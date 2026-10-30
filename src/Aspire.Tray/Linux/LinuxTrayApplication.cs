@@ -11,7 +11,7 @@ namespace Aspire.Tray;
 /// <summary>
 /// Owns GTK on the initial thread; AppIndicator exports its menus over the session bus.
 /// </summary>
-internal sealed class LinuxTrayApplication(TrayController controller, ITrayStartupSettings startup) : IDisposable
+internal sealed class LinuxTrayApplication(TrayController controller, ITrayStartupSettings startup, TimeProvider timeProvider) : IDisposable
 {
     private static LinuxTrayApplication? s_current;
     private readonly ConcurrentQueue<Action> _pending = new();
@@ -29,6 +29,12 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
     private bool _connected;
     private bool _reportedConnected;
     private Exception? _failure;
+    private long? _lastPinPrune;
+
+    internal LinuxTrayApplication(TrayController controller, ITrayStartupSettings startup)
+        : this(controller, startup, TimeProvider.System)
+    {
+    }
 
     private bool IsQuitting => _quitting || Volatile.Read(ref _quitRequested) != 0;
 
@@ -163,16 +169,14 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
 
     private void Refresh()
     {
-        var state = controller.State;
-        if (ReferenceEquals(_displayed, state))
+        var state = GetStateForRefresh();
+        if (state is null)
         {
             return;
         }
-        controller.PruneMissingPinnedAppHosts();
-        state = controller.State;
         var previous = _menu;
         _commands.Clear();
-        _menu = BuildMenu(LinuxTrayMenu.Build(state, controller.ConfirmStop, _code is not null));
+        _menu = BuildMenu(LinuxTrayMenu.Build(state, _code is not null));
         // Retain our own reference: replacing the indicator's menu drops its reference
         // before we disconnect/destroy the old widgets and their callbacks.
         Gtk.g_object_ref_sink(_menu);
@@ -184,7 +188,25 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
             Gtk.gtk_widget_destroy(previous);
             Gtk.g_object_unref(previous);
         }
+    }
+
+    internal TrayViewState? GetStateForRefresh()
+    {
+        var now = timeProvider.GetTimestamp();
+        // Discovery heartbeats do not publish new states. Probe pins independently,
+        // but avoid filesystem access on every 100 ms GTK timer tick.
+        if (_lastPinPrune is not { } previous || timeProvider.GetElapsedTime(previous, now) >= TimeSpan.FromSeconds(1))
+        {
+            controller.PruneMissingPinnedAppHosts();
+            _lastPinPrune = now;
+        }
+        var state = controller.State;
+        if (ReferenceEquals(_displayed, state))
+        {
+            return null;
+        }
         _displayed = state;
+        return state;
     }
 
     private unsafe nint BuildMenu(IReadOnlyList<LinuxTrayMenuItem> items)
@@ -309,7 +331,7 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
             && !File.Exists(host!.Id.AppHostPath))
         {
             if (!host.IsRunning && !host.IsPinned && Confirm("AppHost file not found",
-                "Remove this missing project from recently opened?", "Remove", offerSkip: false, out _))
+                "Remove this missing project from recently opened?", "Remove"))
             {
                 controller.RemoveRecent(host.Id.AppHostPath);
             }
@@ -325,17 +347,7 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
                 OpenUri(controller.GetDashboardUri(host!.Id).AbsoluteUri);
                 break;
             case LinuxTrayAction.Stop:
-                controller.RequireLiveInstance(host!.Id);
-                var skipWarning = false;
-                if (!controller.ConfirmStop || Confirm("Stop AppHost?",
-                    $"Stop {host.DisplayName} (PID {host.Id.AppHostPid})?", "Stop", offerSkip: true, out skipWarning))
-                {
-                    controller.RequestStop(host.Id);
-                    if (skipWarning)
-                    {
-                        controller.SetConfirmStop(false);
-                    }
-                }
+                controller.RequestStop(host!.Id);
                 break;
             case LinuxTrayAction.Start:
                 controller.RequestStart(host!.Id.AppHostPath);
@@ -364,7 +376,7 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
                 }
                 break;
             case LinuxTrayAction.ClearRecent:
-                if (Confirm("Clear recently opened?", "This cannot be undone. Pinned AppHosts will be kept.", "Clear", offerSkip: false, out _))
+                if (Confirm("Clear recently opened?", "This cannot be undone. Pinned AppHosts will be kept.", "Clear"))
                 {
                     controller.ClearRecent();
                 }
@@ -441,22 +453,15 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
         }
     }
 
-    private bool Confirm(string title, string text, string affirmative, bool offerSkip, out bool skipWarning)
+    private bool Confirm(string title, string text, string affirmative)
     {
         var dialog = CreateDialog(title, text);
         try
         {
-            var toggle = offerSkip ? Gtk.gtk_check_button_new_with_label("Don't ask again") : 0;
-            if (toggle != 0)
-            {
-                Gtk.gtk_container_add(Gtk.gtk_dialog_get_content_area(dialog), toggle);
-            }
             Gtk.gtk_dialog_add_button(dialog, "Cancel", -6);
             Gtk.gtk_dialog_add_button(dialog, affirmative, -3);
             Gtk.gtk_dialog_set_default_response(dialog, -6);
-            var accepted = RunDialog(dialog) == -3;
-            skipWarning = accepted && toggle != 0 && Gtk.gtk_toggle_button_get_active(toggle) != 0;
-            return accepted;
+            return RunDialog(dialog) == -3;
         }
         finally
         {
@@ -481,17 +486,15 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
     private void ShowSettings()
     {
         var state = startup.Read();
-        var dialog = CreateDialog(TraySettingsText.Title, TraySettingsText.GetAboutText(preview: false) + "\n\n" + state.Detail);
+        var dialog = CreateDialog(TraySettingsText.PanelTitle,
+            $"Aspire Tray\n{TraySettingsText.GetVersionText()}\n{TraySettingsText.GetAboutDescription(preview: false)}\n\n{state.Detail}");
         try
         {
             var content = Gtk.gtk_dialog_get_content_area(dialog);
-            var login = Gtk.gtk_check_button_new_with_label(TraySettingsText.StartupOption);
+            var login = Gtk.gtk_check_button_new_with_label(TraySettingsText.PanelStartupOption);
             LinuxDesktop.gtk_toggle_button_set_active(login, state.Enabled ? 1 : 0);
             Gtk.gtk_widget_set_sensitive(login, state.CanEnable || state.Enabled ? 1 : 0);
             Gtk.gtk_container_add(content, login);
-            var confirm = Gtk.gtk_check_button_new_with_label("Ask before stopping an AppHost");
-            LinuxDesktop.gtk_toggle_button_set_active(confirm, controller.ConfirmStop ? 1 : 0);
-            Gtk.gtk_container_add(content, confirm);
             Gtk.gtk_dialog_add_button(dialog, "Cancel", -6);
             Gtk.gtk_dialog_add_button(dialog, "Save", -3);
             Gtk.gtk_dialog_set_default_response(dialog, -6);
@@ -502,7 +505,6 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
                 {
                     startup.SetEnabled(enabled);
                 }
-                controller.SetConfirmStop(Gtk.gtk_toggle_button_get_active(confirm) != 0);
             }
         }
         finally

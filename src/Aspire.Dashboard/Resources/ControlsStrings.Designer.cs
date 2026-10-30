@@ -151,6 +151,15 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Some histograms have no shared bucket boundaries. Percentiles cannot be calculated for those intervals. Use Show count to view observation counts..
+        /// </summary>
+        public static string ChartContainerIncompatibleHistogramBounds {
+            get {
+                return ResourceManager.GetString("ChartContainerIncompatibleHistogramBounds", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Options.
         /// </summary>
         public static string ChartContainerOptionsHeader {
@@ -187,11 +196,11 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Some histograms have no shared bucket boundaries. Percentiles cannot be calculated for those intervals. Use Show count to view observation counts..
+        ///   Looks up a localized string similar to Show change per interval.
         /// </summary>
-        public static string ChartContainerIncompatibleHistogramBounds {
+        public static string ChartContainerShowChangePerIntervalLabel {
             get {
-                return ResourceManager.GetString("ChartContainerIncompatibleHistogramBounds", resourceCulture);
+                return ResourceManager.GetString("ChartContainerShowChangePerIntervalLabel", resourceCulture);
             }
         }
 
@@ -219,6 +228,15 @@ namespace Aspire.Dashboard.Resources {
         public static string ChartContainerUnableToDisplay {
             get {
                 return ResourceManager.GetString("ChartContainerUnableToDisplay", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0} per interval.
+        /// </summary>
+        public static string ChartContainerUnitPerInterval {
+            get {
+                return ResourceManager.GetString("ChartContainerUnitPerInterval", resourceCulture);
             }
         }
 
@@ -687,6 +705,42 @@ namespace Aspire.Dashboard.Resources {
         public static string PageToolbarLandmark {
             get {
                 return ResourceManager.GetString("PageToolbarLandmark", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Delete.
+        /// </summary>
+        public static string ParameterDeleteShortAction {
+            get {
+                return ResourceManager.GetString("ParameterDeleteShortAction", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Delete value.
+        /// </summary>
+        public static string ParameterDeleteValueAction {
+            get {
+                return ResourceManager.GetString("ParameterDeleteValueAction", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Edit.
+        /// </summary>
+        public static string ParameterEditShortAction {
+            get {
+                return ResourceManager.GetString("ParameterEditShortAction", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Set.
+        /// </summary>
+        public static string ParameterSetShortAction {
+            get {
+                return ResourceManager.GetString("ParameterSetShortAction", resourceCulture);
             }
         }
 
@@ -1321,6 +1375,15 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Read-only.
+        /// </summary>
+        public static string VolumeMountTypeReadOnlyTitle {
+            get {
+                return ResourceManager.GetString("VolumeMountTypeReadOnlyTitle", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Path.
         /// </summary>
         public static string VolumePathColumnHeader {
@@ -1328,5 +1391,23 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("VolumePathColumnHeader", resourceCulture);
             }
         }
+        /// <summary>
+        ///   Looks up a localized string similar to Couldn't open '{0}'. It may not exist on this machine..
+        /// </summary>
+        public static string VolumeRevealFailed {
+            get {
+                return ResourceManager.GetString("VolumeRevealFailed", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Reveal in file explorer.
+        /// </summary>
+        public static string VolumeRevealInFileExplorer {
+            get {
+                return ResourceManager.GetString("VolumeRevealInFileExplorer", resourceCulture);
+            }
+        }
+
     }
 }

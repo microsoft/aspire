@@ -70,8 +70,11 @@ public class ListIntegrationsToolTests
     {
         var mockPackagingService = MockPackagingServiceFactory.Create(new[]
         {
+            new Aspire.Shared.NuGetPackageCli { Id = "CommunityToolkit.Aspire.Hosting.Aardvark", Version = "9.0.0" },
             new Aspire.Shared.NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "9.0.0" },
-            new Aspire.Shared.NuGetPackageCli { Id = "Aspire.Hosting.PostgreSQL", Version = "9.0.0" }
+            new Aspire.Shared.NuGetPackageCli { Id = "Acme.Aspire.Hosting.Custom", Version = "9.0.0" },
+            new Aspire.Shared.NuGetPackageCli { Id = "Aspire.Hosting.PostgreSQL", Version = "9.0.0" },
+            new Aspire.Shared.NuGetPackageCli { Id = "Aspire.Hosting.CommunityToolkit.Redis", Version = "9.0.0" }
         });
         var tool = new ListIntegrationsTool(mockPackagingService, TestExecutionContextFactory.CreateTestContext(), new MockAuxiliaryBackchannelMonitor());
 
@@ -87,7 +90,7 @@ public class ListIntegrationsToolTests
         using var json = JsonDocument.Parse(textContent.Text);
         Assert.True(json.RootElement.TryGetProperty("integrations", out var integrations));
         Assert.Equal(JsonValueKind.Array, integrations.ValueKind);
-        Assert.Equal(2, integrations.GetArrayLength());
+        Assert.Equal(5, integrations.GetArrayLength());
 
         // Verify the first integration has the expected properties
         var firstIntegration = integrations[0];
@@ -95,12 +98,12 @@ public class ListIntegrationsToolTests
         Assert.True(firstIntegration.TryGetProperty("packageId", out _));
         Assert.True(firstIntegration.TryGetProperty("version", out _));
 
-        // Check that the packages are included (order may vary)
         var packageIds = integrations.EnumerateArray()
             .Select(e => e.GetProperty("packageId").GetString())
             .ToList();
-        Assert.Contains("Aspire.Hosting.Redis", packageIds);
-        Assert.Contains("Aspire.Hosting.PostgreSQL", packageIds);
+        Assert.Equal(
+            ["Aspire.Hosting.CommunityToolkit.Redis", "Aspire.Hosting.PostgreSQL", "Aspire.Hosting.Redis", "CommunityToolkit.Aspire.Hosting.Aardvark", "Acme.Aspire.Hosting.Custom"],
+            packageIds);
     }
 
     [Fact]
@@ -123,4 +126,3 @@ public class ListIntegrationsToolTests
         Assert.Equal(1, integrations.GetArrayLength());
     }
 }
-

@@ -117,6 +117,10 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
+  <data name="PublishModeNotSupportedByRunCommand" xml:space="preserve">
+    <value>The AppHost is in publish mode and cannot be started with 'aspire run'. Use 'aspire publish' instead.</value>
+    <comment>Do not translate the command names 'aspire run' and 'aspire publish'.</comment>
+  </data>
   <data name="ContainerMountAnonymousVolumesReadOnlyExceptionMessage" xml:space="preserve">
     <value>Anonymous volumes cannot be read-only.</value>
   </data>

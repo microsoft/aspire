@@ -47,24 +47,25 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
         AssertArg(args, "--session-id", "11111111-2222-3333-4444-555555555555");
     }
 
-    [Fact]
+    [Theory]
+    [InlineData(null)]
+    [InlineData("1")]
     [RequiresTools(["bash"])]
     [SkipOnPlatform(TestPlatforms.Windows, "The shell hook targets POSIX shells; the PowerShell hook covers Windows.")]
-    public async Task Bash_SkillInvocation_CopilotAppMarker_DoesNotProvideDistinctAttribution()
+    public async Task Bash_SkillInvocation_CopilotAppMarker_ForwardsAppClient(string? copilotCli)
     {
         var run = await RunBashHookAsync(
             """{"toolName":"skill","sessionId":"session-1","toolArgs":{"skill":"aspire"}}""",
             new()
             {
                 ["AI_AGENT"] = "github_copilot_app_agent",
-                ["COPILOT_CLI"] = "1",
+                ["COPILOT_CLI"] = copilotCli,
             });
 
         AssertContinue(run);
         var args = AssertInvoked(run);
         AssertArg(args, "--event-type", "skill_invocation");
-        // Keep this limitation explicit until https://github.com/microsoft/aspire-skills/issues/71 ships.
-        AssertArg(args, "--client-name", "copilot-cli");
+        AssertArg(args, "--client-name", "copilot-app");
         AssertArg(args, "--skill-name", "aspire");
     }
 
@@ -301,23 +302,24 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
         AssertArg(args, "--session-id", "11111111-2222-3333-4444-555555555555");
     }
 
-    [Fact]
+    [Theory]
+    [InlineData(null)]
+    [InlineData("1")]
     [RequiresTools(["pwsh"])]
-    public async Task Pwsh_SkillInvocation_CopilotAppMarker_DoesNotProvideDistinctAttribution()
+    public async Task Pwsh_SkillInvocation_CopilotAppMarker_ForwardsAppClient(string? copilotCli)
     {
         var run = await RunPwshHookAsync(
             """{"toolName":"skill","sessionId":"session-1","toolArgs":{"skill":"aspire"}}""",
             new()
             {
                 ["AI_AGENT"] = "github_copilot_app_agent",
-                ["COPILOT_CLI"] = "1",
+                ["COPILOT_CLI"] = copilotCli,
             });
 
         AssertContinue(run);
         var args = AssertInvoked(run);
         AssertArg(args, "--event-type", "skill_invocation");
-        // Keep this limitation explicit until https://github.com/microsoft/aspire-skills/issues/71 ships.
-        AssertArg(args, "--client-name", "copilot-cli");
+        AssertArg(args, "--client-name", "copilot-app");
         AssertArg(args, "--skill-name", "aspire");
     }
 
@@ -512,7 +514,7 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
         var capturePath = Path.Combine(workspace.WorkspaceRoot.FullName, "capture.txt");
         var recorderPath = CreateBashRecorder(workspace.WorkspaceRoot.FullName);
 
-        var result = RunProcess("bash", [scripts.ShellScriptPath], payload, BuildEnvironment(recorderPath, capturePath, extraEnv));
+        var result = await RunProcessAsync("bash", [scripts.ShellScriptPath], payload, BuildEnvironment(recorderPath, capturePath, extraEnv));
 
         var captured = ReadCapturedArgs(capturePath);
         AssertNativeParity(payload, extraEnv, captured);
@@ -527,7 +529,7 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
         var recorderPath = CreatePwshRecorder(workspace.WorkspaceRoot.FullName);
 
         // -ExecutionPolicy Bypass so the locally created hook and recorder run on Windows agents.
-        var result = RunProcess("pwsh", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scripts.PowerShellScriptPath], payload, BuildEnvironment(recorderPath, capturePath, extraEnv));
+        var result = await RunProcessAsync("pwsh", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scripts.PowerShellScriptPath], payload, BuildEnvironment(recorderPath, capturePath, extraEnv));
 
         var captured = ReadCapturedArgs(capturePath);
         AssertNativeParity(payload, extraEnv, captured);
@@ -538,7 +540,7 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
     {
         var nativeEnvironment = new TestEnvironment(environment);
         var nativeArgs = nativeEnvironment.IsFlagEnabled(AspireCliTelemetry.TelemetryOptOutConfigKey)
-            ? null : AgentTelemetryHook.Classify(payload, nativeEnvironment.IsFlagEnabled("COPILOT_CLI"), AgentTelemetryHook.DefaultMaxPayloadCharacters);
+            ? null : AgentTelemetryHook.Classify(payload, nativeEnvironment, AgentTelemetryHook.DefaultMaxPayloadCharacters);
         if (scriptArgs is null)
         {
             Assert.Null(nativeArgs);
@@ -557,7 +559,7 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
         var home = workspace.CreateDirectory("home");
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(workspace.WorkspaceRoot, homeDirectory: home);
         var installer = new TelemetryHookInstaller(executionContext, NullLogger<TelemetryHookInstaller>.Instance);
-        return await installer.EnsureInstalledAsync(CancellationToken.None);
+        return await installer.EnsureInstalledAsync(TestContext.Current.CancellationToken);
     }
 
     private static string CreateBashRecorder(string directory)
@@ -630,7 +632,7 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
         Assert.Equal(value, args[index + 1]);
     }
 
-    private static ProcessResult RunProcess(string fileName, IReadOnlyList<string> arguments, string stdinPayload, Dictionary<string, string?> environment)
+    private static async Task<ProcessResult> RunProcessAsync(string fileName, IReadOnlyList<string> arguments, string stdinPayload, Dictionary<string, string?> environment)
     {
         var psi = new ProcessStartInfo
         {
@@ -662,43 +664,52 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
             }
         }
 
+        using var timeoutSource = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken, timeoutSource.Token);
         using var process = Process.Start(psi)!;
-
         try
         {
-            process.StandardInput.Write(stdinPayload);
-            process.StandardInput.Close();
-        }
-        catch (IOException)
-        {
-            // The hook may exit before reading stdin (for example on the opt-out path), which closes
-            // the pipe early. That is expected; the captured output below is what matters.
-        }
+            // One deadline covers all I/O, including pipes inherited by descendants after the root exits.
+            var stdoutTask = process.StandardOutput.ReadToEndAsync(timeout.Token);
+            var stderrTask = process.StandardError.ReadToEndAsync(timeout.Token);
 
-        var stdoutTask = process.StandardOutput.ReadToEndAsync();
-        var stderrTask = process.StandardError.ReadToEndAsync();
-
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-        try
-        {
-            process.WaitForExitAsync(timeout.Token).GetAwaiter().GetResult();
-        }
-        catch (OperationCanceledException)
-        {
             try
             {
-                process.Kill(entireProcessTree: true);
+                await process.StandardInput.WriteAsync(stdinPayload.AsMemory(), timeout.Token);
+                await process.StandardInput.FlushAsync(timeout.Token);
+                process.StandardInput.Close();
             }
-            catch (InvalidOperationException)
+            catch (IOException)
             {
+                // Opted-out hooks can exit before consuming stdin.
             }
 
-            throw new TimeoutException($"Hook process '{fileName}' did not exit within 30 seconds.");
-        }
+            await Task.WhenAll(process.WaitForExitAsync(timeout.Token), stdoutTask, stderrTask);
 
-        var stdout = stdoutTask.GetAwaiter().GetResult();
-        var stderr = stderrTask.GetAwaiter().GetResult();
-        return new ProcessResult(process.ExitCode, stdout, stderr);
+            return new ProcessResult(process.ExitCode, await stdoutTask, await stderrTask);
+        }
+        catch (OperationCanceledException ex) when (!TestContext.Current.CancellationToken.IsCancellationRequested)
+        {
+            throw new TimeoutException($"Hook process '{fileName}' did not complete input, output, and exit within {TestConstants.DefaultTimeoutTimeSpan}.", ex);
+        }
+        finally
+        {
+            if (!process.HasExited)
+            {
+                await Task.Run(async () =>
+                {
+                    try
+                    {
+                        process.Kill(entireProcessTree: true);
+                    }
+                    catch (InvalidOperationException) when (process.HasExited)
+                    {
+                    }
+
+                    await process.WaitForExitAsync(CancellationToken.None);
+                }).DefaultTimeout();
+            }
+        }
     }
 
     private sealed record HookRun(ProcessResult Result, string[]? CapturedArgs);

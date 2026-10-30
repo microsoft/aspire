@@ -19,17 +19,17 @@
       </trans-unit>
       <trans-unit id="DevTunnelHostDisconnected">
         <source>The local host for dev tunnel '{0}' is disconnected.</source>
-        <target state="new">The local host for dev tunnel '{0}' is disconnected.</target>
+        <target state="translated">开发隧道“{0}”的本地主机已断开连接。</target>
         <note />
       </trans-unit>
       <trans-unit id="DevTunnelHostHealthy">
         <source>Dev tunnel '{0}' is connected and hosting all expected ports.</source>
-        <target state="new">Dev tunnel '{0}' is connected and hosting all expected ports.</target>
+        <target state="translated">开发隧道“{0}”已连接并托管所有预期端口。</target>
         <note />
       </trans-unit>
       <trans-unit id="DevTunnelHostNotReady">
         <source>Waiting for dev tunnel '{0}' to connect and expose its ports.</source>
-        <target state="new">Waiting for dev tunnel '{0}' to connect and expose its ports.</target>
+        <target state="translated">正在等待开发隧道“{0}”连接并公开其端口。</target>
         <note />
       </trans-unit>
       <trans-unit id="DevTunnelPortHealthy">
@@ -79,47 +79,47 @@
       </trans-unit>
       <trans-unit id="ShowTunnelUrlsCommandClose">
         <source>Close</source>
-        <target state="new">Close</target>
+        <target state="translated">关闭</target>
         <note />
       </trans-unit>
       <trans-unit id="ShowTunnelUrlsCommandDescription">
         <source>Opens available public, inspect, and local URLs for the dev tunnel port.</source>
-        <target state="new">Opens available public, inspect, and local URLs for the dev tunnel port.</target>
+        <target state="translated">打开开发隧道端口的可用的公共、检查和本地 URL。</target>
         <note />
       </trans-unit>
       <trans-unit id="ShowTunnelUrlsCommandDisplayName">
         <source>Show tunnel URLs</source>
-        <target state="new">Show tunnel URLs</target>
+        <target state="translated">显示隧道 URL</target>
         <note />
       </trans-unit>
       <trans-unit id="ShowTunnelUrlsCommandInspectUrlLabel">
         <source>Inspect URL</source>
-        <target state="new">Inspect URL</target>
+        <target state="translated">检查 URL</target>
         <note />
       </trans-unit>
       <trans-unit id="ShowTunnelUrlsCommandInteractionUnavailable">
         <source>Dev tunnel URLs can only be shown in an interactive environment.</source>
-        <target state="new">Dev tunnel URLs can only be shown in an interactive environment.</target>
+        <target state="translated">开发隧道 URL 只能显示在交互式环境中。</target>
         <note />
       </trans-unit>
       <trans-unit id="ShowTunnelUrlsCommandLocalEndpointUrlLabel">
         <source>Local endpoint URL</source>
-        <target state="new">Local endpoint URL</target>
+        <target state="translated">本地终结点 URL</target>
         <note />
       </trans-unit>
       <trans-unit id="ShowTunnelUrlsCommandResultHeading">
         <source>Dev tunnel URLs</source>
-        <target state="new">Dev tunnel URLs</target>
+        <target state="translated">开发隧道 URL</target>
         <note />
       </trans-unit>
       <trans-unit id="ShowTunnelUrlsCommandTunnelUrlLabel">
         <source>Tunnel URL</source>
-        <target state="new">Tunnel URL</target>
+        <target state="translated">隧道 URL</target>
         <note />
       </trans-unit>
       <trans-unit id="ShowTunnelUrlsCommandUnavailable">
         <source>Dev tunnel URLs are not available yet.</source>
-        <target state="new">Dev tunnel URLs are not available yet.</target>
+        <target state="translated">开发隧道 URL 尚不可用。</target>
         <note />
       </trans-unit>
     </body>

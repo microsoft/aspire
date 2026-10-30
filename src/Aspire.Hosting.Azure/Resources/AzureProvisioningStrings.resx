@@ -156,6 +156,15 @@ To learn more, see the [Azure provisioning docs](https://aka.ms/aspire/azure/pro
   <data name="ResourceGroupLabel" xml:space="preserve">
     <value>Resource group</value>
   </data>
+  <data name="TenantResourceSuffixLabel" xml:space="preserve">
+    <value>Tenant-scoped resource suffix</value>
+  </data>
+  <data name="TenantResourceSuffixDescription" xml:space="preserve">
+    <value>Optional. Appended to the names of tenant-wide resources created by this AppHost. Leave empty to use the names from AppHost code unchanged. Changing the suffix targets different resources; previous resources are not renamed or deleted.</value>
+  </data>
+  <data name="TenantResourceSuffixSelectionMessage" xml:space="preserve">
+    <value>Add a suffix to tenant-wide resources created by this AppHost (optional).</value>
+  </data>
   <data name="ValidationSubscriptionIdInvalid" xml:space="preserve">
     <value>Subscription ID must be a valid GUID.</value>
   </data>
@@ -338,6 +347,13 @@ To learn more, see the [Azure provisioning docs](https://aka.ms/aspire/azure/pro
   </data>
   <data name="DeleteAzureResourcesCommandSuccess" xml:space="preserve">
     <value>Azure resources deleted and provisioning state reset.</value>
+  </data>
+  <data name="DeleteAzureResourcesRemainingResourcesFormat" xml:space="preserve">
+    <value>Resource-group deletion completed. These resources were not deleted: {0}.</value>
+    <comment>{0} is a list of resource names, provider types, and object IDs.</comment>
+  </data>
+  <data name="DeleteAzureResourcesRemainingResourcesWarning" xml:space="preserve">
+    <value>The listed resources were not deleted because they exist outside the resource group. Delete them separately using their service's portal or API.</value>
   </data>
   <data name="ContextPropertyLocationDisplayName" xml:space="preserve">
     <value>Azure location</value>

@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using Aspire.Cli.Telemetry;
 using Aspire.Shared.Telemetry;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -87,7 +88,7 @@ internal sealed class TelemetryFixture : IDisposable
         {
             Telemetry.Initialize();
             // Wait for background tag calculation to complete so tests can assert on tags.
-            Telemetry.GetDefaultTagsAsync().GetAwaiter().GetResult();
+            Telemetry.GetDefaultTagsAsync().DefaultTimeout().GetAwaiter().GetResult();
         }
     }
 

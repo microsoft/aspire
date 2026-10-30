@@ -32,6 +32,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     private bool _reconciling;
     private Task? _initializationTask;
     private string? _terminalError;
+    private bool _bannerCollapsed;
     private TerminalToolbarState _state = new();
     private IReadOnlyList<TerminalSizePreset> _sizePresets = [];
     private TerminalViewSession? _viewSession;
@@ -69,10 +70,18 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     [Parameter]
     public bool Chromeless { get; set; }
 
+    /// <summary>Gets or sets whether the terminal is embedded inside another compact surface.</summary>
+    [Parameter]
+    public bool Embedded { get; set; }
+
     /// <summary>Gets or sets whether the resource terminal titlebar offers an independent window.</summary>
     /// <remarks>The Terminals page enables this. Chromeless surfaces never render this action.</remarks>
     [Parameter]
     public bool ShowOpenInWindow { get; set; }
+
+    /// <summary>Gets or sets the route prefix used to open an independent terminal window.</summary>
+    [Parameter]
+    public string TerminalWindowPathPrefix { get; set; } = "terminal-window";
 
     /// <summary>Gets or sets the per-surface key for page-lifetime font-size persistence.</summary>
     /// <remarks>Detached windows seed their font from the opener without sharing live font preferences.</remarks>
@@ -103,6 +112,10 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     /// <summary>Raised when the terminal's metadata, role, dimensions, font or connection state changes.</summary>
     [Parameter]
     public EventCallback<TerminalToolbarState> OnToolbarStateChanged { get; set; }
+
+    /// <summary>Raised when the disconnected banner offers to close the owning dock tab.</summary>
+    [Parameter]
+    public EventCallback OnClose { get; set; }
 
     [Inject]
     public required IJSRuntime JS { get; init; }
@@ -230,6 +243,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
                 ReadOnly = readOnly,
                 ShowDimensions = ShowDimensionsPicker,
                 AutoFit = autoFit,
+                Embedded = Embedded,
                 SizeMemoryKey = SizeMemoryKey,
                 InitialFontSize = InitialFontSize,
                 Label = Loc[nameof(Resources.TerminalStrings.TerminalInputLabel)],
@@ -266,6 +280,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
                 await _jsModule.InvokeVoidAsync("disposeTerminal", id);
             }
             _state = new();
+            _bannerCollapsed = false;
             _terminalError = null;
             if (!_disposed)
             {
@@ -284,8 +299,10 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
             }
             else
             {
+                var autoFit = AutoFit;
                 var generation = await _jsModule!.InvokeAsync<int>(
-                    "reconnectTerminal", _terminalId, BuildWebSocketUrl(newEndpoint));
+                    "reconnectTerminal", _terminalId, BuildWebSocketUrl(newEndpoint), autoFit);
+                _appliedAutoFit = autoFit;
                 _connectedGeneration = Math.Max(_connectedGeneration, generation);
             }
         }
@@ -326,6 +343,10 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
         _connectedGeneration = state.Generation;
         if (_state != state)
         {
+            if (_state.Disconnected != state.Disconnected)
+            {
+                _bannerCollapsed = false;
+            }
             _state = state;
             if (!_initializationFailed)
             {
@@ -428,7 +449,14 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
         return $"{scheme}://{endpoint.Authority}{boundPathAndQuery}";
     }
 
-    private string GetErrorMessage() => Loc[_terminalError switch
+    // A failed mount may follow a transport close before any frame was received.
+    // Show its connection/renderer error, not a claim that output was preserved.
+    private string? ConnectionError => _state.ConnectionError ??
+        (_terminalError is "mount-failed" or "renderer-failed" or "disconnected" ? _terminalError : null);
+
+    private bool ShowDisconnectedRecovery => _state.Disconnected && ConnectionError is not "mount-failed";
+
+    private string GetErrorMessage(string? error) => Loc[error switch
     {
         "disconnected" => nameof(Resources.TerminalStrings.TerminalDisconnected),
         "input-failed" => nameof(Resources.TerminalStrings.TerminalInputFailed),
@@ -438,6 +466,8 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     }];
 
     private Task DismissErrorAsync() => InvokeTerminalAsync("dismissError");
+
+    private Task ReconnectAfterRestartAsync() => InvokeTerminalAsync("restartTerminal");
 
     private async Task RetryAsync()
     {
@@ -527,6 +557,8 @@ public sealed record TerminalViewOptions
     public bool ShowDimensions { get; init; } = true;
     /// <summary>Whether opening the active surface requests automatic grid sizing at the current font size.</summary>
     public bool AutoFit { get; init; }
+    /// <summary>Whether the terminal is embedded inside another compact surface.</summary>
+    public bool Embedded { get; init; }
     /// <summary>The per-surface key for remembering the font size.</summary>
     public string? SizeMemoryKey { get; init; }
     /// <summary>The initial font size when no per-surface preference has been remembered.</summary>
@@ -546,6 +578,10 @@ public sealed record TerminalToolbarState
     public string Status { get; init; } = "connecting";
     /// <summary>Whether a connected frame has been presented.</summary>
     public bool Connected { get; init; }
+    /// <summary>Whether the transport closed, including while reconnecting or after producer completion.</summary>
+    public bool Disconnected { get; init; }
+    /// <summary>Whether automatic transport retries stopped without reconnecting.</summary>
+    public bool RetriesExhausted { get; init; }
     /// <summary>The workload-reported title, or empty when unset.</summary>
     public string Title { get; init; } = string.Empty;
     /// <summary>The decoded working directory reported by the shell, or null when unset.</summary>
@@ -584,6 +620,8 @@ public sealed record TerminalToolbarState
     public int Rows { get; init; }
     /// <summary>The localized error category, or null when healthy.</summary>
     public string? Error { get; init; }
+    /// <summary>The persistent connection or renderer failure, independent of dismissible action errors.</summary>
+    public string? ConnectionError { get; init; }
 }
 
 /// <summary>A named grid preset exposed by the JS terminal.</summary>

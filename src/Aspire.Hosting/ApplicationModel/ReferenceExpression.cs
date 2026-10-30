@@ -436,7 +436,7 @@ public class ReferenceExpression : IExpressionValue, IManifestExpressionProvider
         internal readonly ReferenceExpression GetExpression() =>
             new(_builder.ToString(), [.. _valueProviders], [.. _manifestExpressions], [.. _stringFormats]);
 
-        private static string EscapeUnescapedBraces(string input)
+        internal static string EscapeUnescapedBraces(string input)
         {
             // Fast path: nothing to escape
             if (input.IndexOfAny(s_braces) == -1)
@@ -510,7 +510,8 @@ public class ReferenceExpressionBuilder
     [AspireExport]
     public void AppendLiteral(string value)
     {
-        _builder.Append(value);
+        // _builder is later used as a format string, so escape single braces as ReferenceExpression.Create does.
+        _builder.Append(ReferenceExpression.ExpressionInterpolatedStringHandler.EscapeUnescapedBraces(value));
     }
 
     /// <summary>
@@ -519,7 +520,7 @@ public class ReferenceExpressionBuilder
     /// <param name="value">The formatted string to be appended to the interpolated string.</param>
     public void AppendFormatted(string? value)
     {
-        _builder.Append(value);
+        AppendFormatted(value, format: null);
     }
 
     /// <summary>
@@ -537,7 +538,8 @@ public class ReferenceExpressionBuilder
                 value = FormattingHelpers.FormatValue(value, format);
             }
 
-            _builder.Append(value);
+            // The value is a literal string, but _builder is later used as a format string.
+            _builder.Append(ReferenceExpression.ExpressionInterpolatedStringHandler.EscapeUnescapedBraces(value));
         }
     }
 

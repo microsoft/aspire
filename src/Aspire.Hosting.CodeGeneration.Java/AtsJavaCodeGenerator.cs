@@ -4,6 +4,7 @@
 using System.Globalization;
 using System.Reflection;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Shared.Json;
 using Aspire.TypeSystem;
@@ -773,7 +774,7 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
                 var fieldName = ToCamelCase(property.Name);
                 var methodName = ToPascalCase(fieldName);
                 var transportValueName = $"{fieldName}Value";
-                WriteLine($"        var {transportValueName} = map.get(\"{property.Name}\");");
+                WriteLine($"        var {transportValueName} = map.get(\"{JsonNamingPolicy.CamelCase.ConvertName(property.Name)}\");");
                 WriteLine($"        value.set{methodName}({RenderJavaDtoPropertyTransportValueConversion(property.Type, transportValueName, property.IsOptional)});");
             }
             WriteLine("        return value;");
@@ -792,7 +793,7 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
                 }
                 else
                 {
-                    WriteLine($"        map.put(\"{property.Name}\", AspireClient.serializeValue({fieldName}));");
+                    WriteLine($"        map.put(\"{JsonNamingPolicy.CamelCase.ConvertName(property.Name)}\", AspireClient.serializeValue({fieldName}));");
                 }
             }
             WriteLine("        return map;");
@@ -2000,7 +2001,7 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
         var callbackParameter = property.CallbackParameters is { Count: 1 } ? property.CallbackParameters[0] : null;
         var invocationArguments = new List<string>();
 
-        WriteLine($"        map.put(\"{property.Name}\", {fieldName} == null ? null : (java.util.function.Function<Object, Object>) (transportArg -> {{");
+        WriteLine($"        map.put(\"{JsonNamingPolicy.CamelCase.ConvertName(property.Name)}\", {fieldName} == null ? null : (java.util.function.Function<Object, Object>) (transportArg -> {{");
         if (callbackParameter is not null)
         {
             var callbackParameterName = ToCamelCase(callbackParameter.Name);
@@ -2371,7 +2372,7 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
         WriteLine("        if (options != null) {");
         WriteLine("            resolvedOptions.putAll(options.toMap());");
         WriteLine("        }");
-        WriteLine("        if (resolvedOptions.get(\"Args\") == null) {");
+        WriteLine("        if (resolvedOptions.get(\"args\") == null) {");
         // Python, TypeScript and Rust AppHosts read the process arguments themselves
         // (sys.argv[1:], process.argv.slice(2), std::env::args()), so a builder created without
         // arguments still observes "--operation publish". A JVM cannot do the same:
@@ -2381,23 +2382,23 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
         // ASPIRE_APPHOST_ARGS, newline separated, so CreateBuilder() behaves like its
         // counterparts instead of silently running the app when the user asked to publish.
         WriteLine("            String forwardedArgs = System.getenv(\"ASPIRE_APPHOST_ARGS\");");
-        WriteLine("            resolvedOptions.put(\"Args\", forwardedArgs == null || forwardedArgs.isEmpty()");
+        WriteLine("            resolvedOptions.put(\"args\", forwardedArgs == null || forwardedArgs.isEmpty()");
         WriteLine("                ? new String[0]");
         WriteLine("                : forwardedArgs.split(\"\\n\", -1));");
         WriteLine("        }");
         // ASPIRE_PROJECT_DIRECTORY is set by the CLI so the host reports the correct project
         // directory (not the JVM's user.dir) when matching --apphost <directory> requests.
-        WriteLine("        if (resolvedOptions.get(\"ProjectDirectory\") == null) {");
+        WriteLine("        if (resolvedOptions.get(\"projectDirectory\") == null) {");
         WriteLine("            String projectDirectory = System.getenv(\"ASPIRE_PROJECT_DIRECTORY\");");
         WriteLine("            if (projectDirectory == null || projectDirectory.isEmpty()) {");
         WriteLine("                projectDirectory = System.getProperty(\"user.dir\");");
         WriteLine("            }");
-        WriteLine("            resolvedOptions.put(\"ProjectDirectory\", projectDirectory);");
+        WriteLine("            resolvedOptions.put(\"projectDirectory\", projectDirectory);");
         WriteLine("        }");
-        WriteLine("        if (resolvedOptions.get(\"AppHostFilePath\") == null) {");
+        WriteLine("        if (resolvedOptions.get(\"appHostFilePath\") == null) {");
         WriteLine("            String appHostFilePath = System.getenv(\"ASPIRE_APPHOST_FILEPATH\");");
         WriteLine("            if (appHostFilePath != null && !appHostFilePath.isEmpty()) {");
-        WriteLine("                resolvedOptions.put(\"AppHostFilePath\", appHostFilePath);");
+        WriteLine("                resolvedOptions.put(\"appHostFilePath\", appHostFilePath);");
         WriteLine("            }");
         WriteLine("        }");
         WriteLine("        Map<String, Object> args = new HashMap<>();");

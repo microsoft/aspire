@@ -3,7 +3,8 @@
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
-    <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>
+    <!-- No stable package has shipped yet to use as a compatibility baseline. -->
+    <DisablePackageBaselineValidation>true</DisablePackageBaselineValidation>
     <PackageTags>aspire hosting kubernetes</PackageTags>
     <Description>Kubernetes publishing for Aspire.</Description>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>

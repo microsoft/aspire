@@ -6,12 +6,42 @@ using System.Runtime.Versioning;
 using Aspire.Shared;
 using Aspire.Tests.Utils;
 using Aspire.Tray.Tests.Helpers;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Aspire.Tray.Tests;
 
 public class LinuxTrayTests
 {
     public static bool SupportsLinux => OperatingSystem.IsLinux();
+
+    [Fact]
+    public async Task PeriodicRefreshPrunesDeletedPinsWithoutDiscoveryUpdates()
+    {
+        using var directory = new TestTrayStateDirectory();
+        var path = directory.CreateAppHost("apphost.cs");
+        var store = new FileTraySavedStateStore(directory.StatePath);
+        store.Save(TraySavedState.Empty.Remember(path).SetPinned(path, true));
+        var client = new TestAppHostClient();
+        await using var controller = new TrayController(client, store);
+        var timeProvider = new FakeTimeProvider();
+        using var application = new LinuxTrayApplication(controller, new MemoryTrayStartupSettings(), timeProvider);
+        controller.Start();
+        await client.PublishAndWaitAsync(controller, new([], DiscoveryState.Live));
+        var displayed = Assert.IsType<TrayViewState>(application.GetStateForRefresh());
+        Assert.True(Assert.Single(displayed.AppHosts).IsPinned);
+        File.Delete(path);
+
+        timeProvider.Advance(TimeSpan.FromMilliseconds(999));
+        Assert.Null(application.GetStateForRefresh());
+        timeProvider.Advance(TimeSpan.FromMilliseconds(1));
+        var refreshed = Assert.IsType<TrayViewState>(application.GetStateForRefresh());
+
+        Assert.NotSame(displayed, refreshed);
+        Assert.Empty(refreshed.AppHosts);
+        Assert.Empty(new FileTraySavedStateStore(directory.StatePath).Load().AppHosts);
+        Assert.Null(application.GetStateForRefresh());
+        Assert.Empty(client.StartRequests);
+    }
 
     [Fact]
     public async Task PendingShutdownSkipsDialog()
@@ -64,6 +94,23 @@ public class LinuxTrayTests
             .UseDirectory("Snapshots");
 
     [Fact]
+    public void LiveMenuSurfacesControllerNotices()
+    {
+        var host = new AppHostMenuItem(new(Path.GetFullPath("apphost.cs"), 1, 2),
+            "Example", "PID 1", "Example", true, true, false, null);
+        var state = new TrayViewState(DiscoveryState.Live, [host], "One AppHost")
+        {
+            Notice = "Unable to save AppHost history. The saved file was left unchanged."
+        };
+
+        var menu = LinuxTrayMenu.Build(state, codeAvailable: false);
+
+        Assert.Equal(state.Notice, menu[0].Label);
+        Assert.False(menu[0].Enabled);
+        Assert.Same(host, menu[1].Host);
+    }
+
+    [Fact]
     public void MenuActionsRetainExactIdentity()
     {
         var id = new AppHostId(Path.GetFullPath("Example.AppHost.csproj"), 42, 1000);
@@ -72,7 +119,7 @@ public class LinuxTrayTests
             Health = AppHostHealth.Healthy
         };
         var state = new TrayViewState(DiscoveryState.Live, [host], "One AppHost");
-        var menu = LinuxTrayMenu.Build(state, confirmStop: true, codeAvailable: true);
+        var menu = LinuxTrayMenu.Build(state, codeAvailable: true);
         var row = menu[0];
         Assert.Equal("Example - Healthy", row.Label);
         Assert.Equal(LinuxTrayAction.None, row.Action);
@@ -81,7 +128,7 @@ public class LinuxTrayTests
         Assert.Equal([LinuxTrayAction.Dashboard, LinuxTrayAction.Stop, LinuxTrayAction.TogglePin,
             LinuxTrayAction.Folder, LinuxTrayAction.CopyPath, LinuxTrayAction.Code], actions.Select(item => item.Action));
         Assert.All(actions, action => Assert.Equal(id, action.Host!.Id));
-        Assert.Equal("Stop AppHost...", actions[1].Label);
+        Assert.Equal("Stop AppHost", actions[1].Label);
         Assert.Equal(LinuxTrayIcon.Healthy, row.Icon);
         Assert.Equal(LinuxTrayIcon.Documentation, menu.Single(item => item.Action == LinuxTrayAction.Documentation).Icon);
         Assert.Equal(LinuxTrayIcon.Settings, menu.Single(item => item.Action == LinuxTrayAction.Settings).Icon);
@@ -96,7 +143,7 @@ public class LinuxTrayTests
     {
         var host = new AppHostMenuItem(new(Path.GetFullPath("apphost.cs"), 1, 2),
             "Example", "PID 1", "Example", true, true, false, null) { Health = Enum.Parse<AppHostHealth>(health) };
-        var menu = LinuxTrayMenu.Build(new(DiscoveryState.Live, [host], ""), true, false);
+        var menu = LinuxTrayMenu.Build(new(DiscoveryState.Live, [host], ""), false);
         Assert.Equal($"Example - {expected}", menu[0].Label);
         Assert.Equal(Enum.Parse<LinuxTrayIcon>(health), menu[0].Icon);
     }
@@ -106,15 +153,15 @@ public class LinuxTrayTests
     {
         var host = new AppHostMenuItem(new(Path.GetFullPath("apphost.cs"), 1, 2),
             "Example", "PID 1", "Example", true, true, false, null) { Health = AppHostHealth.NoResources };
-        var row = LinuxTrayMenu.Build(new(DiscoveryState.Live, [host], ""), true, false)[0];
+        var row = LinuxTrayMenu.Build(new(DiscoveryState.Live, [host], ""), false)[0];
 
         Assert.Equal("Example - No resources", row.Label);
         Assert.Equal(LinuxTrayIcon.Unknown, row.Icon);
         Assert.Equal("No resources", row.Children![^2].Label);
         Assert.Equal("Example - Stopped",
-            LinuxTrayMenu.Build(new(DiscoveryState.Live, [host with { IsRunning = false }], ""), true, false)[0].Label);
+            LinuxTrayMenu.Build(new(DiscoveryState.Live, [host with { IsRunning = false }], ""), false)[0].Label);
         Assert.Equal("Example - Discovery unavailable",
-            LinuxTrayMenu.Build(new(DiscoveryState.Disconnected, [host], ""), true, false)
+            LinuxTrayMenu.Build(new(DiscoveryState.Disconnected, [host], ""), false)
                 .Single(item => item.Host == host).Label);
     }
 
@@ -127,14 +174,14 @@ public class LinuxTrayTests
             IsRunning = false, IsPinned = true, CanStart = true
         };
         var state = new TrayViewState(DiscoveryState.Live, [host], "");
-        var row = LinuxTrayMenu.Build(state, true, false)[0];
+        var row = LinuxTrayMenu.Build(state, false)[0];
         Assert.Equal(LinuxTrayAction.None, row.Action);
         Assert.Equal(LinuxTrayAction.Start, row.Children![0].Action);
         Assert.True(row.Children[0].Enabled);
         Assert.Equal(LinuxTrayIcon.Stopped, row.Icon);
         Assert.Equal("Unpin AppHost", row.Children[1].Label);
         var disconnected = state with { Discovery = DiscoveryState.Disconnected, AppHosts = [host with { CanStart = false }] };
-        row = LinuxTrayMenu.Build(disconnected, true, false)[0];
+        row = LinuxTrayMenu.Build(disconnected, false).Single(item => item.Host?.Id == host.Id);
         Assert.Equal("Example - Discovery unavailable", row.Label);
         Assert.False(row.Children![0].Enabled);
         Assert.Equal(LinuxTrayIcon.Warning, row.Icon);
@@ -151,7 +198,7 @@ public class LinuxTrayTests
         {
             Health = AppHostHealth.Healthy, IsStarting = starting
         };
-        var row = LinuxTrayMenu.Build(new(DiscoveryState.Live, [host], ""), true, false)
+        var row = LinuxTrayMenu.Build(new(DiscoveryState.Live, [host], ""), false)
             .Single(item => item.Host == host);
         Assert.Equal(Enum.Parse<LinuxTrayIcon>(expected), row.Icon);
     }

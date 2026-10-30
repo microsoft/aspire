@@ -1,0 +1,123 @@
+.runs-container {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    height: 100%;
+}
+
+.runs-description {
+    margin: 0;
+    color: var(--colorNeutralForeground3);
+    font-size: var(--fontSizeBase200);
+    line-height: var(--lineHeightBase200);
+}
+
+.runs-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    overflow-y: auto;
+    min-height: 0;
+}
+
+.runs-group-header {
+    margin: 12px 0 4px;
+    color: var(--colorNeutralForeground3);
+    font-size: var(--fontSizeBase200);
+    font-weight: var(--fontWeightSemibold);
+}
+
+.runs-empty {
+    padding: 8px;
+    color: var(--colorNeutralForeground3);
+}
+
+.run-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    border-radius: 6px;
+}
+
+.run-row:hover:not(.disabled),
+.run-row.selected {
+    background: var(--colorNeutralBackground1Hover);
+}
+
+.run-select {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    padding: 8px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--colorNeutralForeground1);
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+}
+
+.run-select:disabled {
+    color: var(--colorNeutralForegroundDisabled);
+    cursor: not-allowed;
+}
+
+.run-indicator-slot {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 12px;
+}
+
+.run-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.run-description {
+    color: var(--colorNeutralForeground3);
+    white-space: nowrap;
+}
+
+.run-pin {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    margin-inline-end: 4px;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--colorNeutralForeground3);
+    cursor: pointer;
+}
+
+.run-pin:hover,
+.run-pin.pinned {
+    color: var(--colorBrandForeground1);
+}
+
+.run-pin:hover {
+    background: var(--colorNeutralBackground1Pressed);
+}
+
+.run-select:focus-visible,
+.run-pin:focus-visible {
+    outline: 2px solid var(--colorStrokeFocus2);
+    outline-offset: -2px;
+}
+
+.runs-help-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: auto;
+    color: var(--colorBrandForegroundLink);
+}

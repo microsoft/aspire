@@ -5,6 +5,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>Aspire.Tray</RootNamespace>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <PublishDocumentationFile>false</PublishDocumentationFile>
     <IsPackable>false</IsPackable>
     <EnablePackageValidation>false</EnablePackageValidation>
   </PropertyGroup>

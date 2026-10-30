@@ -14,6 +14,7 @@ public class TracesViewModel
 
     private PagedResult<TraceSummary>? _traces;
     private ResourceKey? _resourceKey;
+    private IReadOnlyList<ResourceKey>? _resourceKeys;
     private string _filterText = string.Empty;
     private int _startIndex;
     private int _count;
@@ -25,6 +26,25 @@ public class TracesViewModel
     }
 
     public ResourceKey? ResourceKey { get => _resourceKey; set => SetValue(ref _resourceKey, value); }
+
+    /// <summary>
+    /// Gets or sets the resources to include when several resources are selected. When set, it's used instead of
+    /// <see cref="ResourceKey"/>, and an empty list matches no data because none of the selected resources have telemetry.
+    /// </summary>
+    public IReadOnlyList<ResourceKey>? ResourceKeys
+    {
+        get => _resourceKeys;
+        set
+        {
+            if (_resourceKeys is null ? value is null : value is not null && _resourceKeys.SequenceEqual(value))
+            {
+                return;
+            }
+
+            _resourceKeys = value;
+            _traces = null;
+        }
+    }
     public SpanType? SpanType { get => _spanType; set => SetValue(ref _spanType, value); }
     public string FilterText { get => _filterText; set => SetValue(ref _filterText, value); }
     public int StartIndex { get => _startIndex; set => SetValue(ref _startIndex, value); }
@@ -76,6 +96,12 @@ public class TracesViewModel
 
     public async Task<PagedResult<TraceSummary>> GetTracesAsync(CancellationToken cancellationToken)
     {
+        if (ResourceKeys is { Count: 0 })
+        {
+            MaxDuration = TimeSpan.Zero;
+            return PagedResult<TraceSummary>.Empty;
+        }
+
         var traces = _traces;
         if (traces == null)
         {
@@ -83,7 +109,7 @@ public class TracesViewModel
 
             var result = await _dataSource.TelemetryRepository.GetTraceSummariesAsync(new GetTracesRequest
             {
-                ResourceKeys = ResourceKey is { } key ? [key] : [],
+                ResourceKeys = ResourceKeys ?? (ResourceKey is { } key ? [key] : []),
                 StartIndex = StartIndex,
                 Count = Count,
                 Filters = filters,

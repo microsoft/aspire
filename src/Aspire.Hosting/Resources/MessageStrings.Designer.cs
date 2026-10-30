@@ -133,6 +133,15 @@ namespace Aspire.Hosting.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to The AppHost is in publish mode and cannot be started with &apos;aspire run&apos;. Use &apos;aspire publish&apos; instead..
+        /// </summary>
+        internal static string PublishModeNotSupportedByRunCommand {
+            get {
+                return ResourceManager.GetString("PublishModeNotSupportedByRunCommand", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Required command &apos;{0}&apos; was not found on PATH or at the specified location..
         /// </summary>
         internal static string RequiredCommandNotFound {

@@ -88,7 +88,7 @@ internal sealed class CircularBuffer<T> : IList<T>, ICollection<T>, IEnumerable<
             }
 
             var removedItem = this[0];
-#if DEBUG
+#if DEBUG_CIRCULAR_BUFFER
             var removedItemCount = CountOccurrences(removedItem);
 #endif
 
@@ -129,7 +129,7 @@ internal sealed class CircularBuffer<T> : IList<T>, ICollection<T>, IEnumerable<
             Increment(ref _end);
             _start = _end;
 
-#if DEBUG
+#if DEBUG_CIRCULAR_BUFFER
             Debug.Assert(
                 CountOccurrences(removedItem) == removedItemCount - 1 + (EqualityComparer<T>.Default.Equals(item, removedItem) ? 1 : 0),
                 "Item was not correctly removed.");
@@ -201,7 +201,7 @@ internal sealed class CircularBuffer<T> : IList<T>, ICollection<T>, IEnumerable<
         if (IsFull)
         {
             var removedItem = this[0];
-#if DEBUG
+#if DEBUG_CIRCULAR_BUFFER
             var removedItemCount = CountOccurrences(removedItem);
 #endif
 
@@ -209,7 +209,7 @@ internal sealed class CircularBuffer<T> : IList<T>, ICollection<T>, IEnumerable<
             Increment(ref _end);
             _start = _end;
 
-#if DEBUG
+#if DEBUG_CIRCULAR_BUFFER
             Debug.Assert(
                 CountOccurrences(removedItem) == removedItemCount - 1 + (EqualityComparer<T>.Default.Equals(item, removedItem) ? 1 : 0),
                 "Item was not correctly removed.");
@@ -280,7 +280,10 @@ internal sealed class CircularBuffer<T> : IList<T>, ICollection<T>, IEnumerable<
         return (_start + index) % _buffer.Count;
     }
 
-#if DEBUG
+    // The removal checks scan the whole buffer twice per added item. A full console log buffer receives a steady stream
+    // of items, which made Debug builds of the AppHost and dashboard spend whole cores in this scan, so the checks only
+    // run when DEBUG_CIRCULAR_BUFFER is defined.
+#if DEBUG_CIRCULAR_BUFFER
     private int CountOccurrences(T item)
     {
         var count = 0;

@@ -9,7 +9,7 @@ namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
 /// Stamps the per-replica terminal properties (<c>terminal.enabled</c>,
-/// <c>terminal.replicaIndex</c>, <c>terminal.replicaCount</c>, and the sensitive
+/// <c>terminal.autoFit</c>, <c>terminal.replicaIndex</c>, <c>terminal.replicaCount</c>, and the sensitive
 /// <c>terminal.consumerUdsPath</c>) onto a resource snapshot when the resource opted into
 /// <see cref="TerminalResourceBuilderExtensions.WithTerminal{T}(IResourceBuilder{T}, Action{TerminalOptions}?)"/>.
 /// </summary>
@@ -55,6 +55,7 @@ internal static class TerminalResourceSnapshotProperties
 
         properties = properties
             .Add(new ResourcePropertySnapshot(KnownProperties.Terminal.Enabled, "true") { IsSensitive = false })
+            .Add(new ResourcePropertySnapshot(KnownProperties.Terminal.AutoFit, terminalAnnotation.Options.HasExplicitDimensions ? "false" : "true") { IsSensitive = false })
             .Add(new ResourcePropertySnapshot(KnownProperties.Terminal.ReplicaIndex, replicaIndex.ToString(CultureInfo.InvariantCulture)) { IsSensitive = false })
             .Add(new ResourcePropertySnapshot(KnownProperties.Terminal.ReplicaCount, replicaCount.ToString(CultureInfo.InvariantCulture)) { IsSensitive = false });
 

@@ -16,6 +16,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Aspire.Hosting.Native.CodeGeneration" />
+    <InternalsVisibleTo Include="aspire-managed" />
     <InternalsVisibleTo Include="Aspire.Hosting.CodeGeneration.TypeScript.Tests" />
   </ItemGroup>
 
@@ -37,6 +39,7 @@
   <ItemGroup>
     <Compile Include="$(SharedDir)AppHostProfilePortGenerator.cs" Link="AppHostProfilePortGenerator.cs" />
     <Compile Include="$(SharedDir)CodeGeneration\AtsOptionsFlattening.cs" Link="AtsOptionsFlattening.cs" />
+    <Compile Include="$(SharedDir)CodeGeneration\AtsTypeSystemCompatibility.cs" Link="AtsTypeSystemCompatibility.cs" />
     <Compile Include="$(SharedDir)Json\AtsJsonCodeWriter.cs" Link="AtsJsonCodeWriter.cs" />
     <Compile Include="$(SharedDir)NpmVersionHelper.cs" Link="NpmVersionHelper.cs" />
   </ItemGroup>

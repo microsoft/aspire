@@ -24,12 +24,13 @@ internal enum LinuxTrayAction
 
 internal static class LinuxTrayMenu
 {
-    internal static IReadOnlyList<LinuxTrayMenuItem> Build(TrayViewState state, bool confirmStop, bool codeAvailable)
+    internal static IReadOnlyList<LinuxTrayMenuItem> Build(TrayViewState state, bool codeAvailable)
     {
         List<LinuxTrayMenuItem> items = [];
-        if (state.ShowStatus)
+        if (state.AppHosts.Count == 0 || state.Discovery != DiscoveryState.Live
+            || state.Notice is not null || state.AppHosts.Any(host => host.Error is not null))
         {
-            items.Add(new(state.Status, Enabled: false));
+            items.Add(new(state.Notice ?? state.Status, Enabled: false));
         }
         items.AddRange(state.AppHosts.Select(Host));
         items.Add(new("", LinuxTrayAction.Separator));
@@ -54,7 +55,7 @@ internal static class LinuxTrayMenu
             if (host.IsRunning)
             {
                 actions.Add(new("Open dashboard", LinuxTrayAction.Dashboard, host, host.CanOpenDashboard));
-                actions.Add(new(host.IsStopping ? "Stopping..." : confirmStop ? "Stop AppHost..." : "Stop AppHost",
+                actions.Add(new(host.IsStopping ? "Stopping..." : "Stop AppHost",
                     LinuxTrayAction.Stop, host, host.CanStop));
             }
             else
@@ -71,12 +72,12 @@ internal static class LinuxTrayMenu
             }
             actions.Add(new("", LinuxTrayAction.Separator));
             actions.Add(new(host.Error ?? Status(host), Enabled: false));
-            actions.Add(new(AppHostPresentation.GetMenuDetailsText(host.Id.AppHostPath, host.Subtitle), Enabled: false));
+            actions.Add(new($"{host.Id.AppHostPath} \u00b7 {host.Subtitle}".ReplaceLineEndings(" ").Replace('\t', ' '), Enabled: false));
             // D-Bus menu hosts vary in icon support. Text also makes health available
             // to screen readers and preserves it on hosts that omit menu artwork.
             var status = state.Discovery != DiscoveryState.Live ? "Discovery unavailable"
                 : Status(host);
-            return new($"{AppHostPresentation.GetCompactMenuLabel(host)} - {status}", Host: host, Children: actions)
+            return new($"{host.Title} - {status}", Host: host, Children: actions)
             {
                 Icon = host switch
                 {

@@ -32,13 +32,11 @@ public sealed class AppServiceDotnetProjectDeploymentTests(ITestOutputHelper out
             await auto.AspireNewAsync(projectName, counter, template: AspireTemplate.JsReact, useRedisCache: false);
             await auto.RunCommandAsync($"cd {projectName}", counter);
             await DotnetProjectDeploymentHelpers.AddPackageAsync(auto, counter, "Aspire.Hosting.Azure.AppService");
-            await DotnetProjectDeploymentHelpers.AddPackageAsync(auto, counter, "Aspire.Hosting.Dotnet");
 
             var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
             var appHostFile = Path.Combine(projectDir, $"{projectName}.AppHost", "AppHost.cs");
-            var content = DotnetProjectDeploymentHelpers.ReplaceExactlyOnce(File.ReadAllText(appHostFile),
-                $"AddProject<Projects.{projectName}_Server>(\"server\")",
-                $"AddDotnetProject(\"server\", \"../{projectName}.Server/{projectName}.Server.csproj\")");
+            var content = File.ReadAllText(appHostFile);
+            Assert.Contains($"AddDotnetProject(\"server\", \"../{projectName}.Server/{projectName}.Server.csproj\")", content, StringComparison.Ordinal);
             Assert.Contains("server.PublishWithContainerFiles(webfrontend, \"wwwroot\");", content, StringComparison.Ordinal);
             content = DotnetProjectDeploymentHelpers.ReplaceExactlyOnce(content, "builder.Build().Run();",
                 "builder.AddAzureAppServiceEnvironment(\"infra\");\nbuilder.Build().Run();");

@@ -1,0 +1,341 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+using Microsoft.AspNetCore.InternalTesting;
+using System.Xml.Linq;
+using Aspire.Cli.Packaging;
+using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Tests.TestServices;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
+
+namespace Aspire.Cli.Tests.DotNet;
+
+public class DotNetAppHostNuGetConfigMergerSnapshotTests
+{
+    private readonly ITestOutputHelper _output;
+
+    public DotNetAppHostNuGetConfigMergerSnapshotTests(ITestOutputHelper output)
+    {
+        _output = output;
+    }
+
+    private static PackagingService CreatePackagingService(CliExecutionContext executionContext)
+    {
+        var features = new TestFeatures();
+        var configuration = new ConfigurationBuilder().Build();
+        return new PackagingService(executionContext, new FakeNuGetPackageCache(), features, configuration, NullLogger<PackagingService>.Instance);
+    }
+
+    private static async Task<FileInfo> WriteConfigAsync(DirectoryInfo dir, string content)
+    {
+        var path = Path.Combine(dir.FullName, "nuget.config");
+        await File.WriteAllTextAsync(path, content);
+        return new FileInfo(path);
+    }
+
+    [Theory]
+    [InlineData("stable")]
+    [InlineData("daily")]
+    [InlineData("pr-1234")]
+    public async Task Merge_WithSimpleNuGetConfig_ProducesExpectedXml(string channelName)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(_output);
+        var root = workspace.WorkspaceRoot;
+
+        // Empty hives directory ensures deterministic channel set (no PR channels)
+        var hivesDir = root.CreateSubdirectory("hives");
+        // Add a deterministic PR hive for testing realistic PR channel mappings.
+        hivesDir.CreateSubdirectory("pr-1234");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(root, hivesDirectory: hivesDir);
+        var packagingService = CreatePackagingService(executionContext);
+
+        // Existing config purposely minimal (no packageSourceMapping yet)
+        await WriteConfigAsync(root,
+            """
+            <?xml version="1.0"?>
+            <configuration>
+                <packageSources>
+                    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
+                </packageSources>
+            </configuration>
+            """);
+
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+        // Filter to explicit channels here so we never select the implicit ("default") channel
+        // which has no mappings and would produce a no-op merge (nothing meaningful to snapshot).
+        var channel = channels.First(c => c.Type is PackageChannelType.Explicit && string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
+
+        await DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(root, channel).DefaultTimeout();
+
+        var updated = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
+        var xmlString = updated.ToString();
+
+        // Normalize machine-specific absolute hive paths in PR channel snapshots for stability
+        if (channelName.StartsWith("pr-", StringComparison.OrdinalIgnoreCase))
+        {
+            // Use forward slashes to match the normalized paths in NuGet config
+            var hivePath = Path.Combine(hivesDir.FullName, channelName).Replace('\\', '/');
+            xmlString = xmlString.Replace(hivePath, "{PR_HIVE}");
+        }
+
+        await Verify(xmlString, extension: "xml")
+            .UseFileName($"Merge_WithSimpleNuGetConfig_ProducesExpectedXml.{channelName}");
+    }
+
+    [Theory]
+    [InlineData("stable")]
+    [InlineData("daily")]
+    [InlineData("pr-1234")]
+    public async Task Merge_WithBrokenSdkState_ProducesExpectedXml(string channelName)
+    {
+        const string stalePrHivePath = @"C:\Users\aspire-test\.aspire\hives\pr-old";
+        using var workspace = TemporaryWorkspace.CreateForCli(_output);
+        var root = workspace.WorkspaceRoot;
+
+        // Empty hives directory ensures deterministic channel set (no PR channels)
+        var hivesDir = root.CreateSubdirectory("hives");
+        // Add a deterministic PR hive for testing realistic PR channel mappings.
+        hivesDir.CreateSubdirectory("pr-1234");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(root, hivesDirectory: hivesDir);
+        var packagingService = CreatePackagingService(executionContext);
+
+        // Existing config purposely minimal (no packageSourceMapping yet)
+        await WriteConfigAsync(root,
+            $$"""
+            <configuration>
+                <packageSources>
+                    <clear />
+                    <add key="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json" />
+                    <add key="https://api.nuget.org/v3/index.json" value="https://api.nuget.org/v3/index.json" />
+                    <add key="{{stalePrHivePath}}" value="{{stalePrHivePath}}" />
+                </packageSources>
+                <packageSourceMapping>
+                    <packageSource key="https://api.nuget.org/v3/index.json">
+                        <package pattern="*" />
+                    </packageSource>
+                    <packageSource key="{{stalePrHivePath}}">
+                        <package pattern="Aspire*" />
+                    </packageSource>
+                    <packageSource key="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json">
+                        <package pattern="*" />
+                    </packageSource>
+                </packageSourceMapping>
+            </configuration>
+            """);
+
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+        // Filter to explicit channels here so we never select the implicit ("default") channel
+        // which has no mappings and would produce a no-op merge (nothing meaningful to snapshot).
+        var channel = channels.First(c => c.Type is PackageChannelType.Explicit && string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
+
+        await DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(root, channel).DefaultTimeout();
+
+        var updated = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
+        var xmlString = updated.ToString()
+            .Replace(stalePrHivePath, "{STALE_PR_HIVE}", StringComparison.Ordinal);
+
+        // Normalize machine-specific absolute hive paths in PR channel snapshots for stability
+        if (channelName.StartsWith("pr-", StringComparison.OrdinalIgnoreCase))
+        {
+            // Use forward slashes to match the normalized paths in NuGet config
+            var hivePath = Path.Combine(hivesDir.FullName, channelName).Replace('\\', '/');
+            xmlString = xmlString.Replace(hivePath, "{PR_HIVE}");
+        }
+
+        await Verify(xmlString, extension: "xml")
+            .UseFileName($"Merge_WithBrokenSdkState_ProducesExpectedXml.{channelName}");
+    }
+
+    [Theory]
+    [InlineData("stable")]
+    [InlineData("daily")]
+    [InlineData("pr-1234")]
+    public async Task Merge_WithDailyFeedWithExtraMappingsIsPreserved_ProducesExpectedXml(string channelName)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(_output);
+        var root = workspace.WorkspaceRoot;
+
+        // Empty hives directory ensures deterministic channel set (no PR channels)
+        var hivesDir = root.CreateSubdirectory("hives");
+        // Add a deterministic PR hive for testing realistic PR channel mappings.
+        hivesDir.CreateSubdirectory("pr-1234");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(root, hivesDirectory: hivesDir);
+        var packagingService = CreatePackagingService(executionContext);
+
+        // Existing config purposely minimal (no packageSourceMapping yet)
+        await WriteConfigAsync(root,
+            """
+            <?xml version="1.0"?>
+            <configuration>
+                <packageSources>
+                    <clear />
+                    <add key="NuGet" value="https://api.nuget.org/v3/index.json" />
+                    <add key="hexesoft" value="https://example.com/hexesoft/nuget/v3/index.json" />
+                    <add key="dotnet9" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json" />
+                </packageSources>
+                <packageSourceMapping>
+                    <packageSource key="dotnet9">
+                        <package pattern="Aspire*" />
+                        <package pattern="Microsoft.Extensions.SpecialPackage*" />
+                    </packageSource>
+                    <packageSource key="https://api.nuget.org/v3/index.json">
+                        <package pattern="*" />
+                    </packageSource>
+                </packageSourceMapping>
+            </configuration>
+            """);
+
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+        // Filter to explicit channels here so we never select the implicit ("default") channel
+        // which has no mappings and would produce a no-op merge (nothing meaningful to snapshot).
+        var channel = channels.First(c => c.Type is PackageChannelType.Explicit && string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
+
+        await DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(root, channel).DefaultTimeout();
+
+        var updated = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
+        var xmlString = updated.ToString();
+
+        // Normalize machine-specific absolute hive paths in PR channel snapshots for stability
+        if (channelName.StartsWith("pr-", StringComparison.OrdinalIgnoreCase))
+        {
+            // Use forward slashes to match the normalized paths in NuGet config
+            var hivePath = Path.Combine(hivesDir.FullName, channelName).Replace('\\', '/');
+            xmlString = xmlString.Replace(hivePath, "{PR_HIVE}");
+        }
+
+        await Verify(xmlString, extension: "xml")
+            .UseFileName($"Merge_WithDailyFeedWithExtraMappingsIsPreserved_ProducesExpectedXml.{channelName}");
+    }
+
+    [Theory]
+    [InlineData("stable")]
+    [InlineData("daily")]
+    [InlineData("pr-1234")]
+    public async Task Merge_WithExtraInternalFeedIncorrectlyMapped_ProducesExpectedXml(string channelName)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(_output);
+        var root = workspace.WorkspaceRoot;
+
+        // Empty hives directory ensures deterministic channel set (no PR channels)
+        var hivesDir = root.CreateSubdirectory("hives");
+        // Add a deterministic PR hive for testing realistic PR channel mappings.
+        hivesDir.CreateSubdirectory("pr-1234");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(root, hivesDirectory: hivesDir);
+        var packagingService = CreatePackagingService(executionContext);
+
+        // Existing config purposely minimal (no packageSourceMapping yet)
+        await WriteConfigAsync(root,
+            """
+            <configuration>
+                <packageSources>
+                    <clear />
+                    <add key="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json" />
+                    <add key="https://api.nuget.org/v3/index.json" value="https://api.nuget.org/v3/index.json" />
+                    <add key="companyfeed" value="https://companyfeed/v3/index.json" />
+                </packageSources>
+                <packageSourceMapping>
+                    <packageSource key="https://api.nuget.org/v3/index.json">
+                        <package pattern="*" />
+                    </packageSource>
+                    <packageSource key="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json">
+                        <package pattern="Aspire*" />
+                    </packageSource>
+                </packageSourceMapping>
+            </configuration>
+            """);
+
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+        // Filter to explicit channels here so we never select the implicit ("default") channel
+        // which has no mappings and would produce a no-op merge (nothing meaningful to snapshot).
+        var channel = channels.First(c => c.Type is PackageChannelType.Explicit && string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
+
+        var configPath = Path.Combine(root.FullName, "nuget.config");
+        var originalContent = await File.ReadAllBytesAsync(configPath);
+        await DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(root, channel).DefaultTimeout();
+        if (channelName == PackageChannelNames.Daily)
+        {
+            Assert.Equal(originalContent, await File.ReadAllBytesAsync(configPath));
+        }
+
+        var updated = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
+        var xmlString = updated.ToString();
+
+        // Normalize machine-specific absolute hive paths in PR channel snapshots for stability
+        if (channelName.StartsWith("pr-", StringComparison.OrdinalIgnoreCase))
+        {
+            // Use forward slashes to match the normalized paths in NuGet config
+            var hivePath = Path.Combine(hivesDir.FullName, channelName).Replace('\\', '/');
+            xmlString = xmlString.Replace(hivePath, "{PR_HIVE}");
+        }
+
+        await Verify(xmlString, extension: "xml")
+            .UseFileName($"Merge_WithExtraInternalFeedIncorrectlyMapped_ProducesExpectedXml.{channelName}");
+    }
+
+    [Theory]
+    [InlineData("stable")]
+    [InlineData("daily")]
+    [InlineData("pr-1234")]
+    public async Task Merge_ExtraPatternOnDailyFeedWhenOnPrFeedGetsConsolidatedWithOtherPatterns_ProducesExpectedXml(string channelName)
+    {
+        const string stalePrHivePath = @"C:\Users\aspire-test\.aspire\hives\pr-old";
+        using var workspace = TemporaryWorkspace.CreateForCli(_output);
+        var root = workspace.WorkspaceRoot;
+
+        // Empty hives directory ensures deterministic channel set (no PR channels)
+        var hivesDir = root.CreateSubdirectory("hives");
+        // Add a deterministic PR hive for testing realistic PR channel mappings.
+        hivesDir.CreateSubdirectory("pr-1234");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(root, hivesDirectory: hivesDir);
+        var packagingService = CreatePackagingService(executionContext);
+
+        // Existing config purposely minimal (no packageSourceMapping yet)
+        await WriteConfigAsync(root,
+            $$"""
+            <?xml version="1.0" encoding="utf-8"?>
+            <configuration>
+                <packageSources>
+                    <clear />
+                    <add key="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json" />
+                    <add key="https://api.nuget.org/v3/index.json" value="https://api.nuget.org/v3/index.json" />
+                    <add key="mycompany" value="http://mycompany.com/feed" />
+                    <add key="{{stalePrHivePath}}" value="{{stalePrHivePath}}" />
+                </packageSources>
+                <packageSourceMapping>
+                    <packageSource key="https://api.nuget.org/v3/index.json">
+                        <package pattern="*" />
+                    </packageSource>
+                    <packageSource key="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json">
+                        <package pattern="Microsoft.Extensions.HelperStuff*" />
+                    </packageSource>
+                    <packageSource key="{{stalePrHivePath}}">
+                        <package pattern="Aspire*" />
+                    </packageSource>
+                </packageSourceMapping>
+            </configuration>
+            """);
+
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+        // Filter to explicit channels here so we never select the implicit ("default") channel
+        // which has no mappings and would produce a no-op merge (nothing meaningful to snapshot).
+        var channel = channels.First(c => c.Type is PackageChannelType.Explicit && string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
+
+        await DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(root, channel).DefaultTimeout();
+
+        var updated = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
+        var xmlString = updated.ToString()
+            .Replace(stalePrHivePath, "{STALE_PR_HIVE}", StringComparison.Ordinal);
+
+        // Normalize machine-specific absolute hive paths in PR channel snapshots for stability
+        if (channelName.StartsWith("pr-", StringComparison.OrdinalIgnoreCase))
+        {
+            // Use forward slashes to match the normalized paths in NuGet config
+            var hivePath = Path.Combine(hivesDir.FullName, channelName).Replace('\\', '/');
+            xmlString = xmlString.Replace(hivePath, "{PR_HIVE}");
+        }
+
+        await Verify(xmlString, extension: "xml")
+            .UseFileName($"Merge_ExtraPatternOnDailyFeedWhenOnPrFeedGetsConsolidatedWithOtherPatterns_ProducesExpectedXml.{channelName}");
+    }
+}

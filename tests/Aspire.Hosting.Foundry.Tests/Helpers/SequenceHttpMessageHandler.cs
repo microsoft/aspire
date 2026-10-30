@@ -14,7 +14,7 @@ internal sealed class SequenceHttpMessageHandler(params HttpResponseMessage[] re
         CancellationToken cancellationToken)
     {
         Requests.Add(new(
-            await request.Content!.ReadAsStringAsync(cancellationToken),
+            request.Content is { } content ? await content.ReadAsStringAsync(cancellationToken) : string.Empty,
             request.Headers.TryGetValues("Mcp-Session-Id", out var sessionIds)
                 ? sessionIds.Single()
                 : null,

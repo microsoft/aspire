@@ -46,6 +46,9 @@ internal static class KnownCapabilities
     // pass it and parse (localized) error output when an older CLI rejects it.
     public const string DescribeIncludeDisabledCommands = "describe-include-disabled-commands.v1";
 
+    // Advertised so tooling can bind `aspire describe` to one same-path AppHost process.
+    public const string DescribeAppHostPid = "describe-apphost-pid.v1";
+
     // Advertised so tooling can detect that `aspire ls --format json --stream` is supported
     // before opting into newline-delimited JSON candidate discovery.
     public const string LsJsonStream = "ls-json-stream.v1";
@@ -63,8 +66,11 @@ internal static class KnownCapabilities
     // Advertised so tooling can pass `aspire run --launch-profile` only to CLIs that understand it.
     public const string LaunchProfile = "launch-profile.v1";
 
+    // Tooling must omit the legacy --replica option when terminal commands select by instance ID.
+    public const string TerminalInstanceSelection = "terminal-instance-selection.v1";
+
     /// <summary>
     /// Gets the set of capabilities this CLI advertises to extensions.
     /// </summary>
-    public static string[] GetAdvertisedCapabilities() => [DevKit, Project, BuildDotnetUsingCli, Baseline, SecretPrompts, FilePickers, Pipelines, PipelineStepListJson, DescribeIncludeDisabledCommands, LsJsonStream, IsolatedLaunch, AgentMcp, LaunchProfile];
+    public static string[] GetAdvertisedCapabilities() => [DevKit, Project, BuildDotnetUsingCli, Baseline, SecretPrompts, FilePickers, Pipelines, PipelineStepListJson, DescribeIncludeDisabledCommands, DescribeAppHostPid, LsJsonStream, IsolatedLaunch, AgentMcp, LaunchProfile, TerminalInstanceSelection];
 }

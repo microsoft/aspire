@@ -2,20 +2,22 @@ import * as vscode from "vscode";
 import { EventEmitter } from "vscode";
 import { promises as fs } from "fs";
 import { createDebugAdapterTracker, AppHostTrackerOptions } from "./adapterTracker";
-import { AspireResourceExtendedDebugConfiguration, AspireResourceDebugSession, EnvVar, AspireExtendedDebugConfiguration, NodeLaunchConfiguration, ProcessRestartedNotification, ProjectLaunchConfiguration, JavaLaunchConfiguration, RustLaunchConfiguration, SessionTerminatedNotification, StartAppHostOptions, AspireOperationKind } from "../dcp/types";
+import { AspireResourceExtendedDebugConfiguration, AspireResourceDebugSession, EnvVar, AspireExtendedDebugConfiguration, GoLaunchConfiguration, NodeLaunchConfiguration, ProcessRestartedNotification, ProjectLaunchConfiguration, JavaLaunchConfiguration, RustLaunchConfiguration, SessionTerminatedNotification, StartAppHostOptions, AspireOperationKind } from "../dcp/types";
 import { extensionLogOutputChannel } from "../utils/logging";
 import AspireDcpServer, { generateDcpIdPrefix } from "../dcp/AspireDcpServer";
 import { redactCliArgsForLogging, spawnCliProcess, terminateCliProcess } from "../utils/process/cliProcess";
-import { disconnectingFromSession, launchingWithAppHost, launchingWithDirectory, processExceptionOccurred, processExitedWithCode, appHostSessionTerminated, debugSessionsFailedToStop, debugSessionStartTimedOut, debugSessionStopTimedOut, rustDebuggerExtensionNotInstalled, javaDebuggerExtensionNotInstalled, javaAppHostCommandNotRecognized } from "../loc/strings";
+import { disconnectingFromSession, launchingWithAppHost, launchingWithDirectory, processExceptionOccurred, processExitedWithCode, appHostSessionTerminated, debugSessionsFailedToStop, debugSessionStartTimedOut, debugSessionStopTimedOut, rustDebuggerExtensionNotInstalled, javaDebuggerExtensionNotInstalled, javaAppHostCommandNotRecognized, goDebuggerExtensionNotInstalled, goAppHostCommandNotRecognized } from "../loc/strings";
 import { isExtensionInstalled } from "../capabilities";
 import { projectDebuggerExtension } from "./languages/dotnet";
 import { AnsiColors } from "../utils/AspireTerminalProvider";
 import { applyTextStyle } from "../utils/strings";
 import { nodeDebuggerExtension } from "./languages/node";
 import { createDefaultRustDebuggerExtension } from "./languages/rust";
+import { goDebuggerExtension, parseGoAppHostCommand } from "./languages/go";
 import { javaDebuggerExtension, parseJavaAppHostCommand, resolveJavaClassPaths } from "./languages/java";
 import { cleanupRun } from "./runCleanupRegistry";
 import { BrowserDebugSessionTermination } from "./browserDebugSessionTermination";
+import { registerBlazorWasmDebugRelay } from "./blazorWasmDebugRelay";
 import { runWithRunStartWrappers } from "./runStartRegistry";
 import AspireRpcServer from "../server/AspireRpcServer";
 import { AlreadyStartedResourceDebugSession, createDebugSessionConfiguration } from "./debuggerExtensions";
@@ -178,6 +180,7 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
 
   private _appHostDebugSession?: AspireResourceDebugSession = undefined;
   private _resourceDebugSessions: AspireResourceDebugSession[] = [];
+  private readonly _resourceDebugSessionProcessIds = new Map<string, number>();
   private readonly _editorResourceSessions = new Map<string, EditorResourceSessionSnapshot>();
   private _trackedDebugAdapters: string[] = [];
   private _rpcClient?: ICliRpcClient;
@@ -340,6 +343,12 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
     return this._cliProcess?.pid;
   }
 
+  // Both DAP and already-started integrations report the debuggee PID. Only debugging-enabled
+  // sessions should claim that PID and prevent another attachment.
+  hasResourceDebugSessionProcess(processId: number): boolean {
+    return [...this._resourceDebugSessionProcessIds.values()].includes(processId);
+  }
+
   constructor(session: vscode.DebugSession, rpcServer: AspireRpcServer, dcpServer: AspireDcpServer, terminalProvider: AspireTerminalProvider, removeAspireDebugSession: (session: AspireDebugSession) => void, trackAppHostDebugSession: AppHostDebugSessionTracker = () => { }, debugSessionId: string = generateDcpIdPrefix(), operationKind?: AspireOperationKind) {
     this._session = session;
     this._rpcServer = rpcServer;
@@ -357,6 +366,8 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
     this.operationKind = operationKind ?? getOperationKind(this.configuration.command);
 
     this.debugSessionId = debugSessionId;
+    this._disposables.push(vscode.debug.onDidTerminateDebugSession(
+      terminatedSession => this._resourceDebugSessionProcessIds.delete(terminatedSession.id)));
   }
 
   /**
@@ -1435,13 +1446,24 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
     }
 
     this._trackedDebugAdapters.push(debugAdapter);
-    this._disposables.push(createDebugAdapterTracker(this._dcpServer, debugAdapter, appHostTracker));
+    this._disposables.push(createDebugAdapterTracker(
+      this._dcpServer,
+      debugAdapter,
+      appHostTracker,
+      (session, processId) => {
+        if (processId === undefined || session.configuration.noDebug === true) {
+          this._resourceDebugSessionProcessIds.delete(session.id);
+        } else {
+          this._resourceDebugSessionProcessIds.set(session.id, processId);
+        }
+      }));
   }
 
   private static readonly _nodeAppHostExtensions = ['.js', '.ts', '.mjs', '.mts', '.cjs', '.cts'];
   private static readonly _dotnetAppHostExtensions = ['.cs', '.csproj', '.fsproj', '.vbproj'];
   private static readonly _rustAppHostExtensions = ['.rs'];
   private static readonly _javaAppHostExtensions = ['.java'];
+  private static readonly _goAppHostExtensions = ['.go'];
 
   private _appHostRestartRequested = false;
   private _appHostTerminationRequested = false;
@@ -1461,6 +1483,7 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
       const isDotNetAppHost = AspireDebugSession._dotnetAppHostExtensions.includes(fileExtension);
       const isRustAppHost = AspireDebugSession._rustAppHostExtensions.includes(fileExtension);
       const isJavaAppHost = AspireDebugSession._javaAppHostExtensions.includes(fileExtension);
+      const isGoAppHost = AspireDebugSession._goAppHostExtensions.includes(fileExtension);
 
       // The CLI only routes an AppHost here when the language declares ExtensionLaunchCapability, so
       // this is parsed before choosing a debugger: an unrecognised command means we cannot build a
@@ -1471,13 +1494,23 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
         throw new Error(javaAppHostCommandNotRecognized());
       }
 
+      // Parsed up front for the same reason as Java: a command that is not `go run <package>` cannot be
+      // turned into a launch configuration, and passing it through would debug the wrong program.
+      const goCommand = isGoAppHost ? parseGoAppHostCommand(args) : null;
+
+      if (isGoAppHost && !goCommand) {
+        throw new Error(goAppHostCommandNotRecognized());
+      }
+
       const debuggerExtension = isNodeAppHost
         ? nodeDebuggerExtension
         : isRustAppHost
           ? createDefaultRustDebuggerExtension()
           : isJavaAppHost
             ? javaDebuggerExtension
-            : projectDebuggerExtension;
+            : isGoAppHost
+              ? goDebuggerExtension
+              : projectDebuggerExtension;
 
       // Resource launches are gated by getResourceDebuggerExtensions, which omits Rust when no native
       // debugger extension is installed. This path builds the descriptor directly, so without the same
@@ -1494,19 +1527,25 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
         throw new Error(javaDebuggerExtensionNotInstalled(debuggerExtension.extensionId));
       }
 
+      // And for Go: the `go` debug type belongs to the Go extension, so without it VS Code would fail
+      // the session with the same raw "configured debug type is not supported" error.
+      if (isGoAppHost && debuggerExtension.extensionId && !isExtensionInstalled(debuggerExtension.extensionId)) {
+        throw new Error(goDebuggerExtensionNotInstalled(debuggerExtension.extensionId));
+      }
+
       // Register the adapter tracker with an app host restart handler.
-      // When the user clicks "restart" on the app host child session,
-      // we suppress VS Code's automatic child restart and restart the
-      // entire Aspire debug session instead.
+      // When the user clicks "restart" on the app host child session, the tracker clears the DAP
+      // `restart` flag of the request sent to the adapter so it shuts down completely, and we restart
+      // the entire Aspire debug session instead. VS Code relaunches the terminated child by itself,
+      // and stopRelaunchedAppHostSession stops that relaunch.
       //
       // The output filter is intentionally a positive opt-in for .NET AppHosts only.
       // The .NET debugger (`coreclr`) emits a lot of `console`-category chatter
       // (module loads, exception-thrown notifications, the debugger banner, etc.)
       // into the parent debug console, and `Microsoft.Extensions.Logging` lines need
-      // correlation and severity styling. Other languages (Node, and future
-      // additions like Python/Go) use different debug adapters that don't produce
-      // that noise, so we pass their output through unmodified until/unless they
-      // explicitly opt in to filtering.
+      // correlation and severity styling. Other languages (Node, Rust, Java and Go) use different
+      // debug adapters that don't produce that noise, so we pass their output through unmodified
+      // until/unless they explicitly opt in to filtering.
       this.createDebugAdapterTrackerCore(
         debuggerExtension.debugAdapter,
         {
@@ -1514,7 +1553,7 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
           onRestartRequested: () => {
             this._appHostRestartRequested = true;
             this.configuration[appHostRestartSourceSessionIdConfigKey] = this._session.id;
-            return true; // suppress VS Code's child restart
+            return true; // the whole Aspire session restarts, so the adapter must not prepare for a relaunch
           },
           onOutput: isDotNetAppHost
             ? (output, category) => this.sendAppHostMessage(output, category)
@@ -1523,7 +1562,9 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
             if (debugSessionId === this.debugSessionId) {
               this._appHostTerminationRequested = true;
             }
-          }
+          },
+          // Delve advertises supportsRestartRequest, which would bypass onRestartRequested (see the tracker).
+          disableDirectRestart: isGoAppHost
         }
       );
 
@@ -1569,6 +1610,17 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
           ...(javaCommand!.vmArgs.length > 0 ? { vm_args: javaCommand!.vmArgs } : {})
         } as JavaLaunchConfiguration;
       }
+      else if (isGoAppHost) {
+        // The program is the AppHost directory, not apphost.go: `go run .` compiles every file in the
+        // package, and a single-file program would leave out the AppHost's sibling .go files. A package
+        // path other than "." resolves against the same directory the CLI starts `go run` in.
+        appHostArgs = goCommand!.appHostArgs;
+        launchConfig = {
+          type: 'go',
+          program: path.resolve(path.dirname(projectFile), goCommand!.packagePath),
+          working_directory: path.dirname(projectFile)
+        } as GoLaunchConfiguration;
+      }
       else {
         // The CLI sends the full dotnet CLI args (e.g., ["run", "--no-build", "--project", "...", "--", ...appHostArgs]).
         // Since we launch the apphost directly via the debugger (not via dotnet run), extract only the args after "--".
@@ -1611,8 +1663,17 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
       this._appHostDebugSession = appHostDebugSession;
       this._trackAppHostDebugSession(this, projectFile, appHostDebugSession);
 
+      // VS Code can report the restarted child as terminated more than once, for example when the
+      // relaunch it scheduled is canceled or stopped. Only the first termination restarts the Aspire
+      // session. An aborted restart leaves this listener subscribed, so the guard also keeps a later
+      // termination from retrying the stop and starting a replacement after the abort.
+      let restartHandled = false;
       const disposable = vscode.debug.onDidTerminateDebugSession(async session => {
         if (this._appHostDebugSession && session.id === this._appHostDebugSession.id) {
+          if (restartHandled) {
+            return;
+          }
+
           // Emit whatever was still being assembled before the banner, so a record the
           // AppHost logged on its way out is not lost and still reads in order.
           this.flushAppHostLogOutput();
@@ -1646,6 +1707,8 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
           // they are stopped before the AppHost entry and the Aspire parent, and so a resource that
           // refuses to stop is reported rather than silently dropped by dispose().
           if (shouldRestart) {
+            restartHandled = true;
+            this.stopRelaunchedAppHostSession(session);
             // The ordered shutdown finalizes this session before VS Code reuses its configuration
             // for the replacement. Keep the source ID long enough for the terminating parent to
             // suppress optimistic stopping without affecting the replacement session.
@@ -1725,6 +1788,52 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
     }
   }
 
+  /**
+   * Stops the copy of an AppHost child that VS Code relaunches by itself after the child terminated
+   * for a restart.
+   *
+   * The adapter tracker only clears the DAP `restart` flag of the request sent to the adapter. VS Code
+   * terminates the child, waits about 300 ms and relaunches the same session id with its old
+   * configuration. It cancels that launch only when the parent session has already ended:
+   * https://github.com/microsoft/vscode/blob/main/src/vs/workbench/contrib/debug/browser/debugService.ts
+   * https://github.com/microsoft/vscode/blob/main/src/vs/workbench/contrib/debug/browser/debugSession.ts
+   * Without this watch the relaunch would run with the previous configuration next to the replacement
+   * session, and the ordered shutdown would not stop it because that shutdown skips an AppHost that
+   * has already terminated.
+   *
+   * VS Code raises the start event only once the relaunch's launch request has completed, which takes
+   * seconds when the adapter builds first (for example Delve building a Go AppHost), so no deadline
+   * can tell a slow relaunch from one that never arrives. The watch ends on what VS Code reports
+   * instead: a start event for the same id (the relaunch is stopped here), or another termination of
+   * that id (the relaunch failed, was canceled or was stopped, which VS Code reports as a further end
+   * of the session). A listener subscribed while an event is being raised does not receive that event,
+   * so the termination that started the watch does not end it.
+   *
+   * Only the restarted child's own id is matched, so the replacement AppHost, which gets a new id, is
+   * never affected. In turn, the replacement parent only adopts an AppHost child that carries its own
+   * debugSessionId (see startAndGetDebugSessionCore), so it cannot adopt the relaunched child that this
+   * watch stops. The watch subscribes to termination events itself, rather than relying on the
+   * session's listener, because the ordered shutdown disposes the session's disposables before the
+   * relaunch can arrive.
+   */
+  private stopRelaunchedAppHostSession(restartedSession: vscode.DebugSession): void {
+    const watch = vscode.Disposable.from(
+      vscode.debug.onDidStartDebugSession(started => {
+        if (started.id !== restartedSession.id) {
+          return;
+        }
+
+        watch.dispose();
+        extensionLogOutputChannel.info(`Stopping AppHost session ${started.name} that VS Code relaunched during a restart`);
+        stopSessionInBackground(() => vscode.debug.stopDebugging(started), `relaunched AppHost session ${started.name}`);
+      }),
+      vscode.debug.onDidTerminateDebugSession(terminated => {
+        if (terminated.id === restartedSession.id) {
+          watch.dispose();
+        }
+      }));
+  }
+
   trackAlreadyStartedResourceSession(debugConfig: AspireResourceExtendedDebugConfiguration, resourceDebugSession: AlreadyStartedResourceDebugSession): AspireResourceDebugSession | undefined {
     // isShuttingDown rather than _disposed: an ordered shutdown snapshots the resource sessions
     // before its awaits, so a resource registered after that snapshot would only be stopped by the
@@ -1733,6 +1842,10 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
     if (this.isShuttingDown) {
       this.stopLateResourceSession(resourceDebugSession);
       return undefined;
+    }
+
+    if (debugConfig.noDebug !== true) {
+      this._resourceDebugSessionProcessIds.set(resourceDebugSession.id, resourceDebugSession.processId);
     }
 
     if (debugConfig.debugSessionId === null) {
@@ -1751,6 +1864,8 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
 
     this.trackEditorResourceSession(debugConfig, 'running');
     void resourceDebugSession.termination.then(exitCode => {
+      this._resourceDebugSessions = this._resourceDebugSessions.filter(session => session !== resourceDebugSession);
+      this._resourceDebugSessionProcessIds.delete(resourceDebugSession.id);
       this.removeEditorResourceSession(debugConfig.runId);
       if (debugConfig.debugSessionId === null) {
         extensionLogOutputChannel.warn(`Unable to report termination for run ${debugConfig.runId} because the DCP session ID is missing.`);
@@ -1786,10 +1901,21 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
       const logConfig = getLoggableDebugConfiguration(debugConfig, this._terminalProvider.isDebugConfigEnvironmentLoggingEnabled());
       extensionLogOutputChannel.info(`Starting debug session with configuration: ${JSON.stringify(logConfig)}`);
       this.createDebugAdapterTrackerCore(debugConfig.type);
+      if (debugConfig.resourceType === 'browser' && debugConfig.type === 'blazorwasm') {
+        this.registerDisposable(registerBlazorWasmDebugRelay(debugConfig));
+      }
 
       let resolved = false;
       const disposable = vscode.debug.onDidStartDebugSession(session => {
-        if (session.configuration.runId === debugConfig.runId) {
+        // Every AppHost child has the empty run ID, so the run ID cannot tell this launch's child from the
+        // child that VS Code relaunches for the outgoing parent after a restart. That relaunch can start
+        // while the replacement parent waits for its own AppHost, and adopting it would make the old
+        // parent's relaunch watch stop what the replacement then takes for its AppHost exiting. Scoping
+        // the match to the launching parent's debugSessionId (stamped on every child configuration)
+        // leaves the stale child to the watch. Resource run IDs are unique, so they need no such scope.
+        const isOwnedByThisSession = debugConfig.isApphost !== true
+          || session.configuration.debugSessionId === debugConfig.debugSessionId;
+        if (session.configuration.runId === debugConfig.runId && isOwnedByThisSession) {
           extensionLogOutputChannel.info(`Debug session started: ${session.name} (run id: ${session.configuration.runId})`);
           disposable.dispose();
           this.updateEditorResourceSessionState(debugConfig.runId, 'running');
@@ -1829,6 +1955,7 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
             // stop that is still waiting for VS Code to confirm the same termination.
             terminated = true;
             this._resourceDebugSessions = this._resourceDebugSessions.filter(resourceSession => resourceSession.id !== session.id);
+            this._resourceDebugSessionProcessIds.delete(session.id);
             this.removeEditorResourceSession(debugConfig.runId);
             cleanupResource();
             resolveTermination();
@@ -1865,7 +1992,11 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
               }
             });
 
-            cleanupResource();
+            // Browser transports stay alive until confirmed termination: an acknowledged or
+            // rejected stop request does not establish that the root session has ended.
+            if (!browserTermination) {
+              cleanupResource();
+            }
 
             return stop;
           };
@@ -2127,6 +2258,7 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
     this.flushAppHostLogOutput();
     this._appHostLogOutput.reset();
     this._trackedDebugAdapters = [];
+    this._resourceDebugSessionProcessIds.clear();
     this._onDidSendDebugConsoleOutput.dispose();
     // Keep this disposed session tracked while its delayed CLI termination is pending, so
     // extension deactivation can still force-drain the process tree before VS Code exits.

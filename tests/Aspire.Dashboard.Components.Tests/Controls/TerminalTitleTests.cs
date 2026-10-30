@@ -152,7 +152,7 @@ public class TerminalTitleTests : DashboardTestContext
         Assert.Equal(Resources.TerminalStrings.ResourceManager.GetString(label), progress.GetAttribute("aria-label"));
         var indicator = cut.Find(".terminal-icon");
         Assert.Equal(state, indicator.GetAttribute("data-state"));
-        Assert.Equal(expectedValue is null ? Resources.TerminalStrings.ResourceManager.GetString(label) : expectedText, indicator.GetAttribute("title"));
+        Assert.Equal(expectedValue is null ? Resources.TerminalStrings.ResourceManager.GetString(label) : expectedText, indicator.GetAttribute("data-tooltip"));
         Assert.Empty(indicator.TextContent.Trim());
         Assert.Equal("terminal-icon", cut.Find(".terminal-metadata").Children[0].ClassName);
         Assert.Equal("terminal-title-container", cut.Find(".terminal-metadata").Children[1].ClassName);
@@ -186,13 +186,13 @@ public class TerminalTitleTests : DashboardTestContext
             Connected = true, ProgressState = "normal", ProgressPercentage = 42
         }));
         Assert.Single(cut.FindAll("[role=progressbar]"));
-        Assert.Equal("42%", cut.Find(".terminal-icon").GetAttribute("title"));
+        Assert.Equal("42%", cut.Find(".terminal-icon").GetAttribute("data-tooltip"));
         Assert.Empty(cut.FindComponents<FluentIcon<Icon>>());
 
         cut.Render(builder => builder.Add(p => p.State, new TerminalToolbarState { Connected = true, ProgressState = "none" }));
         Assert.Same(icon, cut.FindComponent<FluentIcon<Icon>>().Instance.Value);
         cut.Render(builder => builder.Add(p => p.State, new TerminalToolbarState { Connected = false, ProgressState = "normal", ProgressPercentage = 42 }));
         Assert.Same(icon, cut.FindComponent<FluentIcon<Icon>>().Instance.Value);
-        Assert.Null(cut.Find(".terminal-icon").GetAttribute("title"));
+        Assert.Null(cut.Find(".terminal-icon").GetAttribute("data-tooltip"));
     }
 }

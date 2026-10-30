@@ -1,0 +1,225 @@
+.dashboard-feedback-dialog {
+    max-width: 640px;
+}
+
+.dashboard-feedback-progress {
+    display: grid;
+    gap: 6px;
+    margin-bottom: 18px;
+    color: var(--colorNeutralForeground3);
+    font-size: 11px;
+    font-weight: var(--fontWeightSemibold);
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+
+.dashboard-feedback-progress-track {
+    display: block;
+    height: 3px;
+    overflow: hidden;
+    border-radius: 2px;
+    background: var(--colorNeutralBackground3);
+}
+
+.dashboard-feedback-progress-track > span {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--colorBrandBackground);
+    transform-origin: left center;
+    transition: transform 180ms ease;
+}
+
+.dashboard-feedback-step {
+    display: grid;
+    gap: 18px;
+}
+
+.dashboard-feedback-step-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--colorNeutralStroke3);
+}
+
+.dashboard-feedback-step-header h2 {
+    margin: 0;
+    font-size: 18px;
+    line-height: 24px;
+}
+
+.dashboard-feedback-step-header p {
+    margin: 3px 0 0;
+    color: var(--colorNeutralForeground2);
+    line-height: 20px;
+}
+
+.dashboard-feedback-section {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    gap: 8px;
+    border: 0;
+}
+
+.dashboard-feedback-input,
+.dashboard-feedback-textarea {
+    box-sizing: border-box;
+    width: 100%;
+    border: 1px solid var(--colorNeutralStroke1);
+    border-radius: 6px;
+    background: var(--colorNeutralBackground1);
+    color: var(--colorNeutralForeground1);
+    font: inherit;
+}
+
+.dashboard-feedback-input {
+    min-height: 36px;
+    padding: 5px 9px;
+}
+
+.dashboard-feedback-section > ::deep fluent-field.dashboard-feedback-select {
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+    row-gap: 0;
+}
+
+::deep .dashboard-feedback-select fluent-dropdown {
+    width: 100%;
+    min-width: 0;
+}
+
+::deep .dashboard-feedback-select fluent-dropdown::part(root) {
+    min-height: 38px;
+    border-radius: 6px;
+}
+
+.dashboard-feedback-textarea {
+    min-height: 88px;
+    padding: 8px 10px;
+    line-height: 1.4;
+    resize: vertical;
+}
+
+.dashboard-feedback-input:focus-visible,
+.dashboard-feedback-textarea:focus-visible {
+    outline: 0;
+    box-shadow: inset 0 0 0 2px var(--colorStrokeFocus2);
+}
+
+.dashboard-feedback-reason:has(input:focus-visible) {
+    outline: 0;
+    box-shadow: inset 0 0 0 2px var(--colorStrokeFocus2);
+}
+
+.dashboard-feedback-reason-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.dashboard-feedback-reason {
+    display: flex;
+    align-items: center;
+    min-height: 38px;
+    gap: 8px;
+    padding: 7px 10px;
+    border: 1px solid var(--colorNeutralStroke1);
+    border-radius: 6px;
+    color: var(--colorNeutralForeground2);
+    cursor: pointer;
+}
+
+.dashboard-feedback-reason:hover {
+    border-color: var(--colorNeutralStroke1Hover);
+    background: var(--colorNeutralBackground1Hover);
+    color: var(--colorNeutralForeground1);
+}
+
+.dashboard-feedback-reason.selected {
+    border-color: var(--colorBrandStroke1);
+    background: var(--colorBrandBackground2);
+    color: var(--colorNeutralForeground1);
+}
+
+.dashboard-feedback-reason > input {
+    flex: 0 0 auto;
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    accent-color: var(--colorBrandBackground);
+}
+
+.dashboard-feedback-reason > input:focus-visible {
+    outline: 0;
+}
+
+.dashboard-feedback-preview-disclosure {
+    border: 1px solid var(--colorNeutralStroke3);
+    border-radius: 8px;
+    background: var(--colorNeutralBackground2);
+}
+
+.dashboard-feedback-preview-disclosure > summary {
+    padding: 10px 12px;
+    border-radius: 7px 7px 0 0;
+    color: var(--colorBrandForegroundLink);
+    font-size: 12.5px;
+    cursor: pointer;
+}
+
+.dashboard-feedback-preview-disclosure > summary:focus-visible,
+.dashboard-feedback-preview:focus-visible {
+    outline: 0;
+    box-shadow: inset 0 0 0 2px var(--colorStrokeFocus2);
+}
+
+.dashboard-feedback-preview-header {
+    padding: 0 12px 6px;
+    color: var(--colorNeutralForeground3);
+    font-size: 11px;
+}
+
+.dashboard-feedback-preview {
+    max-height: 180px;
+    margin: 0;
+    padding: 10px 12px;
+    overflow: auto;
+    border-top: 1px solid var(--colorNeutralStroke3);
+    background: transparent;
+    color: var(--colorNeutralForeground1);
+    font-family: var(--aspire-font-monospace);
+    font-size: 12px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+}
+
+.dashboard-feedback-status {
+    margin: 0;
+    color: var(--colorPaletteRedForeground1);
+}
+
+.dashboard-feedback-actions {
+    justify-content: flex-end;
+}
+
+/* Skipping sits apart from the form's own buttons, at the start of the footer. */
+.dashboard-feedback-actions ::deep .dashboard-feedback-skip {
+    margin-inline-end: auto;
+}
+
+@media (max-width: 600px) {
+    .dashboard-feedback-reason-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .dashboard-feedback-progress-track > span {
+        transition: none;
+    }
+}

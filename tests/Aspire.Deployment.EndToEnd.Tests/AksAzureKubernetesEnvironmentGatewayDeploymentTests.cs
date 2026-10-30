@@ -103,7 +103,7 @@ public sealed class AksAzureKubernetesEnvironmentGatewayDeploymentTests(ITestOut
             // raw Bicep-provisions-AGC + gateway-attaches-to-LB code paths covered without
             // dragging Let's Encrypt into this test.
             //
-            // We rely on the starter template exposing `var apiService = builder.AddProject<Projects.<name>_ApiService>("apiservice")`.
+            // The starter template exposes `var apiService = builder.AddDotnetProject("apiservice", ...)`.
             // The webfrontend line is left untouched; we don't route to it from the gateway.
             var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
             var appHostDir = Path.Combine(projectDir, $"{projectName}.AppHost");

@@ -42,6 +42,7 @@ jobs:
     if: ${{ github.repository == 'microsoft/aspire' }}
     uses: ./.github/workflows/specialized-test-runner.yml
     permissions:
+      actions: read
       contents: read
     with:
       testRunnerName: "QuarantinedTestRunsheetBuilder"

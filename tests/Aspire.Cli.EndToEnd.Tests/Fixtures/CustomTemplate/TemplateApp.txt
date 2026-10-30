@@ -1,0 +1,4 @@
+Name: TemplateApp
+Greeting: GreetingValue
+Kind: ServiceKindValue
+Features: FeaturesValue

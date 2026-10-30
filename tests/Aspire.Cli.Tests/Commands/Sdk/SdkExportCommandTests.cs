@@ -37,12 +37,12 @@ public class SdkExportCommandTests(ITestOutputHelper outputHelper)
     public async Task SdkExportSendsTheResolvedGeneratorName(string language)
     {
         var interactionService = new TestInteractionService();
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var provider = CreateProvider(
             interactionService,
-            out var workspace,
+            workspace,
             out var rpcClient,
             out _);
-        using var workspaceLease = workspace;
 
         var exitCode = await InvokeAsync(provider, $"sdk export --language {language}");
 
@@ -51,15 +51,40 @@ public class SdkExportCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task SdkExportResolvesTheGoGeneratorWhenTheGoFeatureIsEnabled()
+    {
+        var interactionService = new TestInteractionService();
+        var rpcClient = new StubExportRpcClient();
+        var project = new CapturingAppHostServerProject();
+        var features = new TestFeatures();
+        features.SetFeature(KnownFeatures.ExperimentalPolyglotGo, true);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var provider = CreateProvider(
+            interactionService,
+            workspace,
+            rpcClient,
+            project,
+            features: features);
+
+        var exitCode = await InvokeAsync(provider, "sdk export --language go --package Contoso.Aspire.Widgets@2.0");
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(("Go", "Contoso.Aspire.Widgets", "2.0.0"), rpcClient.LastExportRequest);
+        Assert.Contains(
+            project.Integrations,
+            integration => integration.Name == "Aspire.Hosting.CodeGeneration.Go");
+    }
+
+    [Fact]
     public async Task SdkExportRestoresExactPackageAndWritesOnlyJsonToStdout()
     {
         var interactionService = new TestInteractionService();
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var provider = CreateProvider(
             interactionService,
-            out var workspace,
+            workspace,
             out var rpcClient,
             out var project);
-        using var workspaceLease = workspace;
 
         var exitCode = await InvokeAsync(
             provider,
@@ -101,12 +126,12 @@ public class SdkExportCommandTests(ITestOutputHelper outputHelper)
     public async Task SdkExportRestoresNormalizedFourPartNuGetVersion(string requestedVersion, string normalizedVersion)
     {
         var interactionService = new TestInteractionService();
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var provider = CreateProvider(
             interactionService,
-            out var workspace,
+            workspace,
             out var rpcClient,
             out var project);
-        using var workspaceLease = workspace;
 
         var exitCode = await InvokeAsync(
             provider,
@@ -125,13 +150,13 @@ public class SdkExportCommandTests(ITestOutputHelper outputHelper)
     public async Task SdkExportRejectsRequestedGeneratorPackageAtDifferentVersion()
     {
         var interactionService = new TestInteractionService();
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var provider = CreateProvider(
             interactionService,
-            out var workspace,
+            workspace,
             out var rpcClient,
             out var project,
             identityVersion: "13.5.0");
-        using var workspaceLease = workspace;
 
         var exitCode = await InvokeAsync(
             provider,
@@ -149,13 +174,13 @@ public class SdkExportCommandTests(ITestOutputHelper outputHelper)
     public async Task SdkExportRejectsRequestedGeneratorPackageAtCliVersion()
     {
         var interactionService = new TestInteractionService();
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var provider = CreateProvider(
             interactionService,
-            out var workspace,
+            workspace,
             out var rpcClient,
             out var project,
             identityVersion: "13.5.0");
-        using var workspaceLease = workspace;
 
         var exitCode = await InvokeAsync(
             provider,
@@ -173,12 +198,12 @@ public class SdkExportCommandTests(ITestOutputHelper outputHelper)
     public async Task SdkExportDefaultsToCoreAtTheRunningSdkVersion()
     {
         var interactionService = new TestInteractionService();
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var provider = CreateProvider(
             interactionService,
-            out var workspace,
+            workspace,
             out var rpcClient,
             out var project);
-        using var workspaceLease = workspace;
 
         var exitCode = await InvokeAsync(provider, "sdk export --language typescript");
 
@@ -203,12 +228,12 @@ public class SdkExportCommandTests(ITestOutputHelper outputHelper)
     public async Task SdkExportRejectsMalformedOrNonExactPackages(string package)
     {
         var interactionService = new TestInteractionService();
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var provider = CreateProvider(
             interactionService,
-            out var workspace,
+            workspace,
             out var rpcClient,
             out _);
-        using var workspaceLease = workspace;
 
         var exitCode = await InvokeAsync(provider, $"sdk export --language typescript --package \"{package}\"");
 
@@ -221,12 +246,12 @@ public class SdkExportCommandTests(ITestOutputHelper outputHelper)
     public async Task SdkExportRejectsCoreVersionDifferentFromTheCli()
     {
         var interactionService = new TestInteractionService();
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var provider = CreateProvider(
             interactionService,
-            out var workspace,
+            workspace,
             out var rpcClient,
             out _);
-        using var workspaceLease = workspace;
 
         var exitCode = await InvokeAsync(
             provider,
@@ -244,13 +269,13 @@ public class SdkExportCommandTests(ITestOutputHelper outputHelper)
         var interactionService = new TestInteractionService();
         var physicalSdkVersion = VersionHelper.GetDefaultSdkVersion();
         var emulatedSdkVersion = physicalSdkVersion == "0.0.1" ? "0.0.2" : "0.0.1";
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var provider = CreateProvider(
             interactionService,
-            out var workspace,
+            workspace,
             out var rpcClient,
             out _,
             identityVersion: emulatedSdkVersion);
-        using var workspaceLease = workspace;
 
         var command = specifyPackage
             ? $"sdk export --language typescript --package Aspire.Hosting@{emulatedSdkVersion}"
@@ -269,12 +294,12 @@ public class SdkExportCommandTests(ITestOutputHelper outputHelper)
             "No code generator found for language: klingon.",
             (int)JsonRpcErrorCode.InvalidParams,
             errorData: null));
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var provider = CreateProvider(
             interactionService,
-            out var workspace,
+            workspace,
             rpcClient,
             new CapturingAppHostServerProject());
-        using var workspaceLease = workspace;
 
         var exitCode = await InvokeAsync(provider, "sdk export --language klingon");
 
@@ -289,12 +314,12 @@ public class SdkExportCommandTests(ITestOutputHelper outputHelper)
     public async Task SdkExportRejectsLanguageWithoutCodeGeneratorBeforePreparation()
     {
         var interactionService = new TestInteractionService();
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var provider = CreateProvider(
             interactionService,
-            out var workspace,
+            workspace,
             out var rpcClient,
             out var project);
-        using var workspaceLease = workspace;
 
         var exitCode = await InvokeAsync(provider, "sdk export --language csharp");
 
@@ -314,12 +339,12 @@ public class SdkExportCommandTests(ITestOutputHelper outputHelper)
         var interactionService = new TestInteractionService();
         var rpcClient = new ThrowingExportRpcClient(
             new RemoteInvocationException("AppHost export failed.", 0, errorData: null));
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var provider = CreateProvider(
             interactionService,
-            out var workspace,
+            workspace,
             rpcClient,
             new CapturingAppHostServerProject());
-        using var workspaceLease = workspace;
 
         var exitCode = await InvokeAsync(provider, "sdk export --language typescript");
 
@@ -331,12 +356,12 @@ public class SdkExportCommandTests(ITestOutputHelper outputHelper)
     public async Task SdkExportHasNoSourceOrOutputOptions()
     {
         var interactionService = new TestInteractionService();
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var provider = CreateProvider(
             interactionService,
-            out var workspace,
+            workspace,
             out var rpcClient,
             out _);
-        using var workspaceLease = workspace;
 
         var exitCode = await InvokeAsync(
             provider,
@@ -354,26 +379,24 @@ public class SdkExportCommandTests(ITestOutputHelper outputHelper)
 
     private ServiceProvider CreateProvider(
         TestInteractionService interactionService,
-        out TemporaryWorkspace workspace,
+        TemporaryWorkspace workspace,
         out StubExportRpcClient rpcClient,
         out CapturingAppHostServerProject project,
         string? identityVersion = null)
     {
-        workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         rpcClient = new StubExportRpcClient();
         project = new CapturingAppHostServerProject();
-        return CreateProvider(interactionService, out _, rpcClient, project, workspace, identityVersion);
+        return CreateProvider(interactionService, workspace, rpcClient, project, identityVersion);
     }
 
     private ServiceProvider CreateProvider(
         TestInteractionService interactionService,
-        out TemporaryWorkspace workspace,
+        TemporaryWorkspace workspace,
         IAppHostRpcClient rpcClient,
         IAppHostServerProject appHostServerProject,
-        TemporaryWorkspace? existingWorkspace = null,
-        string? identityVersion = null)
+        string? identityVersion = null,
+        IFeatures? features = null)
     {
-        workspace = existingWorkspace ?? TemporaryWorkspace.CreateForCli(outputHelper);
         var testWorkspace = workspace;
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -383,6 +406,11 @@ public class SdkExportCommandTests(ITestOutputHelper outputHelper)
                 options.CliExecutionContextFactory = _ => testWorkspace.CreateExecutionContext(
                     identityVersion: identityVersion,
                     identityOverridden: true);
+            }
+
+            if (features is not null)
+            {
+                options.FeatureFlagsFactory = _ => features;
             }
         });
 
@@ -449,6 +477,7 @@ public class SdkExportCommandTests(ITestOutputHelper outputHelper)
             IEnumerable<IntegrationReference> integrations,
             string? requestedChannel = null,
             string? packageSourceOverride = null,
+            string? packageSourceOverridePattern = null,
             CancellationToken cancellationToken = default)
         {
             PrepareCallCount++;

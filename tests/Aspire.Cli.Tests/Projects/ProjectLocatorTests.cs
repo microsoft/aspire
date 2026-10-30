@@ -516,7 +516,8 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var projectLocator = CreateProjectLocator(executionContext);
 
-        var ex = await Assert.ThrowsAsync<ProjectLocatorException>(async () => {
+        var ex = await Assert.ThrowsAsync<ProjectLocatorException>(async () =>
+        {
             await projectLocator.UseOrFindAppHostProjectFileAsync(projectFile, createSettingsFile: true).DefaultTimeout();
         });
 
@@ -1395,7 +1396,8 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var projectLocator = CreateProjectLocator(executionContext);
 
-        var ex = await Assert.ThrowsAsync<ProjectLocatorException>(async () =>{
+        var ex = await Assert.ThrowsAsync<ProjectLocatorException>(async () =>
+        {
             await projectLocator.UseOrFindAppHostProjectFileAsync(null, createSettingsFile: true).DefaultTimeout();
         });
 
@@ -4277,7 +4279,8 @@ builder.Build().Run();");
             sdkInstaller ?? new TestDotNetSdkInstaller(),
             appHostCandidateFinder,
             telemetry ?? TestTelemetryHelper.CreateInitializedTelemetry(),
-            configuration ?? new ConfigurationBuilder().Build());
+            configuration ?? new ConfigurationBuilder().Build(),
+            TestConfigSourceServices.Create(executionContext));
     }
 
 }

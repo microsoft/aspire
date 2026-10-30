@@ -261,16 +261,12 @@ suite('Aspire Blazor browser debugger E2E', function () {
             browser: 'chrome',
             web_root: standaloneProjectPath,
         };
-        await assert.rejects(
-            () => executeE2eControlCommand({
-                name: 'createResourceDebugConfiguration',
-                launchConfig,
-                csharpExtensionVersion,
-            }),
-            (error: Error) => {
-                assert.ok(error.message.includes(expectedMessage), error.message);
-                return true;
-            });
+        await executeE2eControlCommand({
+            name: 'createResourceDebugConfiguration',
+            launchConfig,
+            csharpExtensionVersion,
+            expectedErrorMessage: expectedMessage,
+        });
     }
 });
 

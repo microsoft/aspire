@@ -58,6 +58,22 @@ public class CodeGenerationResolverTests
         Assert.Equal("TypeScript", exporter.Language);
     }
 
+    [Fact]
+    public void CodeGeneratorResolver_ResolvesGoApiReferenceExporterWithoutItLivingOnTheCodeGenerator()
+    {
+        using var serviceProvider = CreateServiceProvider();
+        var assemblyLoader = CreateAssemblyLoader();
+        var resolver = new CodeGeneratorResolver(serviceProvider, assemblyLoader, NullLogger<CodeGeneratorResolver>.Instance);
+
+        var generator = resolver.GetCodeGenerator("Go");
+        Assert.NotNull(generator);
+        Assert.IsNotAssignableFrom<IApiReferenceExporter>(generator);
+
+        var exporter = resolver.GetApiReferenceExporter("Go");
+        Assert.NotNull(exporter);
+        Assert.Equal("Go", exporter.Language);
+    }
+
     /// <summary>
     /// A documented API that no generator produces would be worse than no documentation at all, so
     /// discovering exporters independently must not make one reachable for an unsupported language.

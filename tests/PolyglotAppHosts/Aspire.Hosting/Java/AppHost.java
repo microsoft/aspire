@@ -4,6 +4,11 @@ import java.util.Map;
 void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         var container = builder.addContainer("mycontainer", "nginx");
+        container.withTags(new String[] { "Backend", "API" });
+        container.withTags(new String[] { "Service" });
+        container.withTrait("Owner", "Finance");
+        container.withTrait("Owner", "Platform");
+        container.withDashboardPosition(-10);
         container.withOtlpExporter(OtlpProtocol.HTTP_JSON);
         var dockerContainer = builder.addDockerfile("dockerapp", "./app");
         var dockerfileFactory = (AspireFunc1<DockerfileFactoryContext, String>) (factoryContext) -> {
@@ -128,7 +133,13 @@ void main() throws Exception {
             cluster.setIsRbacEnabled(true);
             var _rbacEnabled = cluster.isRbacEnabled();
         });
-        aks.addNodePool("system", new AddNodePoolOptions().vmSize(AksNodeVmSizes.StandardDSv5.StandardD2sV5));
+        aks.withSystemNodePool(pool -> {
+            pool.setOsSku("AzureLinux");
+        });
+        aks.addNodePool("workers", pool -> {
+            pool.setVmSize(AksNodeVmSizes.StandardDSv5.StandardD2sV5);
+            pool.setOsSku("AzureLinux");
+        });
         var aksVolume = aks.addPersistentVolume("aks-data");
         aksVolume.withCapacity("20Gi");
         var pipeline = builder.pipeline();
