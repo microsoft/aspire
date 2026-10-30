@@ -4,6 +4,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using Aspire.Cli.Git;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
@@ -48,8 +49,13 @@ internal sealed class AppHostConnectionResolver(
     CliExecutionContext executionContext,
     ICliHostEnvironment hostEnvironment,
     ILogger<AppHostConnectionResolver> logger,
-    ProfilingTelemetry profilingTelemetry)
+    ProfilingTelemetry profilingTelemetry,
+    ConfigSourceService configSources,
+    Func<string, string, int, ILogger, IReadOnlyList<IAppHostSocket>>? findSockets = null)
 {
+    private readonly Func<string, string, int, ILogger, IReadOnlyList<IAppHostSocket>> _findSockets =
+        findSockets ?? AppHostSocketManager.FindSockets;
+
     /// <summary>
     /// Resolves all running AppHost connections using socket-first discovery.
     /// Supports global discovery without project selection.
@@ -91,6 +97,9 @@ internal sealed class AppHostConnectionResolver(
     /// Whether AppHosts running in a different git worktree are hidden from interactive selection.
     /// AppHosts elsewhere in the same worktree remain selectable.
     /// </param>
+    /// <param name="appHostPid">
+    /// Optional process ID that restricts an explicit project lookup to one AppHost instance.
+    /// </param>
     /// <returns>The resolved connection, or null with an error message.</returns>
     public async Task<AppHostConnectionResult> ResolveConnectionAsync(
         FileInfo? projectFile,
@@ -98,7 +107,8 @@ internal sealed class AppHostConnectionResolver(
         string selectPrompt,
         string notFoundMessage,
         CancellationToken cancellationToken,
-        bool restrictToCurrentWorktree = false)
+        bool restrictToCurrentWorktree = false,
+        int? appHostPid = null)
     {
         // Fast path: If --apphost was specified, check directly for its socket
         if (projectFile is not null)
@@ -145,7 +155,10 @@ internal sealed class AppHostConnectionResolver(
                 };
             }
 
-            var matchingSockets = AppHostSocketManager.FindSockets(
+            // Resolving a project for dynamic resource help may also check its configuration
+            // source. This is intentional: the check is advisory and does not apply settings.
+            configSources.CheckForConfigSourceUpdates(projectFile.Directory!, cancellationToken);
+            var matchingSockets = _findSockets(
                 projectFile.FullName,
                 executionContext.HomeDirectory.FullName,
                 Environment.ProcessId,
@@ -160,6 +173,12 @@ internal sealed class AppHostConnectionResolver(
                         appHostSocket, logger, profilingTelemetry, cancellationToken).ConfigureAwait(false);
                     if (connection is not null)
                     {
+                        if (appHostPid is not null && connection.AppHostInfo?.ProcessId != appHostPid)
+                        {
+                            connection.Dispose();
+                            continue;
+                        }
+
                         var result = new AppHostConnectionResult { Connection = connection };
                         StoreAppHostCliLogFilePath(result);
                         return result;
@@ -277,6 +296,10 @@ internal sealed class AppHostConnectionResolver(
         }
 
         var selectedResult = new AppHostConnectionResult { Connection = selectedConnection };
+        if (selectedConnection.AppHostInfo?.AppHostPath is { Length: > 0 } selectedPath)
+        {
+            configSources.CheckForConfigSourceUpdates(new FileInfo(selectedPath).Directory!, cancellationToken);
+        }
         StoreAppHostCliLogFilePath(selectedResult);
         return selectedResult;
     }

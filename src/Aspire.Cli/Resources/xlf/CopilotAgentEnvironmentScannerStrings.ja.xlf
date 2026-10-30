@@ -4,7 +4,7 @@
     <body>
       <trans-unit id="ApplicatorDescription">
         <source>Configure GitHub Copilot to use the Aspire MCP server</source>
-        <target state="new">Configure GitHub Copilot to use the Aspire MCP server</target>
+        <target state="translated">Aspire MCP サーバーを使用するように GitHub Copilot を構成します</target>
         <note />
       </trans-unit>
     </body>

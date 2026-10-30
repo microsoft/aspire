@@ -11,12 +11,6 @@ public class CommonAgentApplicatorsTests
     private const int MaxSkillDescriptionLength = 1024;
 
     [Fact]
-    public void AgentClient_All_ContainsSupportedGroups()
-    {
-        Assert.Equal([AgentClient.Copilot, AgentClient.ClaudeCode, AgentClient.OpenCode], AgentClient.All);
-    }
-
-    [Fact]
     public void SkillDefinition_CliDefined_ContainsExpectedSkills()
     {
         Assert.Equal(2, SkillDefinition.CliDefined.Count);

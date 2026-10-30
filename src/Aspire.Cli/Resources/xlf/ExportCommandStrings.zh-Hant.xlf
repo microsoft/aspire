@@ -4,72 +4,72 @@
     <body>
       <trans-unit id="DashboardNotAvailable">
         <source>Dashboard is not available. Telemetry data (structured logs, traces) will not be included in the export.</source>
-        <target state="new">Dashboard is not available. Telemetry data (structured logs, traces) will not be included in the export.</target>
+        <target state="translated">儀表板無法使用。診斷資料 (結構化記錄、追蹤) 將不會包含在匯出中。</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
         <source>Export telemetry and resource data to a zip file</source>
-        <target state="new">Export telemetry and resource data to a zip file</target>
+        <target state="translated">將遙測和資源資料匯出至 ZIP 檔案</target>
         <note />
       </trans-unit>
       <trans-unit id="ExportComplete">
         <source>Export saved to {0}</source>
-        <target state="new">Export saved to {0}</target>
+        <target state="translated">匯出已儲存至 {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="FailedToExport">
         <source>Failed to export resource and telemetry data: {0}</source>
-        <target state="new">Failed to export resource and telemetry data: {0}</target>
+        <target state="translated">無法匯出資源與遙測資料: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="GatheringConsoleLogs">
         <source>Gathering console logs...</source>
-        <target state="new">Gathering console logs...</target>
+        <target state="translated">正在收集主控台紀錄...</target>
         <note />
       </trans-unit>
       <trans-unit id="GatheringResources">
         <source>Gathering resource data...</source>
-        <target state="new">Gathering resource data...</target>
+        <target state="translated">正在收集資源資料...</target>
         <note />
       </trans-unit>
       <trans-unit id="GatheringStructuredLogs">
         <source>Gathering structured logs...</source>
-        <target state="new">Gathering structured logs...</target>
+        <target state="translated">正在收集結構化記錄...</target>
         <note />
       </trans-unit>
       <trans-unit id="GatheringTraces">
         <source>Gathering traces...</source>
-        <target state="new">Gathering traces...</target>
+        <target state="translated">正在收集追蹤...</target>
         <note />
       </trans-unit>
       <trans-unit id="IncludeHiddenOptionDescription">
         <source>Include hidden resources in the output</source>
-        <target state="new">Include hidden resources in the output</target>
+        <target state="translated">在輸出中包含隱藏的資源</target>
         <note />
       </trans-unit>
       <trans-unit id="NoResourcesFound">
         <source>No resources found.</source>
-        <target state="new">No resources found.</target>
+        <target state="translated">找不到任何資源。</target>
         <note />
       </trans-unit>
       <trans-unit id="OutputOptionDescription">
         <source>The output file path for the export zip file</source>
-        <target state="new">The output file path for the export zip file</target>
+        <target state="translated">匯出 ZIP 檔案的輸出檔案路徑</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceNotFound">
         <source>Resource '{0}' not found.</source>
-        <target state="new">Resource '{0}' not found.</target>
+        <target state="translated">找不到資源 '{0}'。</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOptionDescription">
         <source>Export data only for the specified resource</source>
-        <target state="new">Export data only for the specified resource</target>
+        <target state="translated">只匯出指定資源的資料</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAppHostAction">
         <source>export data from</source>
-        <target state="new">export data from</target>
+        <target state="translated">匯出資料位置</target>
         <note />
       </trans-unit>
     </body>

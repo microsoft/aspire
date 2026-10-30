@@ -4,7 +4,7 @@
     <body>
       <trans-unit id="ApplicatorDescription">
         <source>Configure Claude Code to use the Aspire MCP server</source>
-        <target state="translated">Configuración de Código Desp para usar el servidor MCP Desi?</target>
+        <target state="translated">Configuración de Código de Claude para usar el servidor MCP Desi?</target>
         <note />
       </trans-unit>
     </body>

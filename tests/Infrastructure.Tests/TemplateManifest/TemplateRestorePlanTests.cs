@@ -203,7 +203,9 @@ public sealed class TemplateRestorePlanTests(ITestOutputHelper output)
         using var command = new PowerShellCommand(script, output)
             .WithTimeout(TimeSpan.FromMinutes(1))
             .WithEnvironmentVariable("TEST_DOTNET", Path.Combine(RepoRoot.Path, ".dotnet", OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet"))
-            .WithEnvironmentVariable("TEST_PROJECT", path);
+            .WithEnvironmentVariable("TEST_PROJECT", path)
+            // Avoid the "MSBuild server unavailable" fallback message polluting the JSON output parsed below.
+            .WithEnvironmentVariable("DOTNET_CLI_USE_MSBUILD_SERVER", "0");
 
         var result = await command.ExecuteAsync();
         result.EnsureSuccessful();

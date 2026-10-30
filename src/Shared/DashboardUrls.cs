@@ -1,4 +1,4 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics.CodeAnalysis;
@@ -11,8 +11,12 @@ namespace Aspire.Dashboard.Utils;
 internal static class DashboardUrls
 {
     public const string ResourcesBasePath = "";
-    public const string ConsoleLogBasePath = "consolelogs";
+    public const string ResourceOverviewBasePath = "resources";
+    public const string ParametersBasePath = "parameters";
+    public const string GraphBasePath = "graph";
     public const string TerminalsBasePath = "terminals";
+    public const string ExtensionsBasePath = "extensions";
+    public const string ConsoleLogBasePath = "consolelogs";
     public const string MetricsBasePath = "metrics";
     public const string StructuredLogsBasePath = "structuredlogs";
     public const string TracesBasePath = "traces";
@@ -122,6 +126,163 @@ internal static class DashboardUrls
         return url;
     }
 
+    /// <summary>
+    /// The query string parameter that lists the resources selected in the dashboard's resource list when more than
+    /// one resource is selected, for example <c>/structuredlogs?resource=api&amp;resource=worker</c>. A single selected
+    /// resource is part of the URL path instead.
+    /// </summary>
+    public const string ResourceSelectionQueryName = "resource";
+
+    /// <summary>
+    /// The query string parameter that switches the dashboard's resource list between listing resources and grouping
+    /// them by tag, for example <c>/resources?pane=tags</c>.
+    /// </summary>
+    public const string ResourcePaneQueryName = "pane";
+
+    /// <summary>
+    /// The query string parameter that focuses the selected resource's terminal instead of its overview cards.
+    /// </summary>
+    public const string ResourceTerminalQueryName = "terminal";
+
+    /// <summary>
+    /// Changes terminal focus without changing the resource, resource pane, other query parameters or fragment.
+    /// </summary>
+    public static string SetResourceTerminalFocus(string url, bool focused)
+    {
+        var fragmentIndex = url.IndexOf('#');
+        var fragment = fragmentIndex >= 0 ? url[fragmentIndex..] : string.Empty;
+        var pathAndQuery = fragmentIndex >= 0 ? url[..fragmentIndex] : url;
+        var queryIndex = pathAndQuery.IndexOf('?');
+        var path = queryIndex >= 0 ? pathAndQuery[..queryIndex] : pathAndQuery;
+        var query = HttpUtility.ParseQueryString(queryIndex >= 0 ? pathAndQuery[(queryIndex + 1)..] : string.Empty);
+        if (focused)
+        {
+            query[ResourceTerminalQueryName] = "true";
+        }
+        else
+        {
+            query.Remove(ResourceTerminalQueryName);
+        }
+
+        return $"{path}{(query.Count > 0 ? $"?{query}" : string.Empty)}{fragment}";
+    }
+
+    /// <summary>
+    /// The <see cref="ResourcePaneQueryName"/> value that lists resources.
+    /// </summary>
+    public const string ResourcePaneResourcesValue = "resources";
+
+    /// <summary>
+    /// The <see cref="ResourcePaneQueryName"/> value that groups resources by tag.
+    /// </summary>
+    public const string ResourcePaneTagsValue = "tags";
+
+    public const string ResourcePaneTelemetryValue = "telemetry";
+
+    public static string TelemetrySourcesUrl() => AddTelemetryPane(StructuredLogsUrl());
+
+    public static string AddTelemetryPane(string url)
+    {
+        var fragmentIndex = url.IndexOf('#');
+        var fragment = fragmentIndex >= 0 ? url[fragmentIndex..] : string.Empty;
+        var pathAndQuery = fragmentIndex >= 0 ? url[..fragmentIndex] : url;
+        var queryIndex = pathAndQuery.IndexOf('?');
+        if (queryIndex >= 0)
+        {
+            var query = HttpUtility.ParseQueryString(pathAndQuery[(queryIndex + 1)..]);
+            if (query[ResourcePaneQueryName] == ResourcePaneTelemetryValue)
+            {
+                return url;
+            }
+            if (query[ResourcePaneQueryName] is not null)
+            {
+                query[ResourcePaneQueryName] = ResourcePaneTelemetryValue;
+                return $"{pathAndQuery[..queryIndex]}?{query}{fragment}";
+            }
+        }
+
+        return AddQueryString(pathAndQuery, ResourcePaneQueryName, ResourcePaneTelemetryValue) + fragment;
+    }
+
+    /// <summary>
+    /// Adds the selected resources to a URL using <see cref="ResourceSelectionQueryName"/>.
+    /// </summary>
+    public static string AddResourceSelection(string url, IEnumerable<string> resources)
+    {
+        foreach (var resource in resources)
+        {
+            url = AddQueryString(url, ResourceSelectionQueryName, resource);
+        }
+
+        return url;
+    }
+
+    /// <summary>
+    /// Gets the URL of the dashboard home page.
+    /// </summary>
+    public static string HomeUrl() => "/";
+
+    /// <summary>
+    /// Gets the URL of the resource overview. Without a resource, the URL lands on the resources view,
+    /// which selects the most recently viewed resource.
+    /// </summary>
+    public static string ResourceOverviewUrl(string? resource = null)
+    {
+        var url = $"/{ResourceOverviewBasePath}";
+        if (resource != null)
+        {
+            url += $"/{Uri.EscapeDataString(resource)}";
+        }
+
+        return url;
+    }
+
+    /// <summary>
+    /// Gets the URL of the resources view with the resource list listing resources.
+    /// </summary>
+    public static string ResourceListUrl() => $"/{ResourceOverviewBasePath}";
+
+    /// <summary>
+    /// Gets the URL of the resources view with the resource list grouped by tag.
+    /// </summary>
+    public static string TagsUrl() => AddQueryString($"/{ResourceOverviewBasePath}", ResourcePaneQueryName, ResourcePaneTagsValue);
+
+    public static string ExtensionsUrl() => $"/{ExtensionsBasePath}";
+
+    public static string ParametersUrl(string? hiddenStates = null, string? hiddenHealthStates = null)
+    {
+        var url = $"/{ParametersBasePath}";
+        if (hiddenStates != null)
+        {
+            url = AddQueryString(url, "hiddenStates", hiddenStates);
+        }
+        if (hiddenHealthStates != null)
+        {
+            url = AddQueryString(url, "hiddenHealthStates", hiddenHealthStates);
+        }
+
+        return url;
+    }
+
+    public static string GraphUrl(string? hiddenTypes = null, string? hiddenStates = null, string? hiddenHealthStates = null)
+    {
+        var url = $"/{GraphBasePath}";
+        if (hiddenTypes != null)
+        {
+            url = AddQueryString(url, "hiddenTypes", hiddenTypes);
+        }
+        if (hiddenStates != null)
+        {
+            url = AddQueryString(url, "hiddenStates", hiddenStates);
+        }
+        if (hiddenHealthStates != null)
+        {
+            url = AddQueryString(url, "hiddenHealthStates", hiddenHealthStates);
+        }
+
+        return url;
+    }
+
     public static string ConsoleLogsUrl(string? resource = null)
     {
         var url = $"/{ConsoleLogBasePath}";
@@ -144,14 +305,24 @@ internal static class DashboardUrls
         return url;
     }
 
-    public static string MetricsUrl(string? resource = null, string? meter = null, string? instrument = null, int? duration = null, string? view = null)
+    public static string MetricsUrl(string? resource = null, string? meter = null, string? instrument = null, int? duration = null, string? view = null, bool pinned = false, bool total = false, bool all = false)
     {
         var url = $"/{MetricsBasePath}";
         if (resource != null)
         {
             url += $"/resource/{Uri.EscapeDataString(resource)}";
         }
-        if (meter is not null)
+        if (pinned)
+        {
+            // The pinned group lists pinned instruments from every meter, so it replaces a meter selection.
+            url = AddQueryString(url, "pinned", "true");
+        }
+        else if (all)
+        {
+            // Every instrument, grouped by meter. Like the pinned group, it replaces a meter selection.
+            url = AddQueryString(url, "all", "true");
+        }
+        else if (meter is not null)
         {
             // Meter and instrument must be querystring parameters because it's valid for the name to contain forward slashes.
             url = AddQueryString(url, "meter", meter);
@@ -167,6 +338,11 @@ internal static class DashboardUrls
         if (view != null)
         {
             url = AddQueryString(url, "view", view);
+        }
+        if (total)
+        {
+            // A counter shows its change per interval by default; this keeps the running total in links.
+            url = AddQueryString(url, "total", "true");
         }
 
         return url;

@@ -9,7 +9,7 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	tunnel := builder.AddDevTunnel("mytunnel")
@@ -26,7 +26,7 @@ func main() {
 	webEndpoint := web.GetEndpoint("http")
 	tunnel.WithTunnelReference(webEndpoint)
 	if err = tunnel.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	web2 := builder.AddContainer("web2", "nginx")
@@ -34,7 +34,7 @@ func main() {
 	web2Endpoint := web2.GetEndpoint("http")
 	tunnel2.WithTunnelReferenceAnonymous(web2Endpoint, true)
 	if err = tunnel2.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	tunnel3 := builder.AddDevTunnel("all-endpoints-tunnel")
@@ -42,7 +42,7 @@ func main() {
 	web3.WithHttpEndpoint(&aspire.WithHttpEndpointOptions{Port: aspire.Float64Ptr(80)})
 	tunnel3.WithTunnelReferenceAll(web3, false)
 	if err = tunnel3.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	web4 := builder.AddContainer("web4", "nginx")
@@ -69,14 +69,14 @@ func main() {
 		WithExpiration(24).
 		WithTunnelReferenceAll(web, false)
 	if err = expiringTunnel.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	if err := app.Run(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 }

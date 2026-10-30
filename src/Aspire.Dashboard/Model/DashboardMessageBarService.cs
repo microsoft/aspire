@@ -20,7 +20,19 @@ public sealed class DashboardMessageBarContent
 
     public string? LinkUrl { get; init; }
 
+    /// <summary>
+    /// Shows the link with the actions and opens it in the dashboard, instead of a new tab. Following the link doesn't
+    /// close the message bar.
+    /// </summary>
+    public bool LinkAsAction { get; init; }
+
     public string? PrimaryAction { get; init; }
+
+    /// <summary>
+    /// When set, the primary action navigates to this dashboard URL and leaves the message bar open, instead of
+    /// closing it with a <c>true</c> result.
+    /// </summary>
+    public string? PrimaryActionUrl { get; init; }
 
     public string? SecondaryAction { get; init; }
 }

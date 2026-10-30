@@ -3,6 +3,7 @@
 
 using System.Globalization;
 using System.Security.Cryptography;
+using Aspire.Cli.Agents.ClaudeCode;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Npm;
 using Aspire.Cli.Resources;
@@ -42,6 +43,7 @@ internal enum PlaywrightInstallStatus
 /// Orchestrates secure installation of the Playwright CLI with supply chain verification.
 /// </summary>
 internal sealed class PlaywrightCliInstaller(
+    IEnumerable<IAgentClient> clients,
     INpmRunner npmRunner,
     INpmProvenanceChecker provenanceChecker,
     IPlaywrightCliRunner playwrightCliRunner,
@@ -79,22 +81,6 @@ internal sealed class PlaywrightCliInstaller(
     /// The name of the playwright-cli skill directory.
     /// </summary>
     internal const string PlaywrightCliSkillName = "playwright-cli";
-
-    /// <summary>
-    /// The primary skill base directory where playwright-cli installs skills.
-    /// This must match the directory that the playwright-cli binary actually writes to.
-    /// See: https://github.com/microsoft/playwright-cli/issues/294
-    /// </summary>
-    internal static readonly string s_primarySkillBaseDirectory = AgentClient.ClaudeCode.ProjectSkillsDirectory;
-
-    // These are upstream-generated paths to clean up in staging, not installation targets.
-    private static readonly string[] s_generatedSkillBaseDirectories =
-    [
-        .. AgentClient.All.Select(static client => client.ProjectSkillsDirectory).Distinct(StringComparer.OrdinalIgnoreCase),
-        // Legacy output from the upstream generator; never offered as installation destinations.
-        Path.Combine(".github", "skills"),
-        Path.Combine(".opencode", "skill")
-    ];
 
     /// <summary>
     /// Generates skills in isolation before copying them to the selected absolute destinations.
@@ -328,10 +314,10 @@ internal sealed class PlaywrightCliInstaller(
     /// Snapshots which playwright-cli skill directories already exist across all
     /// known skill locations so we can tell what was created during this run.
     /// </summary>
-    private static HashSet<string> SnapshotPlaywrightSkillDirs(string repoRoot)
+    private HashSet<string> SnapshotPlaywrightSkillDirs(string repoRoot)
     {
         var existing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var skillBaseDirectory in s_generatedSkillBaseDirectories)
+        foreach (var skillBaseDirectory in GetGeneratedSkillBaseDirectories(repoRoot))
         {
             var dir = Path.Combine(repoRoot, skillBaseDirectory, PlaywrightCliSkillName);
             if (Directory.Exists(dir))
@@ -342,6 +328,21 @@ internal sealed class PlaywrightCliInstaller(
         return existing;
     }
 
+    private IEnumerable<string> GetGeneratedSkillBaseDirectories(string repoRoot)
+    {
+        var workspaceRoot = new DirectoryInfo(repoRoot);
+
+        return
+        [
+            .. clients.Select(client => Path.GetRelativePath(repoRoot,
+                client.GetSkillBaseDirectory(AgentConfigurationScope.Project, workspaceRoot)))
+                .Distinct(StringComparer.OrdinalIgnoreCase),
+            // Legacy output from the upstream generator; never offered as installation destinations.
+            Path.Combine(".github", "skills"),
+            Path.Combine(".opencode", "skill")
+        ];
+    }
+
     /// <summary>
     /// Mirrors the playwright-cli skill directory from the primary location to all
     /// user-selected skill directories, then cleans up any directories that
@@ -349,7 +350,11 @@ internal sealed class PlaywrightCliInstaller(
     /// </summary>
     private (PlaywrightInstallStatus Status, string? Message) MirrorSkillFiles(string repoRoot, IReadOnlySet<string> selectedSkillDirectories, HashSet<string> preExistingLocations)
     {
-        var primarySkillDir = Path.Combine(repoRoot, s_primarySkillBaseDirectory, PlaywrightCliSkillName);
+        // Playwright emits Claude-format skills even when another client is selected.
+        // https://github.com/microsoft/playwright-cli/issues/294
+        var primarySkillBaseDirectory = Path.GetRelativePath(repoRoot, clients.Single(client => string.Equals(client.Id, ClaudeCodeAgentClient.ClientId, StringComparisons.AgentClientId))
+            .GetSkillBaseDirectory(AgentConfigurationScope.Project, new DirectoryInfo(repoRoot)));
+        var primarySkillDir = Path.Combine(repoRoot, primarySkillBaseDirectory, PlaywrightCliSkillName);
 
         if (!Directory.Exists(primarySkillDir))
         {
@@ -361,7 +366,7 @@ internal sealed class PlaywrightCliInstaller(
         // Mirror to each user-selected location (skip the primary — it's the source).
         foreach (var skillBaseDir in selectedSkillDirectories)
         {
-            if (string.Equals(skillBaseDir, s_primarySkillBaseDirectory, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(skillBaseDir, primarySkillBaseDirectory, StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
@@ -383,7 +388,7 @@ internal sealed class PlaywrightCliInstaller(
         // Clean up playwright-cli directories that were created during this run
         // in locations the user didn't select. We only remove directories that
         // didn't exist before install — pre-existing content is never touched.
-        foreach (var skillBaseDirectory in s_generatedSkillBaseDirectories)
+        foreach (var skillBaseDirectory in GetGeneratedSkillBaseDirectories(repoRoot))
         {
             if (selectedSkillDirectories.Contains(skillBaseDirectory))
             {

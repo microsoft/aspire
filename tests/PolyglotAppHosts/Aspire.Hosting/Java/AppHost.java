@@ -4,6 +4,11 @@ import java.util.Map;
 void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         var container = builder.addContainer("mycontainer", "nginx");
+        container.withTags(new String[] { "Backend", "API" });
+        container.withTags(new String[] { "Service" });
+        container.withTrait("Owner", "Finance");
+        container.withTrait("Owner", "Platform");
+        container.withDashboardPosition(-10);
         container.withOtlpExporter(OtlpProtocol.HTTP_JSON);
         var dockerContainer = builder.addDockerfile("dockerapp", "./app");
         var dockerfileFactory = (AspireFunc1<DockerfileFactoryContext, String>) (factoryContext) -> {

@@ -34,6 +34,8 @@ internal sealed class CodingAgentDetector(IEnvironment environment) : ICodingAge
         new("qwen", ["QWEN_CODE"]),
         new("droid", ["DROID_CLI"]),
         new("opencode", ["OPENCODE_AI"]),
+        new("opencode", ["OPENCODE"], "1"),
+        new("opencode", ["OPENCODE_PID"], allowEmptyValue: true),
         new("zed", ["ZED_ENVIRONMENT", "ZED_TERM"]),
         new("kimi", ["KIMI_CLI"]),
         new("openhands", ["OR_APP_NAME"], "OpenHands"),
@@ -70,10 +72,11 @@ internal sealed class CodingAgentDetector(IEnvironment environment) : ICodingAge
         return agentNames is { Count: > 0 } ? string.Join(", ", agentNames) : null;
     }
 
-    private sealed class DetectionRule(string agentName, string[] variableNames, string? expectedValue = null)
+    private sealed class DetectionRule(string agentName, string[] variableNames, string? expectedValue = null, bool allowEmptyValue = false)
     {
         private readonly string[] _variableNames = variableNames;
         private readonly string? _expectedValue = expectedValue;
+        private readonly bool _allowEmptyValue = allowEmptyValue;
 
         public string AgentName { get; } = agentName;
 
@@ -84,7 +87,7 @@ internal sealed class CodingAgentDetector(IEnvironment environment) : ICodingAge
                 var value = environment.GetEnvironmentVariable(variableName);
                 if (_expectedValue is null)
                 {
-                    if (!string.IsNullOrEmpty(value))
+                    if (value is not null && (_allowEmptyValue || value.Length > 0))
                     {
                         return true;
                     }
