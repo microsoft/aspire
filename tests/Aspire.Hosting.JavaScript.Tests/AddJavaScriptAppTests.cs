@@ -255,19 +255,83 @@ public class AddJavaScriptAppTests(ITestOutputHelper outputHelper)
             .WithBun();
 
         using var app = builder.Build();
-        var pipeline = new DistributedApplicationPipeline();
-        var context = new PipelineContext(
-            app.Services.GetRequiredService<DistributedApplicationModel>(),
-            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
-            app.Services,
-            app.Services.GetRequiredService<ILogger<AddJavaScriptAppTests>>(),
-            CancellationToken.None);
+        var pipeline = app.Services.GetRequiredService<IDistributedApplicationPipeline>();
 
-        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() => pipeline.ExecuteAsync(context));
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() => pipeline.ExecuteAsync(CreatePipelineContext(app)));
 
         Assert.Contains("runScriptName", exception.Message);
         Assert.Contains("WithRunScript", exception.Message);
         Assert.Contains("Dockerfile", exception.Message);
+    }
+
+    [Fact]
+    public async Task PublishPipelineValidationStepIsNoOpForResourceExcludedFromManifest()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish).WithResourceCleanUp(true);
+        builder.Services.AddSingleton<IPipelineActivityReporter, NullPublishingActivityReporter>();
+
+        var appDir = CreateJavaScriptAppWithDockerfile(workspace.Path);
+        builder.AddJavaScriptApp("js", appDir, "migrate")
+            .WithBun()
+            .ExcludeFromManifest();
+
+        using var app = builder.Build();
+        var pipeline = (DistributedApplicationPipeline)app.Services.GetRequiredService<IDistributedApplicationPipeline>();
+        var context = CreatePipelineContext(app);
+
+        var stepNames = (await pipeline.ResolveStepsAsync(context)).Select(step => step.Name).ToList();
+        Assert.Contains("validate-javascript-dockerfile-run-script-js", stepNames);
+
+        await pipeline.ExecuteStepSequentiallyAsync("validate-javascript-dockerfile-run-script-js", context);
+    }
+
+    [Fact]
+    public async Task PublishPipelineValidationStepSurvivesLaterWithDockerfile()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish).WithResourceCleanUp(true);
+        builder.Services.AddSingleton<IPipelineActivityReporter, NullPublishingActivityReporter>();
+
+        var appDir = CreateJavaScriptAppWithDockerfile(workspace.Path);
+        builder.AddJavaScriptApp("js", appDir, "migrate")
+            .WithBun()
+            .PublishAsDockerFile(container => container.WithDockerfile(appDir));
+
+        using var app = builder.Build();
+        var pipeline = (DistributedApplicationPipeline)app.Services.GetRequiredService<IDistributedApplicationPipeline>();
+        var context = CreatePipelineContext(app);
+
+        var stepNames = (await pipeline.ResolveStepsAsync(context)).Select(step => step.Name).ToList();
+        Assert.Contains("validate-javascript-dockerfile-run-script-js", stepNames);
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => pipeline.ExecuteStepSequentiallyAsync("validate-javascript-dockerfile-run-script-js", context));
+
+        Assert.Contains("runScriptName", exception.Message);
+    }
+
+    [Fact]
+    public async Task PublishPipelineRunsValidationStepBeforeImageBuildStep()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish).WithResourceCleanUp(true);
+        builder.Services.AddSingleton<IPipelineActivityReporter, NullPublishingActivityReporter>();
+
+        var appDir = CreateJavaScriptAppWithDockerfile(workspace.Path);
+        builder.AddJavaScriptApp("js", appDir)
+            .WithBun();
+
+        using var app = builder.Build();
+        var pipeline = (DistributedApplicationPipeline)app.Services.GetRequiredService<IDistributedApplicationPipeline>();
+
+        var steps = (await pipeline.ResolveStepsAsync(CreatePipelineContext(app)))
+            .ToDictionary(step => step.Name, StringComparer.Ordinal);
+
+        // Compute environments such as Azure Container Apps depend on the image build step without the aggregate Build step.
+        var buildStepClosure = DistributedApplicationPipeline.ComputeTransitiveDependencies(steps["build-js"], steps);
+
+        Assert.Contains(buildStepClosure, step => step.Name == "validate-javascript-dockerfile-run-script-js");
     }
 
     [Fact]
@@ -708,6 +772,13 @@ public class AddJavaScriptAppTests(ITestOutputHelper outputHelper)
 
         return (process.ExitCode, await stdoutTask, await stderrTask);
     }
+
+    private static PipelineContext CreatePipelineContext(DistributedApplication app) => new(
+        app.Services.GetRequiredService<DistributedApplicationModel>(),
+        app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+        app.Services,
+        app.Services.GetRequiredService<ILogger<AddJavaScriptAppTests>>(),
+        CancellationToken.None);
 
     private static string CreateJavaScriptAppWithDockerfile(string rootDirectory)
     {

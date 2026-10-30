@@ -1911,7 +1911,10 @@ public static partial class JavaScriptHostingExtensions
 
             resourceBuilder.WithManifestPublishingCallback(WriteValidatedContainerAsync);
             containerBuilder.WithManifestPublishingCallback(WriteValidatedContainerAsync);
-            containerBuilder.WithAnnotation(new PipelineStepAnnotation(_ => new PipelineStep
+            // The step is added to the pipeline instead of as a PipelineStepAnnotation on the container because
+            // WithDockerfile replaces the container's step annotation, which would drop this step if the
+            // Dockerfile is configured again after this point.
+            builder.Pipeline.AddStep(new PipelineStep
             {
                 Name = validationStepName,
                 Description = $"Validates that JavaScript app '{resource.Name}' does not publish an ignored run script with an existing Dockerfile.",
@@ -1919,10 +1922,24 @@ public static partial class JavaScriptHostingExtensions
                 Resource = containerBuilder.Resource,
                 Action = _ =>
                 {
-                    ValidateExistingDockerfileRunScript(resource, containerBuilder.Resource);
+                    // A resource excluded from the manifest is never published, so it must not fail the pipeline.
+                    if (!containerBuilder.Resource.IsExcludedFromPublish())
+                    {
+                        ValidateExistingDockerfileRunScript(resource, containerBuilder.Resource);
+                    }
+
                     return Task.CompletedTask;
                 }
-            }));
+            });
+
+            // Deploy environments such as Azure Container Apps run the image build step without the aggregate
+            // Build step, so the image build must wait for the validation itself.
+            containerBuilder.WithPipelineConfiguration(context =>
+            {
+                var validationStep = context.GetSteps(containerBuilder.Resource).FirstOrDefault(step => step.Name == validationStepName);
+
+                context.GetSteps(containerBuilder.Resource, WellKnownPipelineTags.BuildCompute).DependsOn(validationStep);
+            });
         }
 
         resourceBuilder.WithVSCodeDebugging();
