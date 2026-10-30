@@ -559,6 +559,19 @@ public static class ProjectResourceBuilderExtensions
         // Remove once retry feature in opentelemetry-dotnet is enabled by default.
         builder.WithEnvironment(KnownOtelConfigNames.DotnetExperimentalOtlpRetry, "in_memory");
 
+        if (builder.ApplicationBuilder.ExecutionContext.IsRunMode)
+        {
+            // Starting with .NET 11, the `dotnet` CLI exports its own traces and metrics (service name "dotnet-cli")
+            // over OTLP whenever standard OTEL_EXPORTER_OTLP_* variables are present. Project resources are launched
+            // with `dotnet run`/`dotnet watch` using the same environment as the app, so the CLI process would
+            // report to the dashboard as unrelated "dotnet-cli-<id>" resources with long-running "dotnet run" spans.
+            // DOTNET_CLI_TELEMETRY_DISABLE_TRACE_EXPORT only disables the Azure Monitor exporter, not OTLP, so opting
+            // out of CLI telemetry is the only switch that stops this without affecting the app's own OTLP export.
+            // https://github.com/dotnet/sdk/blob/main/documentation/project-docs/telemetry.md#opentelemetry-otlp-exporter
+            // https://github.com/microsoft/aspire/issues/20885
+            builder.WithEnvironment(KnownConfigNames.DotnetCliTelemetryOptOut, "true");
+        }
+
         // OTEL settings that are used to improve local development experience.
         if (builder.ApplicationBuilder.ExecutionContext.IsRunMode && builder.ApplicationBuilder.Environment.IsDevelopment())
         {
