@@ -243,11 +243,11 @@ namespace Projects%3B
          cannot supply runtime metadata. DNX layouts are resolved from Aspire home instead. -->
     <PropertyGroup>
       <_AspireCliBundleSelectedCliPath Condition="'$(_AspireResolvedCliInvocationMode)' == 'Aspire'">$(_AspireResolvedCliPath)</_AspireCliBundleSelectedCliPath>
-      <!-- A DNX invocation pinned to the AppHost version must use the bundle extracted by that exact CLI.
+      <!-- DnxPinned must use the bundle extracted by the exact CLI version paired with the AppHost.
            Shared Aspire home layouts can come from an older or newer global CLI with a different DCP, so
            pinned layouts are resolved from, and set up into, a version-specific directory instead.
            See https://github.com/microsoft/aspire/issues/21463. -->
-      <_AspireCliBundlePinnedVersion Condition="'$(_AspireResolvedCliInvocationMode)' == 'Dnx' and $(_AspireCliDnxPackageReference.Contains('@'))">$(_AspireCliDnxPackageReference.Substring($([MSBuild]::Add($(_AspireCliDnxPackageReference.IndexOf('@')), 1))))</_AspireCliBundlePinnedVersion>
+      <_AspireCliBundlePinnedVersion Condition="'$(_AspireResolvedCliInvocationMode)' == 'Dnx' and '$(_AspireCliInvocationMode.ToLowerInvariant())' == 'dnxpinned' and $(_AspireCliDnxPackageReference.Contains('@'))">$(_AspireCliDnxPackageReference.Substring($([MSBuild]::Add($(_AspireCliDnxPackageReference.IndexOf('@')), 1))))</_AspireCliBundlePinnedVersion>
       <!-- Suppress the expected invalid-layout warning only when an existing CLI can prepare its
            bundle. Explicit bundle paths and missing explicit CLI paths cannot be recovered. -->
       <_AspireCliBundleWarnOnInvalidPaths>false</_AspireCliBundleWarnOnInvalidPaths>
