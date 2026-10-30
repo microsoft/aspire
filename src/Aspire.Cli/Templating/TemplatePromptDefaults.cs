@@ -12,13 +12,15 @@ using Microsoft.TemplateEngine.Utils;
 
 namespace Aspire.Cli.Templating;
 
-internal static class TemplatePromptDefaults
+internal sealed class TemplatePromptDefaults
 {
-    public static IReadOnlyDictionary<string, string> Load(
+    private readonly Dictionary<string, List<(IGeneratedSymbolMacro Macro, IMacroConfig Config)>> _projections = new(StringComparer.Ordinal);
+
+    public static TemplatePromptDefaults Load(
         IEngineEnvironmentSettings settings, ITemplateInfo template, TemplateHostConfiguration hostConfiguration,
-        string name, CancellationToken cancellationToken)
+        CancellationToken cancellationToken)
     {
-        var defaults = new Dictionary<string, string>(StringComparer.Ordinal);
+        var defaults = new TemplatePromptDefaults();
         if (hostConfiguration.DefaultValueSources.Count == 0)
         {
             return defaults;
@@ -39,7 +41,6 @@ internal static class TemplatePromptDefaults
         }
 
         var symbols = model.Symbols.ToDictionary(symbol => symbol.Name, StringComparer.Ordinal);
-        var symbolNames = symbols.Keys.ToArray();
         var macros = settings.Components.OfType<IGeneratedSymbolMacro>().ToDictionary(macro => macro.Type, StringComparer.Ordinal);
         foreach (var (parameterName, sourceName) in hostConfiguration.DefaultValueSources)
         {
@@ -50,40 +51,26 @@ internal static class TemplatePromptDefaults
                 !parameter.DataType.Equals("string", StringComparison.OrdinalIgnoreCase) ||
                 parameterName.Equals("AspireVersion", StringComparison.OrdinalIgnoreCase) ||
                 parameterName.Equals("AspireNuGetSource", StringComparison.OrdinalIgnoreCase) ||
-                !symbols.TryGetValue(sourceName, out var source) || source is not GeneratedSymbol { Generator: "coalesce" } coalesce ||
-                !coalesce.Parameters.TryGetValue("sourceVariableName", out var sourceVariable))
+                !symbols.TryGetValue(sourceName, out var source) || source is not GeneratedSymbol { Generator: "coalesce" } coalesce)
             {
                 throw InvalidDefault(parameterName);
             }
 
-            // GeneratedSymbol.Parameters contains JSON-serialized values, e.g.
-            // sourceVariableName -> "\"displayName\"", not an expression to interpolate.
-            using var document = JsonDocument.Parse(sourceVariable);
-            if (document.RootElement.ValueKind != JsonValueKind.String || document.RootElement.GetString() != parameterName)
+            if (ReadReference(coalesce, "sourceVariableName") != parameterName)
             {
                 throw InvalidDefault(parameterName);
             }
 
-            // Only project-name-derived values are previewed. Evaluating random/bound symbols
-            // twice can change the accepted default, and other parameters may contain secrets.
-            var variables = new VariableCollection { ["name"] = name };
             var visiting = new HashSet<string>(StringComparer.Ordinal);
-            var evaluated = new HashSet<string>(StringComparer.Ordinal);
-            Evaluate(sourceName);
-            if (!variables.TryGetValue(sourceName, out var value) || value is not string defaultValue)
-            {
-                throw InvalidDefault(parameterName);
-            }
+            var validated = new HashSet<string>(StringComparer.Ordinal);
+            var projection = new List<(IGeneratedSymbolMacro, IMacroConfig)>();
+            Validate(sourceName);
+            defaults._projections.Add(parameterName, projection);
 
-            defaults.Add(parameterName, defaultValue);
-
-            void Evaluate(string symbolName)
+            void Validate(string symbolName)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                // Native coalesce falls back when an override was not supplied:
-                // https://github.com/dotnet/templating/wiki/Available-Symbols-Generators#coalesce
-                // Omit it here too, rather than feeding its static default to the macro.
-                if (symbolName == parameterName || symbolName == "name" || evaluated.Contains(symbolName))
+                if (symbolName == "name" || validated.Contains(symbolName))
                 {
                     return;
                 }
@@ -96,24 +83,87 @@ internal static class TemplatePromptDefaults
                     throw InvalidDefault(parameterName);
                 }
 
+                // Only project-name-derived values are previewed. Evaluating random/bound
+                // symbols twice can change the fallback; other parameters may contain secrets.
+                // Validate raw references, including unused coalesce branches: the engine's
+                // dependency discovery filters out unknown symbol names.
                 var config = macro.CreateConfig(settings, generated);
-                if (config is not IMacroConfigDependency dependencies)
+                if (generated.Generator == "regex")
+                {
+                    var regexSource = ReadReference(generated, "source");
+                    if (regexSource == parameterName)
+                    {
+                        // Regex can observe an omitted parameter's empty default, whereas
+                        // coalesce also observes suppliedness. A plain collection cannot
+                        // represent both; do not preview graphs requiring parameter state.
+                        throw InvalidDefault(parameterName);
+                    }
+                    Validate(regexSource);
+                }
+                else
+                {
+                    var coalesceSource = ReadReference(generated, "sourceVariableName");
+                    if (coalesceSource == "name")
+                    {
+                        // The engine marks name as NameParameter, not User input, so it
+                        // falls back here even when name is nonempty. Its parameter-aware
+                        // collection is internal; reject this shape rather than mispreview it.
+                        // https://github.com/dotnet/templating/wiki/Available-Symbols-Generators#coalesce
+                        throw InvalidDefault(parameterName);
+                    }
+                    if (coalesceSource != parameterName)
+                    {
+                        Validate(coalesceSource);
+                    }
+                    Validate(ReadReference(generated, "fallbackVariableName"));
+                }
+
+                visiting.Remove(symbolName);
+                validated.Add(symbolName);
+                projection.Add((macro, config));
+            }
+
+            string ReadReference(GeneratedSymbol symbol, string key)
+            {
+                if (!symbol.Parameters.TryGetValue(key, out var reference))
                 {
                     throw InvalidDefault(parameterName);
                 }
 
-                dependencies.ResolveSymbolDependencies(symbolNames);
-                foreach (var dependency in dependencies.Dependencies)
+                // GeneratedSymbol.Parameters contains JSON-serialized values, e.g.
+                // sourceVariableName -> "\"displayName\"", not an expression to interpolate.
+                using var document = JsonDocument.Parse(reference);
+                if (document.RootElement.ValueKind != JsonValueKind.String ||
+                    string.IsNullOrWhiteSpace(document.RootElement.GetString()))
                 {
-                    Evaluate(dependency);
+                    throw InvalidDefault(parameterName);
                 }
 
-                // Use the engine's own implementations and dependency metadata, rather than
-                // interpreting regex steps or coalesce expressions in the CLI.
-                macro.EvaluateConfig(settings, variables, config);
-                visiting.Remove(symbolName);
-                evaluated.Add(symbolName);
+                return document.RootElement.GetString()!;
             }
+        }
+
+        return defaults;
+    }
+
+    public IReadOnlyDictionary<string, string> Evaluate(IEngineEnvironmentSettings settings, string name, CancellationToken cancellationToken)
+    {
+        var defaults = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (parameterName, projection) in _projections)
+        {
+            // Omit the override so native coalesce selects its fallback. Validation excludes
+            // graphs where a plain collection differs from the engine's parameter-aware one.
+            var variables = new VariableCollection { ["name"] = name };
+            foreach (var (macro, config) in projection)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                macro.EvaluateConfig(settings, variables, config);
+            }
+            if (!variables.TryGetValue(projection[^1].Config.VariableName, out var value) || value is not string defaultValue)
+            {
+                throw InvalidDefault(parameterName);
+            }
+            defaults.Add(parameterName, defaultValue);
         }
 
         return defaults;

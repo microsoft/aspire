@@ -337,6 +337,16 @@ internal sealed partial class TemplateEngineFactory(
     private async Task<TemplateResult> ApplyAsync(IEngineEnvironmentSettings settings, TemplateCreator creator, ITemplateInfo template, TemplateInputs inputs, ParseResult parseResult, CancellationToken cancellationToken)
     {
         var hostConfiguration = await TemplateHostConfiguration.LoadAsync(settings, template, cancellationToken);
+        TemplatePromptDefaults promptDefaults;
+        try
+        {
+            promptDefaults = TemplatePromptDefaults.Load(settings, template, hostConfiguration, cancellationToken);
+        }
+        catch (TemplateAuthoringException ex)
+        {
+            return CreationFailed(CreationResultStatus.TemplateIssueDetected, ex.Message);
+        }
+
         var name = inputs.Name is { } explicitName && ProjectNameValidator.IsProjectNameValid(explicitName)
             ? explicitName
             : await prompter.PromptForProjectNameAsync(
@@ -378,7 +388,7 @@ internal sealed partial class TemplateEngineFactory(
         }
         try
         {
-            var promptDefaults = TemplatePromptDefaults.Load(settings, template, hostConfiguration, name, cancellationToken);
+            var evaluatedDefaults = promptDefaults.Evaluate(settings, name, cancellationToken);
             var promptState = (hostEnvironment.SupportsInteractiveInput || computedParameters.Count > 0) && template.ParameterDefinitions.Any(parameter =>
                 !string.IsNullOrEmpty(parameter.Precedence.IsEnabledCondition) || !string.IsNullOrEmpty(parameter.Precedence.IsRequiredCondition))
                 ? new TemplateParameterPromptState(settings, template, name, logger, computedParameters)
@@ -426,7 +436,7 @@ internal sealed partial class TemplateEngineFactory(
                 }
                 else
                 {
-                    var defaultValue = promptDefaults.GetValueOrDefault(parameter.Name);
+                    var defaultValue = evaluatedDefaults.GetValueOrDefault(parameter.Name);
                     value = await PromptForParameterAsync(
                         parameter, promptState?.IsRequired(parameter) ?? parameter.Precedence.IsRequired,
                         hostConfiguration.GetDisplayName(parameter.Name), defaultValue ?? parameter.DefaultValue, cancellationToken);

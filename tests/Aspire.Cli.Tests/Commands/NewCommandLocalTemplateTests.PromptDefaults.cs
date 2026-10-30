@@ -111,6 +111,11 @@ public partial class NewCommandLocalTemplateTests
     [InlineData("no-coalesce")]
     [InlineData("invalid-regex")]
     [InlineData("value-source")]
+    [InlineData("nested-missing-source")]
+    [InlineData("nested-missing-fallback")]
+    [InlineData("nested-name-source")]
+    [InlineData("regex-omitted-override")]
+    [InlineData("coalesce-omitted-fallback")]
     public async Task LocalTemplate_InvalidProjectDerivedDefaultsFailBeforePromptingOrWriting(string scenario)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -165,6 +170,29 @@ public partial class NewCommandLocalTemplateTests
                 host["symbolInfo"]!["DisplayName"]!["valueSource"] = JsonNode.Parse(
                     """{"kind":"nugetPackageVersion","packageId":"Example.Package","versionRange":"[1.0,2.0)"}""");
                 break;
+            case "nested-missing-source":
+                symbols["nestedName"] = JsonNode.Parse(
+                    """{"type":"generated","generator":"coalesce","parameters":{"sourceVariableName":"missing","fallbackVariableName":"name"}}""");
+                symbols["shortNameValue"]!["parameters"]!["fallbackVariableName"] = "nestedName";
+                break;
+            case "nested-missing-fallback":
+                symbols["nestedName"] = JsonNode.Parse(
+                    """{"type":"generated","generator":"coalesce","parameters":{"sourceVariableName":"normalizedName","fallbackVariableName":"missing"}}""");
+                symbols["shortNameValue"]!["parameters"]!["fallbackVariableName"] = "nestedName";
+                break;
+            case "nested-name-source":
+                symbols["nestedName"] = JsonNode.Parse(
+                    """{"type":"generated","generator":"coalesce","parameters":{"sourceVariableName":"name","fallbackVariableName":"normalizedName"}}""");
+                symbols["shortNameValue"]!["parameters"]!["fallbackVariableName"] = "nestedName";
+                break;
+            case "regex-omitted-override":
+                symbols["normalizedName"]!["parameters"]!["source"] = "ShortName";
+                break;
+            case "coalesce-omitted-fallback":
+                symbols["nestedName"] = JsonNode.Parse(
+                    """{"type":"generated","generator":"coalesce","parameters":{"sourceVariableName":"normalizedName","fallbackVariableName":"ShortName"}}""");
+                symbols["shortNameValue"]!["parameters"]!["fallbackVariableName"] = "nestedName";
+                break;
         }
         await File.WriteAllTextAsync(templatePath, template.ToJsonString());
         await File.WriteAllTextAsync(hostPath, host.ToJsonString());
@@ -179,6 +207,58 @@ public partial class NewCommandLocalTemplateTests
         Assert.NotEmpty(interaction.DisplayedErrors);
         Assert.Empty(interaction.StringPromptCalls);
         Assert.False(Directory.Exists(Path.Combine(workspace.Path, "out")));
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task LocalTemplate_InvalidProjectDerivedDefaultsFailBeforeProjectPrompts(bool supplyName, bool supplyOutput)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await CreatePromptDefaultsTemplateAsync(workspace);
+        var hostPath = Path.Combine(workspace.Path, "template", ".template.config", "aspirecli.host.json");
+        await File.WriteAllTextAsync(hostPath, """
+            { "symbolInfo": { "ShortName": { "defaultValueSource": "missing" } } }
+            """);
+        var interaction = new TestInteractionService();
+        using var provider = CreateServices(workspace, interaction, interactive: true).BuildServiceProvider();
+        var options = $"{(supplyName ? "--name Demo" : "")} {(supplyOutput ? "--output out" : "")}";
+
+        var exitCode = await provider.GetRequiredService<RootCommand>()
+            .Parse($"new --template-path template {options} --suppress-agent-init")
+            .InvokeAsync().DefaultTimeout();
+
+        Assert.NotEqual(CliExitCodes.Success, exitCode);
+        Assert.NotEmpty(interaction.DisplayedErrors);
+        Assert.Empty(interaction.StringPromptCalls);
+        Assert.False(Directory.Exists(Path.Combine(workspace.Path, "out")));
+    }
+
+    [Fact]
+    public async Task LocalTemplate_ProjectDerivedDefaultsSupportNestedCoalesce()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await CreatePromptDefaultsTemplateAsync(workspace);
+        var templatePath = Path.Combine(workspace.Path, "template", ".template.config", "template.json");
+        var template = JsonNode.Parse(await File.ReadAllTextAsync(templatePath))!;
+        var symbols = template["symbols"]!;
+        symbols["nestedName"] = JsonNode.Parse(
+            """{"type":"generated","generator":"coalesce","parameters":{"sourceVariableName":"normalizedName","fallbackVariableName":"name"}}""");
+        symbols["shortNameValue"]!["parameters"]!["fallbackVariableName"] = "nestedName";
+        await File.WriteAllTextAsync(templatePath, template.ToJsonString());
+        var interaction = new TestInteractionService();
+        using var provider = CreateServices(workspace, interaction, interactive: true).BuildServiceProvider();
+
+        var exitCode = await provider.GetRequiredService<RootCommand>()
+            .Parse("new --template-path template --name Demo.App --output out --suppress-agent-init")
+            .InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Empty(interaction.DisplayedErrors);
+        Assert.Equal(["Demo.App", "Demo-App"], interaction.StringPromptCalls.Select(prompt => prompt.DefaultValue));
+        await Verify(ReadOutput(workspace));
     }
 
     private static async Task CreatePromptDefaultsTemplateAsync(TemporaryWorkspace workspace)
