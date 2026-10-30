@@ -292,6 +292,13 @@ public static class AzureContainerAppExtensions
                     "See https://learn.microsoft.com/azure/container-apps/express-overview#considerations.");
             }
 
+            if (appEnvResource.IsExpress && appEnvResource.HasAnnotationOfType<InternalLoadBalancerAnnotation>())
+            {
+                throw new InvalidOperationException(
+                    $"Azure Container Apps Express environment '{appEnvResource.Name}' cannot use an internal load balancer because the required static IP output is unavailable for Express environments. " +
+                    "Remove AsExpress() to use a workload profiles environment with internal networking.");
+            }
+
             // When the user has marked this environment as existing (via AsExisting / PublishAsExisting),
             // we must not generate a brand-new managed environment + Log Analytics + Dashboard. Instead,
             // emit a thin module that references the existing environment and still wires up the ACR pull
@@ -1096,6 +1103,7 @@ public static class AzureContainerAppExtensions
     /// App-to-app references require explicitly public HTTP endpoints. References to apps in Express environments use HTTPS; cross-environment references preserve the producer's configured scheme.
     /// Local execution is unchanged.
     /// When combined with existing-resource configuration, the existing environment must already use Express.
+    /// Internal load balancer configuration is rejected during infrastructure generation because Express environments do not provide the static IP output required by private DNS.
     /// </remarks>
     /// <example>
     /// <code>
