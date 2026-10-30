@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "\ud83e\udde9",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Dashboard browser debugging in VS Code no longer times out on slow machines: Chrome and Edge get a longer debugger connection budget, and automatic browser launches no longer delay AppHost startup.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83c\udf10",
+  "firstMergedAt": "2026-10-29T21:30:39Z",
+  "lastMergedAt": "2026-10-29T21:30:39Z",
+  "name": "More reliable dashboard browser debugging in VS Code",
+  "owner": "ellahathaway",
+  "prs": [
+    21274
+  ]
+}

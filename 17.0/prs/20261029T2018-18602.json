@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "New VS Code resource debugging feature",
+  "mergedAt": "2026-10-29T20:18:57Z",
+  "number": 18602,
+  "runDate": "2026-10-30T00:10:00Z",
+  "status": "included",
+  "title": "Add VS Code resource debugging for .NET and Go"
+}

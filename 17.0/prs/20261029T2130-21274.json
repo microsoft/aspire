@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "Fixes dashboard browser debug timeouts",
+  "mergedAt": "2026-10-29T21:30:39Z",
+  "number": 21274,
+  "runDate": "2026-10-30T00:10:00Z",
+  "status": "included",
+  "title": "Harden VS Code dashboard debug browser launch"
+}

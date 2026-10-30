@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "\ud83e\udde9",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "The Aspire VS Code extension can attach a debugger to running .NET and Go resources from the Aspire view or the `aspire_resource_debug` Copilot tool, resolving the launched application rather than `dotnet run`, `dotnet watch`, or `go run`.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\ud83d\udd2c",
+  "firstMergedAt": "2026-10-29T20:18:57Z",
+  "lastMergedAt": "2026-10-29T20:18:57Z",
+  "name": "VS Code resource debugging for .NET and Go",
+  "owner": "adamint",
+  "prs": [
+    18602
+  ]
+}
