@@ -71,6 +71,47 @@ public class KubernetesServiceTests(DcpApiServerCertificateFixture certificateFi
         }
     }
 
+    [Fact]
+    public async Task StopServerAsync_CompletesWhenServerStopsBeforeAcknowledgingStopRequest()
+    {
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
+        var (service, kubeconfigPath, fileSystem) = CreateService();
+        using var disposableFileSystem = fileSystem;
+        using var disposableService = service;
+        var requests = new ConcurrentQueue<string>();
+        var stopRequested = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var server = await StartServerAsync(cts.Token, requestHandler: context =>
+        {
+            requests.Enqueue(context.Request.Method);
+
+            // DCP processes the stop request and shuts down its API server before the response reaches the client.
+            context.Abort();
+            stopRequested.TrySetResult();
+            return Task.CompletedTask;
+        });
+        var serverDisposed = false;
+        try
+        {
+            WriteKubeconfig(kubeconfigPath, server.Port);
+
+            var stopTask = service.StopServerAsync(ResourceCleanup.Full, cts.Token);
+
+            await stopRequested.Task.WaitAsync(cts.Token);
+            await server.DisposeAsync();
+            serverDisposed = true;
+
+            await stopTask.DefaultTimeout();
+            Assert.All(requests, method => Assert.Equal(HttpMethods.Patch, method));
+        }
+        finally
+        {
+            if (!serverDisposed)
+            {
+                await server.DisposeAsync();
+            }
+        }
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("test-namespace")]
