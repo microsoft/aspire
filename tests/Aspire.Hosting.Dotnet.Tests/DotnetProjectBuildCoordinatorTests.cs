@@ -653,7 +653,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         }
 
         await AsyncTestHelpers.AssertIsTrueRetryAsync(
-            () => File.Exists(sentinelPath) && File.ReadAllText(sentinelPath) == "initial",
+            () => ReadSentinelWrittenByRunningProcess(sentinelPath) == "initial",
             "The initial file app should write its source-version marker.",
             retries: 20);
 
@@ -665,7 +665,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
 
         Assert.True(rebuildResult.Success);
         await AsyncTestHelpers.AssertIsTrueRetryAsync(
-            () => File.Exists(sentinelPath) && File.ReadAllText(sentinelPath) == "updated",
+            () => ReadSentinelWrittenByRunningProcess(sentinelPath) == "updated",
             "The rebuilt file app should restart from the edited source.",
             retries: 20);
 
@@ -680,6 +680,29 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
                 await Task.Delay(Timeout.InfiniteTimeSpan);
                 """);
         }
+    }
+
+    [Fact]
+    public void ReadSentinelWrittenByRunningProcessToleratesConcurrentWriter()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sentinelPath = Path.Combine(workspace.Path, "worker-ran.txt");
+
+        // Open the sentinel exactly as File.WriteAllText(Async) does in the running app.
+        using (var writer = new FileStream(sentinelPath, FileMode.Create, FileAccess.Write, FileShare.Read))
+        {
+            writer.Write("initial"u8);
+            writer.Flush();
+
+            Assert.Equal("initial", ReadSentinelWrittenByRunningProcess(sentinelPath));
+        }
+
+        Assert.Null(ReadSentinelWrittenByRunningProcess(Path.Combine(workspace.Path, "missing.txt")));
+    }
+
+    private static string? ReadSentinelWrittenByRunningProcess(string path)
+    {
+        return File.Exists(path) ? File.ReadAllText(path) : null;
     }
 
     [Fact]
