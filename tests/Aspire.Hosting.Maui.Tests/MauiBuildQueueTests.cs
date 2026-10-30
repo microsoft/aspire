@@ -121,27 +121,13 @@ public class MauiBuildQueueTests
 
         await env.Subscriber.WaitForBuildStartedAsync(env.Android);
 
-        var queuedSeen = new TaskCompletionSource<bool>();
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-
-        _ = Task.Run(async () =>
-        {
-            await foreach (var evt in env.NotificationService.WatchAsync(cts.Token))
-            {
-                if (evt.Resource.Name == env.MacCatalyst.Name && evt.Snapshot.State?.Text == "Queued")
-                {
-                    queuedSeen.TrySetResult(true);
-                    return;
-                }
-            }
-        }, cts.Token);
+        var queuedSeen = WaitForStateAsync(env, env.MacCatalyst, "Queued");
 
         var task2 = Task.Run(() => env.Eventing.PublishAsync(
             new BeforeResourceStartedEvent(env.MacCatalyst, env.Services),
             CancellationToken.None));
 
-        var result = await queuedSeen.Task.DefaultTimeout();
-        Assert.True(result);
+        await queuedSeen;
 
         // Clean up: complete both builds and await their tasks.
         env.Subscriber.CompleteBuild(env.Android);
@@ -155,27 +141,13 @@ public class MauiBuildQueueTests
     {
         await using var env = await BuildQueueTestEnvironment.CreateAsync();
 
-        var buildingSeen = new TaskCompletionSource<bool>();
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-
-        _ = Task.Run(async () =>
-        {
-            await foreach (var evt in env.NotificationService.WatchAsync(cts.Token))
-            {
-                if (evt.Resource.Name == env.Android.Name && evt.Snapshot.State?.Text == "Building")
-                {
-                    buildingSeen.TrySetResult(true);
-                    return;
-                }
-            }
-        }, cts.Token);
+        var buildingSeen = WaitForStateAsync(env, env.Android, "Building");
 
         var eventTask = Task.Run(() => env.Eventing.PublishAsync(
             new BeforeResourceStartedEvent(env.Android, env.Services),
             CancellationToken.None));
 
-        var result = await buildingSeen.Task.DefaultTimeout();
-        Assert.True(result);
+        await buildingSeen;
 
         env.Subscriber.CompleteBuild(env.Android);
         await eventTask.DefaultTimeout();
@@ -1157,16 +1129,12 @@ public class MauiBuildQueueTests
         };
     }
 
-    private static async Task WaitForStateAsync(BuildQueueTestEnvironment env, IResource resource, string state)
+    // Starts watching immediately, so a state published before the returned task is awaited is still observed.
+    // The wait shares the test's default timeout rather than starting its own shorter deadline, which a slow
+    // runner could exhaust before the state is published.
+    private static Task WaitForStateAsync(BuildQueueTestEnvironment env, IResource resource, string state)
     {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-        await foreach (var evt in env.NotificationService.WatchAsync(cts.Token))
-        {
-            if (evt.Resource.Name == resource.Name && evt.Snapshot.State?.Text == state)
-            {
-                return;
-            }
-        }
+        return env.NotificationService.WaitForResourceAsync(resource.Name, state).DefaultTimeout();
     }
 
     private static FakeTimeProvider ConfigureLaunchHandoffTimeout(MauiBuildQueueEventSubscriber subscriber)
