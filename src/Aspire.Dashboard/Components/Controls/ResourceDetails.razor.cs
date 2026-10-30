@@ -451,7 +451,11 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
 
     public Task OnViewRelationshipAsync(ResourceDetailRelationshipViewModel relationship)
     {
-        NavigationManager.NavigateTo(DashboardUrls.ResourceOverviewUrl(relationship.Resource.Name));
+        // The previous experience has no resource overview page. It keeps main's query-based resource URL, which its
+        // resources page supports.
+        NavigationManager.NavigateTo(DashboardExperienceComponents.IsLegacyLocation(NavigationManager)
+            ? DashboardUrls.ResourcesUrl(resource: relationship.Resource.Name)
+            : DashboardUrls.ResourceOverviewUrl(relationship.Resource.Name));
         return Task.CompletedTask;
     }
 

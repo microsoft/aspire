@@ -68,6 +68,13 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
     public required Func<bool, Task> OnShowRunningTotalChangedAsync { get; set; }
 
     /// <summary>
+    /// Gets or sets whether a counter offers the choice between its change per interval and its running total.
+    /// The previous dashboard experience doesn't offer it and always shows the running total, as it did before.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public required bool ShowChangePerIntervalOption { get; set; }
+
+    /// <summary>
     /// Gets or sets the label of the back button, e.g. "Back to System.Runtime". No back button when null.
     /// </summary>
     [Parameter]

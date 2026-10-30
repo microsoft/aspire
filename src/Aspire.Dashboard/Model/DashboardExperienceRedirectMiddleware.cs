@@ -64,8 +64,17 @@ internal sealed class DashboardExperienceRedirectMiddleware(
     // Keep in sync with wwwroot/js/app-dashboard-experience.js.
     private static readonly string[] s_sharedPageSegments = ["consolelogs", "structuredlogs", "traces", "metrics", "terminals"];
 
-    internal static string GetLegacyUrl(string path, string? query) =>
-        IsSharedPage(path) ? $"/legacy{path}{query}" : "/legacy";
+    internal static string GetLegacyUrl(string path, string? query)
+    {
+        if (IsSharedPage(path))
+        {
+            return $"/legacy{path}{query}";
+        }
+
+        // The root is the resources page in the previous experience, and its query selects a resource or the view and
+        // filters, for example /?resource=api from the CLI's describe command and MCP tools, or a /?view=Graph bookmark.
+        return path is "/" or "" ? $"/legacy{query}" : "/legacy";
+    }
 
     internal static string GetModernUrl(string path, string? query)
     {

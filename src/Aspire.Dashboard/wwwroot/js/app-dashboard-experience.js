@@ -34,7 +34,9 @@
     const query = window.location.search;
 
     if (experience === 'legacy' && !isLegacyPath) {
-        window.location.replace(isSharedPage(path) ? `/legacy${path}${query}` : '/legacy');
+        // The root is the resources page in the previous experience, and its query selects a resource or the view and
+        // filters, for example /?resource=api from the CLI or a /?view=Graph bookmark.
+        window.location.replace(isSharedPage(path) ? `/legacy${path}${query}` : path === '/' ? `/legacy${query}` : '/legacy');
     } else if (experience === 'modern' && isLegacyPath) {
         const modernPath = path.substring('/legacy'.length);
         window.location.replace(isSharedPage(modernPath) ? `${modernPath}${query}` : '/');

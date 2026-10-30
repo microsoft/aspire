@@ -48,7 +48,14 @@ internal static class DashboardExperienceComponents
     /// </summary>
     internal static bool IsLegacyLocation(NavigationManager navigationManager)
     {
+        // The base-relative path keeps the query and fragment, for example "legacy?view=Graph" on the legacy resources page.
         var path = navigationManager.ToBaseRelativePath(navigationManager.Uri);
+        var endOfPath = path.IndexOfAny(['?', '#']);
+        if (endOfPath >= 0)
+        {
+            path = path[..endOfPath];
+        }
+
         return string.Equals(path, "legacy", StringComparison.OrdinalIgnoreCase) ||
             path.StartsWith("legacy/", StringComparison.OrdinalIgnoreCase);
     }

@@ -142,54 +142,54 @@ public partial class LegacyMobileNavMenu : ComponentBase, IAsyncDisposable
         {
             yield return new MobileNavMenuEntry(
                 Loc[nameof(Resources.Layout.NavMenuResourcesTab)],
-                () => NavigateToAsync(DashboardUrls.ResourcesUrl()),
+                () => NavigateToAsync(LegacyNavUrls.ToLegacyUrl(DashboardUrls.ResourcesUrl())),
                 LegacyDesktopNavMenu.ResourcesIcon(),
                 ActiveIcon: LegacyDesktopNavMenu.ResourcesIcon(active: true),
-                LinkMatchRegex: GetIndexPageRegex(DashboardUrls.ResourcesUrl())
+                LinkMatchRegex: s_resourcesPageRegex
             );
 
             yield return new MobileNavMenuEntry(
                 Loc[nameof(Resources.Layout.NavMenuConsoleLogsTab)],
-                () => NavigateToAsync(DashboardUrls.ConsoleLogsUrl()),
+                () => NavigateToAsync(LegacyNavUrls.ToLegacyUrl(DashboardUrls.ConsoleLogsUrl())),
                 LegacyDesktopNavMenu.ConsoleLogsIcon(),
                 ActiveIcon: LegacyDesktopNavMenu.ConsoleLogsIcon(active: true),
-                LinkMatchRegex: GetNonIndexPageRegex(DashboardUrls.ConsoleLogsUrl())
+                LinkMatchRegex: GetNonIndexPageRegex(LegacyNavUrls.ToLegacyUrl(DashboardUrls.ConsoleLogsUrl()))
             );
 
         }
 
         yield return new MobileNavMenuEntry(
             Loc[nameof(Resources.Layout.NavMenuStructuredLogsTab)],
-            () => NavigateToAsync(DashboardUrls.StructuredLogsUrl()),
+            () => NavigateToAsync(LegacyNavUrls.ToLegacyUrl(DashboardUrls.StructuredLogsUrl())),
             LegacyDesktopNavMenu.StructuredLogsIcon(),
             ActiveIcon: LegacyDesktopNavMenu.StructuredLogsIcon(active: true),
-            LinkMatchRegex: GetNonIndexPageRegex(DashboardUrls.StructuredLogsUrl())
+            LinkMatchRegex: GetNonIndexPageRegex(LegacyNavUrls.ToLegacyUrl(DashboardUrls.StructuredLogsUrl()))
         );
 
         yield return new MobileNavMenuEntry(
             Loc[nameof(Resources.Layout.NavMenuTracesTab)],
-            () => NavigateToAsync(DashboardUrls.TracesUrl()),
+            () => NavigateToAsync(LegacyNavUrls.ToLegacyUrl(DashboardUrls.TracesUrl())),
             LegacyDesktopNavMenu.TracesIcon(),
             ActiveIcon: LegacyDesktopNavMenu.TracesIcon(active: true),
-            LinkMatchRegex: GetNonIndexPageRegex(DashboardUrls.TracesUrl())
+            LinkMatchRegex: GetNonIndexPageRegex(LegacyNavUrls.ToLegacyUrl(DashboardUrls.TracesUrl()))
         );
 
         yield return new MobileNavMenuEntry(
             Loc[nameof(Resources.Layout.NavMenuMetricsTab)],
-            () => NavigateToAsync(DashboardUrls.MetricsUrl()),
+            () => NavigateToAsync(LegacyNavUrls.ToLegacyUrl(DashboardUrls.MetricsUrl())),
             LegacyDesktopNavMenu.MetricsIcon(),
             ActiveIcon: LegacyDesktopNavMenu.MetricsIcon(active: true),
-            LinkMatchRegex: GetNonIndexPageRegex(DashboardUrls.MetricsUrl())
+            LinkMatchRegex: GetNonIndexPageRegex(LegacyNavUrls.ToLegacyUrl(DashboardUrls.MetricsUrl()))
         );
 
         if (DashboardClient.IsEnabled && HasResourceTerminals)
         {
             yield return new MobileNavMenuEntry(
                 Loc[nameof(Resources.Layout.NavMenuTerminalsTab)],
-                () => NavigateToAsync(DashboardUrls.TerminalsUrl()),
+                () => NavigateToAsync(LegacyNavUrls.ToLegacyUrl(DashboardUrls.TerminalsUrl())),
                 LegacyDesktopNavMenu.TerminalsIcon(),
                 ActiveIcon: LegacyDesktopNavMenu.TerminalsIcon(active: true),
-                LinkMatchRegex: GetNonIndexPageRegex(DashboardUrls.TerminalsUrl())
+                LinkMatchRegex: GetNonIndexPageRegex(LegacyNavUrls.ToLegacyUrl(DashboardUrls.TerminalsUrl()))
             );
         }
 
@@ -236,11 +236,9 @@ public partial class LegacyMobileNavMenu : ComponentBase, IAsyncDisposable
         return new Regex($"^({pageRelativeBasePath}(\\?.*)?|{pageRelativeBasePath}/.+)$", LinkMatchRegexOptions);
     }
 
-    private static Regex GetIndexPageRegex(string pageRelativeBasePath)
-    {
-        pageRelativeBasePath = Regex.Escape(pageRelativeBasePath);
-        return new Regex($"^{pageRelativeBasePath}(\\?.*)?$", LinkMatchRegexOptions);
-    }
+    // The resources page is /legacy, /legacy/ (where the layout sends "/") or /legacy/resources, with an optional query,
+    // for example /legacy?resource=api.
+    private static readonly Regex s_resourcesPageRegex = new($"^{LegacyNavUrls.BasePath}(/|/resources/?)?(\\?.*)?$", LinkMatchRegexOptions);
 
     private const RegexOptions LinkMatchRegexOptions = RegexOptions.CultureInvariant | RegexOptions.IgnoreCase;
 }

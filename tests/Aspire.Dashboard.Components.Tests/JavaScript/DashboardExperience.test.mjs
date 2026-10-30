@@ -53,6 +53,12 @@ test("legacy experience redirects modern pages and keeps the original spelling",
     assert.equal(navigate("/traces", { defaultExperience: "legacy" }), "/legacy/traces");
 });
 
+test("legacy experience keeps the root query for the resources page", () => {
+    assert.equal(navigate("/", { search: "?resource=api", cookie: legacyCookie }), "/legacy?resource=api");
+    assert.equal(navigate("/", { search: "?view=Graph&hiddenTypes=Container", cookie: legacyCookie }), "/legacy?view=Graph&hiddenTypes=Container");
+    assert.equal(navigate("/resources/api", { search: "?tab=details", cookie: legacyCookie }), "/legacy");
+});
+
 test("legacy cookie is ignored when the legacy dashboard is unavailable", () => {
     assert.equal(navigate("/traces", { cookie: legacyCookie, legacyAvailable: false }), null);
     assert.equal(navigate("/legacy/traces", { cookie: legacyCookie, legacyAvailable: false }), "/traces");

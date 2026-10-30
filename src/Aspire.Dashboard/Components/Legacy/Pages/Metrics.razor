@@ -108,8 +108,9 @@
                                             Duration="PageViewModel.SelectedDuration.Id"
                                             ActiveView="@((Aspire.Dashboard.Components.Pages.Metrics.MetricViewKind)(PageViewModel.SelectedViewKind ?? Metrics.MetricViewKind.Graph))"
                                             OnViewChangedAsync="@OnChartViewChangedAsync"
-                                            ShowRunningTotal="false"
+                                            ShowRunningTotal="true"
                                             OnShowRunningTotalChangedAsync="@(_ => Task.CompletedTask)"
+                                            ShowChangePerIntervalOption="false"
                                             Resources="@_resources" />
                                     }
                                     else if (PageViewModel.SelectedMeter != null)

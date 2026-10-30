@@ -13,6 +13,9 @@ public sealed class DashboardExperienceRedirectMiddlewareTests
 {
     [Theory]
     [InlineData("legacy", "/", "", "/legacy#")]
+    [InlineData("legacy", "/", "?resource=api", "/legacy?resource=api#")]
+    [InlineData("legacy", "/", "?view=Graph&hiddenTypes=Container", "/legacy?view=Graph&hiddenTypes=Container#")]
+    [InlineData("legacy", "/home", "?resource=api", "/legacy#")]
     [InlineData("legacy", "/resources/api", "", "/legacy#")]
     [InlineData("legacy", "/traces", "", "/legacy/traces#")]
     [InlineData("legacy", "/traces/detail/abc123", "", "/legacy/traces/detail/abc123#")]

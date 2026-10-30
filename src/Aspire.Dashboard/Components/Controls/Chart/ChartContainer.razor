@@ -67,7 +67,7 @@ else
                        IconStart="@(new Icons.Regular.Size24.DataArea())">
                 <div class="metrics-chart-container metric-tab">
                     <PlotlyChart InstrumentViewModel="_instrumentViewModel" Duration="Duration" Resources="Resources" DataEndTime="_dataEndTime" InstrumentChanged="StateHasChanged" />
-                    <ChartFilters @key="(MeterName, InstrumentName)" InstrumentType="_instrument.Summary.Type" ShowCount="_instrumentViewModel.ShowCount" ShowCountChanged="ShowCountChangedAsync" IsCounter="@ChartDataCalculator.IsMonotonicCounter(_instrument.Summary)" ShowChangePerInterval="@(!_instrumentViewModel.ShowRunningTotal)" ShowChangePerIntervalChanged="ShowChangePerIntervalChangedAsync" DimensionFilters="@DimensionFilters" OnDimensionValuesChanged="DimensionValuesChangedAsync" />
+                    <ChartFilters @key="(MeterName, InstrumentName)" InstrumentType="_instrument.Summary.Type" ShowCount="_instrumentViewModel.ShowCount" ShowCountChanged="ShowCountChangedAsync" IsCounter="@(ShowChangePerIntervalOption && ChartDataCalculator.IsMonotonicCounter(_instrument.Summary))" ShowChangePerInterval="@(!_instrumentViewModel.ShowRunningTotal)" ShowChangePerIntervalChanged="ShowChangePerIntervalChangedAsync" DimensionFilters="@DimensionFilters" OnDimensionValuesChanged="DimensionValuesChangedAsync" />
                 </div>
             </FluentTab>
             <FluentTab HeaderClass="tab-label"
@@ -77,7 +77,7 @@ else
                        IconStart="@(new Icons.Regular.Size24.Table())">
                 <div class="metrics-chart-container metric-tab">
                     <MetricTable InstrumentViewModel="_instrumentViewModel" Duration="Duration" Resources="Resources" DataEndTime="_dataEndTime" InstrumentChanged="StateHasChanged" />
-                    <ChartFilters @key="(MeterName, InstrumentName)" InstrumentType="_instrument.Summary.Type" ShowCount="_instrumentViewModel.ShowCount" ShowCountChanged="ShowCountChangedAsync" IsCounter="@ChartDataCalculator.IsMonotonicCounter(_instrument.Summary)" ShowChangePerInterval="@(!_instrumentViewModel.ShowRunningTotal)" ShowChangePerIntervalChanged="ShowChangePerIntervalChangedAsync" DimensionFilters="@DimensionFilters" OnDimensionValuesChanged="DimensionValuesChangedAsync" />
+                    <ChartFilters @key="(MeterName, InstrumentName)" InstrumentType="_instrument.Summary.Type" ShowCount="_instrumentViewModel.ShowCount" ShowCountChanged="ShowCountChangedAsync" IsCounter="@(ShowChangePerIntervalOption && ChartDataCalculator.IsMonotonicCounter(_instrument.Summary))" ShowChangePerInterval="@(!_instrumentViewModel.ShowRunningTotal)" ShowChangePerIntervalChanged="ShowChangePerIntervalChangedAsync" DimensionFilters="@DimensionFilters" OnDimensionValuesChanged="DimensionValuesChangedAsync" />
                 </div>
             </FluentTab>
         </FluentTabs>

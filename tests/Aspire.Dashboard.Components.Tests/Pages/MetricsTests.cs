@@ -117,6 +117,7 @@ public partial class MetricsTests : DashboardTestContext
             builder.Add(component => component.OnViewChangedAsync, _ => Task.CompletedTask);
             builder.Add(component => component.ShowRunningTotal, false);
             builder.Add(component => component.OnShowRunningTotalChangedAsync, _ => Task.CompletedTask);
+            builder.Add(component => component.ShowChangePerIntervalOption, true);
             builder.Add(component => component.Resources, [resource]);
         });
 
@@ -253,6 +254,7 @@ public partial class MetricsTests : DashboardTestContext
             builder.Add(component => component.OnViewChangedAsync, _ => Task.CompletedTask);
             builder.Add(component => component.ShowRunningTotal, false);
             builder.Add(component => component.OnShowRunningTotalChangedAsync, _ => Task.CompletedTask);
+            builder.Add(component => component.ShowChangePerIntervalOption, true);
             builder.Add(component => component.Resources, [resource]);
         });
         cut.WaitForState(() => cut.FindComponents<MetricTable>().Count == 1);
@@ -415,6 +417,7 @@ public partial class MetricsTests : DashboardTestContext
             // This test checks table rows and formatting, so show the counter's reported values, not its change per interval.
             builder.Add(component => component.ShowRunningTotal, true);
             builder.Add(component => component.OnShowRunningTotalChangedAsync, _ => Task.CompletedTask);
+            builder.Add(component => component.ShowChangePerIntervalOption, true);
             builder.Add(component => component.Resources, [resource]);
         });
         cut.WaitForAssertion(() =>
@@ -500,6 +503,57 @@ public partial class MetricsTests : DashboardTestContext
         });
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ChartContainer_Counter_ShowsChangePerIntervalOptionOnlyWhenOffered(bool showOption)
+    {
+        JSInterop.Mode = JSRuntimeMode.Loose;
+        MetricsSetupHelpers.SetupMetricsPage(this);
+        await FluentUISetupHelpers.ConfigureTelemetryRepository(this, readOnly: true, telemetryRepository => telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
+        {
+            new ResourceMetrics
+            {
+                Resource = CreateResource(name: "TestApp"),
+                ScopeMetrics =
+                {
+                    new ScopeMetrics
+                    {
+                        Scope = CreateScope(name: "test-meter"),
+                        Metrics =
+                        {
+                            CreateSumMetric(metricName: "instrument-1", startTime: s_testTime.AddMinutes(1), value: 0),
+                            CreateSumMetric(metricName: "instrument-1", startTime: s_testTime.AddMinutes(2), value: 1)
+                        }
+                    }
+                }
+            }
+        }));
+
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        var resource = telemetryRepository.GetResources().Single();
+
+        // The previous experience passes the running total without the option, which is how it showed counters before.
+        var cut = Render<ChartContainer>(builder =>
+        {
+            builder.Add(component => component.ResourceKey, resource.ResourceKey);
+            builder.Add(component => component.MeterName, "test-meter");
+            builder.Add(component => component.InstrumentName, "instrument-1");
+            builder.Add(component => component.Duration, TimeSpan.FromMinutes(5));
+            builder.Add(component => component.ActiveView, MetricViewKind.Table);
+            builder.Add(component => component.OnViewChangedAsync, _ => Task.CompletedTask);
+            builder.Add(component => component.ShowRunningTotal, !showOption);
+            builder.Add(component => component.OnShowRunningTotalChangedAsync, _ => Task.CompletedTask);
+            builder.Add(component => component.ShowChangePerIntervalOption, showOption);
+            builder.Add(component => component.Resources, [resource]);
+        });
+
+        cut.WaitForState(() => cut.FindComponents<ChartFilters>().Count == 1);
+        Assert.Equal(showOption, cut.FindComponent<ChartFilters>().Instance.IsCounter);
+        Assert.Equal(showOption ? 1 : 0, cut.FindAll(".counter-change-per-interval-switch").Count);
+        Assert.Equal(!showOption, cut.FindComponent<MetricTable>().Instance.InstrumentViewModel.ShowRunningTotal);
+    }
+
     [Fact]
     public async Task ChartContainer_InstrumentChanged_TableUpdates()
     {
@@ -540,6 +594,7 @@ public partial class MetricsTests : DashboardTestContext
             // This test checks table rows and formatting, so show the counter's reported values, not its change per interval.
             builder.Add(component => component.ShowRunningTotal, true);
             builder.Add(component => component.OnShowRunningTotalChangedAsync, _ => Task.CompletedTask);
+            builder.Add(component => component.ShowChangePerIntervalOption, true);
             builder.Add(component => component.Resources, [resource]);
         });
 
@@ -633,6 +688,7 @@ public partial class MetricsTests : DashboardTestContext
                 // This test checks table rows and formatting, so show the counter's reported values, not its change per interval.
                 builder.Add(component => component.ShowRunningTotal, true);
                 builder.Add(component => component.OnShowRunningTotalChangedAsync, _ => Task.CompletedTask);
+                builder.Add(component => component.ShowChangePerIntervalOption, true);
                 builder.Add(component => component.Resources, [resource]);
             });
 

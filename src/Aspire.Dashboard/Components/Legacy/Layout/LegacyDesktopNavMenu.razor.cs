@@ -1,7 +1,6 @@
 ﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Routing;
 using Microsoft.FluentUI.AspNetCore.Components;
@@ -61,8 +60,7 @@ public partial class LegacyDesktopNavMenu : ComponentBase, IDisposable
     {
         if (Uri.TryCreate(location, UriKind.Absolute, out var result))
         {
-            var trimmedPath = result.AbsolutePath.TrimStart('/');
-            var isResources = trimmedPath == DashboardUrls.ResourcesBasePath || trimmedPath[0] == '?';
+            var isResources = LegacyNavUrls.IsResourcesPath(result.AbsolutePath.TrimStart('/'));
             if (isResources != _isResources)
             {
                 _isResources = isResources;

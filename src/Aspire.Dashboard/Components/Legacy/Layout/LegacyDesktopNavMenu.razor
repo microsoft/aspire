@@ -6,32 +6,32 @@
     @if (DashboardClient.IsEnabled)
     {
         <FluentAppBarItem
-            Href="@DashboardUrls.ResourcesUrl()"
+            Href="@LegacyNavUrls.ToLegacyUrl(DashboardUrls.ResourcesUrl())"
             Match="@(_isResources ? NavLinkMatch.Prefix : NavLinkMatch.All)"
             IconRest="ResourcesIcon()"
             IconActive="ResourcesIcon(active: true)"
             Text="@Loc[nameof(Layout.NavMenuResourcesTab)]" />
-        <FluentAppBarItem Href="@DashboardUrls.ConsoleLogsUrl()"
+        <FluentAppBarItem Href="@LegacyNavUrls.ToLegacyUrl(DashboardUrls.ConsoleLogsUrl())"
             IconRest="ConsoleLogsIcon()"
             IconActive="ConsoleLogsIcon(active: true)"
             Text="@Loc[nameof(Layout.NavMenuConsoleLogsTab)]" />
     }
-    <FluentAppBarItem Href="@DashboardUrls.StructuredLogsUrl()"
+    <FluentAppBarItem Href="@LegacyNavUrls.ToLegacyUrl(DashboardUrls.StructuredLogsUrl())"
         IconRest="StructuredLogsIcon()"
         IconActive="StructuredLogsIcon(active: true)"
         Text="@Loc[nameof(Layout.NavMenuStructuredLogsTab)]" />
-    <FluentAppBarItem Href="@DashboardUrls.TracesUrl()"
+    <FluentAppBarItem Href="@LegacyNavUrls.ToLegacyUrl(DashboardUrls.TracesUrl())"
         IconRest="TracesIcon()"
         IconActive="TracesIcon(active: true)"
         Text="@Loc[nameof(Layout.NavMenuTracesTab)]" />
     <FluentAppBarItem
-        Href="@DashboardUrls.MetricsUrl()"
+        Href="@LegacyNavUrls.ToLegacyUrl(DashboardUrls.MetricsUrl())"
         IconRest="MetricsIcon()"
         IconActive="MetricsIcon(active: true)"
         Text="@Loc[nameof(Layout.NavMenuMetricsTab)]" />
     @if (DashboardClient.IsEnabled && HasResourceTerminals)
     {
-        <FluentAppBarItem Href="@DashboardUrls.TerminalsUrl()"
+        <FluentAppBarItem Href="@LegacyNavUrls.ToLegacyUrl(DashboardUrls.TerminalsUrl())"
             IconRest="TerminalsIcon()"
             IconActive="TerminalsIcon(active: true)"
             Text="@Loc[nameof(Layout.NavMenuTerminalsTab)]" />

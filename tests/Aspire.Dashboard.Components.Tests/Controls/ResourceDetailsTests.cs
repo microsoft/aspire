@@ -378,6 +378,38 @@ public class ResourceDetailsTests : DashboardTestContext
             });
     }
 
+    [Theory]
+    [InlineData("/resources/app1", "/resources/api")]
+    [InlineData("/legacy", "/?resource=api")]
+    [InlineData("/legacy?view=Graph", "/?resource=api")]
+    public async Task OnViewRelationshipAsync_NavigatesToResourceUrlOfCurrentExperience(string currentUrl, string expectedUrl)
+    {
+        ResourceSetupHelpers.SetupResourceDetails(this);
+
+        var resource = ModelTestHelpers.CreateResource(resourceName: "app1");
+        var related = ModelTestHelpers.CreateResource(resourceName: "api");
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo(currentUrl);
+
+        var cut = Render<ResourceDetails>(builder =>
+        {
+            builder.Add(p => p.Resource, resource);
+            builder.Add(p => p.ResourceByName, new ConcurrentDictionary<string, ResourceViewModel>([
+                new KeyValuePair<string, ResourceViewModel>(resource.Name, resource),
+                new KeyValuePair<string, ResourceViewModel>(related.Name, related)]));
+        });
+
+        // The previous experience has no resource overview route, so its View action must keep the query-based URL.
+        await cut.InvokeAsync(() => cut.Instance.OnViewRelationshipAsync(new ResourceDetailRelationshipViewModel
+        {
+            Resource = related,
+            ResourceName = related.Name,
+            Types = ["Reference"]
+        }));
+
+        Assert.Equal(expectedUrl, "/" + navigation.ToBaseRelativePath(navigation.Uri));
+    }
+
     [Fact]
     public void Render_StateDescription_ShowsAsResourceDetailEntry()
     {
