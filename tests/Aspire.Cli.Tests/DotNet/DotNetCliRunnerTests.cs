@@ -2695,6 +2695,17 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         Assert.False(string.IsNullOrWhiteSpace(properties.GetProperty("RunCommand").GetString()));
         Assert.Equal("--from-msbuild", properties.GetProperty("RunArguments").GetString());
         Assert.Equal(Path.Combine(projectDirectory.FullName, "relative-working-directory"), properties.GetProperty("RunWorkingDirectory").GetString());
+        outputHelper.WriteLine($"[msbuild-stderr] exit={process.ExitCode} properties=verified chars={stderr.Length} nonWhitespace={stderr.Count(c => !char.IsWhiteSpace(c))} lines={stderr.Split('\n').Length}");
+        // Classify only fixed tokens and diagnostic IDs; never print paths, URLs or restore credentials.
+        foreach (var token in new[] { "warning", "error", "MSBuild", "NuGet", "workload", "telemetry", "Welcome to .NET", "certificate", "restore" })
+        {
+            outputHelper.WriteLine($"[msbuild-stderr] token={token} present={stderr.Contains(token, StringComparison.OrdinalIgnoreCase)}");
+        }
+        var diagnosticCodes = System.Text.RegularExpressions.Regex.Matches(
+            stderr, @"\b(?:MSB|NU|NETSDK|CS)\d{4,5}\b",
+            System.Text.RegularExpressions.RegexOptions.CultureInvariant)
+            .Select(match => match.Value).Distinct(StringComparer.Ordinal);
+        outputHelper.WriteLine($"[msbuild-stderr] diagnosticCodes={string.Join(",", diagnosticCodes)}");
         Assert.True(string.IsNullOrWhiteSpace(stderr));
     }
 
