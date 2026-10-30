@@ -216,8 +216,10 @@ export const unsupportedBrowserDebugTargetWithoutUrl = (browser: string, support
 export const csharpExtensionMissingForBlazorDebugging = (extensionId: string, minimumVersion: string) => vscode.l10n.t('Debugging this Blazor client requires {0} version {1} or later. Install the C# extension, then start debugging again.', extensionId, minimumVersion);
 export const csharpExtensionOutdatedForBlazorDebugging = (extensionId: string, installedVersion: string, minimumVersion: string) => vscode.l10n.t('Debugging this Blazor client requires {0} version {2} or later. Installed version: {1}. Update the C# extension, then start debugging again.', extensionId, installedVersion, minimumVersion);
 export const missingBlazorClientProject = (projectPath: string) => vscode.l10n.t("The Blazor client project '{0}' does not exist. Restore or rebuild the AppHost, then start debugging again.", projectPath);
-export const goDisplayName = (program: string) => `Go: ${program}`;
-export const goLabel = 'Go';
+export const goDisplayName = (program: string) => vscode.l10n.t('Go: {0}', program);
+export const goLabel = vscode.l10n.t('Go');
+export const goDebuggerExtensionNotInstalled = (extensionId: string) => vscode.l10n.t('Go AppHosts require Go debugger support. Set up {0} in the Extensions view, then start the AppHost again.', extensionId);
+export const goAppHostCommandNotRecognized = () => vscode.l10n.t('The Go AppHost launch command was not recognized and cannot be debugged.');
 export const rustDisplayName = (program: string) => vscode.l10n.t('Rust: {0}', program);
 export const rustLabel = vscode.l10n.t('Rust');
 export const rustBuildFailedWithError = (workingDirectory: string, error: string) => vscode.l10n.t('cargo build failed in {0} with error: {1}.', workingDirectory, error);

@@ -275,6 +275,28 @@ suite('utils/strings tests', () => {
         assert.deepStrictEqual(missingFromXlf, [], 'Regenerate loc/xlf/aspire-vscode.xlf with "yarn run localize" after adding package.nls.json entries.');
     });
 
+    test('Go loc strings are present in package.nls.json and the generated XLF catalog', () => {
+        // Same guard as the Rust and Java strings: package.nls.json is the only input to the XLF
+        // catalog (see gulpfile.js), so a Go string that only exists in strings.ts ships untranslated.
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const stringsSource = fs.readFileSync(path.join(extensionRoot, 'src', 'loc', 'strings.ts'), 'utf8');
+        const packageNls = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'package.nls.json'), 'utf8')) as Record<string, string>;
+        const xlf = fs.readFileSync(path.join(extensionRoot, 'loc', 'xlf', 'aspire-vscode.xlf'), 'utf8');
+
+        // The capital letter keeps the scan to goXxx names and away from unrelated words that start with "go".
+        const declarationPattern = /export\s+const\s+(go[A-Z][A-Za-z0-9_]*)\s*=\s*(?:\([^)]*\)\s*=>\s*)?vscode\.l10n\.t\(/g;
+        const names = [...stringsSource.matchAll(declarationPattern)].map(match => match[1]);
+        for (const expectedName of ['goDisplayName', 'goLabel', 'goDebuggerExtensionNotInstalled', 'goAppHostCommandNotRecognized']) {
+            assert.ok(names.includes(expectedName), `Expected ${expectedName} to be declared in strings.ts.`);
+        }
+
+        const missingFromNls = names.filter(name => packageNls[`aspire-vscode.strings.${name}`] === undefined);
+        assert.deepStrictEqual(missingFromNls, [], 'Every Go loc string needs an aspire-vscode.strings.* entry in package.nls.json.');
+
+        const missingFromXlf = names.filter(name => !xlf.includes(`<trans-unit id="aspire-vscode.strings.${name}">`));
+        assert.deepStrictEqual(missingFromXlf, [], 'Regenerate loc/xlf/aspire-vscode.xlf with "yarn run localize" after adding package.nls.json entries.');
+    });
+
     test('debugger setup strings use neutral wording for missing or disabled extensions', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const packageNls = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'package.nls.json'), 'utf8')) as Record<string, string>;
@@ -287,6 +309,9 @@ suite('utils/strings tests', () => {
         assert.strictEqual(
             locStrings.javaDebuggerExtensionNotInstalled('vscjava.vscode-java-debug'),
             'Java AppHosts require Java debugger support. Set up vscjava.vscode-java-debug in the Extensions view, then start the AppHost again.');
+        assert.strictEqual(
+            locStrings.goDebuggerExtensionNotInstalled('golang.go'),
+            'Go AppHosts require Go debugger support. Set up golang.go in the Extensions view, then start the AppHost again.');
     });
 });
 
