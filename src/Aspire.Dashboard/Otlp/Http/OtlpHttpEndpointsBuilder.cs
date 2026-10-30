@@ -168,6 +168,13 @@ public static class OtlpHttpEndpointsBuilder
                         context.Response.StatusCode = StatusCodes.Status400BadRequest;
                         return Empty;
                     }
+                    catch (Exception ex) when (ex is FormatException or ArgumentException)
+                    {
+                        // Malformed field values (invalid hex trace/span id, invalid base64) throw from the protobuf converter while reading valid JSON.
+                        logger.LogDebug(ex, "Invalid value in OTLP JSON request.");
+                        context.Response.StatusCode = StatusCodes.Status400BadRequest;
+                        return Empty;
+                    }
                     catch (BadHttpRequestException ex)
                     {
                         context.Response.StatusCode = ex.StatusCode;
