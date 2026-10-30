@@ -605,6 +605,8 @@ public static class EntraIdResourceExtensions
         [AspireUnion(typeof(string), typeof(IResourceBuilder<ParameterResource>))] object clientId)
     {
         ArgumentNullException.ThrowIfNull(builder);
+        // Reject incompatible registrations before touching any state, so a failed conversion leaves the IDs unchanged.
+        builder.Resource.EnsureCanBeExistingApplication();
         SetExistingApplicationIds(builder.Resource, tenantId, clientId);
         return ConfigureExistingApplication(builder);
     }

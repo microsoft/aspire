@@ -35,7 +35,8 @@ public class LocalDeveloperCertificateTests
         Assert.Equal(clock.UtcNow.AddDays(2), first.NotAfter);
         Assert.Equal(first.Thumbprint, second.Thumbprint);
         Assert.Equal(first.Base64EncodedValue, second.Base64EncodedValue);
-        using var privateCertificate = X509CertificateLoader.LoadPkcs12(Convert.FromBase64String(first.Base64EncodedValue), null, X509KeyStorageFlags.EphemeralKeySet);
+        using var privateCertificate = X509CertificateLoader.LoadPkcs12(Convert.FromBase64String(first.Base64EncodedValue), null,
+            OperatingSystem.IsMacOS() ? X509KeyStorageFlags.DefaultKeySet : X509KeyStorageFlags.EphemeralKeySet);
         using var publicCertificate = X509CertificateLoader.LoadCertificate(Convert.FromBase64String(first.PublicCertificate));
         using var privateKey = privateCertificate.GetRSAPrivateKey();
         using var publicKey = publicCertificate.GetRSAPublicKey();
@@ -261,6 +262,7 @@ public class LocalDeveloperCertificateTests
         Assert.Throws<InvalidOperationException>(existing.RunWithLocalDeveloperCertificateCredential);
         var created = builder.AddEntraIdApplication("created").RunWithLocalDeveloperCertificateCredential();
         Assert.Throws<InvalidOperationException>(() => created.AsExistingApplication(tenant, client));
+        Assert.Throws<InvalidOperationException>(() => created.AsExistingApplicationForExport(tenant, client));
         Assert.Null(created.Resource.TenantId);
         Assert.Null(created.Resource.ClientId);
         var tenantParameter = builder.AddParameter("tenant-id", tenant);

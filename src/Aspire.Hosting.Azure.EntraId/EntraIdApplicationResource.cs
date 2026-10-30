@@ -134,12 +134,17 @@ public class EntraIdApplicationResource : AzureProvisioningResource, IResourceWi
         return EntraIdResourceExtensions.WithReference(builder, application, connectionName);
     }
 
-    internal void SetExistingApplication()
+    internal void EnsureCanBeExistingApplication()
     {
         if (ClientCredentials.OfType<EntraIdLocalDeveloperCertificateCredential>().Any())
         {
             throw new InvalidOperationException("A registration using RunWithLocalDeveloperCertificateCredential cannot be converted to an existing application. Existing registrations remain caller-managed.");
         }
+    }
+
+    internal void SetExistingApplication()
+    {
+        EnsureCanBeExistingApplication();
 
         IsExistingApplication = true;
         ProvisioningTaskCompletionSource = null;

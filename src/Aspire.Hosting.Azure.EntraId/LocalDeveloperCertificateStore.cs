@@ -51,16 +51,23 @@ internal sealed class LocalDeveloperCertificateStore(IAspireStore store, TimePro
             var bytes = await File.ReadAllBytesAsync(path, cancellationToken).ConfigureAwait(false);
             try
             {
-                using var certificate = X509CertificateLoader.LoadPkcs12(bytes, null, X509KeyStorageFlags.EphemeralKeySet);
+                // macOS doesn't support ephemeral PFX imports and throws PlatformNotSupportedException; there the
+                // key is imported into a temporary keychain that is cleaned up when the certificate is disposed.
+                var keyStorageFlags = OperatingSystem.IsMacOS() ? X509KeyStorageFlags.DefaultKeySet : X509KeyStorageFlags.EphemeralKeySet;
+                using var certificate = X509CertificateLoader.LoadPkcs12(bytes, null, keyStorageFlags);
                 using var key = certificate.GetRSAPrivateKey();
                 // Exercise the private key rather than trusting HasPrivateKey on a damaged/inaccessible key.
                 _ = key?.SignData([0], HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+                // NotBefore/NotAfter are local times. Compare UTC values so a daylight-saving transition inside
+                // the validity period doesn't make a 48-hour certificate look longer than it is.
+                var notBefore = certificate.NotBefore.ToUniversalTime();
+                var notAfter = certificate.NotAfter.ToUniversalTime();
                 if (key is { KeySize: >= 2048 } &&
                     certificate.Subject == $"CN=Aspire Entra {resourceName}" &&
                     certificate.Issuer == certificate.Subject &&
-                    certificate.NotAfter - certificate.NotBefore <= TimeSpan.FromDays(2) &&
-                    certificate.NotBefore.ToUniversalTime() <= now.UtcDateTime &&
-                    certificate.NotAfter.ToUniversalTime() > now.AddDays(1).UtcDateTime)
+                    notAfter - notBefore <= TimeSpan.FromDays(2) &&
+                    notBefore <= now.UtcDateTime &&
+                    notAfter > now.AddDays(1).UtcDateTime)
                 {
                     return new LocalDeveloperCertificate(certificate, bytes);
                 }
