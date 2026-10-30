@@ -25,7 +25,6 @@ internal sealed class TerminalTestHost : ITerminalConnectionResolver, IAsyncDisp
     private readonly ConcurrentBag<Task> _attachmentDisposals = [];
     private int _disposedAttachments;
     private int _terminalEnded;
-    private int _includeHmpExit;
     private readonly TaskCompletionSource _endedObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     public TerminalTestHost(ITestOutputHelper output, bool requireAuthentication, bool useGrpc = false)
@@ -49,6 +48,11 @@ internal sealed class TerminalTestHost : ITerminalConnectionResolver, IAsyncDisp
 
     public Hex1bAppWorkloadAdapter Workload => _producer.Workload;
     public Hmp1PresentationAdapter Presentation => _producer.Presentation;
+    public TimeSpan ProducerOutputDelay
+    {
+        get => _producer.OutputDelay;
+        set => _producer.OutputDelay = value;
+    }
     public int ConnectionCount => _producer.ConnectionCount;
     public int DisposedAttachments => Volatile.Read(ref _disposedAttachments);
     public StatusCode? AttachmentFailureStatus { get; init; }
@@ -62,10 +66,14 @@ internal sealed class TerminalTestHost : ITerminalConnectionResolver, IAsyncDisp
 
     public Task WaitForEndedObservedAsync(CancellationToken cancellationToken) => _endedObserved.Task.WaitAsync(cancellationToken);
 
-    public async Task EndTerminalAsync(bool includeHmpExit)
+    public async Task EndTerminalAsync(bool includeHmpExit, CancellationToken cancellationToken = default)
     {
-        Volatile.Write(ref _includeHmpExit, includeHmpExit ? 1 : 0);
         Volatile.Write(ref _terminalEnded, 1);
+        if (includeHmpExit)
+        {
+            // End like a producer whose workload exited: HMP Exit follows every queued output frame.
+            await _producer.CompleteAsync(cancellationToken);
+        }
         await Presentation.DisposeAsync();
     }
 
@@ -137,8 +145,7 @@ internal sealed class TerminalTestHost : ITerminalConnectionResolver, IAsyncDisp
         _attachmentDisposals.Add(disposed.Task);
         var call = new AsyncDuplexStreamingCall<TerminalClientFrame, TerminalServerFrame>(
             new TerminalRequestWriter(connection),
-            new TerminalResponseReader(connection, () => Volatile.Read(ref _terminalEnded) != 0,
-                () => Volatile.Read(ref _includeHmpExit) != 0, _endedObserved, failure),
+            new TerminalResponseReader(connection, () => Volatile.Read(ref _terminalEnded) != 0, _endedObserved, failure),
             Task.FromResult(new Metadata()),
             () => Status.DefaultSuccess,
             () => new Metadata(),
@@ -166,14 +173,13 @@ internal sealed class TerminalTestHost : ITerminalConnectionResolver, IAsyncDisp
         }
     }
 
-    private sealed class TerminalResponseReader(Stream stream, Func<bool> terminalEnded, Func<bool> includeHmpExit,
+    private sealed class TerminalResponseReader(Stream stream, Func<bool> terminalEnded,
         TaskCompletionSource endedObserved, RpcException? failure) : IAsyncStreamReader<TerminalServerFrame>
     {
         // Deliberately split HMP frames across small gRPC messages: transport boundaries
         // must not affect the HMP handshake, UTF-8 input, graphics, or terminal state.
         private readonly byte[] _buffer = new byte[31];
         private bool _sentEnded;
-        private bool _sentExit;
 
         public TerminalServerFrame Current { get; private set; } = new();
 
@@ -188,17 +194,6 @@ internal sealed class TerminalTestHost : ITerminalConnectionResolver, IAsyncDisp
             var count = await stream.ReadAsync(_buffer, cancellationToken);
             if (count == 0)
             {
-                if (terminalEnded() && includeHmpExit() && !_sentExit)
-                {
-                    // HMP Exit precedes gRPC Ended: type 0x06, four-byte LE payload
-                    // length, then a four-byte LE exit code (zero in this fixture).
-                    // https://github.com/mitchdenny/hex1b/blob/798b26c/docs/muxer-protocol.md#exit-0x06
-                    _sentExit = true;
-                    byte[] exit = [0x06, 4, 0, 0, 0, 0, 0, 0, 0];
-                    Current = new TerminalServerFrame { Data = ByteString.CopyFrom(exit) };
-                    return true;
-                }
-
                 if (terminalEnded() && !_sentEnded)
                 {
                     _sentEnded = true;
