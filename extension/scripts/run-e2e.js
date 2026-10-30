@@ -146,8 +146,10 @@ const installAzureFunctionsVsix = process.env.ASPIRE_EXTENSION_E2E_INSTALL_AZURE
 const enableWinUiE2E = process.env.ASPIRE_EXTENSION_E2E_ENABLE_WINUI === 'true';
 const enableBrowserDebuggerE2E = shardName === 'browser-debugger';
 const enableNodeFunctionsE2E = shardName === 'azure-functions-node';
+const enableCoordinatedBuildE2E = shardName === 'coordinated-build'
+  || matchedTestSpecs.some(specPath => path.basename(specPath) === 'coordinatedBuild.e2e.test.js');
 const browserDebuggerTargetFramework = 'net11.0';
-const enableDebuggerExtensions = installAzureFunctionsVsix || enableBrowserDebuggerE2E || enableNodeFunctionsE2E || enableWinUiE2E || enableResourceDebugE2E;
+const enableDebuggerExtensions = installAzureFunctionsVsix || enableBrowserDebuggerE2E || enableNodeFunctionsE2E || enableWinUiE2E || enableCoordinatedBuildE2E || enableResourceDebugE2E;
 const e2eBrowser = process.platform === 'win32' ? 'msedge' : 'chrome';
 const COMMAND_INERT_PATH_PATTERN = isWindows ? WINDOWS_COMMAND_INERT_PATH_PATTERN : POSIX_SHELL_INERT_PATH_PATTERN;
 const COMMAND_INTERPRETER_NAME = isWindows ? 'cmd.exe' : '/bin/sh';
@@ -1535,6 +1537,7 @@ function prepareWorkspaceFixture(resolvedCliPath, resolvedAppHostSdkVersion) {
   else {
     writeWorkerProject('AspireE2E.Worker');
     if (enableResourceDebugE2E) {
+      writeCustomOutputWorkerProject('AspireE2E.CustomOutputWorker');
       writeGoWorker('AspireE2E.Go');
     }
     if (enableAzureFunctionsE2E) {
@@ -1728,6 +1731,8 @@ function replaceCounterHandler(counterPath) {
 function writeBrowserDebuggerAppHostProject(projectName, resolvedAppHostSdkVersion) {
   const projectDirectory = path.join(workspaceRoot, projectName);
   fs.mkdirSync(projectDirectory, { recursive: true });
+  // The standalone client still consumes generated Projects metadata. Keep that SDK and
+  // the browser fixtures' project-reference graph for restore/build prewarming.
   fs.writeFileSync(path.join(projectDirectory, `${projectName}.csproj`), `<Project Sdk="Aspire.AppHost.Sdk/${resolvedAppHostSdkVersion}">
 
   <PropertyGroup>
@@ -1744,6 +1749,7 @@ function writeBrowserDebuggerAppHostProject(projectName, resolvedAppHostSdkVersi
     <ProjectReference Include="../HostedPerPage/HostedPerPage/HostedPerPage.csproj" />
     <ProjectReference Include="../HostedPerPage/HostedPerPage.Client/HostedPerPage.Client.csproj" />
     <PackageReference Include="Aspire.Hosting.Blazor" Version="${resolvedAppHostSdkVersion}" />
+    <PackageReference Include="Aspire.Hosting.Dotnet" Version="${resolvedAppHostSdkVersion}" />
   </ItemGroup>
 
 </Project>
@@ -1756,17 +1762,17 @@ var builder = DistributedApplication.CreateBuilder(args);
 var browser = Environment.GetEnvironmentVariable("ASPIRE_EXTENSION_E2E_BROWSER") ?? "chrome";
 var standalone = builder.AddBlazorWasmProject<Projects.StandaloneClient>("standalone")
     .WithBlazorDebuggerBrowser(browser);
-var gateway = builder.AddBlazorGateway("standalone-gateway");
+var gateway = builder.AddDotnetProjectBlazorGateway("standalone-gateway");
 // Match the HTTP-only client fixtures without depending on machine-wide browser certificate trust.
 gateway.Resource.Annotations.Remove(gateway.Resource.Annotations.OfType<EndpointAnnotation>().Single(endpoint => endpoint.UriScheme == "https"));
 gateway.WithExternalHttpEndpoints()
     .WithBlazorClientApp(standalone);
 // Launch one server per scenario rather than competing for C# run-api startup timeouts.
-builder.AddProject<Projects.HostedGlobal>("hosted-global")
+builder.AddDotnetProject("hosted-global", "../HostedGlobal/HostedGlobal/HostedGlobal.csproj")
     .WithExplicitStart()
     .WithBlazorDebuggerBrowser(browser)
     .ProxyBlazorTelemetry();
-builder.AddProject<Projects.HostedPerPage>("hosted-per-page")
+builder.AddDotnetProject("hosted-per-page", "../HostedPerPage/HostedPerPage/HostedPerPage.csproj")
     .WithExplicitStart()
     .WithBlazorDebuggerBrowser(browser)
     .ProxyBlazorTelemetry();
@@ -1777,16 +1783,18 @@ builder.Build().Run();
 function writeAppHostProject(projectName, resolvedAppHostSdkVersion, includeAzureFunctions, includeWinUi, includeResourceDebug) {
   const projectDirectory = path.join(workspaceRoot, projectName);
   fs.mkdirSync(projectDirectory, { recursive: true });
+  // Keep the Functions lane's SDK machinery; ordinary V2 resources no longer need generated metadata.
+  const projectSdk = includeAzureFunctions ? `Aspire.AppHost.Sdk/${resolvedAppHostSdkVersion}` : 'Microsoft.NET.Sdk';
+  const appHostPackageReference = includeAzureFunctions
+    ? ''
+    : `    <PackageReference Include="Aspire.Hosting.AppHost" Version="${resolvedAppHostSdkVersion}" />\n`;
   const azureFunctionsPackageReference = includeAzureFunctions
     ? `    <PackageReference Include="Aspire.Hosting.Azure.Functions" Version="${resolvedAppHostSdkVersion}" />\n`
     : '';
   const goPackageReference = includeResourceDebug
     ? `    <PackageReference Include="Aspire.Hosting.Go" Version="${resolvedAppHostSdkVersion}" />\n`
     : '';
-  const winUiProjectReference = includeWinUi
-    ? '    <ProjectReference Include="../AspireE2E.WinUI/AspireE2E.WinUI.csproj" />\n'
-    : '';
-  fs.writeFileSync(path.join(projectDirectory, `${projectName}.csproj`), `<Project Sdk="Aspire.AppHost.Sdk/${resolvedAppHostSdkVersion}">
+  fs.writeFileSync(path.join(projectDirectory, `${projectName}.csproj`), `<Project Sdk="${projectSdk}">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -1796,8 +1804,8 @@ function writeAppHostProject(projectName, resolvedAppHostSdkVersion, includeAzur
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../AspireE2E.Worker/AspireE2E.Worker.csproj" />
-${winUiProjectReference}${azureFunctionsPackageReference}${goPackageReference}  </ItemGroup>
+${appHostPackageReference}${azureFunctionsPackageReference}    <PackageReference Include="Aspire.Hosting.Dotnet" Version="${resolvedAppHostSdkVersion}" />
+${goPackageReference}  </ItemGroup>
 
 </Project>
 `);
@@ -1811,8 +1819,15 @@ ${winUiProjectReference}${azureFunctionsPackageReference}${goPackageReference}  
 
 `
     : '';
+  const customOutputWorkerResource = includeResourceDebug
+    ? `builder.AddDotnetProject("e2e-custom-output-worker", "../AspireE2E.CustomOutputWorker/AspireE2E.CustomOutputWorker.csproj")
+    .WithBuildEnvironment("BUILD_FLAVOR", "custom")
+    .WithHttpEndpoint(name: "http");
+
+`
+    : '';
   const winUiResource = includeWinUi
-    ? 'builder.AddProject<Projects.AspireE2E_WinUI>("e2e-winui", launchProfileName: "E2E");\n\n'
+    ? 'builder.AddDotnetProject("e2e-winui", "../AspireE2E.WinUI/AspireE2E.WinUI.csproj", options => options.LaunchProfileName = "E2E");\n\n'
     : '';
   fs.writeFileSync(path.join(projectDirectory, 'AppHost.cs'), `${csharpFileHeader}#pragma warning disable ASPIREINTERACTION001
 #pragma warning disable ASPIREPIPELINES001 // Older published SDKs still mark pipeline APIs experimental.
@@ -1823,7 +1838,7 @@ using Aspire.Hosting.Pipelines;
 // The E2E fixture intentionally covers interaction command arguments and terminal metadata while those APIs are still experimental.
 var builder = DistributedApplication.CreateBuilder(args);
 
-builder.AddProject<Projects.AspireE2E_Worker>("e2e-worker")
+builder.AddDotnetProject("e2e-worker", "../AspireE2E.Worker/AspireE2E.Worker.csproj")
     .WithHttpEndpoint(name: "http")
     .WithCommand(
         "echo-arguments",
@@ -1892,11 +1907,11 @@ builder.AddResource(new NoCommandsResource("e2e-no-commands"));
 // e2e-terminal opts into WithTerminal so the real CLI surfaces terminal.enabled and
 // terminal.replicaIndex over the backchannel. The extension's Open terminal action reads
 // those properties, so this resource exercises that metadata flowing through a real CLI process.
-builder.AddProject<Projects.AspireE2E_Worker>("e2e-terminal")
+builder.AddDotnetProject("e2e-terminal", "../AspireE2E.Worker/AspireE2E.Worker.csproj")
     .WithHttpEndpoint(name: "http")
     .WithTerminal();
 
-${winUiResource}${azureFunctionsResource}${goResource}builder.Pipeline.AddStep("e2e-run-action-step", async context =>
+${winUiResource}${azureFunctionsResource}${customOutputWorkerResource}${goResource}builder.Pipeline.AddStep("e2e-run-action-step", async context =>
 {
     var task = await context.ReportingStep
         .CreateTaskAsync("Running E2E run action pipeline step", context.CancellationToken)
@@ -2140,6 +2155,32 @@ app.Run();
 `);
 }
 
+function writeCustomOutputWorkerProject(projectName) {
+  const projectDirectory = path.join(workspaceRoot, projectName);
+  fs.mkdirSync(projectDirectory, { recursive: true });
+  fs.writeFileSync(path.join(projectDirectory, `${projectName}.csproj`), `<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UseAppHost>false</UseAppHost>
+    <BUILD_FLAVOR>default</BUILD_FLAVOR>
+    <OutputPath Condition="'$(BUILD_FLAVOR)' == 'custom'">bin/custom/</OutputPath>
+  </PropertyGroup>
+
+</Project>
+`);
+
+  fs.writeFileSync(path.join(projectDirectory, 'Program.cs'), `${csharpFileHeader}var builder = WebApplication.CreateBuilder(args);
+var app = builder.Build();
+
+app.MapGet("/", () => "custom-ok");
+
+app.Run();
+`);
+}
+
 function writeGoWorker(projectName) {
   const projectDirectory = path.join(workspaceRoot, projectName);
   fs.mkdirSync(projectDirectory, { recursive: true });
@@ -2290,12 +2331,8 @@ function writeNuGetConfigIfLocalPackageSourcesExist() {
   const fallbackSourceEntries = fallbackSources
     .map(source => `    <add key="${escapeXml(source.key)}" value="${escapeXml(source.value)}" />`)
     .join('\n');
-  const sourceMappingEntries = [
-    ...packageSources.map((_, index) => `e2e-source-${index}`),
-    ...fallbackSources.map(source => source.key),
-  ].map(key => `    <packageSource key="${escapeXml(key)}">
-      <package pattern="*" />
-    </packageSource>`).join('\n');
+  // Clear inherited mappings without enabling mapping: generated AppHosts inherit these
+  // fixture-owned aliases, which the CLI must not modify to add integration mappings.
   const nugetConfig = `<?xml version="1.0" encoding="utf-8"?>
 <configuration>
   <packageSources>
@@ -2305,7 +2342,6 @@ ${fallbackSourceEntries}
   </packageSources>
   <packageSourceMapping>
     <clear />
-${sourceMappingEntries}
   </packageSourceMapping>
 </configuration>
 `;

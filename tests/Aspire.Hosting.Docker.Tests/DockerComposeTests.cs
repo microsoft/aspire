@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource Compose projection alongside executable/V2 deployment coverage.
 #pragma warning disable ASPIRECOMPUTE002
 #pragma warning disable ASPIRECOMPUTE003
 #pragma warning disable ASPIREPIPELINES003
@@ -93,7 +94,7 @@ public class DockerComposeTests(ITestOutputHelper outputHelper)
     {
         static async Task RunTest(Action<IDistributedApplicationBuilder> action)
         {
-            var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+            using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
             // Do not add AddDockerComposeEnvironment
 
             action(builder);
@@ -107,6 +108,10 @@ public class DockerComposeTests(ITestOutputHelper outputHelper)
 
         await RunTest(builder =>
             builder.AddProject<Projects.ServiceA>("ServiceA")
+                .PublishAsDockerComposeService((_, _) => { }));
+
+        await RunTest(builder =>
+            builder.AddDotnetProject("ServiceA", new Projects.ServiceA().ProjectPath, options => options.ExcludeLaunchProfile = true)
                 .PublishAsDockerComposeService((_, _) => { }));
 
         await RunTest(builder =>
@@ -1078,3 +1083,4 @@ public class DockerComposeTests(ITestOutputHelper outputHelper)
         Assert.True(fakeRuntime.WasComposeDownCalled, "ComposeDownAsync should have been called using persisted state from deploy");
     }
 }
+#pragma warning restore CS0618

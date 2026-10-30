@@ -354,12 +354,13 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
                 {
                     using var graph = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(root.FullName, "obj", "Root.csproj.nuget.dgspec.json")));
                     var projects = graph.RootElement.GetProperty("projects");
-                    Assert.Equal([newFeed.FullName], projects.GetProperty(projectFile.FullName).GetProperty("restore").GetProperty("sources")
+                    Assert.Equal([newFeed.FullName, oldFeed.FullName], projects.GetProperty(projectFile.FullName).GetProperty("restore").GetProperty("sources")
                         .EnumerateObject().Select(static source => source.Name).ToArray());
                     using var childGraph = JsonDocument.Parse(await File.ReadAllTextAsync(
                         Path.Combine(childDirectory.FullName, "obj", "Child.csproj.nuget.dgspec.json")));
                     var childProject = childGraph.RootElement.GetProperty("projects").EnumerateObject().Single().Value;
-                    Assert.Equal([childOwnPolicy ? childFeed.FullName : newFeed.FullName], childProject.GetProperty("restore").GetProperty("sources")
+                    string[] expectedChildSources = childOwnPolicy ? [childFeed.FullName] : [newFeed.FullName, oldFeed.FullName];
+                    Assert.Equal(expectedChildSources, childProject.GetProperty("restore").GetProperty("sources")
                         .EnumerateObject().Select(static source => source.Name).ToArray());
                     Assert.Equal(childCache.FullName, childProject.GetProperty("restore").GetProperty("packagesPath").GetString()?.TrimEnd(Path.DirectorySeparatorChar));
                     if (customChildTargets)
@@ -389,6 +390,57 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
                 Directory.Delete(sdkPackageDirectory, recursive: true);
             }
         }
+    }
+
+    [Fact]
+    public async Task ChannelConfigWithoutMappings_RestoresFromAmbientAndSelectedFeeds()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var ambientFeed = workspace.CreateDirectory("ambient-feed");
+        var selectedFeed = workspace.CreateDirectory("selected-feed");
+        var cache = workspace.CreateDirectory("package-cache");
+        var suffix = Guid.NewGuid().ToString("N");
+        var integrationPackage = $"Aspire.SourceOnly.{suffix}";
+        var dependencyPackage = $"Other.Dependency.{suffix}";
+        var packageFiles = new Dictionary<string, string> { ["lib/net10.0/_._"] = "" };
+        NuGetTestHelper.CreatePackage(selectedFeed, integrationPackage, "1.0.0", packageFiles);
+        NuGetTestHelper.CreatePackage(ambientFeed, dependencyPackage, "1.0.0", packageFiles);
+        var configPath = Path.Combine(workspace.Path, "NuGet.Config");
+        await File.WriteAllTextAsync(configPath, $$"""
+            <configuration>
+              <packageSources><clear /><add key="company" value="{{ambientFeed.FullName}}" /></packageSources>
+            </configuration>
+            """);
+        var project = new FileInfo(Path.Combine(workspace.Path, "AppHost.csproj"));
+        await File.WriteAllTextAsync(project.FullName, $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net{{Environment.Version.Major}}.0</TargetFramework>
+                <DisableImplicitFrameworkReferences>true</DisableImplicitFrameworkReferences>
+              </PropertyGroup>
+              <ItemGroup>
+                <PackageReference Include="{{integrationPackage}}" Version="1.0.0" />
+                <PackageReference Include="{{dependencyPackage}}" Version="1.0.0" />
+              </ItemGroup>
+            </Project>
+            """);
+        var service = NuGetTestHelper.CreateService();
+        var channel = PackageChannel.CreateExplicitChannel(
+            "daily", PackageChannelQuality.Both, [new("Aspire*", selectedFeed.FullName)],
+            new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
+        var configuration = service.BuildChannelConfiguration(
+            workspace.WorkspaceRoot, "source-only", channel, null, null, TestContext.Current.CancellationToken);
+        await new DotNetAppHostNuGetConfigMerger(service).CreateOrUpdateAsync(
+            workspace.WorkspaceRoot, configuration, createIfMissing: true, globalPackagesFolder: null,
+            confirmationCallback: null, TestContext.Current.CancellationToken);
+
+        var (exitCode, stdout, stderr) = await RunNativeDotNetAsync(
+            workspace.WorkspaceRoot, cache.FullName, ["restore", project.FullName]);
+
+        Assert.True(exitCode == 0, stdout + stderr);
+        using var assets = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "obj", "project.assets.json")));
+        Assert.Equal([integrationPackage + "/1.0.0", dependencyPackage + "/1.0.0"],
+            assets.RootElement.GetProperty("libraries").EnumerateObject().Select(static package => package.Name));
     }
 
     private static async Task<(int ExitCode, string Output, string Error)> RunNativeDotNetAsync(

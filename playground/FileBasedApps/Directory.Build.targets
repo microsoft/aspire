@@ -2,6 +2,7 @@
 
   <ItemGroup Condition="'$(IsAspireHost)' == 'true'">
     <AspireProjectOrPackageReference Include="Aspire.Hosting.AppHost" />
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.Dotnet" />
   </ItemGroup>
 
   <ItemGroup>

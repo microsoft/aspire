@@ -1,0 +1,21 @@
+﻿<configuration>
+  <packageSources>
+    <add key="aspire-test" value="https://new.example/v3/index.json" />
+  </packageSources>
+  <disabledPackageSources>
+    <clear />
+    <add key="user-disabled" value="true" />
+    <add key="future-private" value="true" />
+    <add key="aspire-apphost-0e77e1652908bf0e" value="true" />
+    <add key="aspire-apphost-efc407738a41fb53-0" value="true" />
+  </disabledPackageSources>
+  <packageSourceMapping>
+    <clear />
+    <packageSource key="company">
+      <package pattern="*" />
+    </packageSource>
+    <packageSource key="aspire-test">
+      <package pattern="Aspire*" />
+    </packageSource>
+  </packageSourceMapping>
+</configuration>

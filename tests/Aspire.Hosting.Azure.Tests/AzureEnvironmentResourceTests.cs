@@ -115,7 +115,9 @@ public class AzureEnvironmentResourceTests(ITestOutputHelper output)
             .WithParameter("pgdb", pgdb.Resource.ConnectionStringExpression);
         builder.AddContainer("myapp", "mcr.microsoft.com/dotnet/aspnet:8.0")
                         .WithReference(cosmos);
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
         builder.AddProject<TestProject>("fe", launchProfileName: null)
+#pragma warning restore CS0618
                         .WithEnvironment("BLOB_CONTAINER_URL", $"{blobs}/container");
 
         var app = builder.Build();
@@ -153,7 +155,9 @@ public class AzureEnvironmentResourceTests(ITestOutputHelper output)
                 c.Add(output);
             })
             .AddBlobs("blobs");
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
         builder.AddProject<TestProject>("fe", launchProfileName: null)
+#pragma warning restore CS0618
             .WithEnvironment("BLOB_CONTAINER_URL", $"{blobs}/container")
             .WithReference(cosmos);
         var externalResource = new ExternalResourceWithParameters("external")

@@ -89,12 +89,23 @@ public class RadiusInfrastructureInitializationTests
         Assert.Same(env.Resource, annotation.ComputeEnvironment);
     }
 
-    [Fact]
-    public async Task PrepareDeploymentTargets_AttachesAnnotation_ToProjectResources()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PrepareDeploymentTargets_AttachesAnnotation_ToProjectResources(bool useDotnetProject)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         builder.AddRadiusEnvironment("radius");
-        builder.AddProject<TestProjectMetadata>("webapp");
+#pragma warning disable CS0618 // Exercise deployment-target attachment through both project factories.
+        if (useDotnetProject)
+        {
+            builder.AddDotnetProject("webapp", "webapp.csproj", options => options.ExcludeLaunchProfile = true);
+        }
+        else
+        {
+            builder.AddProject<TestProjectMetadata>("webapp");
+        }
+#pragma warning restore CS0618
 
         using var app = builder.Build();
         await ExecuteBeforeStartHooksAsync(app, default);

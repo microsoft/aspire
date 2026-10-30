@@ -83,6 +83,7 @@ public sealed class DockerComposeDeployWithVolumeTests(ITestOutputHelper output)
                     }
                 });
 
+            {{(useProjectV2 ? "" : "#pragma warning disable CS0618 // Retain legacy project deployment alongside the modern scenario.")}}
             var api = {{(useProjectV2
                 ? $"builder.AddDotnetProject(\"{serverName}\", \"../{ProjectName}.ApiService/{ProjectName}.ApiService.csproj\")"
                 : $"builder.AddProject<Projects.{ProjectName}_ApiService>(\"{serverName}\")")}}
@@ -97,6 +98,7 @@ public sealed class DockerComposeDeployWithVolumeTests(ITestOutputHelper output)
                 .WithReference(api)
                 .WaitFor(api)
                 .WithExternalHttpEndpoints();
+            {{(useProjectV2 ? "" : "#pragma warning restore CS0618")}}
 
             builder.Build().Run();
             """;

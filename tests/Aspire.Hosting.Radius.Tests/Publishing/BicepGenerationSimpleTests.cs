@@ -161,7 +161,9 @@ public class BicepGenerationSimpleTests
         // naming the missing prereq.
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var env = builder.AddRadiusEnvironment("myenv");
+#pragma warning disable CS0618 // Retain legacy ProjectResource image and metadata interoperability with Radius.
         builder.AddProject<TestProjectMetadata>("webapp");
+#pragma warning restore CS0618
 
         using var app = builder.Build();
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();

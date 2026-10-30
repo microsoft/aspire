@@ -337,6 +337,16 @@ internal sealed partial class TemplateEngineFactory(
     private async Task<TemplateResult> ApplyAsync(IEngineEnvironmentSettings settings, TemplateCreator creator, ITemplateInfo template, TemplateInputs inputs, ParseResult parseResult, CancellationToken cancellationToken)
     {
         var hostConfiguration = await TemplateHostConfiguration.LoadAsync(settings, template, cancellationToken);
+        TemplatePromptDefaults promptDefaults;
+        try
+        {
+            promptDefaults = await TemplatePromptDefaults.LoadAsync(settings, template, hostConfiguration, cancellationToken);
+        }
+        catch (TemplateAuthoringException ex)
+        {
+            return CreationFailed(CreationResultStatus.TemplateIssueDetected, ex.Message);
+        }
+
         var name = inputs.Name is { } explicitName && ProjectNameValidator.IsProjectNameValid(explicitName)
             ? explicitName
             : await prompter.PromptForProjectNameAsync(
@@ -378,6 +388,7 @@ internal sealed partial class TemplateEngineFactory(
         }
         try
         {
+            var evaluatedDefaults = promptDefaults.Evaluate(settings, name, cancellationToken);
             var promptState = (hostEnvironment.SupportsInteractiveInput || computedParameters.Count > 0) && template.ParameterDefinitions.Any(parameter =>
                 !string.IsNullOrEmpty(parameter.Precedence.IsEnabledCondition) || !string.IsNullOrEmpty(parameter.Precedence.IsRequiredCondition))
                 ? new TemplateParameterPromptState(settings, template, name, logger, computedParameters)
@@ -415,7 +426,9 @@ internal sealed partial class TemplateEngineFactory(
                         return new TemplateResult(CliExitCodes.InvalidCommand);
                     }
 
-                    value = identityChannel.SourceDetails;
+                    // Ambient channels do not identify one feed. Leave the template's own
+                    // default intact rather than injecting the channel's display label.
+                    value = identityChannel.Mappings is { Length: > 0 } ? identityChannel.SourceDetails : parameter.DefaultValue;
                 }
                 else if (!hostEnvironment.SupportsInteractiveInput || hostConfiguration.IsHidden(parameter.Name))
                 {
@@ -425,9 +438,16 @@ internal sealed partial class TemplateEngineFactory(
                 }
                 else
                 {
+                    var defaultValue = evaluatedDefaults.GetValueOrDefault(parameter.Name);
                     value = await PromptForParameterAsync(
                         parameter, promptState?.IsRequired(parameter) ?? parameter.Precedence.IsRequired,
-                        hostConfiguration.GetDisplayName(parameter.Name), cancellationToken);
+                        hostConfiguration.GetDisplayName(parameter.Name), defaultValue ?? parameter.DefaultValue, cancellationToken);
+                    if (defaultValue is not null && value == defaultValue)
+                    {
+                        // Accepting a projected fallback must remain omission: submitting it as
+                        // user input changes native coalesce and suppliedness semantics.
+                        continue;
+                    }
                 }
 
                 if (value is null)
@@ -489,8 +509,7 @@ internal sealed partial class TemplateEngineFactory(
         // handles PR hives and explicit local/source overrides.
         var channels = (await packagingService.GetChannelsAsync(cancellationToken, executionContext.IdentityChannel)).ToArray();
         var channel = channels.FirstOrDefault(channel =>
-            string.Equals(channel.Name, executionContext.IdentityChannel, StringComparisons.ChannelName) &&
-            channel.Mappings is { Length: > 0 });
+            string.Equals(channel.Name, executionContext.IdentityChannel, StringComparisons.ChannelName));
         if (channel is null)
         {
             interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture,
@@ -502,7 +521,7 @@ internal sealed partial class TemplateEngineFactory(
         return channel;
     }
 
-    private async Task<string?> PromptForParameterAsync(ITemplateParameter parameter, bool required, string? displayName, CancellationToken cancellationToken)
+    private async Task<string?> PromptForParameterAsync(ITemplateParameter parameter, bool required, string? displayName, string? defaultValue, CancellationToken cancellationToken)
     {
         var prompt = (!string.IsNullOrWhiteSpace(displayName) ? displayName
             : !string.IsNullOrWhiteSpace(parameter.DisplayName)
@@ -512,7 +531,7 @@ internal sealed partial class TemplateEngineFactory(
         {
             var value = await interactionService.PromptConfirmAsync(
                 prompt,
-                binding: PromptBinding.CreateDefault(bool.TryParse(parameter.DefaultValue, out var defaultValue) && defaultValue),
+                binding: PromptBinding.CreateDefault(bool.TryParse(defaultValue, out var booleanDefault) && booleanDefault),
                 cancellationToken: cancellationToken);
             return value ? "true" : "false";
         }
@@ -520,8 +539,8 @@ internal sealed partial class TemplateEngineFactory(
         if (parameter.Choices is { Count: > 0 } choices)
         {
             // Multi-choice defaults accept "web|worker" or "web,worker"; single-choice keys are literal.
-            var defaults = parameter.DefaultValue is { } defaultValue
-                ? parameter.AllowMultipleValues ? defaultValue.Split(MultiValueParameter.MultiValueSeparators) : [defaultValue]
+            var defaults = defaultValue is { } choiceDefault
+                ? parameter.AllowMultipleValues ? choiceDefault.Split(MultiValueParameter.MultiValueSeparators) : [choiceDefault]
                 : [];
             var keys = choices.Keys.OrderByDescending(key => defaults.Contains(key, StringComparer.OrdinalIgnoreCase)).ToArray();
             string FormatChoice(string key) => (string.IsNullOrWhiteSpace(choices[key].DisplayName) ? key : choices[key].DisplayName).EscapeMarkup();
@@ -535,7 +554,7 @@ internal sealed partial class TemplateEngineFactory(
                 return string.Join('|', selected);
             }
 
-            if (!required && string.IsNullOrEmpty(parameter.DefaultValue))
+            if (!required && string.IsNullOrEmpty(defaultValue))
             {
                 // The extension identifies choices by display text, so the skip label must also be unique.
                 var skipLabel = TemplatingStrings.Skip.EscapeMarkup();
@@ -558,7 +577,7 @@ internal sealed partial class TemplateEngineFactory(
         return await interactionService.PromptForStringAsync(
             prompt,
             required: required,
-            binding: PromptBinding.CreateDefault<string?>(parameter.DefaultValue ?? string.Empty),
+            binding: PromptBinding.CreateDefault<string?>(defaultValue ?? string.Empty),
             cancellationToken: cancellationToken);
     }
 

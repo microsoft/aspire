@@ -76,8 +76,14 @@ builder.AddFoundry("ai")
 ```csharp
 var builder = DistributedApplication.CreateBuilder(args);  // Returns IDistributedApplicationBuilder
 builder.AddAzureStorage("storage");     // ✅ Extension method on IDistributedApplicationBuilder
-builder.AddProject<Projects.Api>("api"); // ✅ Extension method on IDistributedApplicationBuilder
+builder.AddDotnetProject("api", "../Api/Api.csproj"); // ✅ From Aspire.Hosting.Dotnet
 ```
+
+For current .NET hosting examples, include the `Aspire.Hosting.Dotnet` AppHost integration and
+an actual AppHost-relative project path. Do not infer a filename from `Projects.*` or invent
+`AddDotnetProject<T>`. See the [migration guide](../../../docs/migrate-from-addproject.md) for
+imports, returned/generic types, and retained exceptions. Keep historical release samples
+accurate to their release; Foundry's own `AddProject` API is unrelated.
 
 ### **`IHostApplicationBuilder`** - Extension methods for service registration
 

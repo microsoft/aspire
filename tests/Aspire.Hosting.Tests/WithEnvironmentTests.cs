@@ -9,8 +9,16 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Aspire.Hosting.Tests;
 
 [Trait("Partition", "5")]
-public class WithEnvironmentTests
+public class WithEnvironmentTests : WithEnvironmentTests<ProjectResource>
 {
+    protected override IResourceBuilder<ProjectResource> AddProject<TProject>(
+        IDistributedApplicationBuilder builder, string name)
+    {
+#pragma warning disable CS0618 // Exercise the legacy factory through the same consumer contracts as V2.
+        return builder.AddProject<TProject>(name);
+#pragma warning restore CS0618
+    }
+
     [Fact]
     public async Task BuiltApplicationHasAccessToIServiceProviderViaEnvironmentCallbackContext()
     {
@@ -35,186 +43,6 @@ public class WithEnvironmentTests
             ).DefaultTimeout();
 
         Assert.Equal("true", config["SP_AVAILABLE"]);
-    }
-
-    [Fact]
-    public async Task EnvironmentReferencingEndpointPopulatesWithBindingUrl()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-
-        var projectA = builder.AddProject<ProjectA>("project")
-                              .WithHttpsEndpoint(port: 1000, targetPort: 2000, "mybinding")
-                              .WithEndpoint("mybinding", e =>
-                              {
-                                  e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 2000);
-                              });
-
-        var projectB = builder.AddProject<ProjectB>("projectB")
-                               .WithEnvironment("myName", projectA.GetEndpoint("mybinding"));
-
-        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(projectB.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
-
-        Assert.Equal("https://localhost:2000", config["myName"]);
-
-        Assert.True(projectB.Resource.TryGetAnnotationsOfType<ResourceRelationshipAnnotation>(out var relationships));
-        Assert.Collection(relationships,
-            r =>
-            {
-                Assert.Equal("Reference", r.Type);
-                Assert.Same(projectA.Resource, r.Resource);
-            });
-    }
-
-    [Fact]
-    public async Task SimpleEnvironmentWithNameAndValue()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-
-        var project = builder.AddProject<ProjectA>("projectA")
-            .WithEnvironment("myName", "value");
-
-        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(project.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
-
-        Assert.Equal("value", config["myName"]);
-    }
-
-    [Fact]
-    public async Task SimpleEnvironmentWithNameAndReferenceExpressionValue()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-
-        var childExpression = ReferenceExpression.Create($"value");
-        var parameterExpression = ReferenceExpression.Create($"{childExpression}");
-
-        var project = builder.AddProject<ProjectA>("projectA")
-            .WithEnvironment("myName", parameterExpression);
-
-        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(project.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
-
-        Assert.Equal("value", config["myName"]);
-    }
-
-    [Fact]
-    public async Task EnvironmentCallbackPopulatesValueWhenCalled()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-
-        var environmentValue = "value";
-        var projectA = builder.AddProject<ProjectA>("projectA").WithEnvironment("myName", () => environmentValue);
-
-        environmentValue = "value2";
-
-        // Call environment variable callbacks.
-        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(projectA.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
-
-        Assert.Equal("value2", config["myName"]);
-    }
-
-    [Fact]
-    public async Task EnvironmentCallbackPopulatesValueWhenParameterResourceProvided()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-
-        builder.Configuration["Parameters:parameter"] = "MY_PARAMETER_VALUE";
-
-        var parameter = builder.AddParameter("parameter");
-
-        var projectA = builder.AddProject<ProjectA>("projectA")
-            .WithEnvironment("MY_PARAMETER", parameter);
-
-        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(projectA.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
-
-        Assert.Equal("MY_PARAMETER_VALUE", config["MY_PARAMETER"]);
-
-        Assert.True(projectA.Resource.TryGetAnnotationsOfType<ResourceRelationshipAnnotation>(out var relationships));
-        Assert.Collection(relationships,
-            r =>
-            {
-                Assert.Equal("Reference", r.Type);
-                Assert.Same(parameter.Resource, r.Resource);
-            });
-    }
-
-    [Fact]
-    public async Task EnvironmentCallbackPopulatesWithExpressionPlaceholderWhenPublishingManifest()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-
-        var parameter = builder.AddParameter("parameter");
-
-        var projectA = builder.AddProject<ProjectA>("projectA")
-            .WithEnvironment("MY_PARAMETER", parameter);
-
-        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(projectA.Resource,
-            DistributedApplicationOperation.Publish).DefaultTimeout();
-
-        Assert.Equal("{parameter.value}", config["MY_PARAMETER"]);
-    }
-
-    [Fact]
-    public async Task EnvironmentCallbackThrowsWhenParameterValueMissingInDcpMode()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-
-        var parameter = builder.AddParameter("parameter");
-
-        var projectA = builder.AddProject<ProjectA>("projectA")
-            .WithEnvironment("MY_PARAMETER", parameter);
-
-        var exception = await Assert.ThrowsAsync<AggregateException>(async () => await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
-            projectA.Resource,
-            DistributedApplicationOperation.Run,
-            TestServiceProvider.Instance
-         )).DefaultTimeout();
-
-        var innerException = Assert.IsType<MissingParameterValueException>(exception.InnerException);
-        Assert.Equal("Parameter resource could not be used because configuration key 'Parameters:parameter' is missing and the Parameter has no default value.", innerException.Message);
-    }
-
-    [Fact]
-    public async Task ComplexEnvironmentCallbackPopulatesValueWhenCalled()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-
-        var environmentValue = "value";
-        var projectA = builder.AddProject<ProjectA>("projectA")
-                              .WithEnvironment(context =>
-                              {
-                                  Assert.NotNull(context.Resource);
-
-                                  context.EnvironmentVariables["myName"] = environmentValue;
-                              });
-
-        environmentValue = "value2";
-
-        // Call environment variable callbacks.
-        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(projectA.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
-
-        Assert.Equal("value2", config["myName"]);
-    }
-
-    [Fact]
-    public async Task ComplexAsyncEnvironmentCallbackPopulatesValueWhenCalled()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-
-        var environmentValue = "value";
-        var projectA = builder.AddProject<ProjectA>("projectA")
-                              .WithEnvironment(async context =>
-                              {
-                                  await Task.Yield();
-
-                                  Assert.NotNull(context.Resource);
-
-                                  context.EnvironmentVariables["myName"] = environmentValue;
-                              });
-
-        environmentValue = "value2";
-
-        // Call environment variable callbacks.
-        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(projectA.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
-
-        Assert.Equal("value2", config["myName"]);
     }
 
     [Fact]
@@ -363,6 +191,194 @@ public class WithEnvironmentTests
                 Assert.Same(sourceBuilder.Resource, r.Resource);
             });
     }
+}
+
+public abstract class WithEnvironmentTests<TResource>
+    where TResource : class, IResourceWithEnvironment, IResourceWithServiceDiscovery
+{
+    protected abstract IResourceBuilder<TResource> AddProject<TProject>(
+        IDistributedApplicationBuilder builder, string name)
+        where TProject : IProjectMetadata, new();
+
+    [Fact]
+    public async Task EnvironmentReferencingEndpointPopulatesWithBindingUrl()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var projectA = AddProject<ProjectA>(builder, "project")
+                              .WithHttpsEndpoint(port: 1000, targetPort: 2000, "mybinding")
+                              .WithEndpoint("mybinding", e =>
+                              {
+                                  e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 2000);
+                              });
+
+        var projectB = AddProject<ProjectB>(builder, "projectB")
+                               .WithEnvironment("myName", projectA.GetEndpoint("mybinding"));
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(projectB.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
+
+        Assert.Equal("https://localhost:2000", config["myName"]);
+
+        Assert.True(projectB.Resource.TryGetAnnotationsOfType<ResourceRelationshipAnnotation>(out var relationships));
+        Assert.Collection(relationships.Where(r => r.Type == "Reference"),
+            r =>
+            {
+                Assert.Equal("Reference", r.Type);
+                Assert.Same(projectA.Resource, r.Resource);
+            });
+    }
+
+    [Fact]
+    public async Task SimpleEnvironmentWithNameAndValue()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var project = AddProject<ProjectA>(builder, "projectA")
+            .WithEnvironment("myName", "value");
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(project.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
+
+        Assert.Equal("value", config["myName"]);
+    }
+
+    [Fact]
+    public async Task SimpleEnvironmentWithNameAndReferenceExpressionValue()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var childExpression = ReferenceExpression.Create($"value");
+        var parameterExpression = ReferenceExpression.Create($"{childExpression}");
+
+        var project = AddProject<ProjectA>(builder, "projectA")
+            .WithEnvironment("myName", parameterExpression);
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(project.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
+
+        Assert.Equal("value", config["myName"]);
+    }
+
+    [Fact]
+    public async Task EnvironmentCallbackPopulatesValueWhenCalled()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var environmentValue = "value";
+        var projectA = AddProject<ProjectA>(builder, "projectA").WithEnvironment("myName", () => environmentValue);
+
+        environmentValue = "value2";
+
+        // Call environment variable callbacks.
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(projectA.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
+
+        Assert.Equal("value2", config["myName"]);
+    }
+
+    [Fact]
+    public async Task EnvironmentCallbackPopulatesValueWhenParameterResourceProvided()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        builder.Configuration["Parameters:parameter"] = "MY_PARAMETER_VALUE";
+
+        var parameter = builder.AddParameter("parameter");
+
+        var projectA = AddProject<ProjectA>(builder, "projectA")
+            .WithEnvironment("MY_PARAMETER", parameter);
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(projectA.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
+
+        Assert.Equal("MY_PARAMETER_VALUE", config["MY_PARAMETER"]);
+
+        Assert.True(projectA.Resource.TryGetAnnotationsOfType<ResourceRelationshipAnnotation>(out var relationships));
+        Assert.Collection(relationships.Where(r => r.Type == "Reference"),
+            r =>
+            {
+                Assert.Equal("Reference", r.Type);
+                Assert.Same(parameter.Resource, r.Resource);
+            });
+    }
+
+    [Fact]
+    public async Task EnvironmentCallbackPopulatesWithExpressionPlaceholderWhenPublishingManifest()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var parameter = builder.AddParameter("parameter");
+
+        var projectA = AddProject<ProjectA>(builder, "projectA")
+            .WithEnvironment("MY_PARAMETER", parameter);
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(projectA.Resource,
+            DistributedApplicationOperation.Publish).DefaultTimeout();
+
+        Assert.Equal("{parameter.value}", config["MY_PARAMETER"]);
+    }
+
+    [Fact]
+    public async Task EnvironmentCallbackThrowsWhenParameterValueMissingInDcpMode()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var parameter = builder.AddParameter("parameter");
+
+        var projectA = AddProject<ProjectA>(builder, "projectA")
+            .WithEnvironment("MY_PARAMETER", parameter);
+
+        var exception = await Assert.ThrowsAsync<AggregateException>(async () => await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            projectA.Resource,
+            DistributedApplicationOperation.Run,
+            TestServiceProvider.Instance
+         )).DefaultTimeout();
+
+        var innerException = Assert.IsType<MissingParameterValueException>(exception.InnerException);
+        Assert.Equal("Parameter resource could not be used because configuration key 'Parameters:parameter' is missing and the Parameter has no default value.", innerException.Message);
+    }
+
+    [Fact]
+    public async Task ComplexEnvironmentCallbackPopulatesValueWhenCalled()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var environmentValue = "value";
+        var projectA = AddProject<ProjectA>(builder, "projectA")
+                              .WithEnvironment(context =>
+                              {
+                                  Assert.NotNull(context.Resource);
+
+                                  context.EnvironmentVariables["myName"] = environmentValue;
+                              });
+
+        environmentValue = "value2";
+
+        // Call environment variable callbacks.
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(projectA.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
+
+        Assert.Equal("value2", config["myName"]);
+    }
+
+    [Fact]
+    public async Task ComplexAsyncEnvironmentCallbackPopulatesValueWhenCalled()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var environmentValue = "value";
+        var projectA = AddProject<ProjectA>(builder, "projectA")
+                              .WithEnvironment(async context =>
+                              {
+                                  await Task.Yield();
+
+                                  Assert.NotNull(context.Resource);
+
+                                  context.EnvironmentVariables["myName"] = environmentValue;
+                              });
+
+        environmentValue = "value2";
+
+        // Call environment variable callbacks.
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(projectA.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
+
+        Assert.Equal("value2", config["myName"]);
+    }
 
     [Fact]
     public async Task GenericWithEnvironmentWorksWithValueAndManifestProvider()
@@ -370,7 +386,7 @@ public class WithEnvironmentTests
         using var builder = TestDistributedApplicationBuilder.Create();
 
         var testValue = new TestValueAndManifestProvider("test-runtime-value", "test-manifest-expression");
-        var projectA = builder.AddProject<ProjectA>("projectA")
+        var projectA = AddProject<ProjectA>(builder, "projectA")
                               .WithEnvironment("TEST_VAR", testValue);
 
         // Call environment variable callbacks for runtime scenario
@@ -398,12 +414,12 @@ public class WithEnvironmentTests
         var resourceA = builder.AddContainer("containerA", "imageA");
         var testValue = new TestValueWithReferences("test-value", resourceA.Resource);
 
-        var projectA = builder.AddProject<ProjectA>("projectA")
+        var projectA = AddProject<ProjectA>(builder, "projectA")
                               .WithEnvironment("TEST_VAR", testValue);
 
         // Verify that the resource relationship was established
         Assert.True(projectA.Resource.TryGetAnnotationsOfType<ResourceRelationshipAnnotation>(out var relationships));
-        var relationship = relationships.Single();
+        var relationship = Assert.Single(relationships, r => r.Type == "Reference");
         Assert.Equal("Reference", relationship.Type);
         Assert.Same(resourceA.Resource, relationship.Resource);
 
@@ -420,16 +436,16 @@ public class WithEnvironmentTests
     public void GenericWithEnvironmentValidatesArguments()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var projectA = builder.AddProject<ProjectA>("projectA");
+        var projectA = AddProject<ProjectA>(builder, "projectA");
         var testValue = new TestValueAndManifestProvider("value", "expression");
 
         // Test null builder
         Assert.Throws<ArgumentNullException>(() =>
-            ResourceBuilderExtensions.WithEnvironment<ProjectResource, TestValueAndManifestProvider>(null!, "TEST_VAR", testValue));
+            ResourceBuilderExtensions.WithEnvironment<TResource, TestValueAndManifestProvider>(null!, "TEST_VAR", testValue));
 
         // Test null name
         Assert.Throws<ArgumentNullException>(() =>
-            projectA.WithEnvironment<ProjectResource, TestValueAndManifestProvider>(null!, testValue));
+            projectA.WithEnvironment<TResource, TestValueAndManifestProvider>(null!, testValue));
 
         // Test null value
         Assert.Throws<ArgumentNullException>(() =>
@@ -451,7 +467,7 @@ public class WithEnvironmentTests
         var endpoint = container.GetEndpoint("primary");
         var portProperty = endpoint.Property(EndpointProperty.Port);
 
-        var projectA = builder.AddProject<ProjectA>("projectA")
+        var projectA = AddProject<ProjectA>(builder, "projectA")
                               .WithEnvironment("ENDPOINT_PORT", portProperty);
 
         // Call environment variable callbacks for runtime scenario
@@ -472,12 +488,12 @@ public class WithEnvironmentTests
 
         // Verify that the resource relationship was established
         Assert.True(projectA.Resource.TryGetAnnotationsOfType<ResourceRelationshipAnnotation>(out var relationships));
-        var relationship = relationships.Single();
+        var relationship = Assert.Single(relationships, r => r.Type == "Reference");
         Assert.Equal("Reference", relationship.Type);
         Assert.Same(container.Resource, relationship.Resource);
     }
 
-    private sealed class TestValueWithReferences : IValueProvider, IManifestExpressionProvider, IValueWithReferences
+    protected sealed class TestValueWithReferences : IValueProvider, IManifestExpressionProvider, IValueWithReferences
     {
         private readonly string _value;
         private readonly IResource _referencedResource;
@@ -498,26 +514,26 @@ public class WithEnvironmentTests
         public IEnumerable<object> References => [_referencedResource];
     }
 
-    private sealed class TestResource(string name, string connectionString) : Resource(name), IResourceWithConnectionString
+    protected sealed class TestResource(string name, string connectionString) : Resource(name), IResourceWithConnectionString
     {
         public ReferenceExpression ConnectionStringExpression =>
             ReferenceExpression.Create($"{connectionString}");
     }
 
-    private sealed class ProjectA : IProjectMetadata
+    protected sealed class ProjectA : IProjectMetadata
     {
         public string ProjectPath => "projectA";
 
         public LaunchSettings LaunchSettings { get; } = new();
     }
 
-    private sealed class ProjectB : IProjectMetadata
+    protected sealed class ProjectB : IProjectMetadata
     {
         public string ProjectPath => "projectB";
         public LaunchSettings LaunchSettings { get; } = new();
     }
 
-    private sealed class TestValueAndManifestProvider : IValueProvider, IManifestExpressionProvider
+    protected sealed class TestValueAndManifestProvider : IValueProvider, IManifestExpressionProvider
     {
         private readonly string _runtimeValue;
         private readonly string _manifestExpression;

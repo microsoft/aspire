@@ -125,6 +125,9 @@ builder.Build().Run();
                         $"AddDotnetProject(\"{resource}\", \"../{projectName}.{suffix}/{projectName}.{suffix}.csproj\")",
                         $"AddProject(\"{resource}\", \"../{projectName}.{suffix}/{projectName}.{suffix}.csproj\")");
                 }
+
+                content = "#pragma warning disable CS0618 // Retain legacy project deployment alongside the modern scenario.\n"
+                    + content + "\n#pragma warning restore CS0618\n";
             }
 
             File.WriteAllText(appHostFilePath, content);

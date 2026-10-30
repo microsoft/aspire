@@ -33,6 +33,10 @@ public static class ProjectResourceBuilderExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>
     /// <para>
+    /// This method is obsolete. Use <c>AddDotnetProject</c> from the <c>Aspire.Hosting.Dotnet</c> package instead.
+    /// See the <see href="https://github.com/microsoft/aspire/blob/main/docs/migrate-from-addproject.md">migration guide</see>.
+    /// </para>
+    /// <para>
     /// This overload of the <see cref="AddProject{TProject}(IDistributedApplicationBuilder, string)"/> method takes
     /// a <typeparamref name="TProject"/> type parameter. The <typeparamref name="TProject"/> type parameter is constrained
     /// to types that implement the <see cref="IProjectMetadata"/> interface.
@@ -53,7 +57,7 @@ public static class ProjectResourceBuilderExtensions
     /// to build the equivalent <see cref="EndpointAnnotation"/>.
     /// </para>
     /// <example>
-    /// Example of adding a project to the application model.
+    /// Legacy example of adding a project to the application model.
     /// <code lang="csharp">
     /// var builder = DistributedApplication.CreateBuilder(args);
     ///
@@ -65,6 +69,7 @@ public static class ProjectResourceBuilderExtensions
     /// <remarks>This method is not available in polyglot app hosts. Use the overload with projectPath instead.</remarks>
     /// </remarks>
     [AspireExportIgnore(Reason = "Uses IProjectMetadata generic constraint which is a .NET-specific type.")]
+    [Obsolete("Use AddDotnetProject from the Aspire.Hosting.Dotnet package instead.")]
     public static IResourceBuilder<ProjectResource> AddProject<TProject>(this IDistributedApplicationBuilder builder, [ResourceName] string name) where TProject : IProjectMetadata, new()
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -82,13 +87,17 @@ public static class ProjectResourceBuilderExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>
     /// <para>
+    /// This method is obsolete. Use <c>AddDotnetProject</c> from the <c>Aspire.Hosting.Dotnet</c> package instead.
+    /// See the <see href="https://github.com/microsoft/aspire/blob/main/docs/migrate-from-addproject.md">migration guide</see>.
+    /// </para>
+    /// <para>
     /// This overload of the <see cref="AddProject(IDistributedApplicationBuilder, string, string)"/> method adds a project to the application
     /// model using a path to the project file. This allows for projects to be referenced that may not be part of the same solution. If the project
     /// path is not an absolute path then it will be computed relative to the app host directory.
     /// </para>
     /// <inheritdoc cref="AddProject(IDistributedApplicationBuilder, string)" path="/remarks/para[@name='kestrel']" />
     /// <example>
-    /// Add a project to the app model via a project path.
+    /// Legacy example of adding a project to the app model via a project path.
     /// <code lang="csharp">
     /// var builder = DistributedApplication.CreateBuilder(args);
     ///
@@ -99,6 +108,7 @@ public static class ProjectResourceBuilderExtensions
     /// </example>
     /// </remarks>
     [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addProject dispatcher export.")]
+    [Obsolete("Use AddDotnetProject from the Aspire.Hosting.Dotnet package instead.")]
     public static IResourceBuilder<ProjectResource> AddProject(this IDistributedApplicationBuilder builder, [ResourceName] string name, string projectPath)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -112,6 +122,7 @@ public static class ProjectResourceBuilderExtensions
     /// Adds a .NET project resource
     /// </summary>
     [AspireExport("addProject")]
+    [Obsolete("Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.")]
     internal static IResourceBuilder<ProjectResource> AddProjectForPolyglot(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
@@ -142,6 +153,10 @@ public static class ProjectResourceBuilderExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>
     /// <para>
+    /// This method is obsolete. Use <c>AddDotnetProject</c> from the <c>Aspire.Hosting.Dotnet</c> package instead.
+    /// See the <see href="https://github.com/microsoft/aspire/blob/main/docs/migrate-from-addproject.md">migration guide</see>.
+    /// </para>
+    /// <para>
     /// This overload of the <see cref="AddProject{TProject}(IDistributedApplicationBuilder, string)"/> method takes
     /// a <typeparamref name="TProject"/> type parameter. The <typeparamref name="TProject"/> type parameter is constrained
     /// to types that implement the <see cref="IProjectMetadata"/> interface.
@@ -159,7 +174,7 @@ public static class ProjectResourceBuilderExtensions
     /// </para>
     /// <inheritdoc cref="AddProject(IDistributedApplicationBuilder, string)" path="/remarks/para[@name='kestrel']" />
     /// <example>
-    /// Example of adding a project to the application model.
+    /// Legacy example of adding a project to the application model.
     /// <code lang="csharp">
     /// var builder = DistributedApplication.CreateBuilder(args);
     ///
@@ -171,6 +186,7 @@ public static class ProjectResourceBuilderExtensions
     /// <remarks>This method is not available in polyglot app hosts. Use the overload with projectPath instead.</remarks>
     /// </remarks>
     [AspireExportIgnore(Reason = "Uses IProjectMetadata generic constraint which is a .NET-specific type.")]
+    [Obsolete("Use AddDotnetProject from the Aspire.Hosting.Dotnet package instead.")]
     public static IResourceBuilder<ProjectResource> AddProject<TProject>(this IDistributedApplicationBuilder builder, [ResourceName] string name, string? launchProfileName) where TProject : IProjectMetadata, new()
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -193,13 +209,17 @@ public static class ProjectResourceBuilderExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>
     /// <para>
+    /// This method is obsolete. Use <c>AddDotnetProject</c> from the <c>Aspire.Hosting.Dotnet</c> package instead.
+    /// See the <see href="https://github.com/microsoft/aspire/blob/main/docs/migrate-from-addproject.md">migration guide</see>.
+    /// </para>
+    /// <para>
     /// This overload of the <see cref="AddProject(IDistributedApplicationBuilder, string, string)"/> method adds a project to the application
     /// model using a path to the project file. This allows for projects to be referenced that may not be part of the same solution. If the project
     /// path is not an absolute path then it will be computed relative to the app host directory.
     /// </para>
     /// <inheritdoc cref="AddProject(IDistributedApplicationBuilder, string)" path="/remarks/para[@name='kestrel']" />
     /// <example>
-    /// Add a project to the app model via a project path.
+    /// Legacy example of adding a project to the app model via a project path.
     /// <code lang="csharp">
     /// var builder = DistributedApplication.CreateBuilder(args);
     ///
@@ -210,6 +230,7 @@ public static class ProjectResourceBuilderExtensions
     /// </example>
     /// </remarks>
     [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addProject dispatcher export.")]
+    [Obsolete("Use AddDotnetProject from the Aspire.Hosting.Dotnet package instead.")]
     public static IResourceBuilder<ProjectResource> AddProject(this IDistributedApplicationBuilder builder, [ResourceName] string name, string projectPath, string? launchProfileName)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -233,6 +254,10 @@ public static class ProjectResourceBuilderExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>
     /// <para>
+    /// This method is obsolete. Use <c>AddDotnetProject</c> from the <c>Aspire.Hosting.Dotnet</c> package instead.
+    /// See the <see href="https://github.com/microsoft/aspire/blob/main/docs/migrate-from-addproject.md">migration guide</see>.
+    /// </para>
+    /// <para>
     /// This overload of the <see cref="AddProject{TProject}(IDistributedApplicationBuilder, string)"/> method takes
     /// a <typeparamref name="TProject"/> type parameter. The <typeparamref name="TProject"/> type parameter is constrained
     /// to types that implement the <see cref="IProjectMetadata"/> interface.
@@ -249,7 +274,7 @@ public static class ProjectResourceBuilderExtensions
     /// that references the project can have a <c>AspireProjectMetadataTypeName="..."</c> attribute added to override the name.
     /// </para>
     /// <example>
-    /// Example of adding a project to the application model.
+    /// Legacy example of adding a project to the application model.
     /// <code lang="csharp">
     /// var builder = DistributedApplication.CreateBuilder(args);
     ///
@@ -261,6 +286,7 @@ public static class ProjectResourceBuilderExtensions
     /// <remarks>This method is not available in polyglot app hosts. Use the overload with projectPath instead.</remarks>
     /// </remarks>
     [AspireExportIgnore(Reason = "Uses IProjectMetadata generic constraint which is a .NET-specific type.")]
+    [Obsolete("Use AddDotnetProject from the Aspire.Hosting.Dotnet package instead.")]
     public static IResourceBuilder<ProjectResource> AddProject<TProject>(this IDistributedApplicationBuilder builder, [ResourceName] string name, Action<ProjectResourceOptions> configure) where TProject : IProjectMetadata, new()
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -288,12 +314,16 @@ public static class ProjectResourceBuilderExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>
     /// <para>
+    /// This method is obsolete. Use <c>AddDotnetProject</c> from the <c>Aspire.Hosting.Dotnet</c> package instead.
+    /// See the <see href="https://github.com/microsoft/aspire/blob/main/docs/migrate-from-addproject.md">migration guide</see>.
+    /// </para>
+    /// <para>
     /// This overload of the <see cref="AddProject(IDistributedApplicationBuilder, string, string)"/> method adds a project to the application
     /// model using a path to the project file or directory. This allows for projects to be referenced that may not be part of the same solution. If the project
     /// path is not an absolute path then it will be computed relative to the app host directory.
     /// </para>
     /// <example>
-    /// Add a project to the app model via a project path.
+    /// Legacy example of adding a project to the app model via a project path.
     /// <code lang="csharp">
     /// var builder = DistributedApplication.CreateBuilder(args);
     ///
@@ -304,6 +334,7 @@ public static class ProjectResourceBuilderExtensions
     /// </example>
     /// </remarks>
     [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addProject dispatcher export.")]
+    [Obsolete("Use AddDotnetProject from the Aspire.Hosting.Dotnet package instead.")]
     public static IResourceBuilder<ProjectResource> AddProject(this IDistributedApplicationBuilder builder, [ResourceName] string name, string projectPath, Action<ProjectResourceOptions> configure)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -488,7 +519,7 @@ public static class ProjectResourceBuilderExtensions
     /// <para>
     /// The resource must carry <see cref="IProjectMetadata"/>. It is intended for language integration
     /// packages that add their own .NET resource type, such as <c>Aspire.Hosting.Dotnet</c>; use
-    /// <see cref="AddProject{TProject}(IDistributedApplicationBuilder, string)"/> for ordinary projects.
+    /// <c>AddDotnetProject</c> from that package for ordinary projects.
     /// </para>
     /// <para>
     /// The project metadata annotation must not be added, removed, or replaced after this method returns.
@@ -558,6 +589,19 @@ public static class ProjectResourceBuilderExtensions
         // https://github.com/open-telemetry/opentelemetry-dotnet/pull/5495
         // Remove once retry feature in opentelemetry-dotnet is enabled by default.
         builder.WithEnvironment(KnownOtelConfigNames.DotnetExperimentalOtlpRetry, "in_memory");
+
+        if (builder.ApplicationBuilder.ExecutionContext.IsRunMode)
+        {
+            // Starting with .NET 11, the `dotnet` CLI exports its own traces and metrics (service name "dotnet-cli")
+            // over OTLP whenever standard OTEL_EXPORTER_OTLP_* variables are present. Project resources are launched
+            // with `dotnet run`/`dotnet watch` using the same environment as the app, so the CLI process would
+            // report to the dashboard as unrelated "dotnet-cli-<id>" resources with long-running "dotnet run" spans.
+            // DOTNET_CLI_TELEMETRY_DISABLE_TRACE_EXPORT only disables the Azure Monitor exporter, not OTLP, so opting
+            // out of CLI telemetry is the only switch that stops this without affecting the app's own OTLP export.
+            // https://github.com/dotnet/sdk/blob/main/documentation/project-docs/telemetry.md#opentelemetry-otlp-exporter
+            // https://github.com/microsoft/aspire/issues/20885
+            builder.WithEnvironment(KnownConfigNames.DotnetCliTelemetryOptOut, "true");
+        }
 
         // OTEL settings that are used to improve local development experience.
         if (builder.ApplicationBuilder.ExecutionContext.IsRunMode && builder.ApplicationBuilder.Environment.IsDevelopment())
@@ -915,7 +959,8 @@ public static class ProjectResourceBuilderExtensions
     /// within a cluster of instances.
     /// </para>
     /// <example>
-    /// Start multiple instances of the same service.
+    /// Start multiple instances of a legacy <see cref="ProjectResource"/>.
+    /// For <c>AddDotnetProject</c> resources, use the overload from <c>Aspire.Hosting.Dotnet</c>.
     /// <code lang="csharp">
     /// var builder = DistributedApplication.CreateBuilder(args);
     ///
@@ -952,7 +997,8 @@ public static class ProjectResourceBuilderExtensions
     /// extension is used this environment variable will not be set.
     /// </para>
     /// <example>
-    /// Disable forwarded headers for a project.
+    /// Disable forwarded headers for a legacy <see cref="ProjectResource"/>.
+    /// For <c>AddDotnetProject</c> resources, use the overload from <c>Aspire.Hosting.Dotnet</c>.
     /// <code lang="csharp">
     /// var builder = DistributedApplication.CreateBuilder(args);
     ///

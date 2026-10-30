@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable CS0618 // Retain synthetic-metadata legacy ProjectResource proxy, gateway, and fluent contracts.
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
 
@@ -548,3 +549,4 @@ public class GatewayConfigurationBuilderTests(ITestOutputHelper testOutputHelper
     private static GatewayAppService[] Svc(params string[] names) =>
         Array.ConvertAll(names, n => new GatewayAppService(n));
 }
+#pragma warning restore CS0618

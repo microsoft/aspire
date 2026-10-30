@@ -89,7 +89,9 @@ public class AzureApplicationInsightsExtensionsTests(ITestOutputHelper testOutpu
 
         appInsights.Resource.Outputs["appInsightsConnectionString"] = "myinstrumentationkey";
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
         var serviceA = builder.AddProject<ProjectA>("serviceA", o => o.ExcludeLaunchProfile = true)
+#pragma warning restore CS0618
             .WithReference(appInsights);
 
         var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(serviceA.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);

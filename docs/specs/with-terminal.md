@@ -10,10 +10,14 @@ Let an Aspire AppHost author opt any executable or container resource into
 interactive terminal access:
 
 ```csharp
-builder.AddProject<Projects.MyAgent>("agent")
+builder.AddDotnetProject("agent", "../MyAgent/MyAgent.csproj")
     .WithReplicas(2)
     .WithTerminal();
 ```
+
+This .NET example requires `Aspire.Hosting.Dotnet` in the AppHost
+(`aspire add Aspire.Hosting.Dotnet`). The project path is AppHost-relative; see the
+[project migration guide](../migrate-from-addproject.md) for the concrete V2 builder APIs.
 
 The dashboard then renders a Hex1b web terminal per replica, and the CLI
 exposes the same session as `aspire terminal attach agent-abc123`, using the
