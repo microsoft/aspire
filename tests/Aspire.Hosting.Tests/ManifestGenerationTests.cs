@@ -410,7 +410,8 @@ public class ManifestGenerationTests(ITestOutputHelper testOutputHelper)
                   "entrypoint": "/bin/sh",
                   "args": [
                     "-c",
-                    "redis-server --requirepass $REDIS_PASSWORD"
+                    "redis-server --requirepass $REDIS_PASSWORD \u0022$@\u0022",
+                    "redis-server"
                   ],
                   "env": {
                     "REDIS_PASSWORD": "{redis-password.value}"
