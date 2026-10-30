@@ -54,7 +54,8 @@ Replace `17.x.x` below with an available version; it is not a literal package ve
 ```
 
 The `Aspire.Hosting.AppHost` package establishes `IsAspireHost` and supplies the AppHost targets,
-including `dotnet run` integration. It does not automatically promote ordinary project
+including `dotnet run` integration and Visual Studio's dynamic file nesting capabilities.
+It does not automatically promote ordinary project
 references into resources.
 
 ### Central Package Management
@@ -108,8 +109,12 @@ var myService = builder.AddProject<Projects.MyService>("myservice");
 After:
 
 ```csharp
-var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj");
+var myService = builder.AddDotnetProject("myservice", "../MyService/");
 ```
+
+For directories containing a single project, `AddDotnetProject` discovers the project file.
+The trailing slash makes the directory intent explicit. You can still pass a full project-file
+path when you need to select a particular project.
 
 If a referenced project should remain a plain `ProjectReference` (for example, a shared library that
 isn't itself an orchestrated resource), keep the `ProjectReference` item and set

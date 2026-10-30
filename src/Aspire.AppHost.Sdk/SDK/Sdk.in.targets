@@ -9,8 +9,8 @@
   <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" Condition="'$(_ImportMicrosoftNETSdkFromAspireSdk)' == 'true'" />
 
   <ItemGroup>
-    <ProjectCapability Include="DynamicFileNesting" />
-    <ProjectCapability Include="DynamicFileNestingEnabled" />
+    <ProjectCapability Include="DynamicFileNesting" Condition="'@(ProjectCapability->WithMetadataValue('Identity', 'DynamicFileNesting'))' == ''" />
+    <ProjectCapability Include="DynamicFileNestingEnabled" Condition="'@(ProjectCapability->WithMetadataValue('Identity', 'DynamicFileNestingEnabled'))' == ''" />
     <ProjectCapability Include="AspireOrchestration" />
   </ItemGroup>
 
