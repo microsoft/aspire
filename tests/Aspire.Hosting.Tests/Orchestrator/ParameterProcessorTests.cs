@@ -1381,6 +1381,37 @@ public class ParameterProcessorTests
     }
 
     [Fact]
+    public async Task InitializeParametersAsync_WithCustomInputForParameterNamedLikeSaveCheckbox_KeepsGeneratedName()
+    {
+        var testInteractionService = new TestInteractionService { IsAvailable = true };
+        var parameterProcessor = CreateParameterProcessor(interactionService: testInteractionService);
+        var parameter = CreateParameterWithMissingValue(ParameterProcessor.SaveToUserSecretsName);
+        parameter.Annotations.Add(new InputGeneratorAnnotation(_ => new InteractionInput
+        {
+            Name = "Secret",
+            InputType = InputType.Text,
+            Label = "Secret"
+        }));
+        var otherParameter = CreateParameterWithMissingValue("otherParam");
+
+        await parameterProcessor.InitializeParametersAsync([parameter, otherParameter]).DefaultTimeout();
+
+        var notificationInteraction = await testInteractionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+        notificationInteraction.CompletionTcs.SetResult(InteractionResult.Ok(true));
+
+        // The save-values checkbox owns its name in the prompt, so this input can't take its parameter's name.
+        var inputsInteraction = await testInteractionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+        Assert.Equal(["Secret", "otherParam", ParameterProcessor.SaveToUserSecretsName], inputsInteraction.Inputs.Select(input => input.Name));
+
+        inputsInteraction.Inputs["Secret"].Value = "secret-value";
+        inputsInteraction.Inputs["otherParam"].Value = "other-value";
+        inputsInteraction.CompletionTcs.SetResult(InteractionResult.Ok(inputsInteraction.Inputs));
+
+        Assert.Equal("secret-value", await parameter.GetValueAsync(CancellationToken.None).DefaultTimeout());
+        Assert.Equal("other-value", await otherParameter.GetValueAsync(CancellationToken.None).DefaultTimeout());
+    }
+
+    [Fact]
     public async Task InitializeParametersAsync_WithMissingParameterValues_NotificationNamesUnresolvedParameters()
     {
         var testInteractionService = new TestInteractionService { IsAvailable = true };

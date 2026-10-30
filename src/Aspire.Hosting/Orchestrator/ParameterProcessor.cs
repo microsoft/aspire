@@ -743,14 +743,19 @@ public sealed class ParameterProcessor(
                 // DependsOnInputs, and read that input by name in its load callback. The callback can't be rewritten,
                 // so when an input depends on a name the renaming would change, the generators' names are kept. The
                 // dashboard then shows the prompt in a dialog, as it does for any input that isn't named after a parameter.
-                var renamedInputNames = resourceInputs
+                // The save-values checkbox appended below owns its name, and input names must be unique in a prompt, so
+                // an input for a parameter that happens to share that name keeps the name its generator chose.
+                var inputsToRename = resourceInputs
                     .Where(i => !string.Equals(i.Input.Name, i.ParameterResource.Name, StringComparisons.InteractionInputName))
+                    .Where(i => !showSaveToSecrets || !string.Equals(i.ParameterResource.Name, SaveToUserSecretsName, StringComparisons.InteractionInputName))
+                    .ToList();
+                var renamedInputNames = inputsToRename
                     .Select(i => i.Input.Name)
                     .ToHashSet(StringComparers.InteractionInputName);
                 var dependsOnRenamedInput = resourceInputs.Any(i => i.Input.DynamicLoading?.DependsOnInputs?.Any(renamedInputNames.Contains) == true);
                 if (!dependsOnRenamedInput)
                 {
-                    foreach (var (parameter, input, _) in resourceInputs)
+                    foreach (var (parameter, input, _) in inputsToRename)
                     {
                         input.SetName(parameter.Name);
                     }
