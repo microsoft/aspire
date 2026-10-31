@@ -215,6 +215,84 @@ evaluate the same values. Runtime `WithEnvironment` is not an equivalent workaro
 [EF Core integration guidance](../Aspire.Hosting.EntityFrameworkCore/README.md#coordinated-builds-and-custom-build-inputs)
 for the remaining compatibility risk.
 
+## MSTest test resources (experimental)
+
+`AddMsTest` / `addMsTest` adds an executable MSTest `.csproj` as a run-only test resource.
+All MSTest hosting APIs are experimental under `ASPIRETESTING001`.
+The test project must enable the Microsoft.Testing.Platform (MTP) runner and register
+`Microsoft.Testing.Extensions.TrxReport`. `MSTest.Sdk` with its Default extensions profile
+provides both. Legacy VSTest library projects are not supported; Aspire does not modify
+project dependencies, SDK selection, or runner configuration.
+
+**C#**
+
+```csharp
+#pragma warning disable ASPIRETESTING001
+
+var api = builder.AddDotnetProject("api", "../Api/Api.csproj");
+
+builder.AddMsTest("api-tests", "../Api.Tests/Api.Tests.csproj")
+    .WithReference(api)
+    .WaitFor(api);
+```
+
+**TypeScript**
+
+```typescript
+const api = await builder.addDotnetProject("api", "../Api/Api.csproj");
+
+await builder.addMsTest("api-tests", "../Api.Tests/Api.Tests.csproj")
+    .withReference(api)
+    .waitFor(api);
+```
+
+Run the application with `aspire test`. The CLI reports the run's output location under its
+`testruns` directory. Aspire supplies a unique
+private directory for each test resource under the run's output directory. The runner writes
+`results.trx` there, and Aspire waits for process completion before publishing individual test
+results to the common test run. Failed processes still have their reports collected.
+Missing reports, malformed XML, unsupported outcomes, and inconsistent counters fail
+collection explicitly. Passing tests cannot override a failed process or failed collection.
+Raw reports and runner-generated attachments remain in the resource directory; attachment
+paths are not followed or copied by this integration. The private directory is managed by
+Aspire, but permissions on framework-written files are controlled by the runner.
+
+Execution uses `dotnet run --project <absolute.csproj> --no-launch-profile -- <runner args>`,
+with the project directory as its working directory. Builds and restores are independent
+of `AddDotnetProject`'s coordinated builds, so avoid concurrent builds of shared outputs.
+Environment variables, service references, endpoints, and dependency waits compose as on
+other executable resources. The test application must consume the injected configuration;
+`WithReference` does not itself configure a test's HTTP client.
+
+Use `MsTestOptions` to select a configuration, one target framework, or runner arguments:
+
+```csharp
+builder.AddMsTest("api-tests", "../Api.Tests/Api.Tests.csproj",
+    new Aspire.Hosting.Dotnet.MsTestOptions
+    {
+        Configuration = "Release",
+        TargetFramework = "net10.0",
+        Args = ["--filter", "FullyQualifiedName~Smoke"]
+    });
+```
+
+The TypeScript options object uses `configuration`, `targetFramework`, and `args`.
+Multi-targeted projects require an explicit framework. Arguments are separate tokens, not
+shell-quoted strings; `WithArgs` also appends runner arguments after the `--` separator.
+Report destination flags, report filenames, response files, and MTP server mode are reserved.
+Only one invocation per resource is supported during testing: replicas, restarts, retries,
+merged reports, and nested legacy TRX results are not supported. Data-driven MTP results are
+kept separately by execution identity even when display names repeat.
+
+During ordinary `aspire run`, the project still executes, but Aspire does not add reporting
+arguments or collect results. MSTest resources are excluded from publish/deploy output.
+Cancellation follows the common testing lifecycle and prevents further result publication;
+whether shutdown leaves a finalized TRX depends on the runner's shutdown behavior.
+
+See [MSTest runner configuration](https://learn.microsoft.com/dotnet/core/testing/unit-testing-mstest-running-tests)
+and [MTP test reports](https://learn.microsoft.com/dotnet/core/testing/microsoft-testing-platform-test-reports)
+for prerequisites and reporting options.
+
 ## Publishing
 
 Resources created with `AddDotnetProject` participate in the same .NET SDK container publishing pipeline as
