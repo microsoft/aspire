@@ -819,6 +819,12 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
     /// </summary>
     private async Task EnqueueSolutionProjectSdkUpdateStepsAsync(UpdateContext context, NuGetPackageCli latestSdkPackage, CancellationToken cancellationToken)
     {
+        // The AppHost's cleanup removes a central Aspire.Hosting.AppHost PackageVersion, which other projects
+        // sharing that Directory.Packages.props may still need (directly or through imported files).
+        var appHostCentralPackagesFile = DetectCentralPackageManagement(context.AppHostProjectFile).DirectoryPackagesPropsFile;
+        var removesCentralAppHostVersion = appHostCentralPackagesFile is not null &&
+            DetectLegacyAppHostReferences(context.AppHostProjectFile).HasOrphanPackageVersion;
+
         foreach (var projectFile in await GetOtherSolutionProjectsAsync(context.AppHostProjectFile, cancellationToken))
         {
             if (!ProjectFileExtensions.Supported.Contains(projectFile.Extension) || !projectFile.Exists)
@@ -852,10 +858,11 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                 (hasPackageReference || hasOrphanPackageVersion) &&
                 !await SkipsImplicitAppHostReferenceAsync(projectFile, document, cancellationToken);
 
-            // A retained explicit reference may rely on that shared central version, so restore the project in
-            // the transaction; if the AppHost's cleanup breaks it, the whole update is rolled back.
-            var validateRetainedReference = hasPackageReference && !removeLegacyReferences &&
-                DetectCentralPackageManagement(projectFile).UsesCentralPackageManagement;
+            // A retained reference may rely on that shared central version, so restore the project in the
+            // transaction; if the AppHost's cleanup breaks it, the whole update is rolled back.
+            var validateRetainedReference = removesCentralAppHostVersion && !removeLegacyReferences &&
+                DetectCentralPackageManagement(projectFile).DirectoryPackagesPropsFile is { } centralPackagesFile &&
+                string.Equals(centralPackagesFile.FullName, appHostCentralPackagesFile!.FullName, StringComparisons.FileSystemPath);
 
             if (staleVersion is null && !removeLegacyReferences && !validateRetainedReference)
             {

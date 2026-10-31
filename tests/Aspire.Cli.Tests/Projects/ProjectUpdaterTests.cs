@@ -2106,8 +2106,10 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         Assert.Contains("""<PackageReference Include="Aspire.Hosting.AppHost" Version="9.4.1" />""", content);
     }
 
-    [Fact]
-    public async Task UpdateProjectFileAsync_RollsBackWhenRetainedSiblingReferenceLosesSharedCentralVersion()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task UpdateProjectFileAsync_RollsBackWhenRetainedSiblingReferenceLosesSharedCentralVersion(bool referenceInImportedFile)
     {
         // The second AppHost is already current but opts out of the implicit Aspire.Hosting.AppHost reference, so
         // it keeps a versionless reference that relies on the shared central version the first AppHost's cleanup
@@ -2121,17 +2123,29 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
               </ItemGroup>
             </Project>
             """);
-        var otherAppHostProjectFile = new FileInfo(Path.Combine(workspace.CreateDirectory("Second.AppHost").FullName, "Second.AppHost.csproj"));
-        await File.WriteAllTextAsync(otherAppHostProjectFile.FullName, """
+        var otherAppHostDirectory = workspace.CreateDirectory("Second.AppHost");
+        var otherAppHostProjectFile = new FileInfo(Path.Combine(otherAppHostDirectory.FullName, "Second.AppHost.csproj"));
+        const string AppHostReference = """
+              <ItemGroup>
+                <PackageReference Include="Aspire.Hosting.AppHost" />
+              </ItemGroup>
+            """;
+        await File.WriteAllTextAsync(otherAppHostProjectFile.FullName, $"""
             <Project Sdk="Aspire.AppHost.Sdk/9.5.0">
               <PropertyGroup>
                 <SkipAddAspireDefaultReferences>true</SkipAddAspireDefaultReferences>
               </PropertyGroup>
-              <ItemGroup>
-                <PackageReference Include="Aspire.Hosting.AppHost" />
-              </ItemGroup>
+            {(referenceInImportedFile ? string.Empty : AppHostReference)}
             </Project>
             """);
+        if (referenceInImportedFile)
+        {
+            await File.WriteAllTextAsync(Path.Combine(otherAppHostDirectory.FullName, "Directory.Build.targets"), $"""
+                <Project>
+                {AppHostReference}
+                </Project>
+                """);
+        }
         var directoryPackagesPropsFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Directory.Packages.props"));
         const string DirectoryPackagesPropsContent = """
             <Project>
@@ -2167,9 +2181,9 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                     }
                     return (0, JsonDocument.Parse(itemsAndProperties.ToJsonString()));
                 },
-                // Mirrors NU1010: a versionless reference without a central PackageVersion cannot be restored.
+                // Mirrors NU1010: the second AppHost's versionless reference needs the central PackageVersion.
                 RestoreAsyncCallback = (project, _, _) =>
-                    File.ReadAllText(project.FullName).Contains("Aspire.Hosting.AppHost", StringComparison.Ordinal) &&
+                    project.FullName == otherAppHostProjectFile.FullName &&
                     !File.ReadAllText(directoryPackagesPropsFile.FullName).Contains("Aspire.Hosting.AppHost", StringComparison.Ordinal) ? 1 : 0,
                 GetSolutionProjectsAsyncCallback = (_, _, _) => (0, [appHostProjectFile, otherAppHostProjectFile]),
             };
