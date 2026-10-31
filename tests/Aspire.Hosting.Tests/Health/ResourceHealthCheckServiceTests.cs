@@ -652,6 +652,37 @@ public class ResourceHealthCheckServiceTests(ITestOutputHelper testOutputHelper)
         await app.StopAsync().TimeoutAfter(TestConstants.LongTimeoutTimeSpan);
     }
 
+    [Fact]
+    public async Task ResourceReadyEventFailureIsLoggedToResourceLogger()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var resource = builder.AddResource(new ParentResource("resource"));
+        builder.Eventing.Subscribe<ResourceReadyEvent>(resource.Resource, (_, _) => throw new InvalidOperationException("ResourceReadyEvent failed"));
+
+        await using var app = await builder.BuildAsync().DefaultTimeout();
+        var resourceLoggerService = app.Services.GetRequiredService<ResourceLoggerService>();
+
+        await app.StartAsync().DefaultTimeout();
+
+        await app.ResourceNotifications.PublishUpdateAsync(resource.Resource, s => s with
+        {
+            State = new ResourceStateSnapshot(KnownResourceStates.Running, null)
+        }).DefaultTimeout();
+
+        await foreach (var batch in resourceLoggerService.WatchAsync(resource.Resource).DefaultTimeout())
+        {
+            var errorLine = batch.FirstOrDefault(l => l.IsErrorMessage && l.Content.Contains("ResourceReadyEvent subscriber for 'resource' failed."));
+            if (errorLine.Content is not null)
+            {
+                Assert.Contains("ResourceReadyEvent failed", errorLine.Content);
+                break;
+            }
+        }
+
+        await app.StopAsync().TimeoutAfter(TestConstants.LongTimeoutTimeSpan);
+    }
+
     private sealed class ParentResource(string name) : Resource(name)
     {
     }
