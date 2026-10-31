@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light dark">
-    <title>Aspire standup | October 30, 2026, 16:00 Pacific</title>
+    <title>Aspire standup | October 30, 2026, 20:00 Pacific</title>
     <style>
         :root { color-scheme: light dark; font-family: system-ui, sans-serif; line-height: 1.6; }
         body { max-width: 56rem; margin: auto; padding: 1.5rem; }
@@ -31,113 +31,109 @@
 <body>
     <header>
         <h1>Aspire standup</h1>
-        <p><time datetime="2026-10-30T16:00:00-07:00">October 30, 2026, 16:00 America/Los_Angeles (PDT)</time><br>
-            <time datetime="2026-10-30T23:00:00Z">October 30, 2026, 23:00 UTC</time> reporting slot.</p>
-        <p>Window: October 30, 19:00-23:00 UTC. PR states and check rollups were read with GitHub
-            at about 23:03 UTC; they are a point-in-time snapshot, not a live dashboard.
+        <p><time datetime="2026-10-30T20:00:00-07:00">October 30, 2026, 20:00 America/Los_Angeles (PDT)</time><br>
+            <time datetime="2026-10-31T03:00:00Z">October 31, 2026, 03:00 UTC</time> reporting slot.</p>
+        <p>Window: October 30, 23:00 UTC to October 31, 03:00 UTC. PR states and check rollups were read with GitHub
+            at about 03:02 UTC; they are a point-in-time snapshot, not a live dashboard.
             Human approval is the merge gate for every PR below; approval alone does not make a PR mergeable.</p>
-        <p class="summary"><strong>Humans merged 5 PRs this window; 7 new aspire fixes are ready and 5 new drafts are in CI.</strong>
-            aspire #21472 and aspire-skills #120, #124, #126 and #127 merged. 46 aspire PRs are ready (4 with merge conflicts),
-            8 aspire.dev PRs are ready, and aspire-skills #125 awaits re-review.</p>
+        <p class="summary"><strong>No PRs merged this window; 15 more PRs became ready, for 70 ready PRs awaiting human review.</strong>
+            Five new aspire PRs, four former aspire drafts, one aspire.dev PR and five aspire-skills PRs became ready.
+            One check failed on #21505 (cause unknown); #21514 and #21516 are drafts in CI.</p>
     </header>
     <main>
         <section aria-labelledby="why">
             <h2 id="why">Why it matters</h2>
-            <p>The merged work stops Aspire deleting DCP’s session folder while DCP still needs it and lands four Aspireify/Doctor
-                skill fixes. The new ready aspire PRs fix user-visible bugs (Key Vault secrets in TypeScript AppHosts,
-                the dashboard file-upload dialog, Azure DevOps pipeline output) and remove Windows and CI flakes that make
-                test results unreliable. The new drafts target a JavaScript installer bug with explicit start
-                (#20186) and TypeScript AppHost Release builds (#16444). Open PRs are not delivered until a human approves and merges them.</p>
+            <p>The new aspire PRs fix deployment bugs users hit directly: Swarm stacks rejected by <code>docker stack deploy</code>,
+                pipeline steps that fail validation, Kubernetes HPA metric names, multi-platform container builds, and TypeScript
+                AppHosts building .NET projects in Release. Others remove CI flakes and stranded CLI temp files. aspire-skills work
+                fixes Aspireify/deployment guidance that produced broken TypeScript AppHosts and repairs the Skill Eval gates.
+                None of these are delivered until a human approves and merges them.</p>
         </section>
         <section aria-labelledby="work">
             <h2 id="work">Work done: pull requests by repository</h2>
             <p>“Checks green” means no failing or pending checks in the snapshot (passed or skipped only).
                 Merged and approved states come from GitHub; the “why” column summarizes each PR’s stated goal.</p>
             <table>
-                <caption>microsoft/aspire: 1 merged, 8 newly ready, 5 draft, 46 ready in total</caption>
-                <thead><tr><th scope="col">PR</th><th scope="col">State at 23:03 UTC</th><th scope="col">Why</th></tr></thead>
+                <caption>microsoft/aspire: 0 merged, 9 newly ready, 3 draft, 55 ready in total</caption>
+                <thead><tr><th scope="col">PR</th><th scope="col">State at 03:02 UTC</th><th scope="col">Why</th></tr></thead>
                 <tbody>
-                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire/pull/21472">#21472</a></th><td>Merged 19:12 UTC (karolz-ms)</td><td>Leaves the DCP session folder for DCP to delete after it starts (<a href="https://github.com/microsoft/aspire/issues/21465">#21465</a>).</td></tr>
-                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire/pull/21483">#21483</a></th><td>Ready, approved (ellahathaway); still blocked; checks green</td><td>Fixes VS Code storage-diagnostics lock tests killed by the holder timeout (8 of 778 first-attempt extension unit-test jobs). Marked ready after 12:00; which rule still blocks it was not determined.</td></tr>
-                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire/pull/21485">#21485</a></th><td>New; Ready, awaiting review; checks green</td><td>Bridges polyglot resource handles to non-resource interfaces, e.g. Key Vault secrets in <code>withEnvironment</code> (<a href="https://github.com/microsoft/aspire/issues/19902">#19902</a>).</td></tr>
-                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire/pull/21486">#21486</a></th><td>New; Ready, awaiting review; checks green</td><td>Keeps the interaction-dialog file browse button after an upload (<a href="https://github.com/microsoft/aspire/issues/18663">#18663</a>).</td></tr>
-                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire/pull/21487">#21487</a></th><td>New; Ready, awaiting review; checks green</td><td>Keeps Azure DevOps <code>##vso</code> logging commands unwrapped in CLI pipeline output (<a href="https://github.com/microsoft/aspire/issues/20311">#20311</a>).</td></tr>
-                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire/pull/21492">#21492</a></th><td>New; Ready, awaiting review; checks green</td><td>Fixes a MauiBuildQueue test hang when a resource state is published late (main CI timeout).</td></tr>
-                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire/pull/21497">#21497</a></th><td>New; Ready, awaiting review; checks green</td><td>Fixes the flaky RemoteHost StartupExit test by avoiding crash dumps from expected server failures.</td></tr>
-                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire/pull/21499">#21499</a></th><td>New; Ready, awaiting review; checks green</td><td>Fixes Windows CLI telemetry persistence tests racing the exporter’s deferred upload.</td></tr>
-                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire/pull/21500">#21500</a></th><td>New; Ready, awaiting review; checks green</td><td>Fixes a flaky terminal WebSocket close-handshake abort on Windows (distinct from #21471).</td></tr>
-                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire/pull/21474">#21474</a></th><td>Returned to draft; <strong>changes requested</strong> (karolz-ms 20:35 UTC)</td><td>Go goroutine-count test fix. The reviewer questioned whether the test is needed at all; needs an author decision.</td></tr>
-                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire/pull/21502">#21502</a></th><td>New draft; 3 checks running</td><td>Fixes the Windows NU1900 stderr flake in <code>ComputeRunArgumentsPopulatesRunPropertiesForSdkProject</code>.</td></tr>
-                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire/pull/21503">#21503</a></th><td>New draft; 3 checks running</td><td>Fixes bUnit <code>focusElement</code> JS-timeout flakes in Dashboard EmptyState/Traces tests.</td></tr>
-                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire/pull/21504">#21504</a></th><td>New draft; 122 checks running</td><td>Defers the JavaScript installer when the parent uses <code>WithExplicitStart</code> (<a href="https://github.com/microsoft/aspire/issues/20186">#20186</a>).</td></tr>
-                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire/pull/21505">#21505</a></th><td>New draft; checks running</td><td>Stops applying the AppHost server’s build configuration to TypeScript AppHost projects (<a href="https://github.com/microsoft/aspire/issues/16444">#16444</a>).</td></tr>
-                    <tr><th scope="row">4 earlier PRs</th><td>Ready; <strong>merge conflict</strong> with main</td><td><a href="https://github.com/microsoft/aspire/pull/21397">#21397</a>, <a href="https://github.com/microsoft/aspire/pull/21427">#21427</a>, <a href="https://github.com/microsoft/aspire/pull/21452">#21452</a>, <a href="https://github.com/microsoft/aspire/pull/21456">#21456</a> need a rebase before review can lead to merge.</td></tr>
-                    <tr><th scope="row">34 earlier PRs</th><td>Ready, awaiting review; checks green; unchanged since 12:00</td><td><a href="https://github.com/microsoft/aspire/pull/21417">#21417</a>, <a href="https://github.com/microsoft/aspire/pull/21424">#21424</a>, <a href="https://github.com/microsoft/aspire/pull/21426">#21426</a>, <a href="https://github.com/microsoft/aspire/pull/21428">#21428</a>, <a href="https://github.com/microsoft/aspire/pull/21430">#21430</a>, <a href="https://github.com/microsoft/aspire/pull/21431">#21431</a>, <a href="https://github.com/microsoft/aspire/pull/21433">#21433</a>, <a href="https://github.com/microsoft/aspire/pull/21434">#21434</a>, <a href="https://github.com/microsoft/aspire/pull/21437">#21437</a>, <a href="https://github.com/microsoft/aspire/pull/21438">#21438</a>, <a href="https://github.com/microsoft/aspire/pull/21439">#21439</a>, <a href="https://github.com/microsoft/aspire/pull/21440">#21440</a>, <a href="https://github.com/microsoft/aspire/pull/21441">#21441</a>, <a href="https://github.com/microsoft/aspire/pull/21442">#21442</a>, <a href="https://github.com/microsoft/aspire/pull/21445">#21445</a>, <a href="https://github.com/microsoft/aspire/pull/21446">#21446</a>, <a href="https://github.com/microsoft/aspire/pull/21447">#21447</a>, <a href="https://github.com/microsoft/aspire/pull/21448">#21448</a>, <a href="https://github.com/microsoft/aspire/pull/21450">#21450</a>, <a href="https://github.com/microsoft/aspire/pull/21451">#21451</a>, <a href="https://github.com/microsoft/aspire/pull/21453">#21453</a>, <a href="https://github.com/microsoft/aspire/pull/21457">#21457</a>, <a href="https://github.com/microsoft/aspire/pull/21458">#21458</a>, <a href="https://github.com/microsoft/aspire/pull/21459">#21459</a>, <a href="https://github.com/microsoft/aspire/pull/21461">#21461</a>, <a href="https://github.com/microsoft/aspire/pull/21466">#21466</a>, <a href="https://github.com/microsoft/aspire/pull/21471">#21471</a>, <a href="https://github.com/microsoft/aspire/pull/21473">#21473</a>, <a href="https://github.com/microsoft/aspire/pull/21475">#21475</a>, <a href="https://github.com/microsoft/aspire/pull/21476">#21476</a>, <a href="https://github.com/microsoft/aspire/pull/21477">#21477</a>, <a href="https://github.com/microsoft/aspire/pull/21478">#21478</a>, <a href="https://github.com/microsoft/aspire/pull/21480">#21480</a>, <a href="https://github.com/microsoft/aspire/pull/21481">#21481</a>.</td></tr>
+                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire/pull/21505">#21505</a></th><td>Draft → ready 02:15 UTC; <strong>1 check failed</strong>, 3 running</td><td>Stops applying the AppHost server’s Release configuration to projects in TypeScript AppHosts (<a href="https://github.com/microsoft/aspire/issues/16444">#16444</a>). New E2E test <a href="https://github.com/microsoft/aspire/actions/runs/41159489960/job/124416735383">passed on Ubuntu</a>; the <a href="https://github.com/microsoft/aspire/actions/runs/41159489960/job/124419014444">Windows VS Code E2E (launch-profiles) job failed</a>, cause unknown.</td></tr>
+                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire/pull/21504">#21504</a></th><td>Draft → ready 02:15 UTC; checks green</td><td>Defers the JavaScript installer when the parent uses <code>WithExplicitStart</code> (<a href="https://github.com/microsoft/aspire/issues/20186">#20186</a>).</td></tr>
+                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire/pull/21502">#21502</a></th><td>Draft → ready 23:16 UTC; checks green</td><td>Fixes the Windows NU1900 stderr flake in <code>ComputeRunArgumentsPopulatesRunPropertiesForSdkProject</code>.</td></tr>
+                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire/pull/21503">#21503</a></th><td>Draft → ready 23:19 UTC; checks green</td><td>Fixes bUnit <code>focusElement</code> JS-timeout flakes in Dashboard EmptyState/Traces tests.</td></tr>
+                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire/pull/21507">#21507</a></th><td>New; ready, awaiting review; checks green</td><td>Makes telemetry watch tests stop and drain the watch on failure instead of timing out (<a href="https://github.com/microsoft/aspire/issues/21317">#21317</a>).</td></tr>
+                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire/pull/21508">#21508</a></th><td>New; ready, awaiting review; checks green</td><td>Cleans up stranded CLI telemetry-hook temp files and names the locked script (<a href="https://github.com/microsoft/aspire/issues/19945">#19945</a>).</td></tr>
+                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire/pull/21510">#21510</a></th><td>New; ready, awaiting review; checks green</td><td>Emits only the configured metric source for Kubernetes HPA (<a href="https://github.com/microsoft/aspire/issues/11332">#11332</a>).</td></tr>
+                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire/pull/21511">#21511</a></th><td>New; ready, awaiting review; checks green</td><td>Lets pipeline steps depend on steps that a deployment target materializes (<a href="https://github.com/microsoft/aspire/issues/20301">#20301</a>).</td></tr>
+                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire/pull/21512">#21512</a></th><td>New; ready, awaiting review; checks green</td><td>Serializes Swarm <code>UpdateConfig.MaxFailureRatio</code> as a YAML number so <code>docker stack deploy</code> accepts it (<a href="https://github.com/microsoft/aspire/issues/19000">#19000</a>).</td></tr>
+                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire/pull/21514">#21514</a></th><td>New draft; 57 checks running</td><td>Fixes multi-platform (multi-RID) project container builds broken by <code>%3B</code> escaping (<a href="https://github.com/microsoft/aspire/issues/9281">#9281</a>).</td></tr>
+                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire/pull/21516">#21516</a></th><td>New draft; 4 checks running</td><td>Fixes the flaky ResourcesLayoutTests grouping-menu click race (<a href="https://github.com/microsoft/aspire/issues/21515">#21515</a>).</td></tr>
+                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire/pull/21474">#21474</a></th><td>Draft; <strong>changes requested</strong> (karolz-ms) still open; checks green</td><td>Now removes the flaky Go goroutine test as the reviewer suggested (commit 00:32 UTC); awaits re-review.</td></tr>
+                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire/pull/21483">#21483</a></th><td>Ready, approved (ellahathaway); still blocked; checks green</td><td>VS Code storage-diagnostics lock-test fix; blocking rule not determined.</td></tr>
+                    <tr><th scope="row">4 earlier PRs</th><td>Ready; merge conflicts resolved 23:11 UTC; checks green</td><td><a href="https://github.com/microsoft/aspire/pull/21397">#21397</a>, <a href="https://github.com/microsoft/aspire/pull/21427">#21427</a>, <a href="https://github.com/microsoft/aspire/pull/21452">#21452</a>, <a href="https://github.com/microsoft/aspire/pull/21456">#21456</a> were rebased and await review.</td></tr>
+                    <tr><th scope="row">41 earlier PRs</th><td>Ready, awaiting review; checks green; unchanged since 16:00</td><td><a href="https://github.com/microsoft/aspire/pull/21417">#21417</a>, <a href="https://github.com/microsoft/aspire/pull/21424">#21424</a>, <a href="https://github.com/microsoft/aspire/pull/21426">#21426</a>, <a href="https://github.com/microsoft/aspire/pull/21428">#21428</a>, <a href="https://github.com/microsoft/aspire/pull/21430">#21430</a>, <a href="https://github.com/microsoft/aspire/pull/21431">#21431</a>, <a href="https://github.com/microsoft/aspire/pull/21433">#21433</a>, <a href="https://github.com/microsoft/aspire/pull/21434">#21434</a>, <a href="https://github.com/microsoft/aspire/pull/21437">#21437</a>, <a href="https://github.com/microsoft/aspire/pull/21438">#21438</a>, <a href="https://github.com/microsoft/aspire/pull/21439">#21439</a>, <a href="https://github.com/microsoft/aspire/pull/21440">#21440</a>, <a href="https://github.com/microsoft/aspire/pull/21441">#21441</a>, <a href="https://github.com/microsoft/aspire/pull/21442">#21442</a>, <a href="https://github.com/microsoft/aspire/pull/21445">#21445</a>, <a href="https://github.com/microsoft/aspire/pull/21446">#21446</a>, <a href="https://github.com/microsoft/aspire/pull/21447">#21447</a>, <a href="https://github.com/microsoft/aspire/pull/21448">#21448</a>, <a href="https://github.com/microsoft/aspire/pull/21450">#21450</a>, <a href="https://github.com/microsoft/aspire/pull/21451">#21451</a>, <a href="https://github.com/microsoft/aspire/pull/21453">#21453</a>, <a href="https://github.com/microsoft/aspire/pull/21457">#21457</a>, <a href="https://github.com/microsoft/aspire/pull/21458">#21458</a>, <a href="https://github.com/microsoft/aspire/pull/21459">#21459</a>, <a href="https://github.com/microsoft/aspire/pull/21461">#21461</a>, <a href="https://github.com/microsoft/aspire/pull/21466">#21466</a>, <a href="https://github.com/microsoft/aspire/pull/21471">#21471</a>, <a href="https://github.com/microsoft/aspire/pull/21473">#21473</a>, <a href="https://github.com/microsoft/aspire/pull/21475">#21475</a>, <a href="https://github.com/microsoft/aspire/pull/21476">#21476</a>, <a href="https://github.com/microsoft/aspire/pull/21477">#21477</a>, <a href="https://github.com/microsoft/aspire/pull/21478">#21478</a>, <a href="https://github.com/microsoft/aspire/pull/21480">#21480</a>, <a href="https://github.com/microsoft/aspire/pull/21481">#21481</a>, <a href="https://github.com/microsoft/aspire/pull/21485">#21485</a>, <a href="https://github.com/microsoft/aspire/pull/21486">#21486</a>, <a href="https://github.com/microsoft/aspire/pull/21487">#21487</a>, <a href="https://github.com/microsoft/aspire/pull/21492">#21492</a>, <a href="https://github.com/microsoft/aspire/pull/21497">#21497</a>, <a href="https://github.com/microsoft/aspire/pull/21499">#21499</a>, <a href="https://github.com/microsoft/aspire/pull/21500">#21500</a>.</td></tr>
                 </tbody>
             </table>
             <table>
-                <caption>microsoft/aspire.dev: 0 merged, 1 newly ready, 8 ready in total</caption>
-                <thead><tr><th scope="col">PR</th><th scope="col">State at 23:03 UTC</th><th scope="col">Why</th></tr></thead>
+                <caption>microsoft/aspire.dev: 0 merged, 1 newly ready, 9 ready in total</caption>
+                <thead><tr><th scope="col">PR</th><th scope="col">State at 03:02 UTC</th><th scope="col">Why</th></tr></thead>
                 <tbody>
-                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire.dev/pull/2003">#2003</a></th><td>New; Ready, awaiting review; checks green</td><td>Uses the <code>apphost.mts</code> layout in Japanese TypeScript AppHost samples; adds a locale-wide fence check.</td></tr>
-                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire.dev/pull/1984">#1984</a></th><td>Ready, awaiting review; checks green; updated 22:24 UTC</td><td>Emits og:type=website for home and splash pages (<a href="https://github.com/microsoft/aspire.dev/issues/1416">#1416</a>); now adds a middleware regression test.</td></tr>
-                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire.dev/pull/1989">#1989</a></th><td>Ready, awaiting review; checks green; updated 19:34 UTC</td><td>Keeps the localized sidebar Glossary link on the English URL.</td></tr>
-                    <tr><th scope="row">5 earlier PRs</th><td>Ready, awaiting review; checks green; unchanged since 12:00</td><td><a href="https://github.com/microsoft/aspire.dev/pull/1988">#1988</a>, <a href="https://github.com/microsoft/aspire.dev/pull/1990">#1990</a>, <a href="https://github.com/microsoft/aspire.dev/pull/1995">#1995</a>, <a href="https://github.com/microsoft/aspire.dev/pull/2001">#2001</a>, <a href="https://github.com/microsoft/aspire.dev/pull/2002">#2002</a>.</td></tr>
+                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire.dev/pull/2004">#2004</a></th><td>New; ready, awaiting review; checks green</td><td>Replaces the removed <code>AddNpmApp</code> in the Japanese “What is Aspire?” C# sample, matching the English fix #1998.</td></tr>
+                    <tr><th scope="row">8 earlier PRs</th><td>Ready, awaiting review; checks green; unchanged since 16:00</td><td><a href="https://github.com/microsoft/aspire.dev/pull/1984">#1984</a>, <a href="https://github.com/microsoft/aspire.dev/pull/1988">#1988</a>, <a href="https://github.com/microsoft/aspire.dev/pull/1989">#1989</a>, <a href="https://github.com/microsoft/aspire.dev/pull/1990">#1990</a>, <a href="https://github.com/microsoft/aspire.dev/pull/1995">#1995</a>, <a href="https://github.com/microsoft/aspire.dev/pull/2001">#2001</a>, <a href="https://github.com/microsoft/aspire.dev/pull/2002">#2002</a>, <a href="https://github.com/microsoft/aspire.dev/pull/2003">#2003</a>.</td></tr>
                 </tbody>
             </table>
             <table>
-                <caption>microsoft/aspire-skills: 4 merged, 1 ready, 1 draft</caption>
-                <thead><tr><th scope="col">PR</th><th scope="col">State at 23:03 UTC</th><th scope="col">Why</th></tr></thead>
+                <caption>microsoft/aspire-skills: 0 merged, 5 newly ready, 6 ready in total</caption>
+                <thead><tr><th scope="col">PR</th><th scope="col">State at 03:02 UTC</th><th scope="col">Why</th></tr></thead>
                 <tbody>
-                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire-skills/pull/120">#120</a></th><td>Merged 19:19 UTC (ellahathaway)</td><td>Keeps dot-prefixed workspace children in Aspire Doctor’s canvas (conflict resolved before merge).</td></tr>
-                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire-skills/pull/126">#126</a></th><td>Merged 19:31 UTC (ellahathaway)</td><td>Uses exported Foundry APIs in the TypeScript example; the earlier change request was dismissed.</td></tr>
-                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire-skills/pull/124">#124</a></th><td>Merged 19:44 UTC (ellahathaway)</td><td>Keeps unproposed discovered services visible in Aspireify.</td></tr>
-                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire-skills/pull/127">#127</a></th><td>Merged 20:11 UTC (ellahathaway)</td><td>Detects template-generated service defaults projects.</td></tr>
-                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire-skills/pull/125">#125</a></th><td>Ready; <strong>changes requested</strong> (spboyer 14:18 UTC); new commit dd5a1540 at 22:56 UTC; 1 check running</td><td>Documents the subnet-based private endpoint API. Awaits spboyer re-review; review is also requested from IEvangelist.</td></tr>
-                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire-skills/pull/129">#129</a></th><td>New draft; 1 check running</td><td>Matches five Aspireify TypeScript examples to the generated AppHost SDK signatures.</td></tr>
+                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire-skills/pull/129">#129</a></th><td>Draft → ready; checks green</td><td>Matches five Aspireify TypeScript examples to the generated AppHost SDK signatures.</td></tr>
+                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire-skills/pull/130">#130</a></th><td>New; ready, awaiting review; checks green</td><td>Aligns Aspireify’s TypeScript AppHost <code>package.json</code> guidance with what the CLI generates.</td></tr>
+                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire-skills/pull/131">#131</a></th><td>New; ready, awaiting review; checks green</td><td>Restores the TypeScript AppHost SDK before building in deployment workflow examples.</td></tr>
+                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire-skills/pull/132">#132</a></th><td>New; ready, awaiting review; checks green</td><td>Moves deployment/init/monitoring evals off an unavailable model; the nightly Skill Eval failed 6 consecutive runs.</td></tr>
+                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire-skills/pull/133">#133</a></th><td>New; ready, awaiting review; checks green</td><td>Lists PR files via the files API so the Skill Eval gate no longer crashes on diffs over 20,000 lines.</td></tr>
+                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire-skills/pull/125">#125</a></th><td>Ready; <strong>changes requested</strong> (spboyer 14:18 UTC) still open; checks green</td><td>Private endpoint API docs; fix commit 22:56 UTC awaits spboyer re-review.</td></tr>
                 </tbody>
             </table>
         </section>
         <section aria-labelledby="impact">
             <h2 id="impact">Measured impact</h2>
             <ul>
-                <li><a href="https://github.com/microsoft/aspire/pull/21497">#21497</a> RemoteHost StartupExit: failed attempt 1 on <strong>4 of 503</strong> rerun PR runs and
-                    0 of 128 main runs.</li>
-                <li><a href="https://github.com/microsoft/aspire/pull/21503">#21503</a> Dashboard.Components: <strong>10 of 181</strong> Windows and 1 of 181 Ubuntu attempt-1 job failures
-                    in a 1,000-run survey; 3 matched the pending-call cause this PR fixes.</li>
-                <li><a href="https://github.com/microsoft/aspire/pull/21500">#21500</a> terminal close handshake: 1 of 56 Windows Dashboard jobs, 0 of 56 Ubuntu (partial survey).</li>
-                <li><a href="https://github.com/microsoft/aspire/pull/21485">#21485</a>: both new tests fail on main and pass after; RemoteHost suite 687 passed, 5 skipped, 0 failed.
-                    <a href="https://github.com/microsoft/aspire/pull/21487">#21487</a>, <a href="https://github.com/microsoft/aspire/pull/21504">#21504</a> and <a href="https://github.com/microsoft/aspire/pull/21505">#21505</a> likewise show new tests failing before and passing after.</li>
-                <li><a href="https://github.com/microsoft/aspire.dev/pull/1984">#1984</a>: new middleware test fails 3 of 4 cases before and passes 4 of 4 after. <a href="https://github.com/microsoft/aspire.dev/pull/2003">#2003</a>: the new
-                    fence check fails on main and passes after (type-check diagnostics 26 → 25).</li>
+                <li><a href="https://github.com/microsoft/aspire/pull/21512">#21512</a>: on main, <code>docker stack deploy</code> to a single-node swarm fails validation; with the fix the
+                    service is created with <code>MaxFailureRatio</code> 0.3.</li>
+                <li><a href="https://github.com/microsoft/aspire/pull/21516">#21516</a>: the new test fails 3/3 on main with the CI error and passes 9/9 after; the full class passed
+                    20 iterations (1,620 executions, 0 failures).</li>
+                <li><a href="https://github.com/microsoft/aspire/pull/21510">#21510</a>: fails 1/1 before, 5/5 after; the Kubernetes suite passed 422/422 with snapshots unchanged.</li>
+                <li><a href="https://github.com/microsoft/aspire/pull/21508">#21508</a>: new tests failed 10/10 before the fix. <a href="https://github.com/microsoft/aspire/pull/21507">#21507</a>: 1 failure in 201 attempt-1 Windows Dashboard jobs.</li>
+                <li><a href="https://github.com/microsoft/aspire/pull/21474">#21474</a>: the removed Go test failed 1 of 128 first-attempt CI jobs and 8 of 900 local stress runs.</li>
+                <li>aspire-skills <a href="https://github.com/microsoft/aspire-skills/pull/132">#132</a>: the nightly Skill Eval failed 6 consecutive runs, with 140 stimuli erroring 3/3.</li>
             </ul>
             <p>These figures come from the PR authors’ evidence, not new measurements by this report.</p>
         </section>
         <section aria-labelledby="investigations">
             <h2 id="investigations">Investigations and unknowns</h2>
-            <p><strong><a href="https://github.com/microsoft/aspire/pull/21474">#21474</a>:</strong> karolz-ms requested changes, saying the Go goroutine test may not be needed at all.
-                Whether to drop the test or keep the fix is an open author decision.</p>
-            <p><strong><a href="https://github.com/microsoft/aspire/pull/21483">#21483</a>:</strong> approved but still blocked; the blocking rule (for example another required review) was not determined.</p>
-            <p><strong>Drafts #21502-#21505 and skills #125/#129:</strong> checks were still running at the snapshot; outcomes unknown.</p>
-            <p>The <a href="https://github.com/microsoft/aspire/pull/21502">#21502</a> fix targets the Windows CLI <code>ComputeRunArgumentsPopulatesRunPropertiesForSdkProject</code>
-                failure that the earlier diagnostic run left inconclusive; until its CI finishes it is not a confirmed fix.</p>
+            <p><strong><a href="https://github.com/microsoft/aspire/pull/21505">#21505</a>:</strong> the Windows VS Code extension E2E (launch-profiles) job failed after about 12 minutes;
+                logs were not yet available because the run was still in progress. Whether it is related to the change or
+                is infrastructure is unknown. Coordinator records report recurring Windows runner disconnects and VS Code Windows
+                E2E hangs; this report did not verify that.</p>
+            <p><strong>Drafts <a href="https://github.com/microsoft/aspire/pull/21514">#21514</a> and <a href="https://github.com/microsoft/aspire/pull/21516">#21516</a>:</strong> checks still running; outcomes unknown.</p>
+            <p><strong><a href="https://github.com/microsoft/aspire/pull/21483">#21483</a>:</strong> approved but still blocked; the blocking rule was not determined.</p>
+            <p>Coordinator records report no new qualifying aspire.dev or aspire-skills defects from bounded searches (not re-verified).</p>
         </section>
         <section aria-labelledby="blockers">
             <h2 id="blockers">Blockers and next actions</h2>
             <dl>
                 <dt>Human review</dt>
-                <dd>46 ready aspire PRs and 8 ready aspire.dev PRs need review; none are delivered until merged.</dd>
-                <dt>Merge conflicts</dt>
-                <dd>aspire <a href="https://github.com/microsoft/aspire/pull/21397">#21397</a>, <a href="https://github.com/microsoft/aspire/pull/21427">#21427</a>, <a href="https://github.com/microsoft/aspire/pull/21452">#21452</a>, <a href="https://github.com/microsoft/aspire/pull/21456">#21456</a> conflict with main and need rebasing.</dd>
-                <dt>Review feedback</dt>
-                <dd>#21474 needs an author response to karolz-ms. aspire-skills #125 needs spboyer’s re-review of the new commit.</dd>
+                <dd>55 ready aspire PRs, 9 aspire.dev PRs and 6 aspire-skills PRs need review; none are delivered until merged.</dd>
+                <dt>Re-review</dt>
+                <dd><a href="https://github.com/microsoft/aspire/pull/21474">#21474</a> needs karolz-ms to re-review the test removal; aspire-skills <a href="https://github.com/microsoft/aspire-skills/pull/125">#125</a> needs spboyer’s re-review.</dd>
+                <dt>CI</dt>
+                <dd>Triage the #21505 Windows VS Code E2E failure once logs are available.</dd>
             </dl>
         </section>
         <section aria-labelledby="final">
             <h2 id="final">Final results</h2>
-            <p>Merged this window: <strong>5</strong> (aspire 1, aspire-skills 4), all by human reviewers.
-                Open and ready: <strong>55</strong> (aspire 46, aspire.dev 8, aspire-skills 1).
-                Draft: <strong>6</strong> (aspire 5, aspire-skills 1). No failing checks on any listed PR in the snapshot.</p>
+            <p>Merged this window: <strong>0</strong>. Open and ready: <strong>70</strong> (aspire 55, aspire.dev 9,
+                aspire-skills 6). Draft: <strong>3</strong> (aspire #21474, #21514, #21516). Failing checks in the snapshot: 1 (#21505).</p>
         </section>
         <section aria-labelledby="publication">
             <h2 id="publication">Publication and evidence limits</h2>
@@ -145,8 +141,7 @@
                 <a href="https://github.com/microsoft/aspire/pull/21391">explicit draft PR #21391</a>.
                 It is <strong>branch source only</strong>, not merged main content, deployment or a hosted rendered page;
                 GitHub Pages is disabled. This report head’s own CI is tracked in that PR.
-                Deployment of merged aspire-skills changes was not verified. Older open PRs created before October 29 and PRs by
-                other authors are outside this report.</p>
+                Open PRs created before October 29 and PRs by other authors are outside this report.</p>
         </section>
     </main>
     <footer><p><strong>&#129302; Posted by AspireAgent (AI Agent)</strong></p></footer>
