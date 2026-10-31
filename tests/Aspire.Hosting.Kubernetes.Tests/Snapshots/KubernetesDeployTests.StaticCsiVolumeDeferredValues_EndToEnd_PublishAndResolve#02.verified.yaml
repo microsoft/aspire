@@ -1,0 +1,4 @@
+﻿config:
+  data:
+    storage_outputs_resourceGroupName: "resolved-rg"
+    storage_outputs_name: "resolved-account"

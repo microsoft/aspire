@@ -30,13 +30,13 @@ public class AzureStorageResource(string name, Action<AzureResourceInfrastructur
     internal IResourceBuilder<AzureQueueStorageResource>? QueueStorageBuilder { get; set; }
     internal IResourceBuilder<AzureTableStorageResource>? TableStorageBuilder { get; set; }
     internal IResourceBuilder<AzureDataLakeStorageResource>? DataLakeStorageBuilder { get; set; }
+    internal IResourceBuilder<AzureFileStorageResource>? FileStorageBuilder { get; set; }
 
-    // Implicit parent selection for child resources (containers, queues, file systems)
-    // added without an explicit parent service. Set to the first blob/queue/data-lake
-    // service created via AddBlobs/AddQueues/AddDataLake, regardless of whether the
-    // user chose a custom name or the default. Used so that AddBlobContainer /
-    // AddQueue / AddDataLakeFileSystem don't auto-create a duplicate default-named
-    // service when the user has already added their own.
+    // Implicit parent selection for child resources (containers, queues, file systems,
+    // and file shares) added without an explicit parent service. Set to the first
+    // corresponding service created by the user, regardless of whether they chose a
+    // custom name or the default. This prevents child helpers from auto-creating a
+    // duplicate default-named service.
     internal IResourceBuilder<AzureBlobStorageResource>? ImplicitBlobService { get; set; }
     internal IResourceBuilder<AzureQueueStorageResource>? ImplicitQueueService { get; set; }
     internal IResourceBuilder<AzureDataLakeStorageResource>? ImplicitDataLakeService { get; set; }
@@ -47,7 +47,11 @@ public class AzureStorageResource(string name, Action<AzureResourceInfrastructur
 
     internal List<AzureQueueStorageQueueResource> Queues { get; } = [];
 
+    internal List<AzureFileStorageShareResource> FileShares { get; } = [];
+
     internal bool IsHnsEnabled { get; set; }
+
+    internal bool IsFileStorageEnabled { get; set; }
 
     /// <summary>
     /// Gets the "blobEndpoint" output reference from the bicep template for the Azure Storage resource.
@@ -70,6 +74,11 @@ public class AzureStorageResource(string name, Action<AzureResourceInfrastructur
     public BicepOutputReference DataLakeEndpoint => new("dataLakeEndpoint", this);
 
     /// <summary>
+    /// Gets the "fileEndpoint" output reference from the Bicep template for the Azure Storage resource.
+    /// </summary>
+    public BicepOutputReference FileEndpoint => new("fileEndpoint", this);
+
+    /// <summary>
     /// Gets the "id" output reference for the resource.
     /// </summary>
     public BicepOutputReference Id => new("id", this);
@@ -78,6 +87,11 @@ public class AzureStorageResource(string name, Action<AzureResourceInfrastructur
     /// Gets the "name" output reference for the resource.
     /// </summary>
     public BicepOutputReference NameOutputReference => new("name", this);
+
+    /// <summary>
+    /// Gets the resource group name output reference for the Azure Storage account.
+    /// </summary>
+    public BicepOutputReference ResourceGroupName => new("resourceGroupName", this);
 
     /// <summary>
     /// Gets a value indicating whether the Azure Storage resource is running in the local emulator.
@@ -103,6 +117,16 @@ public class AzureStorageResource(string name, Action<AzureResourceInfrastructur
     public ReferenceExpression DataLakeUriExpression => IsEmulator
         ? throw new InvalidOperationException("Emulator currently does not support data lake.")
         : ReferenceExpression.Create($"{DataLakeEndpoint}");
+
+    /// <summary>
+    /// Gets the connection URI expression for the Azure Files service.
+    /// </summary>
+    /// <remarks>
+    /// Format: <c>{fileEndpoint}</c> for Azure. The local storage emulator does not support Azure Files.
+    /// </remarks>
+    public ReferenceExpression FileUriExpression => IsEmulator
+        ? throw new InvalidOperationException("Emulator currently does not support file storage.")
+        : ReferenceExpression.Create($"{FileEndpoint}");
 
     /// <summary>
     /// Gets the connection URI expression for the queue storage service.
@@ -147,6 +171,10 @@ public class AzureStorageResource(string name, Action<AzureResourceInfrastructur
     internal ReferenceExpression GetDataLakeConnectionString() => IsEmulator
         ? throw new InvalidOperationException("Emulator currently does not support data lake.")
         : ReferenceExpression.Create($"{DataLakeEndpoint}");
+
+    internal ReferenceExpression GetFileConnectionString() => IsEmulator
+        ? throw new InvalidOperationException("Emulator currently does not support file storage.")
+        : ReferenceExpression.Create($"{FileEndpoint}");
 
     void IResourceWithAzureFunctionsConfig.ApplyAzureFunctionsConfiguration(IDictionary<string, object> target, string connectionName)
     {

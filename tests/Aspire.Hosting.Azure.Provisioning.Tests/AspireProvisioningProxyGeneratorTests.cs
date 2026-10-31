@@ -133,6 +133,32 @@ public class AspireProvisioningProxyGeneratorTests
     }
 
     [Fact]
+    public void ObsoleteTypesAndMembersAreNotExported()
+    {
+        var result = ProvisioningGeneratorTest.Run(ObsoleteSource);
+
+        Assert.Empty(result.GeneratorDiagnostics);
+        Assert.Empty(result.Compilation.GetDiagnostics());
+
+        var proxy = result.Compilation.GetTypeByMetadataName(
+            "ProvisioningGeneratorTests.Generated.CurrentResourceProxy");
+        Assert.NotNull(proxy);
+        Assert.Equal(["CurrentProperty"], GetExportedMembers<IPropertySymbol>(proxy));
+        var methods = GetExportedMembers<IMethodSymbol>(proxy);
+        Assert.Contains("CurrentMethod", methods);
+        Assert.DoesNotContain("LegacyMethod", methods);
+
+        Assert.Null(result.Compilation.GetTypeByMetadataName(
+            "ProvisioningGeneratorTests.Generated.LegacyModelProxy"));
+
+        var factory = result.Compilation.GetTypeByMetadataName(
+            "ProvisioningGeneratorTests.Generated.AzureResourceInfrastructureProvisioningExtensions");
+        Assert.NotNull(factory);
+        Assert.DoesNotContain(factory.GetMembers().OfType<IMethodSymbol>(), static method =>
+            method.Name.Contains("Legacy", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void DerivedMethodCollidingWithGeneratedBaseMethodGeneratesDiagnostic()
     {
         var result = ProvisioningGeneratorTest.Run(InheritedCollisionSource);
@@ -510,6 +536,8 @@ public class AspireProvisioningProxyGeneratorTests
 
     private const string SupportedSource = SupportedAttributes + CommonSource + SupportedTypes;
 
+    private const string ObsoleteSource = ObsoleteAttributes + CommonSource + ObsoleteTypes;
+
     private const string NullableProxyConstructorSource = NullableProxyConstructorAttributes + CommonSource + NullableProxyConstructorTypes;
 
     private const string ParameterNameCollisionSource = ParameterNameCollisionAttributes + CommonSource + ParameterNameCollisionTypes;
@@ -604,6 +632,52 @@ public class AspireProvisioningProxyGeneratorTests
                 public void Set(int value)
                 {
                 }
+            }
+        }
+        """;
+
+    private const string ObsoleteAttributes = """
+        #pragma warning disable CS0612
+        [assembly: Aspire.Hosting.Azure.Provisioning.GenerateAspireProvisioningProxy(
+            typeof(Test.Provisioning.CurrentResource))]
+        [assembly: Aspire.Hosting.Azure.Provisioning.GenerateAspireProvisioningProxy(
+            typeof(Test.Provisioning.LegacyModel),
+            IsInfrastructureRoot = false)]
+        #pragma warning restore CS0612
+
+        """;
+
+    private const string ObsoleteTypes = """
+        namespace Test.Provisioning
+        {
+            [System.Obsolete]
+            public sealed class LegacyModel
+            {
+                public string Value { get; set; } = string.Empty;
+            }
+
+            public sealed class CurrentResource : Azure.Provisioning.Primitives.ProvisionableResource
+            {
+                public CurrentResource(string bicepIdentifier)
+                    : base(bicepIdentifier)
+                {
+                }
+
+                public string CurrentProperty { get; set; } = string.Empty;
+
+                [System.Obsolete]
+                public string LegacyProperty { get; set; } = string.Empty;
+
+                [System.Obsolete]
+                public LegacyModel LegacyModel { get; set; } = new();
+
+                public string CurrentMethod() => string.Empty;
+
+                [System.Obsolete]
+                public string LegacyMethod() => string.Empty;
+
+                [System.Obsolete]
+                public static LegacyModel LegacyDefault { get; } = new();
             }
         }
         """;

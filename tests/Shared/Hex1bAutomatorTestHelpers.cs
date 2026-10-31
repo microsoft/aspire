@@ -479,9 +479,10 @@ internal static class Hex1bAutomatorTestHelpers
         SequenceCounter counter,
         AspireTemplate template = AspireTemplate.Starter,
         bool useRedisCache = true,
-        bool useDevLocalhost = false)
+        bool useDevLocalhost = false,
+        string extraArguments = "")
     {
-        await auto.RunAspireNewPromptsAsync(projectName, template, useRedisCache, useDevLocalhost);
+        await auto.RunAspireNewPromptsAsync(projectName, template, useRedisCache, useDevLocalhost, extraArguments);
 
         // Decline the agent init prompt and wait for success
         await auto.DeclineAgentInitPromptAsync(counter);
