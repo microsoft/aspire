@@ -14,7 +14,8 @@ namespace Aspire.Cli.Git;
 /// <param name="environment">The environment abstraction for OS detection.</param>
 /// <param name="logger">The logger for diagnostic output.</param>
 /// <param name="profilingTelemetry">The profiling telemetry service.</param>
-internal sealed class GitRepository(CliExecutionContext executionContext, IEnvironment environment, ILogger<GitRepository> logger, ProfilingTelemetry profilingTelemetry) : IGitRepository
+/// <param name="gitExecutable">The git executable to run. Tests override this to simulate misbehaving git processes.</param>
+internal sealed class GitRepository(CliExecutionContext executionContext, IEnvironment environment, ILogger<GitRepository> logger, ProfilingTelemetry profilingTelemetry, string gitExecutable = "git") : IGitRepository
 {
     /// <inheritdoc />
     public async Task<DirectoryInfo?> GetRootAsync(CancellationToken cancellationToken)
@@ -28,10 +29,15 @@ internal sealed class GitRepository(CliExecutionContext executionContext, IEnvir
             using var activity = profilingTelemetry.StartGitCommand("rev-parse", startInfo.FileName, startInfo.ArgumentList, executionContext.WorkingDirectory);
             var result = await RunGitAsync(startInfo, activity, cancellationToken).ConfigureAwait(false);
 
-            if (result.ExitStatus.ExitCode != 0)
+            if (result.ExitCode != 0)
             {
-                activity.SetError($"git rev-parse exited with code {result.ExitStatus.ExitCode}.");
-                logger.LogDebug("Git command returned non-zero exit code {ExitCode}: {Error}", result.ExitStatus.ExitCode, result.StandardError.Trim());
+                activity.SetError($"git rev-parse exited with code {result.ExitCode}.");
+                logger.LogDebug("Git command returned non-zero exit code {ExitCode}: {Error}", result.ExitCode, result.StandardError.Trim());
+                return null;
+            }
+
+            if (result.StandardOutput is null)
+            {
                 return null;
             }
 
@@ -85,10 +91,17 @@ internal sealed class GitRepository(CliExecutionContext executionContext, IEnvir
             using var activity = profilingTelemetry.StartGitCommand("ls-files", startInfo.FileName, startInfo.ArgumentList, searchRoot);
             var result = await RunGitAsync(startInfo, activity, cancellationToken).ConfigureAwait(false);
 
-            if (result.ExitStatus.ExitCode != 0)
+            if (result.ExitCode != 0)
             {
-                activity.SetError($"git ls-files exited with code {result.ExitStatus.ExitCode}.");
-                logger.LogDebug("git ls-files returned non-zero exit code {ExitCode} from {SearchRoot}: {Error}", result.ExitStatus.ExitCode, searchRoot.FullName, result.StandardError.Trim());
+                activity.SetError($"git ls-files exited with code {result.ExitCode}.");
+                logger.LogDebug("git ls-files returned non-zero exit code {ExitCode} from {SearchRoot}: {Error}", result.ExitCode, searchRoot.FullName, result.StandardError.Trim());
+                return null;
+            }
+
+            if (result.StandardOutput is null)
+            {
+                // Output may be incomplete, so fall back to the filesystem walker rather than
+                // treating a partial file list as authoritative.
                 return null;
             }
 
@@ -124,8 +137,8 @@ internal sealed class GitRepository(CliExecutionContext executionContext, IEnvir
         }
     }
 
-    private static ProcessStartInfo CreateGitStartInfo(DirectoryInfo workingDirectory, string[] arguments) =>
-        new("git", arguments)
+    private ProcessStartInfo CreateGitStartInfo(DirectoryInfo workingDirectory, string[] arguments) =>
+        new(gitExecutable, arguments)
         {
             WorkingDirectory = workingDirectory.FullName,
             RedirectStandardOutput = true,
@@ -133,14 +146,111 @@ internal sealed class GitRepository(CliExecutionContext executionContext, IEnvir
             CreateNoWindow = true
         };
 
-    private static async Task<ProcessTextOutput> RunGitAsync(ProcessStartInfo startInfo, ProfilingTelemetry.ActivityScope activity, CancellationToken cancellationToken)
+    private async Task<GitProcessOutput> RunGitAsync(ProcessStartInfo startInfo, ProfilingTelemetry.ActivityScope activity, CancellationToken cancellationToken)
     {
-        // RunAndCaptureTextAsync drains stdout and stderr concurrently, and kills git when
-        // cancellationToken fires so Ctrl+C doesn't leave `git ls-files` walking a large repo.
-        var result = await Process.RunAndCaptureTextAsync(startInfo, cancellationToken).ConfigureAwait(false);
-        activity.SetProcessId(result.ProcessId);
-        activity.SetProcessExitCode(result.ExitStatus.ExitCode);
-        activity.SetGitOutputLengths(result.StandardOutput.Length, result.StandardError.Length);
-        return result;
+        // Don't use Process.RunAndCaptureTextAsync: it waits for EOF on stdout and stderr before
+        // waiting for exit, with no bound. A process that inherited git's pipe handles (a hook
+        // or helper git spawned, or an unrelated process spawned concurrently that inherited the
+        // handles) can keep the pipes open long after git exits, which hangs the caller forever.
+        // Wait for git to exit instead, and then bound the time spent draining its output.
+        using var process = Process.Start(startInfo) ?? throw new InvalidOperationException($"Failed to start '{startInfo.FileName}'.");
+        activity.SetProcessId(process.Id);
+
+        var stdoutReader = process.StandardOutput;
+        var stderrReader = process.StandardError;
+        using var readCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var stdoutTask = ReadAllTextAsync(stdoutReader, readCts.Token);
+        var stderrTask = ReadAllTextAsync(stderrReader, readCts.Token);
+
+        try
+        {
+            try
+            {
+                await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                // Kill git so Ctrl+C doesn't leave `git ls-files` walking a large repo.
+                TryKill(process);
+                throw;
+            }
+
+            var exitCode = process.ExitCode;
+            activity.SetProcessExitCode(exitCode);
+
+            try
+            {
+                await Task.WhenAll(stdoutTask, stderrTask).WaitAsync(s_postExitOutputDrainTimeout, cancellationToken).ConfigureAwait(false);
+            }
+            catch (TimeoutException)
+            {
+                logger.LogDebug("git {Arguments} exited with code {ExitCode} but its output pipes were still open after {Timeout}s; another process inherited them.", string.Join(' ', startInfo.ArgumentList), exitCode, s_postExitOutputDrainTimeout.TotalSeconds);
+            }
+
+            // git has exited, so stdout is complete once it reaches EOF. If only stderr is held
+            // open, the stdout result is still trustworthy. If stdout never reached EOF the output
+            // may be truncated, so report it as unavailable and let callers fall back.
+            if (!stdoutTask.IsCompletedSuccessfully)
+            {
+                activity.SetError("git output pipe was not closed after the process exited.");
+                return new GitProcessOutput(exitCode, StandardOutput: null, StandardError: string.Empty);
+            }
+
+            var standardOutput = stdoutTask.Result;
+            var standardError = stderrTask.IsCompletedSuccessfully ? stderrTask.Result : string.Empty;
+            activity.SetGitOutputLengths(standardOutput.Length, standardError.Length);
+            return new GitProcessOutput(exitCode, standardOutput, standardError);
+        }
+        finally
+        {
+            // Stop any read that's still blocked on a pipe held open by another process.
+            readCts.Cancel();
+
+            // Process.Dispose doesn't close the redirected streams once they've been accessed, so
+            // dispose each reader once its read finishes. Disposing while a read is still pending
+            // could block on Windows, where closing a synchronous pipe handle waits for the read.
+            DisposeWhenReadCompletes(stdoutTask, stdoutReader);
+            DisposeWhenReadCompletes(stderrTask, stderrReader);
+        }
     }
+
+    private void TryKill(Process process)
+    {
+        try
+        {
+            process.Kill();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            logger.LogDebug(ex, "Could not kill git process.");
+        }
+    }
+
+    private static async Task<string> ReadAllTextAsync(StreamReader reader, CancellationToken cancellationToken)
+    {
+        // Decode the raw bytes as Process.RunAndCaptureTextAsync does. StreamReader.ReadToEndAsync
+        // strips a leading byte order mark, which in `git ls-files -z` output is part of the first path.
+        var encoding = reader.CurrentEncoding;
+        using var buffer = new MemoryStream();
+        await reader.BaseStream.CopyToAsync(buffer, cancellationToken).ConfigureAwait(false);
+        return encoding.GetString(buffer.GetBuffer(), 0, (int)buffer.Length);
+    }
+
+    private static void DisposeWhenReadCompletes(Task readTask, StreamReader reader) =>
+        _ = readTask.ContinueWith(
+            static (task, state) =>
+            {
+                _ = task.Exception;
+                ((StreamReader)state!).Dispose();
+            },
+            reader,
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+
+    // git normally closes its pipes when it exits, so the drain completes immediately. This only
+    // bounds how long we wait when another process is holding them open.
+    private static readonly TimeSpan s_postExitOutputDrainTimeout = TimeSpan.FromSeconds(2);
+
+    private readonly record struct GitProcessOutput(int ExitCode, string? StandardOutput, string StandardError);
 }
