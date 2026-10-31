@@ -435,16 +435,14 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task ConfigureEnvironmentVariables_ResolvesRelativeDashboardDataDirectoryFromAppHostDirectory(bool useEnvironmentAlias)
+    [InlineData("Dashboard:Data:Directory", "ASPIRE_DASHBOARD_DATA_DIRECTORY")]
+    [InlineData("ASPIRE_DASHBOARD_DATA_DIRECTORY", "ASPIRE_DASHBOARD_DATA_DIRECTORY")]
+    [InlineData("aspire_dashboard_data_directory", "aspire_dashboard_data_directory")]
+    public async Task ConfigureEnvironmentVariables_ResolvesRelativeDashboardDataDirectoryFromAppHostDirectory(string dataDirectoryKey, string forwardedEnvironmentVariable)
     {
         // The dashboard process runs with its own install directory as the working directory, so a relative
         // data directory must be resolved against the AppHost before it's forwarded.
         var appHostDirectory = Path.Combine(Path.GetTempPath(), "apphost-project");
-        var dataDirectoryKey = useEnvironmentAlias
-            ? DashboardConfigNames.DashboardDataDirectoryName.EnvVarName
-            : DashboardConfigNames.DashboardDataDirectoryName.ConfigKey;
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
@@ -456,7 +454,7 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
 
         Assert.Equal(
             Path.Combine(appHostDirectory, "dashboard-data"),
-            environmentVariables[DashboardConfigNames.DashboardDataDirectoryName.EnvVarName]);
+            environmentVariables[forwardedEnvironmentVariable]);
     }
 
     [Fact]

@@ -585,14 +585,22 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
     // the AppHost directory. Otherwise data would be written under the dashboard bundle, which may be read-only.
     private void ResolveDashboardDataDirectory(EnvironmentCallbackContext context)
     {
-        var name = DashboardConfigNames.DashboardDataDirectoryName.EnvVarName;
-        if (context.EnvironmentVariables.TryGetValue(name, out var value) &&
-            value is string dataDirectory &&
-            !string.IsNullOrWhiteSpace(dataDirectory) &&
-            !Path.IsPathFullyQualified(dataDirectory) &&
-            configuration["AppHost:Directory"] is { Length: > 0 } appHostDirectory)
+        if (configuration["AppHost:Directory"] is not { Length: > 0 } appHostDirectory)
         {
-            context.EnvironmentVariables[name] = Path.GetFullPath(dataDirectory, appHostDirectory);
+            return;
+        }
+
+        // Automatic forwarding preserves the configured key's spelling, so match it case-insensitively.
+        var envVarName = DashboardConfigNames.DashboardDataDirectoryName.EnvVarName;
+        foreach (var name in context.EnvironmentVariables.Keys.ToList())
+        {
+            if (string.Equals(name, envVarName, StringComparison.OrdinalIgnoreCase) &&
+                context.EnvironmentVariables[name] is string dataDirectory &&
+                !string.IsNullOrWhiteSpace(dataDirectory) &&
+                !Path.IsPathFullyQualified(dataDirectory))
+            {
+                context.EnvironmentVariables[name] = Path.GetFullPath(dataDirectory, appHostDirectory);
+            }
         }
     }
 
