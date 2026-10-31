@@ -683,6 +683,24 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void MarkerHasValueToleratesConcurrentWriter()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sentinelPath = Path.Combine(workspace.Path, "worker-ran.txt");
+
+        // Open the sentinel exactly as File.WriteAllText(Async) does in the running app.
+        using (var writer = new FileStream(sentinelPath, FileMode.Create, FileAccess.Write, FileShare.Read))
+        {
+            writer.Write("initial"u8);
+            writer.Flush();
+
+            Assert.True(MarkerHasValue(sentinelPath, "initial"));
+        }
+
+        Assert.False(MarkerHasValue(Path.Combine(workspace.Path, "missing.txt"), "initial"));
+    }
+
+    [Fact]
     public void DuplicateProjectPathsProduceOneBuildEntryAndOneWait()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
