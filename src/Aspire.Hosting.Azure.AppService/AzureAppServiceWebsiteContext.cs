@@ -365,6 +365,7 @@ internal sealed class AzureAppServiceWebsiteContext(
     public void BuildWebSite(AzureResourceInfrastructure infra)
     {
         _infrastructure = infra;
+        environmentContext.Environment.ValidatePrivateLink();
 
         // Check for deployment slot
         // If specified, update hostnames to endpoint references
@@ -483,6 +484,11 @@ internal sealed class AzureAppServiceWebsiteContext(
                     UserAssignedIdentities = []
                 },
             };
+
+            if (environmentContext.Environment.IsPublicNetworkAccessDisabled)
+            {
+                site.PublicNetworkAccess = "Disabled";
+            }
 
             // Defining the main container for the app service
             var siteContainer = new SiteContainer("mainContainer", addOnlyIfNotExistsDecorator)
@@ -798,6 +804,22 @@ internal sealed class AzureAppServiceWebsiteContext(
         }
 
         AddStickySlotSettings(deploymentSlot is null ? (WebSite)webSite : parentWebSite, stickyConfigNames);
+
+        var websiteResource = (WebSite)webSite;
+        infra.Add(new ProvisioningOutput("resourceId", typeof(string))
+        {
+            Value = websiteResource.Id
+        });
+        infra.Add(new ProvisioningOutput("resourceLocation", typeof(string))
+        {
+            Value = new FunctionCallExpression(
+                new IdentifierExpression("toLower"),
+                new FunctionCallExpression(
+                    new IdentifierExpression("replace"),
+                    websiteResource.Location.ToBicepExpression(),
+                    new StringLiteralExpression(" "),
+                    new StringLiteralExpression("")))
+        });
     }
 
     /// <summary>

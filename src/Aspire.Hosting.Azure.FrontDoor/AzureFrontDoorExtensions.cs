@@ -39,7 +39,7 @@ public static class AzureFrontDoorExtensions
     /// generated infrastructure directly.
     /// </para>
     /// <para>
-    /// To reach apps in an Azure Container Apps environment over Private Link instead of the public Internet, see
+    /// To reach apps in Azure Container Apps or Azure App Service over Private Link instead of the public Internet, see
     /// <see cref="AzureFrontDoorPrivateLinkExtensions.WithAzureFrontDoorPrivateLink"/>.
     /// </para>
     /// <example>
@@ -139,7 +139,7 @@ public static class AzureFrontDoorExtensions
                 infrastructure.Add(origin);
 
                 // Reach origins in an environment connected through Private Link over the private endpoint.
-                privateLink.ConfigureOrigin(computeEnv, originResource.Name, origin);
+                privateLink.ConfigureOrigin(computeEnv, originResource, origin);
 
                 // Route
                 var route = new FrontDoorRoute($"{originBicepId}Route")
@@ -270,16 +270,16 @@ public static class AzureFrontDoorExtensions
     // WithAzureFrontDoorPrivateLink into Private Link origins.
     private sealed class PrivateLinkConfigurator(AzureResourceInfrastructure infrastructure, AzureFrontDoorResource frontDoor)
     {
-        // The Bicep values that identify a connected environment. Every origin in the environment shares them, and Front
-        // Door shares one private endpoint across those origins.
-        private readonly Dictionary<AzureFrontDoorPrivateLinkAnnotation, (ProvisioningParameter EnvironmentId, BicepValue<string> Location)> _targets = [];
+        // Container Apps origins share an environment target; App Service origins each target their own website.
+        private readonly Dictionary<BicepOutputReference, (ProvisioningParameter ResourceId, BicepValue<string> Location)> _targets = [];
+        private readonly HashSet<AzureFrontDoorPrivateLinkAnnotation> _usedConnections = [];
 
         private ProvisioningVariable? _regions;
 
         // Converts the origin into a Private Link origin when it runs in a connected environment.
         public void ConfigureOrigin(
             IComputeEnvironmentResource computeEnvironment,
-            string originName,
+            IResource originResource,
             FrontDoorOrigin origin)
         {
             if (computeEnvironment is not IAzureCdnPrivateLinkTarget environment ||
@@ -295,23 +295,25 @@ public static class AzureFrontDoorExtensions
             {
                 // The environment refuses public traffic, so a Front Door that isn't connected to it can't reach the origin.
                 throw new InvalidOperationException(
-                    $"Origin '{originName}' of Azure Front Door '{frontDoor.Name}' runs in compute environment '{environment.Name}', " +
+                    $"Origin '{originResource.Name}' of Azure Front Door '{frontDoor.Name}' runs in compute environment '{environment.Name}', " +
                     $"which is connected to another Azure Front Door through Private Link and has public network access disabled. " +
                     $"Call {nameof(AzureFrontDoorPrivateLinkExtensions.WithAzureFrontDoorPrivateLink)} on '{environment.Name}' with '{frontDoor.Name}' to connect it.");
             }
 
-            if (!_targets.TryGetValue(connection, out var target))
+            var resourceId = environment.GetPrivateLinkResourceId(originResource);
+            if (!_targets.TryGetValue(resourceId, out var target))
             {
-                target = CreateTarget(environment);
-                _targets.Add(connection, target);
+                target = CreateTarget(resourceId, environment.GetPrivateLinkLocation(originResource));
+                _targets.Add(resourceId, target);
             }
+            _usedConnections.Add(connection);
 
             // The compute environment routes requests by host name, so the origin host header must be the app's own host name,
             // which AddAzureFrontDoor already sets. The certificate name check must stay on for a Private Link origin.
             origin.EnforceCertificateNameCheck = true;
             origin.SharedPrivateLinkResource = new SharedPrivateLinkResourceProperties
             {
-                PrivateLinkId = target.EnvironmentId,
+                PrivateLinkId = target.ResourceId,
                 PrivateLinkLocation = target.Location,
                 GroupId = connection.Environment.PrivateLinkGroupId,
                 RequestMessage = connection.RequestMessage,
@@ -324,7 +326,7 @@ public static class AzureFrontDoorExtensions
         {
             foreach (var connection in frontDoor.Annotations.OfType<AzureFrontDoorPrivateLinkAnnotation>())
             {
-                if (!_targets.ContainsKey(connection))
+                if (!_usedConnections.Contains(connection))
                 {
                     throw new InvalidOperationException(
                         $"Azure Front Door '{frontDoor.Name}' is connected to compute environment '{connection.Environment.Name}' through Private Link, " +
@@ -341,15 +343,17 @@ public static class AzureFrontDoorExtensions
             }
         }
 
-        private (ProvisioningParameter EnvironmentId, BicepValue<string> Location) CreateTarget(IAzureCdnPrivateLinkTarget environment)
+        private (ProvisioningParameter ResourceId, BicepValue<string> Location) CreateTarget(
+            BicepOutputReference resourceId,
+            BicepOutputReference location)
         {
-            var environmentIdentifier = Infrastructure.NormalizeBicepIdentifier(environment.Name);
-            var environmentId = environment.Id.AsProvisioningParameter(infrastructure, $"{environmentIdentifier}_environment_id");
+            var targetIdentifier = Infrastructure.NormalizeBicepIdentifier(resourceId.Resource.Name);
+            var targetId = resourceId.AsProvisioningParameter(infrastructure, $"{targetIdentifier}_environment_id");
 
             // The environment's region is an output of the environment module, so it is only known at deployment. The output
             // is already the programmatic region name, such as 'westus2'. Front Door Private Link isn't available in every
             // region, so the private endpoint goes to the supported region in the same geography when there is one.
-            var environmentLocation = environment.Location.AsProvisioningParameter(infrastructure, $"{environmentIdentifier}_location");
+            var environmentLocation = location.AsProvisioningParameter(infrastructure, $"{targetIdentifier}_location");
 
             if (_regions is null)
             {
@@ -360,7 +364,7 @@ public static class AzureFrontDoorExtensions
                 infrastructure.Add(_regions);
             }
 
-            return (environmentId, FrontDoorPrivateLinkRegions.CreateLookup(_regions.BicepIdentifier, environmentLocation.BicepIdentifier));
+            return (targetId, FrontDoorPrivateLinkRegions.CreateLookup(_regions.BicepIdentifier, environmentLocation.BicepIdentifier));
         }
     }
 }

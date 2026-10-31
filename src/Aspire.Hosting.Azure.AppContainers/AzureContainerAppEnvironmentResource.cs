@@ -28,10 +28,10 @@ public class AzureContainerAppEnvironmentResource :
     string IAzureDelegatedSubnetResource.DelegatedSubnetServiceName => AzureSubnetServiceDelegations.ContainerAppEnvironments;
 
     /// <inheritdoc />
-    BicepOutputReference IAzureCdnPrivateLinkTarget.Id => ContainerAppEnvironmentId;
+    BicepOutputReference IAzureCdnPrivateLinkTarget.GetPrivateLinkResourceId(IResource origin) => ContainerAppEnvironmentId;
 
     /// <inheritdoc />
-    BicepOutputReference IAzureCdnPrivateLinkTarget.Location => ContainerAppLocation;
+    BicepOutputReference IAzureCdnPrivateLinkTarget.GetPrivateLinkLocation(IResource origin) => ContainerAppLocation;
 
     /// <inheritdoc />
     string IAzureCdnPrivateLinkTarget.PrivateLinkGroupId => "managedEnvironments";
