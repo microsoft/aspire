@@ -64,7 +64,7 @@
       </trans-unit>
       <trans-unit id="ComputedTemplateParameterCondition">
         <source>Parameter '{0}' uses a NuGet-computed value in a prompting condition. Computed values are resolved after prompting and cannot control parameter conditions.</source>
-        <target state="new">Parameter '{0}' uses a NuGet-computed value in a prompting condition. Computed values are resolved after prompting and cannot control parameter conditions.</target>
+        <target state="translated">'{0}' 매개 변수는 프롬프트 조건에서 NuGet 계산 값을 사용합니다. 계산된 값은 확인 후 확인되며 매개 변수 조건을 제어할 수 없습니다.</target>
         <note>{0} is the template parameter name.</note>
       </trans-unit>
       <trans-unit id="CreateNugetConfigConfirmation">
@@ -99,12 +99,12 @@
       </trans-unit>
       <trans-unit id="InvalidTemplateHostConfiguration">
         <source>Could not load template host configuration '{0}': {1}</source>
-        <target state="new">Could not load template host configuration '{0}': {1}</target>
+        <target state="translated">템플릿 호스트 구성 '{0}' 로드할 수 없습니다. {1}</target>
         <note>{0} is the host configuration path; {1} is the validation error.</note>
       </trans-unit>
       <trans-unit id="InvalidTemplateHostConfigurationFormat">
         <source>Expected a JSON object. 'createNuGetConfig' must be a Boolean, and 'symbolInfo' must be an object. Symbol entries must be objects, 'isHidden' must be true or false, and 'displayName' must be a string.</source>
-        <target state="new">Expected a JSON object. 'createNuGetConfig' must be a Boolean, and 'symbolInfo' must be an object. Symbol entries must be objects, 'isHidden' must be true or false, and 'displayName' must be a string.</target>
+        <target state="translated">JSON 개체가 필요합니다. 'createNuGetConfig'는 부울이어야 하고 'symbolInfo'는 개체여야 합니다. 기호 항목은 개체여야 하고, 'isHidden'은 true 또는 false여야 하고, 'displayName'은 문자열이어야 합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidTemplatePromptDefault">
@@ -114,7 +114,7 @@
       </trans-unit>
       <trans-unit id="InvalidTemplateValueSource">
         <source>Computed value '{0}' must target a non-reserved string parameter and specify kind 'nugetPackageVersion', a valid 'packageId' and 'versionRange', an optional Boolean 'allowPrerelease', and an optional output-relative 'workingDirectory'.</source>
-        <target state="new">Computed value '{0}' must target a non-reserved string parameter and specify kind 'nugetPackageVersion', a valid 'packageId' and 'versionRange', an optional Boolean 'allowPrerelease', and an optional output-relative 'workingDirectory'.</target>
+        <target state="translated">계산 값 '{0}'은(는) 예약되지 않은 문자열 매개 변수를 대상으로 하고 'nugetPackageVersion' 종류, 유효한 'packageId' 및 'versionRange', 선택적 부울 'allowPrerelease' 및 선택적 출력 상대 'workingDirectory'를 지정해야 합니다.</target>
         <note>{0} is the template parameter name.</note>
       </trans-unit>
       <trans-unit id="No">
@@ -194,7 +194,7 @@
       </trans-unit>
       <trans-unit id="Skip">
         <source>Skip</source>
-        <target state="new">Skip</target>
+        <target state="translated">건너뛰기</target>
         <note />
       </trans-unit>
       <trans-unit id="SourceOverrideNotPersistedWarning">
@@ -209,27 +209,27 @@
       </trans-unit>
       <trans-unit id="TemplateNuGetConfigurationChanged">
         <source>A computed value changed the generated NuGet configuration. NuGet-computed values must not control configuration contents, locations, or whether configuration files are generated.</source>
-        <target state="new">A computed value changed the generated NuGet configuration. NuGet-computed values must not control configuration contents, locations, or whether configuration files are generated.</target>
+        <target state="translated">계산된 값이 생성된 NuGet 구성을 변경했습니다. NuGet 계산 값은 구성 콘텐츠, 위치 또는 구성 파일 생성 여부를 제어해서는 안 됩니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplatePackageVersionLookupFailed">
         <source>Could not query the effective NuGet sources for package '{0}' to compute parameter '{1}'. Check the NuGet configuration, connectivity, and credentials.</source>
-        <target state="new">Could not query the effective NuGet sources for package '{0}' to compute parameter '{1}'. Check the NuGet configuration, connectivity, and credentials.</target>
+        <target state="translated">'{0}' 패키지에 대한 유효한 NuGet 원본을 쿼리하여 매개 변수 '{1}'을(를) 컴퓨팅할 수 없습니다. NuGet 구성, 연결 상태 및 자격 증명을 확인하세요.</target>
         <note>{0} is the package ID; {1} is the template parameter name.</note>
       </trans-unit>
       <trans-unit id="TemplatePackageVersionNotFound">
         <source>No version of package '{0}' matches range '{1}' with allowPrerelease={2} in the effective NuGet sources for parameter '{3}'.</source>
-        <target state="new">No version of package '{0}' matches range '{1}' with allowPrerelease={2} in the effective NuGet sources for parameter '{3}'.</target>
+        <target state="translated">패키지 '{0}' 버전이 매개 변수 '{3}'에 대한 유효한 NuGet 소스에서 allowPrerelease={2} '{1}' 범위와 일치하지 않습니다.</target>
         <note>{0} is the package ID; {1} is the version range; {2} is the prerelease Boolean; {3} is the template parameter name.</note>
       </trans-unit>
       <trans-unit id="TemplateStagingLinkNotSupported">
         <source>Templates with NuGet-computed values cannot generate symbolic links.</source>
-        <target state="new">Templates with NuGet-computed values cannot generate symbolic links.</target>
+        <target state="translated">NuGet 계산 값이 있는 템플릿은 기호화된 링크를 생성할 수 없습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateValueSourceWorkingDirectoryInvalid">
         <source>The computed value working directory '{0}' must name an existing directory within the generated output.</source>
-        <target state="new">The computed value working directory '{0}' must name an existing directory within the generated output.</target>
+        <target state="translated">계산된 값 작업 디렉터리 '{0}'는 생성된 출력 내의 기존 디렉터리 이름을 지정해야 합니다.</target>
         <note>{0} is the relative working directory.</note>
       </trans-unit>
       <trans-unit id="TemplateVersionNotFound">

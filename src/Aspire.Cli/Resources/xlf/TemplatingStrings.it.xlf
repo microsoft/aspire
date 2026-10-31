@@ -64,7 +64,7 @@
       </trans-unit>
       <trans-unit id="ComputedTemplateParameterCondition">
         <source>Parameter '{0}' uses a NuGet-computed value in a prompting condition. Computed values are resolved after prompting and cannot control parameter conditions.</source>
-        <target state="new">Parameter '{0}' uses a NuGet-computed value in a prompting condition. Computed values are resolved after prompting and cannot control parameter conditions.</target>
+        <target state="translated">Il parametro '{0}' usa un valore calcolato da NuGet in una condizione di richiesta. I valori calcolati vengono risolti dopo la richiesta di conferma e non possono controllare le condizioni dei parametri.</target>
         <note>{0} is the template parameter name.</note>
       </trans-unit>
       <trans-unit id="CreateNugetConfigConfirmation">
@@ -99,12 +99,12 @@
       </trans-unit>
       <trans-unit id="InvalidTemplateHostConfiguration">
         <source>Could not load template host configuration '{0}': {1}</source>
-        <target state="new">Could not load template host configuration '{0}': {1}</target>
+        <target state="translated">Non è stato possibile caricare la configurazione host del modello '{0}': {1}</target>
         <note>{0} is the host configuration path; {1} is the validation error.</note>
       </trans-unit>
       <trans-unit id="InvalidTemplateHostConfigurationFormat">
         <source>Expected a JSON object. 'createNuGetConfig' must be a Boolean, and 'symbolInfo' must be an object. Symbol entries must be objects, 'isHidden' must be true or false, and 'displayName' must be a string.</source>
-        <target state="new">Expected a JSON object. 'createNuGetConfig' must be a Boolean, and 'symbolInfo' must be an object. Symbol entries must be objects, 'isHidden' must be true or false, and 'displayName' must be a string.</target>
+        <target state="translated">È previsto un oggetto JSON. 'createNuGetConfig' deve essere un valore booleano e 'symbolInfo' deve essere un oggetto. Le voci di simboli devono essere oggetti, 'isHidden' deve essere true o false e 'displayName' deve essere una stringa.</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidTemplatePromptDefault">
@@ -114,7 +114,7 @@
       </trans-unit>
       <trans-unit id="InvalidTemplateValueSource">
         <source>Computed value '{0}' must target a non-reserved string parameter and specify kind 'nugetPackageVersion', a valid 'packageId' and 'versionRange', an optional Boolean 'allowPrerelease', and an optional output-relative 'workingDirectory'.</source>
-        <target state="new">Computed value '{0}' must target a non-reserved string parameter and specify kind 'nugetPackageVersion', a valid 'packageId' and 'versionRange', an optional Boolean 'allowPrerelease', and an optional output-relative 'workingDirectory'.</target>
+        <target state="translated">Il valore calcolato '{0}' deve fare riferimento a un parametro stringa non riservato e specificare il tipo 'nugetPackageVersion', un 'packageId' e un 'versionRange' validi, un valore booleano facoltativo 'allowPrerelease' e una 'workingDirectory' facoltativa relativa all'output.</target>
         <note>{0} is the template parameter name.</note>
       </trans-unit>
       <trans-unit id="No">
@@ -194,7 +194,7 @@
       </trans-unit>
       <trans-unit id="Skip">
         <source>Skip</source>
-        <target state="new">Skip</target>
+        <target state="translated">Ignora</target>
         <note />
       </trans-unit>
       <trans-unit id="SourceOverrideNotPersistedWarning">
@@ -209,27 +209,27 @@
       </trans-unit>
       <trans-unit id="TemplateNuGetConfigurationChanged">
         <source>A computed value changed the generated NuGet configuration. NuGet-computed values must not control configuration contents, locations, or whether configuration files are generated.</source>
-        <target state="new">A computed value changed the generated NuGet configuration. NuGet-computed values must not control configuration contents, locations, or whether configuration files are generated.</target>
+        <target state="translated">Un valore calcolato ha modificato la configurazione NuGet generata. I valori calcolati da NuGet non devono controllare il contenuto della configurazione, i percorsi o la generazione dei file di configurazione.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplatePackageVersionLookupFailed">
         <source>Could not query the effective NuGet sources for package '{0}' to compute parameter '{1}'. Check the NuGet configuration, connectivity, and credentials.</source>
-        <target state="new">Could not query the effective NuGet sources for package '{0}' to compute parameter '{1}'. Check the NuGet configuration, connectivity, and credentials.</target>
+        <target state="translated">Non è stato possibile eseguire una query sulle origini NuGet valide per '{0}' pacchetto per calcolare il parametro '{1}'. Controllare la configurazione, la connettività e le credenziali di NuGet.</target>
         <note>{0} is the package ID; {1} is the template parameter name.</note>
       </trans-unit>
       <trans-unit id="TemplatePackageVersionNotFound">
         <source>No version of package '{0}' matches range '{1}' with allowPrerelease={2} in the effective NuGet sources for parameter '{3}'.</source>
-        <target state="new">No version of package '{0}' matches range '{1}' with allowPrerelease={2} in the effective NuGet sources for parameter '{3}'.</target>
+        <target state="translated">Nessuna versione del pacchetto '{0}' corrisponde all'intervallo '{1}' con allowPrerelease={2} nelle origini NuGet effettive per il parametro '{3}'.</target>
         <note>{0} is the package ID; {1} is the version range; {2} is the prerelease Boolean; {3} is the template parameter name.</note>
       </trans-unit>
       <trans-unit id="TemplateStagingLinkNotSupported">
         <source>Templates with NuGet-computed values cannot generate symbolic links.</source>
-        <target state="new">Templates with NuGet-computed values cannot generate symbolic links.</target>
+        <target state="translated">I modelli con valori calcolati da NuGet non possono creare collegamenti simbolici.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateValueSourceWorkingDirectoryInvalid">
         <source>The computed value working directory '{0}' must name an existing directory within the generated output.</source>
-        <target state="new">The computed value working directory '{0}' must name an existing directory within the generated output.</target>
+        <target state="translated">Directory di lavoro con valore calcolato '{0}' deve assegnare un nome a una directory esistente nell'output generato.</target>
         <note>{0} is the relative working directory.</note>
       </trans-unit>
       <trans-unit id="TemplateVersionNotFound">

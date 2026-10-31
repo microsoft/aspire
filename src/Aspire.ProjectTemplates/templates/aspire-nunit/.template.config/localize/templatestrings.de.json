@@ -1,4 +1,4 @@
-{
+﻿{
   "author": "Microsoft",
   "name": "Aspire-Testprojekt (NUnit)",
   "description": "Ein Projekt, das NUnit Integrationstests eines Aspire AppHost-Projekts enthält.",

@@ -1,4 +1,4 @@
-{
+﻿{
   "author": "Microsoft",
   "name": "Aplikacja startowa Aspire (ASP.NET Core/React, C# AppHost)",
   "description": "Szablon projektu do tworzenia aplikacji Aspire z frontonem React i minimalną usługą zaplecza interfejsu API w języku C#, z opcjonalnym buforowaniem Redis.",

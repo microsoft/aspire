@@ -1,4 +1,4 @@
-{
+﻿{
   "author": "Microsoft",
   "name": "Aspire Başlangıç Uygulaması (ASP.NET Core/Blazor)",
   "description": "Blazor web ön yüzü ve web API'si arka uç hizmeti ile isteğe bağlı Redis önbellek hizmetine sahip bir Aspire uygulaması oluşturmak için bir proje şablonu.",
