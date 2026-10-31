@@ -873,10 +873,11 @@ internal sealed class ResourceContainerImageManager(
         if (runtimeIdentifiers.Contains(';'))
         {
             // ArgumentList preserves "linux-x64;linux-arm64" as one argument, but MSBuild still
-            // splits property switches on ';'. Escape the value for that second parsing layer.
-            // https://github.com/dotnet/msbuild/issues/471
-            arguments.Add(MsBuildResponseFileFactory.CreatePropertyArgument("RuntimeIdentifiers", runtimeIdentifiers));
-            arguments.Add(MsBuildResponseFileFactory.CreatePropertyArgument("ContainerRuntimeIdentifiers", runtimeIdentifiers));
+            // splits property switches on ';' (https://github.com/dotnet/msbuild/issues/471).
+            // Percent-escaping the separator would make the SDK see one RID, so quote the list instead.
+            var runtimeIdentifierList = runtimeIdentifiers.Split(';');
+            arguments.Add(MsBuildResponseFileFactory.CreateListPropertyArgument("RuntimeIdentifiers", runtimeIdentifierList));
+            arguments.Add(MsBuildResponseFileFactory.CreateListPropertyArgument("ContainerRuntimeIdentifiers", runtimeIdentifierList));
         }
         else
         {
