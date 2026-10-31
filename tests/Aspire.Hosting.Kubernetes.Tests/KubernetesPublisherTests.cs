@@ -286,7 +286,7 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task PublishAsync_AdditionalResourceWithSameNameAsGeneratedResourceDoesNotOverwriteTemplate()
+    public void PublishAsync_AdditionalResourceWithSameNameAsGeneratedResourceDoesNotOverwriteTemplate()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
