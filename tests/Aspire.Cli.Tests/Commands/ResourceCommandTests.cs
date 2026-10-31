@@ -1695,8 +1695,10 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
         AssertJsonObject(backchannel.ExecuteResourceCommandArguments, ("size", ""), ("color", "teal"));
     }
 
-    [Fact]
-    public async Task ResourceCommand_PromptsForLaterDeclaredDefaultedDependencyBeforeDynamicInputWhenInteractive()
+    [Theory]
+    [InlineData("category")]
+    [InlineData("CATEGORY")]
+    public async Task ResourceCommand_PromptsForLaterDeclaredDefaultedDependencyBeforeDynamicInputWhenInteractive(string dependencyName)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interactionService = new TestInteractionService();
@@ -1727,7 +1729,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
                             inputType: "Choice",
                             required: true,
                             options: ItemOptions("fruit"),
-                            dynamicLoading: new ResourceSnapshotCommandArgumentDynamicLoading { DependsOnInputs = ["category"] }),
+                            dynamicLoading: new ResourceSnapshotCommandArgumentDynamicLoading { DependsOnInputs = [dependencyName] }),
                         CreateArgument(
                             "category",
                             inputType: "Choice",

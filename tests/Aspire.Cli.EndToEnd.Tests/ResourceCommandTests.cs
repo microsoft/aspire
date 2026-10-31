@@ -67,7 +67,9 @@ public sealed class ResourceCommandTests(ITestOutputHelper output)
         await auto.WaitUntilTextAsync("ValueMissing", timeout: TimeSpan.FromSeconds(10));
         await auto.WaitForSuccessPromptAsync(counter);
 
-        await auto.TypeAsync("aspire resource greeting set-parameter --value 'Hello world'");
+        // Interactive sessions prompt for omitted command inputs (such as SaveToUserSecrets), so keep this
+        // scenario flag-only to exercise the provided value without answering prompts.
+        await auto.TypeAsync("aspire resource greeting set-parameter --value 'Hello world' --non-interactive");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Resource 'greeting' set successfully.", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
@@ -86,7 +88,7 @@ public sealed class ResourceCommandTests(ITestOutputHelper output)
         await auto.WaitUntilTextAsync("Hello world", timeout: TimeSpan.FromSeconds(10));
         await auto.WaitForSuccessPromptAsync(counter);
 
-        await auto.TypeAsync("aspire resource greeting delete-parameter");
+        await auto.TypeAsync("aspire resource greeting delete-parameter --non-interactive");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Resource 'greeting' deleted successfully.", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
