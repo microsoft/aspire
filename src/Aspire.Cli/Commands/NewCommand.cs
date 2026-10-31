@@ -112,7 +112,6 @@ internal sealed class NewCommand : BaseCommand
         Options.Add(_agentInitCommand.AgentsOption);
         Options.Add(AgentInitCommand.s_scopeOption);
         Options.Add(AgentInitCommand.s_skillsOption);
-        Options.Add(AgentInitCommand.s_aspireSourceOption);
 
         // Customize description based on whether staging channel is enabled
         var isStagingEnabled = KnownFeatures.IsStagingChannelEnabled(services.Features, configuration)
@@ -814,7 +813,6 @@ internal sealed class NewCommand : BaseCommand
             agentInitBinding,
             PromptBinding.Create(parseResult, _agentInitCommand.AgentsOption),
             PromptBinding.Create(parseResult, AgentInitCommand.s_skillsOption, CommonAgentApplicators.AspireSkillName),
-            PromptBinding.Create(parseResult, AgentInitCommand.s_aspireSourceOption, AgentInitCommand.DefaultAspireSource),
             PromptBinding.Create(parseResult, AgentInitCommand.s_scopeOption, AgentConfigurationScope.Project),
             cancellationToken);
 

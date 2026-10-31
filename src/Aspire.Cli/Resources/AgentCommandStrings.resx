@@ -174,20 +174,11 @@
   <data name="InitCommand_TelemetryHookWriteFailed" xml:space="preserve">
     <value>Skipped the telemetry hook for {0} because its configuration could not be written.</value>
   </data>
-  <data name="SkillDescription_Aspire" xml:space="preserve">
-    <value>Aspire CLI commands and workflows for distributed apps</value>
-  </data>
-  <data name="SkillDescription_AspireDeployment" xml:space="preserve">
-    <value>Aspire deployment target selection, preflight, publish, and deploy workflows</value>
-  </data>
   <data name="SkillDescription_PlaywrightCli" xml:space="preserve">
     <value>Browser automation and functional testing</value>
   </data>
   <data name="SkillDescription_DotnetInspect" xml:space="preserve">
     <value>Query .NET API surfaces across NuGet packages and platform libraries</value>
-  </data>
-  <data name="SkillDescription_Aspireify" xml:space="preserve">
-    <value>One-time setup: wire up AppHost with discovered projects</value>
   </data>
   <data name="Environment_Copilot" xml:space="preserve">
     <value>GitHub Copilot</value>
@@ -197,36 +188,6 @@
   </data>
   <data name="Environment_OpenCode" xml:space="preserve">
     <value>OpenCode</value>
-  </data>
-  <data name="AspireSkillsInstaller_InstallingStatus" xml:space="preserve">
-    <value>Installing Aspire skills...</value>
-  </data>
-  <data name="AspireSkillsInstaller_GitHubUnavailable" xml:space="preserve">
-    <value>Aspire skills could not be downloaded from the verified GitHub release asset, and no valid cached or embedded bundle is available.</value>
-  </data>
-  <data name="AspireSkillsInstaller_InvalidBundle" xml:space="preserve">
-    <value>The Aspire skills bundle is invalid: {0}</value>
-  </data>
-  <data name="AspireSkillsInstaller_InvalidMetadata" xml:space="preserve">
-    <value>Embedded Aspire skills bundle metadata is invalid: {0}</value>
-  </data>
-  <data name="AspireSkillsInstaller_MissingMetadataVersion" xml:space="preserve">
-    <value>Embedded Aspire skills metadata must specify a version.</value>
-  </data>
-  <data name="AspireSkillsInstaller_MetadataRepositoryMismatch" xml:space="preserve">
-    <value>Embedded Aspire skills metadata repository '{0}' does not match expected repository '{1}'.</value>
-  </data>
-  <data name="AspireSkillsInstaller_MissingMetadataTag" xml:space="preserve">
-    <value>Embedded Aspire skills metadata must specify a GitHub release tag.</value>
-  </data>
-  <data name="AspireSkillsInstaller_MissingMetadataAssetName" xml:space="preserve">
-    <value>Embedded Aspire skills metadata must specify a release asset name.</value>
-  </data>
-  <data name="AspireSkillsInstaller_MissingMetadataSha512" xml:space="preserve">
-    <value>Embedded Aspire skills metadata must specify the release asset SHA-512 hash.</value>
-  </data>
-  <data name="AspireSkillsInstaller_ArchiveHashVerificationFailed" xml:space="preserve">
-    <value>Embedded Aspire skills archive failed SHA-512 verification. Expected '{0}', got '{1}'.</value>
   </data>
   <data name="PlaywrightCliInstaller_InstallingStatus" xml:space="preserve">
     <value>Installing Playwright CLI...</value>
@@ -307,15 +268,6 @@
     <value>Cannot register Aspire because '{0}' conflicts with existing settings or an override. Existing settings were left unchanged.</value>
     <comment>{0} identifies the conflicting JSON setting or environment override.</comment>
   </data>
-  <data name="InitCommand_AspireSourceOptionDescription" xml:space="preserve">
-    <value>Source for Aspire agent assets from microsoft/aspire-skills: remote (plugin) or embedded (bundled skill files)</value>
-  </data>
-  <data name="InitCommand_EmbeddedSkillsChoice" xml:space="preserve">
-    <value>Embedded (bundled skill files)</value>
-  </data>
-  <data name="InitCommand_ConfigureAspireSourcePrompt" xml:space="preserve">
-    <value>Which source do you want to use for Aspire?</value>
-  </data>
   <data name="InitCommand_InvalidSkills" xml:space="preserve">
     <value>Invalid skill/tool selection '{0}'. Use {1}, '{2}', or '{3}'.</value>
   </data>
@@ -327,25 +279,16 @@
   {0}</value>
     <comment>{0} lists each agent's configuration path and failure details, one target per line.</comment>
   </data>
-  <data name="InitCommand_InvalidAspireSource" xml:space="preserve">
-    <value>Invalid Aspire source '{0}'. Choose either 'remote' or 'embedded'.</value>
-  </data>
   <data name="InitCommand_LocalSkillsConflict" xml:space="preserve">
     <value>Local Aspire skill files may override plugin skills:
 {0}</value>
     <comment>{0} lists the local skill entry-point paths, one per line.</comment>
   </data>
-  <data name="InitCommand_RemoteSkillsChoice" xml:space="preserve">
-    <value>Remote (plugin)</value>
-  </data>
-  <data name="InitCommand_RemoteSkillsConflict" xml:space="preserve">
-    <value>The Aspire plugin is already enabled. Embedded skills were not installed and no configuration was changed. Keep the plugin, or disable its Aspire registration before choosing embedded skills.</value>
-  </data>
   <data name="InitCommand_PluginRiskWarning" xml:space="preserve">
     <value>Use the Aspire plugin at your own risk.
-Review the source before enabling it.
+Review the source before enabling it at {0}. Plugin-provided tools and scripts can execute code with your permissions.
 
-Prefer skill files only? Choose Embedded, or install skills directly from {0}.</value>
+Prefer skill files only? Install skills directly from {0}.</value>
     <comment>{0} is the official Aspire skills repository URL.</comment>
   </data>
   <data name="InitCommand_ConfiguredTargets" xml:space="preserve">

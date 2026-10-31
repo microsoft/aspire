@@ -116,8 +116,6 @@ ignore:
   - eng/scripts/validate-cli-symbols.ps1                # AzDO native-AOT symbol publish validation; no GH-CI consumer
   - eng/scripts/validate-mac-platform-sso.sh            # manual managed-Mac validation; no GH-CI consumer
   - eng/generate-catalog.ps1                            # Windows/AzDO template catalog generation; no GH-CI consumer
-  - eng/scripts/update-aspire-skills-bundle.ps1         # schedule/dispatch-only bundle updater
-  - eng/scripts/verify-aspire-skills-bundle.ps1         # exercised by its dedicated PR workflow
   # Native AOT/socket/generated-SDK/workload smokes run in the independently path-triggered
   # native-hosting-validation.yml lane, not a tests.yml run_* target.
   - .github/workflows/native-hosting-validation.yml
