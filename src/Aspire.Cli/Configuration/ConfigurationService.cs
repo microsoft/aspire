@@ -52,18 +52,21 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
         }
 
         ConfigurationHelper.NormalizeSettings(settings);
-        key = TemplateSourceConfiguration.ValidateEditKey(settings, key);
+        var keyParts = ParseKey(key);
+        var resolvedKey = TemplateSourceConfiguration.ValidateEditKey(settings, string.Join('.', keyParts.Select(part => part.Name)));
+        ResolveKeyParts(keyParts, resolvedKey);
 
         // Validate the candidate under the config lock, before writing. A rejected edit must
         // preserve the original file, including comments and unrelated settings.
-        SetNestedValue(settings, key, value);
-        TemplateSourceConfiguration.ValidateEditedSource(settings, key);
+        SetNestedValue(settings, keyParts, key, value);
+        TemplateSourceConfiguration.ValidateEditedSource(settings, resolvedKey);
 
         await ConfigurationHelper.WriteSettingsFileAtomicallyAsync(settingsFilePath, settings, cancellationToken, preserveOwnershipAndAcl: true);
     }
 
     public async Task<bool> DeleteConfigurationAsync(string key, bool isGlobal = false, CancellationToken cancellationToken = default)
     {
+        var keyParts = ParseKey(key);
         var settingsFilePath = GetSettingsFilePath(isGlobal);
         using var configLock = await ConfigurationHelper.TryAcquireWorkspaceConfigLockAsync(
             executionContext, isGlobal ? ConfigurationHelper.GetCanonicalGlobalSettingsFile(globalSettingsFile) : new FileInfo(settingsFilePath), logger, cancellationToken)
@@ -78,38 +81,31 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
             return false;
         }
 
-        try
-        {
-            var existingContent = await File.ReadAllTextAsync(settingsFilePath, cancellationToken);
+        var existingContent = await File.ReadAllTextAsync(settingsFilePath, cancellationToken);
 
-            // Handle empty files or whitespace-only content
-            if (string.IsNullOrWhiteSpace(existingContent))
-            {
-                return false;
-            }
-
-            var settings = JsonNode.Parse(existingContent, nodeOptions: null, ConfigurationHelper.ParseOptions)?.AsObject();
-
-            if (settings is null)
-            {
-                return false;
-            }
-
-            ConfigurationHelper.NormalizeSettings(settings);
-            // Delete using dot notation support and return whether deletion occurred
-            var deleted = DeleteNestedValue(settings, TemplateSourceConfiguration.ResolveEditKey(settings, key));
-
-            if (deleted)
-            {
-                await ConfigurationHelper.WriteSettingsFileAtomicallyAsync(settingsFilePath, settings, cancellationToken, preserveOwnershipAndAcl: true);
-            }
-
-            return deleted;
-        }
-        catch
+        // Handle empty files or whitespace-only content
+        if (string.IsNullOrWhiteSpace(existingContent))
         {
             return false;
         }
+
+        var settings = JsonNode.Parse(existingContent, nodeOptions: null, ConfigurationHelper.ParseOptions)?.AsObject();
+        if (settings is null)
+        {
+            return false;
+        }
+
+        ConfigurationHelper.NormalizeSettings(settings);
+        ResolveKeyParts(keyParts, TemplateSourceConfiguration.ResolveEditKey(settings, string.Join('.', keyParts.Select(part => part.Name))));
+        var removedFlat = settings.Remove(string.Join(':', keyParts.Select(part => part.Name)));
+        var deleted = DeleteNestedValue(settings, keyParts, key, 0) || removedFlat;
+
+        if (deleted)
+        {
+            await ConfigurationHelper.WriteSettingsFileAtomicallyAsync(settingsFilePath, settings, cancellationToken, preserveOwnershipAndAcl: true);
+        }
+
+        return deleted;
     }
 
     public string GetSettingsFilePath(bool isGlobal)
@@ -230,42 +226,45 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
     }
 
     /// <summary>
-    /// Sets a nested value in a JsonObject using dot notation.
-    /// Creates intermediate objects as needed and replaces primitives with objects when necessary.
+    /// Sets a nested value using dot notation and bracketed array indices.
+    /// Creates intermediate containers as needed and preserves existing arrays.
     /// Also removes any conflicting flattened keys (colon-separated format) to prevent duplicate key errors.
     /// </summary>
-    private static void SetNestedValue(JsonObject settings, string key, string value)
+    private static void SetNestedValue(JsonObject settings, KeyPart[] keyParts, string key, string value)
     {
-        // Normalize colon-separated keys to dot notation since both represent
-        // the same configuration hierarchy (e.g., "features:polyglotSupportEnabled"
-        // is equivalent to "features.polyglotSupportEnabled")
-        key = key.Replace(':', '.');
-
-        var keyParts = key.Split('.');
-
         // Remove any conflicting flattened keys (e.g., "features:showAllTemplates" when setting "features.showAllTemplates")
         // This prevents duplicate key errors when loading the configuration
-        RemoveConflictingFlattenedKeys(settings, keyParts);
+        RemoveConflictingFlattenedKeys(settings, keyParts.Select(part => part.Name).ToArray());
 
-        var currentObject = settings;
+        JsonNode current = settings;
 
-        // Navigate to the parent object, creating objects as needed
         for (int i = 0; i < keyParts.Length - 1; i++)
         {
             var part = keyParts[i];
+            var child = GetChildValue(current, part, key, allowAppend: true);
 
-            // If the property doesn't exist or isn't an object, replace it with a new object
-            if (!currentObject.ContainsKey(part) || currentObject[part] is not JsonObject)
+            if (keyParts[i + 1].IsArrayIndex)
             {
-                currentObject[part] = new JsonObject();
+                if (child is null)
+                {
+                    child = new JsonArray();
+                    SetChildValue(current, part, key, child);
+                }
+                else if (child is not JsonArray)
+                {
+                    throw new InvalidOperationException(string.Format(CultureInfo.CurrentCulture, ConfigCommandStrings.ConfigurationArrayRequired, key));
+                }
+            }
+            else if (child is not JsonObject and not JsonArray)
+            {
+                child = new JsonObject();
+                SetChildValue(current, part, key, child);
             }
 
-            currentObject = currentObject[part]!.AsObject();
+            current = child;
         }
 
-        // Set the final value
-        var finalKey = keyParts[keyParts.Length - 1];
-        currentObject[finalKey] = value;
+        SetChildValue(current, keyParts[^1], key, JsonValue.Create(value));
     }
 
     /// <summary>
@@ -282,7 +281,9 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
         // Also check for partial flattened keys at each level
         // For example, if we have "a.b.c", we should also check for "a:b" in the root
         // that might contain a "c" value
-        for (int i = 1; i < keyParts.Length; i++)
+        // A single property name is not a flattened key. Removing it here would
+        // discard existing arrays or scalars before array traversal can validate them.
+        for (int i = 2; i < keyParts.Length; i++)
         {
             var partialKey = string.Join(":", keyParts.Take(i));
             if (settings.ContainsKey(partialKey) && settings[partialKey] is not JsonObject)
@@ -294,63 +295,43 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
     }
 
     /// <summary>
-    /// Deletes a nested value from a JsonObject using dot notation.
-    /// Cleans up empty parent objects after deletion.
+    /// Deletes a nested value, compacting arrays and cleaning up empty parent objects.
     /// </summary>
-    private static bool DeleteNestedValue(JsonObject settings, string key)
+    private static bool DeleteNestedValue(JsonNode current, KeyPart[] keyParts, string key, int depth)
     {
-        // Normalize colon-separated keys to dot notation
-        key = key.Replace(':', '.');
-
-        var keyParts = key.Split('.');
-
-        // Remove any flat colon-separated key at root level (legacy format)
-        var flattenedKey = string.Join(":", keyParts);
-        var removedFlat = settings.Remove(flattenedKey);
-
-        var currentObject = settings;
-        var objectPath = new List<(JsonObject obj, string key)>();
-
-        // Navigate to the target value, keeping track of the path
-        for (int i = 0; i < keyParts.Length - 1; i++)
+        var part = keyParts[depth];
+        if (current is not JsonObject and not JsonArray)
         {
-            var part = keyParts[i];
-            objectPath.Add((currentObject, part));
-
-            if (!currentObject.ContainsKey(part) || currentObject[part] is not JsonObject)
-            {
-                return removedFlat; // Path doesn't exist, but may have removed flat key
-            }
-
-            currentObject = currentObject[part]!.AsObject();
+            return false;
         }
 
-        var finalKey = keyParts[keyParts.Length - 1];
-
-        // Check if the final key exists
-        if (!currentObject.ContainsKey(finalKey))
+        var child = GetChildValue(current, part, key, allowAppend: false);
+        if (depth == keyParts.Length - 1)
         {
-            return removedFlat;
+            if (current is JsonArray array)
+            {
+                var index = GetArrayIndex(part, key);
+                if (index >= array.Count)
+                {
+                    return false;
+                }
+                array.RemoveAt(index);
+                return true;
+            }
+
+            return current.AsObject().Remove(part.Name);
         }
 
-        // Remove the final key
-        currentObject.Remove(finalKey);
-
-        // Clean up empty parent objects, working backwards
-        for (int i = objectPath.Count - 1; i >= 0; i--)
+        if (child is null || !DeleteNestedValue(child, keyParts, key, depth + 1))
         {
-            var (parentObject, parentKey) = objectPath[i];
+            return false;
+        }
 
-            // If the current object is empty, remove it from its parent
-            if (currentObject.Count == 0)
-            {
-                parentObject.Remove(parentKey);
-                currentObject = parentObject;
-            }
-            else
-            {
-                break; // Stop cleanup if we encounter a non-empty object
-            }
+        // Keep empty arrays and array elements: removing them would change the setting's
+        // type or shift an unrelated element when deleting a property inside an array.
+        if (child is JsonObject { Count: 0 } && current is JsonObject parent)
+        {
+            parent.Remove(part.Name);
         }
 
         return true;
@@ -367,21 +348,32 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
             var normalizedKey = kvp.Key.Replace(':', '.');
             var key = string.IsNullOrEmpty(prefix) ? normalizedKey : $"{prefix}.{normalizedKey}";
 
-            if (kvp.Value is JsonObject nestedObj)
+            FlattenJsonValue(kvp.Value, result, key);
+        }
+    }
+
+    private static void FlattenJsonValue(JsonNode? value, Dictionary<string, string> result, string key)
+    {
+        if (value is JsonObject { Count: > 0 } obj)
+        {
+            FlattenJsonObject(obj, result, key);
+        }
+        else if (value is JsonArray { Count: > 0 } array)
+        {
+            for (var i = 0; i < array.Count; i++)
             {
-                FlattenJsonObject(nestedObj, result, key);
+                FlattenJsonValue(array[i], result, $"{key}[{i.ToString(CultureInfo.InvariantCulture)}]");
             }
-            else if (kvp.Value is not null)
-            {
-                result[key] = kvp.Value.ToString();
-            }
+        }
+        else if (value is not null)
+        {
+            result[key] = value.ToString();
         }
     }
 
     public Task<string?> GetConfigurationAsync(string key, CancellationToken cancellationToken = default)
     {
-        // Convert dot notation to colon notation for IConfiguration access
-        var configKey = key.Replace('.', ':');
+        var configKey = string.Join(':', ParseKey(key).Select(part => part.Name));
         return Task.FromResult(configuration[configKey]);
     }
 
@@ -389,7 +381,7 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
     {
         ArgumentNullException.ThrowIfNull(startDirectory);
 
-        var configKey = key.Replace('.', ':');
+        var configKey = string.Join(':', ParseKey(key).Select(part => part.Name));
 
         // 1. Project-relative local settings: walk up from startDirectory to find the nearest
         //    config file. Most command lookups stop at that file, even when it omits the key,
@@ -517,4 +509,109 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
             .AddJsonStream(new MemoryStream(bytes))
             .Build();
     }
+
+    private static KeyPart[] ParseKey(string key)
+    {
+        var parts = new List<KeyPart>();
+        // Paths such as "sources.team.plugins[0]" and "matrix[0][1].name" use
+        // brackets only for non-negative indices. Dotted numbers remain object
+        // property names unless traversal reaches an existing JSON array.
+        foreach (var segment in key.Replace(':', '.').Split('.'))
+        {
+            var bracket = segment.IndexOf('[');
+            var name = bracket < 0 ? segment : segment[..bracket];
+            if (name.Length == 0 || name.Contains(']'))
+            {
+                throw new ArgumentException(string.Format(CultureInfo.CurrentCulture, ConfigCommandStrings.ConfigurationKeyInvalid, key), nameof(key));
+            }
+            parts.Add(new KeyPart(name, IsArrayIndex: false));
+
+            while (bracket >= 0)
+            {
+                var end = segment.IndexOf(']', bracket + 1);
+                if (end < 0 || !int.TryParse(segment.AsSpan(bracket + 1, end - bracket - 1), NumberStyles.None, CultureInfo.InvariantCulture, out var index))
+                {
+                    throw new ArgumentException(string.Format(CultureInfo.CurrentCulture, ConfigCommandStrings.ConfigurationKeyInvalid, key), nameof(key));
+                }
+                parts.Add(new KeyPart(index.ToString(CultureInfo.InvariantCulture), IsArrayIndex: true));
+                bracket = end + 1;
+                if (bracket == segment.Length)
+                {
+                    break;
+                }
+                if (segment[bracket] != '[')
+                {
+                    throw new ArgumentException(string.Format(CultureInfo.CurrentCulture, ConfigCommandStrings.ConfigurationKeyInvalid, key), nameof(key));
+                }
+            }
+        }
+
+        return parts.ToArray();
+    }
+
+    private static void ResolveKeyParts(KeyPart[] parts, string resolvedKey)
+    {
+        var names = resolvedKey.Split('.');
+        for (var i = 0; i < parts.Length; i++)
+        {
+            parts[i] = parts[i] with { Name = names[i] };
+        }
+    }
+
+    private static int GetArrayIndex(KeyPart part, string key)
+    {
+        if (!int.TryParse(part.Name, NumberStyles.None, CultureInfo.InvariantCulture, out var index))
+        {
+            throw new ArgumentException(string.Format(CultureInfo.CurrentCulture, ConfigCommandStrings.ConfigurationArrayIndexInvalid, key), nameof(key));
+        }
+
+        return index;
+    }
+
+    private static JsonNode? GetChildValue(JsonNode current, KeyPart part, string key, bool allowAppend)
+    {
+        if (current is JsonArray array)
+        {
+            var index = GetArrayIndex(part, key);
+            if (index < array.Count)
+            {
+                return array[index];
+            }
+            if (allowAppend && index > array.Count)
+            {
+                throw new ArgumentException(string.Format(CultureInfo.CurrentCulture, ConfigCommandStrings.ConfigurationArrayIndexOutOfRange, index, key, array.Count), nameof(key));
+            }
+
+            return null;
+        }
+        if (part.IsArrayIndex)
+        {
+            throw new InvalidOperationException(string.Format(CultureInfo.CurrentCulture, ConfigCommandStrings.ConfigurationArrayRequired, key));
+        }
+
+        return current.AsObject()[part.Name];
+    }
+
+    private static void SetChildValue(JsonNode current, KeyPart part, string key, JsonNode value)
+    {
+        _ = GetChildValue(current, part, key, allowAppend: true);
+        if (current is JsonArray array)
+        {
+            var index = GetArrayIndex(part, key);
+            if (index == array.Count)
+            {
+                array.Add(value);
+            }
+            else
+            {
+                array[index] = value;
+            }
+        }
+        else
+        {
+            current.AsObject()[part.Name] = value;
+        }
+    }
+
+    private readonly record struct KeyPart(string Name, bool IsArrayIndex);
 }
