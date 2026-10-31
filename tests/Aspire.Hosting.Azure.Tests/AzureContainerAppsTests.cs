@@ -4,6 +4,7 @@
 #pragma warning disable ASPIRECOMPUTE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
@@ -1535,6 +1536,21 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         Assert.Empty(model.Resources.OfType<AzureContainerAppEnvironmentResource>());
     }
 
+    [Fact]
+    public void WithAzdResourceNamingIsObsoleteWithTransitionGuidance()
+    {
+        var method = typeof(AzureContainerAppExtensions).GetMethod(nameof(AzureContainerAppExtensions.WithAzdResourceNaming));
+
+        Assert.NotNull(method);
+        var obsolete = method.GetCustomAttribute<ObsoleteAttribute>();
+
+        Assert.NotNull(obsolete);
+        Assert.False(obsolete.IsError);
+        Assert.Equal(
+            "For Aspire AppHosts deployed using Azure Developer CLI (azd), we recommend transitioning to 'aspire deploy'. See https://aka.ms/aspire/azd-transition for more information.",
+            obsolete.Message);
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -1546,7 +1562,9 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
 
         if (useAzdNaming)
         {
+#pragma warning disable CS0618 // Preserve coverage of the obsolete AZD naming convention.
             env.WithAzdResourceNaming();
+#pragma warning restore CS0618
         }
 
         var pg = builder.AddAzurePostgresFlexibleServer("pg")
@@ -2347,10 +2365,12 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
             workspace.Path,
             step: "publish-manifest");
 
+#pragma warning disable CS0618 // Preserve coverage of the obsolete AZD naming convention.
         var env1 = builder.AddAzureContainerAppEnvironment("cae1")
             .WithAzdResourceNaming();
         var env2 = builder.AddAzureContainerAppEnvironment("cae2")
             .WithAzdResourceNaming();
+#pragma warning restore CS0618
 
         builder.AddContainer("api1", "myimage")
             .WithComputeEnvironment(env1);
@@ -2376,8 +2396,10 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
             workspace.Path,
             step: "publish-manifest");
 
+#pragma warning disable CS0618 // Preserve coverage of the obsolete AZD naming convention.
         var azdEnvironment = builder.AddAzureContainerAppEnvironment("azd")
             .WithAzdResourceNaming();
+#pragma warning restore CS0618
         var uniqueEnvironment = builder.AddAzureContainerAppEnvironment("cae")
             .WithUniqueResourceNaming();
 
@@ -3007,8 +3029,10 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
+#pragma warning disable CS0618 // Preserve coverage of the obsolete AZD naming convention.
         builder.AddAzureContainerAppEnvironment("env")
             .WithAzdResourceNaming();
+#pragma warning restore CS0618
 
 #pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
         builder.AddProject<Project>("api", launchProfileName: null)

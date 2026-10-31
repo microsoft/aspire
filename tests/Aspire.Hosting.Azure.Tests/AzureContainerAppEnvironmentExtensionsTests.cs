@@ -337,9 +337,11 @@ public class AzureContainerAppEnvironmentExtensionsTests(ITestOutputHelper outpu
         var registry = builder.AddAzureContainerRegistry("registry")
             .PublishAsExisting("myacr", "my-existing-resource-group");
 
+#pragma warning disable CS0618 // Preserve coverage of the obsolete AZD naming convention.
         builder.AddAzureContainerAppEnvironment("env")
             .WithAzureContainerRegistry(registry)
             .WithAzdResourceNaming();
+#pragma warning restore CS0618
 
         using var app = builder.Build();
         await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
