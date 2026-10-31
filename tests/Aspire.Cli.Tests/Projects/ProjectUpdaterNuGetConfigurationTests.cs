@@ -1014,6 +1014,17 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
         Assert.Equal(originalConfig, await File.ReadAllBytesAsync(configFile.FullName));
         Assert.Equal(originalAspireConfig, await File.ReadAllTextAsync(aspireConfigPath));
         Assert.Equal(2, interaction.BooleanPromptCalls.Count);
+
+        // The preview is shown before the user confirms, so it must describe proposed changes rather than
+        // claim they were already applied (https://github.com/microsoft/aspire/issues/19191).
+        Assert.Contains("Add: https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json", interaction.DisplayedPlainText);
+        Assert.Contains("   Mapping: Aspire* (add)", interaction.DisplayedPlainText);
+        Assert.DoesNotContain(interaction.DisplayedPlainText, text =>
+            text.StartsWith("Added:", StringComparison.Ordinal) ||
+            text.StartsWith("Removed:", StringComparison.Ordinal) ||
+            text.StartsWith("Retained:", StringComparison.Ordinal) ||
+            text.EndsWith("(added)", StringComparison.Ordinal) ||
+            text.EndsWith("(removed)", StringComparison.Ordinal));
     }
 
     [Theory]

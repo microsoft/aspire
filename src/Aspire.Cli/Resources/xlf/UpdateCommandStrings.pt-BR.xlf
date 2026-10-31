@@ -3,8 +3,8 @@
   <file datatype="xml" source-language="en" target-language="pt-BR" original="../UpdateCommandStrings.resx">
     <body>
       <trans-unit id="AddedFeedFormat">
-        <source>Added: {0}</source>
-        <target state="translated">Adicionado: {0}</target>
+        <source>Add: {0}</source>
+        <target state="needs-review-translation">Adicionado: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="AnalyzeAppHost">
@@ -163,13 +163,13 @@
         <note />
       </trans-unit>
       <trans-unit id="MappingAddedFormat">
-        <source>   Mapping: {0} (added)</source>
-        <target state="translated">   Mapeamento: {0} (adicionado)</target>
+        <source>   Mapping: {0} (add)</source>
+        <target state="needs-review-translation">   Mapeamento: {0} (adicionado)</target>
         <note />
       </trans-unit>
       <trans-unit id="MappingRemovedFormat">
-        <source>   Mapping: {0} (removed)</source>
-        <target state="translated">   Mapeamento: {0} (removido)</target>
+        <source>   Mapping: {0} (remove)</source>
+        <target state="needs-review-translation">   Mapeamento: {0} (removido)</target>
         <note />
       </trans-unit>
       <trans-unit id="MappingRetainedFormat">
@@ -313,8 +313,8 @@
         <note />
       </trans-unit>
       <trans-unit id="RemovedFeedFormat">
-        <source>Removed: {0}</source>
-        <target state="translated">Removido: {0}</target>
+        <source>Remove: {0}</source>
+        <target state="needs-review-translation">Removido: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="RemovedObsoleteAppHostPackage">
@@ -353,8 +353,8 @@
         <note />
       </trans-unit>
       <trans-unit id="RetainedFeedFormat">
-        <source>Retained: {0}</source>
-        <target state="translated">Retidos: {0}</target>
+        <source>Keep: {0}</source>
+        <target state="needs-review-translation">Retidos: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="SdkVersionUnknownPlaceholder">
