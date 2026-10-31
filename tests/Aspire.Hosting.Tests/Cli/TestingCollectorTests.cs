@@ -290,7 +290,7 @@ public class TestingCollectorTests(ITestOutputHelper outputHelper)
     }
 
     private static TestRunCoordinator CreateCoordinator(IDistributedApplicationTestingBuilder builder, ResourceNotificationService notifications) =>
-        new(new DistributedApplicationModel(builder.Resources), notifications, TimeProvider.System, NullLogger<TestRunCoordinator>.Instance);
+        new(new DistributedApplicationModel(builder.Resources), notifications, TimeProvider.System, NullLogger<TestRunCoordinator>.Instance, new ResourceLoggerService());
 
     private static async Task ReadAsync(TestRunCoordinator coordinator, ConcurrentQueue<TestRunEvent> events, Action<TestRunEvent>? observed = null)
     {

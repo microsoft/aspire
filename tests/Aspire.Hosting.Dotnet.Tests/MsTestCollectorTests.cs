@@ -247,7 +247,7 @@ public class MsTestCollectorTests(ITestOutputHelper outputHelper)
 
     private static TestRunCoordinator CreateCoordinator(IDistributedApplicationTestingBuilder builder, ResourceNotificationService notifications)
     {
-        return new(new DistributedApplicationModel(builder.Resources), notifications, TimeProvider.System, NullLogger<TestRunCoordinator>.Instance);
+        return new(new DistributedApplicationModel(builder.Resources), notifications, TimeProvider.System, NullLogger<TestRunCoordinator>.Instance, new ResourceLoggerService());
     }
 
     private static async Task<List<TestRunEvent>> ReadAsync(TestRunCoordinator coordinator)

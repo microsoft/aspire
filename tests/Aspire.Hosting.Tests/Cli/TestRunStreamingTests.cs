@@ -27,7 +27,7 @@ public class TestRunStreamingTests(ITestOutputHelper outputHelper)
         tests.Annotations.Add(new ReplicaAnnotation(2));
         var api = new ContainerResource("api");
         var coordinator = new TestRunCoordinator(new DistributedApplicationModel([tests, api]), notifications,
-            TimeProvider.System, NullLogger<TestRunCoordinator>.Instance);
+            TimeProvider.System, NullLogger<TestRunCoordinator>.Instance, new ResourceLoggerService());
         await notifications.PublishUpdateAsync(tests, s => s with { State = KnownResourceStates.Waiting });
         var events = new ConcurrentQueue<TestRunEvent>();
         var observed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -67,7 +67,7 @@ public class TestRunStreamingTests(ITestOutputHelper outputHelper)
         tests.Annotations.Add(new TestingAnnotation());
         await notifications.PublishUpdateAsync(tests, s => s with { State = KnownResourceStates.Finished, ExitCode = 0 });
         var coordinator = new TestRunCoordinator(new DistributedApplicationModel([tests]), notifications,
-            TimeProvider.System, NullLogger<TestRunCoordinator>.Instance);
+            TimeProvider.System, NullLogger<TestRunCoordinator>.Instance, new ResourceLoggerService());
         var events = new ConcurrentQueue<TestRunEvent>();
         await CollectAsync(coordinator.WatchAsync(TestContext.Current.CancellationToken), events).DefaultTimeout();
 
@@ -83,7 +83,7 @@ public class TestRunStreamingTests(ITestOutputHelper outputHelper)
         var tests = new ContainerResource("tests");
         tests.Annotations.Add(new TestingAnnotation());
         var coordinator = new TestRunCoordinator(new DistributedApplicationModel([tests]), notifications,
-            TimeProvider.System, NullLogger<TestRunCoordinator>.Instance);
+            TimeProvider.System, NullLogger<TestRunCoordinator>.Instance, new ResourceLoggerService());
         await using var enumerator = coordinator.WatchAsync(TestContext.Current.CancellationToken).GetAsyncEnumerator();
         Assert.True(await enumerator.MoveNextAsync().AsTask().DefaultTimeout());
 
@@ -99,7 +99,7 @@ public class TestRunStreamingTests(ITestOutputHelper outputHelper)
         await notifications.PublishUpdateAsync(tests, s => s with { State = KnownResourceStates.Exited });
         var time = new FakeTimeProvider();
         var coordinator = new TestRunCoordinator(new DistributedApplicationModel([tests]), notifications,
-            time, NullLogger<TestRunCoordinator>.Instance);
+            time, NullLogger<TestRunCoordinator>.Instance, new ResourceLoggerService());
         var events = new ConcurrentQueue<TestRunEvent>();
         var completion = CollectAsync(coordinator.WatchAsync(TestContext.Current.CancellationToken), events);
         time.Advance(TestRunCoordinator.s_exitCodeTimeout);

@@ -30,6 +30,33 @@ Aspire's approach ensures flexibility, strong tooling support, and clear separat
 
 For the full details and specification, see the [App Model document](https://github.com/microsoft/aspire/blob/main/docs/specs/appmodel.md).
 
+## Experimental test output collection
+
+Framework integrations can register collectors with `WithTesting(options =>
+options.CollectResults(...))`. During `aspire test`, `ResourceTestingContext.CaptureOutputAsync()`
+waits for authoritative native executable completion, then replays DCP's separate raw
+stdout/stderr through EOF into `stdout.log` and `stderr.log` under `context.OutputPath`.
+It writes `output.complete` only after both files close. Repeated/concurrent calls share
+one capture, including failures. The helper does not scrape dashboard logs, merge streams,
+add timestamps, or impose the dashboard backlog limit.
+
+```csharp
+#pragma warning disable ASPIRETESTING001
+
+resource.WithTesting(options => options.CollectResults(async context =>
+{
+    await context.CaptureOutputAsync();
+    // Translate stdout.log into framework-neutral TestResult publications.
+}));
+```
+
+Only one native, non-terminal executable invocation is supported. Framework integrations
+must prevent replicas, restarts, and retries before launch. Failed execution still permits
+capture; cancellation and stream/file errors fail collection. Partial files are retained
+without the completion marker. Artifacts are exclusively created with Unix 0600 permissions
+inside the run's private directory; they cannot overwrite existing files. Ordinary runs
+do not activate collectors or create test output paths.
+
 ## Feedback & contributing
 
 https://github.com/microsoft/aspire

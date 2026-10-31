@@ -11,6 +11,12 @@ internal sealed class TestConsoleLogsService : IConsoleLogsService
 {
     private readonly Func<string, Channel<IReadOnlyList<LogEntry>>>? _getConsoleLogsChannel;
 
+    internal Func<string, bool, CancellationToken, Task<Stream>>? RawOutput { get; init; }
+
+    public Task<Stream> GetRawOutputAsync(string resourceName, bool standardError, CancellationToken cancellationToken) =>
+        RawOutput is { } capture ? capture(resourceName, standardError, cancellationToken) :
+            throw new NotSupportedException("No raw output stream configured.");
+
     public TestConsoleLogsService(Func<string, Channel<IReadOnlyList<LogEntry>>>? getConsoleLogsChannel = null)
     {
         _getConsoleLogsChannel = getConsoleLogsChannel;

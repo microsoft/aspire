@@ -18,7 +18,8 @@ internal sealed class TestRunCoordinator(
     DistributedApplicationModel model,
     ResourceNotificationService notifications,
     TimeProvider timeProvider,
-    ILogger<TestRunCoordinator> logger) : IDisposable
+    ILogger<TestRunCoordinator> logger,
+    ResourceLoggerService resourceLogs) : IDisposable
 {
     internal static readonly TimeSpan s_exitCodeTimeout = TimeSpan.FromSeconds(5);
     private readonly object _gate = new();
@@ -305,7 +306,12 @@ internal sealed class TestRunCoordinator(
                     Message = result.Message
                 }
             });
-        }, resourceCompletion, cancellationToken);
+        }, resourceCompletion, cancellationToken)
+        {
+            CaptureOutputCallback = (captureContext, token) => TestOutputCapture.CaptureAsync(
+                model.Resources.Single(r => StringComparers.ResourceName.Equals(r.Name, resourceName)),
+                resourceLogs, captureContext, token)
+        };
         // Avoid running a collector's synchronous prefix on the resource startup path.
         var task = Task.Run(() => collector(context), cancellationToken);
         string? error = null;

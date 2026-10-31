@@ -108,7 +108,7 @@ public class TestRunCoordinatorTests
         await notifications.PublishUpdateAsync(unknown, s => s with { State = state });
         var timeProvider = new FakeTimeProvider();
         var coordinator = new TestRunCoordinator(new DistributedApplicationModel([unknown, remaining]), notifications,
-            timeProvider, NullLogger<TestRunCoordinator>.Instance);
+            timeProvider, NullLogger<TestRunCoordinator>.Instance, new ResourceLoggerService());
         var completion = coordinator.WaitForCompletionAsync(TestContext.Current.CancellationToken);
 
         timeProvider.Advance(TestRunCoordinator.s_exitCodeTimeout);
@@ -183,5 +183,5 @@ public class TestRunCoordinatorTests
     }
 
     private static TestRunCoordinator CreateCoordinator(ResourceNotificationService notifications, params IResource[] resources) =>
-        new(new DistributedApplicationModel(resources), notifications, TimeProvider.System, NullLogger<TestRunCoordinator>.Instance);
+        new(new DistributedApplicationModel(resources), notifications, TimeProvider.System, NullLogger<TestRunCoordinator>.Instance, new ResourceLoggerService());
 }

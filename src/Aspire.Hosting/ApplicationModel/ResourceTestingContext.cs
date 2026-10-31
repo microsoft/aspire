@@ -30,6 +30,9 @@ public sealed class ResourceTestingContext
     private readonly Task<bool> _resourceCompletion;
     private readonly object _gate = new();
     private bool _closed;
+    private Task? _capture;
+
+    internal Func<ResourceTestingContext, CancellationToken, Task>? CaptureOutputCallback { get; init; }
 
     internal ResourceTestingContext(TestRunContext runContext, string resourceName, string outputPath,
         Action<TestResult> publish, Task<bool> resourceCompletion, CancellationToken cancellationToken)
@@ -81,6 +84,60 @@ public sealed class ResourceTestingContext
     {
         CancellationToken.ThrowIfCancellationRequested();
         return _resourceCompletion.WaitAsync(CancellationToken);
+    }
+
+    /// <summary>
+    /// Captures the completed executable's raw standard output and standard error into this resource's output directory.
+    /// </summary>
+    /// <returns>A task that completes only after both output streams reach EOF and their files are closed.</returns>
+    /// <remarks>
+    /// <para>
+    /// Waits for authoritative process completion, including nonzero exits, then replays DCP's durable,
+    /// timestamp-free stdout and stderr separately into <c>stdout.log</c> and <c>stderr.log</c>.
+    /// Creates <c>output.complete</c> only after both streams drain. Partial files remain on errors or cancellation.
+    /// Files are exclusively created with private permissions (0600 on Unix) in the run's private directory.
+    /// </para>
+    /// <para>
+    /// Supports exactly one native executable invocation, without terminals, replicas, restarts, or retries.
+    /// Integrations must prevent restarts before launch. Concurrent/repeated calls share the same task,
+    /// including a faulted task; capture never reopens or overwrites the owned files.
+    /// No dashboard backlog limits, timestamp formatting, or stdout/stderr merging apply.
+    /// </para>
+    /// </remarks>
+    /// <example>
+    /// <code lang="csharp">
+    /// options.CollectResults(async context =>
+    /// {
+    ///     await context.CaptureOutputAsync();
+    ///     var output = Path.Combine(context.OutputPath, "stdout.log");
+    /// });
+    /// </code>
+    /// </example>
+    /// <exception cref="NotSupportedException">The resource does not have supported native executable output.</exception>
+    /// <exception cref="InvalidOperationException">Collection has completed or the output directory is unsafe.</exception>
+    /// <exception cref="IOException">Owned output artifacts already exist or cannot be written.</exception>
+    /// <exception cref="OperationCanceledException">Collection has been cancelled.</exception>
+    [AspireExport]
+    [Experimental(TestingDiagnostics.DiagnosticId, UrlFormat = TestingDiagnostics.UrlFormat)]
+    public Task CaptureOutputAsync()
+    {
+        lock (_gate)
+        {
+            CancellationToken.ThrowIfCancellationRequested();
+            if (_closed)
+            {
+                throw new InvalidOperationException("Output cannot be captured after collection completes.");
+            }
+            return _capture ??= CaptureAsync();
+        }
+    }
+
+    private async Task CaptureAsync()
+    {
+        await WaitForCompletionAsync().ConfigureAwait(false);
+        var capture = CaptureOutputCallback ??
+            throw new NotSupportedException("Raw process output capture is unavailable in this testing context.");
+        await capture(this, CancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>

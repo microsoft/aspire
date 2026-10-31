@@ -1,0 +1,4 @@
+﻿{
+  Add:     addGoTest(name: string, appDirectory: string, options?: AddGoTestOptions): GoTestResourcePromise;,
+  Capture:     captureOutputAsync(): ResourceTestingContextPromise;
+}

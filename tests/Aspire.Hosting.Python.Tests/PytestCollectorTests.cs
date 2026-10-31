@@ -40,7 +40,7 @@ public class PytestCollectorTests(ITestOutputHelper outputHelper)
         var resource = builder.AddPytest("tests", workspace.Path);
         using var notifications = ResourceNotificationServiceTestHelpers.Create();
         using var coordinator = new TestRunCoordinator(new DistributedApplicationModel(builder.Resources),
-            notifications, TimeProvider.System, NullLogger<TestRunCoordinator>.Instance);
+            notifications, TimeProvider.System, NullLogger<TestRunCoordinator>.Instance, new ResourceLoggerService());
         var completion = coordinator.WaitForCompletionAsync(TestContext.Current.CancellationToken);
         Assert.False(completion.IsCompleted);
         File.WriteAllText(GetReportPath(resource), Report);
@@ -71,7 +71,7 @@ public class PytestCollectorTests(ITestOutputHelper outputHelper)
         }
         using var notifications = ResourceNotificationServiceTestHelpers.Create();
         using var coordinator = new TestRunCoordinator(new DistributedApplicationModel(builder.Resources),
-            notifications, TimeProvider.System, NullLogger<TestRunCoordinator>.Instance);
+            notifications, TimeProvider.System, NullLogger<TestRunCoordinator>.Instance, new ResourceLoggerService());
         var completion = coordinator.WaitForCompletionAsync(TestContext.Current.CancellationToken);
         await notifications.PublishUpdateAsync(resource.Resource, snapshot =>
             snapshot with { State = KnownResourceStates.Finished, ExitCode = 0 });
