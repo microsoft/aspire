@@ -68,6 +68,10 @@ an exit code that remains unknown fails rather than passing or waiting forever.
 Custom resources must publish a terminal state and exit code through
 `ResourceNotificationService`.
 
+Testing has its own command orchestration and localized output, using the existing
+AppHost project and backchannel services. Normal `aspire run` keeps its existing
+implementation, presentation, and lifetime.
+
 The command returns `0` when all tests pass, `23` when any test fails, and `130`
 when cancelled. Missing test annotations, an incompatible AppHost, startup
 failure, premature AppHost exit, or shutdown failure also return a nonzero code

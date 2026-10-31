@@ -1,0 +1,212 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
+  <file datatype="xml" source-language="en" target-language="es" original="../TestCommandStrings.resx">
+    <body>
+      <trans-unit id="AppHost">
+        <source>AppHost</source>
+        <target state="new">AppHost</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AppHostExitedEarly">
+        <source>The AppHost exited before all test resources completed.</source>
+        <target state="new">The AppHost exited before all test resources completed.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AppHostExitedWithCode">
+        <source>AppHost process exited with code {0}.</source>
+        <target state="new">AppHost process exited with code {0}.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AppHostIncompatible">
+        <source>This AppHost does not support aspire test. Update its Aspire.Hosting package to a version that supports test resource lifetimes.</source>
+        <target state="new">This AppHost does not support aspire test. Update its Aspire.Hosting package to a version that supports test resource lifetimes.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ArtifactFailure">
+        <source>Failed to create or write test run artifacts: {0}</source>
+        <target state="new">Failed to create or write test run artifacts: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Cancelled">
+        <source>cancelled</source>
+        <target state="new">cancelled</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ConnectingToAppHost">
+        <source>Connecting to AppHost...</source>
+        <target state="new">Connecting to AppHost...</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Dashboard">
+        <source>Dashboard</source>
+        <target state="new">Dashboard</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFailedToStart">
+        <source>Aspire Dashboard failed to start or is disabled.</source>
+        <target state="new">Aspire Dashboard failed to start or is disabled.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Description">
+        <source>Run an AppHost until all resources marked with WithTesting() and their collectors finish</source>
+        <target state="new">Run an AppHost until all resources marked with WithTesting() and their collectors finish</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ExitCode">
+        <source>Exit code</source>
+        <target state="new">Exit code</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Failed">
+        <source>failed</source>
+        <target state="new">failed</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FormatDescription">
+        <source>Output format for test resource results (JSON or table)</source>
+        <target state="new">Output format for test resource results (JSON or table)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="IncompatibleOptions">
+        <source>aspire test does not support detached execution, profile capture, or extension-managed debug sessions.</source>
+        <target state="new">aspire test does not support detached execution, profile capture, or extension-managed debug sessions.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Incomplete">
+        <source>incomplete</source>
+        <target state="new">incomplete</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InvalidStartupTimeout">
+        <source>{0} must be a positive integer number of seconds for test AppHost startup.</source>
+        <target state="new">{0} must be a positive integer number of seconds for test AppHost startup.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="IsolatedModeRunningInstanceWarning">
+        <source>A running instance of this AppHost was found and will be stopped. To run multiple isolated instances simultaneously, run from different directories such as git worktree directories.</source>
+        <target state="new">A running instance of this AppHost was found and will be stopped. To run multiple isolated instances simultaneously, run from different directories such as git worktree directories.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="KeepAliveDescription">
+        <source>Keep the CLI and AppHost running after tests complete for dashboard inspection</source>
+        <target state="new">Keep the CLI and AppHost running after tests complete for dashboard inspection</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="KeepAliveDisconnected">
+        <source>The AppHost disconnected while being kept alive for test inspection and did not finish shutting down.</source>
+        <target state="new">The AppHost disconnected while being kept alive for test inspection and did not finish shutting down.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="KeepAliveMessage">
+        <source>Tests have completed. The CLI and AppHost are still running for inspection. Press Ctrl+C to stop.</source>
+        <target state="new">Tests have completed. The CLI and AppHost are still running for inspection. Press Ctrl+C to stop.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LogCaptureFailed">
+        <source>No longer receiving logs from the test AppHost.</source>
+        <target state="new">No longer receiving logs from the test AppHost.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Logs">
+        <source>Logs</source>
+        <target state="new">Logs</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoBuildArgumentDescription">
+        <source>Do not build or restore the AppHost before testing</source>
+        <target state="new">Do not build or restore the AppHost before testing</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Outcome">
+        <source>Outcome</source>
+        <target state="new">Outcome</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OutputDirectory">
+        <source>Test output: {0}</source>
+        <target state="new">Test output: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Passed">
+        <source>passed</source>
+        <target state="new">passed</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Pending">
+        <source>pending</source>
+        <target state="new">pending</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PublishedResult">
+        <source>{0}: {1} ({2})</source>
+        <target state="new">{0}: {1} ({2})</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PublishedSummary">
+        <source>Published test results: {0} passed, {1} failed, {2} skipped</source>
+        <target state="new">Published test results: {0} passed, {1} failed, {2} skipped</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RecentAppHostStartupOutput">
+        <source>Recent AppHost startup output</source>
+        <target state="new">Recent AppHost startup output</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Resource">
+        <source>Resource</source>
+        <target state="new">Resource</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceStatus">
+        <source>{0}: {1} ({2}, exit code {3})</source>
+        <target state="new">{0}: {1} ({2}, exit code {3})</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RunningHeader">
+        <source>Tests are running</source>
+        <target state="new">Tests are running</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ShutdownTimeout">
+        <source>The test AppHost did not shut down within {0} seconds.</source>
+        <target state="new">The test AppHost did not shut down within {0} seconds.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Skipped">
+        <source>skipped</source>
+        <target state="new">skipped</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="StartingDashboard">
+        <source>Starting dashboard...</source>
+        <target state="new">Starting dashboard...</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="State">
+        <source>State</source>
+        <target state="new">State</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SummaryFile">
+        <source>Summary JSON: {0}</source>
+        <target state="new">Summary JSON: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SummaryHeader">
+        <source>Test run {0}</source>
+        <target state="new">Test run {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TimeoutWaitingForAppHost">
+        <source>Timed out waiting {0}s for AppHost to start. If the AppHost is still building or starting, set {1} to a higher value and try again.</source>
+        <target state="new">Timed out waiting {0}s for AppHost to start. If the AppHost is still building or starting, set {1} to a higher value and try again.</target>
+        <note>Do not localize the {1} placeholder. It is an environment variable name.</note>
+      </trans-unit>
+      <trans-unit id="UnrecognizedAppHost">
+        <source>The selected AppHost type is not supported for testing.</source>
+        <target state="new">The selected AppHost type is not supported for testing.</target>
+        <note />
+      </trans-unit>
+    </body>
+  </file>
+</xliff>

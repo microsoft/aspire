@@ -139,7 +139,7 @@ public class TestRunReporterTests(ITestOutputHelper outputHelper)
         Assert.Equal("passed", beforeStop["resources"]![1]!["outcome"]!.GetValue<string>());
         reporter.Complete(CommandResult.Failure(CliExitCodes.TestRunFailed));
         AssertPrivateFile(reporter.SummaryPath);
-        Assert.Contains(interaction.DisplayedMessages, message => message.Message == RunCommandStrings.TestRunningHeader);
+        Assert.Contains(interaction.DisplayedMessages, message => message.Message == TestCommandStrings.RunningHeader);
         Assert.Single(interaction.DisplayedRenderables);
         var expectedLink = Aspire.Cli.Utils.MarkupHelpers.SafeFileLink(interaction, reporter.SummaryPath);
         Assert.Contains(paths, message => message.Contains(expectedLink, StringComparison.Ordinal));

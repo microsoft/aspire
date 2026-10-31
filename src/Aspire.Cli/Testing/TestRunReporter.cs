@@ -82,9 +82,9 @@ internal sealed class TestRunReporter
         reporter.Persist("running", exitCode: null, error: null);
         if (format != OutputFormat.Json)
         {
-            interaction.DisplayMessage(KnownEmojis.Microscope, RunCommandStrings.TestRunningHeader);
+            interaction.DisplayMessage(KnownEmojis.Microscope, TestCommandStrings.RunningHeader);
             interaction.DisplaySubtleMessage(string.Format(CultureInfo.CurrentCulture,
-                RunCommandStrings.TestOutputDirectory, MarkupHelpers.SafeFileLink(interaction, outputPath)), allowMarkup: true);
+                TestCommandStrings.OutputDirectory, MarkupHelpers.SafeFileLink(interaction, outputPath)), allowMarkup: true);
         }
 
         return reporter;
@@ -180,7 +180,7 @@ internal sealed class TestRunReporter
             if (_interactive)
             {
                 _interaction.DisplayMessage(KnownEmojis.Microscope, string.Format(CultureInfo.CurrentCulture,
-                    RunCommandStrings.TestPublishedResult, result.ResourceName, result.Name, DisplayOutcome(result.Outcome)));
+                    TestCommandStrings.PublishedResult, result.ResourceName, result.Name, DisplayOutcome(result.Outcome)));
             }
         }
     }
@@ -252,7 +252,7 @@ internal sealed class TestRunReporter
         if (_interactive)
         {
             _interaction.DisplayMessage(KnownEmojis.Microscope, string.Format(CultureInfo.CurrentCulture,
-                RunCommandStrings.TestResourceStatus, resource.ResourceId ?? resource.ResourceName,
+                TestCommandStrings.ResourceStatus, resource.ResourceId ?? resource.ResourceName,
                 resource.State ?? "-", DisplayOutcome(resource.Outcome), resource.ExitCode?.ToString(CultureInfo.CurrentCulture) ?? "-"));
         }
     }
@@ -320,12 +320,12 @@ internal sealed class TestRunReporter
         if (_interactive)
         {
             _interaction.DisplayMessage(KnownEmojis.Microscope, string.Format(CultureInfo.CurrentCulture,
-                RunCommandStrings.TestSummaryHeader, DisplayOutcome(status)));
+                TestCommandStrings.SummaryHeader, DisplayOutcome(status)));
             var table = new Table();
-            table.AddBoldColumn(RunCommandStrings.Resource);
-            table.AddBoldColumn(RunCommandStrings.State);
-            table.AddBoldColumn(RunCommandStrings.TestOutcome);
-            table.AddBoldColumn(RunCommandStrings.TestExitCode);
+            table.AddBoldColumn(TestCommandStrings.Resource);
+            table.AddBoldColumn(TestCommandStrings.State);
+            table.AddBoldColumn(TestCommandStrings.Outcome);
+            table.AddBoldColumn(TestCommandStrings.ExitCode);
             foreach (var resource in OrderedResources())
             {
                 table.AddRow((resource.ResourceId ?? resource.ResourceName).EscapeMarkup(),
@@ -337,12 +337,12 @@ internal sealed class TestRunReporter
             {
                 var totals = ResultSummary();
                 _interaction.DisplayMessage(KnownEmojis.Microscope, string.Format(CultureInfo.CurrentCulture,
-                    RunCommandStrings.TestPublishedSummary, totals.Passed, totals.Failed, totals.Skipped));
+                    TestCommandStrings.PublishedSummary, totals.Passed, totals.Failed, totals.Skipped));
             }
         }
 
         _interaction.DisplaySubtleMessage(string.Format(CultureInfo.CurrentCulture,
-            RunCommandStrings.TestSummaryFile, MarkupHelpers.SafeFileLink(_interaction, SummaryPath)), allowMarkup: true);
+            TestCommandStrings.SummaryFile, MarkupHelpers.SafeFileLink(_interaction, SummaryPath)), allowMarkup: true);
         _summaryDisplayed = true;
     }
 
@@ -434,12 +434,12 @@ internal sealed class TestRunReporter
 
     private static string DisplayOutcome(string outcome) => outcome switch
     {
-        "passed" => RunCommandStrings.TestPassed,
-        "failed" => RunCommandStrings.TestFailed,
-        "cancelled" => RunCommandStrings.TestCancelled,
-        "incomplete" => RunCommandStrings.TestIncomplete,
-        "skipped" => RunCommandStrings.TestSkipped,
-        _ => RunCommandStrings.TestPending
+        "passed" => TestCommandStrings.Passed,
+        "failed" => TestCommandStrings.Failed,
+        "cancelled" => TestCommandStrings.Cancelled,
+        "incomplete" => TestCommandStrings.Incomplete,
+        "skipped" => TestCommandStrings.Skipped,
+        _ => TestCommandStrings.Pending
     };
 
     private static FileStream CreateFile(string path)
