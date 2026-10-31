@@ -205,6 +205,24 @@ A tracking copy is shared by source identity, not a record of what every applica
 
 Missing `configSource.repository` or `configSource.path` must not prevent general configuration loading or discard the app's saved settings. Validate these fields when the binding is used: an advisory check reports the invalid binding without failing the project operation, while an explicit configuration-source refresh fails before Git acquisition or application-file changes.
 
+### Edit array-valued settings
+
+Configuration keys use dots (or colons) for object properties and bracketed indices for arrays:
+
+```shell
+aspire config set "skillSources.team.plugins[0]" deployment
+aspire config get "skillSources.team.plugins[0]"
+aspire config delete "skillSources.team.plugins[0]"
+```
+
+Quote bracketed keys to prevent shell glob expansion. Brackets are reserved for non-negative integer indices, including nested arrays such as `matrix[0][1]`.
+
+Setting an existing index replaces only that element. An index equal to the array length appends an element; larger indices and negative indices are rejected without changing the file. If the array property is missing or null, `[0]` creates it. Explicit bracket syntax never replaces an existing object or scalar with an array.
+
+Numeric dot or colon segments can also address an existing array, so `skillSources.team.plugins.0` edits element zero when `plugins` is already an array. Otherwise numeric segments remain object property names: creating `custom.0` creates an object with a `"0"` property. Use brackets when creating an array rather than relying on numeric property names.
+
+Deleting an array element shifts subsequent elements down by one index. Deleting the final element leaves an empty array, and deleting a property within an array element preserves the element even if it becomes an empty object. `aspire config list` displays individual array entries using bracketed indices, while empty arrays and objects remain visible.
+
 ### Check for updates without applying them
 
 Operations that resolve an Aspire project or select a running AppHost check saved sources in the nearest local settings file and the global settings file for newer versions. Initialization of an already-bound project uses the same discovery from the resolved project directory. Commands that do not resolve a project, such as agent setup, configuration inspection, and documentation lookup, do not perform an ambient source check. Agent setup targets an agent workspace, which is not necessarily the AppHost directory. The check is advisory: the requested operation uses saved configuration whether a source is newer, unavailable, or has never been fetched on this machine.
