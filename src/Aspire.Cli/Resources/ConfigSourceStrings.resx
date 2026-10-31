@@ -61,7 +61,7 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="UseSourceOptionDescription" xml:space="preserve">
-    <value>Accept or decline the proposed Git configuration source using an explicit true or false value.</value>
+    <value>Use the proposed Git configuration source. Specify false to decline it.</value>
   </data>
   <data name="RefreshOptionDescription" xml:space="preserve">
     <value>Apply allowed settings from the nearest local and global saved Git configuration sources, replacing local edits to supplied settings, without updating packages or the CLI.</value>
@@ -125,8 +125,8 @@ Source origin: {3}</value>
     <value>No, use standard Aspire configuration</value>
   </data>
   <data name="ConsentRequired" xml:space="preserve">
-    <value>A configuration source is available. Specify --use-config-source true to accept it or --use-config-source false to use standard Aspire configuration in non-interactive mode.</value>
-    <comment>Do not translate "--use-config-source", "true", or "false".</comment>
+    <value>A configuration source is available. Specify --use-config-source to accept it or --use-config-source false to use standard Aspire configuration in non-interactive mode.</value>
+    <comment>Do not translate "--use-config-source" or "false".</comment>
   </data>
   <data name="NoBinding" xml:space="preserve">
     <value>No configuration source to update.</value>

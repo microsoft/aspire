@@ -238,7 +238,7 @@ public partial class NewCommandLocalTemplateTests
         var options = json ? " --format json" : "";
         if (useSource is not null)
         {
-            options += $" --use-config-source {useSource.Value.ToString().ToLowerInvariant()}";
+            options += useSource.Value ? " --use-config-source" : " --use-config-source false";
         }
 
         var result = await provider.GetRequiredService<RootCommand>()
@@ -343,7 +343,7 @@ public partial class NewCommandLocalTemplateTests
         var options = json ? " --format json" : "";
         if (useSource is not null)
         {
-            options += $" --use-config-source {useSource.Value.ToString().ToLowerInvariant()}";
+            options += useSource.Value ? " --use-config-source" : " --use-config-source false";
         }
 
         var result = await provider.GetRequiredService<RootCommand>()
@@ -410,7 +410,7 @@ public partial class NewCommandLocalTemplateTests
         var options = json ? " --format json" : "";
         if (useSource is not null)
         {
-            options += $" --use-config-source {useSource.Value.ToString().ToLowerInvariant()}";
+            options += useSource.Value ? " --use-config-source" : " --use-config-source false";
         }
 
         var result = await provider.GetRequiredService<RootCommand>()
@@ -433,8 +433,9 @@ public partial class NewCommandLocalTemplateTests
 
     [Theory]
     [InlineData("new")]
+    [InlineData("init")]
     [InlineData("template source list")]
-    public async Task TemplateSourceList_ConfigSourceOptionMatchesNewAndRequiresBooleanValue(string command)
+    public void TemplateSourceList_ConfigSourceOptionPreservesNullableConsentAndAcceptsBareFlag(string command)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interaction = new TestInteractionService();
@@ -452,10 +453,59 @@ public partial class NewCommandLocalTemplateTests
         }
         var bareFlag = root.Parse($"{command} --use-config-source");
 
-        Assert.NotEmpty(bareFlag.Errors);
-        Assert.NotEqual(CliExitCodes.Success, await bareFlag.InvokeAsync().DefaultTimeout());
+        Assert.Empty(bareFlag.Errors);
+        Assert.True(bareFlag.GetValue(ConfigSourceService.s_useSourceOption));
         Assert.Empty(git.FetchModes);
         Assert.Empty(git.ResolutionModes);
+        Assert.Empty(interaction.DisplayedRawText);
+    }
+
+    [Theory]
+    [InlineData("new", "--name Demo")]
+    [InlineData("init", "--language csharp")]
+    [InlineData("template source list", "--format json")]
+    public void TemplateSourceList_ConfigSourceOptionDoesNotConsumeFollowingOptions(string command, string followingOption)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var provider = CreateServices(workspace, new TestInteractionService(), interactive: true).BuildServiceProvider();
+        var root = provider.GetRequiredService<RootCommand>();
+        foreach (var (option, expected) in new (string, bool)[]
+        {
+            ("--use-config-source", true),
+            ("--use-config-source true", true),
+            ("--use-config-source false", false),
+            ("--use-config-source=true", true),
+            ("--use-config-source=false", false)
+        })
+        {
+            var parsed = root.Parse($"{command} {option} {followingOption} --non-interactive");
+            Assert.Empty(parsed.Errors);
+            Assert.Equal(expected, parsed.GetValue(ConfigSourceService.s_useSourceOption));
+            Assert.True(parsed.GetValue(RootCommand.NonInteractiveOption));
+        }
+    }
+
+    [Theory]
+    [InlineData("new")]
+    [InlineData("init")]
+    [InlineData("template source list")]
+    public async Task TemplateSourceList_ConfigSourceOptionRejectsInvalidValuesBeforeAcquisition(string command)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interaction = new TestInteractionService();
+        var git = new TestConfigSourceRepository();
+        using var provider = CreateInheritedTemplateServices(workspace, interaction, git, interactive: true).BuildServiceProvider();
+        var root = provider.GetRequiredService<RootCommand>();
+        foreach (var value in new[] { "invalid", "0", "true false" })
+        {
+            var parsed = root.Parse($"{command} --use-config-source {value} --non-interactive");
+            Assert.NotEmpty(parsed.Errors);
+            Assert.NotEqual(CliExitCodes.Success, await parsed.InvokeAsync().DefaultTimeout());
+        }
+        Assert.Empty(git.FetchModes);
+        Assert.Empty(git.ResolutionModes);
+        Assert.Empty(interaction.StringPromptCalls);
+        Assert.Empty(interaction.BooleanPromptCalls);
         Assert.Empty(interaction.DisplayedRawText);
     }
 }

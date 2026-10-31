@@ -149,7 +149,7 @@ public partial class NewCommandLocalTemplateTests
         var originalGlobal = await File.ReadAllTextAsync(globalPath);
 
         var result = await provider.GetRequiredService<RootCommand>()
-            .Parse($"new --use-config-source {materialize.ToString().ToLowerInvariant()} --name Demo --output out --suppress-agent-init")
+            .Parse($"new --use-config-source{(materialize ? "" : " false")} --name Demo --output out --suppress-agent-init")
             .InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, result);
@@ -186,7 +186,7 @@ public partial class NewCommandLocalTemplateTests
         using var provider = CreateInheritedTemplateServices(workspace, interaction, git, interactive: true).BuildServiceProvider();
 
         var result = await provider.GetRequiredService<RootCommand>()
-            .Parse("template source list --format json --use-config-source true").InvokeAsync().DefaultTimeout();
+            .Parse("template source list --format json --use-config-source").InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, result);
         Assert.Empty(interaction.DisplayedErrors);

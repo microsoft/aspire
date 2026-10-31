@@ -1683,6 +1683,11 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
     {
         var command = new Command("new");
         command.Options.Add(ConfigSourceService.s_useSourceOption);
-        return command.Parse(accepted is null ? "" : $"--use-config-source {accepted.Value.ToString().ToLowerInvariant()}");
+        return command.Parse(accepted switch
+        {
+            true => "--use-config-source",
+            false => "--use-config-source false",
+            null => ""
+        });
     }
 }

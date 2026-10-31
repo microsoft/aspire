@@ -46,7 +46,7 @@ internal sealed class ConfigSourceService(
     {
         Description = ConfigSourceStrings.UseSourceOptionDescription,
         Recursive = true,
-        Arity = ArgumentArity.ExactlyOne
+        Arity = ArgumentArity.ZeroOrOne
     };
 
     /// <summary>

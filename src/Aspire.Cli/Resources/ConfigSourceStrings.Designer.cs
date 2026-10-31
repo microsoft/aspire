@@ -136,7 +136,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to A configuration source is available. Specify --use-config-source true to accept it or --use-config-source false to use standard Aspire configuration in non-interactive mode..
+        ///   Looks up a localized string similar to A configuration source is available. Specify --use-config-source to accept it or --use-config-source false to use standard Aspire configuration in non-interactive mode..
         /// </summary>
         internal static string ConsentRequired {
             get {
@@ -344,7 +344,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Accept or decline the proposed Git configuration source for this project..
+        ///   Looks up a localized string similar to Use the proposed Git configuration source. Specify false to decline it..
         /// </summary>
         internal static string UseSourceOptionDescription {
             get {

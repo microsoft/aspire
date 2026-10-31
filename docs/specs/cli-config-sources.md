@@ -99,10 +99,10 @@ If neither settings file has a saved binding, report that there is no configurat
 
 Other project commands, including standalone `aspire agent init` and `aspire add`, do not prompt to enable a source. Without a saved project `configSource`, they ignore the initialization-source environment variables and employee default. Template search and source listing have the separate runtime-only inheritance contract below.
 
-Non-interactive creation requires `--use-config-source true` to accept the candidate or `--use-config-source false` to decline it. When a candidate is available and neither value is supplied, fail with instructions rather than waiting for input or silently treating employee detection as consent. The same option can bypass the source prompt during interactive creation:
+Non-interactive creation requires `--use-config-source` to accept the candidate or `--use-config-source false` to decline it. The bare flag means `true`; an explicit `--use-config-source true` is also accepted for compatibility. Omitting the option retains unspecified consent. When a candidate is available and the option is omitted, fail with instructions rather than waiting for input or silently treating employee detection as consent. The same option can bypass the source prompt during interactive creation:
 
 ```shell
-aspire new aspire-starter --use-config-source true
+aspire new aspire-starter --use-config-source
 aspire init --use-config-source false
 ```
 
@@ -321,9 +321,9 @@ Keep no-source, declined-source materialization, unrelated global-command, help,
 
 When `ASPIRE_INIT_SOURCE_URL` is explicitly set, template discovery/search in interactive `aspire new` also reads the remote file's `templateSources` section. The explicit environment setting authorizes discovery acquisition without an additional consent prompt. Employee detection alone does not enable runtime template discovery inheritance. Optional `ASPIRE_INIT_SOURCE_PATH` and `ASPIRE_INIT_SOURCE_REF` use the same validation, branch/commit selection, Git authentication, timeout, and immutable snapshot cache as configuration acquisition. Search and opted-in listing reuse a snapshot within the invocation; later invocations acquire the selected source again rather than silently falling back to stale cached configuration.
 
-`aspire template source list` uses the same candidate selection and consent prompt as `aspire new`, including the detected employee candidate when no explicit URL is set. Accepting includes the selected source's template definitions; declining lists only explicit global definitions. In a non-interactive host, an available candidate requires an explicit `--use-config-source true` or `--use-config-source false`, just as for `aspire new`.
+`aspire template source list` uses the same candidate selection and consent prompt as `aspire new`, including the detected employee candidate when no explicit URL is set. Accepting includes the selected source's template definitions; declining lists only explicit global definitions. In a non-interactive host, an available candidate requires `--use-config-source` or `--use-config-source false`, just as for `aspire new`.
 
-With `--format json`, listing never prompts. Without `--use-config-source true`, it does not select, validate, or fetch an init source, and returns only explicit global template definitions. Explicit opt-in includes inherited sources and disables interactive Git authentication; diagnostics stay on stderr and stdout contains only JSON. Both commands' nullable Boolean option requires a value: a bare `--use-config-source` is not accepted. No listing mode materializes project files.
+With `--format json`, listing never prompts. Without `--use-config-source` (or its explicit `true` form), it does not select, validate, or fetch an init source, and returns only explicit global template definitions. Explicit opt-in includes inherited sources and disables interactive Git authentication; diagnostics stay on stderr and stdout contains only JSON. All commands expose the same nullable Boolean option: bare means `true`, explicit `true`/`false` are accepted, and omission remains unspecified. No listing mode materializes project files.
 
 For example, the remote file can supply:
 
@@ -343,7 +343,7 @@ For example, the remote file can supply:
 export ASPIRE_INIT_SOURCE_URL=https://git.acme.example/platform/aspire-init
 export ASPIRE_INIT_SOURCE_REF=config-preview
 aspire template source list --format json
-aspire template source list --format json --use-config-source true
+aspire template source list --format json --use-config-source
 aspire new
 ```
 
@@ -353,7 +353,7 @@ Merge source names case-insensitively with global `templateSources`. The user's 
 
 `aspire template source add` and `remove` edit only explicit global definitions. Adding an alias supplied by the init source creates a global override; removing that override reveals the inherited source again. Removing an inherited-only alias reports that no global source was found. Listing preserves inherited fields without discovering templates or fetching template repositories; acquiring the init configuration itself can require Git/network access.
 
-Never save inherited template sources into the user's global configuration or the generated project's configuration. Unsetting `ASPIRE_INIT_SOURCE_URL` removes the explicit runtime source from subsequent search/list invocations; human-readable listing can still offer an employee-detected candidate through its normal consent flow. On `aspire new`, `--use-config-source true`/`false` still controls project configuration materialization independently; declining materialization does not disable environment-authorized runtime template discovery inheritance. Accepted initialization and runtime discovery share the invocation's acquired snapshot.
+Never save inherited template sources into the user's global configuration or the generated project's configuration. Unsetting `ASPIRE_INIT_SOURCE_URL` removes the explicit runtime source from subsequent search/list invocations; human-readable listing can still offer an employee-detected candidate through its normal consent flow. On `aspire new`, `--use-config-source` (or explicit `true`) and `--use-config-source false` still control project configuration materialization independently; declining materialization does not disable environment-authorized runtime template discovery inheritance. Accepted initialization and runtime discovery share the invocation's acquired snapshot.
 
 ## Phase 2: Acquire content from configuration
 
