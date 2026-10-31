@@ -136,6 +136,11 @@ internal static partial class TerminalHostForwarder
         using var rpc = new JsonRpc(stream);
         rpc.StartListening();
         await rpc.NotifyAsync("shutdown").WaitAsync(cancellationToken).ConfigureAwait(false);
+
+        // NotifyAsync completes once the message reaches JsonRpc's pipe; a background task then
+        // copies it to the socket. Disposing the socket now can drop the notification, so keep the
+        // connection open until the terminal host closes it while tearing down its control listener.
+        await rpc.Completion.WaitAsync(cancellationToken).ConfigureAwait(false);
     }
 
     [LibraryImport("libc", EntryPoint = "kill", SetLastError = true)]
