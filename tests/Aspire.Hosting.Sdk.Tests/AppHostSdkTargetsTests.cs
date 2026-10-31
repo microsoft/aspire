@@ -565,6 +565,80 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         AssertUsesExplicitAspireCli(properties, project, aspireCliPath);
     }
 
+    [Theory]
+    [InlineData("Dnx")]
+    [InlineData("DnxPinned")]
+    [InlineData("dNxPiNnEd")]
+    public async Task ComputeRunArgumentsWarnsWhenAmbientAspireCliPathOverridesDnxMode(string invocationMode)
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/19713: tooling such as the
+        // VS Code extension can set AspireCliPath in the environment, which silently overrode an
+        // explicitly configured DNX invocation mode.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "fake-cli"));
+        var aspireCliPath = await CreateFakeAspireCliAsync(fakeCliDirectory.FullName);
+        await CreateFakeDnxAsync(fakeCliDirectory.FullName);
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true,
+            $$"""
+              <PropertyGroup>
+                <AspireCliInvocationMode>{{invocationMode}}</AspireCliInvocationMode>
+              </PropertyGroup>
+            """);
+
+        var result = await RunDotNetWithArgumentsAsync(
+            project.ProjectDirectory,
+            ["msbuild", "-nologo", "-restore", "-t:ComputeRunArguments", "-getProperty:_AspireResolvedCliInvocationMode,RunCommand,RunArguments", project.ProjectFile],
+            new Dictionary<string, string>
+            {
+                ["AspireCliPath"] = aspireCliPath,
+                [GetPathEnvironmentVariableName()] = CreatePathWithoutAspire(fakeCliDirectory.FullName)
+            });
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        Assert.Contains("warning ASPIRE013", result.Output);
+        Assert.Contains($"AspireCliInvocationMode={invocationMode} is ignored because AspireCliPath is set to '{aspireCliPath}'", result.Output);
+
+        // AspireCliPath remains authoritative; the warning only makes the override visible.
+        var jsonStart = result.StandardOutput.IndexOf('{');
+        var jsonEnd = result.StandardOutput.LastIndexOf('}');
+        Assert.True(jsonStart >= 0 && jsonEnd > jsonStart, result.Output);
+        using var document = JsonDocument.Parse(result.StandardOutput[jsonStart..(jsonEnd + 1)]);
+        var properties = document.RootElement.GetProperty("Properties")
+            .EnumerateObject()
+            .ToDictionary(property => property.Name, property => property.Value.GetString() ?? string.Empty);
+        Assert.Equal("Aspire", properties["_AspireResolvedCliInvocationMode"]);
+        AssertUsesExplicitAspireCli(properties, project, aspireCliPath);
+    }
+
+    [Theory]
+    [InlineData("Path", null)]
+    [InlineData("DnxPinned", "ASPIRE013")]
+    public async Task ComputeRunArgumentsDoesNotWarnWhenAspireCliPathDoesNotOverrideDnxMode(string invocationMode, string? noWarn)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "fake-cli"));
+        var aspireCliPath = await CreateFakeAspireCliAsync(fakeCliDirectory.FullName);
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true,
+            $$"""
+              <PropertyGroup>
+                <AspireCliInvocationMode>{{invocationMode}}</AspireCliInvocationMode>
+                <NoWarn>$(NoWarn);{{noWarn}}</NoWarn>
+              </PropertyGroup>
+            """);
+
+        var result = await RunDotNetWithArgumentsAsync(
+            project.ProjectDirectory,
+            ["msbuild", "-nologo", "-restore", "-t:ComputeRunArguments", project.ProjectFile],
+            new Dictionary<string, string>
+            {
+                ["AspireCliPath"] = aspireCliPath,
+                [GetPathEnvironmentVariableName()] = CreatePathWithoutAspire(fakeCliDirectory.FullName)
+            });
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        Assert.DoesNotContain("ASPIRE013", result.Output);
+    }
+
     [Fact]
     public async Task ComputeRunArgumentsUsesFileBasedAppHostPathWhenCliBundleIsEnabled()
     {
