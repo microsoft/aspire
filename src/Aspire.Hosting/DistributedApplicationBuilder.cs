@@ -408,7 +408,8 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _innerBuilder.Services.AddSingleton(sp => new DistributedApplicationModel(Resources));
         _innerBuilder.Services.AddSingleton<PipelineExecutor>();
         _innerBuilder.Services.AddHostedService<PipelineExecutor>(sp => sp.GetRequiredService<PipelineExecutor>());
-        _innerBuilder.Services.AddHostedService<DistributedApplicationLifecycle>();
+        _innerBuilder.Services.AddSingleton<DistributedApplicationLifecycle>();
+        _innerBuilder.Services.AddHostedService<DistributedApplicationLifecycle>(sp => sp.GetRequiredService<DistributedApplicationLifecycle>());
         _innerBuilder.Services.AddHostedService<VersionCheckService>();
         _innerBuilder.Services.AddSingleton<IPackageFetcher, PackageFetcher>();
         _innerBuilder.Services.AddSingleton<IPackageVersionProvider, PackageVersionProvider>();

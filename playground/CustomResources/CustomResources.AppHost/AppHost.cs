@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using CustomResources.AppHost;
+using Microsoft.Extensions.Configuration;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
@@ -10,6 +11,18 @@ builder.AddTalkingClock("talking-clock");
 builder.AddTestResource("test");
 
 builder.AddParameter("p0");
+
+// Simulates a slow BeforeStartEvent subscriber, e.g. `dotnet run -- --BeforeStartDelaySeconds 15`.
+// Startup logs (AppHost version, "Distributed application starting.") should still appear immediately.
+if (builder.Configuration.GetValue<int?>("BeforeStartDelaySeconds") is { } beforeStartDelaySeconds)
+{
+    builder.Eventing.Subscribe<BeforeStartEvent>(async (_, cancellationToken) =>
+    {
+        Console.WriteLine($"BeforeStartEvent subscriber delaying startup for {beforeStartDelaySeconds}s...");
+        await Task.Delay(TimeSpan.FromSeconds(beforeStartDelaySeconds), cancellationToken);
+        Console.WriteLine("BeforeStartEvent subscriber finished.");
+    });
+}
 
 #if !SKIP_DASHBOARD_REFERENCE
 // This project is only added in playground projects to support development/debugging
