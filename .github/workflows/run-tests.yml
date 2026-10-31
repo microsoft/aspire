@@ -146,6 +146,16 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          # The runner's Windows Docker engine can win auto-detection but cannot create
+          # the Linux bridge networks these tests need. Leave WSLC as the running runtime.
+          $dockerService = Get-Service -Name docker -ErrorAction SilentlyContinue
+          if ($null -ne $dockerService) {
+            Set-Service -Name docker -StartupType Disabled -ErrorAction Stop
+            Stop-Service -Name docker -Force -ErrorAction Stop
+            if ((Get-Service -Name docker).Status -ne 'Stopped') {
+              throw "Docker service is still running."
+            }
+          }
           wsl --update --web-download
           if ($LASTEXITCODE -ne 0) { throw "WSL update failed: $LASTEXITCODE" }
           wslc version
