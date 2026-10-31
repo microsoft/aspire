@@ -1,0 +1,17 @@
+﻿{
+  Method:     addMsTest(name: string, projectPath: string, options?: MsTestOptions): MsTestResourcePromise;,
+  Options:
+export interface MsTestOptions {
+    /** Gets the build configuration, or null to use the project's default. */
+    configuration?: string | null;
+    /** Gets the target framework to run. This must be specified for multi-targeted projects. */
+    targetFramework?: string | null;
+    /**
+     * Gets arguments passed to the embedded runner, for example a filter or settings file.
+     *
+     * Arguments are individual tokens, not shell-quoted strings. Report destination options,
+     * response files, and server mode are reserved by the integration.
+     */
+    args?: string[];
+}
+}
