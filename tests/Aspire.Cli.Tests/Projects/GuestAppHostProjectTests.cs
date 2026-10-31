@@ -2176,6 +2176,77 @@ public class GuestAppHostProjectTests : IDisposable
         Assert.Equal(CliExitCodes.Cancelled, await runTask);
     }
 
+    [Fact]
+    public async Task RunAsync_TestRunUsesNonWatchCliLauncherEvenInExtension()
+    {
+        var appHostFile = new FileInfo(Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.ts"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "// test apphost");
+        var properties = _workspace.CreateDirectory("Properties");
+        await File.WriteAllTextAsync(Path.Combine(properties.FullName, "launchSettings.json"), """
+            { "profiles": { "default": { "environmentVariables": { "ASPIRE_TEST_OUTPUT_PATH": "stale-run" } } } }
+            """);
+        var outputPath = _workspace.CreateDirectory("test results").FullName;
+        var command = OperatingSystem.IsWindows() ? "cmd.exe" : "/bin/sh";
+        var runtime = new RuntimeSpec
+        {
+            Language = "typescript/nodejs",
+            DisplayName = "Test",
+            CodeGenLanguage = "TypeScript",
+            DetectionPatterns = ["apphost.ts"],
+            Execute = new CommandSpec
+            {
+                Command = command,
+                Args = OperatingSystem.IsWindows() ? ["/c", "exit /b 0"] : ["-c", "exit 0"]
+            },
+            WatchExecute = new CommandSpec
+            {
+                Command = command,
+                Args = OperatingSystem.IsWindows() ? ["/c", "exit /b 42"] : ["-c", "exit 42"]
+            },
+            ExtensionLaunchCapability = "node"
+        };
+        using var extensionServices = new ServiceCollection()
+            .AddSingleton<IExtensionBackchannel>(new TestExtensionBackchannel
+            {
+                HasCapabilityAsyncCallback = (_, _) => Task.FromResult(true)
+            }).BuildServiceProvider();
+        var interaction = new TestExtensionInteractionService(extensionServices)
+        {
+            LaunchAppHostCallback = () => throw new InvalidOperationException("Tests must not use the extension launcher.")
+        };
+        var sessionFactory = new FakeAppHostServerSessionFactory
+        {
+            Session = new FakeAppHostServerSession(new FakeAppHostRpcClient { RuntimeSpec = runtime })
+        };
+        var project = CreateGuestAppHostProject(
+            interactionService: interaction,
+            configuration: new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [$"features:{KnownFeatures.DefaultWatchEnabled}"] = "true"
+            }).Build(),
+            appHostServerProjectFactory: new TestAppHostServerProjectFactory
+            {
+                CreateAsyncCallback = (path, _) =>
+                    Task.FromResult<IAppHostServerProject>(new FakeSucceedingAppHostServerProject(path))
+            },
+            serverSessionFactory: sessionFactory);
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            IsTestRun = true,
+            EnvironmentVariables = new Dictionary<string, string>
+            {
+                [KnownConfigNames.TestOutputPath] = outputPath
+            }
+        }, TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(sessionFactory.CapturedEnvironmentVariables);
+        Assert.Equal(outputPath, sessionFactory.CapturedEnvironmentVariables[KnownConfigNames.TestOutputPath]);
+    }
+
     [Theory]
     [InlineData("publish", null, "publish")]
     [InlineData("deploy", null, "publish")]

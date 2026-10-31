@@ -1,0 +1,244 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <!--
+    Microsoft ResX Schema
+
+    Version 2.0
+
+    The primary goals of this format is to allow a simple XML format
+    that is mostly human readable. The generation and parsing of the
+    various data types are done through the TypeConverter classes
+    associated with the data types.
+
+    Example:
+
+    ... ado.net/XML headers & schema ...
+    <resheader name="resmimetype">text/microsoft-resx</resheader>
+    <resheader name="version">2.0</resheader>
+    <resheader name="reader">System.Resources.ResXResourceReader, System.Windows.Forms, ...</resheader>
+    <resheader name="writer">System.Resources.ResXResourceWriter, System.Windows.Forms, ...</resheader>
+    <data name="Name1"><value>this is my long string</value><comment>this is a comment</comment></data>
+    <data name="Color1" type="System.Drawing.Color, System.Drawing">Blue</data>
+    <data name="Bitmap1" mimetype="application/x-microsoft.net.object.binary.base64">
+        <value>[base64 mime encoded serialized .NET Framework object]</value>
+    </data>
+    <data name="Icon1" type="System.Drawing.Icon, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
+        <value>[base64 mime encoded string representing a byte array form of the .NET Framework object]</value>
+        <comment>This is a comment</comment>
+    </data>
+
+    There are any number of "resheader" rows that contain simple
+    name/value pairs.
+
+    Each data row contains a name, and value. The row also contains a
+    type or mimetype. Type corresponds to a .NET class that support
+    text/value conversion through the TypeConverter architecture.
+    Classes that don't support this are serialized and stored with the
+    mimetype set.
+
+    The mimetype is used for serialized objects, and tells the
+    ResXResourceReader how to depersist the object. This is currently not
+    extensible. For a given mimetype the value must be set accordingly:
+
+    Note - application/x-microsoft.net.object.binary.base64 is the format
+    that the ResXResourceWriter will generate, however the reader can
+    read any of the formats listed below.
+
+    mimetype: application/x-microsoft.net.object.binary.base64
+    value   : The object must be serialized with
+            : System.Runtime.Serialization.Formatters.Binary.BinaryFormatter
+            : and then encoded with base64 encoding.
+
+    mimetype: application/x-microsoft.net.object.soap.base64
+    value   : The object must be serialized with
+            : System.Runtime.Serialization.Formatters.Soap.SoapFormatter
+            : and then encoded with base64 encoding.
+
+    mimetype: application/x-microsoft.net.object.bytearray.base64
+    value   : The object must be serialized into a byte array
+            : using a System.ComponentModel.TypeConverter
+            : and then encoded with base64 encoding.
+    -->
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="StartingDashboard" xml:space="preserve">
+    <value>Starting dashboard...</value>
+  </data>
+  <data name="Dashboard" xml:space="preserve">
+    <value>Dashboard</value>
+  </data>
+  <data name="Logs" xml:space="preserve">
+    <value>Logs</value>
+  </data>
+  <data name="ConnectingToAppHost" xml:space="preserve">
+    <value>Connecting to AppHost...</value>
+  </data>
+  <data name="DashboardFailedToStart" xml:space="preserve">
+    <value>Aspire Dashboard failed to start or is disabled.</value>
+  </data>
+  <data name="AppHost" xml:space="preserve">
+    <value>AppHost</value>
+  </data>
+  <data name="AppHostExitedWithCode" xml:space="preserve">
+    <value>AppHost process exited with code {0}.</value>
+  </data>
+  <data name="TimeoutWaitingForAppHost" xml:space="preserve">
+    <value>Timed out waiting {0}s for AppHost to start. If the AppHost is still building or starting, set {1} to a higher value and try again.</value>
+    <comment>Do not localize the {1} placeholder. It is an environment variable name.</comment>
+  </data>
+  <data name="RecentAppHostStartupOutput" xml:space="preserve">
+    <value>Recent AppHost startup output</value>
+  </data>
+  <data name="IsolatedModeRunningInstanceWarning" xml:space="preserve">
+    <value>A running instance of this AppHost was found and will be stopped. To run multiple isolated instances simultaneously, run from different directories such as git worktree directories.</value>
+  </data>
+  <data name="NoBuildArgumentDescription" xml:space="preserve">
+    <value>Do not build or restore the AppHost before testing</value>
+  </data>
+  <data name="Description" xml:space="preserve">
+    <value>Run an AppHost until all resources marked with WithTesting() and their collectors finish</value>
+  </data>
+  <data name="IncompatibleOptions" xml:space="preserve">
+    <value>aspire test does not support detached execution, profile capture, or extension-managed debug sessions.</value>
+  </data>
+  <data name="AppHostIncompatible" xml:space="preserve">
+    <value>This AppHost does not support aspire test. Update its Aspire.Hosting package to a version that supports test resource lifetimes.</value>
+  </data>
+  <data name="AppHostExitedEarly" xml:space="preserve">
+    <value>The AppHost exited before all test resources completed.</value>
+  </data>
+  <data name="RunningHeader" xml:space="preserve">
+    <value>Tests are running</value>
+  </data>
+  <data name="OutputDirectory" xml:space="preserve">
+    <value>Test output: {0}</value>
+  </data>
+  <data name="SummaryHeader" xml:space="preserve">
+    <value>Test run {0}</value>
+  </data>
+  <data name="SummaryFile" xml:space="preserve">
+    <value>Summary JSON: {0}</value>
+  </data>
+  <data name="ResourceStatus" xml:space="preserve">
+    <value>{0}: {1} ({2}, exit code {3})</value>
+  </data>
+  <data name="Outcome" xml:space="preserve">
+    <value>Outcome</value>
+  </data>
+  <data name="ExitCode" xml:space="preserve">
+    <value>Exit code</value>
+  </data>
+  <data name="Passed" xml:space="preserve">
+    <value>passed</value>
+  </data>
+  <data name="Failed" xml:space="preserve">
+    <value>failed</value>
+  </data>
+  <data name="Cancelled" xml:space="preserve">
+    <value>cancelled</value>
+  </data>
+  <data name="Incomplete" xml:space="preserve">
+    <value>incomplete</value>
+  </data>
+  <data name="Pending" xml:space="preserve">
+    <value>pending</value>
+  </data>
+  <data name="ArtifactFailure" xml:space="preserve">
+    <value>Failed to create or write test run artifacts: {0}</value>
+  </data>
+  <data name="KeepAliveDescription" xml:space="preserve">
+    <value>Keep the CLI and AppHost running after tests complete for dashboard inspection</value>
+  </data>
+  <data name="FormatDescription" xml:space="preserve">
+    <value>Output format for test resource results (JSON or table)</value>
+  </data>
+  <data name="KeepAliveMessage" xml:space="preserve">
+    <value>Tests have completed. The CLI and AppHost are still running for inspection. Press Ctrl+C to stop.</value>
+  </data>
+  <data name="KeepAliveDisconnected" xml:space="preserve">
+    <value>The AppHost disconnected while being kept alive for test inspection and did not finish shutting down.</value>
+  </data>
+  <data name="PublishedResult" xml:space="preserve">
+    <value>{0}: {1} ({2})</value>
+  </data>
+  <data name="PublishedSummary" xml:space="preserve">
+    <value>Published test results: {0} passed, {1} failed, {2} skipped</value>
+  </data>
+  <data name="Skipped" xml:space="preserve">
+    <value>skipped</value>
+  </data>
+  <data name="LogCaptureFailed" xml:space="preserve">
+    <value>No longer receiving logs from the test AppHost.</value>
+  </data>
+  <data name="Resource" xml:space="preserve">
+    <value>Resource</value>
+  </data>
+  <data name="State" xml:space="preserve">
+    <value>State</value>
+  </data>
+  <data name="InvalidStartupTimeout" xml:space="preserve">
+    <value>{0} must be a positive integer number of seconds for test AppHost startup.</value>
+  </data>
+  <data name="UnrecognizedAppHost" xml:space="preserve">
+    <value>The selected AppHost type is not supported for testing.</value>
+  </data>
+  <data name="ShutdownTimeout" xml:space="preserve">
+    <value>The test AppHost did not shut down within {0} seconds.</value>
+  </data>
+</root>

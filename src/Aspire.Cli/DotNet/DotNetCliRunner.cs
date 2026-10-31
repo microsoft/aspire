@@ -72,6 +72,7 @@ internal sealed class ProcessInvocationOptions
 
     public string? LaunchProfile { get; set; }
     public bool StartDebugSession { get; set; }
+    public bool DisableExtensionLaunch { get; set; }
     public bool Debug { get; set; }
 
     /// <summary>
@@ -179,6 +180,7 @@ internal sealed class ProcessInvocationOptions
         NuGetRestoreTargetsFile = NuGetRestoreTargetsFile,
         LaunchProfile = LaunchProfile,
         StartDebugSession = StartDebugSession,
+        DisableExtensionLaunch = DisableExtensionLaunch,
         Debug = Debug,
         SuppressLogging = SuppressLogging,
         KillEntireProcessTreeOnCancel = KillEntireProcessTreeOnCancel,
@@ -297,7 +299,7 @@ internal sealed class DotNetCliRunner(
         finalEnv.TryGetValue(KnownConfigNames.UnixSocketPath, out socketPath);
 
         // Handle extension-based launch for app hosts with backchannel
-        if (backchannelCompletionSource is not null)
+        if (backchannelCompletionSource is not null && !options.DisableExtensionLaunch)
         {
             if (ExtensionHelper.IsExtensionHost(interactionService, out var extensionInteractionService, out var extensionBackchannel)
                 && projectFile is not null
@@ -422,6 +424,7 @@ internal sealed class DotNetCliRunner(
         {
             NoLaunchProfile = options.NoLaunchProfile,
             StartDebugSession = options.StartDebugSession,
+            DisableExtensionLaunch = options.DisableExtensionLaunch,
             Debug = options.Debug,
             SuppressLogging = options.SuppressLogging,
             KillEntireProcessTreeOnCancel = options.KillEntireProcessTreeOnCancel,
@@ -909,6 +912,13 @@ internal sealed class DotNetCliRunner(
         string[] launchProfileSwitch = !string.IsNullOrEmpty(launchProfile)
             ? [$"--launch-profile={launchProfile}"]
             : [];
+        // dotnet run --environment wins over launchSettings.json, unlike its ambient environment.
+        // Keep the CLI's per-run destination authoritative even on the SDK fallback launch path.
+        // https://learn.microsoft.com/dotnet/core/tools/dotnet-run#options
+        string[] testOutputSwitch = !watch && options.DisableExtensionLaunch &&
+            env is not null && env.TryGetValue(KnownConfigNames.TestOutputPath, out var testOutputPath)
+                ? ["--environment", $"{KnownConfigNames.TestOutputPath}={testOutputPath}"]
+                : [];
         var suppressCliRunHookProperty = $"/p:{KnownConfigNames.SuppressCliRunHook}=true";
         // Add --non-interactive flag when using watch to prevent interactive prompts during automation
         var nonInteractiveSwitch = watch ? "--non-interactive" : string.Empty;
@@ -917,10 +927,10 @@ internal sealed class DotNetCliRunner(
 
         string[] cliOptions = isSingleFile switch
         {
-            false => [watchOrRunCommand, nonInteractiveSwitch, verboseSwitch, noBuildSwitch, noRestoreSwitch, noProfileSwitch, .. launchProfileSwitch, "--project", projectFile.FullName],
+            false => [watchOrRunCommand, nonInteractiveSwitch, verboseSwitch, noBuildSwitch, noRestoreSwitch, noProfileSwitch, .. launchProfileSwitch, .. testOutputSwitch, "--project", projectFile.FullName],
             // BuildAsync applies the suppression property when it compiles file-based AppHosts, so
             // --no-build can reuse that output without recursively entering the CLI run hook.
-            true => ["run", noBuildSwitch, noRestoreSwitch, noProfileSwitch, .. launchProfileSwitch, noBuild ? string.Empty : suppressCliRunHookProperty, "--file", projectFile.FullName]
+            true => ["run", noBuildSwitch, noRestoreSwitch, noProfileSwitch, .. launchProfileSwitch, .. testOutputSwitch, noBuild ? string.Empty : suppressCliRunHookProperty, "--file", projectFile.FullName]
         };
 
         // Empty extension-owned entries represent omitted optional switches, while empty or

@@ -22,6 +22,8 @@ namespace Aspire.Cli.Backchannel;
 [JsonSerializable(typeof(CommandSpec))]
 [JsonSerializable(typeof(string[]))]
 [JsonSerializable(typeof(bool))]
+[JsonSerializable(typeof(IAsyncEnumerable<TestRunEvent>))]
+[JsonSerializable(typeof(MessageFormatterEnumerableTracker.EnumeratorResults<TestRunEvent>))]
 [JsonSerializable(typeof(long))]
 [JsonSerializable(typeof(DashboardUrlsState))]
 [JsonSerializable(typeof(JsonElement))]

@@ -15,6 +15,8 @@ namespace Aspire.Cli.Backchannel;
 internal interface IAppHostCliBackchannel
 {
     Task RequestStopAsync(CancellationToken cancellationToken);
+    Task<bool> WaitForTestCompletionAsync(CancellationToken cancellationToken);
+    IAsyncEnumerable<TestRunEvent> WatchTestRunAsync(CancellationToken cancellationToken);
     Task NotifyAppHostReadyAsync(CancellationToken cancellationToken);
     Task<DashboardUrlsState> GetDashboardUrlsAsync(CancellationToken cancellationToken);
     IAsyncEnumerable<BackchannelLogEntry> GetAppHostLogEntriesAsync(CancellationToken cancellationToken);
@@ -107,6 +109,14 @@ internal sealed class AppHostCliBackchannel(
         }
     }
 
+    public async Task<bool> WaitForTestCompletionAsync(CancellationToken cancellationToken)
+    {
+        var rpc = await GetRpcTaskAsync().WaitAsync(cancellationToken).ConfigureAwait(false);
+
+        return await rpc.InvokeWithProfilingAsync<bool>(
+            profilingTelemetry, "apphost", "WaitForTestCompletionAsync", [], cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task<DashboardUrlsState> GetDashboardUrlsAsync(CancellationToken cancellationToken)
     {
         using var activity = profilingTelemetry.StartBackchannelGetDashboardUrls();
@@ -145,6 +155,12 @@ internal sealed class AppHostCliBackchannel(
             "resource states",
             cancellationToken);
     }
+
+    public IAsyncEnumerable<TestRunEvent> WatchTestRunAsync(CancellationToken cancellationToken) =>
+        InvokeStreamingRpcAsync<TestRunEvent>(
+            (rpc, ct) => rpc.InvokeStreamingWithProfilingAsync<TestRunEvent>(
+                profilingTelemetry, "apphost", "WatchTestRunAsync", [], ct),
+            "test resource states", cancellationToken);
 
     /// <summary>
     /// Invokes a streaming RPC method, handling reconnection when auto-reconnect is enabled.

@@ -10,6 +10,8 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
 {
     public TaskCompletionSource? RequestStopAsyncCalled { get; set; }
     public Func<Task>? RequestStopAsyncCallback { get; set; }
+    public Func<CancellationToken, Task<bool>>? WaitForTestCompletionAsyncCallback { get; set; }
+    public Func<CancellationToken, IAsyncEnumerable<TestRunEvent>>? WatchTestRunAsyncCallback { get; set; }
     public TaskCompletionSource? NotifyAppHostReadyAsyncCalled { get; set; }
 
     public TaskCompletionSource? GetDashboardUrlsAsyncCalled { get; set; }
@@ -24,6 +26,7 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
     public TaskCompletionSource? ConnectAsyncCalled { get; set; }
     public Func<string, CancellationToken, Task>? ConnectAsyncCallback { get; set; }
     public TaskCompletionSource DisconnectCompletionSource { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    public TaskCompletionSource? WaitForDisconnectAsyncCalled { get; set; }
 
     public TaskCompletionSource? GetPublishingActivitiesAsyncCalled { get; set; }
     public Func<CancellationToken, IAsyncEnumerable<PublishingActivity>>? GetPublishingActivitiesAsyncCallback { get; set; }
@@ -51,6 +54,36 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
     {
         NotifyAppHostReadyAsyncCalled?.SetResult();
         return Task.CompletedTask;
+    }
+
+    public Task<bool> WaitForTestCompletionAsync(CancellationToken cancellationToken) =>
+        WaitForTestCompletionAsyncCallback?.Invoke(cancellationToken) ?? throw new InvalidOperationException("Test completion was not configured.");
+
+    public async IAsyncEnumerable<TestRunEvent> WatchTestRunAsync([EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        if (WatchTestRunAsyncCallback is { } callback)
+        {
+            await foreach (var item in callback(cancellationToken).ConfigureAwait(false))
+            {
+                yield return item;
+            }
+        }
+        else
+        {
+            var passed = await WaitForTestCompletionAsync(cancellationToken).ConfigureAwait(false);
+            yield return new TestRunEvent
+            {
+                Resource = new TestResourceState
+                {
+                    ResourceName = "tests",
+                    ResourceId = "tests",
+                    State = "Finished",
+                    ExitCode = passed ? 0 : 1,
+                    Outcome = passed ? "passed" : "failed"
+                }
+            };
+            yield return new TestRunEvent { Passed = passed };
+        }
     }
 
     public Task<DashboardUrlsState> GetDashboardUrlsAsync(CancellationToken cancellationToken)
@@ -118,6 +151,7 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
 
     public async Task WaitForDisconnectAsync(CancellationToken cancellationToken)
     {
+        WaitForDisconnectAsyncCalled?.TrySetResult();
         await DisconnectCompletionSource.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
     }
 
@@ -235,7 +269,7 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
         }
         else
         {
-            return ["baseline.v2", "pipeline-steps.v1", "pipeline-steps.v2"];
+            return ["baseline.v2", "pipeline-steps.v1", "pipeline-steps.v2", "test-lifetime.v1", "test-reporting.v1"];
         }
     }
 
