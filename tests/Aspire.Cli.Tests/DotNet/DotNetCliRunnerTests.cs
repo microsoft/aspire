@@ -1527,6 +1527,46 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task RunAsyncCanKeepLifecycleOwnershipInsteadOfDelegatingToExtension()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.DotNetCliExecutionFactoryFactory = _ => new TestProcessExecutionFactory
+            {
+                CreateExecutionCallback = (args, env, _, _) => new ExitedProcessExecution(args, env, exitCode: 42)
+            };
+            options.InteractionServiceFactory = sp => new TestExtensionInteractionService(sp)
+            {
+                LaunchAppHostCallback = () => throw new InvalidOperationException("The CLI must own this process.")
+            };
+            options.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel
+            {
+                HasCapabilityAsyncCallback = (_, _) => Task.FromResult(true)
+            };
+            options.AppHostBackchannelFactory = _ => new TestAppHostBackchannel
+            {
+                ConnectAsyncCallback = (_, _) => throw new SocketException((int)SocketError.ConnectionRefused)
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+        var runner = provider.GetRequiredService<IDotNetCliRunner>();
+        var backchannel = new TaskCompletionSource<IAppHostCliBackchannel>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var invocationOptions = new ProcessInvocationOptions { DisableExtensionLaunch = true }.Clone();
+
+        var exitCode = await runner.RunAsync(projectFile, watch: false, noBuild: false, noRestore: false, args: [],
+            env: new Dictionary<string, string>
+            {
+                [KnownConfigNames.UnixSocketPath] = Path.Combine(workspace.WorkspaceRoot.FullName, "cli.sock")
+            }, backchannel, invocationOptions, TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.Equal(42, exitCode);
+        await Assert.ThrowsAsync<FailedToConnectBackchannelConnection>(() => backchannel.Task).DefaultTimeout();
+    }
+
+    [Fact]
     public async Task RunAsyncFailsBackchannelWhenExtensionLaunchedAppHostDoesNotConnectBeforeTimeout()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

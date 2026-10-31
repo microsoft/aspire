@@ -72,6 +72,7 @@ internal sealed class ProcessInvocationOptions
 
     public string? LaunchProfile { get; set; }
     public bool StartDebugSession { get; set; }
+    public bool DisableExtensionLaunch { get; set; }
     public bool Debug { get; set; }
 
     /// <summary>
@@ -179,6 +180,7 @@ internal sealed class ProcessInvocationOptions
         NuGetRestoreTargetsFile = NuGetRestoreTargetsFile,
         LaunchProfile = LaunchProfile,
         StartDebugSession = StartDebugSession,
+        DisableExtensionLaunch = DisableExtensionLaunch,
         Debug = Debug,
         SuppressLogging = SuppressLogging,
         KillEntireProcessTreeOnCancel = KillEntireProcessTreeOnCancel,
@@ -297,7 +299,7 @@ internal sealed class DotNetCliRunner(
         finalEnv.TryGetValue(KnownConfigNames.UnixSocketPath, out socketPath);
 
         // Handle extension-based launch for app hosts with backchannel
-        if (backchannelCompletionSource is not null)
+        if (backchannelCompletionSource is not null && !options.DisableExtensionLaunch)
         {
             if (ExtensionHelper.IsExtensionHost(interactionService, out var extensionInteractionService, out var extensionBackchannel)
                 && projectFile is not null
@@ -422,6 +424,7 @@ internal sealed class DotNetCliRunner(
         {
             NoLaunchProfile = options.NoLaunchProfile,
             StartDebugSession = options.StartDebugSession,
+            DisableExtensionLaunch = options.DisableExtensionLaunch,
             Debug = options.Debug,
             SuppressLogging = options.SuppressLogging,
             KillEntireProcessTreeOnCancel = options.KillEntireProcessTreeOnCancel,

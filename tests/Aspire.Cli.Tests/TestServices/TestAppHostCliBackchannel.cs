@@ -10,6 +10,7 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
 {
     public TaskCompletionSource? RequestStopAsyncCalled { get; set; }
     public Func<Task>? RequestStopAsyncCallback { get; set; }
+    public Func<CancellationToken, Task<bool>>? WaitForTestCompletionAsyncCallback { get; set; }
     public TaskCompletionSource? NotifyAppHostReadyAsyncCalled { get; set; }
 
     public TaskCompletionSource? GetDashboardUrlsAsyncCalled { get; set; }
@@ -52,6 +53,9 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
         NotifyAppHostReadyAsyncCalled?.SetResult();
         return Task.CompletedTask;
     }
+
+    public Task<bool> WaitForTestCompletionAsync(CancellationToken cancellationToken) =>
+        WaitForTestCompletionAsyncCallback?.Invoke(cancellationToken) ?? throw new InvalidOperationException("Test completion was not configured.");
 
     public Task<DashboardUrlsState> GetDashboardUrlsAsync(CancellationToken cancellationToken)
     {
@@ -235,7 +239,7 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
         }
         else
         {
-            return ["baseline.v2", "pipeline-steps.v1", "pipeline-steps.v2"];
+            return ["baseline.v2", "pipeline-steps.v1", "pipeline-steps.v2", "test-lifetime.v1"];
         }
     }
 

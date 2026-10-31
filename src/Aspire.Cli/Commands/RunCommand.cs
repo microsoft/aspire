@@ -163,14 +163,21 @@ internal sealed class RunCommand : BaseCommand
         _aspireSecretsStoreResolver = aspireSecretsStoreResolver;
         _cancellationManager = services.CancellationManager;
 
-        Options.Add(s_detachOption);
-        Options.Add(s_noBuildOption);
-        AppHostLauncher.AddLaunchOptions(this);
-
+        AddRunOptions(this);
         TreatUnmatchedTokensAsErrors = false;
     }
 
-    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    internal static void AddRunOptions(Command command)
+    {
+        command.Options.Add(s_detachOption);
+        command.Options.Add(s_noBuildOption);
+        AppHostLauncher.AddLaunchOptions(command);
+    }
+
+    protected override Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken) =>
+        ExecuteRunAsync(parseResult, testMode: false, cancellationToken);
+
+    internal async Task<CommandResult> ExecuteRunAsync(ParseResult parseResult, bool testMode, CancellationToken cancellationToken)
     {
         var passedAppHostProjectFile = parseResult.GetValue(AppHostLauncher.s_appHostOption);
         var detach = parseResult.GetValue(s_detachOption);
@@ -184,6 +191,11 @@ internal sealed class RunCommand : BaseCommand
         if (isExtensionHost)
         {
             startDebugSession = parseResult.GetValue(RootCommand.StartDebugSessionOption);
+        }
+
+        if (testMode && (detach || format == OutputFormat.Json || captureProfile || startDebugSession || IsDetachedStartChild()))
+        {
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, RunCommandStrings.TestIncompatibleOptions);
         }
 
         // Validate that --format is only used with --detach
@@ -200,7 +212,7 @@ internal sealed class RunCommand : BaseCommand
         var extensionTerminalRunWithoutDebugSession = isExtensionHost
             && !startDebugSession
             && string.IsNullOrEmpty(_configuration[KnownConfigNames.ExtensionDebugSessionId]);
-        var watchModeEnabled = _features.IsFeatureEnabled(KnownFeatures.DefaultWatchEnabled, defaultValue: false) || extensionTerminalRunWithoutDebugSession;
+        var watchModeEnabled = !testMode && (_features.IsFeatureEnabled(KnownFeatures.DefaultWatchEnabled, defaultValue: false) || extensionTerminalRunWithoutDebugSession);
         if (noBuild && watchModeEnabled)
         {
             return CommandResult.Failure(CliExitCodes.InvalidCommand, RunCommandStrings.NoBuildNotSupportedWithWatchMode);
@@ -222,7 +234,7 @@ internal sealed class RunCommand : BaseCommand
         // Skip this when running in non-interactive mode (e.g. as a child of `aspire start`)
         // to avoid delegating back to the extension instead of launching the AppHost directly.
         var nonInteractive = parseResult.GetValue(RootCommand.NonInteractiveOption);
-        if (!nonInteractive
+        if (!testMode && !nonInteractive
             && ExtensionHelper.IsExtensionHost(InteractionService, out var extensionInteractionService, out _)
             && string.IsNullOrEmpty(_configuration[KnownConfigNames.ExtensionDebugSessionId]))
         {
@@ -358,6 +370,7 @@ internal sealed class RunCommand : BaseCommand
             {
                 AppHostFile = effectiveAppHostFile,
                 Watch = false,
+                IsTestRun = testMode,
                 Debug = parseResult.GetValue(RootCommand.DebugOption),
                 NoBuild = noBuild,
                 NoRestore = noBuild, // --no-build implies --no-restore
@@ -432,7 +445,7 @@ internal sealed class RunCommand : BaseCommand
                 if (cancellationToken.IsCancellationRequested && runExitCode == CliExitCodes.Cancelled)
                 {
                     Telemetry.SetActivityProperty(runActivity, TelemetryConstants.Tags.ErrorType, "canceled");
-                    return CommandResult.Cancelled(CliExitCodes.Success);
+                    return CommandResult.Cancelled(testMode ? CliExitCodes.Cancelled : CliExitCodes.Success);
                 }
 
                 Telemetry.SetActivityProperty(runActivity, TelemetryConstants.Tags.ErrorType, "build_failed");
@@ -517,7 +530,36 @@ internal sealed class RunCommand : BaseCommand
                 var isRemoteEnvironment = isCodespaces || isRemoteContainers || isSshRemote;
 
                 var profileStopRequested = false;
-                if (captureProfile)
+                bool? testsPassed = null;
+                if (testMode)
+                {
+                    var capabilities = await backchannel.GetCapabilitiesAsync(cancellationToken).ConfigureAwait(false);
+                    if (!capabilities.Contains("test-lifetime.v1", StringComparer.Ordinal))
+                    {
+                        return CommandResult.Failure(CliExitCodes.AppHostIncompatible, RunCommandStrings.TestAppHostIncompatible);
+                    }
+
+                    using var completionCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                    var completion = backchannel.WaitForTestCompletionAsync(completionCts.Token);
+                    try
+                    {
+                        var finished = await Task.WhenAny(completion, runTask).WaitAsync(cancellationToken).ConfigureAwait(false);
+                        if (finished == runTask && !completion.IsCompleted)
+                        {
+                            return CommandResult.Failure(CliExitCodes.TestRunFailed, RunCommandStrings.TestAppHostExitedEarly);
+                        }
+
+                        testsPassed = await completion.ConfigureAwait(false);
+                        cancellationToken.ThrowIfCancellationRequested();
+                        await backchannel.RequestStopAsync(cancellationToken).WaitAsync(s_gracefulShutdownBudget, _timeProvider, cancellationToken).ConfigureAwait(false);
+                        await runTask.WaitAsync(s_gracefulShutdownBudget, _timeProvider, cancellationToken).ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        completionCts.Cancel();
+                    }
+                }
+                else if (captureProfile)
                 {
                     profileStopRequested = await RequestAppHostStopForProfileAsync(backchannel, runTask, captureProfileDelay, _profilingTelemetry, cancellationToken).ConfigureAwait(false);
                 }
@@ -655,6 +697,21 @@ internal sealed class RunCommand : BaseCommand
                     var exitCode = await runTask;
                     lifetimeActivity.SetProcessExitCode(exitCode);
 
+                    if (testsPassed is { } passed)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        if (!passed)
+                        {
+                            return CommandResult.Failure(CliExitCodes.TestRunFailed);
+                        }
+
+                        // Guest launchers can report the signal used for orderly helper teardown.
+                        // A forced kill (137), or any other AppHost failure, must not become a pass.
+                        return exitCode is 0 or 130 or 143
+                            ? CommandResult.Success()
+                            : CommandResult.Failure(CliExitCodes.TestRunFailed, string.Format(CultureInfo.CurrentCulture, RunCommandStrings.AppHostExitedWithCode, exitCode));
+                    }
+
                     // Capture mode intentionally turns a long-running AppHost startup into a finite command.
                     // Some AppHost implementations, including guest AppHosts, report the teardown exit code
                     // from a helper process that the CLI stops after the AppHost has already started; on
@@ -672,7 +729,7 @@ internal sealed class RunCommand : BaseCommand
 
                     // Cancelled by user (e.g., Ctrl+C) - treat as successful exit since the user intentionally stopped the AppHost.
                     return exitCode == CliExitCodes.Cancelled
-                        ? CommandResult.Cancelled(CliExitCodes.Success)
+                        ? CommandResult.Cancelled(testMode ? CliExitCodes.Cancelled : CliExitCodes.Success)
                         : CommandResult.FromExitCode(exitCode);
                 }
             }
@@ -703,7 +760,7 @@ internal sealed class RunCommand : BaseCommand
             // User Ctrl+C is the normal exit path for `aspire run`; surface as success.
             // Internal failures `return X` directly from GuestAppHostProject.RunAsync rather
             // than flowing through this catch.
-            return CommandResult.Cancelled(CliExitCodes.Success);
+            return CommandResult.Cancelled(testMode ? CliExitCodes.Cancelled : CliExitCodes.Success);
         }
         catch (ProjectLocatorException ex)
         {
@@ -727,7 +784,7 @@ internal sealed class RunCommand : BaseCommand
             var errorMessage = string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.ErrorConnectingToAppHost, ex.Message);
             return CommandResult.Failure(CliExitCodes.FailedToDotnetRunAppHost, errorMessage);
         }
-        catch (ConnectionLostException) when (isExtensionHost)
+        catch (ConnectionLostException) when (isExtensionHost && !testMode)
         {
             // When the extension manages the AppHost lifecycle (e.g., VS Code debug session),
             // it terminates the process on stop/restart, causing the backchannel to drop.
@@ -735,6 +792,15 @@ internal sealed class RunCommand : BaseCommand
         }
         catch (AppHostExitedDuringStartupException ex)
         {
+            if (testMode)
+            {
+                return cancellationToken.IsCancellationRequested
+                    ? CommandResult.Cancelled()
+                    : CommandResult.Failure(
+                        ex.ExitCode is CliExitCodes.Success or CliExitCodes.Cancelled ? CliExitCodes.TestRunFailed : ex.ExitCode,
+                        ex.FailureMessage ?? RunCommandStrings.TestAppHostExitedEarly);
+            }
+
             return CreateRunExitResult(ex.ExitCode, ex.FailureMessage);
         }
         catch (Exception ex)
@@ -746,6 +812,14 @@ internal sealed class RunCommand : BaseCommand
         }
         finally
         {
+            if (testMode && runCts is not null && runTask is { IsCompleted: false })
+            {
+                // Test failures, RPC loss, and incompatible AppHosts still own a live process.
+                // Route early-exit teardown through the same cancellation/drain path as run.
+                cancellationRequested = true;
+                runCts.Cancel();
+            }
+
             try
             {
                 try

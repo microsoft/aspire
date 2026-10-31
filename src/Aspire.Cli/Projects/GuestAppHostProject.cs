@@ -652,7 +652,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             }
 
             // Check if hot reload (watch mode) is enabled
-            var enableHotReload = _features.IsFeatureEnabled(KnownFeatures.DefaultWatchEnabled, defaultValue: false);
+            var enableHotReload = !context.IsTestRun && _features.IsFeatureEnabled(KnownFeatures.DefaultWatchEnabled, defaultValue: false);
 
             var environmentVariables = CreateGuestEnvironmentVariables(
                 context.EnvironmentVariables,
@@ -857,7 +857,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 // This mirrors the pattern in DotNetCliRunner.ExecuteAsync for .NET app hosts.
                 // The RuntimeSpec declares the required extension capability (e.g., "node" for TypeScript);
                 // only use the extension launcher when the runtime requests it and the extension supports it.
-                if (_guestRuntime.ExtensionLaunchCapability is { } requiredCapability
+                if (!context.IsTestRun && _guestRuntime.ExtensionLaunchCapability is { } requiredCapability
                     && ExtensionHelper.IsExtensionHost(_interactionService, out var extensionInteractionService, out var extensionBackchannel)
                     && await extensionBackchannel.HasCapabilityAsync(requiredCapability, cancellationToken))
                 {

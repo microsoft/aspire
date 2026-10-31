@@ -267,4 +267,16 @@
   <data name="NoBuildNotSupportedWithWatchMode" xml:space="preserve">
     <value>The --no-build option cannot be used when watch mode is enabled.</value>
   </data>
+  <data name="TestDescription" xml:space="preserve">
+    <value>Run an AppHost until all resources marked with WithTestRun() finish</value>
+  </data>
+  <data name="TestIncompatibleOptions" xml:space="preserve">
+    <value>aspire test does not support detached execution, JSON output, profile capture, or extension-managed debug sessions.</value>
+  </data>
+  <data name="TestAppHostIncompatible" xml:space="preserve">
+    <value>This AppHost does not support aspire test. Update its Aspire.Hosting package to a version that supports test resource lifetimes.</value>
+  </data>
+  <data name="TestAppHostExitedEarly" xml:space="preserve">
+    <value>The AppHost exited before all test resources completed.</value>
+  </data>
 </root>

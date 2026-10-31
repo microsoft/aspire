@@ -222,6 +222,26 @@
         <target state="translated">Durum</target>
         <note>The state of the resource, eg Running</note>
       </trans-unit>
+      <trans-unit id="TestAppHostExitedEarly">
+        <source>The AppHost exited before all test resources completed.</source>
+        <target state="new">The AppHost exited before all test resources completed.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TestAppHostIncompatible">
+        <source>This AppHost does not support aspire test. Update its Aspire.Hosting package to a version that supports test resource lifetimes.</source>
+        <target state="new">This AppHost does not support aspire test. Update its Aspire.Hosting package to a version that supports test resource lifetimes.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TestDescription">
+        <source>Run an AppHost until all resources marked with WithTestRun() finish</source>
+        <target state="new">Run an AppHost until all resources marked with WithTestRun() finish</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TestIncompatibleOptions">
+        <source>aspire test does not support detached execution, JSON output, profile capture, or extension-managed debug sessions.</source>
+        <target state="new">aspire test does not support detached execution, JSON output, profile capture, or extension-managed debug sessions.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="TimeoutWaitingForAppHost">
         <source>Timed out waiting {0}s for AppHost to start. If the AppHost is still building or starting, set {1} to a higher value and try again.</source>
         <target state="translated">AppHost'un başlamasını beklerken {0} s sonra zaman aşımına uğradı. AppHost hâlâ derleniyor veya başlatılıyorsa {1} değerini daha yüksek bir değere ayarlayıp yeniden deneyin.</target>

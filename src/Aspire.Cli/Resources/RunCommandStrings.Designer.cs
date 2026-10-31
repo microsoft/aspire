@@ -61,6 +61,42 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Run an AppHost until all resources marked with WithTestRun() finish.
+        /// </summary>
+        internal static string TestDescription {
+            get {
+                return ResourceManager.GetString("TestDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string describing incompatible test execution options.
+        /// </summary>
+        internal static string TestIncompatibleOptions {
+            get {
+                return ResourceManager.GetString("TestIncompatibleOptions", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string describing an AppHost without test lifetime support.
+        /// </summary>
+        internal static string TestAppHostIncompatible {
+            get {
+                return ResourceManager.GetString("TestAppHostIncompatible", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string describing an AppHost exiting before tests complete.
+        /// </summary>
+        internal static string TestAppHostExitedEarly {
+            get {
+                return ResourceManager.GetString("TestAppHostExitedEarly", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Maybe later.
         /// </summary>
         internal static string AgentConfigurationMaybeLater {

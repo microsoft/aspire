@@ -31,10 +31,47 @@ aspire <command> [options]
 | `add [<integration>]` | Add a hosting integration to the apphost. |
 | `update` | Update integrations in the Aspire project. |
 | `run` | Run an apphost in development mode. |
+| `test` | Run an apphost until all test resources finish, then shut it down. |
 | `stop` | Stop a running apphost or the specified resource. |
 | `ps` | List running apphosts. |
 
 C# AppHosts created with Aspire 17 or later use package directives instead of the obsolete AppHost SDK. When targeting an earlier Aspire release, the empty template retains its SDK directive so it does not require the newer `Aspire.Hosting.Dotnet` package.
+
+### Running test resources
+
+Mark any resource with `WithTestRun()` to include it in `aspire test`:
+
+```csharp
+var api = builder.AddProject<Projects.Api>("api");
+builder.AddExecutable("tests", "test-runner", ".")
+    .WithReference(api)
+    .WaitFor(api)
+    .WithTestRun();
+```
+
+```bash
+aspire test --apphost ./AppHost/AppHost.csproj
+```
+
+The command uses the same build, launch, and application shutdown behavior as
+`aspire run`, but disables hot reload and waits for every annotated resource
+(including replicas), even after another test fails. Unannotated services remain
+available until the tests finish. The annotation does not change `aspire run`.
+
+A terminal resource state with exit code `0` passes. Nonzero exit codes, failure
+to start, and an unhealthy runtime fail the run. If a terminal snapshot has no
+exit code, Aspire waits up to five seconds for a later exit-code notification;
+an exit code that remains unknown fails rather than passing or waiting forever.
+Custom resources must publish a terminal state and exit code through
+`ResourceNotificationService`.
+
+The command returns `0` when all tests pass, `23` when any test fails, and `130`
+when cancelled. Missing test annotations, an incompatible AppHost, startup
+failure, premature AppHost exit, or shutdown failure also return a nonzero code
+with diagnostics. A test that never reaches a terminal state continues running
+until cancelled. Detached execution, JSON output, profile capture, and
+extension-managed debug sessions are not supported. Per-resource reporting,
+test result collection, and test output directories are not provided yet.
 
 ### Resource Management
 

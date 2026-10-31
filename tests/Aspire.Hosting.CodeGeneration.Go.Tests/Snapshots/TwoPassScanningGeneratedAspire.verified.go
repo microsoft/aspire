@@ -3288,6 +3288,16 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	// configuration.
 	WithTerminal(options ...*WithTerminalOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 
+	// WithTestRun marks a resource as a test resource.
+	//
+	// Waits for every marked resource, including replicas, then shuts down the
+	// application. Exit code zero passes. Startup failure, a nonzero exit code, or
+	// an unknown terminal exit code fails. This does not change the lifetime of
+	// aspire run.
+	//
+	// Returns: The resource builder.
+	WithTestRun() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
 	// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 	// names add multiple values.
 	//
@@ -5362,6 +5372,17 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithTerminal(o
 	return s
 }
 
+// WithTestRun marks a resource as a test resource.
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithTestRun() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestRun", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 // names add multiple values.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithTrait(name string, value string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
@@ -6693,6 +6714,16 @@ type CSharpAppResource interface {
 	// Returns: A reference to the IResourceBuilder for chaining additional
 	// configuration.
 	WithTerminal(options ...*WithTerminalOptions) CSharpAppResource
+
+	// WithTestRun marks a resource as a test resource.
+	//
+	// Waits for every marked resource, including replicas, then shuts down the
+	// application. Exit code zero passes. Startup failure, a nonzero exit code, or
+	// an unknown terminal exit code fails. This does not change the lifetime of
+	// aspire run.
+	//
+	// Returns: The resource builder.
+	WithTestRun() CSharpAppResource
 
 	// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 	// names add multiple values.
@@ -8478,6 +8509,17 @@ func (s *cSharpAppResource) WithTerminal(options ...*WithTerminalOptions) CSharp
 		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithTestRun marks a resource as a test resource.
+func (s *cSharpAppResource) WithTestRun() CSharpAppResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestRun", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -10653,6 +10695,16 @@ type ContainerRegistryResource interface {
 	// configuration.
 	WithTerminal(options ...*WithTerminalOptions) ContainerRegistryResource
 
+	// WithTestRun marks a resource as a test resource.
+	//
+	// Waits for every marked resource, including replicas, then shuts down the
+	// application. Exit code zero passes. Startup failure, a nonzero exit code, or
+	// an unknown terminal exit code fails. This does not change the lifetime of
+	// aspire run.
+	//
+	// Returns: The resource builder.
+	WithTestRun() ContainerRegistryResource
+
 	// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 	// names add multiple values.
 	//
@@ -11650,6 +11702,17 @@ func (s *containerRegistryResource) WithTerminal(options ...*WithTerminalOptions
 		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithTestRun marks a resource as a test resource.
+func (s *containerRegistryResource) WithTestRun() ContainerRegistryResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestRun", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -12959,6 +13022,16 @@ type ContainerResource interface {
 	// Returns: A reference to the IResourceBuilder for chaining additional
 	// configuration.
 	WithTerminal(options ...*WithTerminalOptions) ContainerResource
+
+	// WithTestRun marks a resource as a test resource.
+	//
+	// Waits for every marked resource, including replicas, then shuts down the
+	// application. Exit code zero passes. Startup failure, a nonzero exit code, or
+	// an unknown terminal exit code fails. This does not change the lifetime of
+	// aspire run.
+	//
+	// Returns: The resource builder.
+	WithTestRun() ContainerResource
 
 	// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 	// names add multiple values.
@@ -15028,6 +15101,17 @@ func (s *containerResource) WithTerminal(options ...*WithTerminalOptions) Contai
 		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithTestRun marks a resource as a test resource.
+func (s *containerResource) WithTestRun() ContainerResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestRun", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -18256,6 +18340,16 @@ type DotnetToolResource interface {
 	// configuration.
 	WithTerminal(options ...*WithTerminalOptions) DotnetToolResource
 
+	// WithTestRun marks a resource as a test resource.
+	//
+	// Waits for every marked resource, including replicas, then shuts down the
+	// application. Exit code zero passes. Startup failure, a nonzero exit code, or
+	// an unknown terminal exit code fails. This does not change the lifetime of
+	// aspire run.
+	//
+	// Returns: The resource builder.
+	WithTestRun() DotnetToolResource
+
 	// WithToolIgnoreExistingFeeds configures the tool to use only the specified
 	// package sources, ignoring existing NuGet configuration.
 	//
@@ -20093,6 +20187,17 @@ func (s *dotnetToolResource) WithTerminal(options ...*WithTerminalOptions) Dotne
 		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithTestRun marks a resource as a test resource.
+func (s *dotnetToolResource) WithTestRun() DotnetToolResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestRun", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -22547,6 +22652,16 @@ type ExecutableResource interface {
 	// configuration.
 	WithTerminal(options ...*WithTerminalOptions) ExecutableResource
 
+	// WithTestRun marks a resource as a test resource.
+	//
+	// Waits for every marked resource, including replicas, then shuts down the
+	// application. Exit code zero passes. Startup failure, a nonzero exit code, or
+	// an unknown terminal exit code fails. This does not change the lifetime of
+	// aspire run.
+	//
+	// Returns: The resource builder.
+	WithTestRun() ExecutableResource
+
 	// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 	// names add multiple values.
 	//
@@ -24314,6 +24429,17 @@ func (s *executableResource) WithTerminal(options ...*WithTerminalOptions) Execu
 	return s
 }
 
+// WithTestRun marks a resource as a test resource.
+func (s *executableResource) WithTestRun() ExecutableResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestRun", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 // names add multiple values.
 func (s *executableResource) WithTrait(name string, value string) ExecutableResource {
@@ -25343,6 +25469,16 @@ type ExternalServiceResource interface {
 	// configuration.
 	WithTerminal(options ...*WithTerminalOptions) ExternalServiceResource
 
+	// WithTestRun marks a resource as a test resource.
+	//
+	// Waits for every marked resource, including replicas, then shuts down the
+	// application. Exit code zero passes. Startup failure, a nonzero exit code, or
+	// an unknown terminal exit code fails. This does not change the lifetime of
+	// aspire run.
+	//
+	// Returns: The resource builder.
+	WithTestRun() ExternalServiceResource
+
 	// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 	// names add multiple values.
 	//
@@ -26359,6 +26495,17 @@ func (s *externalServiceResource) WithTerminal(options ...*WithTerminalOptions) 
 		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithTestRun marks a resource as a test resource.
+func (s *externalServiceResource) WithTestRun() ExternalServiceResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestRun", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -29167,6 +29314,16 @@ type ParameterResource interface {
 	// configuration.
 	WithTerminal(options ...*WithTerminalOptions) ParameterResource
 
+	// WithTestRun marks a resource as a test resource.
+	//
+	// Waits for every marked resource, including replicas, then shuts down the
+	// application. Exit code zero passes. Startup failure, a nonzero exit code, or
+	// an unknown terminal exit code fails. This does not change the lifetime of
+	// aspire run.
+	//
+	// Returns: The resource builder.
+	WithTestRun() ParameterResource
+
 	// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 	// names add multiple values.
 	//
@@ -30265,6 +30422,17 @@ func (s *parameterResource) WithTerminal(options ...*WithTerminalOptions) Parame
 		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithTestRun marks a resource as a test resource.
+func (s *parameterResource) WithTestRun() ParameterResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestRun", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -32239,6 +32407,16 @@ type ProjectResource interface {
 	// configuration.
 	WithTerminal(options ...*WithTerminalOptions) ProjectResource
 
+	// WithTestRun marks a resource as a test resource.
+	//
+	// Waits for every marked resource, including replicas, then shuts down the
+	// application. Exit code zero passes. Startup failure, a nonzero exit code, or
+	// an unknown terminal exit code fails. This does not change the lifetime of
+	// aspire run.
+	//
+	// Returns: The resource builder.
+	WithTestRun() ProjectResource
+
 	// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 	// names add multiple values.
 	//
@@ -34023,6 +34201,17 @@ func (s *projectResource) WithTerminal(options ...*WithTerminalOptions) ProjectR
 		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithTestRun marks a resource as a test resource.
+func (s *projectResource) WithTestRun() ProjectResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestRun", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -37410,6 +37599,16 @@ type TestDatabaseResource interface {
 	// configuration.
 	WithTerminal(options ...*WithTerminalOptions) TestDatabaseResource
 
+	// WithTestRun marks a resource as a test resource.
+	//
+	// Waits for every marked resource, including replicas, then shuts down the
+	// application. Exit code zero passes. Startup failure, a nonzero exit code, or
+	// an unknown terminal exit code fails. This does not change the lifetime of
+	// aspire run.
+	//
+	// Returns: The resource builder.
+	WithTestRun() TestDatabaseResource
+
 	// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 	// names add multiple values.
 	//
@@ -39481,6 +39680,17 @@ func (s *testDatabaseResource) WithTerminal(options ...*WithTerminalOptions) Tes
 	return s
 }
 
+// WithTestRun marks a resource as a test resource.
+func (s *testDatabaseResource) WithTestRun() TestDatabaseResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestRun", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 // names add multiple values.
 func (s *testDatabaseResource) WithTrait(name string, value string) TestDatabaseResource {
@@ -41187,6 +41397,16 @@ type TestRedisResource interface {
 	// Returns: A reference to the IResourceBuilder for chaining additional
 	// configuration.
 	WithTerminal(options ...*WithTerminalOptions) TestRedisResource
+
+	// WithTestRun marks a resource as a test resource.
+	//
+	// Waits for every marked resource, including replicas, then shuts down the
+	// application. Exit code zero passes. Startup failure, a nonzero exit code, or
+	// an unknown terminal exit code fails. This does not change the lifetime of
+	// aspire run.
+	//
+	// Returns: The resource builder.
+	WithTestRun() TestRedisResource
 
 	// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 	// names add multiple values.
@@ -43598,6 +43818,17 @@ func (s *testRedisResource) WithTerminal(options ...*WithTerminalOptions) TestRe
 		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithTestRun marks a resource as a test resource.
+func (s *testRedisResource) WithTestRun() TestRedisResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestRun", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 

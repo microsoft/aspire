@@ -13243,6 +13243,15 @@ export interface ContainerRegistryResource {
      */
     withTerminal(options?: WithTerminalOptions): ContainerRegistryResourcePromise;
     /**
+     * Marks a resource as a test resource.
+     *
+     * Waits for every marked resource, including replicas, then shuts down the application.
+     * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
+     * This does not change the lifetime of aspire run.
+     * @returns The resource builder.
+     */
+    withTestRun(): ContainerRegistryResourcePromise;
+    /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
      * @param callback The callback to execute when the step runs.
@@ -13604,6 +13613,15 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
      */
     withTerminal(options?: WithTerminalOptions): ContainerRegistryResourcePromise;
+    /**
+     * Marks a resource as a test resource.
+     *
+     * Waits for every marked resource, including replicas, then shuts down the application.
+     * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
+     * This does not change the lifetime of aspire run.
+     * @returns The resource builder.
+     */
+    withTestRun(): ContainerRegistryResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -14523,6 +14541,28 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
     }
 
     /** @internal */
+    private async _withTestRunInternal(): Promise<ContainerRegistryResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
+            'Aspire.Hosting/withTestRun',
+            rpcArgs
+        );
+        return new ContainerRegistryResourceImpl(result, this._client);
+    }
+
+    /**
+     * Marks a resource as a test resource.
+     *
+     * Waits for every marked resource, including replicas, then shuts down the application.
+     * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
+     * This does not change the lifetime of aspire run.
+     * @returns The resource builder.
+     */
+    withTestRun(): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromiseImpl(this._withTestRunInternal(), this._client);
+    }
+
+    /** @internal */
     private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[], requiredBy?: string[], tags?: string[], description?: string): Promise<ContainerRegistryResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as PipelineStepContextHandle;
@@ -15142,6 +15182,7 @@ const ContainerRegistryResourcePromiseImpl = $aspireCreateFluentPromiseClass<Con
     ["withTags"]: () => ContainerRegistryResourcePromiseImpl,
     ["withDashboardPosition"]: () => ContainerRegistryResourcePromiseImpl,
     ["withTerminal"]: () => ContainerRegistryResourcePromiseImpl,
+    ["withTestRun"]: () => ContainerRegistryResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ContainerRegistryResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ContainerRegistryResourcePromiseImpl,
     ["getResourceName"]: null,
@@ -15898,6 +15939,15 @@ export interface ContainerResource {
      * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
      */
     withTerminal(options?: WithTerminalOptions): ContainerResourcePromise;
+    /**
+     * Marks a resource as a test resource.
+     *
+     * Waits for every marked resource, including replicas, then shuts down the application.
+     * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
+     * This does not change the lifetime of aspire run.
+     * @returns The resource builder.
+     */
+    withTestRun(): ContainerResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -16756,6 +16806,15 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
      */
     withTerminal(options?: WithTerminalOptions): ContainerResourcePromise;
+    /**
+     * Marks a resource as a test resource.
+     *
+     * Waits for every marked resource, including replicas, then shuts down the application.
+     * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
+     * This does not change the lifetime of aspire run.
+     * @returns The resource builder.
+     */
+    withTestRun(): ContainerResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -19104,6 +19163,28 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
+    private async _withTestRunInternal(): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting/withTestRun',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /**
+     * Marks a resource as a test resource.
+     *
+     * Waits for every marked resource, including replicas, then shuts down the application.
+     * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
+     * This does not change the lifetime of aspire run.
+     * @returns The resource builder.
+     */
+    withTestRun(): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._withTestRunInternal(), this._client);
+    }
+
+    /** @internal */
     private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[], requiredBy?: string[], tags?: string[], description?: string): Promise<ContainerResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as PipelineStepContextHandle;
@@ -19869,6 +19950,7 @@ const ContainerResourcePromiseImpl = $aspireCreateFluentPromiseClass<ContainerRe
     ["withTags"]: () => ContainerResourcePromiseImpl,
     ["withDashboardPosition"]: () => ContainerResourcePromiseImpl,
     ["withTerminal"]: () => ContainerResourcePromiseImpl,
+    ["withTestRun"]: () => ContainerResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ContainerResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ContainerResourcePromiseImpl,
     ["withVolume"]: () => ContainerResourcePromiseImpl,
@@ -20467,6 +20549,15 @@ export interface CSharpAppResource {
      * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
      */
     withTerminal(options?: WithTerminalOptions): CSharpAppResourcePromise;
+    /**
+     * Marks a resource as a test resource.
+     *
+     * Waits for every marked resource, including replicas, then shuts down the application.
+     * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
+     * This does not change the lifetime of aspire run.
+     * @returns The resource builder.
+     */
+    withTestRun(): CSharpAppResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -21165,6 +21256,15 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
      */
     withTerminal(options?: WithTerminalOptions): CSharpAppResourcePromise;
+    /**
+     * Marks a resource as a test resource.
+     *
+     * Waits for every marked resource, including replicas, then shuts down the application.
+     * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
+     * This does not change the lifetime of aspire run.
+     * @returns The resource builder.
+     */
+    withTestRun(): CSharpAppResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -23101,6 +23201,28 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
+    private async _withTestRunInternal(): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting/withTestRun',
+            rpcArgs
+        );
+        return new CSharpAppResourceImpl(result, this._client);
+    }
+
+    /**
+     * Marks a resource as a test resource.
+     *
+     * Waits for every marked resource, including replicas, then shuts down the application.
+     * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
+     * This does not change the lifetime of aspire run.
+     * @returns The resource builder.
+     */
+    withTestRun(): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._withTestRunInternal(), this._client);
+    }
+
+    /** @internal */
     private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[], requiredBy?: string[], tags?: string[], description?: string): Promise<CSharpAppResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as PipelineStepContextHandle;
@@ -23861,6 +23983,7 @@ const CSharpAppResourcePromiseImpl = $aspireCreateFluentPromiseClass<CSharpAppRe
     ["withTags"]: () => CSharpAppResourcePromiseImpl,
     ["withDashboardPosition"]: () => CSharpAppResourcePromiseImpl,
     ["withTerminal"]: () => CSharpAppResourcePromiseImpl,
+    ["withTestRun"]: () => CSharpAppResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => CSharpAppResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => CSharpAppResourcePromiseImpl,
     ["withVolume"]: () => CSharpAppResourcePromiseImpl,
@@ -24502,6 +24625,15 @@ export interface DotnetToolResource {
      * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
      */
     withTerminal(options?: WithTerminalOptions): DotnetToolResourcePromise;
+    /**
+     * Marks a resource as a test resource.
+     *
+     * Waits for every marked resource, including replicas, then shuts down the application.
+     * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
+     * This does not change the lifetime of aspire run.
+     * @returns The resource builder.
+     */
+    withTestRun(): DotnetToolResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -25236,6 +25368,15 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
      */
     withTerminal(options?: WithTerminalOptions): DotnetToolResourcePromise;
+    /**
+     * Marks a resource as a test resource.
+     *
+     * Waits for every marked resource, including replicas, then shuts down the application.
+     * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
+     * This does not change the lifetime of aspire run.
+     * @returns The resource builder.
+     */
+    withTestRun(): DotnetToolResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -27287,6 +27428,28 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
+    private async _withTestRunInternal(): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting/withTestRun',
+            rpcArgs
+        );
+        return new DotnetToolResourceImpl(result, this._client);
+    }
+
+    /**
+     * Marks a resource as a test resource.
+     *
+     * Waits for every marked resource, including replicas, then shuts down the application.
+     * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
+     * This does not change the lifetime of aspire run.
+     * @returns The resource builder.
+     */
+    withTestRun(): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._withTestRunInternal(), this._client);
+    }
+
+    /** @internal */
     private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[], requiredBy?: string[], tags?: string[], description?: string): Promise<DotnetToolResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as PipelineStepContextHandle;
@@ -28034,6 +28197,7 @@ const DotnetToolResourcePromiseImpl = $aspireCreateFluentPromiseClass<DotnetTool
     ["withTags"]: () => DotnetToolResourcePromiseImpl,
     ["withDashboardPosition"]: () => DotnetToolResourcePromiseImpl,
     ["withTerminal"]: () => DotnetToolResourcePromiseImpl,
+    ["withTestRun"]: () => DotnetToolResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => DotnetToolResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => DotnetToolResourcePromiseImpl,
     ["withVolume"]: () => DotnetToolResourcePromiseImpl,
@@ -28642,6 +28806,15 @@ export interface ExecutableResource {
      * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
      */
     withTerminal(options?: WithTerminalOptions): ExecutableResourcePromise;
+    /**
+     * Marks a resource as a test resource.
+     *
+     * Waits for every marked resource, including replicas, then shuts down the application.
+     * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
+     * This does not change the lifetime of aspire run.
+     * @returns The resource builder.
+     */
+    withTestRun(): ExecutableResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -29337,6 +29510,15 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
      */
     withTerminal(options?: WithTerminalOptions): ExecutableResourcePromise;
+    /**
+     * Marks a resource as a test resource.
+     *
+     * Waits for every marked resource, including replicas, then shuts down the application.
+     * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
+     * This does not change the lifetime of aspire run.
+     * @returns The resource builder.
+     */
+    withTestRun(): ExecutableResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -31278,6 +31460,28 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
+    private async _withTestRunInternal(): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting/withTestRun',
+            rpcArgs
+        );
+        return new ExecutableResourceImpl(result, this._client);
+    }
+
+    /**
+     * Marks a resource as a test resource.
+     *
+     * Waits for every marked resource, including replicas, then shuts down the application.
+     * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
+     * This does not change the lifetime of aspire run.
+     * @returns The resource builder.
+     */
+    withTestRun(): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._withTestRunInternal(), this._client);
+    }
+
+    /** @internal */
     private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[], requiredBy?: string[], tags?: string[], description?: string): Promise<ExecutableResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as PipelineStepContextHandle;
@@ -32019,6 +32223,7 @@ const ExecutableResourcePromiseImpl = $aspireCreateFluentPromiseClass<Executable
     ["withTags"]: () => ExecutableResourcePromiseImpl,
     ["withDashboardPosition"]: () => ExecutableResourcePromiseImpl,
     ["withTerminal"]: () => ExecutableResourcePromiseImpl,
+    ["withTestRun"]: () => ExecutableResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ExecutableResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ExecutableResourcePromiseImpl,
     ["withVolume"]: () => ExecutableResourcePromiseImpl,
@@ -32311,6 +32516,15 @@ export interface ExternalServiceResource {
      * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
      */
     withTerminal(options?: WithTerminalOptions): ExternalServiceResourcePromise;
+    /**
+     * Marks a resource as a test resource.
+     *
+     * Waits for every marked resource, including replicas, then shuts down the application.
+     * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
+     * This does not change the lifetime of aspire run.
+     * @returns The resource builder.
+     */
+    withTestRun(): ExternalServiceResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -32678,6 +32892,15 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
      */
     withTerminal(options?: WithTerminalOptions): ExternalServiceResourcePromise;
+    /**
+     * Marks a resource as a test resource.
+     *
+     * Waits for every marked resource, including replicas, then shuts down the application.
+     * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
+     * This does not change the lifetime of aspire run.
+     * @returns The resource builder.
+     */
+    withTestRun(): ExternalServiceResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -33621,6 +33844,28 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
     }
 
     /** @internal */
+    private async _withTestRunInternal(): Promise<ExternalServiceResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
+            'Aspire.Hosting/withTestRun',
+            rpcArgs
+        );
+        return new ExternalServiceResourceImpl(result, this._client);
+    }
+
+    /**
+     * Marks a resource as a test resource.
+     *
+     * Waits for every marked resource, including replicas, then shuts down the application.
+     * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
+     * This does not change the lifetime of aspire run.
+     * @returns The resource builder.
+     */
+    withTestRun(): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromiseImpl(this._withTestRunInternal(), this._client);
+    }
+
+    /** @internal */
     private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[], requiredBy?: string[], tags?: string[], description?: string): Promise<ExternalServiceResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as PipelineStepContextHandle;
@@ -34241,6 +34486,7 @@ const ExternalServiceResourcePromiseImpl = $aspireCreateFluentPromiseClass<Exter
     ["withTags"]: () => ExternalServiceResourcePromiseImpl,
     ["withDashboardPosition"]: () => ExternalServiceResourcePromiseImpl,
     ["withTerminal"]: () => ExternalServiceResourcePromiseImpl,
+    ["withTestRun"]: () => ExternalServiceResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ExternalServiceResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ExternalServiceResourcePromiseImpl,
     ["getResourceName"]: null,
@@ -34553,6 +34799,15 @@ export interface ParameterResource {
      * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
      */
     withTerminal(options?: WithTerminalOptions): ParameterResourcePromise;
+    /**
+     * Marks a resource as a test resource.
+     *
+     * Waits for every marked resource, including replicas, then shuts down the application.
+     * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
+     * This does not change the lifetime of aspire run.
+     * @returns The resource builder.
+     */
+    withTestRun(): ParameterResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -34962,6 +35217,15 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
      */
     withTerminal(options?: WithTerminalOptions): ParameterResourcePromise;
+    /**
+     * Marks a resource as a test resource.
+     *
+     * Waits for every marked resource, including replicas, then shuts down the application.
+     * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
+     * This does not change the lifetime of aspire run.
+     * @returns The resource builder.
+     */
+    withTestRun(): ParameterResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -35985,6 +36249,28 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     }
 
     /** @internal */
+    private async _withTestRunInternal(): Promise<ParameterResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<ParameterResourceHandle>(
+            'Aspire.Hosting/withTestRun',
+            rpcArgs
+        );
+        return new ParameterResourceImpl(result, this._client);
+    }
+
+    /**
+     * Marks a resource as a test resource.
+     *
+     * Waits for every marked resource, including replicas, then shuts down the application.
+     * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
+     * This does not change the lifetime of aspire run.
+     * @returns The resource builder.
+     */
+    withTestRun(): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._withTestRunInternal(), this._client);
+    }
+
+    /** @internal */
     private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[], requiredBy?: string[], tags?: string[], description?: string): Promise<ParameterResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as PipelineStepContextHandle;
@@ -36645,6 +36931,7 @@ const ParameterResourcePromiseImpl = $aspireCreateFluentPromiseClass<ParameterRe
     ["withTags"]: () => ParameterResourcePromiseImpl,
     ["withDashboardPosition"]: () => ParameterResourcePromiseImpl,
     ["withTerminal"]: () => ParameterResourcePromiseImpl,
+    ["withTestRun"]: () => ParameterResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ParameterResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ParameterResourcePromiseImpl,
     ["getResourceName"]: null,
@@ -37242,6 +37529,15 @@ export interface ProjectResource {
      * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
      */
     withTerminal(options?: WithTerminalOptions): ProjectResourcePromise;
+    /**
+     * Marks a resource as a test resource.
+     *
+     * Waits for every marked resource, including replicas, then shuts down the application.
+     * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
+     * This does not change the lifetime of aspire run.
+     * @returns The resource builder.
+     */
+    withTestRun(): ProjectResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -37940,6 +38236,15 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
      */
     withTerminal(options?: WithTerminalOptions): ProjectResourcePromise;
+    /**
+     * Marks a resource as a test resource.
+     *
+     * Waits for every marked resource, including replicas, then shuts down the application.
+     * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
+     * This does not change the lifetime of aspire run.
+     * @returns The resource builder.
+     */
+    withTestRun(): ProjectResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -39877,6 +40182,28 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
+    private async _withTestRunInternal(): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting/withTestRun',
+            rpcArgs
+        );
+        return new ProjectResourceImpl(result, this._client);
+    }
+
+    /**
+     * Marks a resource as a test resource.
+     *
+     * Waits for every marked resource, including replicas, then shuts down the application.
+     * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
+     * This does not change the lifetime of aspire run.
+     * @returns The resource builder.
+     */
+    withTestRun(): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._withTestRunInternal(), this._client);
+    }
+
+    /** @internal */
     private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[], requiredBy?: string[], tags?: string[], description?: string): Promise<ProjectResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as PipelineStepContextHandle;
@@ -40637,6 +40964,7 @@ const ProjectResourcePromiseImpl = $aspireCreateFluentPromiseClass<ProjectResour
     ["withTags"]: () => ProjectResourcePromiseImpl,
     ["withDashboardPosition"]: () => ProjectResourcePromiseImpl,
     ["withTerminal"]: () => ProjectResourcePromiseImpl,
+    ["withTestRun"]: () => ProjectResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ProjectResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ProjectResourcePromiseImpl,
     ["withVolume"]: () => ProjectResourcePromiseImpl,
@@ -41397,6 +41725,15 @@ export interface TestDatabaseResource {
      * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
      */
     withTerminal(options?: WithTerminalOptions): TestDatabaseResourcePromise;
+    /**
+     * Marks a resource as a test resource.
+     *
+     * Waits for every marked resource, including replicas, then shuts down the application.
+     * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
+     * This does not change the lifetime of aspire run.
+     * @returns The resource builder.
+     */
+    withTestRun(): TestDatabaseResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -42255,6 +42592,15 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
      */
     withTerminal(options?: WithTerminalOptions): TestDatabaseResourcePromise;
+    /**
+     * Marks a resource as a test resource.
+     *
+     * Waits for every marked resource, including replicas, then shuts down the application.
+     * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
+     * This does not change the lifetime of aspire run.
+     * @returns The resource builder.
+     */
+    withTestRun(): TestDatabaseResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -44602,6 +44948,28 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
+    private async _withTestRunInternal(): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting/withTestRun',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    /**
+     * Marks a resource as a test resource.
+     *
+     * Waits for every marked resource, including replicas, then shuts down the application.
+     * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
+     * This does not change the lifetime of aspire run.
+     * @returns The resource builder.
+     */
+    withTestRun(): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._withTestRunInternal(), this._client);
+    }
+
+    /** @internal */
     private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[], requiredBy?: string[], tags?: string[], description?: string): Promise<TestDatabaseResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as PipelineStepContextHandle;
@@ -45367,6 +45735,7 @@ const TestDatabaseResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestData
     ["withTags"]: () => TestDatabaseResourcePromiseImpl,
     ["withDashboardPosition"]: () => TestDatabaseResourcePromiseImpl,
     ["withTerminal"]: () => TestDatabaseResourcePromiseImpl,
+    ["withTestRun"]: () => TestDatabaseResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => TestDatabaseResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => TestDatabaseResourcePromiseImpl,
     ["withVolume"]: () => TestDatabaseResourcePromiseImpl,
@@ -46142,6 +46511,15 @@ export interface TestRedisResource {
      * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
      */
     withTerminal(options?: WithTerminalOptions): TestRedisResourcePromise;
+    /**
+     * Marks a resource as a test resource.
+     *
+     * Waits for every marked resource, including replicas, then shuts down the application.
+     * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
+     * This does not change the lifetime of aspire run.
+     * @returns The resource builder.
+     */
+    withTestRun(): TestRedisResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -47084,6 +47462,15 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
      */
     withTerminal(options?: WithTerminalOptions): TestRedisResourcePromise;
+    /**
+     * Marks a resource as a test resource.
+     *
+     * Waits for every marked resource, including replicas, then shuts down the application.
+     * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
+     * This does not change the lifetime of aspire run.
+     * @returns The resource builder.
+     */
+    withTestRun(): TestRedisResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -49535,6 +49922,28 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
+    private async _withTestRunInternal(): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting/withTestRun',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    /**
+     * Marks a resource as a test resource.
+     *
+     * Waits for every marked resource, including replicas, then shuts down the application.
+     * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
+     * This does not change the lifetime of aspire run.
+     * @returns The resource builder.
+     */
+    withTestRun(): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._withTestRunInternal(), this._client);
+    }
+
+    /** @internal */
     private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[], requiredBy?: string[], tags?: string[], description?: string): Promise<TestRedisResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as PipelineStepContextHandle;
@@ -50577,6 +50986,7 @@ const TestRedisResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestRedisRe
     ["withTags"]: () => TestRedisResourcePromiseImpl,
     ["withDashboardPosition"]: () => TestRedisResourcePromiseImpl,
     ["withTerminal"]: () => TestRedisResourcePromiseImpl,
+    ["withTestRun"]: () => TestRedisResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => TestRedisResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => TestRedisResourcePromiseImpl,
     ["withVolume"]: () => TestRedisResourcePromiseImpl,
@@ -51352,6 +51762,15 @@ export interface TestVaultResource {
      * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
      */
     withTerminal(options?: WithTerminalOptions): TestVaultResourcePromise;
+    /**
+     * Marks a resource as a test resource.
+     *
+     * Waits for every marked resource, including replicas, then shuts down the application.
+     * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
+     * This does not change the lifetime of aspire run.
+     * @returns The resource builder.
+     */
+    withTestRun(): TestVaultResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -52212,6 +52631,15 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
      */
     withTerminal(options?: WithTerminalOptions): TestVaultResourcePromise;
+    /**
+     * Marks a resource as a test resource.
+     *
+     * Waits for every marked resource, including replicas, then shuts down the application.
+     * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
+     * This does not change the lifetime of aspire run.
+     * @returns The resource builder.
+     */
+    withTestRun(): TestVaultResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -54561,6 +54989,28 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
+    private async _withTestRunInternal(): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting/withTestRun',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    /**
+     * Marks a resource as a test resource.
+     *
+     * Waits for every marked resource, including replicas, then shuts down the application.
+     * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
+     * This does not change the lifetime of aspire run.
+     * @returns The resource builder.
+     */
+    withTestRun(): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._withTestRunInternal(), this._client);
+    }
+
+    /** @internal */
     private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[], requiredBy?: string[], tags?: string[], description?: string): Promise<TestVaultResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as PipelineStepContextHandle;
@@ -55341,6 +55791,7 @@ const TestVaultResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestVaultRe
     ["withTags"]: () => TestVaultResourcePromiseImpl,
     ["withDashboardPosition"]: () => TestVaultResourcePromiseImpl,
     ["withTerminal"]: () => TestVaultResourcePromiseImpl,
+    ["withTestRun"]: () => TestVaultResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => TestVaultResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => TestVaultResourcePromiseImpl,
     ["withVolume"]: () => TestVaultResourcePromiseImpl,
@@ -55914,6 +56365,15 @@ export interface Resource {
      */
     withTerminal(options?: WithTerminalOptions): ResourcePromise;
     /**
+     * Marks a resource as a test resource.
+     *
+     * Waits for every marked resource, including replicas, then shuts down the application.
+     * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
+     * This does not change the lifetime of aspire run.
+     * @returns The resource builder.
+     */
+    withTestRun(): ResourcePromise;
+    /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
      * @param callback The callback to execute when the step runs.
@@ -56275,6 +56735,15 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      * @returns A reference to the `IResourceBuilder`1` for chaining additional configuration.
      */
     withTerminal(options?: WithTerminalOptions): ResourcePromise;
+    /**
+     * Marks a resource as a test resource.
+     *
+     * Waits for every marked resource, including replicas, then shuts down the application.
+     * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
+     * This does not change the lifetime of aspire run.
+     * @returns The resource builder.
+     */
+    withTestRun(): ResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -57195,6 +57664,28 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     }
 
     /** @internal */
+    private async _withTestRunInternal(): Promise<Resource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<IResourceHandle>(
+            'Aspire.Hosting/withTestRun',
+            rpcArgs
+        );
+        return new ResourceImpl(result, this._client);
+    }
+
+    /**
+     * Marks a resource as a test resource.
+     *
+     * Waits for every marked resource, including replicas, then shuts down the application.
+     * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
+     * This does not change the lifetime of aspire run.
+     * @returns The resource builder.
+     */
+    withTestRun(): ResourcePromise {
+        return new ResourcePromiseImpl(this._withTestRunInternal(), this._client);
+    }
+
+    /** @internal */
     private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[], requiredBy?: string[], tags?: string[], description?: string): Promise<Resource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as PipelineStepContextHandle;
@@ -57814,6 +58305,7 @@ const ResourcePromiseImpl = $aspireCreateFluentPromiseClass<Resource, ResourcePr
     ["withTags"]: () => ResourcePromiseImpl,
     ["withDashboardPosition"]: () => ResourcePromiseImpl,
     ["withTerminal"]: () => ResourcePromiseImpl,
+    ["withTestRun"]: () => ResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ResourcePromiseImpl,
     ["getResourceName"]: null,

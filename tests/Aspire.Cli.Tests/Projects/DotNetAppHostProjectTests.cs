@@ -1744,6 +1744,35 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
+    public async Task RunAsync_DisableWatchOverridesDefaultWatchFeature()
+    {
+        var appHostFile = CreateProjectAppHost();
+        var appHostCommand = CreateBuiltAppHostCommand("AppHost");
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, _, _) => 0,
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => (0, CreateAppHostInfoJson(runCommand: appHostCommand.FullName)),
+            RunAsyncCallback = (_, _, _, _, _, _, _, _, _) => throw new InvalidOperationException("Watch must not prevent direct launch."),
+            RunAppHostCommandAsyncCallback = (_, _, _, _, _, _, options, _) =>
+            {
+                Assert.True(options.DisableExtensionLaunch);
+                return Task.FromResult(77);
+            }
+        };
+        var project = CreateDotNetAppHostProject(runner,
+            configureServices: options => options.EnabledFeatures = [KnownFeatures.DefaultWatchEnabled]);
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            IsTestRun = true
+        }, TestContext.Current.CancellationToken);
+
+        Assert.Equal(77, exitCode);
+    }
+
+    [Fact]
     public async Task RunAsync_ProjectAppHostUsesSdkPathForExtensionHost()
     {
         var appHostCommand = CreateBuiltAppHostCommand("AppHost");

@@ -23,6 +23,11 @@ internal sealed class AppHostProjectContext
     public bool Watch { get; init; }
 
     /// <summary>
+    /// Gets whether the CLI owns a finite test run, without hot reload or extension-managed launch.
+    /// </summary>
+    public bool IsTestRun { get; init; }
+
+    /// <summary>
     /// Gets whether to run in debug mode.
     /// </summary>
     public bool Debug { get; init; }

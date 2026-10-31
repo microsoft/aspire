@@ -3515,6 +3515,14 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Marks a resource as a test resource. */
+    public CSharpAppResource withTestRun() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withTestRun", reqArgs);
+        return this;
+    }
+
     /** Adds a pipeline step to the resource that will be executed during deployment. */
     public CSharpAppResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions optionsBag) {
         var dependsOn = optionsBag == null ? null : optionsBag.getDependsOn();
@@ -5952,6 +5960,14 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Marks a resource as a test resource. */
+    public ContainerRegistryResource withTestRun() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withTestRun", reqArgs);
+        return this;
+    }
+
     /** Adds a pipeline step to the resource that will be executed during deployment. */
     public ContainerRegistryResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions optionsBag) {
         var dependsOn = optionsBag == null ? null : optionsBag.getDependsOn();
@@ -7951,6 +7967,14 @@ public class ContainerResource extends ResourceBuilderBase {
             reqArgs.put("configure", configureId);
         }
         getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
+        return this;
+    }
+
+    /** Marks a resource as a test resource. */
+    public ContainerResource withTestRun() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withTestRun", reqArgs);
         return this;
     }
 
@@ -10785,6 +10809,14 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Marks a resource as a test resource. */
+    public DotnetToolResource withTestRun() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withTestRun", reqArgs);
+        return this;
+    }
+
     /** Adds a pipeline step to the resource that will be executed during deployment. */
     public DotnetToolResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions optionsBag) {
         var dependsOn = optionsBag == null ? null : optionsBag.getDependsOn();
@@ -13299,6 +13331,14 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Marks a resource as a test resource. */
+    public ExecutableResource withTestRun() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withTestRun", reqArgs);
+        return this;
+    }
+
     /** Adds a pipeline step to the resource that will be executed during deployment. */
     public ExecutableResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions optionsBag) {
         var dependsOn = optionsBag == null ? null : optionsBag.getDependsOn();
@@ -14473,6 +14513,14 @@ public class ExternalServiceResource extends ResourceBuilderBase {
             reqArgs.put("configure", configureId);
         }
         getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
+        return this;
+    }
+
+    /** Marks a resource as a test resource. */
+    public ExternalServiceResource withTestRun() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withTestRun", reqArgs);
         return this;
     }
 
@@ -19377,6 +19425,14 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Marks a resource as a test resource. */
+    public ParameterResource withTestRun() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withTestRun", reqArgs);
+        return this;
+    }
+
     /** Adds a pipeline step to the resource that will be executed during deployment. */
     public ParameterResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions optionsBag) {
         var dependsOn = optionsBag == null ? null : optionsBag.getDependsOn();
@@ -21811,6 +21867,14 @@ public class ProjectResource extends ResourceBuilderBase {
             reqArgs.put("configure", configureId);
         }
         getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
+        return this;
+    }
+
+    /** Marks a resource as a test resource. */
+    public ProjectResource withTestRun() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withTestRun", reqArgs);
         return this;
     }
 
@@ -25420,6 +25484,14 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Marks a resource as a test resource. */
+    public TestDatabaseResource withTestRun() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withTestRun", reqArgs);
+        return this;
+    }
+
     /** Adds a pipeline step to the resource that will be executed during deployment. */
     public TestDatabaseResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions optionsBag) {
         var dependsOn = optionsBag == null ? null : optionsBag.getDependsOn();
@@ -27754,6 +27826,14 @@ public class TestRedisResource extends ContainerResource {
             reqArgs.put("configure", configureId);
         }
         getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
+        return this;
+    }
+
+    /** Marks a resource as a test resource. */
+    public TestRedisResource withTestRun() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withTestRun", reqArgs);
         return this;
     }
 
@@ -30275,6 +30355,14 @@ public class TestVaultResource extends ContainerResource {
             reqArgs.put("configure", configureId);
         }
         getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
+        return this;
+    }
+
+    /** Marks a resource as a test resource. */
+    public TestVaultResource withTestRun() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withTestRun", reqArgs);
         return this;
     }
 
