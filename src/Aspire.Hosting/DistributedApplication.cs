@@ -87,6 +87,10 @@ public class DistributedApplication : IHost, IAsyncDisposable
         // > Evaluation of native methods in this context is not supported.
         _model = host.Services.GetRequiredService<DistributedApplicationModel>();
         ResourceNotifications = host.Services.GetRequiredService<ResourceNotificationService>();
+
+        // Interactions can't be answered until the host has run its before-start hooks and started the
+        // dashboard and CLI backchannel, so the interaction service is unavailable until then.
+        (host.Services.GetService<IInteractionService>() as InteractionService)?.MarkBeforeStartHooksPending();
     }
 
     /// <summary>
@@ -610,10 +614,6 @@ public class DistributedApplication : IHost, IAsyncDisposable
         var configuration = _host.Services.GetRequiredService<IConfiguration>();
         using var beforeStartActivity = ProfilingTelemetry.StartAppHostBeforeStart(configuration);
 
-        // Interactions can't be answered until the host has started the dashboard and CLI backchannel,
-        // so report the interaction service as unavailable while before-start hooks run.
-        using var interactionBeforeStartScope = (_host.Services.GetService<IInteractionService>() as InteractionService)?.StartBeforeStartScope();
-
         try
         {
             var eventSubscribers = _host.Services.GetServices<IDistributedApplicationEventingSubscriber>().ToArray();
@@ -731,6 +731,10 @@ public class DistributedApplication : IHost, IAsyncDisposable
         {
             beforeStartActivity.SetError(ex);
             throw;
+        }
+        finally
+        {
+            (_host.Services.GetService<IInteractionService>() as InteractionService)?.CompleteBeforeStartHooks();
         }
     }
 

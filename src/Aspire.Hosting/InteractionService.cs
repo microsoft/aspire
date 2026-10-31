@@ -25,9 +25,10 @@ internal class InteractionService : IInteractionService
     private static readonly AsyncLocal<bool> s_nonInteractiveScope = new();
 
     // Interactions are answered by the dashboard and the CLI backchannel, which are hosted services
-    // that only start after before-start hooks (e.g. BeforeStartEvent) complete. While those hooks run,
-    // nothing can respond to an interaction, so awaiting a prompt would never complete.
-    private int _beforeStartScopeCount;
+    // that only start after before-start hooks (e.g. BeforeStartEvent) complete. Until then nothing can
+    // respond to an interaction, so awaiting a prompt would never complete. This is a one-way flag:
+    // DistributedApplication marks startup as pending when it's created and completes it once the hooks finish.
+    private volatile bool _waitingForBeforeStartHooks;
 
     private Action<Interaction>? OnInteractionUpdated { get; set; }
     private readonly object _onInteractionUpdatedLock = new();
@@ -61,7 +62,7 @@ internal class InteractionService : IInteractionService
                 return false;
             }
 
-            if (Volatile.Read(ref _beforeStartScopeCount) > 0)
+            if (_waitingForBeforeStartHooks)
             {
                 return false;
             }
@@ -102,29 +103,16 @@ internal class InteractionService : IInteractionService
     }
 
     /// <summary>
-    /// Creates a scope, used while the app host runs its before-start hooks, in which
-    /// <see cref="IsAvailable"/> returns <c>false</c> because nothing can respond to interactions yet.
+    /// Marks the app host as not yet having completed its before-start hooks. Until
+    /// <see cref="CompleteBeforeStartHooks"/> is called, <see cref="IsAvailable"/> returns <c>false</c>
+    /// because nothing can respond to interactions yet.
     /// </summary>
-    internal BeforeStartScope StartBeforeStartScope() => new(this);
+    internal void MarkBeforeStartHooksPending() => _waitingForBeforeStartHooks = true;
 
-    internal sealed class BeforeStartScope : IDisposable
-    {
-        private InteractionService? _owner;
-
-        public BeforeStartScope(InteractionService owner)
-        {
-            _owner = owner;
-            Interlocked.Increment(ref owner._beforeStartScopeCount);
-        }
-
-        public void Dispose()
-        {
-            if (Interlocked.Exchange(ref _owner, null) is { } owner)
-            {
-                Interlocked.Decrement(ref owner._beforeStartScopeCount);
-            }
-        }
-    }
+    /// <summary>
+    /// Marks the app host's before-start hooks as completed so interactions can be answered once the host starts.
+    /// </summary>
+    internal void CompleteBeforeStartHooks() => _waitingForBeforeStartHooks = false;
 
     public async Task<InteractionResult<bool>> PromptConfirmationAsync(string title, string message, MessageBoxInteractionOptions? options = null, CancellationToken cancellationToken = default)
     {

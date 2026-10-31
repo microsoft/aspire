@@ -188,11 +188,11 @@ public class InteractionServiceTests
     }
 
     [Fact]
-    public async Task IsAvailable_BeforeStartScope_ReturnsFalseAndPromptsThrow()
+    public async Task IsAvailable_BeforeStartHooksPending_ReturnsFalseAndPromptsThrow()
     {
         var interactionService = CreateInteractionService();
 
-        var scope = interactionService.StartBeforeStartScope();
+        interactionService.MarkBeforeStartHooksPending();
 
         Assert.False(interactionService.IsAvailable);
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
@@ -200,11 +200,7 @@ public class InteractionServiceTests
         Assert.Contains(nameof(BeforeStartEvent), ex.Message);
         Assert.Empty(interactionService.GetCurrentInteractions());
 
-        scope.Dispose();
-        Assert.True(interactionService.IsAvailable);
-
-        // Disposing twice must not affect availability.
-        scope.Dispose();
+        interactionService.CompleteBeforeStartHooks();
         Assert.True(interactionService.IsAvailable);
     }
 
@@ -233,7 +229,11 @@ public class InteractionServiceTests
 
         using var app = builder.Build();
         var interactionService = app.Services.GetRequiredService<IInteractionService>();
-        Assert.True(interactionService.IsAvailable);
+
+        // Code that runs after Build() but before the before-start hooks also can't get an answer.
+        Assert.False(interactionService.IsAvailable);
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => interactionService.PromptMessageBoxAsync("Title", "Message")).DefaultTimeout();
 
         await app.ExecuteBeforeStartHooksAsync(default).DefaultTimeout();
 

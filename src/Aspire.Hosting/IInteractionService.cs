@@ -21,7 +21,7 @@ public interface IInteractionService
     /// an exception.
     /// </summary>
     /// <remarks>
-    /// The service is not available while the app host is running its before-start hooks, such as
+    /// The service is not available until the app host has completed its before-start hooks, such as
     /// <see cref="ApplicationModel.BeforeStartEvent"/> subscribers, because the dashboard and CLI that respond
     /// to interactions haven't started yet.
     /// </remarks>
