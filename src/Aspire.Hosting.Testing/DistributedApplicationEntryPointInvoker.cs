@@ -24,7 +24,8 @@ internal static class DistributedApplicationEntryPointInvoker
         Action<DistributedApplicationOptions, HostApplicationBuilderSettings>? onConstructing = null,
         Action<DistributedApplicationBuilder>? onConstructed = null,
         Action<DistributedApplicationBuilder>? onBuilding = null,
-        Action<Exception?>? entryPointCompleted = null)
+        Action<Exception?>? entryPointCompleted = null,
+        Action<DistributedApplication>? onBuilt = null)
     {
         var assembly = entryPointType.Assembly;
         var entryPoint = assembly.EntryPoint;
@@ -61,6 +62,7 @@ internal static class DistributedApplicationEntryPointInvoker
                 onConstructing,
                 onConstructed,
                 onBuilding,
+                onBuilt,
                 entryPointCompleted);
             return await invoker.InvokeAsync(ct).ConfigureAwait(false);
         };
@@ -99,6 +101,7 @@ internal static class DistributedApplicationEntryPointInvoker
         private readonly Action<DistributedApplicationOptions, HostApplicationBuilderSettings>? _onConstructing;
         private readonly Action<DistributedApplicationBuilder>? _onConstructed;
         private readonly Action<DistributedApplicationBuilder>? _onBuilding;
+        private readonly Action<DistributedApplication>? _onBuilt;
         private readonly Action<Exception?>? _entryPointCompleted;
 
         public EntryPointInvoker(
@@ -107,6 +110,7 @@ internal static class DistributedApplicationEntryPointInvoker
             Action<DistributedApplicationOptions, HostApplicationBuilderSettings>? onConstructing,
             Action<DistributedApplicationBuilder>? onConstructed,
             Action<DistributedApplicationBuilder>? onBuilding,
+            Action<DistributedApplication>? onBuilt,
             Action<Exception?>? entryPointCompleted)
         {
             _args = args;
@@ -114,6 +118,7 @@ internal static class DistributedApplicationEntryPointInvoker
             _onConstructing = onConstructing;
             _onConstructed = onConstructed;
             _onBuilding = onBuilding;
+            _onBuilt = onBuilt;
             _entryPointCompleted = entryPointCompleted;
             _applicationBuilderListener = new(this);
         }
@@ -248,7 +253,14 @@ internal static class DistributedApplicationEntryPointInvoker
 
                 if (value.Key == "DistributedApplicationBuilt")
                 {
-                    owner._appTcs.TrySetResult((DistributedApplication)value.Value!);
+                    var app = (DistributedApplication)value.Value!;
+
+                    // Runs synchronously on the entry-point thread, inside Build(). Observers of the returned task
+                    // run as continuations, which are not guaranteed to execute before Build() returns (for example,
+                    // when the entry-point thread has a SynchronizationContext), so the entry point could otherwise
+                    // fail and be observed as a failure before the built application is.
+                    owner._onBuilt?.Invoke(app);
+                    owner._appTcs.TrySetResult(app);
                 }
             }
         }
