@@ -1280,6 +1280,57 @@ public class CapabilityDispatcherTests
     }
 
     [Fact]
+    public void Invoke_UnwrapsResourceBuilderHandleForNonResourceInterfaceParameter()
+    {
+        var handles = new HandleRegistry();
+        var dispatcher = new CapabilityDispatcher(handles, CreateTestMarshaller(handles), [typeof(TestTypeCategoryCapabilities).Assembly]);
+
+        var builder = new TestResourceBuilder<TestExpressionValueResource>(new TestExpressionValueResource("expression-resource"));
+        var handleId = handles.Register(builder, "Aspire.Hosting.RemoteHost.Tests/Aspire.Hosting.RemoteHost.Tests.TestExpressionValueResource");
+        var args = new JsonObject
+        {
+            ["value"] = new JsonObject { ["$handle"] = handleId }
+        };
+
+        var result = dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/acceptExpressionValue", args);
+
+        Assert.NotNull(result);
+        Assert.Equal("expression-resource", result.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task Invoke_WithEnvironment_AcceptsResourceHandleMatchedOnlyThroughExpressionValue()
+    {
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var container = appBuilder.AddContainer("api", "my-api");
+        var expressionResource = appBuilder.AddResource(new TestExpressionValueResource("secret"));
+        await using var handles = new HandleRegistry();
+        var dispatcher = new CapabilityDispatcher(handles, CreateTestMarshaller(handles), [typeof(DistributedApplication).Assembly]);
+        var containerHandleId = handles.Register(container, "Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource");
+        var valueHandleId = handles.Register(expressionResource, "Aspire.Hosting.RemoteHost.Tests/Aspire.Hosting.RemoteHost.Tests.TestExpressionValueResource");
+        var args = new JsonObject
+        {
+            ["builder"] = new JsonObject { ["$handle"] = containerHandleId },
+            ["name"] = "SECRET",
+            ["value"] = new JsonObject { ["$handle"] = valueHandleId }
+        };
+
+        dispatcher.Invoke("Aspire.Hosting/withEnvironment", args);
+
+        var environmentVariables = new Dictionary<string, object>();
+        var context = new EnvironmentCallbackContext(
+            new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run),
+            container.Resource,
+            environmentVariables);
+        foreach (var annotation in container.Resource.Annotations.OfType<EnvironmentCallbackAnnotation>())
+        {
+            await annotation.Callback(context);
+        }
+
+        Assert.Same(expressionResource.Resource, environmentVariables["SECRET"]);
+    }
+
+    [Fact]
     public void Invoke_UnionWithUnsupportedArray_ThrowsTypeMismatch()
     {
         var dispatcher = CreateDispatcher(typeof(TestTypeCategoryCapabilities).Assembly);
@@ -2715,6 +2766,13 @@ internal static class TestTypeCategoryCapabilities
         };
     }
 
+    /// <ats-summary>Accepts an expression value</ats-summary>
+    [AspireExport("acceptExpressionValue")]
+    public static string AcceptExpressionValue(IExpressionValue value)
+    {
+        return value is IResource resource ? resource.Name : value.GetType().Name;
+    }
+
     /// <ats-summary>Accepts a union of resource handle or string</ats-summary>
     [AspireExport("acceptHandleUnion")]
     public static string AcceptHandleUnion([AspireUnion(typeof(TestResourceWithProperties), typeof(string))] object value)
@@ -2848,6 +2906,16 @@ internal sealed class TestResourceBuilder<T> : IResourceBuilder<T> where T : IRe
 /// <summary>
 /// Test resource type with properties that should be accessible via builder handles.
 /// </summary>
+/// <summary>
+/// A resource that is an <see cref="IExpressionValue"/> but not an <see cref="IResourceWithConnectionString"/>.
+/// </summary>
+internal sealed class TestExpressionValueResource(string name) : Resource(name), IExpressionValue
+{
+    public string ValueExpression => $"{{{Name}.value}}";
+
+    public ValueTask<string?> GetValueAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult<string?>("expression-value");
+}
+
 [AspireExport(ExposeProperties = true)]
 internal sealed class TestResourceWithProperties : Resource
 {
