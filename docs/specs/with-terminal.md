@@ -67,6 +67,57 @@ endpoint independently of their visibility.
 When `DistributedApplicationOptions.DisableDashboard` is `true`, terminal host
 telemetry is disabled, even if an explicit OTLP collector endpoint is configured.
 
+## Dashboard program status
+
+Workloads can report [OSC 7501 program status](https://github.com/mitchdenny/hex1b/blob/e84f086/docs/program-status.md)
+through ordinary terminal output. The Dashboard shows the current inventory as
+a compact task tree docked to the right of the terminal, with connected rows
+showing a status icon, title, and optional percentage. Full titles, state,
+blocked reason, application, and message are available on hover and in each
+item's accessible label. Missing intermediate
+records appear only as structural groups, and parent states are independent of
+their children. Status text is self-reported, not authenticated process identity.
+Click a parent row to expand or collapse its children; there is no separate
+collapse icon. Tree keyboard navigation and expansion remain available.
+A small plus badge on a status icon indicates that the row has hidden children.
+
+Working records without a percentage show the same indeterminate rotating ring
+as the terminal header. Records with a percentage show a determinate progress
+wheel; blocked progress uses the warning color and does not rotate. Completed
+and failed records retain their status icons.
+Grouping rows without their own reported status also show an indeterminate ring
+while any descendant is unfinished (`idle`, `working`, or `blocked`), even when
+collapsed. This does not override an explicitly reported parent status or
+percentage, and stops when every descendant is `done` or `error`.
+
+While the panel is visible, drag the splitter between it and the terminal to
+adjust their widths. The status tree scrolls independently in both directions.
+
+The panel opens on the first non-empty status inventory, including one received
+when attaching to a running terminal. Hide or restore it with the flyout icon at
+the bottom right of the terminal footer. Subsequent
+reports and reconnects to the same terminal preserve that view's visibility
+choice. Clearing status shows an empty panel without removing the reopen
+button; switching the view to a different terminal resets this behavior.
+
+This applies to the Terminals page, dock, terminal interaction dialogs, detached
+terminal windows, and read-only views. Hiding or showing the status panel does
+not reconnect or stop the process, and terminals without program status have no
+status panel or status button. The inventory is current state, not event history;
+it is independent of OSC 9;4 progress and OSC 133 shell integration.
+
+The Dashboard circuit accepts bounded messages up to 4 MiB so a complete OSC 7501
+inventory (up to 256 records, including 2 KiB messages) can cross JS interop with
+JSON escaping overhead. Endpoint changes invalidate queued status callbacks before
+reconnecting, so a previous terminal cannot reopen the panel on a new terminal.
+Only one status interop call is sent at a time; updates received while it is
+pending are coalesced into the latest inventory rather than queued.
+
+The `terminal-features` resource in `playground/Terminals` demonstrates reports,
+nested updates, subtree clearing, and complete inventory clearing. It includes
+96 regional tasks with long titles and an eight-level path for testing vertical
+and horizontal scrolling and splitter resizing.
+
 ## AppHost-owned terminals
 
 For processes that the AppHost launches directly rather than as resources, use

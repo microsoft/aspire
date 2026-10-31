@@ -242,6 +242,54 @@ function cancelReconnect(state) {
     }
 }
 
+function notifyProgramStatus(state) {
+    if (state.disposed) {
+        return;
+    }
+    state.programStatusPending = true;
+    if (state.programStatusInFlight || state.programStatusFrame !== null) {
+        return;
+    }
+    // HWT1 exposes a complete inventory, e.g. { records: [{ id: "deploy/east", state: "working", ... }] }.
+    // Keep only the latest inventory while interop is pending, so a slow circuit cannot queue snapshots.
+    state.programStatusFrame = requestAnimationFrame(() => {
+        state.programStatusFrame = null;
+        state.programStatusPending = false;
+        if (state.disposed || !state.dotNetRef) {
+            return;
+        }
+        const snapshot = {
+            terminalId: state.id,
+            generation: state.generation,
+            hasStatus: state.hasProgramStatus,
+            statusEpoch: state.statusEpoch,
+            records: state.programStatus.records,
+        };
+        const json = JSON.stringify(snapshot);
+        if (json === state.lastProgramStatusJson) {
+            return;
+        }
+        state.lastProgramStatusJson = json;
+        state.programStatusInFlight = true;
+        Promise.resolve().then(() => {
+            if (state.disposed || snapshot.generation !== state.generation || snapshot.statusEpoch !== state.statusEpoch) {
+                return;
+            }
+            return state.dotNetRef?.invokeMethodAsync("OnTerminalProgramStatusChanged", snapshot);
+        }).catch(error => {
+            if (!state.disposed) {
+                state.lastProgramStatusJson = null;
+                console.warn("Dashboard terminal program status update failed.", error);
+            }
+        }).finally(() => {
+            state.programStatusInFlight = false;
+            if (state.programStatusPending) {
+                notifyProgramStatus(state);
+            }
+        });
+    });
+}
+
 function releaseRetainedClient(state) {
     const retained = state.retainedClient;
     state.retainedClient = null;
@@ -632,6 +680,7 @@ function connectClient(state) {
     state.autoFitPending = state.autoFit;
     state.waitingForVisibility = false;
     notifyToolbar(state);
+    notifyProgramStatus(state);
     // A hidden Console view must not spend the package's first-frame timeout.
     if (!isVisible(state)) {
         state.waitingForVisibility = true;
@@ -694,6 +743,13 @@ async function mountClient(state, generation, controller) {
                 if (current()) {
                     state.progress = progress;
                     notifyToolbar(state);
+                }
+            },
+            onProgramStatusChange(status) {
+                if (current()) {
+                    state.programStatus = status;
+                    state.hasProgramStatus ||= status.records.length > 0;
+                    notifyProgramStatus(state);
                 }
             },
             onInput: input => inputPolicy(state, input),
@@ -899,6 +955,13 @@ export function initTerminal(element, wsUrl, dotNetRef, options, selectionTempla
         workingDirectory: null,
         workingDirectoryUri: null,
         progress: { state: "none", percentage: null },
+        programStatus: { records: [] },
+        statusEpoch: options.statusEpoch ?? 0,
+        hasProgramStatus: false,
+        programStatusFrame: null,
+        programStatusPending: false,
+        programStatusInFlight: false,
+        lastProgramStatusJson: null,
         peer: { id: null, primaryId: null, isPrimary: false },
         geometry: null,
         layout: null,
@@ -993,7 +1056,7 @@ export function restartTerminal(id) {
     reconnectTerminal(id, state.wsUrl);
 }
 
-export function reconnectTerminal(id, wsUrl, autoFit) {
+export function reconnectTerminal(id, wsUrl, autoFit, statusEpoch) {
     const state = terminals.get(id);
     if (!state || (state.ended && state.wsUrl === wsUrl)) {
         return state?.generation ?? 0;
@@ -1003,6 +1066,9 @@ export function reconnectTerminal(id, wsUrl, autoFit) {
     if (autoFit !== undefined) {
         state.autoFit = autoFit;
     }
+    if (statusEpoch !== undefined) {
+        state.statusEpoch = statusEpoch;
+    }
     if (state.wsUrl !== wsUrl) {
         releaseRetainedClient(state);
         state.connectionError = null;
@@ -1011,6 +1077,8 @@ export function reconnectTerminal(id, wsUrl, autoFit) {
         state.workingDirectory = null;
         state.workingDirectoryUri = null;
         state.progress = { state: "none", percentage: null };
+        state.programStatus = { records: [] };
+        state.hasProgramStatus = false;
     }
     state.wsUrl = wsUrl;
     state.ended = false;
@@ -1034,6 +1102,9 @@ export function disposeTerminal(id) {
     cancelReconnect(state);
     if (state.toolbarFrame !== null) {
         cancelAnimationFrame(state.toolbarFrame);
+    }
+    if (state.programStatusFrame !== null) {
+        cancelAnimationFrame(state.programStatusFrame);
     }
     state.observer.disconnect();
     state.themeObserver.disconnect();

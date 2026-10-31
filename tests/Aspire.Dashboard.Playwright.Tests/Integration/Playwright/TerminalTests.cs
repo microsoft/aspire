@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using System.Text;
 using System.Text.RegularExpressions;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Terminal;
@@ -22,6 +23,72 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
 {
     private const string ResourceName = "terminal-resource";
     private const string Endpoint = "/api/terminal?resource=terminal-resource";
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task ProgramStatus_OpensClearsAndTogglesThroughCircuit()
+    {
+        await RunTestAsync(async page =>
+        {
+            await using var connection = await OpenTerminalAsync(page);
+            var panel = page.Locator(".terminal-status-panel");
+            var toggle = page.Locator(".terminal-status-toggle");
+            await Assertions.Expect(toggle).ToHaveCountAsync(0);
+
+            // OSC 7501 uses colon-delimited fields and base64 UTF-8 titles/messages.
+            connection.Workload.Write("\u001b]7501;state=working:title=QnVpbGQ=:progress=42\u0007");
+            await Assertions.Expect(panel).ToBeVisibleAsync();
+            await Assertions.Expect(panel.Locator(".terminal-status-title")).ToHaveTextAsync("Build");
+            await Assertions.Expect(panel.Locator(".terminal-status-progress")).ToHaveTextAsync("42%");
+            await toggle.ClickAsync();
+            await Assertions.Expect(panel).ToHaveCountAsync(0);
+            connection.Workload.Write("\u001b]7501;state=done:title=QnVpbGQ=\u0007");
+            await toggle.ClickAsync();
+            await Assertions.Expect(panel.Locator(".terminal-status-record")).ToHaveAttributeAsync("data-state", "done");
+            connection.Workload.Write("\u001b]7501;state=clear\u0007");
+            await Assertions.Expect(panel.Locator(".terminal-status-empty")).ToBeVisibleAsync();
+            await Assertions.Expect(panel.Locator(".terminal-status-node")).ToHaveCountAsync(0);
+
+            // Malformed reports must not break the circuit or create a record.
+            connection.Workload.Write("\u001b]7501;state=invalid\u0007");
+            await toggle.ClickAsync();
+            await Assertions.Expect(panel).ToHaveCountAsync(0);
+            await toggle.ClickAsync();
+            await Assertions.Expect(panel.Locator(".terminal-status-empty")).ToBeVisibleAsync();
+        });
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task ProgramStatus_LargeInventoryDoesNotDisconnectCircuit()
+    {
+        await RunTestAsync(async page =>
+        {
+            await using var connection = await OpenTerminalAsync(page);
+            // A complete valid inventory exceeds SignalR's default 32 KiB even without JSON escaping.
+            // Keep message/title sizes at the OSC limits and include text that expands when JSON-escaped.
+            var message = new string('<', 2048);
+            var title = new string('<', 192);
+            var encodedMessage = Convert.ToBase64String(Encoding.UTF8.GetBytes(message));
+            var encodedTitle = Convert.ToBase64String(Encoding.UTF8.GetBytes(title));
+            var reports = new StringBuilder();
+            for (var i = 0; i < 256; i++)
+            {
+                reports.Append($"\u001b]7501;state=blocked:id=task{i}:kind=question:title={encodedTitle}:msg={encodedMessage}\u0007");
+            }
+            connection.Workload.Write(reports.ToString());
+            var panel = page.Locator(".terminal-status-panel");
+            await Assertions.Expect(panel.Locator(".terminal-status-node")).ToHaveCountAsync(256);
+            await Assertions.Expect(panel.Locator("[data-status-id=task255]")).ToHaveAttributeAsync(
+                "title", $"{title}\nBlocked\nQuestion\n{message}");
+            // A subsequent UI event and producer update prove the Blazor circuit remains usable.
+            await page.Locator(".terminal-status-toggle").ClickAsync();
+            await Assertions.Expect(panel).ToHaveCountAsync(0);
+            await page.Locator(".terminal-status-toggle").ClickAsync();
+            connection.Workload.Write("\u001b]7501;state=clear\u0007");
+            await Assertions.Expect(panel.Locator(".terminal-status-empty")).ToBeVisibleAsync();
+        });
+    }
 
     [Fact]
     [OuterloopTest("Resource-intensive Playwright browser test")]

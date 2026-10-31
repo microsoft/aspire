@@ -27,42 +27,67 @@
                 }
             </div>
         }
-        <div class="terminal-body @(_state.Disconnected ? "terminal-disconnected" : null)">
-            <div class="terminal-container" @ref="_terminalElement"></div>
-            @if (_state.Disconnected || _terminalError is not null)
-            {
-                <div class="terminal-overlays @(ShowDisconnectedRecovery && _bannerCollapsed && ConnectionError is not "renderer-failed" ? "terminal-overlays-collapsed" : null)">
-                    @if (ShowDisconnectedRecovery)
+        <div class="terminal-content">
+            <FluentMultiSplitter Orientation="Orientation.Horizontal" BarSize="5px">
+                <FluentMultiSplitterPane Size="70%" Min="15%" Max="85%">
+                    <div class="terminal-body @(_state.Disconnected ? "terminal-disconnected" : null)">
+                        <div class="terminal-container" @ref="_terminalElement"></div>
+                        @if (_state.Disconnected || _terminalError is not null)
+                        {
+                            <div class="terminal-overlays @(ShowDisconnectedRecovery && _bannerCollapsed && ConnectionError is not "renderer-failed" ? "terminal-overlays-collapsed" : null)">
+                                @if (ShowDisconnectedRecovery)
+                                {
+                                    <TerminalDisconnectedBanner @key="ResourceName" ResourceName="@ResourceName" ReadOnly="@ReadOnly" OnClose="@OnClose"
+                                                                OutputUnavailable="@(ConnectionError is "renderer-failed")"
+                                                                OnRestarted="@ReconnectAfterRestartAsync"
+                                                                OnReconnect="@(_state.RetriesExhausted ? EventCallback.Factory.Create(this, RetryAsync) : default)"
+                                                                OnCollapsedChanged="@(collapsed => _bannerCollapsed = collapsed)" />
+                                }
+                                @if (ConnectionError is "mount-failed" && _terminalError is not "mount-failed")
+                                {
+                                    <div class="terminal-error">
+                                        <span role="alert">@GetErrorMessage(ConnectionError)</span>
+                                        <FluentButton Appearance="ButtonAppearance.Default" OnClick="RetryAsync">@Loc[nameof(Resources.TerminalStrings.TerminalRetry)]</FluentButton>
+                                    </div>
+                                }
+                                @if (_terminalError is not null && !(ShowDisconnectedRecovery && _terminalError is "disconnected" or "renderer-failed"))
+                                {
+                                    <div class="terminal-error">
+                                        <span role="alert">@GetErrorMessage(_terminalError)</span>
+                                        @if (_terminalError is "input-failed" or "sizing-failed" or "palette-failed")
+                                        {
+                                            <FluentButton Appearance="ButtonAppearance.Default" OnClick="DismissErrorAsync">@Loc[nameof(Resources.TerminalStrings.TerminalDismissError)]</FluentButton>
+                                        }
+                                        else
+                                        {
+                                            <FluentButton Appearance="ButtonAppearance.Default" OnClick="RetryAsync">@Loc[nameof(Resources.TerminalStrings.TerminalRetry)]</FluentButton>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </FluentMultiSplitterPane>
+                <FluentMultiSplitterPane Size="30%" Min="15%" Max="85%" Collapsed="@(!_showProgramStatus)">
+                    @if (_showProgramStatus)
                     {
-                        <TerminalDisconnectedBanner @key="ResourceName" ResourceName="@ResourceName" ReadOnly="@ReadOnly" OnClose="@OnClose"
-                                                    OutputUnavailable="@(ConnectionError is "renderer-failed")"
-                                                    OnRestarted="@ReconnectAfterRestartAsync"
-                                                    OnReconnect="@(_state.RetriesExhausted ? EventCallback.Factory.Create(this, RetryAsync) : default)"
-                                                    OnCollapsedChanged="@(collapsed => _bannerCollapsed = collapsed)" />
+                        <aside class="terminal-status-panel" id="@_programStatusPanelId" aria-label="@Loc[nameof(Resources.TerminalStrings.TerminalStatusTitle)]">
+                            <div class="terminal-status-content">
+                                @if (_programStatusNodes.Count == 0)
+                                {
+                                    <span class="terminal-status-empty">@Loc[nameof(Resources.TerminalStrings.TerminalStatusEmpty)]</span>
+                                }
+                                else
+                                {
+                                    <FluentTreeView aria-label="@Loc[nameof(Resources.TerminalStrings.TerminalStatusTitle)]" Size="TreeSize.Medium">
+                                        <TerminalProgramStatusTree Nodes="@_programStatusNodes" CollapsedIds="@_collapsedStatusIds" />
+                                    </FluentTreeView>
+                                }
+                            </div>
+                        </aside>
                     }
-                    @if (ConnectionError is "mount-failed" && _terminalError is not "mount-failed")
-                    {
-                        <div class="terminal-error">
-                            <span role="alert">@GetErrorMessage(ConnectionError)</span>
-                            <FluentButton Appearance="ButtonAppearance.Default" OnClick="RetryAsync">@Loc[nameof(Resources.TerminalStrings.TerminalRetry)]</FluentButton>
-                        </div>
-                    }
-                    @if (_terminalError is not null && !(ShowDisconnectedRecovery && _terminalError is "disconnected" or "renderer-failed"))
-                    {
-                        <div class="terminal-error">
-                            <span role="alert">@GetErrorMessage(_terminalError)</span>
-                            @if (_terminalError is "input-failed" or "sizing-failed" or "palette-failed")
-                            {
-                                <FluentButton Appearance="ButtonAppearance.Default" OnClick="DismissErrorAsync">@Loc[nameof(Resources.TerminalStrings.TerminalDismissError)]</FluentButton>
-                            }
-                            else
-                            {
-                                <FluentButton Appearance="ButtonAppearance.Default" OnClick="RetryAsync">@Loc[nameof(Resources.TerminalStrings.TerminalRetry)]</FluentButton>
-                            }
-                        </div>
-                    }
-                </div>
-            }
+                </FluentMultiSplitterPane>
+            </FluentMultiSplitter>
         </div>
         <div class="terminal-footer" tabindex="-1" @ref="_footerElement">
             <span class="terminal-focus-hint"><kbd>F6</kbd>: @Loc[nameof(Resources.TerminalStrings.TerminalFocusControlsDescription)]</span>
@@ -109,6 +134,17 @@
                                   Title="@Loc[nameof(Resources.TerminalStrings.TerminalPalette)]"
                                   AriaLabel="@Loc[nameof(Resources.TerminalStrings.TerminalPalette)]" />
                 </div>
+                @if (_hasProgramStatus)
+                {
+                    <FluentButton Class="terminal-status-toggle toolbar-button" Appearance="ButtonAppearance.Default" IconOnly="true"
+                                  Title="@Loc[nameof(Resources.TerminalStrings.TerminalStatusToggle)]"
+                                  aria-label="@Loc[nameof(Resources.TerminalStrings.TerminalStatusToggle)]"
+                                  aria-expanded="@(_showProgramStatus ? "true" : "false")"
+                                  aria-controls="@_programStatusPanelId"
+                                  OnClick="ToggleProgramStatus">
+                        <FluentIcon Icon="Icons.Regular.Size20.PanelRightExpand" Width="16px" Color="Color.Primary" />
+                    </FluentButton>
+                }
             </div>
         </div>
     </div>
