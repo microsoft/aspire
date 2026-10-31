@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Threading.Channels;
+using Aspire.Hosting.Orchestrator;
 using Aspire.Hosting.Testing;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
@@ -1781,7 +1782,47 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         // The second rebuild runs right after the first one restarted the project, so the project can still be
         // starting (Starting, or no state yet from the re-created DCP executable) when it is stopped. It must be launched again rather than left in a stale Starting state.
         // The test program exits immediately, so it ends up Finished once it has run.
-        await resourceNotificationService.WaitForResourceAsync(project.Resource.Name, KnownResourceStates.Finished, cts.Token).DefaultTimeout(TimeSpan.FromMinutes(2));
+        using var finishedCts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
+        await resourceNotificationService.WaitForResourceAsync(project.Resource.Name, KnownResourceStates.Finished, finishedCts.Token).DefaultTimeout(TimeSpan.FromMinutes(2));
+    }
+
+    [Fact]
+    public async Task ExecuteCommandAsync_RebuildCommand_RestoresInactiveReplicaWhenSiblingIsRestarted()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var projectPath = CreateBuildOutputTestProject(workspace.WorkspaceRoot.FullName, "ASPIRE_REBUILD_OUTPUT_MARKER");
+
+        using var builder = CreateBuilder();
+#pragma warning disable CS0618 // Retain supported legacy project command invocation.
+        var project = builder.AddProject("myProject", projectPath, options => options.ExcludeLaunchProfile = true)
+            .WithReplicas(2);
+#pragma warning restore CS0618
+
+        using var app = builder.Build();
+
+        await app.StartAsync().DefaultTimeout(TimeSpan.FromMinutes(2));
+
+        var resourceNotificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+        var orchestrator = app.Services.GetRequiredService<ApplicationOrchestrator>();
+        var replicaNames = project.Resource.GetResolvedResourceNames();
+        Assert.Equal(2, replicaNames.Length);
+
+        // The test program exits immediately, so both replicas end up Finished.
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
+        foreach (var replicaName in replicaNames)
+        {
+            await resourceNotificationService.WaitForResourceAsync(project.Resource.Name, e => e.ResourceId == replicaName && e.Snapshot.State?.Text == KnownResourceStates.Finished, cts.Token).DefaultTimeout(TimeSpan.FromMinutes(2));
+        }
+
+        // Start only the second replica, so the rebuild restarts it while the first one is inactive.
+        await orchestrator.StartResourceAsync(replicaNames[1], cts.Token).DefaultTimeout(TimeSpan.FromMinutes(2));
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(project.Resource, KnownResourceCommands.RebuildCommand).DefaultTimeout(TimeSpan.FromMinutes(2));
+        Assert.True(result.Success, result.Message);
+
+        // The inactive replica must be restored rather than left in Building, even though its sibling was restarted.
+        Assert.True(resourceNotificationService.TryGetCurrentState(replicaNames[0], out var inactiveReplica));
+        Assert.Equal(KnownResourceStates.Finished, inactiveReplica.Snapshot.State?.Text);
     }
 
     [Fact]

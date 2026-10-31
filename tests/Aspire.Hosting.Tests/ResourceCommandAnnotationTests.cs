@@ -248,4 +248,20 @@ public class ResourceCommandAnnotationTests
     {
         Assert.Equal(expected, CommandsConfigurationExtensions.ShouldRestartAfterRebuild(preRebuildState));
     }
+
+    [Theory]
+    [InlineData(true, "Running", "Restart")]
+    [InlineData(true, "Starting", "Restart")]
+    [InlineData(true, "", "Restart")]
+    [InlineData(true, null, "Restart")]
+    [InlineData(true, "Waiting", "LeaveWaiting")]
+    [InlineData(true, "Finished", "RestorePriorState")]
+    [InlineData(true, "Exited", "RestorePriorState")]
+    [InlineData(true, "FailedToStart", "RestorePriorState")]
+    [InlineData(true, "NotStarted", "RestorePriorState")]
+    [InlineData(false, null, "None")]
+    public void GetReplicaActionAfterRebuild_ReturnsActionForPreRebuildState(bool hasPreRebuildState, string? preRebuildState, string expected)
+    {
+        Assert.Equal(expected, CommandsConfigurationExtensions.GetReplicaActionAfterRebuild(hasPreRebuildState, preRebuildState).ToString());
+    }
 }

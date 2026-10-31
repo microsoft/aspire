@@ -305,49 +305,36 @@ internal static class CommandsConfigurationExtensions
                 // Waiting replicas are already in the startup pipeline — when their deps become
                 // ready, CreateExecutableAsync will launch the freshly-built binary automatically.
                 LogBuildInformation(mainLogger, buildOutput, "Build succeeded. Restarting resource...");
-                var anyRestarted = false;
                 foreach (var name in replicaNames)
                 {
-                    var wasActive = preRebuildStates.TryGetValue(name, out var priorState)
-                        && ShouldRestartAfterRebuild(priorState);
-
-                    var wasWaiting = preRebuildStates.TryGetValue(name, out var waitState)
-                        && waitState == KnownResourceStates.Waiting;
-
-                    if (wasWaiting)
+                    preRebuildStates.TryGetValue(name, out var priorState);
+                    switch (GetReplicaActionAfterRebuild(preRebuildStates.ContainsKey(name), priorState))
                     {
-                        // The resource is still waiting for dependencies. The build output on disk
-                        // has been updated, so when dependencies become ready the new binary will
-                        // be launched. Log a message so the user knows the build succeeded.
-                        LogBuildInformation(mainLogger, buildOutput, "Build succeeded. Resource will start with the updated binary when dependencies are ready.");
-                        anyRestarted = true;
-                    }
-                    else if (wasActive)
-                    {
-                        anyRestarted = true;
-                        await resourceNotificationService.PublishUpdateAsync(projectResource, name, s => s with
-                        {
-                            State = new ResourceStateSnapshot(KnownResourceStates.Starting, KnownResourceStateStyles.Info)
-                        }).ConfigureAwait(false);
+                        case RebuildReplicaAction.LeaveWaiting:
+                            // The resource is still waiting for dependencies. The build output on disk
+                            // has been updated, so when dependencies become ready the new binary will
+                            // be launched. Log a message so the user knows the build succeeded.
+                            LogBuildInformation(mainLogger, buildOutput, "Build succeeded. Resource will start with the updated binary when dependencies are ready.");
+                            break;
 
-                        await orchestrator.StartResourceAsync(name, cancellationToken).ConfigureAwait(false);
-                    }
-                }
-
-                if (!anyRestarted)
-                {
-                    // No replicas were running before rebuild (e.g. resource was stopped).
-                    // Restore each replica to its pre-build state so it doesn't stay stuck
-                    // in "Building" indefinitely.
-                    foreach (var name in replicaNames)
-                    {
-                        if (preRebuildStates.TryGetValue(name, out var priorState) && priorState is not null)
-                        {
+                        case RebuildReplicaAction.Restart:
                             await resourceNotificationService.PublishUpdateAsync(projectResource, name, s => s with
                             {
-                                State = new ResourceStateSnapshot(priorState, KnownResourceStateStyles.Info)
+                                State = new ResourceStateSnapshot(KnownResourceStates.Starting, KnownResourceStateStyles.Info)
                             }).ConfigureAwait(false);
-                        }
+
+                            await orchestrator.StartResourceAsync(name, cancellationToken).ConfigureAwait(false);
+                            break;
+
+                        case RebuildReplicaAction.RestorePriorState:
+                            // The replica was not running before the rebuild (e.g. it was stopped). Restore its
+                            // pre-build state so it doesn't stay stuck in "Building", regardless of whether
+                            // sibling replicas were restarted.
+                            await resourceNotificationService.PublishUpdateAsync(projectResource, name, s => s with
+                            {
+                                State = new ResourceStateSnapshot(priorState!, KnownResourceStateStyles.Info)
+                            }).ConfigureAwait(false);
+                            break;
                     }
                 }
 
@@ -392,6 +379,33 @@ internal static class CommandsConfigurationExtensions
         preRebuildState == KnownResourceStates.Running
         || preRebuildState == KnownResourceStates.Starting
         || string.IsNullOrEmpty(preRebuildState);
+
+    // Each replica is handled independently so a restarted sibling never prevents an inactive replica
+    // from being restored out of "Building".
+    internal static RebuildReplicaAction GetReplicaActionAfterRebuild(bool hasPreRebuildState, string? preRebuildState)
+    {
+        if (!hasPreRebuildState)
+        {
+            return RebuildReplicaAction.None;
+        }
+
+        if (preRebuildState == KnownResourceStates.Waiting)
+        {
+            return RebuildReplicaAction.LeaveWaiting;
+        }
+
+        return ShouldRestartAfterRebuild(preRebuildState)
+            ? RebuildReplicaAction.Restart
+            : RebuildReplicaAction.RestorePriorState;
+    }
+
+    internal enum RebuildReplicaAction
+    {
+        None,
+        LeaveWaiting,
+        Restart,
+        RestorePriorState
+    }
 
     internal static bool IsRebuildComplete(ResourceEvent resourceEvent, string rebuilderInstanceName)
     {
