@@ -143,6 +143,74 @@ public class GitRepositoryTests(ITestOutputHelper outputHelper)
         Assert.Equal(sessionId, startedActivity.GetTagItem(ProfilingTelemetry.Tags.ProfilingSessionId));
     }
 
+    [Fact]
+    [SkipOnPlatform(TestPlatforms.Windows, "Uses a POSIX shell fsmonitor hook to leave a descendant holding git's stderr pipe.")]
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    public async Task GetIncludedFilesAsync_DescendantHoldsInheritedPipe_ReturnsAfterGitExits()
+    {
+        await GitTestHelper.EnsureGitAvailableAsync(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await workspace.InitializeGitAsync();
+        await GitTestHelper.ConfigureGitIdentityAsync(workspace.WorkspaceRoot.FullName, outputHelper);
+
+        var trackedFile = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj");
+        await File.WriteAllTextAsync(trackedFile, "Not a real project file.");
+        await GitTestHelper.RunGitAsync(workspace.WorkspaceRoot.FullName, outputHelper, "add", "AppHost.csproj");
+        await GitTestHelper.RunGitAsync(workspace.WorkspaceRoot.FullName, outputHelper, "commit", "-m", "init");
+
+        // git runs the core.fsmonitor hook as a child process. The hook leaves a background
+        // process that inherits git's stderr pipe and outlives git, so stderr never reaches EOF
+        // after git exits. This is the same shape as any descendant (or a concurrently spawned
+        // process that inherited the pipe handle) keeping git's output pipes open.
+        var hooksDir = Directory.CreateTempSubdirectory("aspire-git-hook-");
+        var pidFile = Path.Combine(hooksDir.FullName, "pids");
+        var hookPath = Path.Combine(hooksDir.FullName, "fsmonitor-hook.sh");
+        await File.WriteAllTextAsync(hookPath, $"""
+            #!/bin/sh
+            sleep 300 >/dev/null &
+            echo $! >> '{pidFile}'
+            exit 1
+
+            """);
+        File.SetUnixFileMode(hookPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        await GitTestHelper.RunGitAsync(workspace.WorkspaceRoot.FullName, outputHelper, "config", "core.fsmonitor", hookPath);
+
+        try
+        {
+            using var profilingTelemetry = CreateProfilingTelemetry();
+            using var loggerFactory = CreateLoggerFactory();
+            var repo = CreateGitRepository(workspace, loggerFactory, profilingTelemetry);
+
+            var result = await repo.GetIncludedFilesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
+
+            Assert.True(File.Exists(pidFile), "The fsmonitor hook was not invoked by git ls-files.");
+            Assert.NotNull(result);
+            Assert.Contains(Path.GetFullPath(trackedFile), result!);
+        }
+        finally
+        {
+            if (File.Exists(pidFile))
+            {
+                foreach (var line in File.ReadAllLines(pidFile))
+                {
+                    if (int.TryParse(line, out var pid))
+                    {
+                        try
+                        {
+                            using var orphan = Process.GetProcessById(pid);
+                            orphan.Kill();
+                        }
+                        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception)
+                        {
+                        }
+                    }
+                }
+            }
+
+            hooksDir.Delete(recursive: true);
+        }
+    }
+
     private static GitRepository CreateGitRepository(TemporaryWorkspace workspace, ILoggerFactory loggerFactory, ProfilingTelemetry profilingTelemetry)
     {
         return new GitRepository(workspace.CreateExecutionContext(), new TestEnvironment(), loggerFactory.CreateLogger<GitRepository>(), profilingTelemetry);
