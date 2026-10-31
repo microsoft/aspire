@@ -301,7 +301,16 @@ public sealed class JsonRpcAuthenticationTests(ITestOutputHelper outputHelper)
 
             var host = builder.Build();
             await host.StartAsync();
-            await host.Services.GetServices<IHostedService>().OfType<JsonRpcServer>().Single().Listening.DefaultTimeout();
+            try
+            {
+                await host.Services.GetServices<IHostedService>().OfType<JsonRpcServer>().Single().Listening.DefaultTimeout();
+            }
+            catch
+            {
+                await host.StopAsync();
+                host.Dispose();
+                throw;
+            }
 
             return new RemoteHostTestServer(host, socketPath);
         }
@@ -370,7 +379,8 @@ public sealed class JsonRpcAuthenticationTests(ITestOutputHelper outputHelper)
                 var pipeClient = new NamedPipeClientStream(".", socketPath, PipeDirection.InOut, PipeOptions.Asynchronous);
                 try
                 {
-                    await pipeClient.ConnectAsync(cancellationToken).DefaultTimeout();
+                    // A zero timeout makes one attempt instead of polling until the pipe appears.
+                    await pipeClient.ConnectAsync(timeout: 0, cancellationToken);
                     return pipeClient;
                 }
                 catch

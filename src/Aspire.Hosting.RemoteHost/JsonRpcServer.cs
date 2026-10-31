@@ -93,6 +93,8 @@ internal sealed class JsonRpcServer : BackgroundService
                 if (task.IsFaulted)
                 {
                     listening.TrySetException(task.Exception!.InnerExceptions);
+                    // ExecuteTask carries the failure; avoid a second UnobservedTaskException if nobody awaits Listening.
+                    _ = listening.Task.Exception;
                 }
                 else
                 {
