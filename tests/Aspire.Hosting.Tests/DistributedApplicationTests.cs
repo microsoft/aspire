@@ -305,8 +305,10 @@ public class DistributedApplicationTests
         await app.StopAsync(token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
     }
 
-    [Fact]
-    public async Task BeforeResourceStartedEvent_NotFiredForExplicitStartOnInitialCreation()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task BeforeResourceStartedEvent_NotFiredForExplicitStartOnInitialCreation(bool cancelStartupAfterStart)
     {
         const string testName = "before-start-event-explicit-start";
         using var testProgram = CreateTestProgram(testName, randomizePorts: false);
@@ -343,14 +345,13 @@ public class DistributedApplicationTests
         using var startupCts = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan);
         var startupToken = startupCts.Token;
 
-        // Start app in background - it won't complete because of explicit start resource
-        _ = app.StartAsync(startupToken);
+        var startTask = app.StartAsync(startupToken);
 
         var normalResourceName = $"{testName}-serviceb";
         var explicitStartResourceName = $"{testName}-servicea";
 
         // Wait for normal resource to be running
-        await rns.WaitForResourceAsync(normalResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Running, startupToken).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        var normalResource = await rns.WaitForResourceAsync(normalResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Running, startupToken).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
 
         // Wait for explicit start resource to be NotStarted
         await rns.WaitForResourceAsync(explicitStartResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.NotStarted, startupToken).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
@@ -362,8 +363,26 @@ public class DistributedApplicationTests
         Assert.Equal(1, normalEventCount);
         Assert.Equal(0, explicitStartEventCount);
 
+        await startTask.DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+
+        var servicePid = Assert.IsType<int>(GetResourcePropertyValue(normalResource, KnownProperties.Executable.Pid));
+        using var serviceProcess = Process.GetProcessById(servicePid);
+        Assert.False(serviceProcess.HasExited);
+        var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
+        Assert.False(lifetime.ApplicationStopped.IsCancellationRequested);
+
+        if (cancelStartupAfterStart)
+        {
+            // Exercise an expired startup budget deterministically, after startup has settled.
+            startupCts.Cancel();
+        }
+
+        // A slow startup must not consume the shutdown phase's cancellation budget.
         using var stopCts = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan);
         await app.StopAsync(stopCts.Token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        await serviceProcess.WaitForExitAsync(stopCts.Token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        Assert.True(serviceProcess.HasExited);
+        Assert.True(lifetime.ApplicationStopped.IsCancellationRequested);
     }
 
     [Fact]
