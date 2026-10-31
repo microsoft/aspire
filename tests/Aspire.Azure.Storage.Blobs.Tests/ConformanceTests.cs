@@ -17,7 +17,7 @@ public class ConformanceTests : ConformanceTests<BlobServiceClient, AzureStorage
     // Roles: Storage Blob Data Reader, Storage Blob Data Contributor
     public const string ServiceUri = "https://aspirestoragetests.blob.core.windows.net/";
 
-    private static readonly Lazy<bool> s_canConnectToServer = new(GetCanConnect);
+    private static readonly Lazy<bool> s_canConnectToServer = new(() => GetCanConnectToServer(GetCanConnect));
 
     protected override ServiceLifetime ServiceLifetime => ServiceLifetime.Singleton;
 
@@ -106,6 +106,16 @@ public class ConformanceTests : ConformanceTests<BlobServiceClient, AzureStorage
 
     protected override void SetMetrics(AzureStorageBlobsSettings options, bool enabled)
         => throw new NotImplementedException();
+
+    // When the server isn't reachable, make TriggerActivity fail fast instead of letting the component fall back to
+    // DefaultAzureCredential, whose credential chain can take longer than the RemoteExecutor timeout.
+    protected override void ConfigureActivitySourceTestOptions(AzureStorageBlobsSettings options)
+    {
+        if (!CanConnectToServer)
+        {
+            options.Credential = UnavailableTokenCredential.Instance;
+        }
+    }
 
     protected override void SetTracing(AzureStorageBlobsSettings options, bool enabled)
         => options.DisableTracing = !enabled;

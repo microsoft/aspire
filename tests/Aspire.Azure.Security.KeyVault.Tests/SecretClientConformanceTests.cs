@@ -17,7 +17,7 @@ public class SecretClientConformanceTests : ConformanceTests<SecretClient, Azure
     // Roles: Key Vault Secrets User
     private const string VaultUri = ConformanceConstants.VaultUri;
 
-    private static readonly Lazy<bool> s_canConnectToServer = new(GetCanConnect);
+    private static readonly Lazy<bool> s_canConnectToServer = new(() => GetCanConnectToServer(GetCanConnect));
 
     protected override ServiceLifetime ServiceLifetime => ServiceLifetime.Singleton;
 
@@ -95,6 +95,16 @@ public class SecretClientConformanceTests : ConformanceTests<SecretClient, Azure
 
     protected override void SetMetrics(AzureSecurityKeyVaultSettings options, bool enabled)
         => throw new NotImplementedException();
+
+    // When the server isn't reachable, make TriggerActivity fail fast instead of letting the component fall back to
+    // DefaultAzureCredential, whose credential chain can take longer than the RemoteExecutor timeout.
+    protected override void ConfigureActivitySourceTestOptions(AzureSecurityKeyVaultSettings options)
+    {
+        if (!CanConnectToServer)
+        {
+            options.Credential = UnavailableTokenCredential.Instance;
+        }
+    }
 
     protected override void SetTracing(AzureSecurityKeyVaultSettings options, bool enabled)
         => options.DisableTracing = !enabled;
