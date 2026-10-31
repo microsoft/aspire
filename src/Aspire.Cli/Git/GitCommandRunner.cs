@@ -205,6 +205,11 @@ internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, ILog
         {
             return null;
         }
+        var name = Path.GetFileName(executable);
+        if (!name.Equals("ssh", StringComparison.OrdinalIgnoreCase) && !name.Equals("ssh.exe", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
         var pathEnvironment = new Dictionary<string, string>();
         foreach (var key in new[] { "PATH", "PATHEXT" })
         {
@@ -213,16 +218,53 @@ internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, ILog
                 pathEnvironment[key] = key == "PATH" ? NormalizeSshPath(value, gitStartInfo.WorkingDirectory) : value;
             }
         }
+        // Git prepends its executable directories, including bundled SSH on Windows.
+        // Query its child environment rather than substituting the CLI's SSH client.
+        // https://github.com/git-for-windows/MINGW-packages/blob/main/mingw-w64-git/git-wrapper.c
+        // https://github.com/git/git/blob/master/exec-cmd.c
+        var pathCommand = OperatingSystem.IsWindows()
+            ? $"!'{Path.Combine(Environment.SystemDirectory, "cmd.exe").Replace("\\", "/", StringComparison.Ordinal).Replace("'", "'\\''", StringComparison.Ordinal)}' /d /c set PATH"
+            : "!printf '%s' \"$PATH\"";
+        var pathQuery = CreateUnattendedQuery(gitStartInfo,
+            ["-c", $"alias.aspire-ssh-path={pathCommand}", "aspire-ssh-path"]);
+        foreach (var (key, value) in pathEnvironment)
+        {
+            pathQuery.Environment[key] = value;
+        }
+        // Read Windows' native semicolon-delimited PATH, not MSYS' POSIX translation.
+        // Prevent MSYS from converting cmd.exe's /d and /c switches into paths.
+        if (OperatingSystem.IsWindows())
+        {
+            pathQuery.Environment["MSYS2_ARG_CONV_EXCL"] = "*";
+        }
+        string childPath;
+        try
+        {
+            childPath = await RunProcessAsync(pathQuery, captureCancellationOutput: false, GitCommandMode.Unattended, cancellationToken);
+        }
+        catch (GitCommandException ex) when (ex.Failure == GitFailure.CommandFailed)
+        {
+            // Without a trustworthy child PATH, report the existing unsupported-SSH
+            // diagnostic instead of guessing a different client.
+            return null;
+        }
+        if (OperatingSystem.IsWindows())
+        {
+            // `set PATH` emits "Path=C:\...\r\nPATHEXT=.COM;.EXE;...\r\n".
+            // Match the complete variable name; similarly prefixed variables are unrelated.
+            var pathLine = childPath.Split('\n').FirstOrDefault(line => line.StartsWith("PATH=", StringComparison.OrdinalIgnoreCase));
+            if (pathLine is null)
+            {
+                return null;
+            }
+            childPath = pathLine[5..].TrimEnd('\r');
+        }
+        pathEnvironment["PATH"] = NormalizeSshPath(childPath, gitStartInfo.WorkingDirectory);
         if (!PathLookupHelper.TryResolveExecutablePath(executable, out var resolved, pathEnvironment))
         {
             return null;
         }
         executable = Path.GetFullPath(resolved, gitStartInfo.WorkingDirectory);
-        var name = Path.GetFileName(executable);
-        if (!name.Equals("ssh", StringComparison.OrdinalIgnoreCase) && !name.Equals("ssh.exe", StringComparison.OrdinalIgnoreCase))
-        {
-            return null;
-        }
         var probe = CreateUnattendedQuery(gitStartInfo, ["version"]);
         probe.FileName = executable;
         probe.ArgumentList.Clear();

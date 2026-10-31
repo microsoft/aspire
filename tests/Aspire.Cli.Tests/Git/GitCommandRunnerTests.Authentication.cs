@@ -225,7 +225,7 @@ public partial class GitCommandRunnerTests
 
         await runner.ConfigureUnattendedSshAsync(info, arguments, TestContext.Current.CancellationToken);
 
-        var ssh = PathLookupHelper.ResolveExecutablePath("ssh");
+        var ssh = await GetGitSelectedSshAsync(info);
         Assert.Equal($"'{ssh.Replace("'", "'\\''", StringComparison.Ordinal)}' -o BatchMode=yes", info.Environment["GIT_SSH_COMMAND"]);
         Assert.Equal("ssh", info.Environment["GIT_SSH_VARIANT"]);
         Assert.Equal("preserved-agent", info.Environment["SSH_AUTH_SOCK"]);
@@ -252,7 +252,74 @@ public partial class GitCommandRunnerTests
 
         await runner.ConfigureUnattendedSshAsync(info, arguments, TestContext.Current.CancellationToken);
 
-        Assert.Equal($"'{ssh.Replace("'", "'\\''", StringComparison.Ordinal)}' -o BatchMode=yes", info.Environment["GIT_SSH_COMMAND"]);
+        var selectedSsh = await GetGitSelectedSshAsync(info);
+        Assert.Equal($"'{selectedSsh.Replace("'", "'\\''", StringComparison.Ordinal)}' -o BatchMode=yes", info.Environment["GIT_SSH_COMMAND"]);
+    }
+
+    [Fact]
+    [PlatformSpecific(TestPlatforms.AnyUnix)]
+    [RequiresTools(["git", "ssh"])]
+    public async Task ConfigureUnattendedSsh_UsesExecutableDirectoryPrependedByRealGit()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var config = Path.Combine(workspace.Path, "gitconfig");
+        await File.WriteAllTextAsync(config, "");
+        var executables = Directory.CreateDirectory(Path.Combine(workspace.Path, "Git child executables"));
+        var ssh = Path.Combine(executables.FullName, "ssh");
+        File.CreateSymbolicLink(ssh, PathLookupHelper.ResolveExecutablePath("ssh"));
+        string[] arguments = ["ls-remote", "--", "ssh://git@example.test/repository"];
+        var runner = CreateRunner();
+        var info = runner.CreateStartInfo(workspace.Path, arguments, GitCommandMode.Unattended);
+        IsolateGit(info, workspace.Path, config);
+        info.Environment["GIT_EXEC_PATH"] = executables.FullName;
+
+        Assert.Equal(ssh, await GetGitSelectedSshAsync(info));
+
+        await runner.ConfigureUnattendedSshAsync(info, arguments, TestContext.Current.CancellationToken);
+
+        Assert.Equal($"'{ssh}' -o BatchMode=yes", info.Environment["GIT_SSH_COMMAND"]);
+        Assert.Equal("", await File.ReadAllTextAsync(config));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("GIT_SSH")]
+    [InlineData("GIT_SSH_COMMAND")]
+    [InlineData("core.sshCommand")]
+    [PlatformSpecific(TestPlatforms.Windows)]
+    [RequiresTools(["git"])]
+    public async Task ConfigureUnattendedSsh_UsesBundledGitWindowsSshWithoutSshOnParentPath(string? setting)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var config = Path.Combine(workspace.Path, "gitconfig");
+        var configuration = setting == "core.sshCommand" ? "[core]\nsshCommand = ssh\n" : "";
+        await File.WriteAllTextAsync(config, configuration);
+        string[] arguments = ["ls-remote", "--", "ssh://git@example.test/repository"];
+        var runner = CreateRunner();
+        var info = runner.CreateStartInfo(workspace.Path, arguments, GitCommandMode.Unattended);
+        IsolateGit(info, workspace.Path, config);
+        info.Environment["PATH"] = string.Join(Path.PathSeparator,
+            info.Environment["PATH"]!.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
+                .Where(directory => !File.Exists(Path.Combine(directory, "ssh.exe")) && !File.Exists(Path.Combine(directory, "ssh"))));
+        if (setting is not null && setting != "core.sshCommand")
+        {
+            info.Environment[setting] = "ssh";
+        }
+
+        Assert.False(PathLookupHelper.TryResolveExecutablePath("ssh", out _, new Dictionary<string, string>
+        {
+            ["PATH"] = info.Environment["PATH"]!,
+            ["PATHEXT"] = info.Environment["PATHEXT"]!
+        }));
+        var selectedSsh = await GetGitSelectedSshAsync(info);
+        Assert.True(File.Exists(selectedSsh));
+        Assert.EndsWith("\\usr\\bin\\ssh.exe", selectedSsh, StringComparison.OrdinalIgnoreCase);
+
+        await runner.ConfigureUnattendedSshAsync(info, arguments, TestContext.Current.CancellationToken);
+
+        Assert.Equal($"'{selectedSsh.Replace("'", "'\\''", StringComparison.Ordinal)}' -o BatchMode=yes", info.Environment["GIT_SSH_COMMAND"]);
+        Assert.Equal("ssh", info.Environment["GIT_SSH_VARIANT"]);
+        Assert.Equal(configuration, await File.ReadAllTextAsync(config));
     }
 
     [Fact]
@@ -269,6 +336,25 @@ public partial class GitCommandRunnerTests
     }
 
     private static string ShellPath(string path) => path.Replace("\\", "/", StringComparison.Ordinal).Replace("'", "'\\''", StringComparison.Ordinal);
+
+    private async Task<string> GetGitSelectedSshAsync(ProcessStartInfo source)
+    {
+        // Observe the actual executable Git's shell selects, independently of
+        // the CLI's PATH lookup. cygpath translates Git for Windows' MSYS path.
+        var selection = OperatingSystem.IsWindows()
+            ? "!cygpath -aw \"$(command -v ssh.exe)\""
+            : "!command -v ssh";
+        var query = CreateRunner().CreateStartInfo(source.WorkingDirectory,
+            ["-c", $"alias.aspire-test-ssh={selection}", "aspire-test-ssh"], GitCommandMode.Unattended);
+        query.Environment.Clear();
+        foreach (var (name, value) in source.Environment)
+        {
+            query.Environment[name] = value;
+        }
+
+        return (await CreateRunner().RunProcessAsync(query, captureCancellationOutput: false,
+            GitCommandMode.Unattended, TestContext.Current.CancellationToken)).TrimEnd('\r', '\n');
+    }
 
     private static void IsolateGit(ProcessStartInfo info, string home, string config)
     {
