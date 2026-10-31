@@ -1160,6 +1160,14 @@ public static class ProjectResourceBuilderExtensions
                     context.Args.Add("--configuration");
                     context.Args.Add(launchDefaults.BuildConfiguration);
                 }
+
+                // Rebuild into the same artifacts path the project is launched from.
+                var options = context.ExecutionContext.Services.GetRequiredService<DistributedApplicationOptions>();
+                if (!string.IsNullOrEmpty(options.GlobalArtifactsPath))
+                {
+                    context.Args.Add("--artifacts-path");
+                    context.Args.Add(options.GlobalArtifactsPath);
+                }
             })
             .WithAnnotation(new ExplicitStartupAnnotation())
             .WithAnnotation(new ExcludeLifecycleCommandsAnnotation())

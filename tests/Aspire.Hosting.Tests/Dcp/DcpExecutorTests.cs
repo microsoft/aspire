@@ -5530,6 +5530,85 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ProjectResource_AppHostGlobalArtifactsPath_IsForwardedToDotnetRun()
+    {
+        // https://github.com/microsoft/aspire/issues/6887: building the AppHost with `--artifacts-path` also redirects
+        // the output of its project resources, so `dotnet run --no-build` must use the same artifacts path to find it.
+        var artifactsPath = Path.Combine(Path.GetTempPath(), "aspire-artifacts");
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddProject<TestProject>("proj", launchProfileName: null)
+            .WithArgs("app-arg");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var kubernetes = new TestKubernetesService();
+        var distributedApplicationOptions = new DistributedApplicationOptions
+        {
+            AssemblyName = typeof(DcpExecutorTests).Assembly.FullName,
+            GlobalArtifactsPath = artifactsPath
+        };
+        var executor = CreateAppExecutor(model, kubernetesService: kubernetes, distributedApplicationOptions: distributedApplicationOptions);
+
+        await executor.RunApplicationAsync();
+
+        var exe = GetCreatedExecutableForResource(kubernetes, "proj");
+        Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
+        var expectedArgs = new List<string> { "run", "--project", "TestProject", "--artifacts-path", artifactsPath };
+        if (GetTestAssemblyConfiguration() is { } configuration)
+        {
+            expectedArgs.AddRange(["--configuration", configuration]);
+        }
+        expectedArgs.AddRange(["--no-launch-profile", "app-arg"]);
+        Assert.Equal(expectedArgs, exe.Spec.Args);
+        Assert.True(exe.TryGetAnnotationAsObjectList<AppLaunchArgumentAnnotation>(CustomResource.ResourceAppArgsAnnotation, out var argAnnotations));
+        Assert.Equal(["app-arg"], argAnnotations.Select(a => a.Argument));
+        AssertEffectiveArgumentIndexesMatchSpecArgs(argAnnotations, exe.Spec.Args);
+    }
+
+    [Theory]
+    [InlineData("run", true)]
+    [InlineData("watch", false)]
+    public async Task ProjectWithDotnetExecutableAnnotation_AppHostGlobalArtifactsPath_IsForwardedToDotnetRunOnly(string verb, bool expectArtifactsPath)
+    {
+        var artifactsPath = Path.Combine(Path.GetTempPath(), "aspire-artifacts");
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddProject<TestProject>("proj", launchProfileName: null)
+            .WithAnnotation(new ExecutableAnnotation
+            {
+                Command = "dotnet",
+                WorkingDirectory = "/tmp/app"
+            })
+            .WithArgs(verb, "--project", "/tmp/app/app.csproj");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var kubernetes = new TestKubernetesService();
+        var distributedApplicationOptions = new DistributedApplicationOptions
+        {
+            AssemblyName = typeof(DcpExecutorTests).Assembly.FullName,
+            GlobalArtifactsPath = artifactsPath
+        };
+        var executor = CreateAppExecutor(model, kubernetesService: kubernetes, distributedApplicationOptions: distributedApplicationOptions);
+
+        await executor.RunApplicationAsync();
+
+        var exe = GetCreatedExecutableForResource(kubernetes, "proj");
+        var expectedArgs = new List<string> { verb };
+        if (GetTestAssemblyConfiguration() is { } configuration)
+        {
+            expectedArgs.AddRange(["--configuration", configuration]);
+        }
+        if (expectArtifactsPath)
+        {
+            expectedArgs.AddRange(["--artifacts-path", artifactsPath]);
+        }
+        expectedArgs.AddRange(["--no-launch-profile", "--project", "/tmp/app/app.csproj"]);
+        Assert.Equal(expectedArgs, exe.Spec.Args);
+    }
+
+    [Fact]
     public async Task ProjectResource_EmptyLaunchToolArgs_KeepsDotnetRunScaffolding_InProcessMode()
     {
         var builder = DistributedApplication.CreateBuilder();
