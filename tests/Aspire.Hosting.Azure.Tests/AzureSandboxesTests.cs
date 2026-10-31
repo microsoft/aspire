@@ -22,6 +22,7 @@ using Azure.Provisioning.Resources;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Testing;
 
 namespace Aspire.Hosting.Azure.Tests;
 
@@ -1596,10 +1597,18 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         // Cancel when the client logs the 403 retry warning, after the rejection has been received and
         // before the retry delay starts. A wall-clock timeout could fire while the request is still in flight.
         using var cancellationTokenSource = new CancellationTokenSource();
+        var sink = new TestSink();
+        sink.MessageLogged += context =>
+        {
+            if (context.LogLevel == LogLevel.Warning)
+            {
+                cancellationTokenSource.Cancel();
+            }
+        };
         var client = new AzureDevComputeClient(
             new HttpClient(handler),
             new RecordingTokenCredential(),
-            new CancelOnWarningLogger(cancellationTokenSource),
+            new TestLogger(nameof(AzureDevComputeClient), sink, enabled: true),
             TimeSpan.FromMinutes(1));
 
         var exception = await Assert.ThrowsAsync<AzureDevComputeCreateException>(() => client.CreateDiskImageAsync(
@@ -3638,21 +3647,6 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         public Task SaveSectionAsync(DeploymentStateSection section, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task DeleteSectionAsync(DeploymentStateSection section, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task ClearAllStateAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    }
-
-    private sealed class CancelOnWarningLogger(CancellationTokenSource cancellationTokenSource) : ILogger
-    {
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-
-        public bool IsEnabled(LogLevel logLevel) => true;
-
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
-        {
-            if (logLevel == LogLevel.Warning)
-            {
-                cancellationTokenSource.Cancel();
-            }
-        }
     }
 
     private sealed class RecordingHandler(Func<HttpRequestMessage, Task<HttpResponseMessage>> handler) : HttpMessageHandler
