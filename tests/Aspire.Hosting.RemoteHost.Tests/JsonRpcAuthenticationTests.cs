@@ -374,13 +374,17 @@ public sealed class JsonRpcAuthenticationTests(ITestOutputHelper outputHelper)
         // Callers must first observe JsonRpcServer.Listening, so a single connection attempt is expected to succeed.
         public static async Task<Stream> ConnectToServerAsync(string socketPath, CancellationToken cancellationToken)
         {
+            // Bounds the single attempt (including time queued on the thread pool) so a stalled connect fails instead of hanging.
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(TestConstants.DefaultTimeoutTimeSpan);
+
             if (OperatingSystem.IsWindows())
             {
                 var pipeClient = new NamedPipeClientStream(".", socketPath, PipeDirection.InOut, PipeOptions.Asynchronous);
                 try
                 {
                     // A zero timeout makes one attempt instead of polling until the pipe appears.
-                    await pipeClient.ConnectAsync(timeout: 0, cancellationToken);
+                    await pipeClient.ConnectAsync(timeout: 0, timeoutCts.Token);
                     return pipeClient;
                 }
                 catch
@@ -393,7 +397,7 @@ public sealed class JsonRpcAuthenticationTests(ITestOutputHelper outputHelper)
             var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
             try
             {
-                await socket.ConnectAsync(new UnixDomainSocketEndPoint(socketPath), cancellationToken).AsTask().DefaultTimeout();
+                await socket.ConnectAsync(new UnixDomainSocketEndPoint(socketPath), timeoutCts.Token);
                 return new NetworkStream(socket, ownsSocket: true);
             }
             catch
