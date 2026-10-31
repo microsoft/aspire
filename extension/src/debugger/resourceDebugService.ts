@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import type { AppHostDisplayInfo, ResourceJson } from '../data/AppHostDataRepository';
+import { resolveResourceNameMatches } from '../data/appHostCliContracts';
 import type { AspireExtendedDebugConfiguration } from '../dcp/types';
 import { compareAppHostIdentity, getOrCreateIdentityForCurrentAppHostTarget, type AppHostIdentityRelation } from '../utils/appHostIdentity';
 import { extensionLogOutputChannel } from '../utils/logging';
@@ -149,12 +150,27 @@ export class ResourceDebugService implements vscode.Disposable, ResourceDebugger
                 appHostPid: resolvedAppHost.appHostPid,
                 cliPid: resolvedAppHost.cliPid ?? undefined,
             };
-            result = await this._dependencies.sessionRegistry.runSerialized(
-                resolvedTarget,
-                request.resourceName,
-                request.cancellationToken,
-                async () => await this._debugSerialized(request, resolvedTarget, telemetry, requestedStrategy, effectiveStrategy),
-                () => ({ outcome: 'cancelled' }));
+            let resource = await this._resolveResource(request, resolvedTarget);
+            while (!('outcome' in resource)) {
+                const lockedResource = resource;
+                // A display selector can move to a new runtime resource while queued. Release the
+                // old lock before retrying so attachment always holds the selected resource's lock.
+                resource = await this._dependencies.sessionRegistry.runSerialized<ResourceJson | ResourceDebugResult>(
+                    resolvedTarget,
+                    lockedResource.name,
+                    request.cancellationToken,
+                    async waited => {
+                        const current = waited ? await this._resolveResource(request, resolvedTarget) : lockedResource;
+                        if ('outcome' in current || current.name !== lockedResource.name) {
+                            return current;
+                        }
+
+                        return await this._debugSerialized(request, resolvedTarget, current, telemetry, requestedStrategy, effectiveStrategy);
+                    },
+                    () => ({ outcome: 'cancelled' }));
+            }
+
+            result = resource;
             return result;
         }
         catch (error) {
@@ -218,13 +234,10 @@ export class ResourceDebugService implements vscode.Disposable, ResourceDebugger
         return matchingAppHosts[0];
     }
 
-    private async _debugSerialized(
+    private async _resolveResource(
         request: ResourceDebugRequest,
         resolvedTarget: ResourceDebugAppHostTarget,
-        telemetry: ResourceDebugOperationTelemetry,
-        requestedStrategy: ResourceDebugStrategy,
-        effectiveStrategy: 'attach',
-    ): Promise<ResourceDebugResult> {
+    ): Promise<ResourceJson | ResourceDebugResult> {
         if (request.cancellationToken?.isCancellationRequested) {
             return { outcome: 'cancelled' };
         }
@@ -257,12 +270,30 @@ export class ResourceDebugService implements vscode.Disposable, ResourceDebugger
             return { outcome: 'appHostNotFound' };
         }
 
-        const matchingResources = resources.filter(resource => resource.name === request.resourceName);
+        const matchingResources = resolveResourceNameMatches(resources, request.resourceName);
         if (matchingResources.length !== 1) {
             return { outcome: 'resourceNotFound' };
         }
 
-        const resource = matchingResources[0];
+        return matchingResources[0];
+    }
+
+    private async _debugSerialized(
+        request: ResourceDebugRequest,
+        resolvedTarget: ResourceDebugAppHostTarget,
+        resource: ResourceJson,
+        telemetry: ResourceDebugOperationTelemetry,
+        requestedStrategy: ResourceDebugStrategy,
+        effectiveStrategy: 'attach',
+    ): Promise<ResourceDebugResult> {
+        if (request.cancellationToken?.isCancellationRequested) {
+            return { outcome: 'cancelled' };
+        }
+
+        if (!isAppHostTargetCurrent(request.appHost)) {
+            return { outcome: 'appHostNotFound' };
+        }
+
         telemetry.recordResource(resource);
         let provider: ResourceAttachProvider | undefined;
         try {
