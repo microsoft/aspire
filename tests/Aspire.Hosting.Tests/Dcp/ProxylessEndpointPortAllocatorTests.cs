@@ -161,14 +161,19 @@ public class ProxylessEndpointPortAllocatorTests
 
     private static int GetUnusedPortOutsideDefaultRange()
     {
-        // OS-assigned ports come from the ephemeral range, which is outside the default proxyless range that other
-        // tests in this process allocate from through the shared reservations.
-        using var listener = new TcpListener(IPAddress.Loopback, 0);
-        listener.Start();
-        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
-        listener.Stop();
-        Assert.True(port > new DcpOptions().ProxylessEndpointPortRangeEnd, $"Expected an ephemeral port outside the default range, got {port}.");
-        return port;
+        // Use ports above the default proxyless range, which other tests in this process allocate from through the
+        // shared reservations. Select with the allocator's own IPv4+IPv6 probe so discovery and allocation agree.
+        var rangeEnd = new DcpOptions().ProxylessEndpointPortRangeEnd;
+        for (var port = rangeEnd + 1 + Random.Shared.Next(1000); port <= IPEndPoint.MaxPort; port++)
+        {
+            if (ProxylessEndpointPortAllocator.TryProbePort(port, ProtocolType.Tcp))
+            {
+                return port;
+            }
+        }
+
+        Assert.Fail($"No available port was found above {rangeEnd}.");
+        return 0;
     }
 
     private static EndpointAnnotation CreateEndpoint(string name)
