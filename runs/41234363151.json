@@ -1,0 +1,175 @@
+{
+  "run_id": 41234363151,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/41234363151",
+  "run_scope": "main",
+  "analyzed_at": "2026-10-31T21:46:38Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 21591,
+    "title": "Make ADC rejected-create cancellation test deterministic",
+    "author": "davidfowl",
+    "state": "closed",
+    "head_branch": "aspireagent/fix-azure-devcompute-cancel-flake",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/21591",
+    "merged_at": "2026-10-31T19:28:09Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "8487570ff52a6a01bb4e6fe5e806f247b96d2c08",
+    "failed_sha": "09065bbaa8ea63ae728b78cb5f4e8a73b6fe8c87",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "6a8f53125b8788df3c409088381057a3c0dacfff",
+        "message": "Fix flaky ExecuteCommandAsync_RebuildCommand_ReturnsBuildOutput build count (#21427) ## Description Fixes the intermittent `ExecuteCommandAsync_RebuildCommand_ReturnsBuildOutput` failure (`Assert.Equal() Failure: Expected: 2, Actual: 3`) on `Hosting-2 (windows-latest)`. **Root cause.** The test project appends to `build-count.txt` from an `AfterTargets=\"Build\"` target and the test asserts that the second rebuild command adds exactly one line. But the project resource itself is launched with `dot",
+        "html_url": "https://github.com/microsoft/aspire/commit/6a8f53125b8788df3c409088381057a3c0dacfff",
+        "pull_request": {
+          "number": 21427,
+          "title": "Fix flaky ExecuteCommandAsync_RebuildCommand_ReturnsBuildOutput build count",
+          "url": "https://github.com/microsoft/aspire/pull/21427",
+          "merged_at": "2026-10-31T06:11:50Z"
+        }
+      },
+      {
+        "sha": "034b7fd88bed17ab22b84e9377ba1cc2181c8645",
+        "message": "Cancel blocked graceful signaler once the child process exits (#21581) ## Description Fixes #18880 `ProcessGuestLauncherTests.LaunchAsync_WithGracefulServices_BlockingSignalerDoesNotConsumeGracefulBudget` is quarantined as a Windows-only timeout. On current `main` it fails **deterministically on every platform**: 5/5 local Linux runs fail at ~5.05s against the test's `< 5s` bound. ### Root cause `ChildProcess.ShutdownLadderAsync` (in `src/Shared/ChildProcess.cs`) dispatches the graceful signaler",
+        "html_url": "https://github.com/microsoft/aspire/commit/034b7fd88bed17ab22b84e9377ba1cc2181c8645",
+        "pull_request": {
+          "number": 21581,
+          "title": "Cancel blocked graceful signaler once the child process exits",
+          "url": "https://github.com/microsoft/aspire/pull/21581",
+          "merged_at": "2026-10-31T15:31:37Z"
+        }
+      },
+      {
+        "sha": "3cc6b58627f98465529a53c57ee58fae9df802a4",
+        "message": "Fix flaky NuGetPackagePrefetcher cancellation logging test (#21599) ## Description Fixes a flaky test: `NuGetPackagePrefetcherTests.PrefetchingCancellationDueToShutdownLogsCleanMessage` times out after 30s waiting for the \"prefetching was cancelled\" log messages. It has 10 recorded occurrences, 9 of them on `Cli (ubuntu-latest)`. ### Root cause This is a race in the test, not a product bug. - `NuGetPackagePrefetcher` is a `BackgroundService`. `StartAsync(stoppingCts.Token)` creates a linked stop",
+        "html_url": "https://github.com/microsoft/aspire/commit/3cc6b58627f98465529a53c57ee58fae9df802a4",
+        "pull_request": {
+          "number": 21599,
+          "title": "Fix flaky NuGetPackagePrefetcher cancellation logging test",
+          "url": "https://github.com/microsoft/aspire/pull/21599",
+          "merged_at": "2026-10-31T19:16:00Z"
+        }
+      },
+      {
+        "sha": "91eb8c82ee5f254fdc71aa9c6be0a6243f3046ec",
+        "message": "Wait for resources to respond before attaching in resource debug E2E (#21577) ## Description Fixes an intermittent failure in the Windows VS Code extension E2E `resource-debug-tools` shard: ``` 1) Aspire resource debug language model tool E2E      attaches to a Go resource launched with Run Without Debugging, hits a breakpoint, and detaches:    Error: Failed to apply E2E control revision …: E2E control command failed. ``` Seen in [run 41186680874, attempt 1](https://github.com/microsoft/aspire/a",
+        "html_url": "https://github.com/microsoft/aspire/commit/91eb8c82ee5f254fdc71aa9c6be0a6243f3046ec",
+        "pull_request": {
+          "number": 21577,
+          "title": "Wait for resources to respond before attaching in resource debug E2E",
+          "url": "https://github.com/microsoft/aspire/pull/21577",
+          "merged_at": "2026-10-31T19:16:46Z"
+        }
+      },
+      {
+        "sha": "92e9528f061a227763ac7c394b3581bf94fd7b9e",
+        "message": "Fix StopNonInteractiveTests launch-port collision between generated AppHosts (#21583) ## Description Fixes #21582. Related to #16643. `StopNonInteractiveTests.StopAllAppHostsFromAppHostDirectory` intermittently fails because the second AppHost crashes with: ``` Failed to bind to address https://127.0.0.1:22001: address already in use ``` This happened in run [41192229293](https://github.com/microsoft/aspire/actions/runs/41192229293), job 124514115730, attempt 1. ### Root cause The test runs `asp",
+        "html_url": "https://github.com/microsoft/aspire/commit/92e9528f061a227763ac7c394b3581bf94fd7b9e",
+        "pull_request": {
+          "number": 21583,
+          "title": "Fix StopNonInteractiveTests launch-port collision between generated AppHosts",
+          "url": "https://github.com/microsoft/aspire/pull/21583",
+          "merged_at": "2026-10-31T19:17:59Z"
+        }
+      },
+      {
+        "sha": "416244400286431cbe930bf2d1f510ff53018a5b",
+        "message": "Style markdown code blocks in interaction notifications and dialogs (#21584) ## Description Markdown code blocks in interaction notifications (and interaction dialogs) render with an unstyled `code` label and a native copy button on their own lines. Long code blocks, such as stack traces, also take over the message bar. **Root cause:** `HighlightedCodeBlockRenderer` emits `.code-block` / `.code-title` / `.code-copy-button` markup. Every style for that markup in `wwwroot/css/markdown.css` is scop",
+        "html_url": "https://github.com/microsoft/aspire/commit/416244400286431cbe930bf2d1f510ff53018a5b",
+        "pull_request": {
+          "number": 21584,
+          "title": "Style markdown code blocks in interaction notifications and dialogs",
+          "url": "https://github.com/microsoft/aspire/pull/21584",
+          "merged_at": "2026-10-31T19:18:20Z"
+        }
+      },
+      {
+        "sha": "8c744929a0cf72b9c9c8a69900892e6b2d49e97d",
+        "message": "Log AppHost startup information before BeforeStartEvent (#21588) ## Description Fixes #6144 If a `BeforeStartEvent` subscriber is slow or deadlocks, the AppHost console stays blank. The first lines users expect to see never appear: `Aspire AppHost version: ...`, `Distributed application starting.` and `Application host directory is: ...`. ### Root cause These messages are logged from `DistributedApplicationLifecycle.StartingAsync`, an `IHostedLifecycleService` callback that only runs inside `IHo",
+        "html_url": "https://github.com/microsoft/aspire/commit/8c744929a0cf72b9c9c8a69900892e6b2d49e97d",
+        "pull_request": {
+          "number": 21588,
+          "title": "Log AppHost startup information before BeforeStartEvent",
+          "url": "https://github.com/microsoft/aspire/pull/21588",
+          "merged_at": "2026-10-31T19:18:40Z"
+        }
+      },
+      {
+        "sha": "5c2e185e7779a866db8ec8ece26a5a2bc20d267a",
+        "message": "Lower minimum Helm version to 4.0.0 (#21590) ## Description Lowers `HelmVersionValidator.MinimumHelmVersion` from **4.2.0** to **4.0.0**, so Helm 4.1.x (preinstalled on GitHub-hosted `windows-2025-vs2026` runners) is no longer rejected by the `check-helm-prereqs-{env}` step. Fixes #20533 ### Root cause #17491 added the validator and chose 4.2.0 because it was \"the latest stable at the time of writing\". No Helm 4.2-specific feature required it. The real requirement is Helm 4 itself: Helm 4 accept",
+        "html_url": "https://github.com/microsoft/aspire/commit/5c2e185e7779a866db8ec8ece26a5a2bc20d267a",
+        "pull_request": {
+          "number": 21590,
+          "title": "Lower minimum Helm version to 4.0.0",
+          "url": "https://github.com/microsoft/aspire/pull/21590",
+          "merged_at": "2026-10-31T19:26:43Z"
+        }
+      },
+      {
+        "sha": "09065bbaa8ea63ae728b78cb5f4e8a73b6fe8c87",
+        "message": "Make ADC rejected-create cancellation test deterministic (#21591) ## Description Fixes the intermittent `Aspire.Hosting.Azure.Tests.AzureSandboxesTests.AzureDevComputeClientKeepsCancellationAfterRejectedCreateDefinite` failure (`Assert.False() Failure … Actual: True` at AzureSandboxesTests.cs:1605). **Root cause:** the test is meant to check that cancelling during the 403 retry delay is reported as a definite rejection (`ResponseMayHaveBeenLost == false`). It cancelled with a wall-clock `Cancell",
+        "html_url": "https://github.com/microsoft/aspire/commit/09065bbaa8ea63ae728b78cb5f4e8a73b6fe8c87",
+        "pull_request": {
+          "number": 21591,
+          "title": "Make ADC rejected-create cancellation test deterministic",
+          "url": "https://github.com/microsoft/aspire/pull/21591",
+          "merged_at": "2026-10-31T19:28:09Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.CodeGeneration.Go.Tests, Hosting.CodeGeneration.Go, Hos... / Hosting.CodeGeneration.Go (windows-latest)",
+      "id": 124649127684,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/41234363151/job/124649127684",
+      "classification": "flaky-test",
+      "reason": "Go runtime hardening goroutine-count assertion failed on Windows; timing-sensitive, no related changes in candidate merges",
+      "failed_steps": [
+        "Run tests (Windows)"
+      ]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.Azure.Tests, Hosting.Azure, Hosting.Azure, tests/Aspire... / Hosting.Azure (ubuntu-latest)",
+      "id": 124649128329,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/41234363151/job/124649128329",
+      "classification": "flaky-test",
+      "reason": "TaskCanceledException in DistributedApplication.StopAsync, same pattern as other known StopAsync flakes",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.CodeGeneration.Go.Tests.AtsGoCodeGeneratorTests.GeneratedRuntime_PassesGoRuntimeHardeningTests",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.CodeGeneration.Go.Tests, Hosting.CodeGeneration.Go, Hos... / Hosting.CodeGeneration.Go (windows-latest)",
+      "error": "Go runtime hardening test failed:\n--- FAIL: TestRegisterCancellationDoesNotParkGoroutinePerToken (0.00s)\n    transport_hardening_test.go:147: registering 1000 tokens left 1782 more goroutines running\nFAIL\nFAIL\tapphost/modules/aspire\t0.482s\nFAIL",
+      "stack_trace": "at Aspire.Hosting.CodeGeneration.Go.Tests.AtsGoCodeGeneratorTests.GeneratedRuntime_PassesGoRuntimeHardeningTests() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.CodeGeneration.Go.Tests\\AtsGoCodeGeneratorTests.cs:line 1028\n   at Aspire.Hosting.CodeGeneration.Go.Tests.AtsGoCodeGeneratorTests.GeneratedRuntime_PassesGoRuntimeHardeningTests() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.CodeGeneration.Go.Tests\\AtsGoCodeGeneratorTests.cs:line 1037\n--- End of stack trace from previous location ---",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Goroutine-count assertion is timing dependent; Go codegen not touched by candidate merges"
+    },
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureFunctionsTests.AddAzureFunctionsProject_WorksWithMultipleProjects",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Azure.Tests, Hosting.Azure, Hosting.Azure, tests/Aspire... / Hosting.Azure (ubuntu-latest)",
+      "error": "System.Threading.Tasks.TaskCanceledException : A task was canceled.",
+      "stack_trace": "at Microsoft.Extensions.Hosting.Internal.Host.ForeachService[T](IEnumerable`1 services, CancellationToken token, Boolean concurrent, Boolean abortOnFirstException, List`1 exceptions, Func`3 operation)\n   at Microsoft.Extensions.Hosting.Internal.Host.StopAsync(CancellationToken cancellationToken)\n   at Aspire.Hosting.DistributedApplication.StopAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/DistributedApplication.cs:line 499\n   at Aspire.Hosting.Azure.Tests.AzureFunctionsTests.AddAzureFunctionsProject_WorksWithMultipleProjects() in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.Azure.Tests/AzureFunctionsTests.cs:line 201\n--- End of stack trace from previous location ---",
+      "standard_output": "| [2026-10-31T20:33:58] Aspire.Hosting.DistributedApplication Information: Aspire AppHost version: 17.0.0-ci\n| [2026-10-31T20:33:58] Aspire.Hosting.DistributedApplication Information: Distributed application starting.\n| [2026-10-31T20:33:58] Aspire.Hosting.DistributedApplication Information: Application host directory is: /home/runner/work/aspire/aspire/tests/Aspire.Hosting.TestUtilities\n| [2026-10-31T20:33:58] Aspire.Hosting.Devcontainers.Codespaces.CodespacesResourceUrlRewriterService Trace: Not running in Codespaces, skipping URL rewriting.\n| [2026-10-31T20:33:58] Aspire.Hosting.Backchannel.AuxiliaryBackchannelService Debug: Starting auxiliary backchannel service on socket path: /home/runner/.aspire/cli/bch/KfshLkY6TmIdn3gumJS.4576\n| [2026-10-31T20:33:58] Aspire.Hosting.Backchannel.AuxiliaryBackchannelService Debug: Auxiliary backchannel listening on /home/runner/.aspire/cli/bch/KfshLkY6TmIdn3gumJS.4576\n| [2026-10-31T20:33:58] Aspire.Hosting.Cli.BackchannelService Debug: Backchannel socket path was not specified.\n| [2026-10-31T20:33:58] Aspire.Hosting.Cli.CliOrphanDetector Debug: No CLI process ID configured. Orphan detection disabled.\n| [2026-10-31T20:33:58] Aspire.Hosting.Dcp.DcpHost Debug: Prepared DCP TLS certificate files for thumbprint E1531ED48BDC63B2322BD4BC3253A7B1A91DC58D.\n| [2026-10-31T20:33:58] Aspire.Hosting.FileSystemService Debug: Allocated temporary directory: /tmp/aspire-dcpm7qJZF\n| [2026-10-31T20:33:58] Aspire.Hosting.Dcp.DcpHost Information: Starting DCP with arguments: start-apiserver --monitor 4576 --detach --kubeconfig \"/tmp/aspire-dcpm7qJZF/kubeconfig\" --tls-cert-thumbprint \"E1531ED48BDC63B2322BD4BC3253A7B1A91DC58D\" --tls-cert-file \"/home/runner/.aspire/dev-certs/https/6CBFA6062F4FB275B3E0CEB082E4697368C4C02714756EA7FA31D2B6193D4A2F.crt\" --tls-key-file \"/home/runner/.aspire/dev-certs/https/6CBFA6062F4FB275B3E0CEB082E4697368C4C02714756EA7FA31D2B6193D4A2F.key\"\n| [2026-10-31T20:33:58] Aspire.Hosting.Dcp.DcpExecutor Debug: Preparing services. Ports randomized: True\n| [2026-10-31T20:33:58] Aspire.Hosting.ApplicationModel.ResourceNotificationService Trace: Version: 1 Resource azure-environment/azure-environment update published: ResourceType = AzureEnvironmentResource, CreationTimeStamp = 2026-10-31T20:33:58, State = { Text = NotStarted, Style = (null) }, IsHidden = True, HeathStatus = (null), ResourceReady = False, ExitCode = (null), Urls = {  }, EnvironmentVariables = {  }, Properties = {  }, HealthReports = {  }, Commands = { reset-provisioning-state (Reset provisioning state) = Enabled change-azure-context (Change Azure context) = Enabled reprovision-all (Reprovision all) = Enabled delete-azure-resources (Delete Azure resources) = Enabled }\n| [2026-10-31T20:33:58] Aspire.Hosting.ApplicationModel.ResourceNotificationService Trace: Version: 1 Resource funcstorage53c8d/funcstorage53c8d-ekdvakxk update published: ResourceType = AzureStorageResource, CreationTimeStamp = (null), State = { Text = (null), Style = (null) }, IsHidden = False, HeathStatus = (null), ResourceReady = False, ExitCode = (null), Urls = {  }, EnvironmentVariables = {  }, Properties = {  }, HealthReports = { funcstorage53c8d_check = (null) }, Commands = { start (Start) = Disabled stop (Stop) = Hidden restart (Restart) = Disabled }\n| [2026-10-31T20:33:58] Aspire.Hosting.ApplicationModel.ResourceNotificationService Trace: Version: 1 Resource funcapp/funcapp-xqcvbqru update published: ResourceType = Project, CreationTimeStamp = (null), State = { Text = (null), Style = (null) }, IsHidden = False, HeathStatus = (null), ResourceReady = False, ExitCode = (null), Urls = {  }, EnvironmentVariables = {  }, Properties = {  }, HealthReports = {  }, Commands = { start (Start) = Disabled stop (Stop) = Hidden restart (Restart) = Disabled rebuild (Rebuild) = Disabled }\n| [2026-10-31T20:33:58] Aspire.Hosting.ApplicationModel.ResourceNotificationService Trace: Version: 1 Resource funcapp2/funcapp2-jzabfxvs update published: ResourceType = Project, Creation",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "TaskCanceledException during host StopAsync; intermittent shutdown race"
+    }
+  ],
+  "causes": [
+    "aspire-codegen-go-runtime-hardening-goroutine-count-flaky",
+    "aspire-hosting-azure-tests-addazurefunctionsproject-multipleprojects-stopasync-taskcanceled"
+  ]
+}

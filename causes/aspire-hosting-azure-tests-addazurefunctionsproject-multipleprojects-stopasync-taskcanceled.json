@@ -1,0 +1,16 @@
+{
+  "id": "aspire-hosting-azure-tests-addazurefunctionsproject-multipleprojects-stopasync-taskcanceled",
+  "type": "flaky-test",
+  "title": "Flaky: AzureFunctionsTests.AddAzureFunctionsProject_WorksWithMultipleProjects TaskCanceledException in DistributedApplication.StopAsync",
+  "test_name": "Aspire.Hosting.Azure.Tests.AzureFunctionsTests.AddAzureFunctionsProject_WorksWithMultipleProjects",
+  "error_pattern": "System.Threading.Tasks.TaskCanceledException : A task was canceled.\n   at Microsoft.Extensions.Hosting.Internal.Host.ForeachService[T]\n   at Microsoft.Extensions.Hosting.Internal.Host.StopAsync\n   at Aspire.Hosting.DistributedApplication.StopAsync",
+  "occurrences": [
+    {
+      "run_id": 41234363151,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/41234363151",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Azure.Tests, Hosting.Azure, Hosting.Azure, tests/Aspire... / Hosting.Azure (ubuntu-latest)",
+      "pr_number": 0,
+      "observed_at": "2026-10-31T21:46:38Z"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "id": "aspire-codegen-go-runtime-hardening-goroutine-count-flaky",
+  "type": "flaky-test",
+  "title": "Flaky: AtsGoCodeGeneratorTests.GeneratedRuntime_PassesGoRuntimeHardeningTests goroutine count assertion on Windows",
+  "test_name": "Aspire.Hosting.CodeGeneration.Go.Tests.AtsGoCodeGeneratorTests.GeneratedRuntime_PassesGoRuntimeHardeningTests",
+  "error_pattern": "Go runtime hardening test failed:\n--- FAIL: TestRegisterCancellationDoesNotParkGoroutinePerToken (0.00s)\n    transport_hardening_test.go:147: registering 1000 tokens left 1782 more goroutines running",
+  "occurrences": [
+    {
+      "run_id": 41234363151,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/41234363151",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.CodeGeneration.Go.Tests, Hosting.CodeGeneration.Go, Hos... / Hosting.CodeGeneration.Go (windows-latest)",
+      "pr_number": 0,
+      "observed_at": "2026-10-31T21:46:38Z"
+    }
+  ]
+}
