@@ -18,4 +18,10 @@ internal sealed class GatewayOriginReference(EndpointReference endpoint) : IValu
         var url = await endpoint.GetValueAsync(cancellationToken).ConfigureAwait(false);
         return url?.TrimEnd('/');
     }
+
+    public async ValueTask<string?> GetValueAsync(ValueProviderContext context, CancellationToken cancellationToken = default)
+    {
+        var url = await endpoint.GetValueAsync(context, cancellationToken).ConfigureAwait(false);
+        return url?.TrimEnd('/');
+    }
 }
