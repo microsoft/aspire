@@ -144,6 +144,8 @@ public class AgentTelemetryPersistenceTests(ITestOutputHelper outputHelper)
             var shutdown = bool.Parse(shutdownValue);
             var persist = bool.Parse(persistValue);
             TelemetryManager.ConfigureExporterForProcess(isAgentTelemetryInvocation: false, isCIEnvironment: !persist);
+            // The drain started by provider.ForceFlush or provider.Shutdown below must be the only drain that can upload.
+            AzureMonitorExporterTestHooks.DisableEagerStorageDrain();
             var requestStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var releaseUpload = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var uploaded = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -496,6 +498,8 @@ public class AgentTelemetryPersistenceTests(ITestOutputHelper outputHelper)
         {
             var persist = !bool.Parse(value);
             TelemetryManager.ConfigureExporterForProcess(isAgentTelemetryInvocation: false, isCIEnvironment: !persist);
+            // The drain started by provider.ForceFlush below must be the only drain that can upload.
+            AzureMonitorExporterTestHooks.DisableEagerStorageDrain();
             var requestStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var releaseUpload = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var uploaded = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -579,4 +583,105 @@ public class AgentTelemetryPersistenceTests(ITestOutputHelper outputHelper)
             }
         }, workspace.Path, isCIEnvironment.ToString());
     }
+
+    [Fact]
+    public void ForceFlush_LocalTelemetryWithStoredBacklogIsUploadedByFlushDrain()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var storage = workspace.CreateDirectory("storage").FullName;
+
+        // An earlier local invocation persisted telemetry and exited before any drain uploaded it.
+        RemoteExecutor.Invoke(static async directory =>
+        {
+            TelemetryManager.ConfigureExporterForProcess(isAgentTelemetryInvocation: false, isCIEnvironment: false);
+            AzureMonitorExporterTestHooks.DisableEagerStorageDrain();
+            AzureMonitorExporterTestHooks.DisableFlushAndShutdownStorageDrain();
+            var agentUploads = 0;
+            using var handler = new MockHttpMessageHandler(async (request, cancellationToken) =>
+            {
+                var payload = await request.Content!.ReadAsStringAsync(cancellationToken);
+                if (payload.Contains(TelemetryConstants.Tags.AgentEventType, StringComparison.Ordinal))
+                {
+                    Interlocked.Increment(ref agentUploads);
+                }
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("""{"itemsReceived":1,"itemsAccepted":1,"errors":[]}""")
+                };
+            });
+            using var client = new HttpClient(handler);
+            using (var provider = CreateRecoveryProvider(directory, client))
+            {
+                using var source = new ActivitySource("AgentRecoveryTest");
+                using (var activity = source.StartActivity(TelemetryConstants.Activities.AgentTelemetry))
+                {
+                    Assert.NotNull(activity);
+                    activity.SetTag(TelemetryConstants.Tags.AgentEventType, "stored_invocation");
+                }
+                Assert.True(await Task.Run(() => provider.ForceFlush(10_000)).DefaultTimeout());
+            }
+            Assert.True(AgentTelemetryUploader.HasPendingTelemetry(directory));
+            Assert.Equal(0, Volatile.Read(ref agentUploads));
+        }, storage).Dispose();
+
+        // The exporter's eager startup drain would find that backlog and occupy the only drain slot,
+        // so the drain started by ForceFlush would return without uploading the new telemetry.
+        RemoteExecutor.Invoke(static async directory =>
+        {
+            TelemetryManager.ConfigureExporterForProcess(isAgentTelemetryInvocation: false, isCIEnvironment: false);
+            AzureMonitorExporterTestHooks.DisableEagerStorageDrain();
+            var firstUpload = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var releaseUpload = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            using var handler = new MockHttpMessageHandler(async (request, cancellationToken) =>
+            {
+                var payload = await request.Content!.ReadAsStringAsync(cancellationToken);
+                // The exporter also sends its resource metrics. Only gate agent telemetry batches.
+                if (payload.Contains(TelemetryConstants.Tags.AgentEventType, StringComparison.Ordinal))
+                {
+                    firstUpload.TrySetResult(payload);
+                    await releaseUpload.Task.WaitAsync(cancellationToken);
+                }
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("""{"itemsReceived":4,"itemsAccepted":4,"errors":[]}""")
+                };
+            });
+            using var client = new HttpClient(handler);
+            using var provider = CreateRecoveryProvider(directory, client);
+            using var source = new ActivitySource("AgentRecoveryTest");
+            string[] eventTypes = ["skill_invocation", "tool_invocation", "reference_file_read"];
+            foreach (var eventType in eventTypes)
+            {
+                using var activity = source.StartActivity(TelemetryConstants.Activities.AgentTelemetry);
+                Assert.NotNull(activity);
+                activity.SetTag(TelemetryConstants.Tags.AgentEventType, eventType);
+            }
+
+            try
+            {
+                Assert.True(await Task.Run(() => provider.ForceFlush(10_000)).DefaultTimeout());
+                var payload = await firstUpload.Task.DefaultTimeout();
+                // The flush drain snapshots storage after persisting, so its first batch carries both the backlog and the new events.
+                Assert.Equal(eventTypes.Append("stored_invocation").Order(), ReadAgentEventTypes(payload).Order());
+            }
+            finally
+            {
+                releaseUpload.TrySetResult();
+                provider.Shutdown();
+            }
+        }, storage).Dispose();
+    }
+
+    private static IEnumerable<string> ReadAgentEventTypes(string payload)
+        => payload.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(line =>
+            {
+                // {"data":{"baseType":"RemoteDependencyData","baseData":{"properties":{"aspire.cli.agent.event_type":"skill_invocation",...}}},...}
+                using var envelope = JsonDocument.Parse(line);
+                return envelope.RootElement.GetProperty("data").GetProperty("baseData").TryGetProperty("properties", out var properties)
+                    && properties.TryGetProperty(TelemetryConstants.Tags.AgentEventType, out var eventType)
+                    ? eventType.GetString()
+                    : null;
+            })
+            .OfType<string>();
 }
