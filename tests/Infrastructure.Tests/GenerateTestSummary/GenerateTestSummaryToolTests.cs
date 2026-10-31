@@ -10,6 +10,7 @@ namespace Infrastructure.Tests;
 /// <summary>
 /// End-to-end tests for the GenerateTestSummary tool.
 /// </summary>
+[Collection(AspireTestToolsBuildCollection.Name)]
 public sealed class GenerateTestSummaryToolTests : IClassFixture<GenerateTestSummaryFixture>, IDisposable
 {
     private readonly TemporaryWorkspace _workspace;
