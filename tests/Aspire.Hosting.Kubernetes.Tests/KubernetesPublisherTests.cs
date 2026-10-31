@@ -286,6 +286,43 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PublishAsync_AdditionalResourceWithSameNameAsGeneratedResourceDoesNotOverwriteTemplate()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        // Additional resources commonly share the name of the generated object they target
+        // (e.g. a GKE ServiceExport must have the same name as its Service).
+        builder.AddContainer("myapp", "mcr.microsoft.com/dotnet/aspnet:8.0")
+            .WithHttpEndpoint(targetPort: 8080)
+            .PublishAsKubernetesService(serviceResource =>
+            {
+                serviceResource.AddManifest("net.gke.io/v1", "ServiceExport", serviceResource.Service!.Metadata.Name);
+            });
+
+        var app = builder.Build();
+
+        app.Run();
+
+        var templatesFolder = Path.Combine(workspace.Path, "templates", "myapp");
+        var templates = Directory.GetFiles(templatesFolder, "*.yaml")
+            .ToDictionary(static path => Path.GetFileName(path), File.ReadAllText);
+
+        var serviceTemplate = Assert.Contains("service.yaml", templates);
+        Assert.Contains("kind: \"Service\"", serviceTemplate);
+
+        var serviceExportTemplate = Assert.Single(templates, t => t.Value.Contains("kind: ServiceExport", StringComparison.Ordinal));
+        Assert.NotEqual("service.yaml", serviceExportTemplate.Key);
+        var yaml = new YamlStream();
+        yaml.Load(new StringReader(serviceExportTemplate.Value));
+        var root = Assert.IsType<YamlMappingNode>(yaml.Documents[0].RootNode);
+        var metadata = Assert.IsType<YamlMappingNode>(root.Children[new YamlScalarNode("metadata")]);
+        Assert.Equal("myapp-service", Assert.IsType<YamlScalarNode>(metadata.Children[new YamlScalarNode("name")]).Value);
+    }
+
+    [Fact]
     public void KubernetesManifestResourceWithFieldThrowsWhenIntermediatePathIsScalar()
     {
         var manifest = new KubernetesManifestResource("example.com/v1", "Example", "example");
