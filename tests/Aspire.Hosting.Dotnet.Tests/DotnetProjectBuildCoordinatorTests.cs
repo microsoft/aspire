@@ -142,6 +142,46 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task CoordinatedBuildOmitsFileLogWhenRunningBuildOutlastsWait()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        UseDotnetSdkVersion(builder, null);
+        var projectPath = CreateProject(workspace.Path, "Api", "Api.csproj");
+        builder.AddDotnetProject("api", projectPath, options => options.ExcludeLaunchProfile = true);
+        await using var app = builder.Build();
+
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        buildResource.RunningBuildWaitTimeout = TimeSpan.Zero;
+        await EventingTestHelpers.SubscribeEventingSubscribersAsync(
+            app,
+            TestContext.Current.CancellationToken);
+        await builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(buildResource, app.Services),
+            TestContext.Current.CancellationToken);
+
+        var buildLogPath = Assert.IsType<string>(buildResource.BuildLogPath);
+        Directory.CreateDirectory(buildResource.BuildDirectory);
+
+        // The still-running build owns the log, so this build must not open another file logger on it.
+        using var runningBuildLog = new FileStream(buildLogPath, FileMode.Create, FileAccess.Write, FileShare.Read);
+        var logger = new WaitingForBuildLogger();
+        var result = await EvaluateArgumentsAsync(
+            buildResource,
+            app.Services,
+            logger,
+            TestContext.Current.CancellationToken).WaitAsync(TestConstants.LongTimeoutTimeSpan, TestContext.Current.CancellationToken);
+
+        Assert.True(logger.Waiting.IsCompleted);
+        Assert.Null(result.Exception);
+        var expected = new List<string> { "build", Assert.IsType<string>(result.Arguments.ElementAt(1).Value) };
+        AddExpectedConfiguration(builder, expected);
+        Assert.Equal(expected, result.Arguments.Select(argument => argument.Value));
+    }
+
+    [Fact]
     public void CoordinatedBuildOmitsFileLogWhenBuildDirectoryContainsSemicolon()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

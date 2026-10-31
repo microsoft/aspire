@@ -19,7 +19,6 @@ namespace Aspire.Hosting.Dotnet;
 internal sealed class DotnetProjectBuildResource : ExecutableResource, IDisposable
 {
     private const string BuildLogFileName = "build.log";
-    private static readonly TimeSpan s_runningBuildWaitTimeout = TimeSpan.FromMinutes(5);
 
     private readonly object _lock = new();
     private readonly List<string> _projectPaths = [];
@@ -229,25 +228,34 @@ internal sealed class DotnetProjectBuildResource : ExecutableResource, IDisposab
         BuildDirectory.Contains(';') ? null : Path.Combine(BuildDirectory, BuildLogFileName);
 
     /// <summary>
+    /// Gets or sets how long <see cref="WaitForRunningBuildAsync"/> waits for another build before building anyway.
+    /// </summary>
+    internal TimeSpan RunningBuildWaitTimeout { get; set; } = TimeSpan.FromMinutes(5);
+
+    /// <summary>
     /// Waits until no other coordinated build process is writing <see cref="BuildLogPath"/>.
     /// </summary>
+    /// <returns>
+    /// <see langword="true"/> when this build can write <see cref="BuildLogPath"/>; <see langword="false"/> when there is
+    /// no log path or another build still holds the log after the wait timed out.
+    /// </returns>
     /// <remarks>
     /// Two builds of the same projects write the same intermediate outputs, so a build started while a previous
     /// AppHost's build is still running can fail with sharing violations (for example in static web asset
     /// compression). Waiting for the previous build is enough: once it finishes, this build is incremental.
     /// </remarks>
-    internal async Task WaitForRunningBuildAsync(ILogger logger, CancellationToken cancellationToken)
+    internal async Task<bool> WaitForRunningBuildAsync(ILogger logger, CancellationToken cancellationToken)
     {
         if (BuildLogPath is not { } buildLogPath)
         {
-            return;
+            return false;
         }
 
         using (var buildLog = FileLock.TryAcquire(buildLogPath))
         {
             if (buildLog is not null)
             {
-                return;
+                return true;
             }
         }
 
@@ -259,7 +267,8 @@ internal sealed class DotnetProjectBuildResource : ExecutableResource, IDisposab
             using var buildLog = await FileLock.AcquireAsync(
                 buildLogPath,
                 cancellationToken,
-                s_runningBuildWaitTimeout).ConfigureAwait(false);
+                RunningBuildWaitTimeout).ConfigureAwait(false);
+            return true;
         }
         catch (TimeoutException ex)
         {
@@ -267,7 +276,8 @@ internal sealed class DotnetProjectBuildResource : ExecutableResource, IDisposab
                 ex,
                 "A coordinated build in '{BuildDirectory}' is still running after {Timeout}. Building anyway.",
                 BuildDirectory,
-                s_runningBuildWaitTimeout);
+                RunningBuildWaitTimeout);
+            return false;
         }
     }
 
