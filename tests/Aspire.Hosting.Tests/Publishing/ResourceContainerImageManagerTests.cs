@@ -1202,8 +1202,8 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
 
         await imageBuilder.BuildImageAsync(resource.Resource, TestContext.Current.CancellationToken);
 
-        const string runtimeIdentifiersArgument = "--property:RuntimeIdentifiers=linux-x64%3Blinux-arm64";
-        const string containerRuntimeIdentifiersArgument = "--property:ContainerRuntimeIdentifiers=linux-x64%3Blinux-arm64";
+        const string runtimeIdentifiersArgument = "--property:RuntimeIdentifiers=\"linux-x64;linux-arm64\"";
+        const string containerRuntimeIdentifiersArgument = "--property:ContainerRuntimeIdentifiers=\"linux-x64;linux-arm64\"";
         Assert.Collection(
             processRunner.ProcessSpecs,
             publish => Assert.Equal(
@@ -1223,12 +1223,17 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
 
         // A fake runner cannot detect MSBuild splitting a single argv entry on ';'.
         // Round-trip each command's emitted properties through a project with no SDK or restore.
+        // The SDK expands RID lists into items, so an escaped ';' must not turn the list into one RID.
         var probePath = Path.Combine(workspace.WorkspaceRoot.FullName, "properties.proj");
         await File.WriteAllTextAsync(probePath, """
             <Project>
               <PropertyGroup>
                 <ContainerWorkingDirectory Condition="'$(RuntimeIdentifiers)' == 'linux-x64;linux-arm64' and '$(ContainerRuntimeIdentifiers)' == 'linux-x64;linux-arm64'">/release-app</ContainerWorkingDirectory>
               </PropertyGroup>
+              <ItemGroup>
+                <ProbeRuntimeIdentifier Include="$(RuntimeIdentifiers)" />
+                <ProbeContainerRuntimeIdentifier Include="$(ContainerRuntimeIdentifiers)" />
+              </ItemGroup>
             </Project>
             """, TestContext.Current.CancellationToken);
 
@@ -1242,6 +1247,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
                 [
                     "msbuild", probePath, "-nologo",
                     "-getProperty:RuntimeIdentifiers,ContainerRuntimeIdentifiers,ContainerWorkingDirectory",
+                    "-getItem:ProbeRuntimeIdentifier,ProbeContainerRuntimeIdentifier",
                     .. propertyArguments
                 ],
                 WorkingDirectory = workspace.WorkspaceRoot.FullName,
@@ -1257,6 +1263,13 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
                 Assert.Equal("linux-x64;linux-arm64", properties.GetProperty("RuntimeIdentifiers").GetString());
                 Assert.Equal("linux-x64;linux-arm64", properties.GetProperty("ContainerRuntimeIdentifiers").GetString());
                 Assert.Equal("/release-app", properties.GetProperty("ContainerWorkingDirectory").GetString());
+                var items = document.RootElement.GetProperty("Items");
+                foreach (var itemType in new[] { "ProbeRuntimeIdentifier", "ProbeContainerRuntimeIdentifier" })
+                {
+                    Assert.Equal(
+                        ["linux-x64", "linux-arm64"],
+                        items.GetProperty(itemType).EnumerateArray().Select(static item => item.GetProperty("Identity").GetString()));
+                }
             }
         }
     }
