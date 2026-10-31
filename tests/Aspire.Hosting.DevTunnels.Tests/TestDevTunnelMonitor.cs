@@ -14,12 +14,13 @@ internal sealed class TestDevTunnelMonitor : IDisposable
 {
     private readonly IDistributedApplicationTestingBuilder _builder = TestDistributedApplicationBuilder.Create();
 
-    public TestDevTunnelMonitor(TimeProvider? timeProvider = null, bool includeSecondPort = false)
+    public TestDevTunnelMonitor(TimeProvider? timeProvider = null, bool includeSecondPort = false, Action<IServiceCollection>? configureServices = null)
     {
         if (timeProvider is not null)
         {
             _builder.Services.AddSingleton(timeProvider);
         }
+        configureServices?.Invoke(_builder.Services);
         _builder.Services.AddSingleton<IDevTunnelClient>(Client);
         _builder.Services.AddSingleton<IInteractionService>(Interaction);
         var target = _builder.AddExecutable("target", "unused", _builder.AppHostDirectory)
@@ -103,6 +104,9 @@ internal sealed class TestDevTunnelMonitor : IDisposable
 
     public void Dispose()
     {
+        // Tests start the monitor directly, so the resource stop and ApplicationStopping that
+        // precede host disposal in production never run. Stop it while its services are alive.
+        Monitor.Dispose();
         App.Dispose();
         _builder.Dispose();
     }
