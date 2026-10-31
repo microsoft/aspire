@@ -5,12 +5,14 @@ using System.Diagnostics;
 using System.Formats.Tar;
 using System.IO.Compression;
 using System.Net;
-using System.Net.Sockets;
 using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.EndToEnd.Tests.Helpers;
+using Aspire.TestUtilities;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Xunit;
 
 namespace Aspire.Cli.EndToEnd.Tests;
@@ -25,13 +27,14 @@ public sealed class SettledNpmReleasesTests
     private const string PackageName = "aspire-e2e-settle-probe";
 
     [Fact]
+    [RequiresTools(["bash", "npm"])]
     public async Task SettledNpmReleasesCommand_SkipsReleaseWhoseTarballIsNotYetAvailable()
     {
         Assert.SkipUnless(OperatingSystem.IsLinux(), "The cutoff command targets the Linux bash shells used by the Docker E2E tests.");
 
         var cancellationToken = TestContext.Current.CancellationToken;
         var now = DateTimeOffset.UtcNow;
-        await using var registry = FakeNpmRegistry.Start(now);
+        await using var registry = await FakeNpmRegistry.StartAsync(now, cancellationToken);
         var workspace = Directory.CreateTempSubdirectory("aspire-npm-settle-");
 
         try
@@ -100,58 +103,58 @@ public sealed class SettledNpmReleasesTests
         return (process.ExitCode, await stdout + await stderr);
     }
 
-    private sealed class FakeNpmRegistry : IAsyncDisposable
+    private sealed class FakeNpmRegistry(WebApplication application) : IAsyncDisposable
     {
-        private readonly HttpListener _listener;
-        private readonly Task _serveLoop;
-        private readonly byte[] _packument;
-        private readonly byte[] _settledTarball;
+        public string Url => $"{application.Urls.Single()}/";
 
-        private FakeNpmRegistry(HttpListener listener, string url, byte[] packument, byte[] settledTarball)
+        public static async Task<FakeNpmRegistry> StartAsync(DateTimeOffset now, CancellationToken cancellationToken)
         {
-            _listener = listener;
-            Url = url;
-            _packument = packument;
-            _settledTarball = settledTarball;
-            _serveLoop = Task.Run(ServeAsync);
-        }
-
-        public string Url { get; }
-
-        public static FakeNpmRegistry Start(DateTimeOffset now)
-        {
-            using var portProbe = new TcpListener(IPAddress.Loopback, 0);
-            portProbe.Start();
-            var port = ((IPEndPoint)portProbe.LocalEndpoint).Port;
-            portProbe.Stop();
-
-            var url = $"http://127.0.0.1:{port}/";
-            var listener = new HttpListener();
-            listener.Prefixes.Add(url);
-            listener.Start();
+            var builder = WebApplication.CreateBuilder(new WebApplicationOptions { Args = [] });
+            builder.WebHost.ConfigureKestrel(options => options.Listen(IPAddress.Loopback, 0));
+            var application = builder.Build();
 
             var settledTarball = CreateTarball("1.0.0");
-            var packument = new JsonObject
-            {
-                ["name"] = PackageName,
-                ["dist-tags"] = new JsonObject { ["latest"] = "1.1.0" },
-                ["versions"] = new JsonObject
-                {
-                    ["1.0.0"] = CreateVersion(url, "1.0.0", settledTarball),
-                    // Listed in metadata, but the tarball is not downloadable yet.
-                    ["1.1.0"] = CreateVersion(url, "1.1.0", CreateTarball("1.1.0")),
-                },
-                ["time"] = new JsonObject
-                {
-                    ["created"] = now.AddDays(-30).ToString("O"),
-                    ["modified"] = now.AddMinutes(-2).ToString("O"),
-                    ["1.0.0"] = now.AddDays(-30).ToString("O"),
-                    ["1.1.0"] = now.AddMinutes(-2).ToString("O"),
-                },
-            };
+            var freshTarball = CreateTarball("1.1.0");
 
-            return new FakeNpmRegistry(listener, url, Encoding.UTF8.GetBytes(packument.ToJsonString()), settledTarball);
+            application.MapGet($"/{PackageName}", (HttpContext context) =>
+            {
+                var registryUrl = $"{context.Request.Scheme}://{context.Request.Host}/";
+                var packument = new JsonObject
+                {
+                    ["name"] = PackageName,
+                    ["dist-tags"] = new JsonObject { ["latest"] = "1.1.0" },
+                    ["versions"] = new JsonObject
+                    {
+                        ["1.0.0"] = CreateVersion(registryUrl, "1.0.0", settledTarball),
+                        // Listed in metadata, but the tarball is not downloadable yet.
+                        ["1.1.0"] = CreateVersion(registryUrl, "1.1.0", freshTarball),
+                    },
+                    ["time"] = new JsonObject
+                    {
+                        ["created"] = now.AddDays(-30).ToString("O"),
+                        ["modified"] = now.AddMinutes(-2).ToString("O"),
+                        ["1.0.0"] = now.AddDays(-30).ToString("O"),
+                        ["1.1.0"] = now.AddMinutes(-2).ToString("O"),
+                    },
+                };
+                return Results.Text(packument.ToJsonString(), "application/json");
+            });
+            application.MapGet($"/{PackageName}/-/{PackageName}-1.0.0.tgz", () => Results.Bytes(settledTarball, "application/octet-stream"));
+            application.MapFallback(() => Results.Json(new { error = "Not found" }, statusCode: StatusCodes.Status404NotFound));
+
+            try
+            {
+                await application.StartAsync(cancellationToken);
+                return new FakeNpmRegistry(application);
+            }
+            catch
+            {
+                await application.DisposeAsync();
+                throw;
+            }
         }
+
+        public ValueTask DisposeAsync() => application.DisposeAsync();
 
         private static JsonObject CreateVersion(string registryUrl, string version, byte[] tarball) => new()
         {
@@ -180,43 +183,6 @@ public sealed class SettledNpmReleasesTests
             }
 
             return output.ToArray();
-        }
-
-        private async Task ServeAsync()
-        {
-            while (_listener.IsListening)
-            {
-                HttpListenerContext context;
-                try
-                {
-                    context = await _listener.GetContextAsync();
-                }
-                catch (Exception ex) when (ex is HttpListenerException or ObjectDisposedException or InvalidOperationException)
-                {
-                    return;
-                }
-
-                var path = Uri.UnescapeDataString(context.Request.Url?.AbsolutePath ?? string.Empty);
-                var (status, contentType, body) = path switch
-                {
-                    $"/{PackageName}" => (200, "application/json", _packument),
-                    $"/{PackageName}/-/{PackageName}-1.0.0.tgz" => (200, "application/octet-stream", _settledTarball),
-                    _ => (404, "application/json", """{"error":"Not found"}"""u8.ToArray()),
-                };
-
-                context.Response.StatusCode = status;
-                context.Response.ContentType = contentType;
-                context.Response.ContentLength64 = body.Length;
-                await context.Response.OutputStream.WriteAsync(body);
-                context.Response.Close();
-            }
-        }
-
-        public async ValueTask DisposeAsync()
-        {
-            _listener.Stop();
-            _listener.Close();
-            await _serveLoop;
         }
     }
 }
