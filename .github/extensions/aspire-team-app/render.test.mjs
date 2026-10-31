@@ -3,6 +3,56 @@ import vm from "node:vm";
 import test from "node:test";
 
 import { APP_JS, STYLES } from "./render.mjs";
+import { mirrorHealthItem } from "./mirror-monitor.mjs";
+
+test("mirror health shows backlog evidence and only a read-only diagnosis action", () => {
+  const { api } = createRendererHarness();
+  const item = mirrorHealthItem({
+    level: "critical",
+    firstObservedAt: "2026-09-16T00:00:00Z",
+    observation: { sourceSha: "a".repeat(40), mirrorSha: "b".repeat(40), missingCount: 12, checkedAt: "2026-09-17T12:00:00Z" },
+  }, new Date("2026-09-17T12:00:00Z"));
+  const html = api.healthCard(item, 0, 1);
+  assert.match(html, /Critical/);
+  assert.match(html, /at least 36h/);
+  assert.match(html, /Missing commits/);
+  assert.match(html, /aaaaaaaaaaaa/);
+  assert.match(html, /bbbbbbbbbbbb/);
+  assert.match(html, /Diagnose here/);
+  assert.equal((html.match(/data-kind="diagnose-health"/g) || []).length, 1);
+  assert.equal((html.match(/data-kind="fix-health"/g) || []).length, 0);
+});
+
+test("mirror notification renders a branch instead of an undefined PR number", () => {
+  const { app, api } = createRendererHarness();
+  api.setState({ authenticated: true, accounts: [], activeAccounts: [], notifications: [{
+    id: "mirror-warning", kind: "mirror", title: "Internal mirror: warning", detail: "Behind",
+    repository: "microsoft/aspire", url: "https://example.com", tone: "warning",
+  }] });
+  api.setView("notifications");
+  api.render();
+  assert.match(app.innerHTML, /aspire main/);
+  assert.equal(app.innerHTML.includes("#undefined"), false);
+});
+
+test("mirror events update the bell and health counts even with automatic queue updates paused", () => {
+  const handlers = new Map();
+  const { api, app } = createRendererHarness({
+    EventSource: function () { this.addEventListener = (name, handler) => handlers.set(name, handler); },
+  });
+  api.setState(healthDashboard([], emptyHealthCounts(), true));
+  api.setPrefs({ ...rendererPrefs(), autoApplyUpdates: false });
+  const item = mirrorHealthItem({ level: "unknown", error: "Authentication unavailable" });
+  handlers.get("mirror")({ data: JSON.stringify({
+    mirror: item,
+    notifications: [{ kind: "mirror", id: "critical-1", title: "Mirror critical", repository: "microsoft/aspire" }],
+  }) });
+  assert.equal(api.getState().counts.unknown, 1);
+  assert.equal(api.getState().notifications[0].id, "critical-1");
+  assert.equal(api.getPrefs().autoApplyUpdates, false);
+  assert.match(app.innerHTML, /Internal mirror: Unknown/);
+  assert.match(app.innerHTML, /Authentication unavailable/);
+});
 
 test("renderer follows Primer and canvas theme tokens with system color-scheme fallbacks", () => {
   assert.match(STYLES, /--bg: var\(--bgColor-default, var\(--background-color-default, var\(--fallback-bg\)\)\)/);
@@ -1424,7 +1474,7 @@ function createRendererHarness(overrides = {}) {
     document,
     window: { CSS: { escape: cssEscape } },
     CSS: { escape: cssEscape },
-    EventSource: function () { throw new Error("disabled"); },
+    EventSource: overrides.EventSource ?? function () { throw new Error("disabled"); },
     ResizeObserver: undefined,
     requestAnimationFrame(handler) { handler(); },
     fetch: overrides.fetch ?? (async () => jsonResponse({ dashboard: null, prefs: null })),
