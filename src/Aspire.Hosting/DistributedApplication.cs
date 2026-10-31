@@ -473,6 +473,7 @@ public class DistributedApplication : IHost, IAsyncDisposable
         try
         {
             ApplyLocaleOverride(configuration, _localeOverrideContext);
+            LogStartupInformation();
 
             // We only run the start lifecycle hook if we are in run mode or
             // publish mode. In inspect mode we try to avoid lifecycle hooks
@@ -545,6 +546,8 @@ public class DistributedApplication : IHost, IAsyncDisposable
             {
                 try
                 {
+                    LogStartupInformation();
+
                     // We only run the start lifecycle hook if we are in run mode or
                     // publish mode. In inspect mode we try to avoid lifecycle hooks
                     // kickings. Eventing will still work generally since they are more
@@ -572,6 +575,10 @@ public class DistributedApplication : IHost, IAsyncDisposable
             // Do nothing
         }
     }
+
+    // Log startup information before BeforeStartEvent so it is visible even if a subscriber blocks.
+    private void LogStartupInformation()
+        => _host.Services.GetService<DistributedApplicationLifecycle>()?.LogStartupInformation();
 
     private static bool IsInspectMode(IConfiguration configuration)
         => string.Equals(configuration["AppHost:Operation"], "inspect", StringComparison.OrdinalIgnoreCase);
