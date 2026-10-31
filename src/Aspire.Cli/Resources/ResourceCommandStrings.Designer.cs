@@ -185,5 +185,14 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("InvalidNumberInput", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to (None).
+        /// </summary>
+        internal static string NoChoiceLabel {
+            get {
+                return ResourceManager.GetString("NoChoiceLabel", resourceCulture);
+            }
+        }
     }
 }

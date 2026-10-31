@@ -1544,6 +1544,157 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
             });
     }
 
+    [Fact]
+    public async Task ResourceCommand_DoesNotPromptForCommandInputsWhenInputIsRedirected()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interactionService = new TestInteractionService();
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse { Success = true },
+            ResourceSnapshots =
+            [
+                CreateResourceSnapshot(
+                    "web-browser-automation",
+                    CreateCommand(
+                        "configure",
+                        CreateArgument("message", value: "hello"),
+                        CreateArgument("enabled", inputType: "Boolean", value: "true")))
+            ]
+        };
+        await using var provider = CreateServiceProvider(workspace, outputHelper, backchannel, interactionService, interactive: true, isInputRedirected: true);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("""resource web-browser-automation configure""");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Empty(interactionService.StringPromptCalls);
+        Assert.Empty(interactionService.BooleanPromptCalls);
+        AssertJsonObject(backchannel.ExecuteResourceCommandArguments);
+    }
+
+    [Fact]
+    public async Task ResourceCommand_PromptsForDynamicCommandInputEnabledByLaterDeclaredDependencyWhenInteractive()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interactionService = new TestInteractionService();
+        var selectionPrompts = new List<string>();
+        interactionService.PromptForSelectionCallback = (promptText, choices, formatter, _) =>
+        {
+            selectionPrompts.Add(promptText);
+            var items = choices.Cast<object>().ToList();
+            return promptText == "category:"
+                ? items.Single(item => formatter(item) == "Fruit")
+                : items.Single(item => formatter(item) == "Apple");
+        };
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            ResourceSnapshots =
+            [
+                CreateResourceSnapshot(
+                    "web-browser-automation",
+                    CreateCommand(
+                        "configure",
+                        CreateArgument(
+                            "item",
+                            inputType: "Choice",
+                            required: true,
+                            disabled: true,
+                            dynamicLoading: new ResourceSnapshotCommandArgumentDynamicLoading { DependsOnInputs = ["category"] }),
+                        CreateArgument(
+                            "category",
+                            inputType: "Choice",
+                            required: true,
+                            options: new Dictionary<string, string?> { ["fruit"] = "Fruit", ["vegetable"] = "Vegetable" })))
+            ],
+            ExecuteResourceCommandHandler = options => options is { ValidateOnly: true }
+                ? new ExecuteResourceCommandResponse
+                {
+                    Success = true,
+                    ArgumentInputs =
+                    [
+                        options.Arguments?["category"] is null
+                            ? CreateArgument("item", inputType: "Choice", required: true, disabled: true)
+                            : CreateArgument(
+                                "item",
+                                inputType: "Choice",
+                                required: true,
+                                options: new Dictionary<string, string?> { ["apple"] = "Apple", ["banana"] = "Banana" })
+                    ]
+                }
+                : new ExecuteResourceCommandResponse { Success = true }
+        };
+        await using var provider = CreateServiceProvider(workspace, outputHelper, backchannel, interactionService, interactive: true);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("""resource web-browser-automation configure""");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(["category:", "item:"], selectionPrompts);
+        var executeCall = Assert.Single(backchannel.ExecuteResourceCommandCalls, call => call?.ValidateOnly is false);
+        AssertJsonObject(executeCall?.Arguments, ("category", "fruit"), ("item", "apple"));
+    }
+
+    [Fact]
+    public async Task ResourceCommand_PromptsForChoiceInputsWithDefaultsAndOptionalValuesWhenInteractive()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interactionService = new TestInteractionService();
+        var selectionLabels = new Dictionary<string, List<string>>();
+        interactionService.PromptForSelectionCallback = (promptText, choices, formatter, _) =>
+        {
+            var items = choices.Cast<object>().ToList();
+            selectionLabels[promptText] = items.Select(formatter).ToList();
+            return promptText == "size:"
+                ? items.Single(item => formatter(item) == "None")
+                : items[0];
+        };
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse { Success = true },
+            ResourceSnapshots =
+            [
+                CreateResourceSnapshot(
+                    "web-browser-automation",
+                    CreateCommand(
+                        "configure",
+                        CreateArgument(
+                            "size",
+                            inputType: "Choice",
+                            value: "large",
+                            options: new Dictionary<string, string?> { [""] = "None", ["small"] = "Small", ["large"] = "Large" }),
+                        CreateArgument(
+                            "color",
+                            inputType: "Choice",
+                            value: "teal",
+                            allowCustomChoice: true,
+                            options: new Dictionary<string, string?> { ["red"] = "Red", ["blue"] = "Blue" }),
+                        CreateArgument(
+                            "shape",
+                            inputType: "Choice",
+                            options: new Dictionary<string, string?> { ["circle"] = "Circle", ["square"] = "Square" })))
+            ]
+        };
+        await using var provider = CreateServiceProvider(workspace, outputHelper, backchannel, interactionService, interactive: true);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("""resource web-browser-automation configure""");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(["Large", "None", "Small"], selectionLabels["size:"]);
+        Assert.Equal(["teal", "Red", "Blue", InteractionServiceStrings.CustomChoiceLabel], selectionLabels["color:"]);
+        Assert.Equal([ResourceCommandStrings.NoChoiceLabel, "Circle", "Square"], selectionLabels["shape:"]);
+        AssertJsonObject(backchannel.ExecuteResourceCommandArguments, ("size", ""), ("color", "teal"));
+    }
+
     [Theory]
     [InlineData("--message", "--message")]
     [InlineData("--count", "--count")]
@@ -2531,7 +2682,8 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
         ITestOutputHelper outputHelper,
         TestAppHostAuxiliaryBackchannel backchannel,
         TestInteractionService? interactionService = null,
-        bool interactive = false)
+        bool interactive = false,
+        bool isInputRedirected = false)
     {
         var monitor = new TestAuxiliaryBackchannelMonitor();
         monitor.AddConnection("/tmp/test.sock", backchannel);
@@ -2545,7 +2697,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
             }
             if (interactive)
             {
-                options.CliHostEnvironmentFactory = _ => new TestCliHostEnvironment(supportsInteractiveInput: true);
+                options.CliHostEnvironmentFactory = _ => new TestCliHostEnvironment(supportsInteractiveInput: true, isInputRedirected: isInputRedirected);
             }
         });
 

@@ -100,4 +100,8 @@
   <data name="CommandSpecificHelpDefaultValue" xml:space="preserve">
     <value>Default: {0}.</value>
   </data>
+  <data name="NoChoiceLabel" xml:space="preserve">
+    <value>(None)</value>
+    <comment>Selection choice that leaves an optional command input unset.</comment>
+  </data>
 </root>

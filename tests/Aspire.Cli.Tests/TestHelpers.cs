@@ -18,11 +18,13 @@ internal static class TestHelpers
     }
 }
 
-internal sealed class TestCliHostEnvironment(bool supportsInteractiveInput = false, bool supportsInteractiveOutput = false, bool supportsAnsi = true) : ICliHostEnvironment
+internal sealed class TestCliHostEnvironment(bool supportsInteractiveInput = false, bool supportsInteractiveOutput = false, bool supportsAnsi = true, bool isInputRedirected = false) : ICliHostEnvironment
 {
     public bool SupportsInteractiveInput => supportsInteractiveInput;
 
     public bool SupportsInteractiveOutput => supportsInteractiveOutput;
 
     public bool SupportsAnsi => supportsAnsi;
+
+    public bool IsInputRedirected => isInputRedirected;
 }

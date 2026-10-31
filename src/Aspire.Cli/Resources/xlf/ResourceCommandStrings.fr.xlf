@@ -67,6 +67,11 @@
         <target state="new">Please enter a valid number.</target>
         <note />
       </trans-unit>
+      <trans-unit id="NoChoiceLabel">
+        <source>(None)</source>
+        <target state="new">(None)</target>
+        <note>Selection choice that leaves an optional command input unset.</note>
+      </trans-unit>
       <trans-unit id="SelectAppHostAction">
         <source>connect to</source>
         <target state="translated">se connecter à</target>
