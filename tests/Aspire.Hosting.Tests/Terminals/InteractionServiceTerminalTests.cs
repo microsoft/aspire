@@ -450,6 +450,6 @@ public class InteractionServiceTerminalTests
         }
         return new InteractionService(
             NullLogger<InteractionService>.Instance, new DistributedApplicationOptions(), services.BuildServiceProvider(),
-            new ConfigurationBuilder().Build(), new TestInteractionFileUploadStore()).WithConsumersReady();
+            new ConfigurationBuilder().Build(), new TestInteractionFileUploadStore());
     }
 }

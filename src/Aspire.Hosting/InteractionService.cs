@@ -24,10 +24,11 @@ internal class InteractionService : IInteractionService
     // When set, IsAvailable returns false so command callbacks know not to prompt the user.
     private static readonly AsyncLocal<bool> s_nonInteractiveScope = new();
 
-    // Interactions are answered by consumers such as the dashboard and the CLI backchannel. Those are hosted
-    // services that only start after the app host's before-start hooks (e.g. BeforeStartEvent) complete. Until the
-    // app host marks consumers as ready, nothing can respond to an interaction, so awaiting a prompt would never complete.
-    private volatile bool _consumersReady;
+    // Interactions are answered by consumers such as the dashboard and the CLI backchannel, which are hosted
+    // services that only start after before-start hooks (e.g. BeforeStartEvent) complete. Until then nothing can
+    // respond to an interaction, so awaiting a prompt would never complete. DistributedApplication marks consumers
+    // as not ready when it's created and marks them ready once the hooks finish.
+    private volatile bool _consumersReady = true;
 
     private Action<Interaction>? OnInteractionUpdated { get; set; }
     private readonly object _onInteractionUpdatedLock = new();
@@ -101,13 +102,8 @@ internal class InteractionService : IInteractionService
         }
     }
 
-    /// <summary>
-    /// Marks the consumers that respond to interactions as ready. Until this is called, <see cref="IsAvailable"/>
-    /// returns <c>false</c> because nothing can respond to interactions yet.
-    /// </summary>
-    internal void MarkConsumersReady() => _consumersReady = true;
-
-    void IInteractionService.MarkConsumersReady() => MarkConsumersReady();
+    /// <inheritdoc />
+    void IInteractionService.MarkConsumersReady(bool ready) => _consumersReady = ready;
 
     public async Task<InteractionResult<bool>> PromptConfirmationAsync(string title, string message, MessageBoxInteractionOptions? options = null, CancellationToken cancellationToken = default)
     {

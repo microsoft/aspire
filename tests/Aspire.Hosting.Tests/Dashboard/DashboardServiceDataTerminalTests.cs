@@ -218,7 +218,7 @@ public class DashboardServiceDataTerminalTests
             new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
             new ConfigurationBuilder().Build(),
-            new TestInteractionFileUploadStore()).WithConsumersReady();
+            new TestInteractionFileUploadStore());
         var data = new DashboardServiceData(
             notifications,
             loggerService,

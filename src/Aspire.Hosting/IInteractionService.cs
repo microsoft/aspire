@@ -28,11 +28,11 @@ public interface IInteractionService
     bool IsAvailable { get; }
 
     /// <summary>
-    /// Called by the app host once the consumers that respond to interactions, such as the dashboard and CLI,
-    /// can be reached. Implementations that gate <see cref="IsAvailable"/> on this should report the service as
-    /// available from this point on.
+    /// Sets whether the consumers that respond to interactions, such as the dashboard and CLI, are ready.
+    /// While consumers aren't ready, <see cref="IsAvailable"/> returns <c>false</c>.
     /// </summary>
-    internal void MarkConsumersReady()
+    /// <param name="ready"><c>true</c> if consumers are ready to respond to interactions; otherwise, <c>false</c>.</param>
+    internal void MarkConsumersReady(bool ready)
     {
     }
 

@@ -476,7 +476,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
             new ConfigurationBuilder().Build(),
-            new TestInteractionFileUploadStore()).WithConsumersReady();
+            new TestInteractionFileUploadStore());
         using var dashboardServiceData = CreateDashboardServiceData(loggerFactory: loggerFactory, interactionService: interactionService);
         var dashboardService = CreateDashboardService(dashboardServiceData, logger: loggerFactory.CreateLogger<DashboardServiceImpl>());
 
@@ -547,7 +547,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
             new ConfigurationBuilder().Build(),
-            new TestInteractionFileUploadStore()).WithConsumersReady();
+            new TestInteractionFileUploadStore());
         using var dashboardServiceData = CreateDashboardServiceData(loggerFactory: loggerFactory, interactionService: interactionService);
         var dashboardService = CreateDashboardService(dashboardServiceData, logger: loggerFactory.CreateLogger<DashboardServiceImpl>());
 
@@ -587,7 +587,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
             new ConfigurationBuilder().Build(),
-            new TestInteractionFileUploadStore()).WithConsumersReady();
+            new TestInteractionFileUploadStore());
         using var dashboardServiceData = CreateDashboardServiceData(interactionService: interactionService);
         var dashboardService = CreateDashboardService(dashboardServiceData);
 
@@ -625,7 +625,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         using var services = new ServiceCollection().AddSingleton(terminals).BuildServiceProvider();
         var interactionService = new InteractionService(
             NullLogger<InteractionService>.Instance, new DistributedApplicationOptions(), services,
-            new ConfigurationBuilder().Build(), new TestInteractionFileUploadStore()).WithConsumersReady();
+            new ConfigurationBuilder().Build(), new TestInteractionFileUploadStore());
         using var data = CreateDashboardServiceData(interactionService: interactionService);
         var dashboard = CreateDashboardService(data, terminalService: terminals);
         await using var terminal = terminals.CreateTerminal(new TerminalLaunchOptions
@@ -680,7 +680,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         using var services = new ServiceCollection().AddSingleton(terminals).BuildServiceProvider();
         var interactions = new InteractionService(
             NullLogger<InteractionService>.Instance, new DistributedApplicationOptions(), services,
-            new ConfigurationBuilder().Build(), new TestInteractionFileUploadStore()).WithConsumersReady();
+            new ConfigurationBuilder().Build(), new TestInteractionFileUploadStore());
         using var data = CreateDashboardServiceData(interactionService: interactions);
         await using var terminal = terminals.CreateTerminal(new TerminalLaunchOptions
         {
@@ -745,7 +745,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
             new ConfigurationBuilder().Build(),
-            new TestInteractionFileUploadStore()).WithConsumersReady();
+            new TestInteractionFileUploadStore());
         using var dashboardServiceData = CreateDashboardServiceData(loggerFactory: loggerFactory, interactionService: interactionService);
         var dashboardService = CreateDashboardService(dashboardServiceData, logger: loggerFactory.CreateLogger<DashboardServiceImpl>());
 
@@ -805,7 +805,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
             new ConfigurationBuilder().Build(),
-            new TestInteractionFileUploadStore()).WithConsumersReady();
+            new TestInteractionFileUploadStore());
         using var dashboardServiceData = CreateDashboardServiceData(loggerFactory: loggerFactory, interactionService: interactionService);
         var dashboardService = CreateDashboardService(dashboardServiceData, logger: loggerFactory.CreateLogger<DashboardServiceImpl>());
 
@@ -843,7 +843,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
             new ConfigurationBuilder().Build(),
-            new TestInteractionFileUploadStore()).WithConsumersReady();
+            new TestInteractionFileUploadStore());
         using var dashboardServiceData = CreateDashboardServiceData(loggerFactory: loggerFactory, interactionService: interactionService);
         var dashboardService = CreateDashboardService(dashboardServiceData, logger: loggerFactory.CreateLogger<DashboardServiceImpl>());
 
@@ -1228,7 +1228,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
             new ConfigurationBuilder().Build(),
-            fileUploadStore).WithConsumersReady();
+            fileUploadStore);
         using var dashboardServiceData = CreateDashboardServiceData(interactionService: interactionService, fileUploadStore: fileUploadStore);
         var fileInput = new InteractionInput { Name = "File", InputType = InputType.File };
         var textInput = new InteractionInput { Name = "Text", InputType = InputType.Text };
@@ -1267,7 +1267,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
             new ConfigurationBuilder().Build(),
-            fileUploadStore).WithConsumersReady();
+            fileUploadStore);
         using var dashboardServiceData = CreateDashboardServiceData(interactionService: interactionService, fileUploadStore: fileUploadStore);
         var input = new InteractionInput { Name = "File", InputType = InputType.File, Required = true, AllowMultipleFiles = true };
         var resultTask = interactionService.PromptInputAsync("Upload", "Select a file", input);
@@ -1331,7 +1331,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
             new ConfigurationBuilder().Build(),
-            fileUploadStore).WithConsumersReady();
+            fileUploadStore);
         using var dashboardServiceData = CreateDashboardServiceData(interactionService: interactionService, fileUploadStore: fileUploadStore);
         var input = new InteractionInput { Name = "File", InputType = InputType.File };
         var resultTask = interactionService.PromptInputAsync("Upload", "Select a file", input);
@@ -1901,7 +1901,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
             new ConfigurationBuilder().Build(),
-            fileUploadStore).WithConsumersReady();
+            fileUploadStore);
 
         return new DashboardServiceData(
             resourceNotificationService,
