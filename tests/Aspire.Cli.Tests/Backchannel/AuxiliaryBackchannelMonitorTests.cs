@@ -184,6 +184,47 @@ public class AuxiliaryBackchannelMonitorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task StopAsync_ClosesMonitorOwnedConnectionsGracefully()
+    {
+        var homeDirectory = CreateSocketSafeHomeDirectory();
+        try
+        {
+            using var profiling = new ProfilingTelemetry(new ConfigurationBuilder().Build());
+            var monitor = new AuxiliaryBackchannelMonitor(
+                new CapturingLogger<AuxiliaryBackchannelMonitor>(), CreateExecutionContext(homeDirectory), new FakeTimeProvider(), profiling);
+            using var server = new TestAuxiliaryBackchannelServer(
+                CreateLiveOwnerSocketPath(homeDirectory), Path.Combine(homeDirectory.FullName, "MyApp.AppHost.csproj"));
+            server.CloseOnClientDisconnect = false;
+            var accepted = server.AcceptAsync(TestContext.Current.CancellationToken);
+
+            await monitor.ScanAsync(TestContext.Current.CancellationToken).DefaultTimeout();
+            await accepted.DefaultTimeout();
+            var connection = Assert.IsType<AppHostAuxiliaryBackchannel>(Assert.Single(monitor.Connections));
+            connection.GracefulCloseTimeout = Timeout.InfiniteTimeSpan;
+
+            // Hosted shutdown (for example 'aspire mcp start') stops the monitor before the host disposes it,
+            // so stopping must perform the same graceful close as DisposeAsync rather than drop the socket.
+            await monitor.StartAsync(TestContext.Current.CancellationToken).DefaultTimeout();
+            var stopTask = monitor.StopAsync(TestContext.Current.CancellationToken);
+
+            await server.WaitForClientDisconnectAsync().DefaultTimeout();
+            // The CLI has only shut down its sending side, so it can still receive from the AppHost.
+            server.SendNotificationToClient();
+            Assert.False(stopTask.IsCompleted);
+
+            server.CloseConnection();
+
+            await stopTask.DefaultTimeout();
+            Assert.Empty(monitor.Connections);
+            await monitor.DisposeAsync().AsTask().DefaultTimeout();
+        }
+        finally
+        {
+            homeDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public void FindConnectionByAppHostPath_WithCaseVariant_FollowsCurrentVolumeBehavior()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

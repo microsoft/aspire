@@ -330,9 +330,16 @@ internal sealed class AuxiliaryBackchannelMonitor(
         finally
         {
             // Clean up all connections in parallel
-            var disconnectTasks = Connections.Select(DisconnectAsync);
-            await Task.WhenAll(disconnectTasks).ConfigureAwait(false);
-            _connectionsBySocketPath.Clear();
+            var connections = new List<IAppHostAuxiliaryBackchannel>();
+            foreach (var socketPath in _connectionsBySocketPath.Keys)
+            {
+                if (_connectionsBySocketPath.TryRemove(socketPath, out var connection))
+                {
+                    connections.Add(connection);
+                }
+            }
+
+            await Task.WhenAll(connections.Select(DisconnectAsync)).ConfigureAwait(false);
         }
     }
 
@@ -791,14 +798,19 @@ internal sealed class AuxiliaryBackchannelMonitor(
     {
         try
         {
-            connection.Dispose();
+            if (connection is IAsyncDisposable asyncDisposable)
+            {
+                await asyncDisposable.DisposeAsync().ConfigureAwait(false);
+            }
+            else
+            {
+                connection.Dispose();
+            }
         }
         catch
         {
             // Ignore disposal errors
         }
-
-        await Task.CompletedTask.ConfigureAwait(false);
     }
 
     /// <summary>

@@ -51,6 +51,17 @@ internal sealed class TestAuxiliaryBackchannelServer : IDisposable
 
     public Task WaitForClientDisconnectAsync() => _clientDisconnected.Task;
 
+    /// <summary>
+    /// Writes a JSON-RPC notification directly to the client. This succeeds when the client has only shut down
+    /// its sending side and throws a <see cref="SocketException"/> when the client has closed its socket.
+    /// </summary>
+    public void SendNotificationToClient()
+    {
+        var body = """{"jsonrpc":"2.0","method":"testProbe"}"""u8;
+        var header = System.Text.Encoding.ASCII.GetBytes($"Content-Length: {body.Length}\r\n\r\n");
+        _connectionSocket!.Send([.. header, .. body]);
+    }
+
     public void CloseConnection()
     {
         _rpc?.Dispose();
