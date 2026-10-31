@@ -33,7 +33,7 @@ import { blazorWasmDebugProofTimeoutMs, getBlazorWasmDebugProofCleanupTimeoutMs 
 import type { BlazorWasmDebuggerStatus } from './blazorWasmDebuggerSetup';
 import { getPsFollowProcessLogPath, type PsFollowProcessEvent } from './psFollowProcessLog';
 import { proveDotnetResourceLaunch } from './dotnetResourceLaunchProof';
-import { runAttachedResourceDetachSequence } from './attachedResourceDetachSequence';
+import { attachWhenResourceResponds, runAttachedResourceDetachSequence } from './attachedResourceDetachSequence';
 
 let atomicWriteSequence = 0;
 
@@ -1456,24 +1456,56 @@ async function proveAttachedResourceDebugging(
       throw new Error('Aspire extension E2E attach proof could not find the registered aspire_resource_debug tool.');
     }
 
+    const fetchResourceResponse = async (phase: 'beforeAttach' | 'attached' | 'detached'): Promise<string | undefined> => {
+      const resource = appHostTreeProvider.findResourceElement(resourceName, appHostPath);
+      if (!(resource instanceof ResourceItem) || resource.resource.state !== 'Running') {
+        return undefined;
+      }
+
+      const requestUrl = await resolveResourceRequestUrl(
+        appHostTreeProvider,
+        appHostPath,
+        resourceName,
+        resourceRequestPath,
+        timeoutMs);
+      try {
+        const response = await fetch(requestUrl, { signal: AbortSignal.timeout(5000) });
+        const body = await response.text();
+        return response.ok && body === expectedResponse ? body : undefined;
+      }
+      catch (error) {
+        throw new Error(`${phase} request to resource '${resourceName}' failed: ${error instanceof Error ? error.name : String(error)}`);
+      }
+    };
     const workspaceRoot = getE2eWorkspacePath(process.env.ASPIRE_EXTENSION_E2E_WORKSPACE_ROOT);
     const relativeAppHostPath = path.relative(workspaceRoot, appHostPath).split(path.sep).join('/');
-    const toolCancellation = new vscode.CancellationTokenSource();
-    let languageModelResult: vscode.LanguageModelToolResult;
-    try {
-      languageModelResult = await invokeRegisteredLanguageModelTool(
-        resourceDebugTool,
-        'aspire_resource_debug',
-        {
-          appHostPath: relativeAppHostPath,
-          resourceName,
-          strategy: 'attach',
-        },
-        toolCancellation.token);
-    }
-    finally {
-      toolCancellation.dispose();
-    }
+    const languageModelResult = await attachWhenResourceResponds({
+      waitForResourceResponse: async phase => {
+        const body = await waitForE2eValue(
+          `resource '${resourceName}' response before attaching the debugger`,
+          timeoutMs,
+          () => fetchResourceResponse(phase));
+        extensionLogOutputChannel.info(`Resource debug E2E resource '${resourceName}' responded before attach.`);
+        return body;
+      },
+      attach: async () => {
+        const toolCancellation = new vscode.CancellationTokenSource();
+        try {
+          return await invokeRegisteredLanguageModelTool(
+            resourceDebugTool,
+            'aspire_resource_debug',
+            {
+              appHostPath: relativeAppHostPath,
+              resourceName,
+              strategy: 'attach',
+            },
+            toolCancellation.token);
+        }
+        finally {
+          toolCancellation.dispose();
+        }
+      },
+    });
     const resultPart = languageModelResult.content[0];
     if (!(resultPart instanceof vscode.LanguageModelTextPart)) {
       throw new Error('aspire_resource_debug returned a non-text result.');
@@ -1535,27 +1567,6 @@ async function proveAttachedResourceDebugging(
         }));
 
     const attachedSessionForDetach = attachedSession;
-    const fetchResourceResponse = async (phase: 'attached' | 'detached'): Promise<string | undefined> => {
-      const resource = appHostTreeProvider.findResourceElement(resourceName, appHostPath);
-      if (!(resource instanceof ResourceItem) || resource.resource.state !== 'Running') {
-        return undefined;
-      }
-
-      const requestUrl = await resolveResourceRequestUrl(
-        appHostTreeProvider,
-        appHostPath,
-        resourceName,
-        resourceRequestPath,
-        timeoutMs);
-      try {
-        const response = await fetch(requestUrl, { signal: AbortSignal.timeout(5000) });
-        const body = await response.text();
-        return response.ok && body === expectedResponse ? body : undefined;
-      }
-      catch (error) {
-        throw new Error(`${phase} request to resource '${resourceName}' failed: ${error instanceof Error ? error.name : String(error)}`);
-      }
-    };
     const responseBody = await runAttachedResourceDetachSequence({
       removeBreakpoint: () => {
         breakpointRemovalRequested = true;

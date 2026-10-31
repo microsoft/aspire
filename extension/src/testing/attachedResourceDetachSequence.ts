@@ -6,6 +6,20 @@ export interface AttachedResourceDetachSteps {
   detach(): Promise<void>;
 }
 
+export interface ResourceAttachReadinessSteps<T> {
+  waitForResourceResponse(phase: 'beforeAttach'): Promise<string>;
+  attach(): Promise<T>;
+}
+
+// A resource reports Running as soon as its launcher process starts, which for `go run` is before the
+// compiled application exists. The attach provider resolves that application among the launcher's
+// children within a bounded budget, so attaching on Running alone fails whenever the build outlasts the
+// budget. The application serving its expected response is the observable signal that it is up.
+export async function attachWhenResourceResponds<T>(steps: ResourceAttachReadinessSteps<T>): Promise<T> {
+  await steps.waitForResourceResponse('beforeAttach');
+  return await steps.attach();
+}
+
 // The traffic driver leaves requests queued inside the debuggee while it is stopped at the breakpoint.
 // vscode.debug.removeBreakpoints only schedules a setBreakpoints request, so continuing before the
 // adapter acknowledges the removal lets a queued request stop on the still-bound breakpoint again, and
