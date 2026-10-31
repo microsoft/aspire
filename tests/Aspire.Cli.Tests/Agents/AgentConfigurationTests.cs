@@ -33,7 +33,7 @@ public class AgentConfigurationTests(ITestOutputHelper output) : IDisposable
         await File.WriteAllBytesAsync(path, bytes).DefaultTimeout();
 
         var inline = AgentConfiguration.ParseObject(json);
-        var file = AgentConfiguration.ReadObject(path, CancellationToken.None);
+        var file = AgentConfiguration.ReadObject(path);
         var edit = new AgentConfiguration();
         var tracked = await edit.ReadObjectForEditAsync(path, CancellationToken.None).DefaultTimeout();
 
@@ -55,7 +55,7 @@ public class AgentConfigurationTests(ITestOutputHelper output) : IDisposable
         var path = Path.Combine(_context.Project.FullName, "settings.json");
         await File.WriteAllBytesAsync(path, bytes).DefaultTimeout();
 
-        var file = AgentConfiguration.ReadObject(path, CancellationToken.None);
+        var file = AgentConfiguration.ReadObject(path);
         var edit = new AgentConfiguration();
         var tracked = await edit.ReadObjectForEditAsync(path, CancellationToken.None).DefaultTimeout();
 
@@ -82,7 +82,7 @@ public class AgentConfigurationTests(ITestOutputHelper output) : IDisposable
         await File.WriteAllBytesAsync(path, bytes).DefaultTimeout();
 
         var fileError = Assert.Throws<InvalidOperationException>(() =>
-            AgentConfiguration.ReadObject(path, CancellationToken.None));
+            AgentConfiguration.ReadObject(path));
         var edit = new AgentConfiguration();
         var trackedError = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             edit.ReadObjectForEditAsync(path, CancellationToken.None)).DefaultTimeout();
@@ -115,7 +115,7 @@ public class AgentConfigurationTests(ITestOutputHelper output) : IDisposable
             _ => Assert.ThrowsAny<JsonException>(() => AgentConfiguration.ParseObject(json))
         };
         var file = Assert.Throws<InvalidOperationException>(() =>
-            AgentConfiguration.ReadObject(path, CancellationToken.None));
+            AgentConfiguration.ReadObject(path));
         var edit = new AgentConfiguration();
         var tracked = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             edit.ReadObjectForEditAsync(path, CancellationToken.None)).DefaultTimeout();
@@ -134,7 +134,7 @@ public class AgentConfigurationTests(ITestOutputHelper output) : IDisposable
         var path = Path.Combine(directory, "settings.json");
         var edit = new AgentConfiguration();
 
-        Assert.Null(AgentConfiguration.ReadObject(path, CancellationToken.None));
+        Assert.Null(AgentConfiguration.ReadObject(path));
         Assert.Empty(AgentConfiguration.EnumerateJsonFiles(directory));
         Assert.Null(await edit.ReadBytesForEditAsync(path, CancellationToken.None).DefaultTimeout());
         Assert.Empty(edit.GetJsonFilesForEdit(directory));
@@ -177,7 +177,7 @@ public class AgentConfigurationTests(ITestOutputHelper output) : IDisposable
         const string changed = """{"value":"external"}""";
         await File.WriteAllTextAsync(path, changed);
 
-        var discovered = AgentConfiguration.ReadObject(path, CancellationToken.None);
+        var discovered = AgentConfiguration.ReadObject(path);
         var captured = await edit.ReadObjectForEditAsync(path, CancellationToken.None).DefaultTimeout();
 
         Assert.Equal("external", discovered!["value"]!.GetValue<string>());
@@ -202,7 +202,7 @@ public class AgentConfigurationTests(ITestOutputHelper output) : IDisposable
         var edit = new AgentConfiguration();
         var config = await edit.ReadObjectForEditAsync(path, CancellationToken.None) ?? new JsonObject();
         await _context.Copilot.UpdateIntegrationConfigAsync(
-            config, _context.Project, AgentConfigurationScope.Project, edit, CancellationToken.None);
+            config, _context.Project, AgentConfigurationScope.Project, edit, _context.Sources, CancellationToken.None);
         await AgentConfigurationTestContext.WriteAsync(path, changed);
 
         await Assert.ThrowsAsync<IOException>(() => edit.PublishAsync(path, config, CancellationToken.None)).DefaultTimeout();
@@ -223,7 +223,7 @@ public class AgentConfigurationTests(ITestOutputHelper output) : IDisposable
         var edit = new AgentConfiguration();
         var config = await edit.ReadObjectForEditAsync(path, CancellationToken.None) ?? new JsonObject();
         await client.UpdateIntegrationConfigAsync(
-            config, _context.Project, AgentConfigurationScope.Project, edit, CancellationToken.None);
+            config, _context.Project, AgentConfigurationScope.Project, edit, _context.Sources, CancellationToken.None);
         const string changed = """{"userEdit":true}""";
         await AgentConfigurationTestContext.WriteAsync(inherited, changed);
 
@@ -253,7 +253,7 @@ public class AgentConfigurationTests(ITestOutputHelper output) : IDisposable
         var edit = new AgentConfiguration();
         var config = await edit.ReadObjectForEditAsync(path, CancellationToken.None) ?? new JsonObject();
         await _context.ClaudeCode.UpdateIntegrationConfigAsync(
-            config, _context.Project, AgentConfigurationScope.Project, edit, CancellationToken.None);
+            config, _context.Project, AgentConfigurationScope.Project, edit, _context.Sources, CancellationToken.None);
         if (change == "directory")
         {
             Directory.CreateDirectory(directory);
@@ -281,7 +281,7 @@ public class AgentConfigurationTests(ITestOutputHelper output) : IDisposable
         var edit = new AgentConfiguration();
         var config = await edit.ReadObjectForEditAsync(path, CancellationToken.None) ?? new JsonObject();
         await _context.ClaudeCode.UpdateIntegrationConfigAsync(
-            config, _context.Project, AgentConfigurationScope.Project, edit, CancellationToken.None);
+            config, _context.Project, AgentConfigurationScope.Project, edit, _context.Sources, CancellationToken.None);
         await File.WriteAllTextAsync(Path.Combine(directory, ".ignored.json"), "{malformed");
 
         await edit.PublishAsync(path, config, CancellationToken.None).DefaultTimeout();
@@ -297,7 +297,7 @@ public class AgentConfigurationTests(ITestOutputHelper output) : IDisposable
         var remoteEdit = new AgentConfiguration();
         var remote = (await remoteEdit.ReadObjectForEditAsync(path, CancellationToken.None))!;
         await _context.OpenCode.UpdateIntegrationConfigAsync(
-            remote, _context.Project, AgentConfigurationScope.Global, remoteEdit, CancellationToken.None);
+            remote, _context.Project, AgentConfigurationScope.Global, remoteEdit, _context.Sources, CancellationToken.None);
         var mcpEdit = new AgentConfiguration();
         var (mcp, mcpPath) = await _context.OpenCode.ReadMcpConfigAsync(
             path, _context.Project, AgentConfigurationScope.Global, mcpEdit, CancellationToken.None);

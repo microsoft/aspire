@@ -29,6 +29,16 @@ public sealed class ConfigSourceTests(ITestOutputHelper output)
             await context.AssertSourceAppliedAsync("original");
         });
 
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public Task AgentInit_RegistersMaterializedSkillSources()
+        => ConfigSourceTestContext.RunAsync(output, async context =>
+        {
+            await context.CreateProjectAsync();
+            await context.AssertSourceAppliedAsync("original");
+            await context.RegisterAndAssertSkillSourcesAsync();
+        });
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]

@@ -1,0 +1,10 @@
+﻿[
+  Use the Aspire plugin at your own risk.
+Review the source before enabling it.
+
+Prefer skill files only? Choose Embedded, or install skills directly from https://third-party.example/skills/, https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v2/.,
+  Use the Aspire plugin at your own risk.
+Review the source before enabling it.
+
+Prefer skill files only? Choose Embedded, or install skills directly from https://team.example/skills/.
+]

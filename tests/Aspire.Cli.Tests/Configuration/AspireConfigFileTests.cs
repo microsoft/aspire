@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
+using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Tests.Utils;
 
@@ -9,6 +10,20 @@ namespace Aspire.Cli.Tests.Configuration;
 
 public class AspireConfigFileTests(ITestOutputHelper outputHelper)
 {
+    [Fact]
+    public void FromLegacy_PreservesNamedSkillSources()
+    {
+        var sources = new Dictionary<string, SkillSource>
+        {
+            ["default"] = new() { Enabled = false },
+            ["team"] = new() { Repository = "example/team" }
+        };
+
+        var config = AspireConfigFile.FromLegacy(new AspireJsonConfiguration { SkillSources = sources }, profiles: null);
+
+        Assert.Same(sources, config.SkillSources);
+    }
+
     [Fact]
     public void Load_ReturnsNull_WhenFileDoesNotExist()
     {
@@ -69,6 +84,49 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
         config.Save(workspace.Path);
 
         await Verify(await File.ReadAllTextAsync(path), "json");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task LoadAndSave_PreservesSkillSourcePlugins(bool explicitPlugins)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
+        var globalSettingsFile = new FileInfo(Path.Combine(workspace.Path, "globalsettings.json"));
+        await File.WriteAllTextAsync(globalSettingsFile.FullName, """
+            {
+              "skillSources": {
+                "team": {
+                  "repository": "example/global",
+                  "plugins": ["deployment", "operations"]
+                }
+              }
+            }
+            """);
+        var plugins = explicitPlugins ? """, "plugins": ["local", "release"]""" : string.Empty;
+        await File.WriteAllTextAsync(path, $$"""
+            {
+              "skillSources": {
+                "default": { "enabled": false },
+                "team": { "repository": "example/local"{{plugins}} }
+              }
+            }
+            """);
+        string[] expectedPlugins = explicitPlugins
+            ? ["local@team", "release@team"]
+            : ["deployment@team", "operations@team"];
+        Assert.Equal(expectedPlugins, Assert.Single(SkillSource.Resolve(workspace.WorkspaceRoot, globalSettingsFile)).GetPluginNames());
+
+        var config = AspireConfigFile.Load(workspace.Path);
+        Assert.NotNull(config);
+        config.Channel = "daily";
+        config.Save(workspace.Path);
+
+        var source = Assert.Single(SkillSource.Resolve(workspace.WorkspaceRoot, globalSettingsFile));
+        Assert.Equal("example/local", source.Repository);
+        Assert.Equal(expectedPlugins, source.GetPluginNames());
+        await Verify(await File.ReadAllTextAsync(path), "json").UseParameters(explicitPlugins);
     }
 
     [Fact]

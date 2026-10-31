@@ -4,6 +4,7 @@
 using System.ComponentModel;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Aspire.Cli.Agents.AspireSkills;
 
 namespace Aspire.Cli.Configuration;
 
@@ -74,6 +75,10 @@ internal sealed class AspireJsonConfiguration
     [JsonConverter(typeof(FlexibleBooleanDictionaryConverter))]
     [Description("Feature flags for enabling/disabling experimental or optional features. Key is feature name, value is enabled (true) or disabled (false).")]
     public Dictionary<string, bool>? Features { get; set; }
+
+    [JsonPropertyName(SkillSource.SectionName)]
+    [Description("Named agent skill sources, merged across configuration layers. The built-in default source remains enabled unless explicitly disabled.")]
+    public Dictionary<string, SkillSource>? SkillSources { get; set; }
 
     /// <summary>
     /// Captures any additional properties not explicitly defined in this class.

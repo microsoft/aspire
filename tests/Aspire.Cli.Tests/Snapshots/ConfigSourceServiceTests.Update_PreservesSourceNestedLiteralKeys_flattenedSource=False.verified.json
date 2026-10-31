@@ -4,12 +4,13 @@
     "path": "teams/platform.json",
     "appliedVersion": "version-2"
   },
-  "docs": {
-    "api": {
-      "sitemapUrl": "https://local.example/sitemap.xml"
-    },
-    "custom": "preserved",
-    "custom:key": "literal"
+  "skillSources": {
+    "team": {
+      "repository": "example/remote",
+      "custom": {
+        "setting": "remote"
+      }
+    }
   },
   "profiles": {
     "dev:local": {

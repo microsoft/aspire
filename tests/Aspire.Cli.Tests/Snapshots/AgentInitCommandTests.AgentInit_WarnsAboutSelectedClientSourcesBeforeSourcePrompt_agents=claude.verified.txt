@@ -1,0 +1,14 @@
+﻿[
+  Use the Aspire plugin at your own risk.
+Review the source before enabling it.
+
+Prefer skill files only? Choose Embedded, or install skills directly from https://github.com/microsoft/aspire-skills.,
+  Use the Aspire plugin at your own risk.
+Review the source before enabling it.
+
+Prefer skill files only? Choose Embedded, or install skills directly from https://github.com/example/plugins.,
+  Use the Aspire plugin at your own risk.
+Review the source before enabling it.
+
+Prefer skill files only? Choose Embedded, or install skills directly from https://github.com/example/team.
+]

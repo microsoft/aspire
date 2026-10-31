@@ -24,7 +24,7 @@ public class OpenCodeAgentClientTests(ITestOutputHelper output) : IDisposable
         await AgentConfigurationTestContext.WriteAsync(nestedConfig, existing);
         var target = client.GetIntegrationConfigPath(AgentConfigurationScope.Project, _context.Project);
 
-        Assert.True(client.HasIntegrationRegistration(_context.Project, AgentConfigurationScope.Project, TestContext.Current.CancellationToken));
+        Assert.True(client.HasIntegrationRegistration(_context.Project, AgentConfigurationScope.Project, _context.Sources));
         Assert.Equal(Path.Combine(_context.Project.FullName, "opencode.jsonc"), target);
         Assert.False(File.Exists(target));
         Assert.Equal(existing, await File.ReadAllTextAsync(nestedConfig));
@@ -384,7 +384,7 @@ public class OpenCodeAgentClientTests(ITestOutputHelper output) : IDisposable
         Assert.Equal(original, await File.ReadAllTextAsync(normal));
         Assert.Equal(new[] { other, normal, selected }.Order(),
             Directory.EnumerateFiles(_context.Home.FullName, "*", SearchOption.AllDirectories).Order());
-        Assert.True(_context.OpenCode.HasIntegrationRegistration(_context.Project, AgentConfigurationScope.Project, TestContext.Current.CancellationToken));
+        Assert.True(_context.OpenCode.HasIntegrationRegistration(_context.Project, AgentConfigurationScope.Project, _context.Sources));
     }
 
     public void Dispose() => _context.Dispose();
