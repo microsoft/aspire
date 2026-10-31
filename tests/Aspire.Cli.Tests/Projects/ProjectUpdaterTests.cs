@@ -2202,6 +2202,96 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task UpdateProjectFileAsync_RollsBackWhenSiblingCleanupRemovesCentralVersionNeededByAnotherSibling()
+    {
+        // The AppHost doesn't use central package management. Two other AppHosts share their own
+        // Directory.Packages.props: the stale one gets its legacy reference and central version removed, and the
+        // current one opts out of the implicit reference and still needs that version. It must be restored in the
+        // transaction so the update fails instead of reporting success.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostProjectFile = new FileInfo(Path.Combine(workspace.CreateDirectory("First.AppHost").FullName, "First.AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostProjectFile.FullName, """
+            <Project Sdk="Aspire.AppHost.Sdk/9.4.1">
+            </Project>
+            """);
+        var siblingsDirectory = workspace.CreateDirectory("Siblings");
+        var staleProjectFile = new FileInfo(Path.Combine(siblingsDirectory.CreateSubdirectory("Second.AppHost").FullName, "Second.AppHost.csproj"));
+        await File.WriteAllTextAsync(staleProjectFile.FullName, """
+            <Project Sdk="Aspire.AppHost.Sdk/9.4.1">
+              <ItemGroup>
+                <PackageReference Include="Aspire.Hosting.AppHost" />
+              </ItemGroup>
+            </Project>
+            """);
+        var retainedProjectFile = new FileInfo(Path.Combine(siblingsDirectory.CreateSubdirectory("Third.AppHost").FullName, "Third.AppHost.csproj"));
+        await File.WriteAllTextAsync(retainedProjectFile.FullName, """
+            <Project Sdk="Aspire.AppHost.Sdk/9.5.0">
+              <PropertyGroup>
+                <SkipAddAspireDefaultReferences>true</SkipAddAspireDefaultReferences>
+              </PropertyGroup>
+              <ItemGroup>
+                <PackageReference Include="Aspire.Hosting.AppHost" />
+              </ItemGroup>
+            </Project>
+            """);
+        var directoryPackagesPropsFile = new FileInfo(Path.Combine(siblingsDirectory.FullName, "Directory.Packages.props"));
+        const string DirectoryPackagesPropsContent = """
+            <Project>
+              <PropertyGroup>
+                <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+              </PropertyGroup>
+              <ItemGroup>
+                <PackageVersion Include="Aspire.Hosting.AppHost" Version="9.4.1" />
+              </ItemGroup>
+            </Project>
+            """;
+        await File.WriteAllTextAsync(directoryPackagesPropsFile.FullName, DirectoryPackagesPropsContent);
+        var originalAppHostContent = await File.ReadAllTextAsync(appHostProjectFile.FullName);
+        var originalStaleContent = await File.ReadAllTextAsync(staleProjectFile.FullName);
+        await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "Repro.slnx"), "<Solution />");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, config =>
+        {
+            config.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
+            {
+                SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _, _) => query switch
+                {
+                    "Aspire.AppHost.Sdk" => (0, [new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = PackageSources.NuGetOrg }]),
+                    "Aspire.Hosting.AppHost" => (0, [new NuGetPackageCli { Id = "Aspire.Hosting.AppHost", Version = "9.5.0", Source = PackageSources.NuGetOrg }]),
+                    _ => throw new InvalidOperationException($"Unexpected package query: {query}"),
+                },
+                GetProjectItemsAndPropertiesAsyncCallback = (project, _, _, _, _) =>
+                {
+                    var itemsAndProperties = new JsonObject();
+                    itemsAndProperties.WithSdkVersion("9.4.1");
+                    if (project.FullName == retainedProjectFile.FullName)
+                    {
+                        itemsAndProperties.WithProperty("SkipAddAspireDefaultReferences", "true");
+                    }
+                    return (0, JsonDocument.Parse(itemsAndProperties.ToJsonString()));
+                },
+                // Mirrors NU1010: the retained versionless reference needs the central PackageVersion.
+                RestoreAsyncCallback = (project, _, _) =>
+                    project.FullName == retainedProjectFile.FullName &&
+                    !File.ReadAllText(directoryPackagesPropsFile.FullName).Contains("Aspire.Hosting.AppHost", StringComparison.Ordinal) ? 1 : 0,
+                GetSolutionProjectsAsyncCallback = (_, _, _) => (0, [appHostProjectFile, staleProjectFile, retainedProjectFile]),
+            };
+            config.InteractionServiceFactory = _ => new TestInteractionService { ConfirmCallback = (_, _) => true };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var channels = await provider.GetRequiredService<IPackagingService>().GetChannelsAsync().DefaultTimeout();
+        var projectUpdater = provider.GetRequiredService<IProjectUpdater>();
+        var exception = await Assert.ThrowsAsync<ProjectUpdaterException>(
+            () => projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, channels.Single(c => c.Name == "default"))).DefaultTimeout());
+
+        Assert.Contains(retainedProjectFile.FullName, exception.Message);
+        Assert.Equal(originalAppHostContent, await File.ReadAllTextAsync(appHostProjectFile.FullName));
+        Assert.Equal(originalStaleContent, await File.ReadAllTextAsync(staleProjectFile.FullName));
+        Assert.Equal(DirectoryPackagesPropsContent, await File.ReadAllTextAsync(directoryPackagesPropsFile.FullName));
+    }
+
+    [Fact]
     public async Task UpdateProjectFileAsync_RollsBackWhenOtherSolutionProjectFailsToRestore()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

@@ -819,12 +819,17 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
     /// </summary>
     private async Task EnqueueSolutionProjectSdkUpdateStepsAsync(UpdateContext context, NuGetPackageCli latestSdkPackage, CancellationToken cancellationToken)
     {
-        // The AppHost's cleanup removes a central Aspire.Hosting.AppHost PackageVersion, which other projects
-        // sharing that Directory.Packages.props may still need (directly or through imported files).
-        var appHostCentralPackagesFile = DetectCentralPackageManagement(context.AppHostProjectFile).DirectoryPackagesPropsFile;
-        var removesCentralAppHostVersion = appHostCentralPackagesFile is not null &&
-            DetectLegacyAppHostReferences(context.AppHostProjectFile).HasOrphanPackageVersion;
+        // Cleanup of the AppHost or of another project can remove a central Aspire.Hosting.AppHost PackageVersion,
+        // which other projects sharing that Directory.Packages.props may still need (directly or through
+        // imported files). Analyze every project first so all affected central files are known.
+        var affectedCentralPackagesFiles = new HashSet<string>(StringComparers.FileSystemPath);
+        if (DetectCentralPackageManagement(context.AppHostProjectFile).DirectoryPackagesPropsFile is { } appHostCentralPackagesFile &&
+            DetectLegacyAppHostReferences(context.AppHostProjectFile).HasOrphanPackageVersion)
+        {
+            affectedCentralPackagesFiles.Add(appHostCentralPackagesFile.FullName);
+        }
 
+        var analyses = new List<(FileInfo ProjectFile, string? StaleVersion, bool RemoveLegacyReferences, bool HasPackageReference, bool HasOrphanPackageVersion, string? CentralPackagesFile)>();
         foreach (var projectFile in await GetOtherSolutionProjectsAsync(context.AppHostProjectFile, cancellationToken))
         {
             if (!ProjectFileExtensions.Supported.Contains(projectFile.Extension) || !projectFile.Exists)
@@ -858,11 +863,22 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                 (hasPackageReference || hasOrphanPackageVersion) &&
                 !await SkipsImplicitAppHostReferenceAsync(projectFile, document, cancellationToken);
 
-            // A retained reference may rely on that shared central version, so restore the project in the
-            // transaction; if the AppHost's cleanup breaks it, the whole update is rolled back.
-            var validateRetainedReference = removesCentralAppHostVersion && !removeLegacyReferences &&
-                DetectCentralPackageManagement(projectFile).DirectoryPackagesPropsFile is { } centralPackagesFile &&
-                string.Equals(centralPackagesFile.FullName, appHostCentralPackagesFile!.FullName, StringComparisons.FileSystemPath);
+            var centralPackagesFile = DetectCentralPackageManagement(projectFile).DirectoryPackagesPropsFile?.FullName;
+            if (removeLegacyReferences && hasOrphanPackageVersion && centralPackagesFile is not null)
+            {
+                affectedCentralPackagesFiles.Add(centralPackagesFile);
+            }
+
+            analyses.Add((projectFile, staleVersion, removeLegacyReferences, hasPackageReference, hasOrphanPackageVersion, centralPackagesFile));
+        }
+
+        foreach (var (projectFile, staleVersion, removeLegacyReferences, hasPackageReference, hasOrphanPackageVersion, centralPackagesFile) in analyses)
+        {
+            // A retained reference may rely on a removed central version, so restore the project in the
+            // transaction; if a cleanup breaks it, the whole update is rolled back.
+            var validateRetainedReference = !removeLegacyReferences &&
+                centralPackagesFile is not null &&
+                affectedCentralPackagesFiles.Contains(centralPackagesFile);
 
             if (staleVersion is null && !removeLegacyReferences && !validateRetainedReference)
             {
