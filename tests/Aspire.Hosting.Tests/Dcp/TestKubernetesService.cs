@@ -31,6 +31,11 @@ internal sealed class TestKubernetesService : IKubernetesService
     public ConcurrentQueue<CustomResource> CreatedResources { get; } = [];
     public ConcurrentQueue<string> DeletedResources { get; } = [];
 
+    // The state reported after a stop patch. DCP reports FailedToStart when a stop arrives before the
+    // workload was launched, so tests can override these to simulate that.
+    public string StoppedExecutableState { get; set; } = ExecutableState.Finished;
+    public string StoppedContainerState { get; set; } = ContainerState.Exited;
+
     private readonly List<Channel<(WatchEventType, CustomResource)>> _watchChannels = [];
     private readonly Func<CustomResource, string, bool?, Stream> _startStream;
     private readonly bool _ignoreDeletes;
@@ -420,7 +425,7 @@ internal sealed class TestKubernetesService : IKubernetesService
                     {
                         exe.Status = new ExecutableStatus();
                     }
-                    exe.Status.State = ExecutableState.Finished;
+                    exe.Status.State = StoppedExecutableState;
                     changed = true;
                 }
 
@@ -447,7 +452,7 @@ internal sealed class TestKubernetesService : IKubernetesService
                     {
                         ctr.Status = new ContainerStatus();
                     }
-                    ctr.Status.State = ContainerState.Exited;
+                    ctr.Status.State = StoppedContainerState;
                     changed = true;
                 }
 
