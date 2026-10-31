@@ -50,6 +50,13 @@ internal static partial class Gtk
     [LibraryImport(GtkLibrary)] internal static partial nint gtk_image_new_from_pixbuf(nint pixbuf);
     [LibraryImport("libgdk-3.so.0")] internal static partial nint gdk_pixbuf_get_from_surface(nint surface, int x, int y, int width, int height);
     [LibraryImport("libcairo.so.2")] internal static partial nint cairo_image_surface_create(int format, int width, int height);
+    [LibraryImport("libcairo.so.2", StringMarshalling = StringMarshalling.Utf8)] internal static partial nint cairo_image_surface_create_from_png(string path);
+    [LibraryImport("libcairo.so.2", StringMarshalling = StringMarshalling.Utf8)] internal static partial int cairo_surface_write_to_png(nint surface, string path);
+    [LibraryImport("libcairo.so.2")] internal static partial int cairo_image_surface_get_width(nint surface);
+    [LibraryImport("libcairo.so.2")] internal static partial int cairo_image_surface_get_height(nint surface);
+    [LibraryImport("libcairo.so.2")] internal static partial void cairo_set_source_surface(nint context, nint surface, double x, double y);
+    [LibraryImport("libcairo.so.2")] internal static partial void cairo_paint_with_alpha(nint context, double alpha);
+    [LibraryImport("libcairo.so.2")] internal static partial void cairo_set_operator(nint context, int operation);
     [LibraryImport("libcairo.so.2")] internal static partial int cairo_surface_status(nint surface);
     [LibraryImport("libcairo.so.2")] internal static partial void cairo_surface_destroy(nint surface);
     [LibraryImport("libcairo.so.2")] internal static partial nint cairo_create(nint surface);
@@ -100,4 +107,5 @@ internal static partial class Gtk
     [LibraryImport(IndicatorLibrary)] internal static partial void app_indicator_set_status(nint indicator, int status);
     [LibraryImport(IndicatorLibrary)] internal static partial void app_indicator_set_menu(nint indicator, nint menu);
     [LibraryImport(IndicatorLibrary, StringMarshalling = StringMarshalling.Utf8)] internal static partial void app_indicator_set_title(nint indicator, string title);
+    [LibraryImport(IndicatorLibrary, StringMarshalling = StringMarshalling.Utf8)] internal static partial void app_indicator_set_icon_full(nint indicator, string icon, string description);
 }

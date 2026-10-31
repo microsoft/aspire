@@ -17,7 +17,7 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
     private readonly ConcurrentQueue<Action> _pending = new();
     private readonly Dictionary<nint, LinuxTrayMenuItem> _commands = [];
     private readonly TaskCompletionSource _ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
-    private readonly string? _code = FindExecutable("code");
+    private readonly List<Task> _desktopTasks = [];
     private readonly long _started = Stopwatch.GetTimestamp();
     private TrayViewState? _displayed;
     private nint _indicator;
@@ -30,6 +30,11 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
     private bool _connected;
     private Exception? _failure;
     private long? _lastPinPrune;
+    private IReadOnlyList<LinuxFolderApplication> _applications = [];
+    private LinuxTrayIcons? _icons;
+    private TrayIconStatus? _iconStatus;
+    private LinuxTrayPanel? _panel;
+    private LinuxStatusNotifierItem? _panelIcon;
 
     internal LinuxTrayApplication(TrayController controller, ITrayStartupSettings startup)
         : this(controller, startup, TimeProvider.System)
@@ -43,6 +48,12 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
     internal unsafe void Run()
     {
         Gtk.Load();
+        var nativeMenu = LinuxDesktopEnvironment.IsGnome(Environment.GetEnvironmentVariable("XDG_CURRENT_DESKTOP"),
+            Environment.GetEnvironmentVariable("XDG_SESSION_DESKTOP"));
+        if (!nativeMenu)
+        {
+            LinuxLayerShell.Preload();
+        }
         if (Gtk.gtk_init_check(0, 0) == 0)
         {
             throw new InvalidOperationException("GTK could not connect to a graphical desktop. Run Aspire Tray inside your Wayland or X11 session.");
@@ -66,16 +77,33 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
         {
             throw new FileNotFoundException("The tray icon is missing.", icon);
         }
-        _indicator = Gtk.app_indicator_new("dev.aspire.tray", icon, 0);
-        if (_indicator == 0)
+        _icons = new LinuxTrayIcons(icon);
+        _applications = LinuxFolderApplication.Discover(Environment.GetEnvironmentVariable("PATH") ?? "");
+        if (!nativeMenu)
         {
-            throw new InvalidOperationException("Could not create the Linux AppIndicator.");
+            _panel = new(controller, _applications, ExecutePanelAction, LinuxDesktopEnvironment.RequirePanelBackend());
+            _panelIcon = new(_watcher, icon, (x, y) => _pending.Enqueue(() =>
+            {
+                _panel.SetAnchor(new(x, y, 0, 0));
+                _panel.Toggle();
+            }));
         }
-        Gtk.app_indicator_set_title(_indicator, "Aspire");
-        Gtk.g_signal_connect_data(_indicator, "connection-changed",
-            (nint)(delegate* unmanaged[Cdecl]<nint, int, nint, void>)&ConnectionChanged, 0, 0, 0);
+        else
+        {
+            _indicator = Gtk.app_indicator_new("dev.aspire.tray", icon, 0);
+            if (_indicator == 0)
+            {
+                throw new InvalidOperationException("Could not create the Linux AppIndicator.");
+            }
+            Gtk.app_indicator_set_title(_indicator, "Aspire");
+            Gtk.g_signal_connect_data(_indicator, "connection-changed",
+                (nint)(delegate* unmanaged[Cdecl]<nint, int, nint, void>)&ConnectionChanged, 0, 0, 0);
+        }
         Refresh();
-        Gtk.app_indicator_set_status(_indicator, 1);
+        if (_indicator != 0)
+        {
+            Gtk.app_indicator_set_status(_indicator, 1);
+        }
         _timer = Gtk.g_timeout_add(100, (nint)(delegate* unmanaged[Cdecl]<nint, int>)&Tick, 0);
         Gtk.gtk_main();
         if (_failure is not null)
@@ -102,8 +130,15 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
             }
             else
             {
-                Gtk.app_indicator_set_status(_indicator, 0);
-                Gtk.app_indicator_set_status(_indicator, 1);
+                if (_panel is not null)
+                {
+                    _panel.Show();
+                }
+                else
+                {
+                    Gtk.app_indicator_set_status(_indicator, 0);
+                    Gtk.app_indicator_set_status(_indicator, 1);
+                }
                 restored.TrySetResult();
             }
         });
@@ -167,6 +202,7 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
     private void Quit()
     {
         _quitting = true;
+        _panel?.Hide();
         if (_dialog != 0)
         {
             // gtk_dialog_run owns a separate nested loop. Cancel it before quitting
@@ -196,13 +232,19 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
             {
                 return 1;
             }
-            app.UpdateAvailability(app._connected, app.HasRegisteredHost());
+            app._panelIcon?.PollRegistration();
+            app._panel?.Poll();
+            app.UpdateAvailability(app._panelIcon?.IsRegistered ?? app._connected, app.HasRegisteredHost());
+            if (!app.IsAvailable)
+            {
+                app._panel?.Hide();
+            }
             app.ProcessPending();
             if (!app.IsQuitting)
             {
                 if (!app._ready.Task.IsCompleted && Stopwatch.GetElapsedTime(app._started) > TimeSpan.FromSeconds(8))
                 {
-                    throw new InvalidOperationException("The tray requires StatusNotifierWatcher registration and a registered panel host. Enable an AppIndicator extension on GNOME or the tray module on Waybar.");
+                    throw new InvalidOperationException("The tray requires StatusNotifierWatcher registration and a registered panel host. Enable an AppIndicator extension on GNOME or your desktop's tray module.");
                 }
                 app.Refresh();
             }
@@ -224,14 +266,33 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
             return;
         }
         var previous = _menu;
-        _commands.Clear();
-        _menu = BuildMenu(LinuxTrayMenu.Build(state, _code is not null));
-        // Retain our own reference: replacing the indicator's menu drops its reference
-        // before we disconnect/destroy the old widgets and their callbacks.
-        Gtk.g_object_ref_sink(_menu);
-        Gtk.gtk_widget_show_all(_menu);
-        Gtk.app_indicator_set_menu(_indicator, _menu);
-        Gtk.app_indicator_set_title(_indicator, $"Aspire - {state.Status}");
+        _panel?.Update(state);
+        if (_panelIcon is null)
+        {
+            _commands.Clear();
+            _menu = BuildMenu(LinuxTrayMenu.Build(state, _applications));
+            // Retain our own reference: replacing the indicator's menu drops its reference
+            // before we disconnect/destroy the old widgets and their callbacks.
+            Gtk.g_object_ref_sink(_menu);
+            Gtk.gtk_widget_show_all(_menu);
+            Gtk.app_indicator_set_menu(_indicator, _menu);
+            Gtk.app_indicator_set_title(_indicator, $"Aspire - {state.Status}");
+        }
+        var status = TrayIconStatusRules.Get(state);
+        if (_iconStatus != status)
+        {
+            var icon = _icons!.GetPath(status);
+            var description = $"Aspire - {TrayIconStatusRules.Describe(status)}";
+            if (_panelIcon is not null)
+            {
+                _panelIcon.Update(icon, description);
+            }
+            else
+            {
+                Gtk.app_indicator_set_icon_full(_indicator, icon, description);
+            }
+            _iconStatus = status;
+        }
         if (previous != 0)
         {
             Gtk.gtk_widget_destroy(previous);
@@ -368,15 +429,14 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
         {
             // Never include dashboard URLs or raw process output in diagnostics.
             Console.Error.WriteLine($"Tray action failed ({ex.GetType().Name}).");
-            app.ShowMessage("Aspire action failed", ex is InvalidOperationException or FileNotFoundException
-                ? ex.Message : "The requested action failed. Check your desktop application configuration.");
+            app.ShowActionFailure(ex);
         }
     }
 
-    private void Execute(LinuxTrayMenuItem item)
+    internal void Execute(LinuxTrayMenuItem item)
     {
         var host = item.Host;
-        if (item.Action is LinuxTrayAction.Start or LinuxTrayAction.Folder or LinuxTrayAction.Code
+        if (item.Action is LinuxTrayAction.Start or LinuxTrayAction.Folder or LinuxTrayAction.OpenIn
             && !File.Exists(host!.Id.AppHostPath))
         {
             if (!host.IsRunning && !host.IsPinned && Confirm("AppHost file not found",
@@ -404,25 +464,22 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
             case LinuxTrayAction.TogglePin:
                 controller.SetPinned(host!.Id.AppHostPath, !host.IsPinned);
                 break;
+            case LinuxTrayAction.RemoveRecent:
+                controller.RemoveRecent(host!.Id.AppHostPath);
+                break;
             case LinuxTrayAction.Folder:
-                var folder = Path.GetDirectoryName(host!.Id.AppHostPath)!;
-                if (!Directory.Exists(folder))
-                {
-                    throw new FileNotFoundException("The AppHost folder no longer exists.", folder);
-                }
-                OpenUri(new Uri(folder + Path.DirectorySeparatorChar).AbsoluteUri);
+                // File-manager activation can wait for D-Bus service startup. Keep
+                // GTK responsive so stop and SIGTERM still interrupt open dialogs.
+                _desktopTasks.RemoveAll(task => task.IsCompleted);
+                _desktopTasks.Add(RevealFileAsync(host!.Id.AppHostPath));
                 break;
             case LinuxTrayAction.CopyPath:
                 Gtk.gtk_clipboard_set_text(Gtk.gtk_clipboard_get(Gtk.gdk_atom_intern("CLIPBOARD", 0)),
                     Path.GetDirectoryName(host!.Id.AppHostPath)!, -1);
                 break;
-            case LinuxTrayAction.Code:
-                var info = new ProcessStartInfo(_code!) { UseShellExecute = false };
-                info.ArgumentList.Add("--");
-                info.ArgumentList.Add(Path.GetDirectoryName(host!.Id.AppHostPath)!);
-                using (Process.Start(info) ?? throw new InvalidOperationException("Could not open Visual Studio Code."))
-                {
-                }
+            case LinuxTrayAction.OpenIn:
+                var application = item.Application ?? throw new InvalidOperationException("The selected application is no longer available.");
+                application.Open(Path.GetDirectoryName(host!.Id.AppHostPath)!);
                 break;
             case LinuxTrayAction.ClearRecent:
                 if (Confirm("Clear recently opened?", "This cannot be undone. Pinned AppHosts will be kept.", "Clear"))
@@ -441,6 +498,121 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
                 break;
         }
     }
+
+    private async Task RevealFileAsync(string path)
+    {
+        try
+        {
+            await Task.Run(() => LinuxFileManager.ShowItem(path)).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"File-manager action failed ({ex.GetType().Name}).");
+            _pending.Enqueue(() =>
+            {
+                if (!IsQuitting)
+                {
+                    ShowActionFailure(ex);
+                }
+            });
+        }
+    }
+
+    private void ShowActionFailure(Exception error)
+    {
+        var message = error is InvalidOperationException or FileNotFoundException
+            ? error.Message : "The requested action failed. Check your desktop application configuration.";
+        controller.ReportActionError(message);
+        if (_panel is not null)
+        {
+            if (!_panel.Visible)
+            {
+                _panel.Show();
+            }
+            _panel.Update(controller.State);
+        }
+        else
+        {
+            ShowMessage("Aspire action failed", message);
+        }
+    }
+
+    private void ExecutePanelAction(PanelAction action)
+    {
+        try
+        {
+            ExecutePanelCommand(action);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Tray action failed ({ex.GetType().Name}).");
+            ShowActionFailure(ex);
+        }
+    }
+
+    private void ExecutePanelCommand(PanelAction action)
+    {
+        switch (action.Kind)
+        {
+            case PanelActionKind.Settings:
+                _panel!.ShowSettings(PanelSettings.Read(startup, preview: false, LogPanelSettingsFailure));
+                break;
+            case PanelActionKind.SetLaunchAtSignIn:
+                _panel!.UpdateSettings(PanelSettings.SetLaunchAtSignIn(startup, action.Enabled, preview: false, LogPanelSettingsFailure));
+                break;
+            case PanelActionKind.ClearRecent:
+                controller.ClearRecent();
+                break;
+            case PanelActionKind.Close:
+                _panel!.Hide();
+                break;
+            case PanelActionKind.ToggleRecent:
+                break;
+            default:
+                if (action.Kind is PanelActionKind.Start or PanelActionKind.OpenIn or PanelActionKind.ShowInFolder
+                    && !File.Exists(action.Host!.Id.AppHostPath))
+                {
+                    if (action.Recent)
+                    {
+                        _panel!.ConfirmRemoveMissing(action.Host);
+                    }
+                    else
+                    {
+                        controller.ReportActionError("The AppHost project no longer exists at its saved location.");
+                        _panel!.Update(controller.State);
+                    }
+                    break;
+                }
+                if (action.Kind is PanelActionKind.OpenDashboard or PanelActionKind.Documentation or PanelActionKind.OpenIn
+                    or PanelActionKind.ShowInFolder or PanelActionKind.Quit)
+                {
+                    _panel!.Hide();
+                }
+                var command = action.Kind switch
+                {
+                    PanelActionKind.OpenDashboard => LinuxTrayAction.Dashboard,
+                    PanelActionKind.Stop => LinuxTrayAction.Stop,
+                    PanelActionKind.Start => LinuxTrayAction.Start,
+                    PanelActionKind.OpenIn => LinuxTrayAction.OpenIn,
+                    PanelActionKind.ShowInFolder => LinuxTrayAction.Folder,
+                    PanelActionKind.CopyPath => LinuxTrayAction.CopyPath,
+                    PanelActionKind.TogglePin => LinuxTrayAction.TogglePin,
+                    PanelActionKind.RemoveRecent => LinuxTrayAction.RemoveRecent,
+                    PanelActionKind.Documentation => LinuxTrayAction.Documentation,
+                    PanelActionKind.Quit => LinuxTrayAction.Quit,
+                    _ => throw new InvalidOperationException("The selected flyout action is not supported.")
+                };
+                Execute(new("", command, action.Host)
+                {
+                    Application = action.Kind == PanelActionKind.OpenIn
+                        ? _applications.SingleOrDefault(application => application.Title == action.Application) : null
+                });
+                break;
+        }
+    }
+
+    private static void LogPanelSettingsFailure(Exception error)
+        => Console.Error.WriteLine($"Flyout settings failed ({error.GetType().Name}).");
 
     private static void OpenUri(string uri)
     {
@@ -484,6 +656,7 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
         {
             return -6;
         }
+        _panel?.Hide();
         _dialog = dialog;
         try
         {
@@ -562,18 +735,15 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
         }
     }
 
-    private static string? FindExecutable(string name)
-        => (Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator)
-            .Where(Path.IsPathFullyQualified).Select(directory => Path.Combine(directory, name))
-            .FirstOrDefault(path => File.Exists(path) && (!OperatingSystem.IsLinux()
-                || (File.GetUnixFileMode(path) & (UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute)) != 0));
-
     public void Dispose()
     {
+        Task.WhenAll(_desktopTasks).GetAwaiter().GetResult();
         if (_timer != 0)
         {
             Gtk.g_source_remove(_timer);
         }
+        _panelIcon?.Dispose();
+        _panel?.Dispose();
         if (_indicator != 0)
         {
             Gtk.app_indicator_set_status(_indicator, 0);
@@ -588,6 +758,7 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
         {
             Gtk.g_object_unref(_watcher);
         }
+        _icons?.Dispose();
         s_current = null;
     }
 }

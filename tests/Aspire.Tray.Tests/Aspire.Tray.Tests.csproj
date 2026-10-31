@@ -23,7 +23,14 @@
     <Compile Include="$(SharedDir)TrayCliProtocol.cs" Link="Shared/TrayCliProtocol.cs" />
     <Compile Include="$(SharedDir)LinuxTrayPayload.cs" Link="Shared/LinuxTrayPayload.cs" />
     <Compile Include="$(RepoRoot)src/Aspire.Tray/Linux/Gtk.cs" Link="Linux/Gtk.cs" />
+    <Compile Include="$(RepoRoot)src/Aspire.Tray/Linux/LinuxFolderApplication.cs" Link="Linux/LinuxFolderApplication.cs" />
+    <Compile Include="$(RepoRoot)src/Aspire.Tray/Linux/LinuxFileManager.cs" Link="Linux/LinuxFileManager.cs" />
+    <Compile Include="$(RepoRoot)src/Aspire.Tray/Linux/LinuxTrayIcons.cs" Link="Linux/LinuxTrayIcons.cs" />
     <Compile Include="$(RepoRoot)src/Aspire.Tray/Linux/LinuxTrayApplication.cs" Link="Linux/LinuxTrayApplication.cs" />
+    <Compile Include="$(RepoRoot)src/Aspire.Tray/Linux/LinuxTrayPanel.cs" Link="Linux/LinuxTrayPanel.cs" />
+    <Compile Include="$(RepoRoot)src/Aspire.Tray/Linux/LinuxDesktopEnvironment.cs" Link="Linux/LinuxDesktopEnvironment.cs" />
+    <Compile Include="$(RepoRoot)src/Aspire.Tray/Linux/LinuxStatusNotifierItem.cs" Link="Linux/LinuxStatusNotifierItem.cs" />
+    <Compile Include="$(RepoRoot)src/Aspire.Tray/Linux/LinuxPanelAccessibility.cs" Link="Linux/LinuxPanelAccessibility.cs" />
     <Compile Include="$(RepoRoot)src/Aspire.Tray/Linux/LinuxTrayMenu.cs" Link="Linux/LinuxTrayMenu.cs" />
     <Compile Include="$(RepoRoot)src/Aspire.Tray/Linux/LinuxTrayStartupSettings.cs" Link="Linux/LinuxTrayStartupSettings.cs" />
     <Compile Include="$(RepoRoot)src/Aspire.Tray/Linux/LinuxTrayRuntime.cs" Link="Linux/LinuxTrayRuntime.cs" />

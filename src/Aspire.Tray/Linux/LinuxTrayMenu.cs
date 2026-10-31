@@ -10,6 +10,7 @@ internal sealed record LinuxTrayMenuItem(string Label, LinuxTrayAction Action = 
     AppHostMenuItem? Host = null, bool Enabled = true, IReadOnlyList<LinuxTrayMenuItem>? Children = null)
 {
     internal LinuxTrayIcon Icon { get; init; }
+    internal LinuxFolderApplication? Application { get; init; }
 }
 
 internal enum LinuxTrayIcon
@@ -19,65 +20,84 @@ internal enum LinuxTrayIcon
 
 internal enum LinuxTrayAction
 {
-    None, Separator, Dashboard, Stop, Start, TogglePin, Folder, CopyPath, Code, ClearRecent, Settings, Documentation, Quit
+    None, Separator, Dashboard, Stop, Start, TogglePin, Folder, CopyPath, OpenIn, RemoveRecent, ClearRecent, Settings, Documentation, Quit
 }
 
 internal static class LinuxTrayMenu
 {
-    internal static IReadOnlyList<LinuxTrayMenuItem> Build(TrayViewState state, bool codeAvailable)
+    internal static IReadOnlyList<LinuxTrayMenuItem> Build(TrayViewState state, IReadOnlyList<LinuxFolderApplication> applications)
     {
-        List<LinuxTrayMenuItem> items = [];
-        if (state.AppHosts.Count == 0 || state.Discovery != DiscoveryState.Live
-            || state.Notice is not null || state.AppHosts.Any(host => host.Error is not null))
+        var (summary, _) = TrayPanel.GetHeaderStatus(state, TrayPanelPalette.Dark);
+        List<LinuxTrayMenuItem> items = [new($"Aspire \u00b7 {summary}", Enabled: false)];
+        var notice = state.Notice ?? (state.Discovery != DiscoveryState.Live || state.AppHosts.Any(host => host.Error is not null)
+            ? state.Status : null);
+        if (!string.IsNullOrEmpty(notice) && notice != summary)
         {
-            items.Add(new(state.Notice ?? state.Status, Enabled: false));
+            items.Add(new(notice, Enabled: false));
         }
-        items.AddRange(state.AppHosts.Select(Host));
-        items.Add(new("", LinuxTrayAction.Separator));
-        var recent = state.RecentAppHosts.Select(Host).ToList();
-        if (recent.Count == 0)
+        AddSection("RUNNING", state.AppHosts.Where(host => host.Id.AppHostPid != 0));
+        AddSection("PINNED", state.AppHosts.Where(host => host.Id.AppHostPid == 0));
+        if (state.RecentAppHosts.Count > 0)
         {
-            recent.Add(new("No recently opened AppHosts", Enabled: false));
+            items.Add(new("", LinuxTrayAction.Separator));
+            var recent = state.RecentAppHosts.Select(host => Host(host, recent: true)).ToList();
+            recent.Add(new("", LinuxTrayAction.Separator));
+            recent.Add(new("Clear recent AppHosts...", LinuxTrayAction.ClearRecent, Enabled: state.CanClearRecent));
+            items.Add(new($"Recently opened \u00b7 {state.RecentAppHosts.Count}", Children: recent));
         }
-        recent.Add(new("", LinuxTrayAction.Separator));
-        recent.Add(new("Clear recently opened...", LinuxTrayAction.ClearRecent, Enabled: state.CanClearRecent));
-        items.Add(new("Recently opened", Children: recent));
         items.Add(new("", LinuxTrayAction.Separator));
-        items.Add(new("Documentation", LinuxTrayAction.Documentation) { Icon = LinuxTrayIcon.Documentation });
         items.Add(new("Settings...", LinuxTrayAction.Settings) { Icon = LinuxTrayIcon.Settings });
-        items.Add(new("", LinuxTrayAction.Separator));
-        items.Add(new("Quit Aspire", LinuxTrayAction.Quit));
+        items.Add(new("Documentation", LinuxTrayAction.Documentation) { Icon = LinuxTrayIcon.Documentation });
+        items.Add(new("Quit", LinuxTrayAction.Quit));
         return items;
 
-        LinuxTrayMenuItem Host(AppHostMenuItem host)
+        void AddSection(string title, IEnumerable<AppHostMenuItem> hosts)
+        {
+            var rows = hosts.Select(host => Host(host, recent: false)).ToArray();
+            if (rows.Length == 0)
+            {
+                return;
+            }
+            items.Add(new("", LinuxTrayAction.Separator));
+            items.Add(new(title, Enabled: false));
+            items.AddRange(rows);
+        }
+
+        LinuxTrayMenuItem Host(AppHostMenuItem host, bool recent)
         {
             List<LinuxTrayMenuItem> actions = [];
             if (host.IsRunning)
             {
                 actions.Add(new("Open dashboard", LinuxTrayAction.Dashboard, host, host.CanOpenDashboard));
-                actions.Add(new(host.IsStopping ? "Stopping..." : "Stop AppHost",
+                actions.Add(new(host.IsStopping ? "Stopping..." : "Stop",
                     LinuxTrayAction.Stop, host, host.CanStop));
             }
             else
             {
-                actions.Add(new(host.IsStarting ? "Starting..." : "Start AppHost", LinuxTrayAction.Start, host, host.CanStart));
+                actions.Add(new(host.IsStarting ? "Starting..." : "Start", LinuxTrayAction.Start, host, host.CanStart));
             }
-            actions.Add(new(host.IsPinned ? "Unpin AppHost" : "Pin AppHost", LinuxTrayAction.TogglePin, host));
             actions.Add(new("", LinuxTrayAction.Separator));
-            actions.Add(new("Open folder", LinuxTrayAction.Folder, host));
-            actions.Add(new("Copy path", LinuxTrayAction.CopyPath, host));
-            if (codeAvailable)
+            if (applications.Count > 0)
             {
-                actions.Add(new("Open in Visual Studio Code", LinuxTrayAction.Code, host));
+                actions.Add(new("Open in", Children: applications.Select(application =>
+                    new LinuxTrayMenuItem(application.Title, LinuxTrayAction.OpenIn, host) { Application = application }).ToArray()));
+            }
+            actions.Add(new("Show in file manager", LinuxTrayAction.Folder, host));
+            actions.Add(new("Copy path", LinuxTrayAction.CopyPath, host));
+            actions.Add(new(host.IsPinned ? "Unpin" : "Pin", LinuxTrayAction.TogglePin, host));
+            if (recent)
+            {
+                actions.Add(new("Remove from recent", LinuxTrayAction.RemoveRecent, host));
             }
             actions.Add(new("", LinuxTrayAction.Separator));
             actions.Add(new(host.Error ?? Status(host), Enabled: false));
-            actions.Add(new($"{host.Id.AppHostPath} \u00b7 {host.Subtitle}".ReplaceLineEndings(" ").Replace('\t', ' '), Enabled: false));
+            var location = AppHostPresentation.GetCompactLocation(host.Id.AppHostPath);
+            actions.Add(new(host.IsRunning ? $"{location} \u00b7 PID {host.Id.AppHostPid}" : location, Enabled: false));
             // D-Bus menu hosts vary in icon support. Text also makes health available
             // to screen readers and preserves it on hosts that omit menu artwork.
             var status = state.Discovery != DiscoveryState.Live ? "Discovery unavailable"
                 : Status(host);
-            return new($"{host.Title} - {status}", Host: host, Children: actions)
+            return new($"{host.Title} \u00b7 {status}", Host: host, Children: actions)
             {
                 Icon = host switch
                 {
