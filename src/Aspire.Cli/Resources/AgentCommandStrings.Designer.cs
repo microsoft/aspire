@@ -724,6 +724,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Could not update the telemetry hook script &apos;{0}&apos;: {1}.
+        /// </summary>
+        internal static string TelemetryHookScriptUpdateFailed {
+            get {
+                return ResourceManager.GetString("TelemetryHookScriptUpdateFailed", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Skipped the telemetry hook for {0} because its configuration could not be written..
         /// </summary>
         internal static string InitCommand_TelemetryHookWriteFailed {

@@ -494,6 +494,11 @@ Prefer skill files only? Choose Embedded, or install skills directly from {0}.</
         <target state="translated">Konfiguracja zakończyła się błędami. Popraw zgłoszone problemy i uruchom polecenie ponownie.</target>
         <note />
       </trans-unit>
+      <trans-unit id="TelemetryHookScriptUpdateFailed">
+        <source>Could not update the telemetry hook script '{0}': {1}</source>
+        <target state="new">Could not update the telemetry hook script '{0}': {1}</target>
+        <note>{0} is the hook script path. {1} is the underlying error message.</note>
+      </trans-unit>
     </body>
   </file>
 </xliff>

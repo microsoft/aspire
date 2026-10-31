@@ -133,6 +133,52 @@ public class TelemetryHookInstallerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task EnsureInstalledAsync_RemovesTempFileAndNamesScript_WhenReplacementFails()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var home = workspace.CreateDirectory("home");
+        var installer = CreateInstaller(workspace, home);
+
+        // A non-empty directory at the script path makes the final replacement fail on every OS.
+        var hooksDirectory = Path.Combine(home.FullName, ".aspire", "hooks");
+        var powerShellPath = Path.Combine(hooksDirectory, "track-telemetry.ps1");
+        Directory.CreateDirectory(powerShellPath);
+        await File.WriteAllTextAsync(Path.Combine(powerShellPath, "blocker"), "x").DefaultTimeout();
+
+        var exception = await Assert.ThrowsAsync<IOException>(() => installer.EnsureInstalledAsync(CancellationToken.None)).DefaultTimeout();
+
+        Assert.Empty(Directory.GetFiles(hooksDirectory, "track-telemetry.ps1.tmp-*"));
+        Assert.Contains(powerShellPath, exception.Message);
+        Assert.NotNull(exception.InnerException);
+    }
+
+    [Fact]
+    // Only Windows prevents replacing a file that another handle opened without delete sharing.
+    [PlatformSpecific(TestPlatforms.Windows)]
+    public async Task EnsureInstalledAsync_RemovesTempFileAndNamesScript_WhenScriptIsLocked()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var home = workspace.CreateDirectory("home");
+        var installer = CreateInstaller(workspace, home);
+
+        var hooksDirectory = Path.Combine(home.FullName, ".aspire", "hooks");
+        Directory.CreateDirectory(hooksDirectory);
+        var powerShellPath = Path.Combine(hooksDirectory, "track-telemetry.ps1");
+        await File.WriteAllTextAsync(powerShellPath, "# stale hook content").DefaultTimeout();
+
+        // Matches a concurrently executing hook: reads are shared, writes and deletion are not.
+        Exception exception;
+        using (File.Open(powerShellPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            exception = await Assert.ThrowsAsync<IOException>(() => installer.EnsureInstalledAsync(CancellationToken.None)).DefaultTimeout();
+        }
+
+        Assert.Empty(Directory.GetFiles(hooksDirectory, "track-telemetry.ps1.tmp-*"));
+        Assert.Contains(powerShellPath, exception.Message);
+        Assert.Equal("# stale hook content", await File.ReadAllTextAsync(powerShellPath).DefaultTimeout());
+    }
+
+    [Fact]
     public async Task EnsureInstalledAsync_SetsExecutableBit_OnNonWindows()
     {
         if (OperatingSystem.IsWindows())
