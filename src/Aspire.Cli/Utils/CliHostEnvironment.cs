@@ -26,6 +26,11 @@ internal interface ICliHostEnvironment
     /// Gets whether the host supports colors and ANSI codes.
     /// </summary>
     bool SupportsAnsi { get; }
+
+    /// <summary>
+    /// Gets whether standard input is redirected (e.g., piped or read from a file) rather than attached to a terminal.
+    /// </summary>
+    bool IsInputRedirected => false;
 }
 
 /// <summary>
@@ -66,6 +71,11 @@ internal sealed class CliHostEnvironment : ICliHostEnvironment
     /// Gets whether the host supports colors and ANSI codes.
     /// </summary>
     public bool SupportsAnsi { get; }
+
+    /// <summary>
+    /// Gets whether standard input is redirected (e.g., piped or read from a file) rather than attached to a terminal.
+    /// </summary>
+    public bool IsInputRedirected { get; } = Console.IsInputRedirected;
 
     public CliHostEnvironment(IConfiguration configuration, bool nonInteractive)
         : this(configuration, nonInteractive, Console.IsOutputRedirected)
