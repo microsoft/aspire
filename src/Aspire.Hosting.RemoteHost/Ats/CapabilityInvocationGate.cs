@@ -15,8 +15,8 @@ namespace Aspire.Hosting.RemoteHost.Ats;
 /// </remarks>
 internal sealed class CapabilityInvocationGate
 {
-    [ThreadStatic]
-    private static Lease? s_currentLease;
+    // AsyncLocal (rather than ThreadStatic) so callbacks offloaded to other threads by the invocation can still release the gate.
+    private static readonly AsyncLocal<Lease?> s_currentLease = new();
 
     private readonly SemaphoreSlim _semaphore = new(1, 1);
 
@@ -28,31 +28,31 @@ internal sealed class CapabilityInvocationGate
         await _semaphore.WaitAsync().ConfigureAwait(false);
 
         var lease = new Lease(_semaphore);
-        var previousLease = s_currentLease;
-        s_currentLease = lease;
+        var previousLease = s_currentLease.Value;
+        s_currentLease.Value = lease;
         try
         {
             return invocation();
         }
         finally
         {
-            s_currentLease = previousLease;
+            s_currentLease.Value = previousLease;
             lease.Release();
         }
     }
 
     /// <summary>
-    /// Releases the gate held by the current thread before invoking a guest callback.
+    /// Releases the gate held by the current invocation context before invoking a guest callback.
     /// </summary>
     public static void ReleaseForCallback()
     {
-        var lease = s_currentLease;
+        var lease = s_currentLease.Value;
         if (lease is null)
         {
             return;
         }
 
-        s_currentLease = null;
+        s_currentLease.Value = null;
         lease.Release();
     }
 

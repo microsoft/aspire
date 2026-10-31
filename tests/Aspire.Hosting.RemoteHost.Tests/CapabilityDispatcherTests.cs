@@ -1080,8 +1080,10 @@ public class CapabilityDispatcherTests
         Assert.Equal(["first", "second"], TestCapabilitiesWithInvocationGate.EnteredOrder);
     }
 
-    [Fact]
-    public async Task InvokeAsync_CallbackFromSynchronousInvocation_CanReenterDispatcher()
+    [Theory]
+    [InlineData("invokeCallbackFromGatedInvocation")]
+    [InlineData("invokeOffloadedCallbackFromGatedInvocation")]
+    public async Task InvokeAsync_CallbackFromSynchronousInvocation_CanReenterDispatcher(string capability)
     {
         TestCapabilitiesWithInvocationGate.Reset();
         var handles = new HandleRegistry();
@@ -1094,7 +1096,7 @@ public class CapabilityDispatcherTests
         dispatcher = new CapabilityDispatcher(handles, marshaller, [typeof(TestCapabilitiesWithInvocationGate).Assembly]);
 
         await Task.Run(() => dispatcher.InvokeAsync(
-            "Aspire.Hosting.RemoteHost.Tests/invokeCallbackFromGatedInvocation",
+            $"Aspire.Hosting.RemoteHost.Tests/{capability}",
             new JsonObject { ["callback"] = "reentrant-callback" })).WaitAsync(TimeSpan.FromSeconds(30));
 
         Assert.Equal(1, invoker.InvocationCount);
@@ -2805,6 +2807,13 @@ internal static class TestCapabilitiesWithInvocationGate
     public static void InvokeCallbackFromGatedInvocation(Func<Task> callback)
     {
         callback().GetAwaiter().GetResult();
+    }
+
+    /// <ats-summary>Synchronously waits for a guest callback offloaded to the thread pool from a gated invocation</ats-summary>
+    [AspireExport]
+    public static void InvokeOffloadedCallbackFromGatedInvocation(Func<Task> callback)
+    {
+        Task.Run(callback).GetAwaiter().GetResult();
     }
 }
 
