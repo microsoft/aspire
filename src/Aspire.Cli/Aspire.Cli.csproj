@@ -270,6 +270,7 @@
     <Compile Include="$(SharedDir)Model\Serialization\TelemetryValidateTokenJson.cs" Link="Otlp\TelemetryValidateTokenJson.cs" />
     <Compile Include="$(SharedDir)Export\ExportArchive.cs" Link="Export\ExportArchive.cs" />
     <Compile Include="$(SharedDir)ConsoleLogs\AnsiParser.cs" Link="ConsoleLogs\AnsiParser.cs" />
+    <Compile Include="$(SharedDir)ConsoleLogs\ConsoleLogTail.cs" Link="ConsoleLogs\ConsoleLogTail.cs" />
     <Compile Include="$(SharedDir)ConsoleLogs\LogEntries.cs" Link="ConsoleLogs\LogEntries.cs" />
     <Compile Include="$(SharedDir)ConsoleLogs\LogEntry.cs" Link="ConsoleLogs\LogEntry.cs" />
     <Compile Include="$(SharedDir)ConsoleLogs\LogParser.cs" Link="ConsoleLogs\LogParser.cs" />

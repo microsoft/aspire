@@ -1835,6 +1835,51 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task GetConsoleLogsAsync_TailDoesNotCountSystemLines()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        builder.AddResource(new CustomResource("myresource"));
+
+        using var app = builder.Build();
+
+        var resourceLoggerService = app.Services.GetRequiredService<ResourceLoggerService>();
+        resourceLoggerService.TimeProvider = new FixedTimeProvider();
+
+        await app.StartAsync().DefaultTimeout();
+
+        var logger = resourceLoggerService.GetLogger("myresource");
+        logger.LogInformation("[sys] Starting process...");
+        logger.LogInformation("app line 1");
+        logger.LogInformation("app line 2");
+        logger.LogInformation("[sys] Process exited");
+        resourceLoggerService.Complete("myresource");
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        var logs = new List<ResourceLogLine>();
+        await foreach (var logLine in target.GetConsoleLogsAsync(new GetConsoleLogsRequest
+        {
+            ResourceName = "myresource",
+            Tail = 1,
+            IncludeHidden = true
+        }))
+        {
+            logs.Add(logLine);
+        }
+
+        Assert.Collection(logs,
+            log => Assert.Equal($"{TestTimestamp} app line 2", log.Content),
+            log => Assert.Equal($"{TestTimestamp} [sys] Process exited", log.Content));
+
+        await app.StopAsync().DefaultTimeout();
+    }
+
+    [Fact]
     public async Task GetConsoleLogsAsync_AppliesSearchAfterStrippingAnsiControlSequences()
     {
         using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
