@@ -57,6 +57,44 @@ await builder.build().run();
 
 For a script instead of an ASGI web application, use `AddPythonApp("python", "../python-app", "main.py")`. Use `AddPythonModule` to run a module with `python -m`.
 
+## Experimental pytest testing
+
+`AddPytest` participates in the experimental `aspire test` command (`ASPIRETESTING001`). These APIs are in development; see the [testing foundation](https://github.com/microsoft/aspire/pull/21527) and [MSTest layer](https://github.com/microsoft/aspire/pull/21559) for the shared testing contract, rather than assuming released packages expose them.
+
+Declare pytest in your Python application's `requirements.txt` or `pyproject.toml`. The helper uses the existing Python virtual-environment and dependency-installation conventions; it does not install pytest globally or require a reporting plugin.
+
+**C#**
+
+```csharp
+#pragma warning disable ASPIRETESTING001
+
+builder.AddPytest("api-tests", "../python-api")
+    .WithUv()
+    .WithArgs("tests", "-q")
+    .WithReference(python)
+    .WaitFor(python);
+```
+
+**TypeScript**
+
+```typescript
+await builder.addPytest("api-tests", "../python-api")
+    .withUv()
+    .withArgs(["tests", "-q"])
+    .withReference(python)
+    .waitFor(python);
+```
+
+Run `aspire test` from the AppHost directory. `WithReference` supplies connection configuration; `WaitFor` waits for the referenced service before starting tests. Use `WithArgs` for pytest selectors and options, without changing the application's working directory or import mode.
+
+`AddPytest` returns the existing Python resource builder. By default, it launches `.venv/bin/pytest` (`.venv/Scripts/pytest.exe` on Windows), with the usual application/AppHost environment discovery. `WithVirtualEnvironment("custom-venv")` selects a different environment. Requirements-based projects use the existing pip installer. `WithUv` runs an installer child with `uv sync`, then launches pytest directly, not `uv run`; it aligns `UV_PROJECT_ENVIRONMENT` with the selected environment. For a custom dependency group, use `WithUv(args: ["sync", "--group", "test"])`; these arguments belong to the installer, not pytest.
+
+During testing, Aspire appends `--junitxml=<resource-output>/pytest.xml` before any `--` separator, overriding report destinations in pytest configuration or `PYTEST_ADDOPTS`. Explicit report redirection and response files in `WithArgs` are rejected. Keep pytest's built-in JUnit plugin enabled. The collector waits for process completion and harvests the report even after a failing exit. Missing, malformed, unsupported, or inconsistent reports fail collection explicitly. Every nonzero process exit fails the run, including exit 5 (no tests collected); exit 2 (interrupted or aborted collection) is not treated as user cancellation without Aspire cancellation.
+
+The common summary counts **JUnit report outcomes**, not unique pytest items. Parameterized names, failures, skips/xfails, collection/setup/teardown errors, durations, and diagnostic text are preserved. A call failure and teardown error may yield separate outcomes with identical names; a skip and teardown error can share one XML case. A passing call followed by a teardown error may count twice in pytest's suite total but emit only an error; Aspire does not invent the hidden pass. No outcomes are deduplicated. Non-strict XPASS is indistinguishable from a pass in built-in XML; strict XPASS fails. Raw suite counters and captured output remain in `pytest.xml`.
+
+Only a single invocation per resource is supported during testing: replicas and restarts are rejected, and retry/repeat/loop plugins are unsupported. Common retry/loop arguments are rejected; do not enable these modes through plugins or configuration. Reports are finalized at completion, not streamed as live test events. Cancellation interrupts collection and may leave incomplete or absent XML. Aspire owns the private output directory (0700 on Unix); pytest controls report-file permissions. Ordinary `aspire run` launches pytest without Aspire reporting arguments or collectors. The resource is excluded from publishing.
+
 ## Additional documentation
 
 * https://aspire.dev/integrations/gallery/
@@ -64,6 +102,8 @@ For a script instead of an ASGI web application, use `AddPythonApp("python", "..
 * https://docs.python.org/3/
 * https://docs.astral.sh/uv/
 * https://uvicorn.dev/
+* https://docs.pytest.org/en/stable/how-to/output.html#creating-junitxml-format-files
+* https://docs.pytest.org/en/stable/reference/exit-codes.html
 
 ## Feedback & contributing
 
