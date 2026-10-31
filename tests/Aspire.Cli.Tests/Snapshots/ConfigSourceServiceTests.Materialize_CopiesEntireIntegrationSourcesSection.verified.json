@@ -1,7 +1,4 @@
 ﻿{
-  "docs": {
-    "custom": "keep"
-  },
   "INTEGRATIONSOURCES": {
     "default": {
       "enabled": false
@@ -13,6 +10,9 @@
         "Exact.Integration"
       ]
     }
+  },
+  "docs": {
+    "custom": "keep"
   },
   "configSource": {
     "repository": "https://git.example/organization/config",
