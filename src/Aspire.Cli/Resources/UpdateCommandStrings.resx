@@ -103,19 +103,19 @@
     <value>Apply these changes to NuGet.config?</value>
   </data>
   <data name="AddedFeedFormat" xml:space="preserve">
-    <value>Added: {0}</value>
+    <value>Add: {0}</value>
   </data>
   <data name="RemovedFeedFormat" xml:space="preserve">
-    <value>Removed: {0}</value>
+    <value>Remove: {0}</value>
   </data>
   <data name="RetainedFeedFormat" xml:space="preserve">
-    <value>Retained: {0}</value>
+    <value>Keep: {0}</value>
   </data>
   <data name="MappingAddedFormat" xml:space="preserve">
-    <value>   Mapping: {0} (added)</value>
+    <value>   Mapping: {0} (add)</value>
   </data>
   <data name="MappingRemovedFormat" xml:space="preserve">
-    <value>   Mapping: {0} (removed)</value>
+    <value>   Mapping: {0} (remove)</value>
   </data>
   <data name="MappingRetainedFormat" xml:space="preserve">
     <value>   Mapping: {0}</value>

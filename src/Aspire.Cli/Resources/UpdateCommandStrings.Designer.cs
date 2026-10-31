@@ -61,7 +61,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Added: {0}.
+        ///   Looks up a localized string similar to Add: {0}.
         /// </summary>
         internal static string AddedFeedFormat {
             get {
@@ -349,7 +349,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to    Mapping: {0} (added).
+        ///   Looks up a localized string similar to    Mapping: {0} (add).
         /// </summary>
         internal static string MappingAddedFormat {
             get {
@@ -358,7 +358,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to    Mapping: {0} (removed).
+        ///   Looks up a localized string similar to    Mapping: {0} (remove).
         /// </summary>
         internal static string MappingRemovedFormat {
             get {
@@ -619,7 +619,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Removed: {0}.
+        ///   Looks up a localized string similar to Remove: {0}.
         /// </summary>
         internal static string RemovedFeedFormat {
             get {
@@ -691,7 +691,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Retained: {0}.
+        ///   Looks up a localized string similar to Keep: {0}.
         /// </summary>
         internal static string RetainedFeedFormat {
             get {
