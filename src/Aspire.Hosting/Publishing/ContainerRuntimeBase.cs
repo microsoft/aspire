@@ -97,6 +97,58 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
             remoteImageName).ConfigureAwait(false);
     }
 
+    public virtual async Task CopyFilesFromImageAsync(string imageName, string sourcePath, string destinationPath, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(imageName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourcePath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(destinationPath);
+        if (!sourcePath.StartsWith('/') || sourcePath.Contains('\\') || sourcePath.Contains('\0'))
+        {
+            throw new ArgumentException("The source must be an absolute container directory path.", nameof(sourcePath));
+        }
+        if (!Directory.Exists(destinationPath))
+        {
+            throw new DirectoryNotFoundException($"Destination directory '{destinationPath}' does not exist.");
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        var containerName = $"aspire-files-{Guid.NewGuid():N}";
+        Exception? copyError = null;
+        try
+        {
+            // A stopped container exposes image files without executing application code.
+            // Use a known name so cleanup can also handle cancellation during creation.
+            await ExecuteContainerCommandForOutputAsync(
+                ["create", "--pull", "never", "--name", containerName, "--entrypoint", "/bin/true", imageName],
+                "create file-export container", imageName, cancellationToken).ConfigureAwait(false);
+            // Docker/Podman cp uses '/.' to copy directory contents, not the directory itself.
+            // Example: cp aspire-files-<id>:/app/dist/. <host-output-directory>
+            await ExecuteContainerCommandForOutputAsync(
+                ["cp", $"{containerName}:{sourcePath.TrimEnd('/')}/.", Path.GetFullPath(destinationPath)],
+                "copy image files", imageName, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            copyError = ex;
+            throw;
+        }
+        finally
+        {
+            // Cleanup must still run when the caller cancels, but cannot block indefinitely.
+            using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            try
+            {
+                await ExecuteContainerCommandForOutputAsync(
+                    ["rm", "--force", "--volumes", containerName],
+                    "remove file-export container", imageName, cleanup.Token).ConfigureAwait(false);
+            }
+            catch (Exception cleanupError) when (copyError is not null)
+            {
+                throw new AggregateException("Copying image files and removing the temporary container both failed.", copyError, cleanupError);
+            }
+        }
+    }
+
     public virtual async Task<ContainerImageConfigInspectionResult> InspectImageConfigAsync(string imageName, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(imageName);

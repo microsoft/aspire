@@ -11,8 +11,118 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace Aspire.Hosting.Tests.Publishing;
 
 [Trait("Partition", "4")]
-public class ContainerRuntimeBaseTests
+public class ContainerRuntimeBaseTests(ITestOutputHelper outputHelper)
 {
+    [Fact]
+    public async Task CopyImageFilesUsesStoppedContainerAndArgumentLists()
+    {
+        using var workspace = Aspire.Tests.Utils.TemporaryWorkspace.Create(outputHelper);
+        var processRunner = new CapturingProcessRunner();
+        var runtime = new TestContainerRuntime(processRunner);
+        const string image = "registry/image\\\" --help";
+
+        await runtime.CopyFilesFromImageAsync(image, "/app/dist/", workspace.Path, TestContext.Current.CancellationToken);
+
+        var create = Assert.IsAssignableFrom<IReadOnlyList<string>>(processRunner.ArgumentLists[0]);
+        var container = create[4];
+        Assert.StartsWith("aspire-files-", container);
+        Assert.Collection(processRunner.ArgumentLists,
+            arguments => Assert.Equal(["create", "--pull", "never", "--name", container, "--entrypoint", "/bin/true", image], arguments),
+            arguments => Assert.Equal(["cp", $"{container}:/app/dist/.", workspace.Path], arguments),
+            arguments => Assert.Equal(["rm", "--force", "--volumes", container], arguments));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    public async Task CopyImageFilesCleansUpAfterCreationOrCopyFailure(int failedCommand)
+    {
+        using var workspace = Aspire.Tests.Utils.TemporaryWorkspace.Create(outputHelper);
+        var results = failedCommand == 0
+            ? new[] { new ProcessResult(1, ["creation failed"]), new ProcessResult(0) }
+            : [new ProcessResult(0), new ProcessResult(1, ["copy failed"]), new ProcessResult(0)];
+        var processRunner = new CapturingProcessRunner(results);
+        var runtime = new TestContainerRuntime(processRunner);
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
+            runtime.CopyFilesFromImageAsync("image", "/dist", workspace.Path, TestContext.Current.CancellationToken));
+
+        Assert.Contains(failedCommand == 0 ? "creation failed" : "copy failed", exception.Message);
+        Assert.Equal(failedCommand + 2, processRunner.ArgumentLists.Count);
+        var create = Assert.IsAssignableFrom<IReadOnlyList<string>>(processRunner.ArgumentLists[0]);
+        Assert.Equal(["rm", "--force", "--volumes", create[4]], processRunner.ArgumentLists.Last());
+    }
+
+    [Fact]
+    public async Task CopyImageFilesReportsCleanupFailure()
+    {
+        using var workspace = Aspire.Tests.Utils.TemporaryWorkspace.Create(outputHelper);
+        var processRunner = new CapturingProcessRunner([new ProcessResult(0), new ProcessResult(0), new ProcessResult(1, ["cleanup failed"])]);
+        var runtime = new TestContainerRuntime(processRunner);
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
+            runtime.CopyFilesFromImageAsync("image", "/dist", workspace.Path, TestContext.Current.CancellationToken));
+
+        Assert.Contains("cleanup failed", exception.Message);
+    }
+
+    [Fact]
+    public async Task CopyImageFilesPreservesCopyAndCleanupFailures()
+    {
+        using var workspace = Aspire.Tests.Utils.TemporaryWorkspace.Create(outputHelper);
+        var processRunner = new CapturingProcessRunner([new ProcessResult(0), new ProcessResult(1, ["copy failed"]), new ProcessResult(1, ["cleanup failed"])]);
+        var runtime = new TestContainerRuntime(processRunner);
+
+        var exception = await Assert.ThrowsAsync<AggregateException>(() =>
+            runtime.CopyFilesFromImageAsync("image", "/dist", workspace.Path, TestContext.Current.CancellationToken));
+
+        Assert.Collection(exception.InnerExceptions,
+            error => Assert.Contains("copy failed", error.Message),
+            error => Assert.Contains("cleanup failed", error.Message));
+    }
+
+    [Fact]
+    public async Task CopyImageFilesCleansUpAfterCancellation()
+    {
+        using var workspace = Aspire.Tests.Utils.TemporaryWorkspace.Create(outputHelper);
+        using var cancellation = new CancellationTokenSource();
+        var processRunner = new CapturingProcessRunner
+        {
+            RunCallback = spec =>
+            {
+                if (spec.ArgumentList![0] == "cp")
+                {
+                    cancellation.Cancel();
+                    return Task.FromCanceled<ProcessResult>(cancellation.Token);
+                }
+                return Task.FromResult(new ProcessResult(0));
+            }
+        };
+        var runtime = new TestContainerRuntime(processRunner);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            runtime.CopyFilesFromImageAsync("image", "/dist", workspace.Path, cancellation.Token));
+
+        Assert.Equal(3, processRunner.ArgumentLists.Count);
+        var create = Assert.IsAssignableFrom<IReadOnlyList<string>>(processRunner.ArgumentLists[0]);
+        Assert.Equal(["rm", "--force", "--volumes", create[4]], processRunner.ArgumentLists.Last());
+    }
+
+    [Fact]
+    public async Task CopyImageFilesDoesNotCreateContainerWhenAlreadyCancelled()
+    {
+        using var workspace = Aspire.Tests.Utils.TemporaryWorkspace.Create(outputHelper);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        var processRunner = new CapturingProcessRunner();
+        var runtime = new TestContainerRuntime(processRunner);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            runtime.CopyFilesFromImageAsync("image", "/dist", workspace.Path, cancellation.Token));
+
+        Assert.Empty(processRunner.ArgumentLists);
+    }
+
     [Fact]
     public async Task ExecuteContainerCommandAsync_IncludesCapturedOutputInFailureMessage()
     {
@@ -414,10 +524,15 @@ public class ContainerRuntimeBaseTests
         private readonly Queue<ProcessResult> _results = new(results ?? []);
 
         public List<IReadOnlyList<string>?> ArgumentLists { get; } = [];
+        public Func<ProcessSpec, Task<ProcessResult>>? RunCallback { get; init; }
 
         public (Task<ProcessResult>, IAsyncDisposable) Run(ProcessSpec processSpec)
         {
             ArgumentLists.Add(processSpec.ArgumentList);
+            if (RunCallback is not null)
+            {
+                return (RunCallback(processSpec), new NoOpAsyncDisposable());
+            }
             var result = _results.Count > 0 ? _results.Dequeue() : new ProcessResult(0);
             foreach (var output in result.ProcessOutput)
             {
