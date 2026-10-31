@@ -591,7 +591,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
 
     private async Task<JsonDocument> GetItemsAndPropertiesAsync(FileInfo projectFile, CancellationToken cancellationToken)
     {
-        return await GetItemsAndPropertiesAsync(projectFile, ["PackageReference", "ProjectReference"], ["AspireHostingSDKVersion", "ManagePackageVersionsCentrally", "NuGetRestoreTargets", "_UsingAspireAppHostSdk", "_AspireAppHostPackageVersion", "DirectoryBuildPropsPath", "DirectoryBuildTargetsPath", "MSBuildAllProjects", "MSBuildProjectFullPath"], cancellationToken);
+        return await GetItemsAndPropertiesAsync(projectFile, ["PackageReference", "ProjectReference"], ["AspireHostingSDKVersion", "ManagePackageVersionsCentrally", "NuGetRestoreTargets", "_UsingAspireAppHostSdk", "_AspireAppHostPackageVersion", "DirectoryBuildPropsPath", "DirectoryBuildTargetsPath", "MSBuildAllProjects", "MSBuildProjectFullPath", SkipAddAspireDefaultReferencesProperty], cancellationToken);
     }
 
     private async Task<JsonDocument> GetItemsAndPropertiesAsync(FileInfo projectFile, string[] items, string[] properties, CancellationToken cancellationToken)
@@ -850,7 +850,11 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
 
             // The current SDK references Aspire.Hosting.AppHost implicitly, and the AppHost's cleanup may remove
             // a PackageVersion shared through central package management, so remove the same legacy references.
-            var (hasPackageReference, hasOrphanPackageVersion) = DetectLegacyAppHostReferences(projectFile);
+            // A project that opts out of the implicit reference still needs its explicit one.
+            var (hasPackageReference, hasOrphanPackageVersion) =
+                await SkipsImplicitAppHostReferenceAsync(projectFile, document, cancellationToken)
+                    ? (false, false)
+                    : DetectLegacyAppHostReferences(projectFile);
             if (staleVersion is null && !hasPackageReference && !hasOrphanPackageVersion)
             {
                 continue;
@@ -900,6 +904,23 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                 });
             }
         }
+    }
+
+    private const string SkipAddAspireDefaultReferencesProperty = "SkipAddAspireDefaultReferences";
+
+    private async Task<bool> SkipsImplicitAppHostReferenceAsync(FileInfo projectFile, XDocument document, CancellationToken cancellationToken)
+    {
+        if (await TryGetItemsAndPropertiesAsync(projectFile, cancellationToken) is { } evaluation)
+        {
+            return evaluation.RootElement.TryGetProperty("Properties", out var properties) &&
+                properties.TryGetProperty(SkipAddAspireDefaultReferencesProperty, out var value) &&
+                string.Equals(value.GetString(), "true", StringComparison.OrdinalIgnoreCase);
+        }
+
+        // Evaluation can fail while the declared SDK is unresolvable; fall back to the project file itself.
+        return document.Descendants().Any(element =>
+            element.Name.LocalName == SkipAddAspireDefaultReferencesProperty &&
+            string.Equals(element.Value.Trim(), "true", StringComparison.OrdinalIgnoreCase));
     }
 
     // Edited projects are restored with the candidate restore preview, which overrides the restore targets of
