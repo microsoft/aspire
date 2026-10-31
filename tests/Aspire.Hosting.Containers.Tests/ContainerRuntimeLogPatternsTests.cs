@@ -24,6 +24,9 @@ public class ContainerRuntimeLogPatternsTests
     [InlineData("2026-07-31T17:40:30.9610000Z Error: unable to copy from source docker://cgr.dev/mattermost.com/go-msft-fips:1.24.6: initializing source docker://cgr.dev/mattermost.com/go-msft-fips:1.24.6: fetching manifest 1.24.6 in cgr.dev/mattermost.com/go-msft-fips: unable to retrieve auth token: invalid username/password: unauthorized: Authentication required")]
     // Podman 5.x, which lacked the outer "unable to copy from source" wrapper.
     [InlineData("2026-07-30T22:57:47.7100000Z Error: initializing source docker://does.not.exist.internal/does-not-exist:latest: pinging container registry does.not.exist.internal: no such host")]
+    // WSLC, DNS failure and anonymous authentication failure.
+    [InlineData("""2026-10-31T09:33:05.9740000Z Get "https://does.not.exist.internal/v2/": dial tcp: lookup does.not.exist.internal on 192.168.10.1:53: no such host""")]
+    [InlineData("""2026-10-31T09:32:29.6960000Z Head "https://cgr.dev/v2/mattermost.com/go-msft-fips/manifests/1.24.6": unauthorized: {"errors":[{"code":"UNAUTHORIZED","message":"Authentication required"}]}""")]
     public void IsImagePullFailure_MatchesRuntimeFailureOutput(string line)
     {
         Assert.True(ContainerRuntimeLogPatterns.IsImagePullFailure(line));
@@ -39,6 +42,9 @@ public class ContainerRuntimeLogPatternsTests
     [InlineData("2026-07-31T17:40:30.9610000Z Error: container exited with code 1")]
     // A docker:// reference on its own is not a failure.
     [InlineData("2026-07-31T17:40:30.9610000Z Resolved docker://docker.io/library/redis:8.6")]
+    [InlineData("2026-10-31T09:33:05.9740000Z Error code: E_FAIL")]
+    [InlineData("""2026-10-31T09:33:05.9740000Z Get "https://example.com/health": dial tcp: connection refused""")]
+    [InlineData("""2026-10-31T09:33:05.9740000Z Head "https://registry.example/v2/library/redis/manifests/latest": 200 OK""")]
     public void IsImagePullFailure_DoesNotMatchUnrelatedOutput(string line)
     {
         Assert.False(ContainerRuntimeLogPatterns.IsImagePullFailure(line));
