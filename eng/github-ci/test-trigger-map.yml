@@ -136,6 +136,11 @@ ignore:
 # only. targets may be test: / job: / a GROUP name / ALL.
 path_rules:
   - paths:
+      - .github/scripts/flaky_investigation/**
+    targets: [test:Infrastructure.Tests]
+    reason: infrastructure tests exercise trusted flaky-test orchestration and evidence accounting
+
+  - paths:
       - Aspire.slnx
     targets: [ALL]
     reason: solution membership can add an existing project without touching that project's files, so run everything
