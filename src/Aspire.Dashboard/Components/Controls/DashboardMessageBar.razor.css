@@ -62,6 +62,17 @@
     padding-inline-start: 8px;
 }
 
+/* Markdown code blocks in interaction notifications. Keep long output, such as stack traces,
+   compact and scrollable so the whole notification fits in the message bar area. */
+.dashboard-message-bar-message ::deep pre {
+    margin: 0.25rem 0;
+}
+
+.dashboard-message-bar-message ::deep .code-container {
+    max-height: 6rem;
+    overflow: auto;
+}
+
 .dashboard-message-bar-actions {
     display: flex;
     align-items: center;
