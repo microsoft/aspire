@@ -124,13 +124,14 @@ internal sealed class KubernetesPublishingContext(
             }
         }
 
-        // Write Gateway API resources (Gateway + HTTPRoutes) as standalone templates.
+        // Write Gateway API resources (Gateway + HTTPRoutes + GRPCRoutes) as standalone templates.
         foreach (var gatewayResource in resources.OfType<KubernetesGatewayResource>())
         {
             if (gatewayResource.Parent == environment && gatewayResource.GeneratedGateway is { } generatedGateway)
             {
                 var gatewayObjects = new List<BaseKubernetesResource> { generatedGateway };
                 gatewayObjects.AddRange(gatewayResource.GeneratedHttpRoutes);
+                gatewayObjects.AddRange(gatewayResource.GeneratedGrpcRoutes);
                 await WriteKubernetesTemplatesForResource(gatewayResource, gatewayObjects).ConfigureAwait(false);
             }
         }
