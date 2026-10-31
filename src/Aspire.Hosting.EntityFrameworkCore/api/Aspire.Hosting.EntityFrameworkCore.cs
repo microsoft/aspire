@@ -25,10 +25,10 @@ namespace Aspire.Hosting
         [AspireExport]
         public static ApplicationModel.IResourceBuilder<EntityFrameworkCore.EFMigrationResource> WithMigrationOutputDirectory(this ApplicationModel.IResourceBuilder<EntityFrameworkCore.EFMigrationResource> builder, string outputDirectory) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withMigrationsProject dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withMigrationsProject dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<EntityFrameworkCore.EFMigrationResource> WithMigrationsProject(this ApplicationModel.IResourceBuilder<EntityFrameworkCore.EFMigrationResource> builder, string projectPath) { throw null; }
 
-        [AspireExportIgnore(Reason = "Uses IProjectMetadata generic constraint which is a .NET-specific type. Polyglot app hosts use the internal withMigrationsProject dispatcher export.")]
+        [AspireExportIgnore(Reason = "Uses IProjectMetadata generic constraint which is a .NET-specific type. Polyglot AppHosts use the internal withMigrationsProject dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<EntityFrameworkCore.EFMigrationResource> WithMigrationsProject<TProject>(this ApplicationModel.IResourceBuilder<EntityFrameworkCore.EFMigrationResource> builder)
             where TProject : IProjectMetadata, new() { throw null; }
     }
@@ -36,15 +36,27 @@ namespace Aspire.Hosting
     public static partial class EFResourceBuilderExtensions
     {
         [AspireExportIgnore(Reason = "Action<IResourceBuilder<DotnetToolResource>> callbacks are not ATS-compatible.")]
+        public static ApplicationModel.IResourceBuilder<EntityFrameworkCore.EFMigrationResource> AddEFMigrations(this ApplicationModel.IResourceBuilder<ApplicationModel.IDotnetProgramResource> builder, string name, System.Action<ApplicationModel.IResourceBuilder<ApplicationModel.DotnetToolResource>>? configureToolResource) { throw null; }
+
+        [AspireExportIgnore(Reason = "Action<IResourceBuilder<DotnetToolResource>> callbacks are not ATS-compatible.")]
+        public static ApplicationModel.IResourceBuilder<EntityFrameworkCore.EFMigrationResource> AddEFMigrations(this ApplicationModel.IResourceBuilder<ApplicationModel.IDotnetProgramResource> builder, string name, string dbContextTypeName, System.Action<ApplicationModel.IResourceBuilder<ApplicationModel.DotnetToolResource>>? configureToolResource) { throw null; }
+
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addEFMigrations dispatcher export.")]
+        public static ApplicationModel.IResourceBuilder<EntityFrameworkCore.EFMigrationResource> AddEFMigrations(this ApplicationModel.IResourceBuilder<ApplicationModel.IDotnetProgramResource> builder, string name, string dbContextTypeName) { throw null; }
+
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addEFMigrations dispatcher export.")]
+        public static ApplicationModel.IResourceBuilder<EntityFrameworkCore.EFMigrationResource> AddEFMigrations(this ApplicationModel.IResourceBuilder<ApplicationModel.IDotnetProgramResource> builder, string name) { throw null; }
+
+        [AspireExportIgnore(Reason = "Action<IResourceBuilder<DotnetToolResource>> callbacks are not ATS-compatible.")]
         public static ApplicationModel.IResourceBuilder<EntityFrameworkCore.EFMigrationResource> AddEFMigrations(this ApplicationModel.IResourceBuilder<ApplicationModel.ProjectResource> builder, string name, System.Action<ApplicationModel.IResourceBuilder<ApplicationModel.DotnetToolResource>>? configureToolResource) { throw null; }
 
         [AspireExportIgnore(Reason = "Action<IResourceBuilder<DotnetToolResource>> callbacks are not ATS-compatible.")]
         public static ApplicationModel.IResourceBuilder<EntityFrameworkCore.EFMigrationResource> AddEFMigrations(this ApplicationModel.IResourceBuilder<ApplicationModel.ProjectResource> builder, string name, string dbContextTypeName, System.Action<ApplicationModel.IResourceBuilder<ApplicationModel.DotnetToolResource>>? configureToolResource) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addEFMigrations dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addEFMigrations dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<EntityFrameworkCore.EFMigrationResource> AddEFMigrations(this ApplicationModel.IResourceBuilder<ApplicationModel.ProjectResource> builder, string name, string dbContextTypeName) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addEFMigrations dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addEFMigrations dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<EntityFrameworkCore.EFMigrationResource> AddEFMigrations(this ApplicationModel.IResourceBuilder<ApplicationModel.ProjectResource> builder, string name) { throw null; }
     }
 }
@@ -54,6 +66,8 @@ namespace Aspire.Hosting.EntityFrameworkCore
     [AspireExport(ExposeProperties = true)]
     public partial class EFMigrationResource : ApplicationModel.ContainerResource
     {
+        public EFMigrationResource(string name, ApplicationModel.IDotnetProgramResource startupProjectResource, string? dbContextTypeName) : base(default!, default) { }
+
         public EFMigrationResource(string name, ApplicationModel.ProjectResource projectResource, string? dbContextTypeName) : base(default!, default) { }
 
         public string? BundleBaseImage { get { throw null; } set { } }
@@ -70,6 +84,7 @@ namespace Aspire.Hosting.EntityFrameworkCore
 
         public string? MigrationsProjectPath { get { throw null; } set { } }
 
+        [System.Obsolete("Use StartupProjectResource instead.")]
         public ApplicationModel.ProjectResource ProjectResource { get { throw null; } }
 
         [AspireExportIgnore(Reason = "Conflicts with the publishAsMigrationBundle builder method export.")]
@@ -83,5 +98,7 @@ namespace Aspire.Hosting.EntityFrameworkCore
         public bool ScriptIdempotent { get { throw null; } set { } }
 
         public bool ScriptNoTransactions { get { throw null; } set { } }
+
+        public ApplicationModel.IDotnetProgramResource StartupProjectResource { get { throw null; } }
     }
 }

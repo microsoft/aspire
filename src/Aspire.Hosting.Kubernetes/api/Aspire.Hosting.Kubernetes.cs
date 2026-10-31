@@ -16,26 +16,17 @@ namespace Aspire.Hosting
         [AspireExport]
         public static ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> AddIssuer(this ApplicationModel.IResourceBuilder<Kubernetes.CertManagerResource> builder, string name) { throw null; }
 
-        [AspireExport("withAcmeServerParam")]
-        public static ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> WithAcmeServer(this ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> builder, string serverUrl, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> email) { throw null; }
+        [AspireExportIgnore(Reason = "Handled by the withAcmeServer union export.")]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> WithAcmeServer(this ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> serverUrl, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> email) { throw null; }
 
-        [AspireExport]
+        [AspireExportIgnore(Reason = "Handled by the withAcmeServer union export.")]
         public static ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> WithAcmeServer(this ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> builder, string serverUrl, string email) { throw null; }
 
         [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> WithExternalAccountBinding(this ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> keyId, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> hmacKey) { throw null; }
+
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> WithHttp01Solver(this ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> builder) { throw null; }
-
-        [AspireExport("withLetsEncryptProductionParam")]
-        public static ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> WithLetsEncryptProduction(this ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> email) { throw null; }
-
-        [AspireExport]
-        public static ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> WithLetsEncryptProduction(this ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> builder, string email) { throw null; }
-
-        [AspireExport("withLetsEncryptStagingParam")]
-        public static ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> WithLetsEncryptStaging(this ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> email) { throw null; }
-
-        [AspireExport]
-        public static ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> WithLetsEncryptStaging(this ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> builder, string email) { throw null; }
 
         [AspireExport("withGatewayTlsIssuer")]
         public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> WithTls(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> builder, ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> issuer) { throw null; }
@@ -195,13 +186,27 @@ namespace Aspire.Hosting
         [AspireExport]
         public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> WithCapacity(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> builder, string capacity) { throw null; }
 
-        [AspireExport("withKubernetesPersistentVolumeMount")]
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> WithConfiguration(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> builder, System.Action<Kubernetes.Resources.PersistentVolumeClaim> configure) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> WithoutStorageClass(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> builder) { throw null; }
+
+        [System.Runtime.CompilerServices.OverloadResolutionPriority(1)]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the withKubernetesPersistentVolumeMount adapter.")]
         public static ApplicationModel.IResourceBuilder<T> WithPersistentVolume<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> volume, string mountPath, bool isReadOnly = false)
             where T : ApplicationModel.IComputeResource { throw null; }
+
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the withKubernetesPersistentVolumeMount adapter.")]
+        public static ApplicationModel.IResourceBuilder<T> WithPersistentVolume<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> volume, string mountPath, string env, bool isReadOnly = false)
+            where T : ApplicationModel.IComputeResource, ApplicationModel.IResourceWithEnvironment { throw null; }
 
         [AspireExport("withKubernetesPersistentVolume")]
         public static ApplicationModel.IResourceBuilder<T> WithPersistentVolume<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> volume)
             where T : ApplicationModel.IComputeResource { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> WithPersistentVolumeName(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> builder, string persistentVolumeName) { throw null; }
 
         [AspireExport("withStorageClassParam")]
         public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> WithStorageClass(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> storageClassName) { throw null; }
@@ -270,34 +275,34 @@ namespace Aspire.Hosting.Kubernetes
     {
         internal HelmChartOptions() { }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withChartDescription dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the union-based withChartDescription dispatcher export.")]
         public HelmChartOptions WithChartDescription(ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> description) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withChartDescription dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the union-based withChartDescription dispatcher export.")]
         public HelmChartOptions WithChartDescription(string description) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withChartName dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the union-based withChartName dispatcher export.")]
         public HelmChartOptions WithChartName(ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> name) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withChartName dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the union-based withChartName dispatcher export.")]
         public HelmChartOptions WithChartName(string name) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withChartVersion dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the union-based withChartVersion dispatcher export.")]
         public HelmChartOptions WithChartVersion(ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> version) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withChartVersion dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the union-based withChartVersion dispatcher export.")]
         public HelmChartOptions WithChartVersion(string version) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withNamespace dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the union-based withNamespace dispatcher export.")]
         public HelmChartOptions WithNamespace(ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> @namespace) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withNamespace dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the union-based withNamespace dispatcher export.")]
         public HelmChartOptions WithNamespace(string @namespace) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withReleaseName dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the union-based withReleaseName dispatcher export.")]
         public HelmChartOptions WithReleaseName(ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> releaseName) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withReleaseName dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the union-based withReleaseName dispatcher export.")]
         public HelmChartOptions WithReleaseName(string releaseName) { throw null; }
     }
 
@@ -337,7 +342,7 @@ namespace Aspire.Hosting.Kubernetes
     }
 
     [AspireExport(ExposeProperties = true)]
-    public sealed partial class KubernetesEnvironmentResource : ApplicationModel.Resource, ApplicationModel.IComputeEnvironmentResource, ApplicationModel.IResource
+    public sealed partial class KubernetesEnvironmentResource : ApplicationModel.Resource, ApplicationModel.IComputeEnvironmentResource, ApplicationModel.IResource, ApplicationModel.IComputeEnvironmentWithVolumeMounts
     {
         public KubernetesEnvironmentResource(string name) : base(default!) { }
 
@@ -520,6 +525,7 @@ namespace Aspire.Hosting.Kubernetes.Resources
     {
         protected BaseKubernetesResource(string apiVersion, string kind) : base(default, default) { }
 
+        [AspireExport]
         [YamlDotNet.Serialization.YamlMember(Alias = "metadata", Order = -1)]
         public ObjectMetaV1 Metadata { get { throw null; } set { } }
     }
@@ -769,6 +775,25 @@ namespace Aspire.Hosting.Kubernetes.Resources
     }
 
     [YamlDotNet.Serialization.YamlSerializable]
+    public sealed partial class CsiVolumeSourceV1
+    {
+        [YamlDotNet.Serialization.YamlMember(Alias = "driver")]
+        public string Driver { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "fsType")]
+        public string? FsType { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "nodePublishSecretRef")]
+        public LocalObjectReferenceV1? NodePublishSecretRef { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "readOnly")]
+        public bool? ReadOnly { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "volumeAttributes")]
+        public System.Collections.Generic.Dictionary<string, string> VolumeAttributes { get { throw null; } }
+    }
+
+    [YamlDotNet.Serialization.YamlSerializable]
     public sealed partial class Deployment : Workload
     {
         public Deployment() : base(default!, default!) { }
@@ -871,6 +896,9 @@ namespace Aspire.Hosting.Kubernetes.Resources
 
         [YamlDotNet.Serialization.YamlMember(Alias = "fieldRef")]
         public ObjectFieldSelectorV1? FieldRef { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "fileKeyRef")]
+        public FileKeySelectorV1? FileKeyRef { get { throw null; } set { } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "resourceFieldRef")]
         public ResourceFieldSelectorV1? ResourceFieldRef { get { throw null; } set { } }
@@ -1021,6 +1049,22 @@ namespace Aspire.Hosting.Kubernetes.Resources
     [YamlDotNet.Serialization.YamlSerializable]
     public sealed partial class FieldsV1
     {
+    }
+
+    [YamlDotNet.Serialization.YamlSerializable]
+    public sealed partial class FileKeySelectorV1
+    {
+        [YamlDotNet.Serialization.YamlMember(Alias = "key")]
+        public string Key { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "optional")]
+        public bool? Optional { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "path")]
+        public string Path { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "volumeName")]
+        public string VolumeName { get { throw null; } set { } }
     }
 
     [YamlDotNet.Serialization.YamlSerializable]
@@ -1800,9 +1844,11 @@ namespace Aspire.Hosting.Kubernetes.Resources
         public string FieldPath { get { throw null; } set { } }
     }
 
+    [AspireExport]
     [YamlDotNet.Serialization.YamlSerializable]
     public sealed partial class ObjectMetaV1
     {
+        [AspireExport]
         [YamlDotNet.Serialization.YamlMember(Alias = "annotations")]
         public System.Collections.Generic.Dictionary<string, string> Annotations { get { throw null; } }
 
@@ -1824,6 +1870,7 @@ namespace Aspire.Hosting.Kubernetes.Resources
         [YamlDotNet.Serialization.YamlMember(Alias = "generation")]
         public long? Generation { get { throw null; } set { } }
 
+        [AspireExport]
         [YamlDotNet.Serialization.YamlMember(Alias = "labels")]
         public System.Collections.Generic.Dictionary<string, string> Labels { get { throw null; } set { } }
 
@@ -1910,18 +1957,22 @@ namespace Aspire.Hosting.Kubernetes.Resources
         public PersistentVolumeSpecV1 Spec { get { throw null; } set { } }
     }
 
+    [AspireExport]
     [YamlDotNet.Serialization.YamlSerializable]
     public sealed partial class PersistentVolumeClaim : BaseKubernetesResource
     {
         public PersistentVolumeClaim() : base(default!, default!) { }
 
+        [AspireExport]
         [YamlDotNet.Serialization.YamlMember(Alias = "spec")]
         public PersistentVolumeClaimSpecV1 Spec { get { throw null; } set { } }
     }
 
+    [AspireExport]
     [YamlDotNet.Serialization.YamlSerializable]
     public sealed partial class PersistentVolumeClaimSpecV1
     {
+        [AspireExport]
         [YamlDotNet.Serialization.YamlMember(Alias = "accessModes")]
         public System.Collections.Generic.List<string> AccessModes { get { throw null; } }
 
@@ -1931,23 +1982,27 @@ namespace Aspire.Hosting.Kubernetes.Resources
         [YamlDotNet.Serialization.YamlMember(Alias = "dataSourceRef")]
         public TypedObjectReferenceV1? DataSourceRef { get { throw null; } set { } }
 
+        [AspireExport]
         [YamlDotNet.Serialization.YamlMember(Alias = "resources")]
         public VolumeResourceRequirementsV1 Resources { get { throw null; } set { } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "selector")]
         public LabelSelectorV1? Selector { get { throw null; } set { } }
 
+        [AspireExport]
         [YamlDotNet.Serialization.YamlMember(Alias = "storageClassName")]
-        public string StorageClassName { get { throw null; } set { } }
+        public string? StorageClassName { get { throw null; } set { } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "volumeAttributesClassName")]
         public string VolumeAttributesClassName { get { throw null; } set { } }
 
+        [AspireExport]
         [YamlDotNet.Serialization.YamlMember(Alias = "volumeMode")]
-        public string VolumeMode { get { throw null; } set { } }
+        public string? VolumeMode { get { throw null; } set { } }
 
+        [AspireExport]
         [YamlDotNet.Serialization.YamlMember(Alias = "volumeName")]
-        public string VolumeName { get { throw null; } set { } }
+        public string? VolumeName { get { throw null; } set { } }
     }
 
     [YamlDotNet.Serialization.YamlSerializable]
@@ -3053,12 +3108,14 @@ namespace Aspire.Hosting.Kubernetes.Resources
         public ServiceAccountTokenProjectionV1? ServiceAccountToken { get { throw null; } set { } }
     }
 
+    [AspireExport]
     [YamlDotNet.Serialization.YamlSerializable]
     public sealed partial class VolumeResourceRequirementsV1
     {
         [YamlDotNet.Serialization.YamlMember(Alias = "limits")]
         public System.Collections.Generic.Dictionary<string, string> Limits { get { throw null; } }
 
+        [AspireExport]
         [YamlDotNet.Serialization.YamlMember(Alias = "requests")]
         public System.Collections.Generic.Dictionary<string, string> Requests { get { throw null; } }
     }
@@ -3068,6 +3125,9 @@ namespace Aspire.Hosting.Kubernetes.Resources
     {
         [YamlDotNet.Serialization.YamlMember(Alias = "configMap")]
         public ConfigMapVolumeSourceV1? ConfigMap { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "csi")]
+        public CsiVolumeSourceV1? Csi { get { throw null; } set { } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "emptyDir")]
         public EmptyDirVolumeSourceV1? EmptyDir { get { throw null; } set { } }

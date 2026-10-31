@@ -57,6 +57,8 @@ namespace Aspire.Hosting.Milvus
     public partial class AttuResource : ApplicationModel.ContainerResource
     {
         public AttuResource(string name) : base(default!, default) { }
+
+        public ApplicationModel.EndpointReference PrimaryEndpoint { get { throw null; } }
     }
 
     [AspireExport(ExposeProperties = true)]
