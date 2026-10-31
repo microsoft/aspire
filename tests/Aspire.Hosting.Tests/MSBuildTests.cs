@@ -438,6 +438,81 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
         return (process.ExitCode, output.ToString());
     }
 
+    /// <summary>
+    /// Only an artifacts path passed as a global property (for example, <c>dotnet build --artifacts-path</c>) redirects
+    /// referenced project output in a way that <c>dotnet run --no-build</c> can't rediscover on its own, so only that
+    /// value should be recorded for the AppHost to forward when launching project resources.
+    /// See https://github.com/microsoft/aspire/issues/6887.
+    /// </summary>
+    [Theory]
+    [InlineData("global")]
+    [InlineData("environment")]
+    [InlineData("project")]
+    [InlineData("none")]
+    public void GlobalArtifactsPathIsOnlyRecordedWhenPassedAsGlobalProperty(string source)
+    {
+        var repoRoot = MSBuildUtils.GetRepoRoot();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var appHostDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost");
+        Directory.CreateDirectory(appHostDirectory);
+        var artifactsPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".artifacts");
+        var projectArtifactsPath = source == "project" ? $"<ArtifactsPath>{artifactsPath}</ArtifactsPath>" : "";
+
+        File.WriteAllText(Path.Combine(appHostDirectory, "AppHost.csproj"),
+            $"""
+            <Project Sdk="Microsoft.NET.Sdk">
+
+              <PropertyGroup>
+                <OutputType>Exe</OutputType>
+                <TargetFramework>net10.0</TargetFramework>
+                <IsAspireHost>true</IsAspireHost>
+                <SkipAddAspireDefaultReferences>true</SkipAddAspireDefaultReferences>
+                <AspireHostingSDKVersion>9.0.0</AspireHostingSDKVersion>
+                <_AspireUseTaskHostFactory>true</_AspireUseTaskHostFactory>
+                {projectArtifactsPath}
+              </PropertyGroup>
+
+            </Project>
+            """);
+
+        CreateDirectoryBuildFiles(appHostDirectory, repoRoot);
+
+        var arguments = "msbuild -getProperty:ArtifactsPath,_AspireGlobalArtifactsPath AppHost.csproj";
+        var environment = new Dictionary<string, string>
+        {
+            ["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1",
+            ["DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE"] = "1",
+        };
+        switch (source)
+        {
+            case "global":
+                arguments += $" \"-p:ArtifactsPath={artifactsPath}\"";
+                break;
+            case "environment":
+                environment["ArtifactsPath"] = artifactsPath;
+                break;
+        }
+
+        var result = RunDotNet(appHostDirectory, arguments, timeoutMilliseconds: 180_000, environment);
+
+        Assert.True(result.ExitCode == 0, $"MSBuild query failed: {Environment.NewLine}{result.Output}");
+        using var document = JsonDocument.Parse(result.Output);
+        var properties = document.RootElement.GetProperty("Properties");
+
+        if (source == "none")
+        {
+            Assert.Equal(string.Empty, properties.GetProperty("_AspireGlobalArtifactsPath").GetString());
+            return;
+        }
+
+        // The probe used to detect a global property must leave the evaluated artifacts path untouched.
+        Assert.StartsWith(artifactsPath, properties.GetProperty("ArtifactsPath").GetString());
+        Assert.Equal(
+            source == "global" ? artifactsPath : string.Empty,
+            properties.GetProperty("_AspireGlobalArtifactsPath").GetString());
+    }
+
     [Fact]
     public void AppHostInspectionQuerySucceedsForPlainAppHostNamedProject()
     {

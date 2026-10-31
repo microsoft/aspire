@@ -16,6 +16,7 @@ public sealed class DistributedApplicationOptions
     private readonly Lazy<string?> _dashboardApplicationNameLazy;
     private readonly Lazy<string?> _appHostFilePathLazy;
     private readonly Lazy<string?> _configurationLazy;
+    private readonly Lazy<string?> _globalArtifactsPathLazy;
     // This is for testing
     private string? _projectDirectory;
     private bool _projectDirectorySet;
@@ -34,6 +35,7 @@ public sealed class DistributedApplicationOptions
         _dashboardApplicationNameLazy = new(ResolveDashboardApplicationName);
         _appHostFilePathLazy = new(ResolveAppHostFilePath);
         _configurationLazy = new(ResolveConfiguration);
+        _globalArtifactsPathLazy = new(ResolveGlobalArtifactsPath);
     }
 
     /// <summary>
@@ -65,6 +67,23 @@ public sealed class DistributedApplicationOptions
     internal Assembly? Assembly => _assembly.Value;
 
     internal string? Configuration => _configurationLazy.Value;
+
+    /// <summary>
+    /// Gets the artifacts path that was passed to the AppHost build as a global MSBuild property
+    /// (for example, via <c>dotnet build --artifacts-path</c>), if any.
+    /// </summary>
+    internal string? GlobalArtifactsPath
+    {
+        get => _globalArtifactsPathSet ? _globalArtifactsPath : _globalArtifactsPathLazy.Value;
+        set
+        {
+            _globalArtifactsPath = value;
+            _globalArtifactsPathSet = true;
+        }
+    }
+
+    private string? _globalArtifactsPath;
+    private bool _globalArtifactsPathSet;
 
     internal string? ContentRootPath { get; set; }
 
@@ -241,6 +260,13 @@ public sealed class DistributedApplicationOptions
     private string? ResolveConfiguration()
     {
         return Assembly?.GetCustomAttribute<AssemblyConfigurationAttribute>()?.Configuration;
+    }
+
+    private string? ResolveGlobalArtifactsPath()
+    {
+        var assemblyMetadata = Assembly?.GetCustomAttributes<AssemblyMetadataAttribute>();
+        var artifactsPath = GetMetadataValue(assemblyMetadata, "AppHostGlobalArtifactsPath");
+        return string.IsNullOrWhiteSpace(artifactsPath) ? null : artifactsPath;
     }
 
     private static string? GetMetadataValue(IEnumerable<AssemblyMetadataAttribute>? assemblyMetadata, string key)
