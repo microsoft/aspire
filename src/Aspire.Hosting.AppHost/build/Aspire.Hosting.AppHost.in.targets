@@ -218,6 +218,10 @@ namespace Projects%3B
 
   <Target Name="_ResolveAspireCliInvocation"
           Condition="'$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'true'">
+    <Warning Code="ASPIRE014"
+             Condition="'$(_AspireCliInvocationMode.ToLowerInvariant())' != 'path' and '$(_AspireCliInvocationMode.ToLowerInvariant())' != 'dnx' and '$(_AspireCliInvocationMode.ToLowerInvariant())' != 'dnxpinned'"
+             Text="$(MSBuildProjectName) is configured with AspireCliInvocationMode=$(_AspireCliInvocationMode), which is not a supported value. Supported values are Path, Dnx, and DnxPinned. The default Path invocation mode will be used." />
+
     <ResolveAspireCliInvocation AspireCliPath="$(AspireCliPath)"
                                 AspireCliInvocationMode="$(_AspireCliInvocationMode)"
                                 PathEnvironmentVariable="$(Path)">

@@ -436,6 +436,84 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         Assert.Contains("Install or use the .NET SDK 10.0 or later", result.Output);
     }
 
+    [Theory]
+    [InlineData("DefinitelyInvalid")]
+    [InlineData("DnxPinnedd")]
+    public async Task ComputeRunArgumentsWarnsAndUsesPathModeWhenInvocationModeIsUnsupported(string invocationMode)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "fake-cli"));
+        var aspireCliPath = await CreateFakeAspireCliAsync(fakeCliDirectory.FullName);
+        await CreateFakeDnxAsync(fakeCliDirectory.FullName);
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true,
+            $$"""
+              <PropertyGroup>
+                <AspireCliInvocationMode>{{invocationMode}}</AspireCliInvocationMode>
+              </PropertyGroup>
+            """);
+
+        var result = await RunComputeRunArgumentsAsync(project, CreatePathEnvironment(fakeCliDirectory.FullName));
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        Assert.Contains("warning ASPIRE014", result.Output);
+        Assert.Contains($"AspireCliInvocationMode={invocationMode}, which is not a supported value", result.Output);
+        Assert.Contains("Supported values are Path, Dnx, and DnxPinned", result.Output);
+
+        var properties = await GetComputeRunArgumentsPropertiesAsync(
+            project,
+            environment: CreatePathEnvironment(fakeCliDirectory.FullName));
+
+        Assert.Equal("Aspire", properties["_AspireResolvedCliInvocationMode"]);
+        Assert.Equal(GetExpectedAspireRunCommand(aspireCliPath), properties["RunCommand"]);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("Path")]
+    [InlineData("pAtH")]
+    [InlineData("Dnx")]
+    [InlineData("DnxPinned")]
+    public async Task ComputeRunArgumentsDoesNotWarnWhenInvocationModeIsSupported(string? invocationMode)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "fake-cli"));
+        await CreateFakeAspireCliAsync(fakeCliDirectory.FullName);
+        await CreateFakeDnxAsync(fakeCliDirectory.FullName);
+        var extraProjectXml = invocationMode is null
+            ? null
+            : $$"""
+              <PropertyGroup>
+                <AspireCliInvocationMode>{{invocationMode}}</AspireCliInvocationMode>
+              </PropertyGroup>
+            """;
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true, extraProjectXml);
+
+        var result = await RunComputeRunArgumentsAsync(project, CreatePathEnvironment(fakeCliDirectory.FullName));
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        Assert.DoesNotContain("ASPIRE014", result.Output);
+    }
+
+    [Fact]
+    public async Task UnsupportedInvocationModeWarningCanBeSuppressed()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "fake-cli"));
+        await CreateFakeAspireCliAsync(fakeCliDirectory.FullName);
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true,
+            """
+              <PropertyGroup>
+                <AspireCliInvocationMode>DefinitelyInvalid</AspireCliInvocationMode>
+                <NoWarn>$(NoWarn);ASPIRE014</NoWarn>
+              </PropertyGroup>
+            """);
+
+        var result = await RunComputeRunArgumentsAsync(project, CreatePathEnvironment(fakeCliDirectory.FullName));
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        Assert.DoesNotContain("ASPIRE014", result.Output);
+    }
+
     [Fact]
     public async Task ComputeRunArgumentsSkipsNonExecutableDnxOnUnix()
     {
@@ -1577,6 +1655,12 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
             extraArguments,
             environment);
     }
+
+    private static Task<DotNetResult> RunComputeRunArgumentsAsync(RunHookProject project, IDictionary<string, string> environment)
+        => RunDotNetWithArgumentsAsync(
+            project.ProjectDirectory,
+            ["msbuild", "-nologo", "-restore", "-t:ComputeRunArguments", project.ProjectFile],
+            environment);
 
     private static async Task<Dictionary<string, string>> GetResolveAspireCliBundlePathPropertiesAsync(
         RunHookProject project,
