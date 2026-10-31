@@ -888,6 +888,45 @@ public class OtlpHttpJsonTests
         Assert.Equal(HttpStatusCode.BadRequest, responseMessage.StatusCode);
     }
 
+    [Theory]
+    [InlineData("zz")] // Non-hex characters throw FormatException when parsed to bytes.
+    [InlineData("abc")] // Odd-length hex throws ArgumentException.
+    public async Task CallService_Traces_JsonContentType_InvalidTraceId_BadRequest(string invalidTraceId)
+    {
+        // Arrange
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(_testOutputHelper);
+        await app.StartAsync().DefaultTimeout();
+
+        using var httpClient = IntegrationTestHelpers.CreateHttpClient($"http://{app.OtlpServiceHttpEndPointAccessor().EndPoint}");
+
+        var json = $$"""
+            {
+              "resourceSpans": [
+                {
+                  "scopeSpans": [
+                    {
+                      "spans": [
+                        {
+                          "traceId": "{{invalidTraceId}}",
+                          "spanId": "eee19b7ec3c1b174",
+                          "name": "test"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+            """;
+        var content = new StringContent(json, Encoding.UTF8, OtlpHttpEndpointsBuilder.JsonContentType);
+
+        // Act
+        var responseMessage = await httpClient.PostAsync("/v1/traces", content).DefaultTimeout();
+
+        // Assert
+        Assert.Equal(HttpStatusCode.BadRequest, responseMessage.StatusCode);
+    }
+
     [Fact]
     public async Task CallService_JsonContentType_EmptyBody_Success()
     {
