@@ -226,7 +226,7 @@ public partial class GitCommandRunnerTests
         await runner.ConfigureUnattendedSshAsync(info, arguments, TestContext.Current.CancellationToken);
 
         var ssh = await GetGitSelectedSshAsync(info);
-        Assert.Equal($"'{ssh.Replace("'", "'\\''", StringComparison.Ordinal)}' -o BatchMode=yes", info.Environment["GIT_SSH_COMMAND"]);
+        AssertOpenSshCommand(ssh, info.Environment["GIT_SSH_COMMAND"]);
         Assert.Equal("ssh", info.Environment["GIT_SSH_VARIANT"]);
         Assert.Equal("preserved-agent", info.Environment["SSH_AUTH_SOCK"]);
         Assert.Equal(configuration, await File.ReadAllTextAsync(config));
@@ -253,7 +253,7 @@ public partial class GitCommandRunnerTests
         await runner.ConfigureUnattendedSshAsync(info, arguments, TestContext.Current.CancellationToken);
 
         var selectedSsh = await GetGitSelectedSshAsync(info);
-        Assert.Equal($"'{selectedSsh.Replace("'", "'\\''", StringComparison.Ordinal)}' -o BatchMode=yes", info.Environment["GIT_SSH_COMMAND"]);
+        AssertOpenSshCommand(selectedSsh, info.Environment["GIT_SSH_COMMAND"]);
     }
 
     [Fact]
@@ -277,7 +277,7 @@ public partial class GitCommandRunnerTests
 
         await runner.ConfigureUnattendedSshAsync(info, arguments, TestContext.Current.CancellationToken);
 
-        Assert.Equal($"'{ssh}' -o BatchMode=yes", info.Environment["GIT_SSH_COMMAND"]);
+        AssertOpenSshCommand(ssh, info.Environment["GIT_SSH_COMMAND"]);
         Assert.Equal("", await File.ReadAllTextAsync(config));
     }
 
@@ -317,7 +317,7 @@ public partial class GitCommandRunnerTests
 
         await runner.ConfigureUnattendedSshAsync(info, arguments, TestContext.Current.CancellationToken);
 
-        Assert.Equal($"'{selectedSsh.Replace("'", "'\\''", StringComparison.Ordinal)}' -o BatchMode=yes", info.Environment["GIT_SSH_COMMAND"]);
+        AssertOpenSshCommand(selectedSsh, info.Environment["GIT_SSH_COMMAND"]);
         Assert.Equal("ssh", info.Environment["GIT_SSH_VARIANT"]);
         Assert.Equal(configuration, await File.ReadAllTextAsync(config));
     }
@@ -336,6 +336,16 @@ public partial class GitCommandRunnerTests
     }
 
     private static string ShellPath(string path) => path.Replace("\\", "/", StringComparison.Ordinal).Replace("'", "'\\''", StringComparison.Ordinal);
+
+    private static void AssertOpenSshCommand(string executable, string? command)
+    {
+        Assert.NotNull(command);
+        const string suffix = "' -o BatchMode=yes";
+        // Windows path casing is immaterial, but -o and -O are different SSH options.
+        Assert.EndsWith(suffix, command, StringComparison.Ordinal);
+        Assert.Equal($"'{executable.Replace("'", "'\\''", StringComparison.Ordinal)}", command[..^suffix.Length],
+            ignoreCase: OperatingSystem.IsWindows());
+    }
 
     private async Task<string> GetGitSelectedSshAsync(ProcessStartInfo source)
     {
