@@ -64,17 +64,29 @@ internal sealed class DockerContainerRuntime : ContainerRuntimeBase<DockerContai
 
         try
         {
-            var arguments = $"buildx build --file \"{dockerfilePath}\" --tag \"{imageName}\"";
+            // Pass argv through ArgumentList. A single Arguments string is re-parsed on spaces and
+            // quotes, which splits cache destinations and secret paths that contain whitespace.
+            var arguments = new List<string>
+            {
+                "buildx",
+                "build",
+                "--file",
+                dockerfilePath,
+                "--tag",
+                imageName
+            };
 
             if (!string.IsNullOrEmpty(selectedBuilderName))
             {
-                arguments += $" --builder \"{selectedBuilderName}\"";
+                arguments.Add("--builder");
+                arguments.Add(selectedBuilderName);
             }
 
             // Add platform support if specified
             if (options?.TargetPlatform is not null)
             {
-                arguments += $" --platform \"{options.TargetPlatform.Value.ToRuntimePlatformString()}\"";
+                arguments.Add("--platform");
+                arguments.Add(options.TargetPlatform.Value.ToRuntimePlatformString());
             }
 
             // Add output format support if specified
@@ -95,19 +107,15 @@ internal sealed class DockerContainerRuntime : ContainerRuntimeBase<DockerContai
                     outputType += $",dest={archivePath}";
                 }
 
-                arguments += $" --output \"{outputType}\"";
+                arguments.Add("--output");
+                arguments.Add(outputType);
             }
 
-            // Add build arguments if specified
-            arguments += BuildArgumentsString(buildArguments);
-
-            // Add build secrets if specified
-            arguments += BuildSecretsString(buildSecrets);
-
-            // Add stage if specified
-            arguments += BuildStageString(stage);
-
-            arguments += $" \"{contextPath}\"";
+            AppendBuildArguments(arguments, buildArguments);
+            AppendBuildSecrets(arguments, buildSecrets);
+            AppendBuildStage(arguments, stage);
+            AppendAdditionalArguments(arguments, options?.AdditionalArguments);
+            arguments.Add(contextPath);
 
             // Prepare environment variables for build secrets
             var environmentVariables = new Dictionary<string, string>();

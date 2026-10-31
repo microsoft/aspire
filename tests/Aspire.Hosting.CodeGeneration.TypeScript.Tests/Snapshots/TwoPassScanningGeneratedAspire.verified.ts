@@ -2662,6 +2662,19 @@ export interface ContainerBuildOptionsCallbackContext {
         get: () => Promise<string | null>;
         set: (value: string | null) => Promise<void>;
     };
+    /**
+     * Gets additional arguments passed to the container build command. Use this for builder flags that are not represented by the typed properties above, such as BuildKit cache configuration (`--cache-from`/`--cache-to`) or extra `--secret` options.
+     *
+     * Each entry is one process argument. A flag and its value are separate entries,
+     * and the value is not joined, split, or quoted by Aspire. Spaces, quotes, and
+     * commas are preserved, so a cache spec such as
+     * `type=local,dest=./build cache` stays a single argument.
+     * Entries are only applied to builder-based builds (docker buildx / podman build).
+     * They do not apply to project resources built via `dotnet publish /t:PublishContainer`,
+     * which does not invoke a container builder directly.
+     * @experimental
+     */
+    additionalArguments(): Promise<AspireList<string>>;
 }
 
 export interface ContainerBuildOptionsCallbackContextPromise extends PromiseLike<ContainerBuildOptionsCallbackContext> {
@@ -2694,6 +2707,19 @@ export interface ContainerBuildOptionsCallbackContextPromise extends PromiseLike
      * @experimental
      */
     executionContext(): DistributedApplicationExecutionContextPromise;
+    /**
+     * Gets additional arguments passed to the container build command. Use this for builder flags that are not represented by the typed properties above, such as BuildKit cache configuration (`--cache-from`/`--cache-to`) or extra `--secret` options.
+     *
+     * Each entry is one process argument. A flag and its value are separate entries,
+     * and the value is not joined, split, or quoted by Aspire. Spaces, quotes, and
+     * commas are preserved, so a cache spec such as
+     * `type=local,dest=./build cache` stays a single argument.
+     * Entries are only applied to builder-based builds (docker buildx / podman build).
+     * They do not apply to project resources built via `dotnet publish /t:PublishContainer`,
+     * which does not invoke a container builder directly.
+     * @experimental
+     */
+    additionalArguments(): Promise<AspireList<string>>;
 }
 
 // ============================================================================
@@ -2849,6 +2875,19 @@ class ContainerBuildOptionsCallbackContextImpl implements ContainerBuildOptionsC
         }
     };
 
+    private _additionalArguments?: AspireList<string>;
+    async additionalArguments(): Promise<AspireList<string>> {
+        if (!this._additionalArguments) {
+            this._additionalArguments = new AspireList<string>(
+                this._handle,
+                this._client,
+                'Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.additionalArguments',
+                'Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.additionalArguments'
+            );
+        }
+        return this._additionalArguments;
+    }
+
 }
 
 /** @internal */
@@ -2858,6 +2897,7 @@ const ContainerBuildOptionsCallbackContextPromiseImpl = $aspireCreateFluentPromi
     ["logger"]: [() => LoggerPromiseImpl, false] as const,
     ["cancellationToken"]: null,
     ["executionContext"]: [() => DistributedApplicationExecutionContextPromiseImpl, false] as const,
+    ["additionalArguments"]: null,
 }));
 
 // ============================================================================

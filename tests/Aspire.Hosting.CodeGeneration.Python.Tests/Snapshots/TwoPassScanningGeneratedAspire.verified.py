@@ -4108,6 +4108,15 @@ class ContainerBuildOptionsCallbackContext:
             {'context': self._handle, 'value': value}
         )
 
+    @_cached_property
+    def additional_arguments(self) -> AspireList[str]:
+        """Gets additional arguments passed to the container build command. Use this for builder flags that are not represented by the typed properties above, such as BuildKit cache configuration (`--cache-from`/`--cache-to`) or extra `--secret` options."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.additionalArguments',
+            {'context': self._handle}
+        )
+        return typing.cast(AspireList[str], result)
+
 
 class ContainerFileSystemCallbackContext:
     """Type class for ContainerFileSystemCallbackContext."""

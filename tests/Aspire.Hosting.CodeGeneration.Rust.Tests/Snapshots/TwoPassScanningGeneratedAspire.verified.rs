@@ -3946,6 +3946,11 @@ impl ContainerBuildOptionsCallbackContext {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerBuildOptionsCallbackContext::new(handle, self.client.clone()))
     }
+
+    /// Gets additional arguments passed to the container build command. Use this for builder flags that are not represented by the typed properties above, such as BuildKit cache configuration (`--cache-from`/`--cache-to`) or extra `--secret` options.
+    pub fn additional_arguments(&self) -> AspireList<String> {
+        AspireList::with_getter(self.handle.clone(), self.client.clone(), "Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.additionalArguments")
+    }
 }
 
 /// Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerFileSystemCallbackContext

@@ -153,12 +153,22 @@ internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContai
             throw new ArgumentException("OutputPath must be provided when ImageFormat is Oci.", nameof(options));
         }
 
-        var arguments = $"build --file \"{dockerfilePath}\" --tag \"{imageName}\"";
+        // Pass argv through ArgumentList. A single Arguments string is re-parsed on spaces and
+        // quotes, which splits cache destinations and secret paths that contain whitespace.
+        var arguments = new List<string>
+        {
+            "build",
+            "--file",
+            dockerfilePath,
+            "--tag",
+            imageName
+        };
 
         // Add platform support if specified
         if (options?.TargetPlatform is not null)
         {
-            arguments += $" --platform \"{options.TargetPlatform.Value.ToRuntimePlatformString()}\"";
+            arguments.Add("--platform");
+            arguments.Add(options.TargetPlatform.Value.ToRuntimePlatformString());
         }
 
         // Add format support if specified
@@ -170,7 +180,8 @@ internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContai
                 ContainerImageFormat.Docker => "docker",
                 _ => throw new ArgumentOutOfRangeException(nameof(options), options.ImageFormat, "Invalid container image format")
             };
-            arguments += $" --format \"{format}\"";
+            arguments.Add("--format");
+            arguments.Add(format);
         }
 
         // Archive output is deliberately NOT handled here.
@@ -185,16 +196,11 @@ internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContai
         // See https://docs.podman.io/en/latest/markdown/podman-build.1.html and
         // https://docs.podman.io/en/latest/markdown/podman-save.1.html
 
-        // Add build arguments if specified
-        arguments += BuildArgumentsString(buildArguments);
-
-        // Add build secrets if specified
-        arguments += BuildSecretsString(buildSecrets, requireValue: true);
-
-        // Add stage if specified
-        arguments += BuildStageString(stage);
-
-        arguments += $" \"{contextPath}\"";
+        AppendBuildArguments(arguments, buildArguments);
+        AppendBuildSecrets(arguments, buildSecrets, requireValue: true);
+        AppendBuildStage(arguments, stage);
+        AppendAdditionalArguments(arguments, options?.AdditionalArguments);
+        arguments.Add(contextPath);
 
         // Prepare environment variables for build secrets (only for environment-type secrets)
         var environmentVariables = new Dictionary<string, string>();
