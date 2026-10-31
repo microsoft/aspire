@@ -10,7 +10,7 @@ namespace Aspire.Hosting.Utils;
 /// </summary>
 /// <remarks>
 /// DCP streams the runtime's raw stdout/stderr into the resource log stream without normalizing it,
-/// so assertions over those logs have to account for Docker, Podman, and WSLC describing the same condition
+/// so assertions over those logs have to account for Docker and Podman describing the same condition
 /// differently. Docker is a CLI over a daemon REST API and uses BuildKit; Podman is daemonless and
 /// builds with Buildah.
 /// <para>
@@ -51,20 +51,13 @@ public static partial class ContainerRuntimeLogPatterns
     /// Copying blob sha256:58dee6a49ef1c01bb8a00180d70f55b3527c8e7326a05b3c5135c4ff60cfb6d6
     /// Writing manifest to image destination
     /// </code>
-    /// WSLC reports registry HTTP failures without a daemon or containers/image wrapper:
-    /// <code>
-    /// Get "https://does.not.exist.internal/v2/": dial tcp: lookup does.not.exist.internal: no such host
-    /// Head "https://cgr.dev/v2/mattermost.com/go-msft-fips/manifests/1.24.6": unauthorized: {"errors":[{"code":"UNAUTHORIZED","message":"Authentication required"}]}
-    /// </code>
-    /// Match the registry API path and failure reason, not WSLC's generic <c>Error code: E_FAIL</c>.
     /// </remarks>
     public static bool IsImagePullFailure(string line)
     {
         ArgumentNullException.ThrowIfNull(line);
 
         return line.Contains("Error response from daemon", StringComparison.Ordinal)
-            || PodmanImagePullFailureRegex().IsMatch(line)
-            || WslcImagePullFailureRegex().IsMatch(line);
+            || PodmanImagePullFailureRegex().IsMatch(line);
     }
 
     /// <summary>
@@ -86,30 +79,18 @@ public static partial class ContainerRuntimeLogPatterns
     /// The step counter is matched explicitly rather than looking for a bare <c>STEP</c>, so that build
     /// output which merely contains that word — say a <c>RUN echo</c> in the Dockerfile under test —
     /// does not satisfy the assertion.
-    /// WSLC omits BuildKit's internal steps and emits named stage progress instead:
-    /// <code>
-    /// [builder 1/4] FROM mcr.microsoft.com/cbl-mariner/base/nginx:1.22@sha256:...
-    /// [runner 3/4] COPY --from=builder /usr/share/nginx/html/cachebuster.txt /usr/share/nginx/html
-    /// </code>
     /// </remarks>
     public static bool IsBuildProgress(string line)
     {
         ArgumentNullException.ThrowIfNull(line);
 
         return line.Contains("load build definition from Dockerfile", StringComparison.Ordinal)
-            || PodmanBuildStepRegex().IsMatch(line)
-            || WslcBuildStepRegex().IsMatch(line);
+            || PodmanBuildStepRegex().IsMatch(line);
     }
 
     [GeneratedRegex(@"Error:.*\bdocker://")]
     private static partial Regex PodmanImagePullFailureRegex();
 
-    [GeneratedRegex("""\b(?:Get|Head) "https?://[^/"]+/v2/[^"]*": (?:dial tcp:|unauthorized:)""")]
-    private static partial Regex WslcImagePullFailureRegex();
-
     [GeneratedRegex(@"\bSTEP \d+/\d+:")]
     private static partial Regex PodmanBuildStepRegex();
-
-    [GeneratedRegex(@"\[(?:[\w.-]+ )?\d+/\d+\] (?:FROM|RUN|COPY|ADD) ")]
-    private static partial Regex WslcBuildStepRegex();
 }

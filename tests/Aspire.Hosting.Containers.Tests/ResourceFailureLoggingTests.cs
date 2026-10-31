@@ -35,8 +35,7 @@ public class ContainerResourceFailureLoggingTests(ITestOutputHelper testOutputHe
         }
 
         var logLines = GetLogLines(logCollector);
-        Assert.Contains(logLines, x => x.EndsWith("unknown flag: --illegal")
-            || x.EndsWith("Option name was not recognised for the current command: '--illegal'"));
+        Assert.Contains(logLines, x => x.EndsWith("unknown flag: --illegal"));
     }
 
     [Fact]
