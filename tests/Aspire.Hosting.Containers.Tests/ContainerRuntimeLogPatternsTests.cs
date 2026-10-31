@@ -58,6 +58,9 @@ public class ContainerRuntimeLogPatternsTests
     [InlineData(@"2026-07-31T17:41:39.0250000Z [2/2] STEP 6/6: LABEL ""com.microsoft.developer.usvc-dev.build""=""0.25.9""")]
     // Podman/Buildah, single-stage build has no stage prefix.
     [InlineData("2026-07-31T17:41:35.2070000Z STEP 1/3: FROM alpine")]
+    // WSLC omits internal BuildKit steps.
+    [InlineData("2026-10-31T09:36:39.2700000Z [builder 1/4] FROM mcr.microsoft.com/cbl-mariner/base/nginx:1.22@sha256:4b1aff404705ded4dbc264617604a14f3034802636f22ece1d3ad8b0c7102d66")]
+    [InlineData("2026-10-31T09:36:39.8850000Z [runner 3/4] COPY --from=builder /usr/share/nginx/html/cachebuster.txt /usr/share/nginx/html")]
     public void IsBuildProgress_MatchesRuntimeBuildOutput(string line)
     {
         Assert.True(ContainerRuntimeLogPatterns.IsBuildProgress(line));
@@ -70,6 +73,8 @@ public class ContainerRuntimeLogPatternsTests
     // Buildah output that is not a step line.
     [InlineData("2026-07-31T17:41:39.0360000Z Successfully tagged localhost/testcontainer:50a50dfc")]
     [InlineData("2026-07-31T17:41:35.2070000Z Getting image source signatures")]
+    [InlineData("2026-10-31T09:36:39.2710000Z [builder 2/4] CACHED")]
+    [InlineData("2026-10-31T09:36:39.2710000Z [builder] RUN starting application")]
     public void IsBuildProgress_DoesNotMatchUnrelatedOutput(string line)
     {
         Assert.False(ContainerRuntimeLogPatterns.IsBuildProgress(line));

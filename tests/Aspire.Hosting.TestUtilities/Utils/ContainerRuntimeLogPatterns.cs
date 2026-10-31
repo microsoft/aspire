@@ -86,13 +86,19 @@ public static partial class ContainerRuntimeLogPatterns
     /// The step counter is matched explicitly rather than looking for a bare <c>STEP</c>, so that build
     /// output which merely contains that word — say a <c>RUN echo</c> in the Dockerfile under test —
     /// does not satisfy the assertion.
+    /// WSLC omits BuildKit's internal steps and emits named stage progress instead:
+    /// <code>
+    /// [builder 1/4] FROM mcr.microsoft.com/cbl-mariner/base/nginx:1.22@sha256:...
+    /// [runner 3/4] COPY --from=builder /usr/share/nginx/html/cachebuster.txt /usr/share/nginx/html
+    /// </code>
     /// </remarks>
     public static bool IsBuildProgress(string line)
     {
         ArgumentNullException.ThrowIfNull(line);
 
         return line.Contains("load build definition from Dockerfile", StringComparison.Ordinal)
-            || PodmanBuildStepRegex().IsMatch(line);
+            || PodmanBuildStepRegex().IsMatch(line)
+            || WslcBuildStepRegex().IsMatch(line);
     }
 
     [GeneratedRegex(@"Error:.*\bdocker://")]
@@ -103,4 +109,7 @@ public static partial class ContainerRuntimeLogPatterns
 
     [GeneratedRegex(@"\bSTEP \d+/\d+:")]
     private static partial Regex PodmanBuildStepRegex();
+
+    [GeneratedRegex(@"\[(?:[\w.-]+ )?\d+/\d+\] (?:FROM|RUN|COPY|ADD) ")]
+    private static partial Regex WslcBuildStepRegex();
 }
