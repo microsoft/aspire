@@ -1,0 +1,38 @@
+﻿[
+  {
+    Name: test_api.test_value[1],
+    Outcome: Passed,
+    Duration: 00:00:00.1250000
+  },
+  {
+    Name: test_api.test_value[2],
+    Outcome: Failed,
+    Duration: 00:00:00.2500000,
+    Message:
+failure:  assert 1 == 2
+traceback
+captured stdout
+  },
+  {
+    Name: test_api.test_skip,
+    Outcome: Skipped,
+    Duration: 00:00:00,
+    Message:
+skipped: pytest.skip unavailable
+skip reason
+  },
+  {
+    Name: test_api.test_xfail,
+    Outcome: Skipped,
+    Message: skipped: pytest.xfail known issue
+  },
+  {
+    Name: test_collection.py,
+    Outcome: Failed,
+    Duration: 00:00:00,
+    Message:
+error:  collection failure
+ImportError
+captured stderr
+  }
+]
