@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <title>Aspire standup | October 31, 2026, 12:00 Pacific</title>
+    <style>
+        :root { color-scheme: light dark; font-family: system-ui, sans-serif; line-height: 1.6; }
+        body { max-width: 56rem; margin: auto; padding: 1.5rem; }
+        h1, h2 { line-height: 1.25; }
+        h2 { margin-top: 2rem; }
+        a { color: #3559c7; text-underline-offset: .15em; overflow-wrap: anywhere; }
+        .summary { border-inline-start: .25rem solid #6554c0; padding-inline-start: 1rem; }
+        table { width: 100%; border-collapse: collapse; margin: 1rem 0 1.5rem; font-size: .925rem; }
+        caption { text-align: start; font-weight: bold; padding-bottom: .25rem; }
+        th, td { border-bottom: 1px solid #8884; padding: .35rem .5rem .35rem 0; text-align: start; vertical-align: top; overflow-wrap: anywhere; }
+        thead th { border-bottom: 2px solid #888; }
+        tbody th { font-weight: normal; white-space: nowrap; }
+        @media (max-width: 40rem) {
+            table { font-size: .85rem; }
+            thead th:nth-child(2), td { width: 42%; }
+            td + td { width: auto; }
+        }
+        dt { font-weight: bold; }
+        dd { margin: 0 0 1rem; }
+        footer { margin-top: 2rem; border-top: 1px solid #888; padding-top: 1rem; }
+        @media (prefers-color-scheme: dark) { a { color: #b6c7ff; } }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Aspire standup</h1>
+        <p><time datetime="2026-10-31T12:00:00-07:00">October 31, 2026, 12:00 America/Los_Angeles (PDT)</time><br>
+            <time datetime="2026-10-31T19:00:00Z">October 31, 2026, 19:00 UTC</time> reporting slot.</p>
+        <p>Window: October 31, 15:00 UTC to 19:00 UTC. PR states and check rollups were read with GitHub
+            between about 19:01 and 19:08 UTC; they are a point-in-time snapshot, not a live dashboard.
+            Human approval is the merge gate for every PR below; approval alone does not make a PR mergeable.</p>
+        <p class="summary"><strong>1 PR merged this window (aspire #21581); 7 more aspire PRs are approved but GitHub still reports them blocked.</strong>
+            139 ready PRs await review (aspire 112, aspire.dev 16, aspire-skills 11). 8 aspire PRs became ready; 6 aspire drafts are in CI,
+            3 of them with failing jobs. main’s first-attempt CI pass rate was 11.1% (1/9) over 24 hours.</p>
+    </header>
+    <main>
+        <section aria-labelledby="why">
+            <h2 id="why">Why it matters</h2>
+            <p>Flaky CI is the main drag: per the live tracker <a href="https://github.com/microsoft/aspire/issues/21600">#21600</a>, only 1 of 56 first-attempt main runs passed in 7 days, and most PR runs
+                need a rerun. Most open PRs fix those flakes or user-facing bugs; the newest draft, <a href="https://github.com/microsoft/aspire/pull/21608">#21608</a>, targets the Windows runner losses
+                (<a href="https://github.com/microsoft/aspire/issues/21570">#21570</a>). None of the open PRs are delivered until a human approves and merges them.</p>
+        </section>
+        <section aria-labelledby="work">
+            <h2 id="work">Work done: pull requests by repository</h2>
+            <p>“Checks green” means no failing or pending checks in the snapshot (passed or skipped only).
+                Merged and approved states come from GitHub; the “why” column summarizes each PR’s stated goal.</p>
+            <table>
+                <caption>microsoft/aspire: 1 merged, 7 approved, 8 newly ready, 6 draft, 112 ready in total</caption>
+                <thead><tr><th scope="col">PR</th><th scope="col">State at ~19:06 UTC</th><th scope="col">Why</th></tr></thead>
+                <tbody>
+                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire/pull/21581">#21581</a></th><td><strong>Merged</strong> 15:31 UTC (approved by JamesNK)</td><td>Cancels a blocked graceful signaler once the child process exits (<a href="https://github.com/microsoft/aspire/issues/18880">#18880</a>).</td></tr>
+                    <tr><th scope="row">7 approved PRs</th><td><strong>Approved</strong> by sebastienros on the current head (16:53–17:02 UTC); checks green; <strong>still blocked</strong></td><td><a href="https://github.com/microsoft/aspire/pull/21577">#21577</a>, <a href="https://github.com/microsoft/aspire/pull/21583">#21583</a>, <a href="https://github.com/microsoft/aspire/pull/21584">#21584</a>, <a href="https://github.com/microsoft/aspire/pull/21588">#21588</a>, <a href="https://github.com/microsoft/aspire/pull/21590">#21590</a>, <a href="https://github.com/microsoft/aspire/pull/21591">#21591</a>, <a href="https://github.com/microsoft/aspire/pull/21599">#21599</a>. No unresolved threads were found on <a href="https://github.com/microsoft/aspire/pull/21577">#21577</a>. The blocking rule is <strong>unknown</strong>; the main ruleset requires extra approval for unattributed changes, which may apply (not confirmed).</td></tr>
+                    <tr><th scope="row">4 former drafts</th><td>Draft → ready; checks green</td><td><a href="https://github.com/microsoft/aspire/pull/21586">#21586</a> <code>aspire update</code> SDK in other projects (<a href="https://github.com/microsoft/aspire/issues/11458">#11458</a>); <a href="https://github.com/microsoft/aspire/pull/21592">#21592</a> DNX CLI-path warning (<a href="https://github.com/microsoft/aspire/issues/19713">#19713</a>); <a href="https://github.com/microsoft/aspire/pull/21595">#21595</a> VS Code ps-follower (<a href="https://github.com/microsoft/aspire/issues/20869">#20869</a>); <a href="https://github.com/microsoft/aspire/pull/21596">#21596</a> Dashboard MetricsTests flake (<a href="https://github.com/microsoft/aspire/issues/21126">#21126</a>).</td></tr>
+                    <tr><th scope="row">3 new PRs</th><td>New; ready, awaiting review; checks green</td><td><a href="https://github.com/microsoft/aspire/pull/21598">#21598</a> describes the NuGet.config preview as proposed changes (<a href="https://github.com/microsoft/aspire/issues/19191">#19191</a>); <a href="https://github.com/microsoft/aspire/pull/21602">#21602</a> treats a backchannel close during stop as completed (<a href="https://github.com/microsoft/aspire/issues/21180">#21180</a>); <a href="https://github.com/microsoft/aspire/pull/21604">#21604</a> gives the Deno inspector attach the AppHost startup budget (<a href="https://github.com/microsoft/aspire/issues/21603">#21603</a>).</td></tr>
+                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire/pull/21599">#21599</a></th><td>New; ready; approved (in the 7 above); checks green</td><td>Fixes the flaky NuGetPackagePrefetcher cancellation-logging test (<a href="https://github.com/microsoft/aspire/issues/20507">#20507</a>).</td></tr>
+                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire/pull/21553">#21553</a></th><td>Ready; checks green; no approval</td><td>Prevents a BeforeStart interaction deadlock (<a href="https://github.com/microsoft/aspire/issues/11371">#11371</a>). JamesNK has commented; reviews are requested from mitchdenny, karolz-ms and danegsta.</td></tr>
+                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire/pull/21474">#21474</a></th><td>Ready; <strong>changes requested</strong> (karolz-ms, Oct 30) still open; checks green</td><td>Removes the flaky Go goroutine-count test as the reviewer suggested; awaits re-review.</td></tr>
+                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire/pull/21608">#21608</a></th><td>New draft; 0 failed, 2 running</td><td>Pins the Windows CI container runtime to Docker so DCP stops probing <code>wslc.exe</code> (<a href="https://github.com/microsoft/aspire/issues/21570">#21570</a>). The author reports that 45 of 57 main runs lost a Windows runner in 7 days, all in DCP-launching projects; not re-measured here.</td></tr>
+                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire/pull/21601">#21601</a></th><td>New draft; checks green</td><td>Prompts for omitted resource command inputs in the interactive CLI (<a href="https://github.com/microsoft/aspire/issues/18342">#18342</a>).</td></tr>
+                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire/pull/21597">#21597</a></th><td>New draft; <strong>4 failed</strong>, 1 running</td><td>Treats DCP <code>FailedToStart</code> as stopped (<a href="https://github.com/microsoft/aspire/issues/20750">#20750</a>). Overlaps davidfowl’s open <a href="https://github.com/microsoft/aspire/pull/21441">#21441</a> with the same fix title; which one should proceed is undecided.</td></tr>
+                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire/pull/21605">#21605</a></th><td>New draft; <strong>4 failed</strong>, 1 running</td><td>Surfaces ResourceReadyEvent subscriber failures (<a href="https://github.com/microsoft/aspire/issues/7590">#7590</a>). The author attributes the failures to infrastructure (npm-install timeouts, DCP watch drop); not verified here.</td></tr>
+                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire/pull/21609">#21609</a></th><td>New draft; <strong>3 failed</strong>, 2 running</td><td>Remaps <code>*.localhost</code> host names for containers (<a href="https://github.com/microsoft/aspire/issues/13130">#13130</a>). The author calls the failures known flakes (Hosting, MongoDB, VS Code Linux E2E); not verified here.</td></tr>
+                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire/pull/21576">#21576</a></th><td>Draft; 119 checks running</td><td>Stops counting <code>[sys]</code> lines toward <code>aspire logs --tail</code> (<a href="https://github.com/microsoft/aspire/issues/17699">#17699</a>).</td></tr>
+                    <tr><th scope="row">96 earlier PRs</th><td>Ready, awaiting review; checks green</td><td><a href="https://github.com/microsoft/aspire/pull/21397">#21397</a>, <a href="https://github.com/microsoft/aspire/pull/21417">#21417</a>, <a href="https://github.com/microsoft/aspire/pull/21424">#21424</a>, <a href="https://github.com/microsoft/aspire/pull/21426">#21426</a>, <a href="https://github.com/microsoft/aspire/pull/21428">#21428</a>, <a href="https://github.com/microsoft/aspire/pull/21430">#21430</a>, <a href="https://github.com/microsoft/aspire/pull/21431">#21431</a>, <a href="https://github.com/microsoft/aspire/pull/21433">#21433</a>, <a href="https://github.com/microsoft/aspire/pull/21434">#21434</a>, <a href="https://github.com/microsoft/aspire/pull/21437">#21437</a>, <a href="https://github.com/microsoft/aspire/pull/21438">#21438</a>, <a href="https://github.com/microsoft/aspire/pull/21439">#21439</a>, <a href="https://github.com/microsoft/aspire/pull/21440">#21440</a>, <a href="https://github.com/microsoft/aspire/pull/21441">#21441</a>, <a href="https://github.com/microsoft/aspire/pull/21442">#21442</a>, <a href="https://github.com/microsoft/aspire/pull/21445">#21445</a>, <a href="https://github.com/microsoft/aspire/pull/21446">#21446</a>, <a href="https://github.com/microsoft/aspire/pull/21447">#21447</a>, <a href="https://github.com/microsoft/aspire/pull/21448">#21448</a>, <a href="https://github.com/microsoft/aspire/pull/21450">#21450</a>, <a href="https://github.com/microsoft/aspire/pull/21451">#21451</a>, <a href="https://github.com/microsoft/aspire/pull/21453">#21453</a>, <a href="https://github.com/microsoft/aspire/pull/21456">#21456</a>, <a href="https://github.com/microsoft/aspire/pull/21457">#21457</a>, <a href="https://github.com/microsoft/aspire/pull/21458">#21458</a>, <a href="https://github.com/microsoft/aspire/pull/21459">#21459</a>, <a href="https://github.com/microsoft/aspire/pull/21461">#21461</a>, <a href="https://github.com/microsoft/aspire/pull/21466">#21466</a>, <a href="https://github.com/microsoft/aspire/pull/21471">#21471</a>, <a href="https://github.com/microsoft/aspire/pull/21473">#21473</a>, <a href="https://github.com/microsoft/aspire/pull/21475">#21475</a>, <a href="https://github.com/microsoft/aspire/pull/21476">#21476</a>, <a href="https://github.com/microsoft/aspire/pull/21477">#21477</a>, <a href="https://github.com/microsoft/aspire/pull/21478">#21478</a>, <a href="https://github.com/microsoft/aspire/pull/21480">#21480</a>, <a href="https://github.com/microsoft/aspire/pull/21481">#21481</a>, <a href="https://github.com/microsoft/aspire/pull/21485">#21485</a>, <a href="https://github.com/microsoft/aspire/pull/21486">#21486</a>, <a href="https://github.com/microsoft/aspire/pull/21487">#21487</a>, <a href="https://github.com/microsoft/aspire/pull/21492">#21492</a>, <a href="https://github.com/microsoft/aspire/pull/21497">#21497</a>, <a href="https://github.com/microsoft/aspire/pull/21499">#21499</a>, <a href="https://github.com/microsoft/aspire/pull/21500">#21500</a>, <a href="https://github.com/microsoft/aspire/pull/21502">#21502</a>, <a href="https://github.com/microsoft/aspire/pull/21503">#21503</a>, <a href="https://github.com/microsoft/aspire/pull/21504">#21504</a>, <a href="https://github.com/microsoft/aspire/pull/21505">#21505</a>, <a href="https://github.com/microsoft/aspire/pull/21507">#21507</a>, <a href="https://github.com/microsoft/aspire/pull/21508">#21508</a>, <a href="https://github.com/microsoft/aspire/pull/21510">#21510</a>, <a href="https://github.com/microsoft/aspire/pull/21511">#21511</a>, <a href="https://github.com/microsoft/aspire/pull/21512">#21512</a>, <a href="https://github.com/microsoft/aspire/pull/21514">#21514</a>, <a href="https://github.com/microsoft/aspire/pull/21516">#21516</a>, <a href="https://github.com/microsoft/aspire/pull/21517">#21517</a>, <a href="https://github.com/microsoft/aspire/pull/21518">#21518</a>, <a href="https://github.com/microsoft/aspire/pull/21519">#21519</a>, <a href="https://github.com/microsoft/aspire/pull/21521">#21521</a>, <a href="https://github.com/microsoft/aspire/pull/21522">#21522</a>, <a href="https://github.com/microsoft/aspire/pull/21523">#21523</a>, <a href="https://github.com/microsoft/aspire/pull/21524">#21524</a>, <a href="https://github.com/microsoft/aspire/pull/21525">#21525</a>, <a href="https://github.com/microsoft/aspire/pull/21526">#21526</a>, <a href="https://github.com/microsoft/aspire/pull/21528">#21528</a>, <a href="https://github.com/microsoft/aspire/pull/21530">#21530</a>, <a href="https://github.com/microsoft/aspire/pull/21531">#21531</a>, <a href="https://github.com/microsoft/aspire/pull/21533">#21533</a>, <a href="https://github.com/microsoft/aspire/pull/21534">#21534</a>, <a href="https://github.com/microsoft/aspire/pull/21536">#21536</a>, <a href="https://github.com/microsoft/aspire/pull/21537">#21537</a>, <a href="https://github.com/microsoft/aspire/pull/21538">#21538</a>, <a href="https://github.com/microsoft/aspire/pull/21539">#21539</a>, <a href="https://github.com/microsoft/aspire/pull/21541">#21541</a>, <a href="https://github.com/microsoft/aspire/pull/21542">#21542</a>, <a href="https://github.com/microsoft/aspire/pull/21543">#21543</a>, <a href="https://github.com/microsoft/aspire/pull/21544">#21544</a>, <a href="https://github.com/microsoft/aspire/pull/21545">#21545</a>, <a href="https://github.com/microsoft/aspire/pull/21546">#21546</a>, <a href="https://github.com/microsoft/aspire/pull/21547">#21547</a>, <a href="https://github.com/microsoft/aspire/pull/21548">#21548</a>, <a href="https://github.com/microsoft/aspire/pull/21549">#21549</a>, <a href="https://github.com/microsoft/aspire/pull/21554">#21554</a>, <a href="https://github.com/microsoft/aspire/pull/21555">#21555</a>, <a href="https://github.com/microsoft/aspire/pull/21556">#21556</a>, <a href="https://github.com/microsoft/aspire/pull/21558">#21558</a>, <a href="https://github.com/microsoft/aspire/pull/21561">#21561</a>, <a href="https://github.com/microsoft/aspire/pull/21562">#21562</a>, <a href="https://github.com/microsoft/aspire/pull/21565">#21565</a>, <a href="https://github.com/microsoft/aspire/pull/21566">#21566</a>, <a href="https://github.com/microsoft/aspire/pull/21569">#21569</a>, <a href="https://github.com/microsoft/aspire/pull/21571">#21571</a>, <a href="https://github.com/microsoft/aspire/pull/21573">#21573</a>, <a href="https://github.com/microsoft/aspire/pull/21574">#21574</a>, <a href="https://github.com/microsoft/aspire/pull/21575">#21575</a>, <a href="https://github.com/microsoft/aspire/pull/21579">#21579</a>, <a href="https://github.com/microsoft/aspire/pull/21594">#21594</a>.</td></tr>
+                </tbody>
+            </table>
+            <table>
+                <caption>microsoft/aspire.dev: 0 merged, 1 newly ready, 16 ready in total</caption>
+                <thead><tr><th scope="col">PR</th><th scope="col">State at ~19:02 UTC</th><th scope="col">Why</th></tr></thead>
+                <tbody>
+                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire.dev/pull/2011">#2011</a></th><td>New; ready, awaiting review; checks green</td><td>Fixes broken links and a raw INCLUDE in What’s new 9.4/9.5.</td></tr>
+                    <tr><th scope="row">15 earlier PRs</th><td>Ready, awaiting review; checks green</td><td><a href="https://github.com/microsoft/aspire.dev/pull/1984">#1984</a>, <a href="https://github.com/microsoft/aspire.dev/pull/1988">#1988</a>, <a href="https://github.com/microsoft/aspire.dev/pull/1989">#1989</a>, <a href="https://github.com/microsoft/aspire.dev/pull/1990">#1990</a>, <a href="https://github.com/microsoft/aspire.dev/pull/1995">#1995</a>, <a href="https://github.com/microsoft/aspire.dev/pull/2001">#2001</a>, <a href="https://github.com/microsoft/aspire.dev/pull/2002">#2002</a>, <a href="https://github.com/microsoft/aspire.dev/pull/2003">#2003</a>, <a href="https://github.com/microsoft/aspire.dev/pull/2004">#2004</a>, <a href="https://github.com/microsoft/aspire.dev/pull/2005">#2005</a>, <a href="https://github.com/microsoft/aspire.dev/pull/2006">#2006</a>, <a href="https://github.com/microsoft/aspire.dev/pull/2007">#2007</a>, <a href="https://github.com/microsoft/aspire.dev/pull/2008">#2008</a>, <a href="https://github.com/microsoft/aspire.dev/pull/2009">#2009</a>, <a href="https://github.com/microsoft/aspire.dev/pull/2010">#2010</a>.</td></tr>
+                </tbody>
+            </table>
+            <table>
+                <caption>microsoft/aspire-skills: 0 merged, 2 newly ready, 11 ready in total</caption>
+                <thead><tr><th scope="col">PR</th><th scope="col">State at ~19:02 UTC</th><th scope="col">Why</th></tr></thead>
+                <tbody>
+                    <tr><th scope="row">2 new PRs</th><td>New; ready, awaiting review; checks green</td><td><a href="https://github.com/microsoft/aspire-skills/pull/138">#138</a> <code>aspire new</code> options table (<code>--version</code> has no <code>-v</code>); <a href="https://github.com/microsoft/aspire-skills/pull/140">#140</a> retired docs slugs in Aspireify auto-managed checks.</td></tr>
+                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire-skills/pull/132">#132</a></th><td>Ready; mergeable again; all 7 checks green, including the ci-gate eval</td><td>Moves deployment/init/monitoring evals off an unavailable model.</td></tr>
+                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire-skills/pull/139">#139</a></th><td>Draft; ci-gate eval <strong>failed</strong></td><td>Fixes the <code>aspire describe</code> jq endpoint path; the coordinator keeps it draft until <a href="https://github.com/microsoft/aspire-skills/pull/132">#132</a> merges.</td></tr>
+                    <tr><th scope="row">4 earlier PRs</th><td>Ready, awaiting review; checks green</td><td><a href="https://github.com/microsoft/aspire-skills/pull/134">#134</a>, <a href="https://github.com/microsoft/aspire-skills/pull/135">#135</a>, <a href="https://github.com/microsoft/aspire-skills/pull/136">#136</a>, <a href="https://github.com/microsoft/aspire-skills/pull/137">#137</a>: Aspireify C# and AWS example fixes and experimental-API suppressions.</td></tr>
+                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire-skills/pull/125">#125</a></th><td>Ready; <strong>approved</strong> (spboyer); <strong>merge conflict</strong></td><td>Private endpoint API docs; needs a rebase.</td></tr>
+                    <tr><th scope="row"><a href="https://github.com/microsoft/aspire-skills/pull/130">#130</a></th><td>Ready; <strong>changes requested</strong> (spboyer); merge conflict</td><td>TypeScript AppHost <code>package.json</code> guidance; reviewer feedback not yet addressed.</td></tr>
+                    <tr><th scope="row">2 PRs</th><td>Ready; <strong>merge conflict</strong></td><td><a href="https://github.com/microsoft/aspire-skills/pull/129">#129</a> Aspireify TypeScript examples; <a href="https://github.com/microsoft/aspire-skills/pull/131">#131</a> deploy CI SDK restore; both need rebases.</td></tr>
+                </tbody>
+            </table>
+        </section>
+        <section aria-labelledby="impact">
+            <h2 id="impact">Measured impact</h2>
+            <p>From the flaky-test tracker <a href="https://github.com/microsoft/aspire/issues/21600">#21600</a> (regenerated 16:13 UTC; window Oct 16 00:12 to Oct 31 16:13 UTC):</p>
+            <ul>
+                <li>main first-attempt pass rate: 24h <strong>11.1%</strong> (1/9); 7d <strong>1.8%</strong> (1/56).</li>
+                <li>PR first-attempt pass rate: 24h <strong>37.8%</strong> (54/143); 7d <strong>30.0%</strong> (128/426).</li>
+                <li>Distinct flaky tests failing (seen on ≥2 branches or on main): 24h <strong>83</strong>; 7d <strong>212</strong>; target 0.</li>
+            </ul>
+            <p>These are the tracker’s numbers; this report did not re-measure them. One fix (<a href="https://github.com/microsoft/aspire/pull/21581">#21581</a>) reached main this window.</p>
+        </section>
+        <section aria-labelledby="investigations">
+            <h2 id="investigations">Investigations and unknowns</h2>
+            <p><strong>Approved but blocked:</strong> 7 aspire PRs have a current-head approval and green required checks, but GitHub reports them as blocked. The cause is unknown.</p>
+            <p><strong>Draft failures</strong> on <a href="https://github.com/microsoft/aspire/pull/21597">#21597</a>, <a href="https://github.com/microsoft/aspire/pull/21605">#21605</a> and <a href="https://github.com/microsoft/aspire/pull/21609">#21609</a>: the authors attribute them to known flakes or infrastructure; this report did not verify that.</p>
+            <p><strong>Overlap:</strong> <a href="https://github.com/microsoft/aspire/pull/21597">#21597</a> and davidfowl’s <a href="https://github.com/microsoft/aspire/pull/21441">#21441</a> both fix DCP <code>FailedToStart</code> handling.</p>
+        </section>
+        <section aria-labelledby="blockers">
+            <h2 id="blockers">Blockers and next actions</h2>
+            <dl>
+                <dt>Merge gate</dt>
+                <dd>Find out what still blocks the 7 approved aspire PRs; 105 other ready aspire PRs, 16 aspire.dev PRs and 11 aspire-skills PRs need review.</dd>
+                <dt>External dependency</dt>
+                <dd>The macOS test-host hang family waits on a public .NET 11 SDK that contains dotnet/runtime#135409. That PR merged to release/11.0 on Oct 14; whether a public SDK includes it is not verified here.</dd>
+                <dt>Rebases and re-review</dt>
+                <dd>aspire-skills <a href="https://github.com/microsoft/aspire-skills/pull/125">#125</a>, <a href="https://github.com/microsoft/aspire-skills/pull/129">#129</a>, <a href="https://github.com/microsoft/aspire-skills/pull/130">#130</a>, <a href="https://github.com/microsoft/aspire-skills/pull/131">#131</a> conflict with main; <a href="https://github.com/microsoft/aspire/pull/21474">#21474</a> needs karolz-ms; <a href="https://github.com/microsoft/aspire-skills/pull/130">#130</a> needs spboyer’s feedback addressed.</dd>
+                <dt>Decision</dt>
+                <dd>Choose between <a href="https://github.com/microsoft/aspire/pull/21597">#21597</a> and <a href="https://github.com/microsoft/aspire/pull/21441">#21441</a>.</dd>
+            </dl>
+        </section>
+        <section aria-labelledby="final">
+            <h2 id="final">Final results</h2>
+            <p>Merged this window: <strong>1</strong> (aspire #21581). Open and ready: <strong>139</strong> (aspire 112, aspire.dev 16,
+                aspire-skills 11), of which 8 approved (aspire 7, aspire-skills #125). Draft: <strong>7</strong> (aspire #21576, #21597, #21601, #21605, #21608, #21609;
+                aspire-skills #139). Drafts with failing checks: 4 (#21597, #21605, #21609, skills #139). Merge conflicts: 4 (aspire-skills).</p>
+        </section>
+        <section aria-labelledby="publication">
+            <h2 id="publication">Publication and evidence limits</h2>
+            <p>This latest-only report updates <code>reports/latest.html</code> on the reusable
+                <a href="https://github.com/microsoft/aspire/pull/21391">explicit draft PR #21391</a>.
+                It is <strong>branch source only</strong>, not merged main content, deployment or a hosted rendered page;
+                GitHub Pages is disabled. This report head’s own CI is tracked in that PR.
+                Open PRs created before October 29 and PRs by other authors are outside this report.</p>
+        </section>
+    </main>
+    <footer><p><strong>&#129302; Posted by AspireAgent (AI Agent)</strong></p></footer>
+</body>
+</html>
