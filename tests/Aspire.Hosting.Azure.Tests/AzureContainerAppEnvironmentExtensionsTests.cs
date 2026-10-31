@@ -6,6 +6,7 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.AppContainers;
+using Aspire.Hosting.Pipelines;
 using System.Runtime.CompilerServices;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -571,6 +572,38 @@ public class AzureContainerAppEnvironmentExtensionsTests(ITestOutputHelper outpu
 
         await Verify(mainBicep, "bicep")
             .AppendContentAsFile(envBicep, "bicep");
+    }
+
+    [Fact]
+    public async Task PipelineStepCanDependOnContainerAppJobProvisioningStep()
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/20301.
+        // The 'provision-{name}-containerapp' step only exists after BeforeStart materializes the
+        // deployment target, so BeforeStart must not reject a step that depends on it. The publish
+        // pipeline then validates the full step graph, including this dependency.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper, workspace.Path);
+
+        builder.AddAzureContainerAppEnvironment("env");
+        builder.AddContainer("myjob", "busybox")
+            .PublishAsAzureContainerAppJob();
+
+        builder.Pipeline.AddStep(
+            name: "start-myjob",
+            action: _ => Task.CompletedTask,
+            dependsOn: "provision-myjob-containerapp",
+            requiredBy: WellKnownPipelineSteps.Deploy);
+
+        using var app = builder.Build();
+
+        // Publishing will stop the app when it is done.
+        await app.RunAsync();
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var job = Assert.Single(model.Resources, r => r.Name == "myjob");
+        Assert.Equal("myjob-containerapp", job.GetDeploymentTargetAnnotation()?.DeploymentTarget.Name);
+        Assert.True(File.Exists(Path.Combine(workspace.Path, "main.bicep")));
     }
 
     [Fact]

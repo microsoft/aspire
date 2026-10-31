@@ -2276,6 +2276,83 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     }
 
     [Fact]
+    public async Task ExecuteStepSequentiallyAsync_StepOutsideTargetClosureDependsOnStepMaterializedByTarget_Succeeds()
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/20301.
+        // Deployment targets (and their provisioning steps) are materialized while the
+        // before-start step runs, so a user step that depends on one of those steps must not
+        // fail before-start validation. Its dependency is validated once the full pipeline runs.
+        using var builder = CreatePipelineTestBuilder();
+        var executionOrder = new List<string>();
+        var materialized = false;
+        builder.AddResource(new CustomResource("compute"))
+            .WithAnnotation(new PipelineStepAnnotation(_ => materialized
+                ? [new PipelineStep
+                {
+                    Name = "provision-compute",
+                    Action = _ =>
+                    {
+                        executionOrder.Add("provision-compute");
+                        return Task.CompletedTask;
+                    }
+                }]
+                : []));
+        using var app = builder.Build();
+        var pipeline = new DistributedApplicationPipeline();
+
+        pipeline.AddStep("prepare-targets", _ =>
+        {
+            executionOrder.Add("prepare-targets");
+            materialized = true;
+            return Task.CompletedTask;
+        }, requiredBy: WellKnownPipelineSteps.BeforeStart);
+        pipeline.AddStep("start-job", _ =>
+        {
+            executionOrder.Add("start-job");
+            return Task.CompletedTask;
+        }, dependsOn: "provision-compute");
+
+        await pipeline.Clone().ExecuteStepSequentiallyAsync(WellKnownPipelineSteps.BeforeStart, CreateDeployingContext(app)).DefaultTimeout();
+
+        Assert.Equal(["prepare-targets"], executionOrder);
+
+        // Once the deployment target exists, the dependency resolves and runs first.
+        await pipeline.ExecuteStepSequentiallyAsync("start-job", CreateDeployingContext(app)).DefaultTimeout();
+
+        Assert.Equal(["prepare-targets", "provision-compute", "start-job"], executionOrder);
+    }
+
+    [Fact]
+    public async Task ExecuteStepSequentiallyAsync_StepInTargetClosureDependsOnUnknownStep_Throws()
+    {
+        using var builder = CreatePipelineTestBuilder();
+        using var app = builder.Build();
+        var pipeline = new DistributedApplicationPipeline();
+        pipeline.AddStep("step1", _ => Task.CompletedTask, dependsOn: "unknown-step", requiredBy: "target");
+        pipeline.AddStep("target", _ => Task.CompletedTask);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => pipeline.ExecuteStepSequentiallyAsync("target", CreateDeployingContext(app))).DefaultTimeout();
+
+        Assert.Equal("Step 'step1' depends on unknown step 'unknown-step'", exception.Message);
+    }
+
+    [Fact]
+    public async Task ExecuteStepSequentiallyAsync_StepInTargetClosureRequiredByUnknownStep_Throws()
+    {
+        using var builder = CreatePipelineTestBuilder();
+        using var app = builder.Build();
+        var pipeline = new DistributedApplicationPipeline();
+        pipeline.AddStep("step1", _ => Task.CompletedTask, requiredBy: new[] { "target", "unknown-step" });
+        pipeline.AddStep("target", _ => Task.CompletedTask);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => pipeline.ExecuteStepSequentiallyAsync("target", CreateDeployingContext(app))).DefaultTimeout();
+
+        Assert.Equal("Step 'step1' is required by unknown step 'unknown-step'", exception.Message);
+    }
+
+    [Fact]
     public async Task ExecuteStepSequentiallyAsync_WithMultipleFinalActions_ExecutesInRegistrationOrder()
     {
         using var builder = CreatePipelineTestBuilder();
