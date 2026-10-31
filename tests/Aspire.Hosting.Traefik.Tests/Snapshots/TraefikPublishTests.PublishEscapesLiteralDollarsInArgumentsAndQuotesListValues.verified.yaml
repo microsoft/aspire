@@ -1,0 +1,93 @@
+﻿services:
+  traefik:
+    image: "docker.io/library/traefik:v3.7"
+    command:
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.traefik.address=:8080"
+      - "--entrypoints.websecure.http.tls.certresolver=letsencrypt"
+      - "--global.checknewversion=false"
+      - "--global.sendanonymoususage=false"
+      - "--ping=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.constraints=Label(`aspire.traefik.traefik`, `true`)"
+      - "--certificatesresolvers.letsencrypt.acme.email=ops$$team@example.com"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
+    ports:
+      - "80:80"
+      - "443:443"
+    expose:
+      - "8080"
+    volumes:
+      - type: "bind"
+        target: "/var/run/docker.sock"
+        source: "/var/run/docker.sock"
+        read_only: true
+      - type: "volume"
+        target: "/letsencrypt"
+        source: "aspire.hosting.testutilities-0123456789-traefik-letsencrypt"
+        read_only: false
+    networks:
+      - "aspire"
+  sso-proxy:
+    image: "quay.io/oauth2-proxy/oauth2-proxy:v7.15.5"
+    command:
+      - "--http-address=0.0.0.0:4180"
+      - "--proxy-prefix=/oauth2"
+      - "--provider=oidc"
+      - "--client-id=client$$id"
+      - "--oidc-issuer-url=https://login.${DOMAIN}/$$realm"
+      - "--upstream=static://202"
+      - "--reverse-proxy=true"
+      - "--set-xauthrequest=true"
+      - "--skip-provider-button=true"
+      - "--code-challenge-method=S256"
+      - "--cookie-secure=true"
+      - "--email-domain=*"
+      - "--allowed-group=\"cn=admins,ou=groups\""
+      - "--allowed-group=\"say \"\"hi\"\"\""
+      - "--whitelist-domain=app.${DOMAIN}"
+      - "--banner=Costs $${PRICE}"
+    environment:
+      OAUTH2_PROXY_CLIENT_SECRET: "${CLIENT_SECRET}"
+      OAUTH2_PROXY_COOKIE_SECRET: "${SSO_COOKIE_SECRET}"
+    expose:
+      - "4180"
+    networks:
+      - "aspire"
+    labels:
+      traefik.enable: "true"
+      aspire.traefik.traefik: "true"
+      traefik.http.routers.sso-proxy-1.rule: "Host(`app.${DOMAIN}`) && PathPrefix(`/oauth2`)"
+      traefik.http.routers.sso-proxy-1.entrypoints: "websecure"
+      traefik.http.routers.sso-proxy-1.service: "sso-proxy-1"
+      traefik.http.routers.sso-proxy-1.priority: "1000000"
+      traefik.http.routers.sso-proxy-1.tls: "true"
+      traefik.http.routers.sso-proxy-1.tls.certresolver: "letsencrypt"
+      traefik.http.services.sso-proxy-1.loadbalancer.server.port: "4180"
+  app:
+    image: "myregistry/app:latest"
+    expose:
+      - "8080"
+    networks:
+      - "aspire"
+    labels:
+      traefik.enable: "true"
+      aspire.traefik.traefik: "true"
+      traefik.http.routers.app.rule: "Host(`app.${DOMAIN}`)"
+      traefik.http.routers.app.entrypoints: "websecure"
+      traefik.http.routers.app.service: "app"
+      traefik.http.routers.app.tls: "true"
+      traefik.http.routers.app.tls.certresolver: "letsencrypt"
+      traefik.http.routers.app.middlewares: "sso"
+      traefik.http.middlewares.sso.forwardAuth.address: "http://sso-proxy:4180/"
+      traefik.http.middlewares.sso.forwardAuth.authResponseHeaders: "X-Auth-Request-User,X-Auth-Request-Email,X-Auth-Request-Preferred-Username,X-Auth-Request-Groups"
+      traefik.http.services.app.loadbalancer.server.port: "8080"
+networks:
+  aspire:
+    driver: "bridge"
+volumes:
+  aspire.hosting.testutilities-0123456789-traefik-letsencrypt:
+    driver: "local"

@@ -1,0 +1,83 @@
+﻿http:
+  middlewares:
+    strip:
+      stripPrefix:
+        prefixes:
+        - /api
+        - /v1
+    strip-regex:
+      stripPrefixRegex:
+        regex:
+        - /users/[a-z0-9]+
+    add-prefix:
+      addPrefix:
+        prefix: /backend
+    replace-path:
+      replacePath:
+        path: /health
+    replace-path-regex:
+      replacePathRegex:
+        regex: ^/v1/(.*)
+        replacement: /$1
+    to-https:
+      redirectScheme:
+        scheme: https
+        permanent: true
+        port: "8443"
+    no-www:
+      redirectRegex:
+        regex: ^https://www\.(.*)
+        replacement: https://$1
+        permanent: true
+    cors:
+      headers:
+        customRequestHeaders:
+          X-Forwarded-Proto: https
+        customResponseHeaders:
+          Server: ""
+        accessControlAllowOriginList:
+        - https://app.example.com
+        accessControlAllowMethods:
+        - GET
+        - POST
+        accessControlMaxAge: 600
+    security:
+      headers:
+        stsSeconds: 31536000
+        frameDeny: true
+        contentTypeNosniff: true
+        referrerPolicy: strict-origin-when-cross-origin
+        contentSecurityPolicy: default-src 'self'
+    compress:
+      compress: {}
+    retry:
+      retry:
+        attempts: 3
+        initialInterval: 250ms
+    breaker:
+      circuitBreaker:
+        expression: NetworkErrorRatio() > 0.30
+    upload-limit:
+      buffering:
+        maxRequestBodyBytes: 10485760
+    in-flight:
+      inFlightReq:
+        amount: 50
+    rate:
+      rateLimit:
+        average: 100
+        burst: 50
+        period: 60s
+    office:
+      ipAllowList:
+        sourceRange:
+        - 10.0.0.0/8
+        - 192.168.1.7
+    auth:
+      basicAuth:
+        users:
+        - admin:$2y$05$abcdefghijklmnopqrstuv
+    dev-auth:
+      basicAuth:
+        users:
+        - admin:{SHA}W6ph5Mm5Pz8GgiULbPgzG37mj9g=

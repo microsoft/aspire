@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <IsPackable>true</IsPackable>
+    <PackageTags>aspire integration hosting traefik reverse-proxy ingress</PackageTags>
+    <Description>Traefik Proxy support for Aspire.</Description>
+    <!-- No shipped baseline exists until the first release. -->
+    <EnablePackageValidation>false</EnablePackageValidation>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <MinCodeCoverage>0</MinCodeCoverage>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="$(SharedDir)KnownEndpointNames.cs" LinkBase="Shared" />
+    <Compile Include="$(SharedDir)KnownResourceNames.cs" LinkBase="Shared" />
+    <Compile Include="$(SharedDir)StringComparers.cs" LinkBase="Shared" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Aspire.Hosting\Aspire.Hosting.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.Docker\Aspire.Hosting.Docker.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="YamlDotNet" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Aspire.Hosting.Traefik.Tests" />
+  </ItemGroup>
+
+</Project>

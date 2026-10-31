@@ -1,0 +1,20 @@
+﻿services:
+  api:
+    image: "myregistry/api:latest"
+    expose:
+      - "8080"
+    networks:
+      - "aspire"
+      - "traefik-public"
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.api.rule: "Host(`api.example.com`)"
+      traefik.http.routers.api.entrypoints: "websecure"
+      traefik.http.routers.api.service: "api"
+      traefik.http.services.api.loadbalancer.server.port: "8080"
+      traefik.docker.network: "traefik-public"
+networks:
+  aspire:
+    driver: "bridge"
+  traefik-public:
+    external: true

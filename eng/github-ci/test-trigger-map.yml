@@ -675,6 +675,7 @@ affected_project_rules:
       - Aspire.Hosting.Redis
       - Aspire.Hosting.Seq
       - Aspire.Hosting.SqlServer
+      - Aspire.Hosting.Traefik
       - Aspire.Hosting.Valkey
       - Aspire.Hosting.Yarp
     targets: [job:polyglot]

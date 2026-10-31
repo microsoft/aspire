@@ -84,6 +84,7 @@
     <Project Path="src/Aspire.Hosting.Seq/Aspire.Hosting.Seq.csproj" />
     <Project Path="src/Aspire.Hosting.SqlServer/Aspire.Hosting.SqlServer.csproj" />
     <Project Path="src/Aspire.Hosting.Tasks/Aspire.Hosting.Tasks.csproj" />
+    <Project Path="src/Aspire.Hosting.Traefik/Aspire.Hosting.Traefik.csproj" />
     <Project Path="src/Aspire.Hosting.Valkey/Aspire.Hosting.Valkey.csproj" />
     <Project Path="src/Aspire.Hosting.Yarp/Aspire.Hosting.Yarp.csproj" />
     <Project Path="src/Aspire.Hosting/Aspire.Hosting.csproj" />
@@ -478,6 +479,10 @@
     <Project Path="playground/webpubsub/WebPubSub.AppHost/WebPubSub.AppHost.csproj" />
     <Project Path="playground/webpubsub/WebPubSubWeb/WebPubSubWeb.csproj" />
   </Folder>
+  <Folder Name="/playground/traefik/">
+    <Project Path="playground/traefik/Traefik.Api/Traefik.Api.csproj" Id="dab2fb92-c982-4029-affc-c41ead645ffd" />
+    <Project Path="playground/traefik/Traefik.AppHost/Traefik.AppHost.csproj" Id="aabb8eb7-e7f3-4592-b3da-43c2a1682de6" />
+  </Folder>
   <Folder Name="/playground/yarp/">
     <Project Path="playground/yarp/Yarp.AppHost/Yarp.AppHost.csproj" Id="8dcffdd3-e0d3-44cc-8fb7-6d7a3db2e1d5" />
     <Project Path="playground/yarp/Yarp.Backend/Yarp.Backend.csproj" Id="1a96af46-9332-4e00-9202-fb00bd7d37b3" />
@@ -621,6 +626,7 @@
     <Project Path="tests/Aspire.Hosting.Testing.Tests/Aspire.Hosting.Testing.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Tests/Aspire.Hosting.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.TestUtilities/Aspire.Hosting.TestUtilities.csproj" />
+    <Project Path="tests/Aspire.Hosting.Traefik.Tests/Aspire.Hosting.Traefik.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Valkey.Tests/Aspire.Hosting.Valkey.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Yarp.Tests/Aspire.Hosting.Yarp.Tests.csproj" />
     <Project Path="tests/Aspire.TerminalHost.Tests/Aspire.TerminalHost.Tests.csproj" />

@@ -1,0 +1,27 @@
+﻿{
+  Args: [
+    --http-address=0.0.0.0:4180,
+    --proxy-prefix=/oauth2,
+    --provider=keycloak-oidc,
+    --client-id=oauth2-proxy,
+    --oidc-issuer-url=http://auth.dev.localhost:8000/realms/demo,
+    --skip-oidc-discovery=true,
+    --login-url=http://auth.dev.localhost:8000/realms/demo/protocol/openid-connect/auth,
+    --redeem-url=http://keycloak:8080/realms/demo/protocol/openid-connect/token,
+    --oidc-jwks-url=http://keycloak:8080/realms/demo/protocol/openid-connect/certs,
+    --upstream=static://202,
+    --reverse-proxy=true,
+    --set-xauthrequest=true,
+    --skip-provider-button=true,
+    --code-challenge-method=S256,
+    --cookie-secure=false,
+    --email-domain=*,
+    --allowed-group=admins,
+    --insecure-oidc-allow-unverified-email=true,
+    --whitelist-domain=admin.dev.localhost:*,
+    --whitelist-domain=admin2.dev.localhost:*
+  ],
+  KeycloakHostname: http://auth.dev.localhost:8000,
+  KeycloakBackchannel: true,
+  KeycloakProxyHeaders: xforwarded
+}

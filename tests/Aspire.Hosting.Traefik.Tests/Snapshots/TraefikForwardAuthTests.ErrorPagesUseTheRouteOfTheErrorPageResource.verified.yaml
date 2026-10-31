@@ -1,0 +1,31 @@
+﻿http:
+  routers:
+    error-pages:
+      rule: Host(`errors.dev.localhost`)
+      entryPoints:
+      - web
+      service: error-pages
+    api:
+      rule: Host(`api.dev.localhost`)
+      entryPoints:
+      - web
+      service: api
+      middlewares:
+      - errors
+  services:
+    error-pages:
+      loadBalancer:
+        servers:
+        - url: http://pages:80
+    api:
+      loadBalancer:
+        servers:
+        - url: http://api:8080
+  middlewares:
+    errors:
+      errors:
+        status:
+        - 500-599
+        - "404"
+        query: /{status}.html
+        service: error-pages

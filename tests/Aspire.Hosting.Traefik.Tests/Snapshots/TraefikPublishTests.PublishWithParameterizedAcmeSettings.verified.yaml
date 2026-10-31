@@ -1,0 +1,55 @@
+﻿services:
+  traefik:
+    image: "docker.io/library/traefik:v3.7"
+    command:
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.traefik.address=:8080"
+      - "--entrypoints.websecure.http.tls.certresolver=letsencrypt"
+      - "--global.checknewversion=false"
+      - "--global.sendanonymoususage=false"
+      - "--ping=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.constraints=Label(`aspire.traefik.traefik`, `true`)"
+      - "--certificatesresolvers.letsencrypt.acme.email=admin@${DOMAIN}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.caserver=${ACME_CA_SERVER}"
+    ports:
+      - "80:80"
+      - "443:443"
+    expose:
+      - "8080"
+    volumes:
+      - type: "bind"
+        target: "/var/run/docker.sock"
+        source: "/var/run/docker.sock"
+        read_only: true
+      - type: "volume"
+        target: "/letsencrypt"
+        source: "aspire.hosting.testutilities-0123456789-traefik-letsencrypt"
+        read_only: false
+    networks:
+      - "aspire"
+  whoami:
+    image: "traefik/whoami:latest"
+    expose:
+      - "80"
+    networks:
+      - "aspire"
+    labels:
+      traefik.enable: "true"
+      aspire.traefik.traefik: "true"
+      traefik.http.routers.whoami.rule: "Host(`whoami.${DOMAIN}`)"
+      traefik.http.routers.whoami.entrypoints: "websecure"
+      traefik.http.routers.whoami.service: "whoami"
+      traefik.http.routers.whoami.tls: "true"
+      traefik.http.routers.whoami.tls.certresolver: "letsencrypt"
+      traefik.http.services.whoami.loadbalancer.server.port: "80"
+networks:
+  aspire:
+    driver: "bridge"
+volumes:
+  aspire.hosting.testutilities-0123456789-traefik-letsencrypt:
+    driver: "local"

@@ -1,0 +1,85 @@
+﻿services:
+  traefik:
+    image: "docker.io/library/traefik:v3.7"
+    command:
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.traefik.address=:8080"
+      - "--entrypoints.amqps.address=:5671"
+      - "--entrypoints.dns.address=:53/udp"
+      - "--entrypoints.dns-tcp.address=:53"
+      - "--entrypoints.websecure.http.tls.certresolver=letsencrypt"
+      - "--global.checknewversion=false"
+      - "--global.sendanonymoususage=false"
+      - "--ping=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.constraints=Label(`aspire.traefik.traefik`, `true`)"
+      - "--certificatesresolvers.letsencrypt.acme.email=admin@example.com"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
+      - "--certificatesresolvers.le-dns.acme.email=admin@example.com"
+      - "--certificatesresolvers.le-dns.acme.storage=/letsencrypt/acme.json"
+      - "--certificatesresolvers.le-dns.acme.tlschallenge=true"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "5671:5671"
+      - "53:53"
+      - "53:53/udp"
+    expose:
+      - "8080"
+    volumes:
+      - type: "bind"
+        target: "/var/run/docker.sock"
+        source: "/var/run/docker.sock"
+        read_only: true
+      - type: "volume"
+        target: "/letsencrypt"
+        source: "aspire.hosting.testutilities-53c8d7322c-traefik-letsencrypt"
+        read_only: false
+    networks:
+      - "aspire"
+  messaging:
+    image: "rabbitmq:latest"
+    expose:
+      - "5672"
+    networks:
+      - "aspire"
+    labels:
+      traefik.enable: "true"
+      aspire.traefik.traefik: "true"
+      traefik.tcp.routers.messaging.rule: "HostSNI(`amqp.${DOMAIN}`)"
+      traefik.tcp.routers.messaging.tls: "true"
+      traefik.tcp.routers.messaging.tls.certresolver: "letsencrypt"
+      traefik.tcp.routers.messaging.entrypoints: "amqps"
+      traefik.tcp.routers.messaging.service: "messaging"
+      traefik.tcp.services.messaging.loadbalancer.server.port: "5672"
+      traefik.tcp.routers.messaging-2.rule: "HostSNI(`queue.${DOMAIN}`)"
+      traefik.tcp.routers.messaging-2.tls: "true"
+      traefik.tcp.routers.messaging-2.tls.certresolver: "le-dns"
+      traefik.tcp.routers.messaging-2.entrypoints: "websecure"
+      traefik.tcp.routers.messaging-2.service: "messaging-2"
+      traefik.tcp.services.messaging-2.loadbalancer.server.port: "5672"
+  dns:
+    image: "coredns/coredns:latest"
+    expose:
+      - "53"
+    networks:
+      - "aspire"
+    labels:
+      traefik.enable: "true"
+      aspire.traefik.traefik: "true"
+      traefik.udp.routers.dns.entrypoints: "dns"
+      traefik.udp.routers.dns.service: "dns"
+      traefik.udp.services.dns.loadbalancer.server.port: "53"
+      traefik.tcp.routers.dns.rule: "HostSNI(`*`)"
+      traefik.tcp.routers.dns.entrypoints: "dns-tcp"
+      traefik.tcp.routers.dns.service: "dns"
+      traefik.tcp.services.dns.loadbalancer.server.port: "53"
+networks:
+  aspire:
+    driver: "bridge"
+volumes:
+  aspire.hosting.testutilities-53c8d7322c-traefik-letsencrypt:
+    driver: "local"

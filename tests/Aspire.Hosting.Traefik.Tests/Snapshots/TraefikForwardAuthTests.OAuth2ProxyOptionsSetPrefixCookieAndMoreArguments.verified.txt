@@ -1,0 +1,23 @@
+﻿{
+  Args: [
+    --http-address=0.0.0.0:4180,
+    --proxy-prefix=/sso,
+    --provider=oidc,
+    --client-id=client,
+    --oidc-issuer-url=https://login.example.com,
+    --upstream=static://202,
+    --reverse-proxy=true,
+    --set-xauthrequest=true,
+    --skip-provider-button=true,
+    --code-challenge-method=S256,
+    --cookie-secure=true,
+    --cookie-name=_app_session,
+    --cookie-domain=.dev.localhost,
+    --email-domain=*,
+    --whitelist-domain=app.dev.localhost:*,
+    --session-store-type=redis
+  ],
+  SignInRoutes: [
+    /sso
+  ]
+}

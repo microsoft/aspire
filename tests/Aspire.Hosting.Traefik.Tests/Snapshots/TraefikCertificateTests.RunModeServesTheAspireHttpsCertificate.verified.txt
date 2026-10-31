@@ -1,0 +1,16 @@
+﻿{
+  WithoutPassword: {
+    ASPIRE_TRAEFIK_TLS_CERTIFICATE: /certs/ABC.crt,
+    ASPIRE_TRAEFIK_TLS_KEY: /certs/ABC.key
+  },
+  TlsFile:
+{{- if env "ASPIRE_TRAEFIK_TLS_CERTIFICATE" }}
+tls:
+  stores:
+    default:
+      defaultCertificate:
+        certFile: {{ env "ASPIRE_TRAEFIK_TLS_CERTIFICATE" | quote }}
+        keyFile: {{ env "ASPIRE_TRAEFIK_TLS_KEY" | quote }}
+{{- end }}
+
+}
