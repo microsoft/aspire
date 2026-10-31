@@ -222,14 +222,37 @@ public class DistributedApplicationBuilderTests(ITestOutputHelper outputHelper)
 #pragma warning disable CS0618 // AddProject is obsolete but is still the TypeScript addProject export.
         var project = appBuilder.AddProject("api", projectPath, options => options.ExcludeLaunchProfile = true);
 #pragma warning restore CS0618
+        using var app = appBuilder.Build();
 
         var launchConfiguration = Assert.IsType<ProjectLaunchConfiguration>(
             await project.Resource.CreateLaunchConfigurationAsync(
                 LaunchConfigurationTestHelpers.CreateCallbackContext(project.Resource, ExecutableLaunchMode.NoDebug)));
         Assert.Null(launchConfiguration.BuildConfiguration);
         Assert.Null(appBuilder.Configuration["AppHost:BuildConfiguration"]);
+        Assert.Null(app.Services.GetRequiredService<DistributedApplicationOptions>().Configuration);
+    }
 
+    [Theory]
+    [InlineData("omitted")]
+    [InlineData("args")]
+    [InlineData("options")]
+    public void PolyglotCreateBuilderDoesNotApplyAppHostServerBuildConfiguration(string form)
+    {
+        // Every form accepted by the createBuilder export is a guest AppHost, whose entry assembly is the
+        // prebuilt AppHost server.
+        Assert.False(string.IsNullOrEmpty(Assembly.GetEntryAssembly()?.GetCustomAttribute<AssemblyConfigurationAttribute>()?.Configuration));
+
+        object? argsOrOptions = form switch
+        {
+            "omitted" => null,
+            "args" => Array.Empty<string>(),
+            _ => new CreateBuilderOptions()
+        };
+
+        var appBuilder = DistributedApplication.CreateBuilderForPolyglot(argsOrOptions);
         using var app = appBuilder.Build();
+
+        Assert.Null(appBuilder.Configuration["AppHost:BuildConfiguration"]);
         Assert.Null(app.Services.GetRequiredService<DistributedApplicationOptions>().Configuration);
     }
 
@@ -240,6 +263,7 @@ public class DistributedApplicationBuilderTests(ITestOutputHelper outputHelper)
         {
             AssemblyName = typeof(DistributedApplicationBuilderTests).Assembly.GetName().Name
         });
+        using var app = appBuilder.Build();
 
         var expected = typeof(DistributedApplicationBuilderTests).Assembly.GetCustomAttribute<AssemblyConfigurationAttribute>()?.Configuration;
         Assert.False(string.IsNullOrEmpty(expected));

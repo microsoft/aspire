@@ -277,8 +277,9 @@ public class DistributedApplication : IHost, IAsyncDisposable
     {
         return argsOrOptions switch
         {
-            null => CreateBuilder(),
-            string[] args => CreateBuilder(args),
+            // Every dispatcher form is a guest AppHost, so route all of them through CreateBuilderOptions.
+            null => CreateBuilder(new CreateBuilderOptions()),
+            string[] args => CreateBuilder(new CreateBuilderOptions { Args = args }),
             CreateBuilderOptions options => CreateBuilder(options),
             _ => throw new ArgumentException("Options must be omitted, a string array, or a CreateBuilderOptions instance.", nameof(argsOrOptions))
         };

@@ -621,11 +621,15 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
         });
 
         var projectPath = Path.Combine(projectDirectory, "MyService", "MyService.csproj");
-        var app = builder.AddDotnetProject("svc", projectPath, o => o.ExcludeLaunchProfile = true);
+        var project = builder.AddDotnetProject("svc", projectPath, o => o.ExcludeLaunchProfile = true);
+        using var app = builder.Build();
+
+        // The configuration captured for the coordinated build and process launch.
+        Assert.Null(Assert.Single(project.Resource.Annotations.OfType<DotnetProjectMetadata>()).BuildConfiguration);
 
         var launchConfig = Assert.IsType<ProjectLaunchConfiguration>(
-            await app.Resource.CreateLaunchConfigurationAsync(
-                LaunchConfigurationTestHelpers.CreateCallbackContext(app.Resource, ExecutableLaunchMode.NoDebug)));
+            await project.Resource.CreateLaunchConfigurationAsync(
+                LaunchConfigurationTestHelpers.CreateCallbackContext(project.Resource, ExecutableLaunchMode.NoDebug)));
         Assert.Null(launchConfig.BuildConfiguration);
     }
 
