@@ -1190,6 +1190,54 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
         Assert.NotEmpty(errorWriter.ToString());
     }
 
+    [Fact]
+    public async Task DescribeCommand_WhenCanceledAtAppHostSelectionPrompt_DoesNotDisplayStoppingAspire()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var cts = new CancellationTokenSource();
+        var prompted = false;
+        var interactionService = new TestInteractionService
+        {
+            // Simulate the user pressing CTRL+C while the AppHost selection prompt is shown.
+            PromptForSelectionCallback = (_, _, _, cancellationToken) =>
+            {
+                prompted = true;
+                cts.Cancel();
+                throw new OperationCanceledException(cancellationToken);
+            }
+        };
+
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        monitor.AddConnection("socket.hash1", new TestAppHostAuxiliaryBackchannel
+        {
+            IsInScope = false,
+            AppHostInfo = new AppHostInformation
+            {
+                AppHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "OtherAppHost", "OtherAppHost.csproj"),
+                ProcessId = 1234
+            }
+        });
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+            options.InteractionServiceFactory = _ => interactionService;
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("describe");
+
+        var exitCode = await result.InvokeAsync(new System.CommandLine.InvocationConfiguration(), cts.Token).DefaultTimeout();
+
+        Assert.True(prompted);
+        Assert.Equal(CliExitCodes.Cancelled, exitCode);
+        // "Stopping Aspire." implies the AppHost is being stopped, but describe never owns the AppHost.
+        var cancellation = Assert.Single(interactionService.DisplayedCancellations);
+        Assert.Equal(InteractionServiceStrings.OperationCancelled, cancellation.Message);
+    }
+
     private ServiceProvider CreateDescribeTestServices(
         TemporaryWorkspace workspace,
         TestOutputTextWriter outputWriter,
