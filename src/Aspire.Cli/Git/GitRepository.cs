@@ -156,10 +156,8 @@ internal sealed class GitRepository(CliExecutionContext executionContext, IEnvir
         using var process = Process.Start(startInfo) ?? throw new InvalidOperationException($"Failed to start '{startInfo.FileName}'.");
         activity.SetProcessId(process.Id);
 
-        // Process.Dispose doesn't close the redirected streams once they've been accessed, so
-        // dispose the readers explicitly to release the pipe handles.
-        using var stdoutReader = process.StandardOutput;
-        using var stderrReader = process.StandardError;
+        var stdoutReader = process.StandardOutput;
+        var stderrReader = process.StandardError;
         using var readCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var stdoutTask = stdoutReader.ReadToEndAsync(readCts.Token);
         var stderrTask = stderrReader.ReadToEndAsync(readCts.Token);
@@ -207,8 +205,12 @@ internal sealed class GitRepository(CliExecutionContext executionContext, IEnvir
         {
             // Stop any read that's still blocked on a pipe held open by another process.
             readCts.Cancel();
-            ObserveFault(stdoutTask);
-            ObserveFault(stderrTask);
+
+            // Process.Dispose doesn't close the redirected streams once they've been accessed, so
+            // dispose each reader once its read finishes. Disposing while a read is still pending
+            // could block on Windows, where closing a synchronous pipe handle waits for the read.
+            DisposeWhenReadCompletes(stdoutTask, stdoutReader);
+            DisposeWhenReadCompletes(stderrTask, stderrReader);
         }
     }
 
@@ -224,8 +226,17 @@ internal sealed class GitRepository(CliExecutionContext executionContext, IEnvir
         }
     }
 
-    private static void ObserveFault(Task task) =>
-        _ = task.ContinueWith(static t => _ = t.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+    private static void DisposeWhenReadCompletes(Task readTask, StreamReader reader) =>
+        _ = readTask.ContinueWith(
+            static (task, state) =>
+            {
+                _ = task.Exception;
+                ((StreamReader)state!).Dispose();
+            },
+            reader,
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
 
     // git normally closes its pipes when it exits, so the drain completes immediately. This only
     // bounds how long we wait when another process is holding them open.
