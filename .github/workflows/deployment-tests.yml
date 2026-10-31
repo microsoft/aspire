@@ -563,11 +563,10 @@ jobs:
           docker info | head -20
           echo "✅ Docker is available"
 
-      # Pin Helm to satisfy Aspire.Hosting.Kubernetes' minimum supported version
-      # (HelmVersionValidator.MinimumHelmVersion, currently v4.2.0). The new
-      # check-helm-prereqs-{env} pipeline step now fails fast on older Helm
-      # CLIs, so the runner image's preinstalled Helm — which lags behind —
-      # would otherwise break every AKS deployment scenario.
+      # Pin Helm so AKS deployment scenarios run against a known Helm 4 release
+      # that satisfies Aspire.Hosting.Kubernetes' minimum supported version
+      # (HelmVersionValidator.MinimumHelmVersion, currently v4.0.0). The
+      # check-helm-prereqs-{env} pipeline step fails fast on older Helm CLIs.
       - name: Setup Helm
         uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
         with:

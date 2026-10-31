@@ -33,8 +33,27 @@ public class HelmVersionValidatorTests
     [Fact]
     public async Task EnsureMinimumVersionAsync_AtMinimum_Passes()
     {
-        var runner = new FakeHelmRunner { VersionOutput = "v4.2.0+gfa15ec0" };
+        var runner = new FakeHelmRunner { VersionOutput = "v4.0.0+g1b6053d" };
         await HelmVersionValidator.EnsureMinimumVersionAsync(runner, CancellationToken.None);
+    }
+
+    [Theory]
+    [InlineData("v4.0.0")]
+    [InlineData("v4.1.0+g4553a0a")]
+    [InlineData("v4.1.4+g05fa379")] // Preinstalled on GitHub-hosted windows-2025-vs2026 runners (https://github.com/microsoft/aspire/issues/20533).
+    [InlineData("v4.2.0+gfa15ec0")]
+    public async Task EnsureMinimumVersionAsync_AnyHelm4Release_Passes(string helm4Version)
+    {
+        var runner = new FakeHelmRunner { VersionOutput = helm4Version };
+        await HelmVersionValidator.EnsureMinimumVersionAsync(runner, CancellationToken.None);
+    }
+
+    [Fact]
+    public void MinimumHelmVersion_IsFirstHelm4Release()
+    {
+        // Every flag Aspire passes to helm (upgrade --install --server-side/--force-conflicts/--take-ownership/--wait,
+        // uninstall --wait) exists from Helm 4.0.0, so requiring a newer minor only rejects working installs.
+        Assert.Equal(new Version(4, 0, 0), HelmVersionValidator.MinimumHelmVersion);
     }
 
     [Fact]
@@ -45,8 +64,7 @@ public class HelmVersionValidatorTests
     }
 
     [Theory]
-    [InlineData("v4.1.0+gfa15ec0")]
-    [InlineData("v4.0.0")]
+    [InlineData("v3.19.0+g3d8990f")]
     [InlineData("v3.18.0+gb88f836")]
     [InlineData("v3.14.4+gb88f836")]
     public async Task EnsureMinimumVersionAsync_TooOld_ThrowsWithDetectedAndRequired(string oldVersion)
