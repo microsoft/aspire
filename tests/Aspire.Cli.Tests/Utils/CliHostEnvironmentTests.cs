@@ -156,6 +156,26 @@ public class CliHostEnvironmentTests
         Assert.Equal(expected, env.IsPromptInputRedirected);
     }
 
+    [Theory]
+    [InlineData(false, null, null, false)]
+    [InlineData(true, null, null, true)]
+    [InlineData(true, "localhost:1234", "true", false)]
+    [InlineData(true, "localhost:1234", "false", true)]
+    public void IsPromptOutputRedirected_AccountsForRedirectedOutputAndExtensionPrompts(bool isOutputRedirected, string? extensionEndpoint, string? extensionPromptEnabled, bool expected)
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ASPIRE_EXTENSION_ENDPOINT"] = extensionEndpoint,
+                ["ASPIRE_EXTENSION_PROMPT_ENABLED"] = extensionPromptEnabled
+            })
+            .Build();
+
+        var env = new CliHostEnvironment(configuration, nonInteractive: false, isOutputRedirected: isOutputRedirected, isInputRedirected: false);
+
+        Assert.Equal(expected, env.IsPromptOutputRedirected);
+    }
+
     [Fact]
     public void SupportsInteractiveInput_ReturnsTrue_WhenExtensionPromptsEnabledInCI()
     {

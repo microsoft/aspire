@@ -284,7 +284,7 @@ internal sealed class ResourceCommand : BaseCommand
     // Prompts read from the terminal, so they can't be answered when stdin is redirected. The host environment
     // accounts for the VS Code extension, which answers prompts over its backchannel.
     private bool CanPromptForCommandInputs() =>
-        _hostEnvironment.SupportsInteractiveInput && !_hostEnvironment.IsPromptInputRedirected;
+        _hostEnvironment.SupportsInteractiveInput && !_hostEnvironment.IsPromptInputRedirected && !_hostEnvironment.IsPromptOutputRedirected;
 
     private static async Task<ResourceSnapshotCommandArgument> LoadCurrentArgumentInputAsync(
         IAppHostAuxiliaryBackchannel connection,
@@ -322,9 +322,18 @@ internal sealed class ResourceCommand : BaseCommand
             return confirmed.ToString().ToLowerInvariant();
         }
 
-        if (string.Equals(input.InputType, "Choice", StringComparison.OrdinalIgnoreCase) && input.Options is { Count: > 0 } options)
+        if (string.Equals(input.InputType, "Choice", StringComparison.OrdinalIgnoreCase))
         {
-            return await PromptForChoiceArgumentAsync(input, promptText, options, cancellationToken).ConfigureAwait(false);
+            if (input.Options is { Count: > 0 } options)
+            {
+                return await PromptForChoiceArgumentAsync(input, promptText, options, cancellationToken).ConfigureAwait(false);
+            }
+
+            if (!input.AllowCustomChoice)
+            {
+                // Nothing can be selected, so leave the input unset and let the AppHost validate it like an omitted option.
+                return null;
+            }
         }
 
         Func<string, ValidationResult>? validator = IsNumberInput(input)
