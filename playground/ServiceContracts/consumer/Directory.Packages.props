@@ -1,0 +1,4 @@
+<Project>
+  <!-- Match the prototype's transitive dependency pins without sharing producer source. -->
+  <Import Project="$(AspireRepoRoot)/Directory.Packages.props" Condition="'$(AspireRepoRoot)' != ''" />
+</Project>
