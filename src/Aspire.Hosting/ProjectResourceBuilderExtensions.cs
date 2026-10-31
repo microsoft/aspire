@@ -1161,9 +1161,10 @@ public static class ProjectResourceBuilderExtensions
                     context.Args.Add(launchDefaults.BuildConfiguration);
                 }
 
-                // Rebuild into the same artifacts path the project is launched from.
+                // Rebuild into the same artifacts path the project is launched from. Only legacy ProjectResource
+                // launches forward the AppHost's global artifacts path, see ExecutableLaunchRecipe.
                 var options = context.ExecutionContext.Services.GetRequiredService<DistributedApplicationOptions>();
-                if (!string.IsNullOrEmpty(options.GlobalArtifactsPath))
+                if (projectResource is ProjectResource && !string.IsNullOrEmpty(options.GlobalArtifactsPath))
                 {
                     context.Args.Add("--artifacts-path");
                     context.Args.Add(options.GlobalArtifactsPath);

@@ -466,6 +466,40 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         Assert.Equal(expectedFileArgs, fileArgs);
     }
 
+    [Fact]
+    public async Task RebuilderDoesNotForwardAppHostGlobalArtifactsPath()
+    {
+        // The AppHost's global artifacts path is only forwarded to legacy ProjectResource launches
+        // (https://github.com/microsoft/aspire/issues/6887). The coordinated build and launch of
+        // AddDotnetProject don't use it, so the rebuild must keep writing to the same output.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        UseDotnetSdkVersion(builder, "11.0.100-rc.2.26504.105");
+        var filePath = Path.Combine(workspace.Path, "worker.cs");
+        File.WriteAllText(filePath, "System.Console.WriteLine(\"Hello\");");
+
+        builder.AddDotnetProject("worker", filePath, options => options.ExcludeLaunchProfile = true);
+        var rebuilder = Assert.Single(builder.Resources.OfType<ProjectRebuilderResource>());
+        await using var app = builder.Build();
+        app.Services.GetRequiredService<DistributedApplicationOptions>().GlobalArtifactsPath =
+            Path.Combine(workspace.Path, "artifacts");
+
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+        await EventingTestHelpers.SubscribeEventingSubscribersAsync(
+            app,
+            TestContext.Current.CancellationToken);
+        await builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(rebuilder, app.Services),
+            TestContext.Current.CancellationToken);
+        var rebuildArgs = await ArgumentEvaluator.GetArgumentListAsync(rebuilder, app.Services);
+
+        var expectedRebuildArgs = new List<string> { "build", filePath };
+        AddExpectedConfiguration(builder, expectedRebuildArgs);
+        Assert.Equal(expectedRebuildArgs, rebuildArgs);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
