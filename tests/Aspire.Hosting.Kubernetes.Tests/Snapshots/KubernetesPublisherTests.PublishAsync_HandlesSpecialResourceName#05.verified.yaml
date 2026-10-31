@@ -8,9 +8,9 @@ metadata:
     app.kubernetes.io/component: "SpeciaL-ApP"
     app.kubernetes.io/instance: "{{ .Release.Name }}"
 data:
-  OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY: "{{ .Values.config.SpeciaL_ApP.OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY }}"
-  ConnectionStrings__api_cs2: "{{ .Values.config.SpeciaL_ApP.ConnectionStrings__api_cs2 }}"
-  ConnectionStrings__manual-db: "{{ .Values.config.SpeciaL_ApP.ConnectionStrings__manual_db }}"
-  OTEL_EXPORTER_OTLP_ENDPOINT: "{{ .Values.config.SpeciaL_ApP.OTEL_EXPORTER_OTLP_ENDPOINT }}"
-  OTEL_EXPORTER_OTLP_PROTOCOL: "{{ .Values.config.SpeciaL_ApP.OTEL_EXPORTER_OTLP_PROTOCOL }}"
-  OTEL_SERVICE_NAME: "{{ .Values.config.SpeciaL_ApP.OTEL_SERVICE_NAME }}"
+  OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY: {{ tpl "{{ .Values.config.SpeciaL_ApP.OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY }}" . | quote }}
+  ConnectionStrings__api_cs2: {{ tpl "{{ .Values.config.SpeciaL_ApP.ConnectionStrings__api_cs2 }}" . | quote }}
+  ConnectionStrings__manual-db: {{ tpl "{{ .Values.config.SpeciaL_ApP.ConnectionStrings__manual_db }}" . | quote }}
+  OTEL_EXPORTER_OTLP_ENDPOINT: {{ tpl "{{ .Values.config.SpeciaL_ApP.OTEL_EXPORTER_OTLP_ENDPOINT }}" . | quote }}
+  OTEL_EXPORTER_OTLP_PROTOCOL: {{ tpl "{{ .Values.config.SpeciaL_ApP.OTEL_EXPORTER_OTLP_PROTOCOL }}" . | quote }}
+  OTEL_SERVICE_NAME: {{ tpl "{{ .Values.config.SpeciaL_ApP.OTEL_SERVICE_NAME }}" . | quote }}

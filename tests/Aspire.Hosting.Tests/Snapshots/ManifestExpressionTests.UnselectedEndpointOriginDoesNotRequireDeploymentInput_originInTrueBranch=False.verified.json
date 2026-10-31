@@ -1,0 +1,27 @@
+﻿{
+  "resources": {
+    "frontend": {
+      "type": "container.v0",
+      "image": "image:latest",
+      "bindings": {
+        "http": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http",
+          "targetPort": 8080
+        }
+      }
+    },
+    "backend": {
+      "type": "container.v0",
+      "image": "image:latest",
+      "env": {
+        "ORIGIN": "{cond-frontend-bindings-http-tlsenabled-8f90c942.connectionString}"
+      }
+    },
+    "cond-frontend-bindings-http-tlsenabled-8f90c942": {
+      "type": "value.v0",
+      "connectionString": "https://deployed.example"
+    }
+  }
+}

@@ -27,6 +27,7 @@
 
   <ItemGroup>
     <Compile Include="$(SharedDir)PublishingContextUtils.cs" LinkBase="Shared" />
+    <Compile Include="$(SharedDir)ResourceNameHelpers.cs" LinkBase="Shared" />
     <Compile Include="$(SharedDir)EnvironmentVariableNameEncoder.cs" LinkBase="Shared" />
     <Compile Include="$(SharedDir)Model\KnownRelationshipTypes.cs" LinkBase="Shared" />
   </ItemGroup>

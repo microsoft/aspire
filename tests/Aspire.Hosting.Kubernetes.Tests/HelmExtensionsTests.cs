@@ -8,6 +8,15 @@ namespace Aspire.Hosting.Kubernetes.Tests;
 
 public class HelmExtensionsTests
 {
+    [Fact]
+    public void ToQuotedHelmTemplateExpressionDoesNotWrapAnAlreadyQuotedTemplate()
+    {
+        var template = "{{ .Values.config.myapp.key }}".ToQuotedHelmTemplateExpression();
+
+        Assert.Equal(template, template.ToQuotedHelmTemplateExpression());
+        Assert.Equal((false, ScalarStyle.ForcePlain), HelmExtensions.ShouldDoubleQuoteString(template));
+    }
+
     [Theory]
     [InlineData("plain string", true, null)]
     [InlineData("{{ .Values.config.myapp.key }}", true, null)]

@@ -11,6 +11,34 @@ namespace Aspire.Hosting.Foundry.Tests;
 
 public class ProjectResourceTests
 {
+    [Theory]
+    [InlineData(EndpointProperty.BrowserOrigin, "{my-project.outputs.endpointOrigin}", "https://account.services.ai.azure.com")]
+    [InlineData(EndpointProperty.BrowserOrigins, "{my-project.outputs.endpointOrigin}", "https://account.services.ai.azure.com")]
+    [InlineData(EndpointProperty.BrowserOriginsJson, "[\"{my-project.outputs.endpointOrigin}\"]", "[\"https://account.services.ai.azure.com\"]")]
+    public async Task BrowserOriginPropertiesUseDeployedProjectAuthority(EndpointProperty property, string expression, string expected)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var project = builder.AddFoundry("account").AddProject("my-project");
+        var agent = builder.AddContainer("agent", "image").WithHttpEndpoint(targetPort: 8080);
+        project.Resource.Outputs["endpointOrigin"] = "https://account.services.ai.azure.com";
+
+#pragma warning disable ASPIRECOMPUTE002
+        var value = ((IComputeEnvironmentResource)project.Resource).GetEndpointPropertyExpression(agent.GetEndpoint("http").Property(property));
+#pragma warning restore ASPIRECOMPUTE002
+
+        Assert.Equal(expression, value.ValueExpression);
+        Assert.Equal(expected, await value.GetValueAsync(default));
+    }
+
+    [Fact]
+    public async Task BrowserOriginOutputRemovesProjectNavigationPath()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var project = builder.AddFoundry("account").AddProject("my-project");
+
+        await Verify(project.Resource.GetBicepTemplateString(), "bicep");
+    }
+
     [Fact]
     public void AddProject_CreatesProjectWithCorrectParent()
     {

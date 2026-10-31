@@ -31,6 +31,13 @@ await builder.addDockerComposeEnvironment("compose");
 
 The dashboard container included in the published Compose file opts out of dashboard usage and error telemetry by default (`ASPIRE_DASHBOARD_TELEMETRY_OPTOUT=true`). This does not affect the application's OpenTelemetry data sent to the dashboard.
 
+Browser-origin endpoint properties use overridable deployment inputs because a Compose service address does not identify its public browser address.
+For example, `frontend.GetEndpoint("http").BrowserOrigins.First` reads `Parameters:frontend-http-BrowserOrigin` when preparing deployment.
+The `BrowserOrigins` and `BrowserOriginsJson` inputs accept the requested comma-separated and JSON representations respectively; local URL customization is unchanged.
+External HTTP endpoints with an explicit published port default to `http://localhost:<published-port>` (or HTTPS for an HTTPS endpoint), not the service's container port.
+Endpoints without a known published port require an explicit input.
+Generated input names include a stable suffix for hyphenated endpoint names so different resource/endpoint combinations cannot share an input.
+
 ### Volumes
 
 Use an environment variable so projects and executables can use a local Aspire store directory while Docker Compose mounts the published named volume:

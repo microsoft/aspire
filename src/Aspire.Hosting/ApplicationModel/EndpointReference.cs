@@ -17,6 +17,7 @@ public sealed class EndpointReference : IExpressionValue, IManifestExpressionPro
     private EndpointAnnotation? _endpointAnnotation;
     private bool? _isAllocated;
     private readonly NetworkIdentifier? _contextNetworkId;
+    private EndpointBrowserOrigins? _browserOrigins;
 
     /// <summary>
     /// Gets the endpoint annotation associated with the endpoint reference.
@@ -52,6 +53,22 @@ public sealed class EndpointReference : IExpressionValue, IManifestExpressionPro
     /// Gets the name of the endpoint associated with the endpoint reference.
     /// </summary>
     public string EndpointName { get; }
+
+    /// <summary>
+    /// Gets deferred browser-facing origins associated with this endpoint.
+    /// </summary>
+    /// <remarks>
+    /// Origins use finalized URL customization and are independent of this reference's service-discovery
+    /// network context. Use <see cref="EndpointBrowserOrigins.First"/> for one preferred origin,
+    /// or <see cref="EndpointBrowserOrigins.AsJson"/> and <see cref="EndpointBrowserOrigins.Join"/>
+    /// for all distinct origins.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// backend.WithEnvironment("ALLOWED_ORIGINS", frontend.GetEndpoint("https").BrowserOrigins.AsJson());
+    /// </code>
+    /// </example>
+    public EndpointBrowserOrigins BrowserOrigins => _browserOrigins ??= new(this);
 
     /// <summary>
     /// Gets or sets a custom error message to be thrown when the endpoint annotation is not found.
@@ -145,6 +162,9 @@ public sealed class EndpointReference : IExpressionValue, IManifestExpressionPro
             EndpointProperty.TargetPort => Binding("targetPort"),
             EndpointProperty.HostAndPort => $"{Binding("host")}:{Binding("port")}",
             EndpointProperty.TlsEnabled => Binding("tlsEnabled"),
+            EndpointProperty.BrowserOrigins => Binding("browserOrigins"),
+            EndpointProperty.BrowserOrigin => Binding("browserOrigin"),
+            EndpointProperty.BrowserOriginsJson => Binding("browserOriginsJson"),
             _ => throw new InvalidOperationException($"The property '{property}' is not supported for the endpoint '{EndpointName}'.")
         };
 
@@ -362,12 +382,33 @@ public class EndpointReferenceExpression(EndpointReference endpointReference, En
 
         return Property switch
         {
+            EndpointProperty.BrowserOrigins or EndpointProperty.BrowserOrigin or EndpointProperty.BrowserOriginsJson =>
+                await ResolveBrowserOriginsAsync().ConfigureAwait(false),
             EndpointProperty.Scheme => new(Endpoint.Scheme),
             EndpointProperty.TlsEnabled => Endpoint.TlsEnabled ? bool.TrueString : bool.FalseString,
             EndpointProperty.IPV4Host when networkContext == KnownNetworkIdentifiers.LocalhostNetwork => "127.0.0.1",
             EndpointProperty.TargetPort when Endpoint.TargetPort is int port => new(port.ToString(CultureInfo.InvariantCulture)),
             _ => await ResolveValueWithAllocatedAddress().ConfigureAwait(false)
         };
+
+        async ValueTask<string> ResolveBrowserOriginsAsync()
+        {
+            var snapshot = Endpoint.EndpointAnnotation.BrowserUrlsSnapshot;
+            var urls = await snapshot.GetValueAsync(cancellationToken).ConfigureAwait(false);
+            var origins = urls.Select(url => new Uri(url.Url, UriKind.Absolute))
+                .Where(uri => uri.Scheme is "http" or "https")
+                .Select(uri => new UriBuilder(uri) { Host = uri.HostNameType == UriHostNameType.Dns ? uri.IdnHost : uri.Host }.Uri
+                    .GetComponents(UriComponents.SchemeAndServer, UriFormat.UriEscaped))
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            return Property switch
+            {
+                EndpointProperty.BrowserOrigin => origins.Length > 0 ? origins[0] :
+                    throw new InvalidOperationException($"No browser URL is available for resource '{Endpoint.Resource.Name}' and endpoint '{Endpoint.EndpointName}'."),
+                EndpointProperty.BrowserOriginsJson => System.Text.Json.JsonSerializer.Serialize(origins),
+                _ => string.Join(",", origins)
+            };
+        }
 
         async ValueTask<string?> ResolveValueWithAllocatedAddress()
         {
@@ -436,5 +477,14 @@ public enum EndpointProperty
     /// <summary>
     /// Whether TLS is enabled on the endpoint. Returns <see cref="bool.TrueString"/> or <see cref="bool.FalseString"/>.
     /// </summary>
-    TlsEnabled
+    TlsEnabled,
+
+    /// <summary>Comma-separated browser-facing origins for this endpoint.</summary>
+    BrowserOrigins,
+
+    /// <summary>The first browser-facing origin for this endpoint.</summary>
+    BrowserOrigin,
+
+    /// <summary>The endpoint's browser-facing origins as a JSON array string.</summary>
+    BrowserOriginsJson
 }

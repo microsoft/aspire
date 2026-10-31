@@ -1,0 +1,64 @@
+﻿{
+  "resources": {
+    "frontend": {
+      "type": "container.v0",
+      "image": "image:latest",
+      "bindings": {
+        "http": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http",
+          "targetPort": 8080
+        }
+      }
+    },
+    "backend": {
+      "type": "container.v0",
+      "image": "image:latest",
+      "env": {
+        "ENCODED": "{value-99e6deef0891b691-uri-encoded.connectionString}"
+      }
+    },
+    "query": {
+      "type": "parameter.v0",
+      "value": "{query.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "query-uri-encoded": {
+      "type": "annotated.string",
+      "value": "{query.value}",
+      "filter": "uri"
+    },
+    "inactive": {
+      "type": "parameter.v0",
+      "value": "{inactive.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "cond-frontend-bindings-http-tlsenabled-3222dddb": {
+      "type": "value.v0",
+      "connectionString": "https://example/?q={query-uri-encoded.value}"
+    },
+    "value-99e6deef0891b691-uri-encoded": {
+      "type": "value.v0",
+      "connectionString": "https%3A%2F%2Fexample%2F%3Fq%3D{value-3f8a3dc00d06603c-uri-encoded.value}"
+    },
+    "value-126dbcdbcefaca31-uri-encoded": {
+      "type": "annotated.string",
+      "value": "{query.value}",
+      "filter": "uri"
+    },
+    "value-3f8a3dc00d06603c-uri-encoded": {
+      "type": "annotated.string",
+      "value": "{value-126dbcdbcefaca31-uri-encoded.value}",
+      "filter": "uri"
+    }
+  }
+}

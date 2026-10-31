@@ -1,0 +1,24 @@
+﻿services:
+  aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-b:
+    image: "image:latest"
+    ports:
+      - "8080:80"
+    networks:
+      - "aspire"
+  aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:
+    image: "image:latest"
+    ports:
+      - "8081:80"
+    networks:
+      - "aspire"
+  consumer:
+    image: "image:latest"
+    environment:
+      FIRST: "${AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA_B_C_BROWSERORIGIN}"
+      SECOND: "${AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA_B_974268FC1F766C94}"
+      REPEATED: "${AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA_B_C_BROWSERORIGIN}"
+    networks:
+      - "aspire"
+networks:
+  aspire:
+    driver: "bridge"

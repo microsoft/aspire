@@ -52,6 +52,7 @@
     <Compile Include="$(SharedDir)ProjectPathResolver.cs" Link="Utils\ProjectPathResolver.cs" />
     <Compile Include="$(SharedDir)StringComparers.cs" Link="Utils\StringComparers.cs" />
     <Compile Include="$(SharedDir)ResourceNameComparer.cs" Link="Utils\ResourceNameComparer.cs" />
+    <Compile Include="$(SharedDir)ResourceNameHelpers.cs" Link="Utils\ResourceNameHelpers.cs" />
     <Compile Include="$(SharedDir)TaskHelpers.cs" Link="Utils\TaskHelpers.cs" />
     <Compile Include="$(SharedDir)TimeSpanMillisecondsJsonConverter.cs" Link="Utils\TimeSpanMillisecondsJsonConverter.cs" />
     <Compile Include="$(SharedDir)DashboardConfigNames.cs" Link="Utils\DashboardConfigNames.cs" />

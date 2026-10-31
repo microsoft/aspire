@@ -50,6 +50,8 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
     /// </summary>
     internal Dictionary<string, CapturedEnvironmentVariable> CapturedEnvironmentVariables { get; } = [];
 
+    internal Dictionary<string, ParameterResource> EndpointInputs { get; } = new(StringComparer.OrdinalIgnoreCase);
+
     internal Dictionary<IResource, DockerComposeServiceResource> ResourceMapping { get; } = new(new ResourceNameComparer());
 
     internal IPortAllocator PortAllocator { get; } = new PortAllocator();

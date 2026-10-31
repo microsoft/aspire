@@ -1,0 +1,33 @@
+﻿{
+  "resources": {
+    "backend": {
+      "type": "container.v0",
+      "image": "image:latest",
+      "env": {
+        "FIRST": "{value-f97679fecbfddf91.connectionString}",
+        "VALUES": "{cond-enabled-value-71cdf305.connectionString}"
+      }
+    },
+    "enabled": {
+      "type": "parameter.v0",
+      "value": "{enabled.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "value-f97679fecbfddf91": {
+      "type": "value.v0",
+      "connectionString": "first"
+    },
+    "cond-enabled-value-71cdf305": {
+      "type": "value.v0",
+      "connectionString": "{value-f97679fecbfddf91.connectionString}|{value-f97679fecbfddf91-1.connectionString}|{value-f97679fecbfddf91.connectionString}"
+    },
+    "value-f97679fecbfddf91-1": {
+      "type": "value.v0",
+      "connectionString": "second"
+    }
+  }
+}

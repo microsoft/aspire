@@ -14,6 +14,38 @@ namespace Aspire.Hosting.Tests;
 [Trait("Partition", "5")]
 public class AddParameterTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CreateParameterFromConfigurationPreservesOverridableDefault(bool overridden)
+    {
+        var configuration = new ConfigurationManager();
+        var parameter = ParameterResourceBuilderExtensions.CreateParameter(configuration, "public-origin", secret: false, "http://localhost:8080");
+
+        if (overridden)
+        {
+            configuration["Parameters:public_origin"] = "https://public.example";
+        }
+        Assert.Equal(overridden ? "https://public.example" : "http://localhost:8080", await parameter.GetValueAsync(default));
+        Assert.Equal("http://localhost:8080", parameter.Default!.GetDefaultValue());
+    }
+
+    [Fact]
+    public async Task CreateParameterFromConfigurationUsesStandardValueLookup()
+    {
+        var configuration = new ConfigurationManager();
+        var parameter = ParameterResourceBuilderExtensions.CreateParameter(configuration, "public-origin", secret: false);
+        Assert.True(parameter.Required);
+        Assert.False(parameter.Secret);
+        Assert.Null(parameter.Default);
+        Assert.Equal("Parameters:public-origin", parameter.ConfigurationKey);
+        var missing = ParameterResourceBuilderExtensions.CreateParameter(configuration, "missing", secret: false);
+        await Assert.ThrowsAsync<MissingParameterValueException>(async () => await missing.GetValueAsync(default));
+
+        configuration["Parameters:public_origin"] = "https://public.example";
+        Assert.Equal("https://public.example", await parameter.GetValueAsync(default));
+    }
+
     [Fact]
     public void ParametersAreVisibleByDefault()
     {

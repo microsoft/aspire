@@ -1,0 +1,33 @@
+﻿{
+  "resources": {
+    "public-host": {
+      "type": "parameter.v0",
+      "value": "{public-host.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "backend": {
+      "type": "container.v0",
+      "image": "image:latest",
+      "env": {
+        "URL": "https://{public-host.value}/{value-4311bf6732892bae.connectionString}?literal={{cond-unused-condition-value-7999efbb.connectionString}}"
+      }
+    },
+    "unused-condition": {
+      "type": "parameter.v0",
+      "value": "{unused-condition.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "value-4311bf6732892bae": {
+      "type": "value.v0",
+      "connectionString": "concrete"
+    }
+  }
+}

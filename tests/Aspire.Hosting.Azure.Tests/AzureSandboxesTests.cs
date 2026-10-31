@@ -15,6 +15,7 @@ using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Publishing;
+using Aspire.Hosting.Tests;
 using Aspire.Hosting.Tests.Publishing;
 using Aspire.Hosting.Utils;
 using Azure.Core;
@@ -26,6 +27,36 @@ namespace Aspire.Hosting.Azure.Tests;
 
 public class AzureSandboxesTests(ITestOutputHelper output)
 {
+    [Theory]
+    [InlineData(EndpointProperty.BrowserOrigin, "https://api.example.test")]
+    [InlineData(EndpointProperty.BrowserOrigins, "https://api.example.test")]
+    [InlineData(EndpointProperty.BrowserOriginsJson, "[\"https://api.example.test\"]")]
+    public async Task BrowserOriginsUseDeployedSandboxProxyAuthority(EndpointProperty property, string expected)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
+        builder.Services.AddSingleton<IDeploymentStateManager>(new InMemoryDeploymentStateManager());
+        var environment = builder.AddAzureSandboxGroup("sandboxes");
+        var api = builder.AddContainer("api", "image").WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints().PublishAsAzureSandbox();
+        using var app = builder.Build();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+        var target = Assert.IsType<AzureSandboxContainerResource>(api.Resource.GetDeploymentTargetAnnotation(environment.Resource)!.DeploymentTarget);
+        var manager = app.Services.GetRequiredService<IDeploymentStateManager>();
+        var state = await manager.AcquireSectionAsync(AzureSandboxContainerDeployment.GetStateSectionName(target), default);
+        state.Data["Ports"] = new JsonArray(new JsonObject
+        {
+            ["Name"] = "http",
+            ["Port"] = 8080,
+            ["Url"] = "https://api.example.test:443/path?query=value#fragment"
+        });
+        await manager.SaveSectionAsync(state, default);
+        Assert.True(AzureSandboxContainerDeployment.TryResolveEndpointReferenceValue(
+            api.GetEndpoint("http").Property(property), environment.Resource, out var value));
+        var context = new ValueProviderContext { ExecutionContext = app.Services.GetRequiredService<DistributedApplicationExecutionContext>() };
+
+        Assert.Equal(expected, await value.GetValueAsync(context, default));
+    }
+
     [Fact]
     public void AzureSandboxGroupUsesExplicitOutputReferenceNames()
     {

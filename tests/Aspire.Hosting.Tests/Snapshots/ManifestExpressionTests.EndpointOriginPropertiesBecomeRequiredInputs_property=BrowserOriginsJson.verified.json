@@ -1,0 +1,51 @@
+﻿{
+  "resources": {
+    "frontend": {
+      "type": "container.v0",
+      "image": "image:latest",
+      "bindings": {
+        "http": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http",
+          "targetPort": 8080
+        }
+      }
+    },
+    "backend": {
+      "type": "container.v0",
+      "image": "image:latest",
+      "env": {
+        "DIRECT": "{frontend-http-BrowserOriginsJson.value}",
+        "COMPOSITE": "prefix/{frontend-http-BrowserOriginsJson.value}/suffix",
+        "WRAPPED": "{frontend-http-BrowserOriginsJson.value}",
+        "SELECTED": "{cond-frontend-bindings-http-tlsenabled-4f3d6af1.connectionString}",
+        "ENCODED": "{value-2d0564a098308e9b-uri-encoded.connectionString}",
+        "ENDPOINT": "{frontend.bindings.http.url}",
+        "HOST": "{frontend.bindings.http.host}"
+      }
+    },
+    "cond-frontend-bindings-http-tlsenabled-4f3d6af1": {
+      "type": "value.v0",
+      "connectionString": "{frontend-http-BrowserOriginsJson.value}"
+    },
+    "frontend-http-BrowserOriginsJson": {
+      "type": "parameter.v0",
+      "value": "{frontend-http-BrowserOriginsJson.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "value-2d0564a098308e9b-uri-encoded": {
+      "type": "value.v0",
+      "connectionString": "{value-2d0564a098308e9b-uri-encoded-1.value}"
+    },
+    "value-2d0564a098308e9b-uri-encoded-1": {
+      "type": "annotated.string",
+      "value": "{frontend-http-BrowserOriginsJson.value}",
+      "filter": "uri"
+    }
+  }
+}

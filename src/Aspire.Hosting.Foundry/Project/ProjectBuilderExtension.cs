@@ -413,6 +413,15 @@ public static class AzureCognitiveServicesProjectExtensions
         {
             Value = (BicepValue<string>)new IndexExpression((BicepExpression)project.Properties.Endpoints!, "AI Foundry API")
         });
+        // The project URL includes /api/projects/<name>. Browser origins must contain only
+        // scheme and authority, so expose that portion as a deployed output for consumers.
+        var projectEndpoint = new IndexExpression((BicepExpression)project.Properties.Endpoints!, "AI Foundry API");
+        var endpointOrigin = new FunctionCallExpression(new IdentifierExpression("join"),
+            new FunctionCallExpression(new IdentifierExpression("take"),
+                new FunctionCallExpression(new IdentifierExpression("split"), projectEndpoint, new StringLiteralExpression("/")),
+                new IntLiteralExpression(3)),
+            new StringLiteralExpression("/"));
+        infra.Add(new ProvisioningOutput("endpointOrigin", typeof(string)) { Value = (BicepValue<string>)endpointOrigin });
         infra.Add(new ProvisioningOutput("principalId", typeof(string))
         {
             Value = projectPrincipalId

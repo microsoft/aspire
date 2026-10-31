@@ -1,0 +1,29 @@
+﻿{
+  "resources": {
+    "backend": {
+      "type": "container.v0",
+      "image": "image:latest",
+      "env": {
+        "CUSTOM": "{value-4311bf6732892bae.connectionString}",
+        "URL": "https://{public-host.value}/{value-8189da318d21a051-uri-encoded.connectionString}"
+      }
+    },
+    "public-host": {
+      "type": "parameter.v0",
+      "value": "{public-host.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "value-4311bf6732892bae": {
+      "type": "value.v0",
+      "connectionString": "path with spaces/{{literal.value}}"
+    },
+    "value-8189da318d21a051-uri-encoded": {
+      "type": "value.v0",
+      "connectionString": "path%20with%20spaces%2F%7Bliteral.value%7D"
+    }
+  }
+}

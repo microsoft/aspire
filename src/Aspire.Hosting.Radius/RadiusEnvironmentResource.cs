@@ -198,6 +198,8 @@ public sealed class RadiusEnvironmentResource : Resource, IComputeEnvironmentRes
 
         return property switch
         {
+            EndpointProperty.BrowserOrigin or EndpointProperty.BrowserOrigins or EndpointProperty.BrowserOriginsJson =>
+                throw new NotSupportedException("Radius service DNS does not establish a public browser origin. Supply a deployment origin input."),
             EndpointProperty.Url => IsDefaultPort(scheme, port.Value)
                 ? ReferenceExpression.Create($"{scheme}://{host.Value}")
                 : ReferenceExpression.Create($"{scheme}://{host.Value}:{RadiusServiceDiscovery.ToInvariantString(port.Value)}"),

@@ -1591,7 +1591,7 @@ ContainerTargetPlatform = typing.Literal["LinuxAmd64", "LinuxArm64", "AllLinux",
 
 DistributedApplicationOperation = typing.Literal["Run", "Publish"]
 
-EndpointProperty = typing.Literal["Url", "Host", "IPV4Host", "Port", "Scheme", "TargetPort", "HostAndPort", "TlsEnabled"]
+EndpointProperty = typing.Literal["Url", "Host", "IPV4Host", "Port", "Scheme", "TargetPort", "HostAndPort", "TlsEnabled", "BrowserOrigins", "BrowserOrigin", "BrowserOriginsJson"]
 
 HealthStatus = typing.Literal["Unhealthy", "Degraded", "Healthy"]
 
@@ -4893,6 +4893,49 @@ class DockerfileStage:
         return typing.cast(DockerfileStage, result)
 
 
+class EndpointBrowserOrigins:
+    """Type class for EndpointBrowserOrigins."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"EndpointBrowserOrigins(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    @_cached_property
+    def first(self) -> EndpointReferenceExpression:
+        """Gets an endpoint-property expression for the preferred browser origin."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointBrowserOrigins.first',
+            {'context': self._handle}
+        )
+        return typing.cast(EndpointReferenceExpression, result)
+
+    def join(self) -> EndpointReferenceExpression:
+        """Creates an endpoint-property expression for comma-separated origins."""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointBrowserOrigins.join',
+            rpc_args,
+        )
+        return typing.cast(EndpointReferenceExpression, result)
+
+    def as_json(self) -> EndpointReferenceExpression:
+        """Creates an endpoint-property expression for a JSON array of origins."""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointBrowserOrigins.asJson',
+            rpc_args,
+        )
+        return typing.cast(EndpointReferenceExpression, result)
+
+
 class EndpointReference:
     """Type class for EndpointReference."""
 
@@ -4925,6 +4968,15 @@ class EndpointReference:
             {'context': self._handle}
         )
         return typing.cast(str, result)
+
+    @_cached_property
+    def browser_origins(self) -> EndpointBrowserOrigins:
+        """Gets deferred browser-facing origins associated with this endpoint."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointReference.browserOrigins',
+            {'context': self._handle}
+        )
+        return typing.cast(EndpointBrowserOrigins, result)
 
     @_cached_property
     def error_message(self) -> str | None:
@@ -13656,6 +13708,7 @@ _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.Docker.
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.DockerfileBuilderCallbackContext", DockerfileBuilderCallbackContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.DockerfileFactoryContext", DockerfileFactoryContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.Docker.DockerfileStage", DockerfileStage)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointBrowserOrigins", EndpointBrowserOrigins)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference", EndpointReference)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReferenceExpression", EndpointReferenceExpression)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointUpdateContext", EndpointUpdateContext)

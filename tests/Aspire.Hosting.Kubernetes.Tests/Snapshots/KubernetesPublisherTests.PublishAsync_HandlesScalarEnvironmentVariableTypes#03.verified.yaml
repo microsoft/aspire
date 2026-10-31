@@ -8,12 +8,12 @@ metadata:
     app.kubernetes.io/component: "myapp"
     app.kubernetes.io/instance: "{{ .Release.Name }}"
 data:
-  BOOL_TRUE: "{{ .Values.config.myapp.BOOL_TRUE }}"
-  BOOL_FALSE: "{{ .Values.config.myapp.BOOL_FALSE }}"
-  INT_VALUE: "{{ .Values.config.myapp.INT_VALUE }}"
-  DOUBLE_VALUE: "{{ .Values.config.myapp.DOUBLE_VALUE }}"
-  DATETIMEOFFSET_VALUE: "{{ .Values.config.myapp.DATETIMEOFFSET_VALUE }}"
-  TIMESPAN_VALUE: "{{ .Values.config.myapp.TIMESPAN_VALUE }}"
-  URI_VALUE: "{{ .Values.config.myapp.URI_VALUE }}"
-  NULLABLE_INT_WITH_VALUE: "{{ .Values.config.myapp.NULLABLE_INT_WITH_VALUE }}"
-  STRING_VALUE: "{{ .Values.config.myapp.STRING_VALUE }}"
+  BOOL_TRUE: {{ tpl "{{ .Values.config.myapp.BOOL_TRUE }}" . | quote }}
+  BOOL_FALSE: {{ tpl "{{ .Values.config.myapp.BOOL_FALSE }}" . | quote }}
+  INT_VALUE: {{ tpl "{{ .Values.config.myapp.INT_VALUE }}" . | quote }}
+  DOUBLE_VALUE: {{ tpl "{{ .Values.config.myapp.DOUBLE_VALUE }}" . | quote }}
+  DATETIMEOFFSET_VALUE: {{ tpl "{{ .Values.config.myapp.DATETIMEOFFSET_VALUE }}" . | quote }}
+  TIMESPAN_VALUE: {{ tpl "{{ .Values.config.myapp.TIMESPAN_VALUE }}" . | quote }}
+  URI_VALUE: {{ tpl "{{ .Values.config.myapp.URI_VALUE }}" . | quote }}
+  NULLABLE_INT_WITH_VALUE: {{ tpl "{{ .Values.config.myapp.NULLABLE_INT_WITH_VALUE }}" . | quote }}
+  STRING_VALUE: {{ tpl "{{ .Values.config.myapp.STRING_VALUE }}" . | quote }}

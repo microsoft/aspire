@@ -10,6 +10,7 @@ using Aspire.Hosting.Docker.Resources.ComposeNodes;
 using Aspire.Hosting.Docker.Resources.ServiceNodes;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Publishing;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Docker;
@@ -97,7 +98,8 @@ internal sealed class DockerComposePublishingContext(
                     await dockerfileBuildAnnotation.EmitDockerfileArtifactsAsync(dockerfileContext, resourceDockerfilePath).ConfigureAwait(false);
                 }
 
-                var composeService = await serviceResource.BuildComposeServiceAsync().ConfigureAwait(false);
+                var composeService = await serviceResource.BuildComposeServiceAsync(
+                    executionContext.Services.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>()).ConfigureAwait(false);
 
                 HandleComposeFileVolumes(serviceResource, composeFile);
 

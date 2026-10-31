@@ -1,0 +1,7 @@
+﻿parameters: {}
+secrets: {}
+config:
+  consumer:
+    web_http_BrowserOrigin: "https://public.example"
+    web_http_BrowserOrigins: "https://public.example,https://alias.example"
+    web_http_BrowserOriginsJson: "[\"https://public.example\",\"https://alias.example\"]"

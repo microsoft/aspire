@@ -184,7 +184,7 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
         }
     }
 
-    private BicepValue<string> GetEndpointValue(EndpointMapping mapping, EndpointProperty property)
+    private BicepValue<string> GetEndpointValue(EndpointMapping mapping, EndpointReferenceExpression reference)
     {
         var (scheme, host, port, targetPort, isHttpIngress, external, tlsEnabled) = mapping;
 
@@ -200,8 +200,14 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
             return $"{prefix}{host}{suffix}";
         }
 
-        return property switch
+        return reference.Property switch
         {
+            EndpointProperty.BrowserOrigins or EndpointProperty.BrowserOrigin when isHttpIngress && external =>
+                GetHostValue($"{scheme}://"),
+            EndpointProperty.BrowserOriginsJson when isHttpIngress && external =>
+                GetHostValue($"[\"{scheme}://", "\"]"),
+            EndpointProperty.BrowserOrigins or EndpointProperty.BrowserOrigin or EndpointProperty.BrowserOriginsJson =>
+                AllocateParameter(_containerAppEnvironmentContext.GetEndpointInput(reference)),
             EndpointProperty.Url => GetHostValue($"{scheme}://", suffix: isHttpIngress ? null : $":{port}"),
             EndpointProperty.Host or EndpointProperty.IPV4Host => GetHostValue(),
             EndpointProperty.Port => port.ToString(CultureInfo.InvariantCulture),
@@ -252,7 +258,7 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
 
             var mapping = context._endpointMapping[ep.EndpointName];
 
-            var url = GetEndpointValue(mapping, EndpointProperty.Url);
+            var url = GetEndpointValue(mapping, ep.Property(EndpointProperty.Url));
 
             return (url, secretType);
         }
@@ -313,7 +319,8 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
 
             // Express cannot use a standard environment's private DNS either. Check visibility
             // before delegating, while the original endpoint metadata is still available.
-            if (epExpr.Property is EndpointProperty.Url or EndpointProperty.Host or EndpointProperty.IPV4Host or EndpointProperty.HostAndPort)
+            if (epExpr.Property is EndpointProperty.Url or EndpointProperty.Host or EndpointProperty.IPV4Host or EndpointProperty.HostAndPort or
+                EndpointProperty.BrowserOrigins or EndpointProperty.BrowserOrigin or EndpointProperty.BrowserOriginsJson)
             {
                 ValidateExpressEndpointReference(epExpr.Endpoint);
             }
@@ -324,7 +331,7 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
 
             var mapping = context._endpointMapping[epExpr.Endpoint.EndpointName];
 
-            var val = GetEndpointValue(mapping, epExpr.Property);
+            var val = GetEndpointValue(mapping, epExpr);
 
             return (val, secretType);
         }
@@ -585,7 +592,7 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
                     HttpGet = new()
                     {
                         Path = endpointProbeAnnotation.Path,
-                        Port = AsInt(GetEndpointValue(endpointMapping, EndpointProperty.TargetPort)),
+                        Port = AsInt(GetEndpointValue(endpointMapping, endpointProbeAnnotation.EndpointReference.Property(EndpointProperty.TargetPort))),
                         Scheme = scheme is "https" ? ContainerAppHttpScheme.Https : ContainerAppHttpScheme.Http,
                     },
                 };

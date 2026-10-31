@@ -89,7 +89,14 @@ internal static class FoundryEchoTestApp
                         throw new InvalidOperationException("The request targeted a different deployment's image.");
                     }
 
-                    return $"Echo: {input}";
+                    return JsonSerializer.Serialize(new
+                    {
+                        echo = $"Echo: {input}",
+                        origin = Environment.GetEnvironmentVariable("BROWSER_ORIGIN")
+                            ?? throw new InvalidOperationException("The deployed browser origin is missing."),
+                        originsJson = Environment.GetEnvironmentVariable("BROWSER_ORIGINS_JSON")
+                            ?? throw new InvalidOperationException("The deployed browser origins JSON is missing.")
+                    });
                 }
 
                 private sealed class EchoAgentSession : AgentSession;

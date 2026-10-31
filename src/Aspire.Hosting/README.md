@@ -30,6 +30,12 @@ Aspire's approach ensures flexibility, strong tooling support, and clear separat
 
 For the full details and specification, see the [App Model document](https://github.com/microsoft/aspire/blob/main/docs/specs/appmodel.md).
 
+## Browser origins in Codespaces
+
+In run mode, endpoint URLs targeting `localhost` are projected to the HTTPS Codespaces forwarding address after URL customization and before allocation notifications. `endpoint.BrowserOrigins` and dashboard links therefore use the same projected URLs, including details-only endpoint links. Custom public URLs remain unchanged, and paths, queries, and fragments are preserved.
+
+Physical endpoint allocation and host/container service discovery remain unchanged. Snapshot-only resource URLs continue to use the dashboard notification rewriter.
+
 ## Feedback & contributing
 
 https://github.com/microsoft/aspire

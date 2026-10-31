@@ -1,0 +1,25 @@
+﻿{
+  "resources": {
+    "public-host": {
+      "type": "parameter.v0",
+      "value": "{public-host.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "backend": {
+      "type": "container.v0",
+      "image": "image:latest",
+      "env": {
+        "DIRECT": "{cond-test-condition-1ac9b522.connectionString}",
+        "COMPOSITE": "redirect={cond-test-condition-1ac9b522.connectionString}"
+      }
+    },
+    "cond-test-condition-1ac9b522": {
+      "type": "value.v0",
+      "connectionString": "https://{public-host.value}/signin-oidc"
+    }
+  }
+}

@@ -28,6 +28,9 @@ public sealed class EndpointAnnotation : IResourceAnnotation
     private bool? _isExplicitlyProxied;
     private readonly NetworkIdentifier _networkId;
 
+    // Retain finalized URL objects so facade address updates also update browser-origin resolution.
+    internal ValueSnapshot<IReadOnlyList<ResourceUrlAnnotation>> BrowserUrlsSnapshot { get; } = new();
+
     /// <summary>
     /// Initializes a new instance of <see cref="EndpointAnnotation"/>.
     /// </summary>

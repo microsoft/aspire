@@ -5,6 +5,7 @@
 
 using System.Text.Json;
 using Aspire.Hosting.Tests.Helpers;
+using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Azure.Provisioning.KeyVault;
 using Json.Schema;
@@ -44,6 +45,28 @@ public class SchemaTests
                 { "ConnectionStringParameter", (IDistributedApplicationBuilder builder) =>
                     {
                         builder.AddConnectionString("foo");
+                    }
+                },
+
+                { "SymbolicAndConcreteValues", (IDistributedApplicationBuilder builder) =>
+                    {
+                        var host = builder.AddParameter("public-host");
+                        var frontend = builder.AddContainer("frontend", "image").WithHttpEndpoint(targetPort: 8080);
+                        var tls = frontend.GetEndpoint("http").Property(EndpointProperty.TlsEnabled);
+                        var custom = new TestManifestValue("{frontend.customProperty}", (_, _) =>
+                            ValueTask.FromResult<string?>("path with spaces"));
+                        var selected = ReferenceExpression.CreateConditional(tls, bool.FalseString,
+                            ReferenceExpression.Create($"https://{host}/{custom:uri}?tls={tls}"), ReferenceExpression.Empty);
+                        var wrapper = new TestManifestValue(selected.ValueExpression, (_, _) =>
+                            throw new InvalidOperationException("A symbolic wrapper must not be evaluated."), selected);
+                        var formatted = new TestManifestValue("prefix/{public-host.value}", (_, _) =>
+                            throw new InvalidOperationException("A symbolic wrapper must not be evaluated."), host.Resource);
+                        builder.AddContainer("backend", "image")
+                            .WithEnvironment("URL", wrapper)
+                            .WithEnvironment("ORIGIN", frontend.GetEndpoint("http").BrowserOrigins.First)
+                            .WithEnvironment("ORIGINS", frontend.GetEndpoint("http").BrowserOrigins.Join())
+                            .WithEnvironment("ORIGINS_JSON", frontend.GetEndpoint("http").BrowserOrigins.AsJson())
+                            .WithEnvironment("ENCODED", ReferenceExpression.Create($"{formatted:uri}"));
                     }
                 },
 

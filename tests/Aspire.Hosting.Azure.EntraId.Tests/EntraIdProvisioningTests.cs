@@ -11,6 +11,7 @@ using System.Runtime.CompilerServices;
 using Aspire.Hosting.Azure.EntraId.Provisioning;
 using Aspire.Hosting.Dotnet;
 using Aspire.Hosting.Pipelines;
+using Aspire.Hosting.Tests.Dcp;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Aspire.Tests.Utils;
@@ -874,12 +875,79 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task WithRedirectUris_BrowserOrigin_PreservesDeferredValues()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var environment = builder.AddResource(new TestComputeEnvironment("env"));
+        var web = builder.AddContainer("web", "image").WithHttpsEndpoint(targetPort: 8080).WithComputeEnvironment(environment);
+        var origin = web.GetEndpoint("https").BrowserOrigins.First;
+        var entra = builder.AddEntraIdApplication("entra-web")
+            .WithRedirectUris(origin, "/signin-oidc", "/signout-callback-oidc");
+
+        await Verify(entra.Resource.GetBicepTemplateString(), "bicep");
+        Assert.All(new[] { "redirectUri0", "redirectUri1" }, name =>
+        {
+            var expression = Assert.IsType<ReferenceExpression>(entra.Resource.Parameters[name]);
+            Assert.Equal("https://{0}" + (name == "redirectUri0" ? "/signin-oidc" : "/signout-callback-oidc"), expression.Format);
+        });
+        Assert.Equal("https://web.contoso.example/signin-oidc",
+            await Assert.IsType<ReferenceExpression>(entra.Resource.Parameters["redirectUri0"]).GetValueAsync(default));
+        Assert.Equal("https://web.contoso.example/signout-callback-oidc",
+            await Assert.IsType<ReferenceExpression>(entra.Resource.Parameters["redirectUri1"]).GetValueAsync(default));
+    }
+
+    [Fact]
+    public async Task WithRedirectUris_BrowserOrigin_ResolvesSharedBrowserOrigin()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var web = builder.AddContainer("web", "image").WithHttpsEndpoint(targetPort: 8080)
+            .WithEndpoint("https", endpoint => endpoint.AllocatedEndpoint = new(endpoint, "localhost", 7081));
+        var origin = web.GetEndpoint("https").BrowserOrigins.First;
+        var entra = builder.AddEntraIdApplication("entra-web").WithRedirectUris(origin, "/signin-oidc", "/signout-callback-oidc");
+        web.WithUrlForEndpoint("https", url => url.Url = "https://web.dev.localhost:7081/swagger?x=1#top");
+        _ = entra.Resource.GetBicepTemplateString();
+        using var app = builder.Build();
+        _ = app.Services.GetRequiredService<ApplicationOrchestratorProxy>();
+
+        await builder.Eventing.PublishResourceEndpointsAllocatedAsync(new ResourceEndpointsAllocatedEvent(web.Resource, app.Services), CancellationToken.None);
+
+        var signIn = Assert.IsType<ReferenceExpression>(entra.Resource.Parameters["redirectUri0"]);
+        var signOut = Assert.IsType<ReferenceExpression>(entra.Resource.Parameters["redirectUri1"]);
+        Assert.Equal("https://web.dev.localhost:7081/signin-oidc", await signIn.GetValueAsync(CancellationToken.None));
+        Assert.Equal("https://web.dev.localhost:7081/signout-callback-oidc", await signOut.GetValueAsync(CancellationToken.None));
+        Assert.Same(origin, Assert.Single(signIn.ValueProviders));
+    }
+
+    [Fact]
+    public void WithRedirectUris_BrowserOrigin_ValidatesBeforeAddingValues()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var entra = builder.AddEntraIdApplication("entra-web");
+        var origin = builder.AddContainer("web", "image").GetEndpoint("https").BrowserOrigins.First;
+
+        Assert.Throws<ArgumentNullException>("builder", () => EntraIdResourceExtensions.WithRedirectUris(null!, origin, "/signin-oidc"));
+        Assert.Throws<ArgumentNullException>("browserOrigin", () => entra.WithRedirectUris((EndpointReferenceExpression)null!, "/signin-oidc"));
+        Assert.Throws<ArgumentException>("browserOrigin", () => entra.WithRedirectUris(origin.Endpoint.Property(EndpointProperty.Url), "/signin-oidc"));
+        Assert.Throws<ArgumentException>("browserOrigin", () => entra.WithRedirectUris(origin.Endpoint.BrowserOrigins.AsJson(), "/signin-oidc"));
+        Assert.Throws<ArgumentException>("browserOrigin", () => entra.WithRedirectUris(origin.Endpoint.BrowserOrigins.Join(), "/signin-oidc"));
+        Assert.Throws<ArgumentNullException>("callbackPaths", () => entra.WithRedirectUris(origin, (string[])null!));
+        Assert.Throws<ArgumentException>("callbackPaths", () => entra.WithRedirectUris(origin));
+        Assert.Throws<ArgumentNullException>("callbackPaths", () => entra.WithRedirectUris(origin, "/valid", null!));
+        Assert.Throws<ArgumentException>("callbackPaths", () => entra.WithRedirectUris(origin, "/valid", ""));
+        Assert.Throws<ArgumentException>("callbackPaths", () => entra.WithRedirectUris(origin, "/valid", " "));
+        Assert.Throws<ArgumentException>("callbackPaths", () => entra.WithRedirectUris(origin, "/valid", "signin-oidc"));
+        _ = entra.Resource.GetBicepTemplateString();
+        Assert.Equal(["tenantResourceSuffix"], entra.Resource.Parameters.Keys);
+    }
+
+    [Fact]
     public async Task WithRedirectUris_Endpoint_RunMode_UsesAllocatedEndpointUrl()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var web = builder.AddContainer("web", "image").WithHttpsEndpoint(targetPort: 8080, name: "https");
         var entra = builder.AddEntraIdApplication("entra-web")
             .WithRedirectUris(web.GetEndpoint("https"), "/signin-oidc", "/signout-callback-oidc");
+        Assert.Empty(web.Resource.Annotations.OfType<ResourceUrlsCallbackAnnotation>());
 
         await Verify(entra.Resource.GetBicepTemplateString(), "bicep");
         Assert.Equal(new[] { "tenantResourceSuffix", "redirectUri0", "redirectUri1" }, entra.Resource.Parameters.Keys);
@@ -894,10 +962,10 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var environment = builder.AddResource(new TestComputeEnvironment("env"));
         var web = builder.AddContainer("web", "image")
-            .WithHttpsEndpoint(targetPort: 8080, name: "https")
-            .WithComputeEnvironment(environment);
+            .WithHttpsEndpoint(targetPort: 8080, name: "https");
         var entra = builder.AddEntraIdApplication("entra-web")
             .WithRedirectUris(web.GetEndpoint("https"), "/signin-oidc");
+        web.WithComputeEnvironment(environment);
 
         await Verify(entra.Resource.GetBicepTemplateString(), "bicep");
     }
@@ -911,31 +979,67 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
             .WithEndpoint("https", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 7081));
         var entra = builder.AddEntraIdApplication("entra-web")
             .WithRedirectUris(web.GetEndpoint("https"), "/signin-oidc");
+        web.WithUrlForEndpoint("https", url => url.Url = "https://web-hashr.dev.localhost:7081");
 
         _ = entra.Resource.GetBicepTemplateString();
         var expression = Assert.IsType<ReferenceExpression>(entra.Resource.Parameters["redirectUri0"]);
         var resolveTask = expression.GetValueAsync(new ValueProviderContext(), CancellationToken.None).AsTask();
         Assert.False(resolveTask.IsCompleted);
 
-        // Mimics the orchestrator: when the dashboard uses a *.dev.localhost name the friendly URL is primary and
-        // the plain localhost URL is only shown in the details.
-        var endpoint = web.GetEndpoint("https");
-        var urls = new List<ResourceUrlAnnotation>
-        {
-            new() { Url = "https://web-hashr.dev.localhost:7081", Endpoint = endpoint, DisplayLocation = UrlDisplayLocation.SummaryAndDetails },
-            new() { Url = "https://localhost:7081", Endpoint = endpoint, DisplayLocation = UrlDisplayLocation.DetailsOnly }
-        };
-        var context = new ResourceUrlsCallbackContext(builder.ExecutionContext, web.Resource, urls);
-        foreach (var callback in web.Resource.Annotations.OfType<ResourceUrlsCallbackAnnotation>())
-        {
-            await callback.Callback(context);
-        }
+        using var app = builder.Build();
+        _ = app.Services.GetRequiredService<ApplicationOrchestratorProxy>();
+        await builder.Eventing.PublishResourceEndpointsAllocatedAsync(new ResourceEndpointsAllocatedEvent(web.Resource, app.Services), CancellationToken.None);
 
         Assert.Equal("https://web-hashr.dev.localhost:7081/signin-oidc", await resolveTask.WaitAsync(TimeSpan.FromSeconds(10)));
     }
 
     [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]
     private static extern Task ExecuteBeforeStartHooksAsync(DistributedApplication app, CancellationToken cancellationToken);
+
+    [Fact]
+    public async Task WithRedirectUris_Endpoint_RunMode_UsesHighestRankedFinalOrigin()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var web = builder.AddContainer("web", "image").WithHttpsEndpoint(targetPort: 8080)
+            .WithEndpoint("https", endpoint => endpoint.AllocatedEndpoint = new(endpoint, "localhost", 7081));
+        var entra = builder.AddEntraIdApplication("entra-web")
+            .WithRedirectUris(web.GetEndpoint("https"), "/signin-oidc");
+        web.WithUrlForEndpoint("https", url => url.Url = "https://web.dev.localhost:7081/swagger")
+            .WithUrlForEndpoint("https", _ => new ResourceUrlAnnotation
+            {
+                Url = "https://public.example:9443/home",
+                DisplayOrder = 100
+            });
+        _ = entra.Resource.GetBicepTemplateString();
+        var expression = Assert.IsType<ReferenceExpression>(entra.Resource.Parameters["redirectUri0"]);
+        using var app = builder.Build();
+        _ = app.Services.GetRequiredService<ApplicationOrchestratorProxy>();
+
+        await builder.Eventing.PublishResourceEndpointsAllocatedAsync(new ResourceEndpointsAllocatedEvent(web.Resource, app.Services), CancellationToken.None);
+
+        Assert.Equal("https://public.example:9443/signin-oidc", await expression.GetValueAsync(CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task WithRedirectUris_Endpoint_RunMode_PropagatesUrlCustomizationFailure()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var web = builder.AddContainer("web", "image").WithHttpsEndpoint(targetPort: 8080)
+            .WithEndpoint("https", endpoint => endpoint.AllocatedEndpoint = new(endpoint, "localhost", 7081));
+        var entra = builder.AddEntraIdApplication("entra-web")
+            .WithRedirectUris(web.GetEndpoint("https"), "/signin-oidc");
+        web.WithUrls(_ => throw new InvalidOperationException("URL customization failed."));
+        _ = entra.Resource.GetBicepTemplateString();
+        var expression = Assert.IsType<ReferenceExpression>(entra.Resource.Parameters["redirectUri0"]);
+        using var app = builder.Build();
+        _ = app.Services.GetRequiredService<ApplicationOrchestratorProxy>();
+
+        await builder.Eventing.PublishResourceEndpointsAllocatedAsync(new ResourceEndpointsAllocatedEvent(web.Resource, app.Services), CancellationToken.None);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await expression.GetValueAsync(CancellationToken.None).AsTask().WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Equal("URL customization failed.", exception.Message);
+    }
 
     [Fact]
     public async Task WithRedirectUris_Host_WritesHostParameterWithPaths()
@@ -981,17 +1085,14 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
             .WithEndpoint("https", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 7081));
         var entra = builder.AddEntraIdApplication("entra-web")
             .WithRedirectUris(web.GetEndpoint("https"), "/signin-oidc");
+        web.WithUrlForEndpoint("https", url => url.Url = "/swagger");
 
         _ = entra.Resource.GetBicepTemplateString();
         var expression = Assert.IsType<ReferenceExpression>(entra.Resource.Parameters["redirectUri0"]);
 
-        // The orchestrator only makes relative URLs absolute after all callbacks have run.
-        var urls = new List<ResourceUrlAnnotation> { new() { Url = "/swagger", Endpoint = web.GetEndpoint("https") } };
-        var context = new ResourceUrlsCallbackContext(builder.ExecutionContext, web.Resource, urls);
-        foreach (var callback in web.Resource.Annotations.OfType<ResourceUrlsCallbackAnnotation>())
-        {
-            await callback.Callback(context);
-        }
+        using var app = builder.Build();
+        _ = app.Services.GetRequiredService<ApplicationOrchestratorProxy>();
+        await builder.Eventing.PublishResourceEndpointsAllocatedAsync(new ResourceEndpointsAllocatedEvent(web.Resource, app.Services), CancellationToken.None);
 
         Assert.Equal("https://localhost:7081/signin-oidc", await expression.GetValueAsync(new ValueProviderContext(), CancellationToken.None).AsTask().WaitAsync(TimeSpan.FromSeconds(10)));
     }
@@ -1012,23 +1113,25 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
         _ = entra.Resource.GetBicepTemplateString();
         var expression = Assert.IsType<ReferenceExpression>(entra.Resource.Parameters["redirectUri0"]);
 
-        // web's own https URL is details-only; the other resource's same-named endpoint link is summary-visible.
-        var urls = new List<ResourceUrlAnnotation>
+        web.WithUrls(context =>
         {
-            new() { Url = "https://localhost:7081", Endpoint = web.GetEndpoint("https"), DisplayLocation = UrlDisplayLocation.DetailsOnly },
-            new() { Url = "https://other.dev.localhost:7082", Endpoint = other.GetEndpoint("https"), DisplayLocation = UrlDisplayLocation.SummaryAndDetails }
-        };
-        var context = new ResourceUrlsCallbackContext(builder.ExecutionContext, web.Resource, urls);
-        foreach (var callback in web.Resource.Annotations.OfType<ResourceUrlsCallbackAnnotation>())
-        {
-            await callback.Callback(context);
-        }
+            context.Urls[0].DisplayLocation = UrlDisplayLocation.DetailsOnly;
+            context.Urls.Add(new()
+            {
+                Url = "https://other.dev.localhost:7082",
+                Endpoint = other.GetEndpoint("https"),
+                DisplayLocation = UrlDisplayLocation.SummaryAndDetails
+            });
+        });
+        using var app = builder.Build();
+        _ = app.Services.GetRequiredService<ApplicationOrchestratorProxy>();
+        await builder.Eventing.PublishResourceEndpointsAllocatedAsync(new ResourceEndpointsAllocatedEvent(web.Resource, app.Services), CancellationToken.None);
 
         Assert.Equal("https://localhost:7081/signin-oidc", await expression.GetValueAsync(new ValueProviderContext(), CancellationToken.None).AsTask().WaitAsync(TimeSpan.FromSeconds(10)));
     }
 
     [Fact]
-    public async Task WithRedirectUris_Endpoint_RunMode_ClearedUrlsFallBackToAllocatedUrlWithoutWaiting()
+    public async Task WithRedirectUris_Endpoint_RunMode_ClearedUrlsReportMissingOrigin()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var web = builder.AddContainer("web", "image")
@@ -1036,19 +1139,18 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
             .WithEndpoint("https", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 7081));
         var entra = builder.AddEntraIdApplication("entra-web")
             .WithRedirectUris(web.GetEndpoint("https"), "/signin-oidc");
+        web.WithUrls(context => context.Urls.Clear());
 
         _ = entra.Resource.GetBicepTemplateString();
         var expression = Assert.IsType<ReferenceExpression>(entra.Resource.Parameters["redirectUri0"]);
 
-        // An earlier WithUrls callback removed every displayed URL.
-        var context = new ResourceUrlsCallbackContext(builder.ExecutionContext, web.Resource, []);
-        foreach (var callback in web.Resource.Annotations.OfType<ResourceUrlsCallbackAnnotation>())
-        {
-            await callback.Callback(context);
-        }
+        using var app = builder.Build();
+        _ = app.Services.GetRequiredService<ApplicationOrchestratorProxy>();
+        await builder.Eventing.PublishResourceEndpointsAllocatedAsync(new ResourceEndpointsAllocatedEvent(web.Resource, app.Services), CancellationToken.None);
 
-        // Far below the 30 second fallback timeout.
-        Assert.Equal("https://localhost:7081/signin-oidc", await expression.GetValueAsync(new ValueProviderContext(), CancellationToken.None).AsTask().WaitAsync(TimeSpan.FromSeconds(5)));
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await expression.GetValueAsync(new ValueProviderContext(), CancellationToken.None).AsTask().WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Equal("No browser URL is available for resource 'web' and endpoint 'https'.", exception.Message);
     }
 
     [Fact]

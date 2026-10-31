@@ -1,0 +1,41 @@
+﻿{
+  "resources": {
+    "frontend-http-BrowserOrigin": {
+      "type": "parameter.v0",
+      "value": "{frontend-http-BrowserOrigin.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "frontend": {
+      "type": "container.v0",
+      "image": "image:latest",
+      "bindings": {
+        "http": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http",
+          "targetPort": 8080
+        }
+      }
+    },
+    "backend": {
+      "type": "container.v0",
+      "image": "image:latest",
+      "env": {
+        "ORIGIN": "{frontend-http-BrowserOrigin-1.value}"
+      }
+    },
+    "frontend-http-BrowserOrigin-1": {
+      "type": "parameter.v0",
+      "value": "{frontend-http-BrowserOrigin-1.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

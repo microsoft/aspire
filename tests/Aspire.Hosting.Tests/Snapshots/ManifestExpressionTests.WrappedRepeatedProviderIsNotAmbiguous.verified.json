@@ -1,0 +1,15 @@
+﻿{
+  "resources": {
+    "backend": {
+      "type": "container.v0",
+      "image": "image:latest",
+      "env": {
+        "VALUES": "prefix/{value-f97679fecbfddf91.connectionString}/{value-f97679fecbfddf91.connectionString}"
+      }
+    },
+    "value-f97679fecbfddf91": {
+      "type": "value.v0",
+      "connectionString": "value"
+    }
+  }
+}

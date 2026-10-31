@@ -1,0 +1,11 @@
+﻿{
+  "resources": {
+    "backend": {
+      "type": "container.v0",
+      "image": "image:latest",
+      "env": {
+        "URL": "https://public.example/path%20with%20spaces%2F%7Bliteral%7D"
+      }
+    }
+  }
+}

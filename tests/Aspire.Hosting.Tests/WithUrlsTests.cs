@@ -85,7 +85,7 @@ public class WithUrlsTests(ITestOutputHelper testOutputHelper) : WithUrlsTests<P
                 }
 
                 // Publish the ResourceEndpointsAllocatedEvent for the resource
-                await e.Eventing.PublishAsync(new ResourceEndpointsAllocatedEvent(custom, e.Services), EventDispatchBehavior.BlockingConcurrent, ct);
+                await e.Eventing.PublishResourceEndpointsAllocatedAsync(new ResourceEndpointsAllocatedEvent(custom, e.Services), EventDispatchBehavior.BlockingConcurrent, ct);
 
                 // Publish the BeforeResourceStartedEvent for the resource
                 await e.Eventing.PublishAsync(new BeforeResourceStartedEvent(custom, e.Services), EventDispatchBehavior.BlockingSequential, ct);
@@ -276,7 +276,7 @@ public abstract class WithUrlsTests<TResource>(ITestOutputHelper testOutputHelpe
     }
 
     [Fact]
-    public async Task WithUrlsCallsCallbackAfterBeforeResourceStartedEvent()
+    public async Task WithUrlsCallsCallbackBeforeResourceEndpointsAllocatedEvent()
     {
         using var builder = TestDistributedApplicationBuilder.Create(TestOutputHelper);
 
@@ -287,8 +287,7 @@ public abstract class WithUrlsTests<TResource>(ITestOutputHelper testOutputHelpe
             .WithUrls(c => called = true)
             .OnResourceEndpointsAllocated((_, _, _) =>
             {
-                // Should not be called at this point
-                Assert.False(called);
+                Assert.True(called);
                 return Task.CompletedTask;
             })
             .OnBeforeResourceStarted((_, _, _) =>

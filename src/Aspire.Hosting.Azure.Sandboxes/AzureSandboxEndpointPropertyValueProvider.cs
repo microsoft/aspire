@@ -107,6 +107,10 @@ internal sealed class AzureSandboxEndpointPropertyValueProvider : IValueProvider
             EndpointProperty.Scheme => uri.Scheme,
             EndpointProperty.HostAndPort => uri.IsDefaultPort ? uri.Host : uri.Authority,
             EndpointProperty.TlsEnabled => string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ? bool.TrueString : bool.FalseString,
+            EndpointProperty.BrowserOrigin or EndpointProperty.BrowserOrigins =>
+                uri.GetComponents(UriComponents.SchemeAndServer, UriFormat.UriEscaped),
+            EndpointProperty.BrowserOriginsJson =>
+                System.Text.Json.JsonSerializer.Serialize(new[] { uri.GetComponents(UriComponents.SchemeAndServer, UriFormat.UriEscaped) }),
             _ => throw new InvalidOperationException($"The property '{_endpointReferenceExpression.Property}' is not supported for the endpoint '{_endpointReferenceExpression.Endpoint.EndpointName}'.")
         };
     }

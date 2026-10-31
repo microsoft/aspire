@@ -223,8 +223,8 @@ public class AzureCognitiveServicesProjectResource :
     /// returned directly for URL-shaped properties. The default
     /// <see cref="IComputeEnvironmentResource.GetEndpointPropertyExpression"/> implementation composes
     /// <c>{scheme}://{host}</c>, which would produce a malformed double-scheme value
-    /// (for example <c>http://https://...</c>). Only the properties that <c>WithReference</c> emits for a
-    /// hosted agent endpoint are supported.
+    /// (for example <c>http://https://...</c>). Browser-origin properties use the project's deployed
+    /// authority without the project and agent navigation paths.
     /// </remarks>
     ReferenceExpression IComputeEnvironmentResource.GetEndpointPropertyExpression(EndpointReferenceExpression endpointReferenceExpression)
     {
@@ -235,8 +235,12 @@ public class AzureCognitiveServicesProjectResource :
         {
             EndpointProperty.Url => GetAgentAddressExpression(endpointReferenceExpression.Endpoint),
             EndpointProperty.Scheme => ReferenceExpression.Create($"https"),
+            EndpointProperty.BrowserOrigin or EndpointProperty.BrowserOrigins =>
+                ReferenceExpression.Create($"{new BicepOutputReference("endpointOrigin", this)}"),
+            EndpointProperty.BrowserOriginsJson =>
+                ReferenceExpression.Create($"[\"{new BicepOutputReference("endpointOrigin", this)}\"]"),
             _ => throw new InvalidOperationException(
-                $"The endpoint property '{property}' is not supported for Foundry hosted agent endpoints. Only 'Url' and 'Scheme' are supported.")
+                $"The endpoint property '{property}' is not supported for Foundry hosted agent endpoints.")
         };
     }
 

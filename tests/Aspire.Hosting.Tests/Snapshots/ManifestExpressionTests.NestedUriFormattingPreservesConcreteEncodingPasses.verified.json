@@ -1,0 +1,35 @@
+﻿{
+  "resources": {
+    "frontend": {
+      "type": "container.v0",
+      "image": "image:latest",
+      "bindings": {
+        "http": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http",
+          "targetPort": 8080
+        }
+      }
+    },
+    "backend": {
+      "type": "container.v0",
+      "image": "image:latest",
+      "env": {
+        "ENCODED": "{value-489baf88d5310331-uri-encoded.connectionString}"
+      }
+    },
+    "value-f97679fecbfddf91": {
+      "type": "value.v0",
+      "connectionString": "one two/%"
+    },
+    "value-24a3f268d8a982e1-uri-encoded": {
+      "type": "value.v0",
+      "connectionString": "one%20two%2F%25"
+    },
+    "value-489baf88d5310331-uri-encoded": {
+      "type": "value.v0",
+      "connectionString": "https%3A%2F%2Fexample%2F%3Fq%3Done%2520two%252F%2525"
+    }
+  }
+}

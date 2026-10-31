@@ -636,6 +636,32 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
+    public void Scanner_HostingAssembly_BrowserUrlReferences()
+    {
+        var capabilities = ScanCapabilitiesFromHostingAssembly();
+
+        var endpointOrigins = Assert.Single(capabilities, c =>
+            c.CapabilityId == "Aspire.Hosting.ApplicationModel/EndpointReference.browserOrigins");
+        Assert.Equal("browserOrigins", endpointOrigins.MethodName);
+        Assert.Equal("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointBrowserOrigins", endpointOrigins.ReturnType.TypeId);
+
+        var firstOrigin = Assert.Single(capabilities, c =>
+            c.CapabilityId == "Aspire.Hosting.ApplicationModel/EndpointBrowserOrigins.first");
+        Assert.Equal("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReferenceExpression", firstOrigin.ReturnType.TypeId);
+        var originOperations = capabilities
+            .Where(c => c.CapabilityId.StartsWith("Aspire.Hosting.ApplicationModel/EndpointBrowserOrigins.", StringComparison.Ordinal))
+            .Select(c => c.MethodName)
+            .Order()
+            .ToArray();
+        Assert.Equal(["asJson", "first", "join"], originOperations);
+        var joinedOrigins = Assert.Single(capabilities, c =>
+            c.CapabilityId == "Aspire.Hosting.ApplicationModel/EndpointBrowserOrigins.join");
+        Assert.Single(joinedOrigins.Parameters);
+        Assert.IsType<EndpointReferenceExpression>(
+            new ContainerResource("frontend").GetEndpoint("https").BrowserOrigins.First);
+    }
+
+    [Fact]
     public async Task Scanner_HostingAssembly_AddContainerCapability()
     {
         // Verify the addContainer capability from the real Aspire.Hosting assembly

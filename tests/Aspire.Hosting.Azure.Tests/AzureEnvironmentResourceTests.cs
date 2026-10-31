@@ -1,8 +1,13 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Hosting.ApplicationModel;
 #pragma warning disable ASPIREAZURE003 // IBicepOutputReferenceProvider is experimental.
+
+using System.Text.Json.Nodes;
+using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Azure.Provisioning;
+using Aspire.Hosting.Pipelines;
+using Aspire.Hosting.Tests;
 using Aspire.Hosting.Utils;
 using Azure.Provisioning;
 using Azure.Provisioning.Storage;
@@ -15,6 +20,140 @@ namespace Aspire.Hosting.Azure.Tests;
 
 public class AzureEnvironmentResourceTests(ITestOutputHelper output)
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task BrowserOriginInputsKeepDistinctEndpointIdentities(bool longNames)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
+        var prefix = longNames ? new string('a', 45) : "a";
+        var first = builder.AddContainer($"{prefix}-b", "image").WithHttpEndpoint(name: "c", targetPort: 80);
+        var second = builder.AddContainer(prefix, "image").WithHttpEndpoint(name: "b-c", targetPort: 80);
+        builder.AddAzureContainerAppEnvironment("env");
+        var backend = builder.AddContainer("consumer", "image").WithHttpEndpoint(targetPort: 8080).WithExternalHttpEndpoints()
+            .WithEnvironment("FIRST", first.GetEndpoint("c").BrowserOrigins.First)
+            .WithEnvironment("SECOND", second.GetEndpoint("b-c").BrowserOrigins.First)
+            .WithEnvironment("REPEATED", first.GetEndpoint("c").BrowserOrigins.First);
+        using var app = builder.Build();
+
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+
+        var target = backend.Resource.GetDeploymentTargetAnnotation()!;
+        var provisioning = Assert.IsAssignableFrom<AzureProvisioningResource>(target.DeploymentTarget);
+        var bicep = provisioning.GetBicepTemplateString();
+        var inputs = provisioning.Parameters.Values.OfType<ParameterResource>().ToArray();
+        Assert.Equal(2, inputs.Length);
+        var firstInput = inputs[0];
+        var secondInput = inputs[1];
+        Assert.NotSame(firstInput, secondInput);
+        Assert.NotEqual(firstInput.Name, secondInput.Name);
+        Assert.All(new[] { firstInput, secondInput }, parameter => Assert.InRange(parameter.Name.Length, 1, 64));
+        builder.Configuration[$"Parameters:{firstInput.Name}"] = "https://first.example";
+        builder.Configuration[$"Parameters:{secondInput.Name}"] = "https://second.example";
+        Assert.Equal("https://first.example", await firstInput.GetValueAsync(default));
+        Assert.Equal("https://second.example", await secondInput.GetValueAsync(default));
+        await Verify(bicep, "bicep").UseParameters(longNames);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task BrowserUrlProjectionsUseAzureWorkloadExpressions(bool appService)
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output, workspace.Path);
+        builder.Services.AddSingleton<IDeploymentStateManager>(new InMemoryDeploymentStateManager());
+        if (appService)
+        {
+            builder.AddAzureAppServiceEnvironment("env");
+        }
+        else
+        {
+            builder.AddAzureContainerAppEnvironment("env");
+        }
+#pragma warning disable CS0618 // Exercise legacy ProjectResource publishing with synthetic project metadata.
+        var frontend = builder.AddProject<TestProject>("frontend", launchProfileName: null)
+            .WithHttpEndpoint(targetPort: 8080).WithExternalHttpEndpoints();
+        var origin = frontend.GetEndpoint("http").BrowserOrigins.First;
+        var backend = builder.AddProject<TestProject>("backend", launchProfileName: null)
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints()
+            .WithEnvironment("ORIGIN", origin)
+            .WithEnvironment("ORIGINS", frontend.GetEndpoint("http").BrowserOrigins.Join())
+            .WithEnvironment("ORIGINS_JSON", frontend.GetEndpoint("http").BrowserOrigins.AsJson())
+            .WithEnvironment("CONFIG", ReferenceExpression.Create($"origin={origin}"));
+#pragma warning restore CS0618
+        using var app = builder.Build();
+
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, CancellationToken.None);
+
+        Assert.True(backend.Resource.TryGetLastAnnotation<DeploymentTargetAnnotation>(out var target));
+        var provisioningResource = Assert.IsAssignableFrom<AzureProvisioningResource>(target.DeploymentTarget);
+        var (manifest, bicep) = await AzureManifestUtils.GetManifestWithBicep(provisioningResource);
+        await Verify(manifest.ToString(), "json").AppendContentAsFile(bicep, "bicep").UseParameters(appService);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task BrowserOriginsFollowEndpointVisibility(bool appService)
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output, workspace.Path);
+        builder.Services.AddSingleton<IDeploymentStateManager>(new InMemoryDeploymentStateManager());
+        if (appService)
+        {
+            builder.AddAzureAppServiceEnvironment("env");
+        }
+        else
+        {
+            builder.AddAzureContainerAppEnvironment("env");
+        }
+#pragma warning disable CS0618 // Exercise legacy ProjectResource publishing with synthetic project metadata.
+        var frontend = builder.AddProject<TestProject>("frontend", launchProfileName: null).WithHttpEndpoint(targetPort: 8080);
+        var origins = frontend.GetEndpoint("http").BrowserOrigins;
+        var backend = builder.AddProject<TestProject>("backend", launchProfileName: null)
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints()
+            .WithEnvironment("ORIGIN", origins.First)
+            .WithEnvironment("ORIGINS", frontend.GetEndpoint("http").BrowserOrigins.Join())
+            .WithEnvironment("ORIGINS_JSON", origins.AsJson())
+            .WithEnvironment("CONFIG", ReferenceExpression.Create($"origin={origins.First}"));
+#pragma warning restore CS0618
+        using var app = builder.Build();
+
+        if (appService)
+        {
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, CancellationToken.None));
+            var cause = Assert.IsType<NotSupportedException>(exception.GetBaseException());
+            Assert.Equal("The endpoint 'http' on resource 'frontend' is not external. App Service only supports external endpoints.", cause.Message);
+            return;
+        }
+
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, CancellationToken.None);
+        var target = backend.Resource.GetDeploymentTargetAnnotation()!;
+        var provisioningResource = Assert.IsAssignableFrom<AzureProvisioningResource>(target.DeploymentTarget);
+        var bicep = provisioningResource.GetBicepTemplateString();
+        var inputs = provisioningResource.Parameters.Values.OfType<ParameterResource>().ToArray();
+        Assert.Equal(
+            ["frontend-http-BrowserOrigin", "frontend-http-BrowserOrigins", "frontend-http-BrowserOriginsJson"],
+            inputs.Select(input => input.Name));
+        builder.Configuration["Parameters:frontend-http-BrowserOrigin"] = "https://public.example";
+        builder.Configuration["Parameters:frontend-http-BrowserOrigins"] = "https://public.example,https://alias.example";
+        builder.Configuration["Parameters:frontend-http-BrowserOriginsJson"] = "[\"https://public.example\",\"https://alias.example\"]";
+        var inputBindings = new AzureBicepResource("inputs", templateString: "");
+        foreach (var (name, value) in provisioningResource.Parameters.Where(parameter => parameter.Value is ParameterResource))
+        {
+            inputBindings.Parameters.Add(name, value);
+        }
+        var parameters = new JsonObject();
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await BicepUtilities.SetParametersAsync(parameters, inputBindings, builder.ExecutionContext, cancellationToken: cts.Token);
+
+        await Verify(bicep, "bicep").AppendContentAsFile(parameters.ToJsonString(), "json").UseParameters(appService);
+    }
+
     [Fact]
     public async Task WhenUsedWithAzureContainerAppsEnvironment_GeneratesProperBicep()
     {

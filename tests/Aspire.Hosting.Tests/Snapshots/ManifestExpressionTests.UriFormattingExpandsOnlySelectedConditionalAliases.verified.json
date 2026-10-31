@@ -1,0 +1,55 @@
+﻿{
+  "resources": {
+    "public-host": {
+      "type": "parameter.v0",
+      "value": "{public-host.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "backend": {
+      "type": "container.v0",
+      "image": "image:latest",
+      "env": {
+        "ENCODED": "{value-42b144c0b0c815d1-uri-encoded.connectionString}"
+      }
+    },
+    "selected": {
+      "type": "parameter.v0",
+      "value": "{selected.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "inactive": {
+      "type": "parameter.v0",
+      "value": "{inactive.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "cond-selected-value-c832832d": {
+      "type": "value.v0",
+      "connectionString": "https://{public-host.value}/{value-f97679fecbfddf91.connectionString}"
+    },
+    "value-f97679fecbfddf91": {
+      "type": "value.v0",
+      "connectionString": "path with spaces/{{literal}}"
+    },
+    "value-42b144c0b0c815d1-uri-encoded": {
+      "type": "value.v0",
+      "connectionString": "https%3A%2F%2F{value-0aafa6eabbf223f4-uri-encoded.value}%2Fpath%20with%20spaces%2F%7Bliteral%7D"
+    },
+    "value-0aafa6eabbf223f4-uri-encoded": {
+      "type": "annotated.string",
+      "value": "{public-host.value}",
+      "filter": "uri"
+    }
+  }
+}

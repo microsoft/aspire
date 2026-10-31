@@ -8,4 +8,4 @@ metadata:
     app.kubernetes.io/component: "myapp"
     app.kubernetes.io/instance: "{{ .Release.Name }}"
 data:
-  DEFERRED_VALUE: "{{ .Values.config.myapp.DEFERRED_VALUE }}"
+  DEFERRED_VALUE: {{ tpl "{{ .Values.config.myapp.DEFERRED_VALUE }}" . | quote }}

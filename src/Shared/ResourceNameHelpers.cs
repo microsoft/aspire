@@ -12,6 +12,20 @@ namespace Aspire.Hosting.Utils;
 /// </summary>
 internal static class ResourceNameHelpers
 {
+    public static string GetEndpointPropertyInputName(string resourceName, string endpointName, string property, int maxLength)
+    {
+        var name = $"{resourceName}-{endpointName}-{property}";
+        if (endpointName.Contains('-'))
+        {
+            // "a-b"/"c" and "a"/"b-c" have the same readable prefix. Encode the
+            // boundary so independently published environments and request order agree.
+            var identity = $"{resourceName.ToUpperInvariant()}\0{endpointName.ToUpperInvariant()}\0{property}";
+            name = $"{name}-{GetHash(identity)}";
+        }
+
+        return TruncateWithHash(name, maxLength);
+    }
+
     /// <summary>
     /// Preserves names that fit, or shortens them using a prefix and a hash of the full name.
     /// </summary>
@@ -26,9 +40,11 @@ internal static class ResourceNameHelpers
             return name;
         }
 
-        var hash = XxHash3.HashToUInt64(Encoding.UTF8.GetBytes(name))
-            .ToString("x16", CultureInfo.InvariantCulture);
+        var hash = GetHash(name);
 
         return $"{name[..(maxLength - hash.Length - 1)]}-{hash}";
     }
+
+    private static string GetHash(string name) =>
+        XxHash3.HashToUInt64(Encoding.UTF8.GetBytes(name)).ToString("x16", CultureInfo.InvariantCulture);
 }

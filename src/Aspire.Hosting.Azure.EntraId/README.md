@@ -105,16 +105,28 @@ Existing registrations with different `uniqueName` values are not automatically 
 `AddExistingEntraApplication` or explicitly clean them up when migrating.
 
 Configure callback URIs with `WithRedirectUris`. To derive the scheme, host, and port from a resource's endpoint, pass the endpoint and the
-callback paths. When running locally the allocated endpoint URL is used; when publishing or deploying, the host comes from the resource's
+callback paths. When running locally the finalized preferred browser origin is used; when publishing or deploying, the host comes from the resource's
 compute environment. The callback path can't be discovered, so it must match the path configured in the consuming app:
 
 ```csharp
 entraWeb.WithRedirectUris(web.GetEndpoint("https"), "/signin-oidc", "/signout-callback-oidc");
 ```
 
-When running locally, the endpoint's primary URL is used, so a friendly `*.dev.localhost` name is registered when the dashboard uses one.
-That URL is read when the registration's URL callback runs, so a `WithUrlForEndpoint` or `WithUrls` callback added after this call that changes
-the endpoint's host isn't reflected. Add such callbacks before calling `WithRedirectUris`.
+Run-mode origins come from the endpoint's `BrowserOrigins` after all `WithUrlForEndpoint` and `WithUrls` callbacks finish.
+This includes friendly `*.dev.localhost` names and custom origins added after `WithRedirectUris`. Preferred origins follow display
+ordering, and navigation paths, queries, and fragments are excluded before appending the callback path. Removing all browser URLs
+for the endpoint reports a missing origin rather than falling back to its physical address.
+
+To select the browser origin explicitly, pass the scalar reference and callback paths:
+
+```csharp
+var origin = web.GetEndpoint("https").BrowserOrigins.First;
+entraWeb.WithRedirectUris(origin, "/signin-oidc", "/signout-callback-oidc");
+```
+
+Both overloads use the same publish/deploy behavior: an HTTPS hostname expression from the owning compute environment during infrastructure generation,
+preserving deployment outputs and allowing compute-environment configuration after `WithRedirectUris`.
+For a different public origin, supply the callback URLs explicitly or through parameters.
 
 When only the host name varies per environment (for example, a custom domain supplied at deployment time), pass a parameter for the host
 and the fixed callback paths. Each URI is `https://{host}{path}`:

@@ -212,8 +212,8 @@ internal sealed class AzureAppServiceWebsiteContext(
 
             var context = environmentContext.GetAppServiceContext(ep.Resource);
             return isSlot ?
-                (GetEndpointValue(context._slotEndpointMapping[ep.EndpointName], EndpointProperty.Url), secretType) :
-                (GetEndpointValue(context._endpointMapping[ep.EndpointName], EndpointProperty.Url), secretType);
+                (GetEndpointValue(context._slotEndpointMapping[ep.EndpointName], EndpointProperty.Url, ep.Property(EndpointProperty.Url)), secretType) :
+                (GetEndpointValue(context._endpointMapping[ep.EndpointName], EndpointProperty.Url, ep.Property(EndpointProperty.Url)), secretType);
         }
 
         if (value is ParameterResource param)
@@ -264,7 +264,7 @@ internal sealed class AzureAppServiceWebsiteContext(
 
             var context = environmentContext.GetAppServiceContext(epExpr.Endpoint.Resource);
             var mapping = isSlot ? context._slotEndpointMapping[epExpr.Endpoint.EndpointName] : context._endpointMapping[epExpr.Endpoint.EndpointName];
-            var val = GetEndpointValue(mapping, epExpr.Property);
+            var val = GetEndpointValue(mapping, epExpr.Property, epExpr);
             return (val, secretType);
         }
 
@@ -514,7 +514,7 @@ internal sealed class AzureAppServiceWebsiteContext(
         // There should be a single valid target port
         if (_endpointMapping.FirstOrDefault() is var (_, mapping))
         {
-            var targetPort = GetEndpointValue(mapping, EndpointProperty.TargetPort);
+            var targetPort = GetEndpointValue(mapping, EndpointProperty.TargetPort, null);
 
             if (mainContainer is SiteContainer container)
             {
@@ -899,10 +899,17 @@ internal sealed class AzureAppServiceWebsiteContext(
         });
     }
 
-    private BicepValue<string> GetEndpointValue(EndpointMapping mapping, EndpointProperty property)
+    private BicepValue<string> GetEndpointValue(EndpointMapping mapping, EndpointProperty property, EndpointReferenceExpression? reference)
     {
         return property switch
         {
+            EndpointProperty.BrowserOrigins or EndpointProperty.BrowserOrigin when mapping.IsHttpIngress && mapping.External =>
+                BicepFunction.Interpolate($"{mapping.Scheme}://{mapping.Host}.azurewebsites.net"),
+            EndpointProperty.BrowserOriginsJson when mapping.IsHttpIngress && mapping.External =>
+                BicepFunction.Interpolate($"[\"{mapping.Scheme}://{mapping.Host}.azurewebsites.net\"]"),
+            EndpointProperty.BrowserOrigins or EndpointProperty.BrowserOrigin or EndpointProperty.BrowserOriginsJson =>
+                AllocateParameter(environmentContext.GetEndpointInput(
+                    reference ?? throw new InvalidOperationException("A browser origin property requires its endpoint reference."))),
             EndpointProperty.Url => BicepFunction.Interpolate($"{mapping.Scheme}://{mapping.Host}.azurewebsites.net"),
             EndpointProperty.Host => BicepFunction.Interpolate($"{mapping.Host}.azurewebsites.net"),
             EndpointProperty.Port => mapping.Port.ToString(CultureInfo.InvariantCulture),

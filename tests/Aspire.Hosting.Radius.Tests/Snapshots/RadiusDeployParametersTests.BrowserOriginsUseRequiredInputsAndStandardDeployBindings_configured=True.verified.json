@@ -1,0 +1,15 @@
+﻿{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "web_http_BrowserOrigin": {
+      "value": "https://public.example"
+    },
+    "web_http_BrowserOrigins": {
+      "value": "https://public.example,https://alias.example"
+    },
+    "web_http_BrowserOriginsJson": {
+      "value": "[\u0022https://public.example\u0022,\u0022https://alias.example\u0022]"
+    }
+  }
+}

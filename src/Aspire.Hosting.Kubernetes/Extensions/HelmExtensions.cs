@@ -93,7 +93,9 @@ internal static partial class HelmExtensions
     /// Evaluates a string as a Helm template and quotes the complete result as a YAML scalar.
     /// </summary>
     public static string ToQuotedHelmTemplateExpression(this string value)
-        => $"{StartDelimiter} tpl {JsonSerializer.Serialize(value)} . {PipelineDelimiter} quote {EndDelimiter}";
+        => QuotedTemplateExpressionPattern().IsMatch(value)
+            ? value
+            : $"{StartDelimiter} tpl {JsonSerializer.Serialize(value)} . {PipelineDelimiter} quote {EndDelimiter}";
 
     public static (bool, ScalarStyle?) ShouldDoubleQuoteString(string value)
     {

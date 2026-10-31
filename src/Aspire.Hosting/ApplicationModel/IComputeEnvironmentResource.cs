@@ -50,6 +50,8 @@ public interface IComputeEnvironmentResource : IResource
 
         return property switch
         {
+            EndpointProperty.BrowserOrigins or EndpointProperty.BrowserOrigin or EndpointProperty.BrowserOriginsJson =>
+                throw new NotSupportedException($"The compute environment cannot provide browser origins for endpoint '{endpoint.Name}'."),
             EndpointProperty.Url => IsDefaultPort(scheme, port)
                 ? ReferenceExpression.Create($"{scheme}://{host.Value}")
                 : ReferenceExpression.Create($"{scheme}://{host.Value}:{port.ToString(CultureInfo.InvariantCulture)}"),

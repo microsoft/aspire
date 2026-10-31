@@ -100,6 +100,9 @@ public class AzureContainerAppExpressEndpointTests(ITestOutputHelper outputHelpe
         var expectedValues = new Dictionary<EndpointProperty, string>
         {
             [EndpointProperty.Url] = "https://api.salmonisland-e9e6a567.westus3.azurecontainerapps.io",
+            [EndpointProperty.BrowserOrigins] = "https://api.salmonisland-e9e6a567.westus3.azurecontainerapps.io",
+            [EndpointProperty.BrowserOrigin] = "https://api.salmonisland-e9e6a567.westus3.azurecontainerapps.io",
+            [EndpointProperty.BrowserOriginsJson] = "[\"https://api.salmonisland-e9e6a567.westus3.azurecontainerapps.io\"]",
             [EndpointProperty.Host] = "api.salmonisland-e9e6a567.westus3.azurecontainerapps.io",
             [EndpointProperty.IPV4Host] = "api.salmonisland-e9e6a567.westus3.azurecontainerapps.io",
             [EndpointProperty.HostAndPort] = "api.salmonisland-e9e6a567.westus3.azurecontainerapps.io:443",
@@ -146,6 +149,7 @@ public class AzureContainerAppExpressEndpointTests(ITestOutputHelper outputHelpe
     [InlineData(EndpointProperty.TargetPort)]
     [InlineData(EndpointProperty.Scheme)]
     [InlineData(EndpointProperty.TlsEnabled)]
+    [InlineData(EndpointProperty.BrowserOrigins)]
     public void InternalEndpointReferencesRequireExplicitPublicIngress(EndpointProperty property)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
@@ -193,6 +197,31 @@ public class AzureContainerAppExpressEndpointTests(ITestOutputHelper outputHelpe
             "Use WithExternalHttpEndpoints() to explicitly enable public HTTPS ingress, or use a standard Azure Container Apps environment.",
             exception.Message);
         Assert.False(api.GetEndpoint("http").EndpointAnnotation.IsExternal);
+    }
+
+    [Theory]
+    [InlineData(EndpointProperty.BrowserOrigin)]
+    [InlineData(EndpointProperty.BrowserOrigins)]
+    [InlineData(EndpointProperty.BrowserOriginsJson)]
+    public async Task BrowserOriginPropertiesUseTheNormalLocalVisibilityValidation(EndpointProperty property)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
+        builder.AddAzureContainerAppEnvironment("env").AsExpress();
+        var api = builder.AddContainer("api", "image").WithHttpEndpoint(targetPort: 8080);
+        var web = builder.AddContainer("web", "image").WithHttpEndpoint(targetPort: 8080).WithExternalHttpEndpoints()
+            .WithEnvironment("ORIGIN", api.GetEndpoint("http").Property(property));
+        using var app = builder.Build();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            await ExecuteBeforeStartHooksAsync(app, default);
+            _ = GetTarget(web.Resource).GetBicepTemplateString();
+        });
+
+        Assert.Equal(
+            "Azure Container Apps Express environment 'env' cannot reference internal endpoint 'http' on resource 'api'. " +
+            "Use WithExternalHttpEndpoints() to explicitly enable public HTTPS ingress, or use a standard Azure Container Apps environment.",
+            exception.GetBaseException().Message);
     }
 
     [Theory]

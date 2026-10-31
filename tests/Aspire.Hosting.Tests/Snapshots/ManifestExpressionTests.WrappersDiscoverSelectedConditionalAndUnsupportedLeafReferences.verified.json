@@ -1,0 +1,37 @@
+﻿{
+  "resources": {
+    "public-host": {
+      "type": "parameter.v0",
+      "value": "{public-host.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "backend": {
+      "type": "container.v0",
+      "image": "image:latest",
+      "env": {
+        "REDIRECT": "redirect={cond-enabled-value-79448306.connectionString}"
+      }
+    },
+    "enabled": {
+      "type": "parameter.v0",
+      "value": "{enabled.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "cond-enabled-value-79448306": {
+      "type": "value.v0",
+      "connectionString": "https://{public-host.value}/{value-4311bf6732892bae.connectionString}"
+    },
+    "value-4311bf6732892bae": {
+      "type": "value.v0",
+      "connectionString": "concrete"
+    }
+  }
+}

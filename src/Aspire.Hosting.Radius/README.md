@@ -90,6 +90,10 @@ builder.AddContainer("api", "myorg/api", "1.0")
 
 Untargeted resources surface a clear error from the core pipeline instead of being silently claimed by one environment.
 
+Browser-origin endpoint properties in workload environment variables use required deployment inputs rather than cluster-local service DNS.
+For example, `web.GetEndpoint("http").BrowserOrigins.First` reads `Parameters:web-http-BrowserOrigin`.
+The `BrowserOrigins` and `BrowserOriginsJson` inputs accept comma-separated and JSON origin lists, respectively, and use the normal Radius deployment-parameter file.
+
 ## Deploying to a cloud
 
 Everything above works against a plain Kubernetes cluster with Radius installed. To target Azure

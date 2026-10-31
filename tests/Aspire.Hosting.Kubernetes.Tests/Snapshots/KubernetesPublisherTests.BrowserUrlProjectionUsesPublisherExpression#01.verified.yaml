@@ -1,0 +1,10 @@
+﻿parameters: {}
+secrets: {}
+config:
+  env_dashboard:
+    ASPIRE_DASHBOARD_TELEMETRY_OPTOUT: "true"
+  backend:
+    frontend_http_BrowserOrigin: ""
+    frontend_http_BrowserOrigins: ""
+    frontend_http_BrowserOriginsJson: ""
+    CONFIG: ""

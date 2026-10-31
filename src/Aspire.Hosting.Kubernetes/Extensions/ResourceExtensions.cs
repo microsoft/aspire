@@ -119,7 +119,12 @@ internal static class ResourceExtensions
                              : kvp.Value.Expression   // All configmap values are strings
                                ?? string.Empty;
 
-            configMap.Data[kvp.Key] = expression.EnsureStringOutput();
+            // Values can contain JSON, quotes, or newlines. YAML quoting must apply to
+            // the complete Helm result, not to the unevaluated substitution.
+            expression = expression.EnsureStringOutput();
+            configMap.Data[kvp.Key] = expression.ContainsHelmExpression()
+                ? expression.ToQuotedHelmTemplateExpression()
+                : expression;
             processedKeys.Add(kvp.Key);
         }
 

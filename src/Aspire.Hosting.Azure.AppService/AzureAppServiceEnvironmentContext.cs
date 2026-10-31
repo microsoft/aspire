@@ -3,6 +3,9 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.AppService;
+using Aspire.Hosting.Utils;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Azure;
@@ -22,8 +25,22 @@ internal sealed class AzureAppServiceEnvironmentContext(
     public IServiceProvider Services => serviceProvider;
 
     private readonly Dictionary<IResource, AzureAppServiceWebsiteContext> _appServices = new(new ResourceNameComparer());
+    private readonly Dictionary<string, ParameterResource> _endpointInputs = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<(string ResourceName, string[] EndpointNames)> _upgradedEndpoints = [];
     private bool _hasLoggedHttpsUpgrade;
+
+    public ParameterResource GetEndpointInput(EndpointReferenceExpression reference)
+    {
+        if (!_endpointInputs.TryGetValue(reference.ValueExpression, out var parameter))
+        {
+            var name = ResourceNameHelpers.GetEndpointPropertyInputName(
+                reference.Endpoint.Resource.Name, reference.Endpoint.EndpointAnnotation.Name, reference.Property.ToString(), 64);
+            parameter = ParameterResourceBuilderExtensions.CreateParameter(serviceProvider.GetRequiredService<IConfiguration>(), name, secret: false);
+            _endpointInputs.Add(reference.ValueExpression, parameter);
+        }
+
+        return parameter;
+    }
 
     /// <summary>
     /// Records HTTP endpoints that were upgraded to HTTPS for a resource.

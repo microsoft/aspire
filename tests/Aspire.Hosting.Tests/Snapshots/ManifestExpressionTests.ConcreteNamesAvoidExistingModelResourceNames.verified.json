@@ -1,0 +1,24 @@
+﻿{
+  "resources": {
+    "backend": {
+      "type": "container.v0",
+      "image": "image:latest",
+      "env": {
+        "CUSTOM": "{value-f97679fecbfddf91-1.connectionString}"
+      }
+    },
+    "value-f97679fecbfddf91": {
+      "type": "parameter.v0",
+      "value": "{value-f97679fecbfddf91.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "value-f97679fecbfddf91-1": {
+      "type": "value.v0",
+      "connectionString": "concrete"
+    }
+  }
+}

@@ -253,6 +253,15 @@ const (
 	// EndpointPropertyTlsEnabled indicates whether TLS is enabled on the endpoint.
 	// Returns TrueString or FalseString.
 	EndpointPropertyTlsEnabled EndpointProperty = "TlsEnabled"
+	// EndpointPropertyBrowserOrigins - Comma-separated browser-facing origins for
+	// this endpoint.
+	EndpointPropertyBrowserOrigins EndpointProperty = "BrowserOrigins"
+	// EndpointPropertyBrowserOrigin is the first browser-facing origin for this
+	// endpoint.
+	EndpointPropertyBrowserOrigin EndpointProperty = "BrowserOrigin"
+	// EndpointPropertyBrowserOriginsJson is the endpoint's browser-facing origins
+	// as a JSON array string.
+	EndpointPropertyBrowserOriginsJson EndpointProperty = "BrowserOriginsJson"
 )
 
 // InputType specifies the type of input for an [InteractionInput].
@@ -20334,10 +20343,108 @@ func (s *dotnetToolResource) WithoutHttpsCertificate() DotnetToolResource {
 	return s
 }
 
+// EndpointBrowserOrigins provides collection operations over an endpoint's
+// finalized browser-facing origins.
+type EndpointBrowserOrigins interface {
+	handleReference
+
+	// AsJson creates an endpoint-property expression for a JSON array of origins.
+	//
+	// Returns: The browser origins serialized as a JSON array.
+	AsJson() EndpointReferenceExpression
+
+	// First gets an endpoint-property expression for the preferred browser origin.
+	First() EndpointReferenceExpression
+
+	// Join creates an endpoint-property expression for comma-separated origins.
+	//
+	// Returns: The joined browser origins as an endpoint-property expression.
+	Join() EndpointReferenceExpression
+
+	// Err returns the first error recorded on this wrapper, or nil if the wrapper
+	// resolved successfully and no chained operation has failed.
+	Err() error
+}
+
+// endpointBrowserOrigins is the unexported impl of EndpointBrowserOrigins.
+type endpointBrowserOrigins struct {
+	*resourceBuilderBase
+}
+
+// newEndpointBrowserOriginsFromHandle wraps an existing handle as EndpointBrowserOrigins.
+func newEndpointBrowserOriginsFromHandle(h *handle, c *client) EndpointBrowserOrigins {
+	return &endpointBrowserOrigins{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// AsJson creates an endpoint-property expression for a JSON array of origins.
+func (s *endpointBrowserOrigins) AsJson() EndpointReferenceExpression {
+	if s.err != nil { return &endpointReferenceExpression{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/EndpointBrowserOrigins.asJson", reqArgs)
+	if err != nil {
+		return &endpointReferenceExpression{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/EndpointBrowserOrigins.asJson returned unexpected type %T", result)
+		return &endpointReferenceExpression{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &endpointReferenceExpression{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// First gets an endpoint-property expression for the preferred browser origin.
+func (s *endpointBrowserOrigins) First() EndpointReferenceExpression {
+	if s.err != nil { return &endpointReferenceExpression{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/EndpointBrowserOrigins.first", reqArgs)
+	if err != nil {
+		return &endpointReferenceExpression{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/EndpointBrowserOrigins.first returned unexpected type %T", result)
+		return &endpointReferenceExpression{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &endpointReferenceExpression{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// Join creates an endpoint-property expression for comma-separated origins.
+func (s *endpointBrowserOrigins) Join() EndpointReferenceExpression {
+	if s.err != nil { return &endpointReferenceExpression{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/EndpointBrowserOrigins.join", reqArgs)
+	if err != nil {
+		return &endpointReferenceExpression{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/EndpointBrowserOrigins.join returned unexpected type %T", result)
+		return &endpointReferenceExpression{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &endpointReferenceExpression{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
 // EndpointReference represents an endpoint reference for a resource with
 // endpoints.
 type EndpointReference interface {
 	handleReference
+
+	// BrowserOrigins gets deferred browser-facing origins associated with this
+	// endpoint.
+	//
+	// Origins use finalized URL customization and are independent of this
+	// reference's service-discovery network context. Use First for one preferred
+	// origin, or AsJson and Join for all distinct origins.
+	BrowserOrigins() EndpointBrowserOrigins
 
 	// EndpointName gets the name of the endpoint associated with the endpoint
 	// reference.
@@ -20449,6 +20556,26 @@ type endpointReference struct {
 // newEndpointReferenceFromHandle wraps an existing handle as EndpointReference.
 func newEndpointReferenceFromHandle(h *handle, c *client) EndpointReference {
 	return &endpointReference{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// BrowserOrigins gets deferred browser-facing origins associated with this
+// endpoint.
+func (s *endpointReference) BrowserOrigins() EndpointBrowserOrigins {
+	if s.err != nil { return &endpointBrowserOrigins{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/EndpointReference.browserOrigins", reqArgs)
+	if err != nil {
+		return &endpointBrowserOrigins{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/EndpointReference.browserOrigins returned unexpected type %T", result)
+		return &endpointBrowserOrigins{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &endpointBrowserOrigins{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
 // EndpointName gets the name of the endpoint associated with the endpoint
@@ -35091,8 +35218,13 @@ func (s *resourceCommandService) ExecuteCommandAsync(resource any, commandName s
 // ResourceEndpointsAllocatedEvent - This event is raised by orchestrators to
 // signal to resources that their endpoints have been allocated.
 //
-// Any resources that customize their URLs via a ResourceUrlsCallbackAnnotation
-// will have their callbacks invoked during this event.
+// Resources that customize their URLs via a ResourceUrlsCallbackAnnotation have
+// their callbacks invoked before event handlers run. Browser URL references
+// contain the finalized values at that point. Endpoint and URL configuration
+// must be registered before this event is published. Browser-facing resource
+// allocators should complete allocation through
+// PublishResourceEndpointsAllocatedAsync so URL customization completes before
+// the notification is dispatched.
 type ResourceEndpointsAllocatedEvent interface {
 	handleReference
 
@@ -45898,6 +46030,9 @@ func registerWrappers(c *client) {
 	})
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource", func(h *handle, c *client) any {
 		return newDotnetToolResourceFromHandle(h, c)
+	})
+	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointBrowserOrigins", func(h *handle, c *client) any {
+		return newEndpointBrowserOriginsFromHandle(h, c)
 	})
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference", func(h *handle, c *client) any {
 		return newEndpointReferenceFromHandle(h, c)

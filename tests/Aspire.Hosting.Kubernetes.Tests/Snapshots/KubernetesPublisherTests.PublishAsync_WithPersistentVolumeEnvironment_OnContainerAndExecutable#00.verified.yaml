@@ -8,4 +8,4 @@ metadata:
     app.kubernetes.io/component: "container"
     app.kubernetes.io/instance: "{{ .Release.Name }}"
 data:
-  DATA_PATH: "{{ .Values.config.container.DATA_PATH }}"
+  DATA_PATH: {{ tpl "{{ .Values.config.container.DATA_PATH }}" . | quote }}

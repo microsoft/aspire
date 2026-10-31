@@ -455,13 +455,16 @@ public class EntraIdApplicationResource : AzureProvisioningResource, IResourceWi
                 continue;
             }
 
-            if (value is IEntraIdDerivedRedirectUri derivedRedirectUri)
+            var uriExpression = value switch
             {
-                // The value is only known when the parameter is resolved: after endpoint allocation when running
-                // locally, from the compute environment when deploying, or from the host parameter's value.
-                var uriParameter = derivedRedirectUri
-                    .CreateExpression()
-                    .AsProvisioningParameter(infrastructure, NextDerivedParameterName());
+                ReferenceExpression referenceExpression => referenceExpression,
+                Func<ReferenceExpression> factory => factory(),
+                _ => null
+            };
+            if (uriExpression is not null)
+            {
+                // Keep runtime browser origins and deployment parameters/outputs deferred until resolution.
+                var uriParameter = uriExpression.AsProvisioningParameter(infrastructure, NextDerivedParameterName());
                 literals.Add(uriParameter.Value.Compile());
                 continue;
             }
@@ -700,14 +703,16 @@ public class EntraIdApplicationResource : AzureProvisioningResource, IResourceWi
     /// </remarks>
     public IReadOnlyList<ParameterResource> RedirectUriParameters => [.. _redirectUriValues.OfType<ParameterResource>()];
 
-    // Holds string or ParameterResource entries in the order they were added, so registration order matches call order.
+    // Keep literal, parameter, expression, and deferred-expression entries in registration order.
     private readonly List<object> _redirectUriValues = [];
 
     internal void AddRedirectUri(string redirectUri) => _redirectUriValues.Add(redirectUri);
 
     internal void AddRedirectUri(ParameterResource redirectUri) => _redirectUriValues.Add(redirectUri);
 
-    internal void AddRedirectUri(IEntraIdDerivedRedirectUri redirectUri) => _redirectUriValues.Add(redirectUri);
+    internal void AddRedirectUri(ReferenceExpression redirectUri) => _redirectUriValues.Add(redirectUri);
+
+    internal void AddRedirectUri(Func<ReferenceExpression> redirectUri) => _redirectUriValues.Add(redirectUri);
 
     /// <summary>
     /// Gets the application roles to declare on an application created by Aspire.

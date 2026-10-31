@@ -1,0 +1,33 @@
+﻿{
+  "resources": {
+    "frontend": {
+      "type": "container.v0",
+      "image": "image:latest",
+      "bindings": {
+        "http": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http",
+          "targetPort": 8080
+        }
+      }
+    },
+    "module": {
+      "type": "azure.bicep.v0",
+      "path": "module.module.bicep",
+      "params": {
+        "origin": "{frontend-http-BrowserOrigin.value}",
+        "redirect": "{frontend-http-BrowserOrigin.value}/signin-oidc"
+      }
+    },
+    "frontend-http-BrowserOrigin": {
+      "type": "parameter.v0",
+      "value": "{frontend-http-BrowserOrigin.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

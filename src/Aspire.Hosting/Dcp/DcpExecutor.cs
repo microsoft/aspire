@@ -241,10 +241,22 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
                 // resource-specific endpoint events. URL callbacks can reference endpoints on other
                 // resources, so publishing per-resource while another resource is still allocating can
                 // make a valid cross-resource callback observe an unallocated endpoint.
-                foreach (var resource in endpointAllocatedResources.Distinct())
+                var endpointEvents = new List<ResourceEndpointsAllocatedEvent>();
+                lock (_endpointsAdvertised)
                 {
-                    await PublishEndpointsAllocatedEventAsync(resource, ct).ConfigureAwait(false);
+                    foreach (var resource in endpointAllocatedResources.Distinct())
+                    {
+                        if (_endpointsAdvertised.Add(resource.Name))
+                        {
+                            endpointEvents.Add(new ResourceEndpointsAllocatedEvent(resource, _executionContext.Services));
+                        }
+                    }
                 }
+
+                // Finalize the entire allocated batch before notifying observers so a handler can resolve
+                // another resource's browser URLs without waiting for a later notification.
+                await _executorEvents.PublishAsync(new OnEndpointsAllocatedContext(ct, endpointEvents)).ConfigureAwait(false);
+
             }, ct);
 
             // Container creation and executable configuration may both require endpoints expressed within the container network.
@@ -1409,21 +1421,6 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
         {
             _connectionStringsAdvertised.Remove(resource.Name);
         }
-    }
-
-    private async Task<bool> PublishEndpointsAllocatedEventAsync(IResource resource, CancellationToken ct)
-    {
-        lock (_endpointsAdvertised)
-        {
-            if (!_endpointsAdvertised.Add(resource.Name))
-            {
-                return false; // Already published for this resource.
-            }
-        }
-
-        var ev = new ResourceEndpointsAllocatedEvent(resource, _executionContext.Services);
-        await _distributedApplicationEventing.PublishAsync(ev, EventDispatchBehavior.BlockingSequential, ct).ConfigureAwait(false);
-        return true;
     }
 
     private async Task PublishConnectionStringAvailableEventAsync(IResource resource, CancellationToken ct)

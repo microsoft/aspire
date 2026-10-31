@@ -1,0 +1,23 @@
+﻿{
+  "resources": {
+    "backend": {
+      "type": "container.v0",
+      "image": "image:latest",
+      "env": {
+        "VALUES": "{value-f97679fecbfddf91.connectionString}|{value-b7f50510b3aedd38-uri-encoded.connectionString}|{value-f97679fecbfddf91.connectionString}"
+      }
+    },
+    "value-f97679fecbfddf91": {
+      "type": "value.v0",
+      "connectionString": "first value"
+    },
+    "value-f97679fecbfddf91-1": {
+      "type": "value.v0",
+      "connectionString": "second/value"
+    },
+    "value-b7f50510b3aedd38-uri-encoded": {
+      "type": "value.v0",
+      "connectionString": "second%2Fvalue"
+    }
+  }
+}
