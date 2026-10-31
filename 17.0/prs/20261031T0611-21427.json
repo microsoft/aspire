@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only flaky test fix",
+  "mergedAt": "2026-10-31T06:11:50Z",
+  "number": 21427,
+  "runDate": "2026-10-31T12:03:26Z",
+  "status": "excluded",
+  "title": "Fix flaky ExecuteCommandAsync_RebuildCommand_ReturnsBuildOutput build count"
+}
