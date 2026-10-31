@@ -96,7 +96,7 @@ public sealed class Hex1bNativePublishingTests : IDisposable
         var result = await RunDotNetAsync(
             ["msbuild", Path.Combine(RepoRoot.Path, "eng", "Bundle.proj"), "-nologo", "-t:_ShowBanner",
              $"-p:Configuration={configuration}", $"-p:ContinuousIntegrationBuild={ci}",
-             $"-p:ArtifactsLogDir={Path.Combine(_workspace.Path, "logs")}"]);
+             $"-p:_ArtifactsLogDir={Path.Combine(_workspace.Path, "logs")}"]);
 
         Assert.Equal(succeeds, result.ExitCode == 0);
         if (!succeeds)

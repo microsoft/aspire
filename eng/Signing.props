@@ -124,6 +124,10 @@
     <!-- Sign the aspire-managed binary at its publish output path (before it gets packed into the bundle archive) -->
     <ItemsToSign Condition="$([System.OperatingSystem]::IsWindows())" Include="$(ArtifactsBinDir)Aspire.Managed\**\publish\aspire-managed.exe" />
     <ItemsToSign Condition="$([System.OperatingSystem]::IsWindows())" Include="$(ArtifactsBinDir)Aspire.Tray.Windows\**\publish\aspire-tray.exe" />
+    <!-- Bundle builds can reuse a tray published outside the standard artifacts tree. -->
+    <ItemsToSign Condition="'$(WindowsTrayPath)' != '' and $(TargetRid.StartsWith('win-'))"
+                 Include="$([MSBuild]::NormalizePath('$(WindowsTrayPath)', 'aspire-tray.exe'))"
+                 Exclude="@(ItemsToSign)" />
     <ItemsToSign Condition="$([System.OperatingSystem]::IsLinux())" Include="$(ArtifactsBinDir)Aspire.Managed/**/publish/aspire-managed" />
     <ItemsToSign Condition="$([System.OperatingSystem]::IsMacOS())" Include="$(ArtifactsBinDir)Aspire.Managed/**/publish/aspire-managed" />
     <!-- The whole macOS tray app is signed/notarized separately by

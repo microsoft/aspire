@@ -72,6 +72,11 @@ public static class Program
             Description = "Pre-built Windows tray publish directory (required for Windows; signed before layout assembly)"
         };
 
+        var dashboardOption = new Option<string?>("--dashboard")
+        {
+            Description = "Prepared Dashboard publish directory (discovered from artifacts when omitted)"
+        };
+
         var rootCommand = new RootCommand("CreateLayout - Build Aspire bundle layout for distribution");
         rootCommand.Options.Add(outputOption);
         rootCommand.Options.Add(artifactsOption);
@@ -81,6 +86,7 @@ public static class Program
         rootCommand.Options.Add(archiveOption);
         rootCommand.Options.Add(trayAppOption);
         rootCommand.Options.Add(windowsTrayOption);
+        rootCommand.Options.Add(dashboardOption);
         rootCommand.Options.Add(verboseOption);
 
         rootCommand.SetAction(async (parseResult, cancellationToken) =>
@@ -96,7 +102,7 @@ public static class Program
             try
             {
                 using var builder = new LayoutBuilder(outputPath, artifactsPath, rid, configuration, version, verbose,
-                    parseResult.GetValue(trayAppOption), parseResult.GetValue(windowsTrayOption));
+                    parseResult.GetValue(trayAppOption), parseResult.GetValue(windowsTrayOption), parseResult.GetValue(dashboardOption));
                 await builder.BuildAsync().ConfigureAwait(false);
 
                 if (createArchive)
@@ -135,8 +141,9 @@ internal sealed class LayoutBuilder : IDisposable
     private readonly bool _verbose;
     private readonly string? _trayAppPath;
     private readonly string? _windowsTrayPath;
+    private readonly string? _dashboardPath;
 
-    public LayoutBuilder(string outputPath, string artifactsPath, string rid, string configuration, string version, bool verbose, string? trayAppPath, string? windowsTrayPath)
+    public LayoutBuilder(string outputPath, string artifactsPath, string rid, string configuration, string version, bool verbose, string? trayAppPath, string? windowsTrayPath, string? dashboardPath = null)
     {
         _outputPath = Path.GetFullPath(outputPath);
         _artifactsPath = Path.GetFullPath(artifactsPath);
@@ -146,6 +153,7 @@ internal sealed class LayoutBuilder : IDisposable
         _verbose = verbose;
         _trayAppPath = trayAppPath;
         _windowsTrayPath = windowsTrayPath;
+        _dashboardPath = dashboardPath;
     }
 
     public void Dispose()
@@ -316,12 +324,23 @@ internal sealed class LayoutBuilder : IDisposable
     {
         Log("Copying Native AOT Dashboard...");
 
+        if (_dashboardPath is not null && string.IsNullOrWhiteSpace(_dashboardPath))
+        {
+            throw new InvalidOperationException("--dashboard requires a nonempty publish directory.");
+        }
+
         // A non-RID publish contains a framework-dependent apphost instead of the native Dashboard.
         // Only RID-specific output can be used here.
-        var dashboardPublishPath = FindPublishPath("Aspire.Dashboard", "net11.0", requireRidSpecific: true);
+        var dashboardPublishPath = _dashboardPath ?? FindPublishPath("Aspire.Dashboard", "net11.0", requireRidSpecific: true);
         if (dashboardPublishPath is null)
         {
-            throw new InvalidOperationException("Aspire.Dashboard publish output not found.");
+            throw new InvalidOperationException(
+                $"Aspire.Dashboard publish output not found for RID '{_rid}', configuration '{_configuration}'. " +
+                $"Searched: {string.Join(", ", GetRidSpecificPublishPaths("Aspire.Dashboard", "net11.0"))}");
+        }
+        if (!Directory.Exists(dashboardPublishPath))
+        {
+            throw new InvalidOperationException($"Dashboard publish directory not found at {dashboardPublishPath}");
         }
 
         var isWindows = _rid.StartsWith("win", StringComparison.OrdinalIgnoreCase);
@@ -459,15 +478,7 @@ internal sealed class LayoutBuilder : IDisposable
     {
         // Only use the requested configuration so stale output from another build cannot be bundled.
         // Prefer RID-specific publish paths over non-RID output.
-        var ridSpecificSearchPaths = new[]
-        {
-            // PlatformName-scoped output used by RID packaging and signing.
-            Path.Combine(_artifactsPath, "bin", projectName, _rid, _configuration, targetFramework, _rid, "publish"),
-            // RID-specific self-contained publish output (preferred for Aspire.Managed)
-            Path.Combine(_artifactsPath, "bin", projectName, _configuration, targetFramework, _rid, "publish"),
-            // Native AOT output
-            Path.Combine(_artifactsPath, "bin", projectName, _configuration, targetFramework, _rid, "native"),
-        };
+        var ridSpecificSearchPaths = GetRidSpecificPublishPaths(projectName, targetFramework);
 
         var searchPaths = requireRidSpecific
             ? ridSpecificSearchPaths
@@ -488,6 +499,16 @@ internal sealed class LayoutBuilder : IDisposable
 
         return null;
     }
+
+    private string[] GetRidSpecificPublishPaths(string projectName, string targetFramework) =>
+    [
+        // PlatformName-scoped output used by RID packaging and signing.
+        Path.Combine(_artifactsPath, "bin", projectName, _rid, _configuration, targetFramework, _rid, "publish"),
+        // RID-specific self-contained publish output (preferred for Aspire.Managed).
+        Path.Combine(_artifactsPath, "bin", projectName, _configuration, targetFramework, _rid, "publish"),
+        // Native AOT output.
+        Path.Combine(_artifactsPath, "bin", projectName, _configuration, targetFramework, _rid, "native"),
+    ];
 
     private string? FindDcpPath()
     {

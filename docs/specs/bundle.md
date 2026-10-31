@@ -364,6 +364,21 @@ The repository-development path uses project references and local artifacts wher
 
 [eng/Bundle.proj](../../eng/Bundle.proj) orchestrates local bundle creation. Restore the repository toolchain first and install the target platform's Native AOT prerequisites.
 
+The bundling process is:
+
+1. Validate the requested configuration and acquire DCP for the target platform.
+2. Publish the managed helper, Dashboard, TerminalHost, AppHost Server, and
+   platform tray, or reuse their prepared outputs when requested.
+3. For signed distributions, sign the component binaries. The macOS tray app
+   also requires whole-app signing and notarization.
+4. Create any requested Dashboard and DCP distribution packages, then assemble
+   the payload archive from the prepared components.
+5. Publish the CLI with the payload embedded and sign it when requested.
+   Distribution builds also create CLI archives, .NET tool packages, and npm packages.
+
+Signing precedes payload assembly so the embedded components retain their
+signatures. Assembly and packaging do not republish components.
+
 ```powershell
 # Windows example, from the repository root
 .\restore.cmd
@@ -376,18 +391,25 @@ dotnet msbuild eng/Bundle.proj /t:Build /p:TargetRid=win-x64 /p:Configuration=Re
 dotnet msbuild eng/Bundle.proj /t:Build /p:TargetRid=osx-arm64 /p:Configuration=Release
 ```
 
-The build sequence is:
+`Build` is the default entry point. A default build creates the payload archive
+and self-extracting CLI without distribution packages. Dashboard distribution
+outputs include a NuGet package and runtime ZIP.
 
-1. Publish `Aspire.Managed` as a self-contained single-file executable.
-2. Publish `Aspire.Dashboard` and `Aspire.TerminalHost` with Native AOT for the same RID and configuration.
-3. Publish the native tray payload on macOS or Windows, before signing bundle components.
-4. Restore the matching DCP package, using the target OS/architecture rather than the build machine's defaults.
-5. Run `CreateLayout` to assemble the payload and create its `.tar.gz` archive.
-6. Publish the Native AOT CLI with `BundlePayloadPath` pointing to that archive.
+The assembled directories are under `artifacts/bundle/{rid}/`; the payload
+archive is `artifacts/bundle/aspire-{version}-{rid}.tar.gz`. The self-extracting
+CLI is in the CLI project's publish output, not in the payload directory.
 
-The assembled directories are under `artifacts/bundle/{rid}/`; the payload archive is `artifacts/bundle/aspire-{version}-{rid}.tar.gz`. The self-extracting CLI is in the CLI project's publish output, not in the payload directory.
+See the [project's options](../../eng/Bundle.proj) for distribution packaging,
+signing, output paths, and component-reuse controls. Skipping component
+publishing requires prepared inputs; `SkipCliArtifacts` instead omits the CLI
+and its packages. Repository build wrappers translate the legacy
+`/p:SkipNativeBuild=true` argument into CLI omission; use the direct MSBuild
+entry point above for advanced bundle controls.
 
-`Configuration` defaults to Debug for local bundle builds. The GitHub Actions native-archive workflow defaults to Release and passes it explicitly; CI bundle creation rejects non-Release configurations so distributed payloads use Native AOT optimizations. `SkipManagedBuild=true` reuses existing Managed, Dashboard, and TerminalHost publishes; `SkipNativeBuild=true` skips the final CLI publish. They do not make missing payload components optional.
+Windows and macOS archive checks validate tray payloads before CLI embedding.
+Official macOS tray signing includes notarization. CLI symbols are staged
+independently; see
+[CLI native symbols](../ci/cli-native-symbols.md).
 
 ### CreateLayout
 
@@ -405,13 +427,15 @@ dotnet run --project tools/CreateLayout -- \
 
 `--output`, `--artifacts`, `--rid`, and `--configuration` are required. `--bundle-version`, `--archive`, and `--verbose` are optional. The output directory is cleaned before assembly. There is no `--embed-in-cli`, `--runtime`, or runtime-download option; embedding happens in the subsequent CLI publish.
 
+Use `--dashboard "/path/to/prepared/publish"` to select a Dashboard publish directory instead of discovering one under the artifacts directory. Invalid or incomplete input fails without falling back to discovery.
+
 For the complete tool contract, see [CreateLayout](../../tools/CreateLayout/README.md). CI packaging additionally uses [dashboardpack](../../eng/dashboardpack/Common.projitems), [clipack](../../eng/clipack/Common.projitems), signing targets, and the native-archive workflows.
 
 ### Experimental Native Tray Companion
 
 `aspire tray start` starts or restores the native companion from the invoking CLI's leased bundle; `aspire tray stop` shuts down the companion without stopping AppHosts. The companion uses the CLI's versioned discovery and exact-instance stop contracts. Linux and standalone CLI binaries without a bundled payload are unsupported.
 
-macOS bundles contain the complete `Aspire Tray.app`, including its executable, plist, artwork, and signature. Windows x64 and ARM64 bundles contain `tray/aspire-tray.exe` and the shared `tray/Aspire.ico`. `CreateLayout` copies the already-published payload and rejects missing or incompatible files. The native archive verification targets check the actual packaged payload before it is embedded in the CLI.
+macOS bundles contain the complete `Aspire Tray.app`, including its executable, plist, artwork, and signature. Windows x64 and ARM64 bundles contain `tray/aspire-tray.exe` and the shared `tray/Aspire.ico`. `CreateLayout` copies the already-published payload and rejects missing or incompatible files. Archive verification checks the actual packaged payload before it is embedded in the CLI.
 
 Official packaging signs the macOS app as a whole and signs the Windows executable before layout assembly. Pipeline wiring and local ad-hoc signatures do not establish that official signing or notarization has been validated. Windows ARM64 native UI, installed-bundle lifecycle, real monitor/DPI behavior, and formal security review remain outstanding; successful cross-publishing or payload verification is not runtime validation.
 

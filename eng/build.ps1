@@ -235,9 +235,10 @@ if ($bundle) {
     "/p:TargetRid=$rid"
   )
   
-  # Pass through SkipNativeBuild if set
-  if ($remainingArguments -contains "/p:SkipNativeBuild=true") {
-    $bundleArgs += "/p:SkipNativeBuild=true"
+  # Preserve the legacy wrapper switch; advanced controls use Bundle.proj directly.
+  if ($remainingArguments -contains "/p:SkipNativeBuild=true" -or
+      $remainingArguments -contains "-p:SkipNativeBuild=true") {
+    $bundleArgs += "/p:SkipCliArtifacts=true"
   }
   
   # CI flag is passed to Bundle.proj which handles version computation via Versions.props

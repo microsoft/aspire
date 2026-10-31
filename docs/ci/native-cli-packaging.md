@@ -19,6 +19,22 @@ The GitHub Actions test workflow builds native CLI archives per OS/RID and uploa
 
 These PR artifacts are useful for validation and dogfooding, but they are not the final official signed release artifacts.
 
+## Shared bundle validation
+
+Validate packaging and signing against the outputs of the producing build,
+not replacement projects or private MSBuild targets in `Infrastructure.Tests`.
+The native jobs verify packaged Dashboard and TerminalHost behavior and compare
+the CLI archive with its tool and npm packages. Official builds additionally
+exercise real signing and notarization; unsigned GitHub artifacts cannot
+establish those contracts.
+
+The deployment workflow consumes a different build mode: it invokes
+`eng/Bundle.proj` with `BuildDistributionPackages` omitted, producing a
+standalone CLI rather than distribution packages. Validate that path with a
+Linux build and inspect the resulting CLI and extracted bundle. A successful
+distribution-mode build alone does not establish this contract, and validating
+the build does not require deploying to Azure.
+
 ## Internal signed builds
 
 The internal Azure DevOps `build_sign_native` stage is responsible for producing signed native CLI artifacts. Windows and macOS native jobs run with code signing enabled so each OS/arch-specific native executable can be signed or notarized on the appropriate platform.
@@ -36,6 +52,11 @@ If the macOS job produced a tool `.nupkg` from an unsigned binary and the main W
 The tool packaging flow therefore extracts the signed `aspire` binary from the signed native archive and packs that into the RID-specific tool `.nupkg`. This produces an unsigned `.nupkg` that contains the signed `aspire` CLI; the `.nupkg` itself is signed later by the main Windows job.
 
 Linux native jobs do not sign ELF binaries in `build_sign_native`. For Linux, extracting from the native archive gives the same unsigned ELF payload, and the resulting NuGet packages are signed later as packages by the main Windows build.
+
+The official Assemble job signs Linux Dashboard packages and verifies their
+final Shipping signatures before publishing. Preserve signed packages when
+staging producer outputs; see the Assemble job in
+[`azure-pipelines.yml`](../../eng/pipelines/azure-pipelines.yml).
 
 ## Nix flake packaging
 

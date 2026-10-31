@@ -54,6 +54,12 @@ Unsupported runtime identifiers, including `win-x86`, are rejected before the ou
 | `--bundle-version <ver>` | Version string for the layout (default: `0.0.0-dev`) |
 | `--archive` | Create a `.tar.gz` archive after building, including on Windows |
 | `--verbose` | Enable verbose output |
+| `--dashboard <directory>` | Exact Dashboard publish directory, not an executable path. Overrides artifact discovery. |
+
+When `--dashboard` is omitted, Dashboard discovery uses the existing RID-specific `net11.0` paths for the requested configuration, preferring platform-scoped output, then RID publish output, then native output. An explicit directory never falls back to discovery, even if discoverable output exists. Empty or whitespace arguments are rejected. Explicit and discovered payloads receive the same asset validation and debug-symbol filtering.
+
+Bundle assembly uses the selected Dashboard publish output consistently so
+reusing a component cannot accidentally package another configuration's files.
 
 ### Examples
 
@@ -118,7 +124,10 @@ Linux layouts have no tray directory. The macOS app is copied as a complete bund
 
 Dashboard packaging requires the executable, a nonempty `wwwroot/_framework/blazor.web.js`, and a nonempty SQLite native library for the target RID: `e_sqlite3.dll` on Windows, `libe_sqlite3.so` on Linux, or `libe_sqlite3.dylib` on macOS. CreateLayout fails before copying the Dashboard if any of these requirements is not met.
 
-`Bundle.proj` verifies the macOS or Windows tray in the resulting archive before CLI embedding. These checks validate payload structure, not native UI behavior or signing service readiness.
+Tray verification inspects the assembled archive rather than just the source
+files, because copying and archiving must preserve the app's resources,
+permissions, and signature. These checks do not establish native UI behavior or
+signing service readiness.
 
 ## Integration with Build Scripts
 

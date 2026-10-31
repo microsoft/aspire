@@ -9,6 +9,8 @@
     <!-- Uncomment this override in future releases when the development branch precedes its dashboard image, using an available tag. -->
     <!-- <AspireDashboardImageTag>17.0</AspireDashboardImageTag> -->
     <DefaultTargetFramework>net10.0</DefaultTargetFramework>
+    <AspireDashboardTargetFramework>net11.0</AspireDashboardTargetFramework>
+    <AspireTerminalHostTargetFramework>net11.0</AspireTerminalHostTargetFramework>
     <AllTargetFrameworks>$(DefaultTargetFramework);net11.0</AllTargetFrameworks>
     <!-- dotnet versions for running template tests -->
     <DotNetRuntimeNet10VersionForTesting>10.0.8</DotNetRuntimeNet10VersionForTesting>

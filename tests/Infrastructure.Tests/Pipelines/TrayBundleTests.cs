@@ -121,60 +121,6 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void BundlePublishesTrayBeforeLayoutIndependentlyOfNativeCliSkip()
-    {
-        var project = LoadProject("eng/Bundle.proj");
-        var build = Target(project, "Build");
-        var dependencies = build.Attribute("DependsOnTargets")!.Value.Split(';', StringSplitOptions.TrimEntries);
-        Assert.True(Array.IndexOf(dependencies, "_PublishNativeTray") < Array.IndexOf(dependencies, "_RunCreateLayout"));
-        Assert.Equal("($(TargetRid.StartsWith('osx-')) or $(TargetRid.StartsWith('win-'))) and '$(SkipTrayBuild)' != 'true'", Target(project, "_PublishNativeTray").Attribute("Condition")!.Value);
-        Assert.Equal("'$(SkipNativeBuild)' != 'true'", Target(project, "_PublishNativeCli").Attribute("Condition")!.Value);
-        Assert.Contains("--tray-app \"$(TrayAppPath)\"", Target(project, "_RunCreateLayout").Value);
-        Assert.Contains("--tray-windows \"$(WindowsTrayPath)\"", Target(project, "_RunCreateLayout").Value);
-        var cliPublish = Target(project, "_PublishNativeCli");
-        Assert.Equal("--output \"$(CliPublishDir)\"", Assert.Single(cliPublish.Descendants("_CliPublishOutputArg")).Value);
-        Assert.Contains("$(_CliPublishOutputArg)", Assert.Single(cliPublish.Elements("Exec")).Attribute("Command")!.Value);
-    }
-
-    [Fact]
-    public void WholeAppSigningBypassesArcadeAndRestoresWithoutPublishing()
-    {
-        var project = LoadProject("src/Aspire.Tray/Mac/Aspire.Tray.Mac.csproj");
-        Assert.Equal("Publish", Target(project, "PackageTray").Attribute("AfterTargets")!.Value);
-        var restore = Target(project, "RestoreSignedTray");
-        Assert.Null(restore.Attribute("DependsOnTargets"));
-        Assert.Contains(restore.Elements("Exec"), exec => exec.Attribute("Command")!.Value.StartsWith("ditto -xk", StringComparison.Ordinal));
-        Assert.Contains(restore.Elements("Exec"), exec => exec.Attribute("Command")!.Value.Contains("anchor apple generic", StringComparison.Ordinal));
-
-        var signing = LoadProject("eng/Signing.props");
-        Assert.Equal([@"$(ArtifactsBinDir)Aspire.Tray.Windows\**\publish\aspire-tray.exe"],
-            signing.Descendants("ItemsToSign")
-                .Select(element => element.Attribute("Include")!.Value)
-                .Where(include => include.Contains("Aspire.Tray.", StringComparison.Ordinal)));
-        var traySigning = LoadProject("eng/pipelines/SignTray.proj");
-        var input = Assert.Single(traySigning.Descendants("_TrayToSign"));
-        Assert.Equal("$(TraySigningArchive)", input.Attribute("Include")!.Value);
-        Assert.Equal("MacDeveloperHarden", input.Element("Authenticode")!.Value);
-        var notarization = Assert.Single(traySigning.Descendants("_TrayToNotarize"));
-        Assert.Equal(input.Attribute("Include")!.Value, notarization.Attribute("Include")!.Value);
-        Assert.Equal("8020", notarization.Element("Authenticode")!.Value);
-        Assert.Equal("dotnet", notarization.Element("MacAppName")!.Value);
-        var signTray = Target(traySigning, "SignTray");
-        Assert.Equal("ValidateTraySigning", signTray.Attribute("DependsOnTargets")!.Value);
-        Assert.Equal(["@(_TrayToSign)", "@(_TrayToNotarize)"],
-            signTray.Elements("SignFiles").Select(task => task.Attribute("Files")!.Value));
-
-        var pipeline = File.ReadAllText(Path.Combine(RepoRoot.Path, "eng/pipelines/templates/build_sign_native.yml"));
-        var prepare = pipeline.IndexOf("/t:PrepareTraySigning", StringComparison.Ordinal);
-        var sign = pipeline.IndexOf("SignManaged.binlog", StringComparison.Ordinal);
-        var signApp = pipeline.IndexOf("/t:SignTray", StringComparison.Ordinal);
-        var restoreApp = pipeline.IndexOf("/t:RestoreSignedTray", StringComparison.Ordinal);
-        var layout = pipeline.IndexOf("/t:_RestoreDcpPackage;_RunCreateLayout", StringComparison.Ordinal);
-        Assert.True(prepare >= 0 && prepare < sign && sign < signApp && signApp < restoreApp && restoreApp < layout);
-        Assert.Contains("/p:SkipTrayBuild=true", pipeline);
-    }
-
-    [Fact]
     [RequiresTools(["pwsh", "ditto"])]
     [SupportedOSPlatform("macos")]
     public async Task MacSigningTransportContainsAppDirectoryAndPreservesExecutableModes()
@@ -187,7 +133,7 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
         File.WriteAllText(scriptPath, """
             param([string]$RepositoryRoot, [string]$AppPath, [string]$ArchivePath)
             & "$RepositoryRoot/dotnet.sh" msbuild "$RepositoryRoot/src/Aspire.Tray/Mac/Aspire.Tray.Mac.csproj" `
-                /t:PrepareTraySigning /p:RuntimeIdentifier=osx-arm64 `
+                /t:CreateTrayAppSigningArchive /p:RuntimeIdentifier=osx-arm64 `
                 "/p:TrayAppPath=$AppPath" "/p:TraySigningArchive=$ArchivePath" /nologo
             exit $LASTEXITCODE
             """);
@@ -218,17 +164,8 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void NativePayloadVerificationRunsAfterLayoutAndSharedTestsUseCentralMatrix()
+    public void SharedTestsUseCentralMatrix()
     {
-        var project = LoadProject("eng/Bundle.proj");
-        var verification = Target(project, "_VerifyNativeTrayArchive");
-        Assert.Equal("_RunCreateLayout", verification.Attribute("AfterTargets")!.Value);
-        Assert.Equal("$(TargetRid.StartsWith('osx-'))", verification.Attribute("Condition")!.Value);
-        var command = Assert.Single(verification.Elements("Exec")).Attribute("Command")!.Value;
-        Assert.Contains("verify-tray-payload.sh", command);
-        Assert.Contains("aspire-$(BundleVersion)-$(TargetRid).tar.gz", command);
-        Assert.Contains("\"$(RequireMacTraySignature)\"", command);
-
         const string testProjectPath = "tests/Aspire.Tray.Tests/Aspire.Tray.Tests.csproj";
         var solution = LoadProject("Aspire.slnx");
         Assert.Contains(solution.Descendants("Project"), entry => entry.Attribute("Path")?.Value == testProjectPath);
@@ -258,16 +195,6 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
                 ? ["job:cli-starter-validation", "job:extension-e2e", "job:homebrew-installer", "job:winget-installer"]
                 : Array.Empty<string>(),
             result.Jobs.Order(StringComparer.Ordinal));
-    }
-
-    [Fact]
-    public void BundleUsesProductTrayProjectAndOutputDirectory()
-    {
-        var project = LoadProject("eng/Bundle.proj");
-        Assert.Equal(@"$(RepoRoot)src\Aspire.Tray\Mac\Aspire.Tray.Mac.csproj", Assert.Single(project.Descendants("TrayProjectPath")).Value);
-        Assert.Equal(@"$(ArtifactsDir)bin\Aspire.Tray.Mac\$(Configuration)\net10.0\$(TargetRid)\app\Aspire Tray.app", Assert.Single(project.Descendants("TrayAppPath")).Value);
-        Assert.All(Target(project, "_PublishNativeTray").Elements("Exec"),
-            exec => Assert.Contains("$(_OfficialBuildIdArg)", exec.Attribute("Command")!.Value));
     }
 
     [Theory]
@@ -343,24 +270,13 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void WindowsSigningAndArchiveVerificationUsePublishedPayloadBeforeEmbedding()
+    public void WindowsSigningSelectsPublishedTrayPayload()
     {
         var signing = LoadProject("eng/Signing.props");
         Assert.Equal("Microsoft400", Assert.Single(signing.Descendants("FileSignInfo"),
             element => element.Attribute("Include")?.Value == "aspire-tray.exe").Attribute("CertificateName")!.Value);
         Assert.Contains(signing.Descendants("ItemsToSign"),
             element => element.Attribute("Include")?.Value == @"$(ArtifactsBinDir)Aspire.Tray.Windows\**\publish\aspire-tray.exe");
-        var bundle = LoadProject("eng/Bundle.proj");
-        var verify = Target(bundle, "_VerifyWindowsTrayArchive");
-        Assert.Equal("_RunCreateLayout", verify.Attribute("AfterTargets")!.Value);
-        Assert.Equal("$(TargetRid.StartsWith('win-'))", verify.Attribute("Condition")!.Value);
-        Assert.All(verify.Elements("Exec"),
-            exec => Assert.Contains("verify-windows-tray-payload.ps1", exec.Attribute("Command")!.Value));
-        var pipeline = File.ReadAllText(Path.Combine(RepoRoot.Path, "eng/pipelines/templates/build_sign_native.yml"));
-        Assert.Contains("if in(parameters.agentOs, 'macos', 'windows')", pipeline);
-        Assert.Contains("/p:RequireWindowsTraySignature=${{ parameters.codeSign }}", pipeline);
-        Assert.True(pipeline.IndexOf("/t:_PublishNativeTray", StringComparison.Ordinal) <
-            pipeline.IndexOf("SignManaged.binlog", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -465,7 +381,4 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
     }
 
     private static XDocument LoadProject(string path) => XDocument.Load(Path.Combine(RepoRoot.Path, path));
-
-    private static XElement Target(XDocument project, string name)
-        => Assert.Single(project.Descendants("Target"), target => target.Attribute("Name")?.Value == name);
 }

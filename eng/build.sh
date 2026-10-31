@@ -334,12 +334,14 @@ if [ "$build_bundle" = true ]; then
         "/p:TargetRid=$rid"
     )
     
-    # Pass through SkipNativeBuild if set
-    for arg in "$@"; do
-        if [[ "$arg" == *"SkipNativeBuild=true"* ]]; then
-            bundle_args+=("/p:SkipNativeBuild=true")
-            break
-        fi
+    # Use saved arguments: positional arguments were consumed by option parsing.
+    # Advanced bundle controls use Bundle.proj directly.
+    for arg in ${extraargs[@]+"${extraargs[@]}"}; do
+        case "$arg" in
+            /p:SkipNativeBuild=true|-p:SkipNativeBuild=true)
+                bundle_args+=("/p:SkipCliArtifacts=true")
+                break ;;
+        esac
     done
     
     # CI flag is passed to Bundle.proj which handles version computation via Versions.props

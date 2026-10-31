@@ -201,6 +201,16 @@ template image and the dot is a small view over it, colored with the system gree
 orange; the dimmed state is AppKit's own disabled status-item rendering. The tooltip and
 accessibility label state the status in words, so the dot's color is never the only cue.
 
+## Publish the standalone tray
+
+The public `PublishTray` target in `eng/Bundle.proj` publishes only the tray,
+without assembling a CLI bundle. The macOS `publish.sh` helper below uses this
+target; it can also be called directly:
+
+```sh
+dotnet msbuild eng/Bundle.proj -t:PublishTray -p:TargetRid=osx-arm64 -p:Configuration=Release
+```
+
 ## Build and run on macOS
 
 Building requires a compatible .NET SDK and Xcode Command Line Tools. From the
@@ -216,19 +226,13 @@ Publish for the current machine, or pass `osx-arm64` or `osx-x64` explicitly:
 bash src/Aspire.Tray/Mac/publish.sh
 ```
 
-This uses the same publish/package target as the CLI bundle. To build a complete
-Apple Silicon CLI into an isolated output directory:
+The helper publishes the tray without rebuilding unrelated bundle components.
+A complete CLI bundle embeds the prepared app alongside the other components.
+The app is verified from the actual payload archive so a valid source app alone
+is not mistaken for a correctly packaged app.
 
-```sh
-./dotnet.sh msbuild eng/Bundle.proj \
-    -p:Configuration=Release -p:TargetRid=osx-arm64 \
-    -p:CliPublishDir="$PWD/artifacts/tray-cli-validation"
-```
-
-The resulting `artifacts/tray-cli-validation/aspire` embeds the app together with
-the existing managed and DCP payloads. `SkipNativeBuild=true` skips only the
-outer CLI build, not the NativeAOT tray. The app is verified from the actual
-payload archive before embedding.
+See [the bundle build overview](../../docs/specs/bundle.md#build-process) for
+bundle configuration and component-reuse options.
 
 Quit the running tray before replacing its `.app` or republishing the CLI
 executable it uses. A running NativeAOT executable must not be overwritten.
