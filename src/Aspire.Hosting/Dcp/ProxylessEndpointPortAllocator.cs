@@ -18,10 +18,10 @@ namespace Aspire.Hosting.Dcp;
 /// use, the allocator jumps back to the random walk instead of linearly scanning through a dense used
 /// cluster.
 ///
-/// The random walk cursor is independent of incremental scanning. Incremental successes mark adjacent
-/// candidates as visited and can therefore consume ports the random permutation would have reached
-/// later, but the next random jump resumes from the previous permutation position and skips already
-/// visited ports. This keeps the search exhaustive while opportunistically exploiting nearby free ports.
+/// The random walk cursor is independent of incremental scanning. Incremental successes consume adjacent
+/// candidates the random permutation would have reached later, but the next random jump resumes from the
+/// previous permutation position and skips ports that are no longer available. This keeps the search
+/// exhaustive while opportunistically exploiting nearby free ports.
 ///
 /// This approach was tested against naive incremental allocation, pure random allocation, and
 /// ephemeral port allocation. It was the fastest strategy tested while avoiding the worst-case
@@ -29,8 +29,10 @@ namespace Aspire.Hosting.Dcp;
 ///
 /// The probe releases the port before the workload binds it, so allocators for different applications
 /// in the same process (for example, tests that run AppHosts in parallel) could otherwise hand out the
-/// same port. Allocated ports are therefore also reserved in a process-wide
-/// <see cref="ProxylessEndpointPortReservations"/> until the allocator is disposed.
+/// same port. Port availability is therefore tracked in a process-wide
+/// <see cref="ProxylessEndpointPortReservations"/>: allocated ports stay reserved until the allocator is
+/// disposed, and ports whose probe failed are remembered as unavailable so no allocator in the process
+/// probes them again. Ports excluded by the application model only apply to this allocator.
 /// </remarks>
 internal sealed class ProxylessEndpointPortAllocator : IDisposable
 {
@@ -38,12 +40,11 @@ internal sealed class ProxylessEndpointPortAllocator : IDisposable
     private readonly int _rangeStart;
     private readonly int _rangeEnd;
     private readonly int _rangeSize;
-    private readonly bool[] _visited;
+    private readonly HashSet<int> _excludedPorts = [];
     private readonly Dictionary<EndpointAnnotation, int> _reservedPorts = new(ReferenceEqualityComparer.Instance);
     private readonly Func<int, ProtocolType, bool> _tryProbe;
     private readonly ProxylessEndpointPortReservations _processReservations;
     private readonly List<int> _processReservedPorts = [];
-    private int _visitedCount;
     private int _randomWalkCursor;
     private readonly int _randomWalkStep;
     private int? _nextCandidate;
@@ -82,10 +83,6 @@ internal sealed class ProxylessEndpointPortAllocator : IDisposable
             throw new ArgumentOutOfRangeException(nameof(randomWalkStep), randomWalkStep, "Random walk step must be coprime with the configured range size.");
         }
 
-        // The scan range is dense and bounded, so indexable visited state is cheaper and simpler than
-        // hashing individual ports. The default range is only about 23 KB while still giving O(1)
-        // lookups for both random-walk and incremental scans.
-        _visited = new bool[_rangeSize];
         _randomWalkCursor = randomWalkOffset;
         _randomWalkStep = randomWalkStep;
         _tryProbe = tryProbe;
@@ -125,9 +122,9 @@ internal sealed class ProxylessEndpointPortAllocator : IDisposable
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
 
-            if (TryGetPortIndex(port, out var index))
+            if (port >= _rangeStart && port <= _rangeEnd)
             {
-                MarkVisited(index);
+                _excludedPorts.Add(port);
             }
         }
     }
@@ -159,23 +156,36 @@ internal sealed class ProxylessEndpointPortAllocator : IDisposable
         while (_nextCandidate is int candidate)
         {
             var port = _rangeStart + candidate;
-            MarkVisited(candidate);
 
             // Reserve the port process-wide before probing so another application's allocator in this
-            // process cannot claim it between the probe releasing it and the workload binding it.
-            if (_processReservations.TryReserve(port))
+            // process cannot claim it between the probe releasing it and the workload binding it. A cached
+            // incremental candidate can have been excluded or claimed since it was selected, so check again.
+            if (!_excludedPorts.Contains(port) && _processReservations.TryReserve(port))
             {
-                // Bind only long enough to confirm the OS currently considers the port available.
-                // After that, the allocator's visited/reserved state prevents Aspire from handing
-                // the same port to another endpoint in this app model.
-                if (_tryProbe(port, protocol))
+                bool probeSucceeded;
+                try
+                {
+                    // Bind only long enough to confirm the OS currently considers the port available.
+                    // After that, the process-wide reservation prevents Aspire from handing the same
+                    // port to another endpoint in this or any other app model in the process.
+                    probeSucceeded = _tryProbe(port, protocol);
+                }
+                catch
+                {
+                    _processReservations.Release(port);
+                    throw;
+                }
+
+                if (probeSucceeded)
                 {
                     _processReservedPorts.Add(port);
-                    _nextCandidate = _visitedCount == _rangeSize ? null : GetNextIncrementalCandidate(candidate);
+                    _nextCandidate = GetNextIncrementalCandidate(candidate);
                     return port;
                 }
 
-                _processReservations.Release(port);
+                // Something outside Aspire's tracking holds the port. Remember that process-wide without
+                // registering cleanup so no allocator in this process probes it again.
+                _processReservations.MarkUnavailable(port);
             }
 
             _nextCandidate = GetNextRandomWalkCandidate();
@@ -184,38 +194,35 @@ internal sealed class ProxylessEndpointPortAllocator : IDisposable
         throw CreateNoAvailablePortsException();
     }
 
-    private int GetNextIncrementalCandidate(int afterIndex)
+    private bool IsCandidateAvailable(int index)
     {
-        if (_visitedCount == _rangeSize)
-        {
-            throw CreateNoAvailablePortsException();
-        }
+        var port = _rangeStart + index;
+        return !_excludedPorts.Contains(port) && _processReservations.IsAvailable(port);
+    }
 
-        for (var i = 1; i <= _rangeSize; i++)
+    private int? GetNextIncrementalCandidate(int afterIndex)
+    {
+        for (var i = 1; i < _rangeSize; i++)
         {
             var candidate = (afterIndex + i) % _rangeSize;
-            if (!_visited[candidate])
+            if (IsCandidateAvailable(candidate))
             {
                 return candidate;
             }
         }
 
-        throw CreateNoAvailablePortsException();
+        // Fall back to the random walk on the next allocation, which reports exhaustion if nothing is left.
+        return null;
     }
 
     private int GetNextRandomWalkCandidate()
     {
-        if (_visitedCount == _rangeSize)
-        {
-            throw CreateNoAvailablePortsException();
-        }
-
         for (var i = 0; i < _rangeSize; i++)
         {
             var candidate = _randomWalkCursor;
             _randomWalkCursor = (_randomWalkCursor + _randomWalkStep) % _rangeSize;
 
-            if (!_visited[candidate])
+            if (IsCandidateAvailable(candidate))
             {
                 return candidate;
             }
@@ -227,29 +234,6 @@ internal sealed class ProxylessEndpointPortAllocator : IDisposable
     private InvalidOperationException CreateNoAvailablePortsException()
     {
         return new InvalidOperationException($"No available ports were found in the configured proxyless endpoint port range {_rangeStart}-{_rangeEnd}.");
-    }
-
-    private void MarkVisited(int index)
-    {
-        if (_visited[index])
-        {
-            return;
-        }
-
-        _visited[index] = true;
-        _visitedCount++;
-    }
-
-    private bool TryGetPortIndex(int port, out int index)
-    {
-        if (port < _rangeStart || port > _rangeEnd)
-        {
-            index = -1;
-            return false;
-        }
-
-        index = port - _rangeStart;
-        return true;
     }
 
     // Exposed for tests so port-availability checks use the exact same IPv4+IPv6 probe as
@@ -367,21 +351,45 @@ internal sealed class ProxylessEndpointPortAllocator : IDisposable
 }
 
 /// <summary>
-/// Tracks ports handed out by live <see cref="ProxylessEndpointPortAllocator"/> instances so that allocators for
-/// different applications in the same process never hand out the same port.
+/// Tracks port availability shared by every <see cref="ProxylessEndpointPortAllocator"/> in the process so that
+/// allocators for different applications never hand out the same port or re-probe a port known to be in use.
 /// </summary>
+/// <remarks>
+/// The port space is small and dense, so state is a directly indexed array (64 KB) rather than a hashed set.
+/// </remarks>
 internal sealed class ProxylessEndpointPortReservations
 {
+    private const byte Available = 0;
+    private const byte Reserved = 1;
+    private const byte Unavailable = 2;
+
     private readonly object _lock = new();
-    private readonly HashSet<int> _ports = [];
+    private readonly byte[] _states = new byte[IPEndPoint.MaxPort + 1];
 
     public static ProxylessEndpointPortReservations Shared { get; } = new();
 
+    public bool IsAvailable(int port)
+    {
+        lock (_lock)
+        {
+            return _states[port] == Available;
+        }
+    }
+
+    /// <summary>
+    /// Reserves an available port for a live allocator. The allocator must <see cref="Release"/> it on disposal.
+    /// </summary>
     public bool TryReserve(int port)
     {
         lock (_lock)
         {
-            return _ports.Add(port);
+            if (_states[port] != Available)
+            {
+                return false;
+            }
+
+            _states[port] = Reserved;
+            return true;
         }
     }
 
@@ -389,7 +397,21 @@ internal sealed class ProxylessEndpointPortReservations
     {
         lock (_lock)
         {
-            _ports.Remove(port);
+            if (_states[port] == Reserved)
+            {
+                _states[port] = Available;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Records that a port is in use outside Aspire's tracking. The port is never released.
+    /// </summary>
+    public void MarkUnavailable(int port)
+    {
+        lock (_lock)
+        {
+            _states[port] = Unavailable;
         }
     }
 }

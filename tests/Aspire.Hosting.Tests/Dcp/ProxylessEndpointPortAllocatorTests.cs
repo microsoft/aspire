@@ -159,6 +159,65 @@ public class ProxylessEndpointPortAllocatorTests
         Assert.Equal(10003, third.AllocatePort(CreateEndpoint("c")));
     }
 
+    [Fact]
+    public void AllocatorsSharingReservationsDoNotReprobePortsFoundInUse()
+    {
+        var reservations = new ProxylessEndpointPortReservations();
+        var probedPorts = new List<int>();
+        bool Probe(int port, ProtocolType protocol)
+        {
+            probedPorts.Add(port);
+            return port != 10000;
+        }
+
+        using var first = new ProxylessEndpointPortAllocator(
+            rangeStart: 10000,
+            rangeEnd: 10002,
+            randomWalkOffset: 0,
+            randomWalkStep: 1,
+            tryProbe: Probe,
+            reservations);
+        Assert.Equal(10001, first.AllocatePort(CreateEndpoint("a")));
+        first.Dispose();
+
+        // A port another allocator found in use stays unavailable, even after that allocator is disposed.
+        using var second = new ProxylessEndpointPortAllocator(
+            rangeStart: 10000,
+            rangeEnd: 10002,
+            randomWalkOffset: 0,
+            randomWalkStep: 1,
+            tryProbe: Probe,
+            reservations);
+        Assert.Equal(10001, second.AllocatePort(CreateEndpoint("a")));
+        Assert.Equal(new[] { 10000, 10001, 10001 }, probedPorts);
+    }
+
+    [Fact]
+    public void ExcludedPortsOnlyApplyToTheExcludingAllocator()
+    {
+        var reservations = new ProxylessEndpointPortReservations();
+        using var first = new ProxylessEndpointPortAllocator(
+            rangeStart: 10000,
+            rangeEnd: 10001,
+            randomWalkOffset: 0,
+            randomWalkStep: 1,
+            tryProbe: static (_, _) => true,
+            reservations);
+        using var second = new ProxylessEndpointPortAllocator(
+            rangeStart: 10000,
+            rangeEnd: 10001,
+            randomWalkOffset: 0,
+            randomWalkStep: 1,
+            tryProbe: static (_, _) => true,
+            reservations);
+
+        first.ExcludePort(10000);
+
+        Assert.Equal(10001, first.AllocatePort(CreateEndpoint("a")));
+        Assert.Equal(10000, second.AllocatePort(CreateEndpoint("a")));
+        Assert.Throws<InvalidOperationException>(() => first.AllocatePort(CreateEndpoint("b")));
+    }
+
     private static int GetUnusedPortOutsideDefaultRange()
     {
         // Use ports above the default proxyless range, which other tests in this process allocate from through the
