@@ -12,6 +12,7 @@ using Aspire.Cli.Interaction;
 using Aspire.Cli.Utils;
 using System.Text;
 using System.Text.Json.Nodes;
+using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Logging.Abstractions;
 using Spectre.Console;
 using Microsoft.AspNetCore.InternalTesting;
@@ -22,6 +23,130 @@ namespace Aspire.Cli.Tests.Commands;
 
 public class TestCommandTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task JsonReportsLivePublishedResultsAndWaitsForCollection(bool keepAlive, bool cancelDuringCollection)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = CreateAppHost(workspace);
+        using var cancellation = new CancellationTokenSource();
+        var resourceFinished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseCollection = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var inspecting = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var processStopped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        string? summaryPath = null;
+        var stopRequested = false;
+        async IAsyncEnumerable<TestRunEvent> Watch([EnumeratorCancellation] CancellationToken ct)
+        {
+            yield return new TestRunEvent { Resource = new TestResourceState { ResourceName = "tests" } };
+            yield return new TestRunEvent
+            {
+                Collection = new TestCollectionState { ResourceName = "tests", CollectorCount = 1, Status = "running" }
+            };
+            yield return new TestRunEvent
+            {
+                Result = new PublishedTestResult
+                {
+                    ResourceName = "tests", Name = "failed fixture", Outcome = "failed", DurationMilliseconds = 25,
+                    Message = "fixture assertion"
+                }
+            };
+            yield return new TestRunEvent
+            {
+                Resource = new TestResourceState { ResourceName = "tests", ResourceId = "tests", State = "Finished", ExitCode = 0, Outcome = "passed" }
+            };
+            resourceFinished.TrySetResult();
+            await releaseCollection.Task.WaitAsync(ct);
+            yield return new TestRunEvent
+            {
+                Collection = new TestCollectionState { ResourceName = "tests", CollectorCount = 1, Status = "completed" }
+            };
+            yield return new TestRunEvent { Passed = false };
+        }
+        var backchannel = new TestAppHostBackchannel
+        {
+            WatchTestRunAsyncCallback = Watch,
+            WaitForDisconnectAsyncCalled = inspecting,
+            RequestStopAsyncCallback = () =>
+            {
+                stopRequested = true;
+                processStopped.TrySetResult();
+                return Task.CompletedTask;
+            }
+        };
+        var factory = new TestAppHostProjectFactory
+        {
+            RunAsyncCallback = (context, ct) =>
+            {
+                summaryPath = Path.Combine(context.EnvironmentVariables[KnownConfigNames.TestOutputPath], "summary.json");
+                context.BuildCompletionSource!.TrySetResult(true);
+                context.BackchannelCompletionSource!.TrySetResult(backchannel);
+                return AwaitStopAsync(ct);
+            }
+        };
+        async Task<int> AwaitStopAsync(CancellationToken ct)
+        {
+            await processStopped.Task.WaitAsync(ct);
+            return 0;
+        }
+        var stdout = new StringBuilder();
+        var stderr = new StringBuilder();
+        var services = CreateServices(workspace, appHostFile, factory);
+        services.AddSingleton<IInteractionService>(CreateConsoleInteraction(workspace, stdout, stderr));
+        using var provider = services.BuildServiceProvider();
+        var arguments = new List<string> { "test", "--apphost", appHostFile.FullName, "--format", "json" };
+        if (keepAlive)
+        {
+            arguments.Add("--keep-alive");
+        }
+        var execution = provider.GetRequiredService<RootCommand>().Parse(arguments.ToArray()).InvokeAsync(cancellationToken: cancellation.Token);
+
+        await resourceFinished.Task.DefaultTimeout();
+        Assert.False(execution.IsCompleted);
+        Assert.False(stopRequested);
+        Assert.Equal("", stdout.ToString());
+        var live = JsonNode.Parse(File.ReadAllText(summaryPath!))!;
+        Assert.Equal("running", live["status"]!.GetValue<string>());
+        Assert.Equal("failed", live["testResults"]![0]!["outcome"]!.GetValue<string>());
+        if (cancelDuringCollection)
+        {
+            cancellation.Cancel();
+            Assert.Equal(CliExitCodes.Cancelled, await execution.DefaultTimeout());
+        }
+        else
+        {
+            releaseCollection.TrySetResult();
+            if (keepAlive)
+            {
+                await inspecting.Task.DefaultTimeout();
+                Assert.False(execution.IsCompleted);
+                Assert.False(stopRequested);
+                var completed = JsonNode.Parse(stdout.ToString())!;
+                Assert.Equal("failed", completed["status"]!.GetValue<string>());
+                Assert.Null(completed["cliExitCode"]);
+                cancellation.Cancel();
+                Assert.Equal(CliExitCodes.Cancelled, await execution.DefaultTimeout());
+            }
+            else
+            {
+                Assert.Equal(CliExitCodes.TestRunFailed, await execution.DefaultTimeout());
+            }
+        }
+        var output = JsonNode.Parse(stdout.ToString())!;
+        Assert.Equal("passed", output["resources"]![0]!["outcome"]!.GetValue<string>());
+        Assert.Equal((1, 0, 0), (output["publishedResults"]!["failed"]!.GetValue<int>(),
+            output["publishedResults"]!["passed"]!.GetValue<int>(), output["publishedResults"]!["skipped"]!.GetValue<int>()));
+        Assert.Equal("failed fixture", output["testResults"]![0]!["name"]!.GetValue<string>());
+        Assert.Equal(25, output["testResults"]![0]!["durationMilliseconds"]!.GetValue<int>());
+        Assert.Equal(cancelDuringCollection ? "incomplete" : "completed", output["collections"]![0]!["status"]!.GetValue<string>());
+        if (!keepAlive)
+        {
+            Assert.Equal(File.ReadAllText(summaryPath!), stdout.ToString().TrimEnd());
+        }
+    }
+
     [Theory]
     [InlineData(true, 0, 0, false)]
     [InlineData(false, 0, 23, false)]

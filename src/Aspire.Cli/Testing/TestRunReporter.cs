@@ -25,6 +25,8 @@ internal sealed class TestRunReporter
     private readonly TimeProvider _timeProvider;
     private readonly ILogger _logger;
     private readonly Dictionary<string, TestResourceState> _resources = new(StringComparers.ResourceName);
+    private readonly List<PublishedTestResult> _results = [];
+    private readonly Dictionary<string, TestCollectionState> _collections = new(StringComparers.ResourceName);
     private readonly DateTimeOffset _startedAt;
     private readonly object _gate = new();
     private bool _completed;
@@ -98,11 +100,24 @@ internal sealed class TestRunReporter
                 throw new InvalidOperationException("The test stream continued after aggregate completion.");
             }
 
-            if (item.Resource is { } resource && item.Passed is null)
+            if ((item.Resource is null ? 0 : 1) + (item.Result is null ? 0 : 1) +
+                (item.Collection is null ? 0 : 1) + (item.Passed is null ? 0 : 1) != 1)
+            {
+                throw new InvalidOperationException("The AppHost sent an invalid test resource event.");
+            }
+            if (item.Resource is { } resource)
             {
                 Update(resource);
             }
-            else if (item.Resource is null && item.Passed is { } result)
+            else if (item.Result is { } testResult)
+            {
+                UpdateResult(testResult);
+            }
+            else if (item.Collection is { } collection)
+            {
+                UpdateCollection(collection);
+            }
+            else if (item.Passed is { } result)
             {
                 passed = result;
             }
@@ -116,6 +131,8 @@ internal sealed class TestRunReporter
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (passed is true && (_resources.Count == 0 || _resources.Values.Any(r => r.Outcome != "passed") ||
+                _results.Any(r => r.Outcome == "failed") ||
+                _collections.Values.Any(c => c.Status is not ("completed" or "notConfigured")) ||
                 _resources.Values.GroupBy(r => r.ResourceName, StringComparers.ResourceName)
                     .Any(group => group.Count() != group.First().ExpectedReplicas ||
                         group.Any(r => r.ExpectedReplicas != group.First().ExpectedReplicas))))
@@ -139,6 +156,57 @@ internal sealed class TestRunReporter
                 return;
             }
             UpdateCore(resource);
+        }
+    }
+
+    private void UpdateResult(PublishedTestResult result)
+    {
+        lock (_gate)
+        {
+            if (_completed)
+            {
+                _logger.LogDebug("Ignoring test result after finalizing the run.");
+                return;
+            }
+            ArgumentException.ThrowIfNullOrWhiteSpace(result.Name);
+            if (result.Outcome is not ("passed" or "failed" or "skipped") ||
+                result.DurationMilliseconds is { } duration && (!double.IsFinite(duration) || duration < 0) ||
+                !_resources.Values.Any(r => StringComparers.ResourceName.Equals(r.ResourceName, result.ResourceName)))
+            {
+                throw new InvalidOperationException("The AppHost sent an invalid published test result.");
+            }
+            _results.Add(result);
+            Persist("running", exitCode: null, error: null);
+            if (_interactive)
+            {
+                _interaction.DisplayMessage(KnownEmojis.Microscope, string.Format(CultureInfo.CurrentCulture,
+                    RunCommandStrings.TestPublishedResult, result.ResourceName, result.Name, DisplayOutcome(result.Outcome)));
+            }
+        }
+    }
+
+    private void UpdateCollection(TestCollectionState collection)
+    {
+        lock (_gate)
+        {
+            if (_completed)
+            {
+                _logger.LogDebug("Ignoring test collection update after finalizing the run.");
+                return;
+            }
+            if (collection.CollectorCount < 0 ||
+                collection.Status is not ("notConfigured" or "running" or "completed" or "failed" or "cancelled") ||
+                collection.Status == "notConfigured" && collection.CollectorCount != 0 ||
+                !_resources.Values.Any(r => StringComparers.ResourceName.Equals(r.ResourceName, collection.ResourceName)))
+            {
+                throw new InvalidOperationException("The AppHost sent an invalid test collection state.");
+            }
+            _collections[collection.ResourceName] = collection;
+            Persist("running", exitCode: null, error: null);
+            if (_interactive && collection.Error is { } error)
+            {
+                _interaction.DisplayError(error);
+            }
         }
     }
 
@@ -214,6 +282,13 @@ internal sealed class TestRunReporter
                 _resources[key] = resource with { Outcome = "incomplete" };
             }
         }
+        foreach (var (key, collection) in _collections.ToArray())
+        {
+            if (collection.Status == "running")
+            {
+                _collections[key] = collection with { Status = "incomplete" };
+            }
+        }
         Persist(status, result.ExitCode, result.ErrorMessage);
         DisplaySummary(status);
     }
@@ -224,7 +299,7 @@ internal sealed class TestRunReporter
         {
             _completed = true;
             _completedAt ??= _timeProvider.GetUtcNow();
-            // The resource run is complete, but a keep-alive CLI has not exited yet.
+            // Resources and collectors are complete, but a keep-alive CLI has not exited yet.
             Persist(passed ? "passed" : "failed", exitCode: null, error: null);
             DisplaySummary(passed ? "passed" : "failed");
         }
@@ -258,6 +333,12 @@ internal sealed class TestRunReporter
                     resource.ExitCode?.ToString(CultureInfo.CurrentCulture) ?? "-");
             }
             _interaction.DisplayRenderable(table);
+            if (_results.Count > 0)
+            {
+                var totals = ResultSummary();
+                _interaction.DisplayMessage(KnownEmojis.Microscope, string.Format(CultureInfo.CurrentCulture,
+                    RunCommandStrings.TestPublishedSummary, totals.Passed, totals.Failed, totals.Skipped));
+            }
         }
 
         _interaction.DisplaySubtleMessage(string.Format(CultureInfo.CurrentCulture,
@@ -331,7 +412,17 @@ internal sealed class TestRunReporter
         Status = status,
         CliExitCode = exitCode,
         Error = error,
-        Resources = OrderedResources()
+        Resources = OrderedResources(),
+        TestResults = _results.OrderBy(r => r.ResourceName, StringComparers.ResourceName).ToArray(),
+        Collections = _collections.Values.OrderBy(c => c.ResourceName, StringComparers.ResourceName).ToArray(),
+        PublishedResults = ResultSummary()
+    };
+
+    private PublishedResultSummary ResultSummary() => new()
+    {
+        Passed = _results.Count(r => r.Outcome == "passed"),
+        Failed = _results.Count(r => r.Outcome == "failed"),
+        Skipped = _results.Count(r => r.Outcome == "skipped")
     };
 
     private TestResourceState[] OrderedResources() => _resources.Values
@@ -347,6 +438,7 @@ internal sealed class TestRunReporter
         "failed" => RunCommandStrings.TestFailed,
         "cancelled" => RunCommandStrings.TestCancelled,
         "incomplete" => RunCommandStrings.TestIncomplete,
+        "skipped" => RunCommandStrings.TestSkipped,
         _ => RunCommandStrings.TestPending
     };
 
@@ -420,6 +512,16 @@ internal sealed class TestRunSummary
     public int? CliExitCode { get; init; }
     public string? Error { get; init; }
     public TestResourceState[] Resources { get; init; } = [];
+    public PublishedTestResult[] TestResults { get; init; } = [];
+    public TestCollectionState[] Collections { get; init; } = [];
+    public PublishedResultSummary PublishedResults { get; init; } = new();
+}
+
+internal sealed class PublishedResultSummary
+{
+    public int Passed { get; init; }
+    public int Failed { get; init; }
+    public int Skipped { get; init; }
 }
 
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase, WriteIndented = true)]

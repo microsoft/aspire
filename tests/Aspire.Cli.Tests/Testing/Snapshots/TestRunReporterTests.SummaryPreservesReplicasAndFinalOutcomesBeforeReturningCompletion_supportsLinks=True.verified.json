@@ -25,5 +25,12 @@
       "expectedReplicas": 2,
       "outcome": "passed"
     }
-  ]
+  ],
+  "testResults": [],
+  "collections": [],
+  "publishedResults": {
+    "passed": 0,
+    "failed": 0,
+    "skipped": 0
+  }
 }

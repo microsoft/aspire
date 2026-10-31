@@ -6,11 +6,15 @@ using System.Collections.Concurrent;
 using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
+using Aspire.Shared;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using StreamJsonRpc;
+using TestResult = Aspire.Hosting.ApplicationModel.TestResult;
 
 namespace Aspire.Hosting.Tests;
+
+#pragma warning disable ASPIRETESTING001 // Tests the experimental testing API.
 
 [Trait("Partition", "4")]
 public class TestRunCoordinatorEndToEndTests(ITestOutputHelper outputHelper)
@@ -23,6 +27,7 @@ public class TestRunCoordinatorEndToEndTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var outputDirectory = workspace.CreateDirectory("test-output");
+        SocketPermissionHelper.CreateDirectory(outputDirectory.FullName, repairExisting: true);
         using var builder = TestDistributedApplicationBuilder.Create(
             options => options.DisableDashboard = true, outputHelper);
         builder.Configuration[KnownConfigNames.UnixSocketPath] = UnixSocketHelper.GetBackchannelSocketPath();
@@ -39,15 +44,20 @@ public class TestRunCoordinatorEndToEndTests(ITestOutputHelper outputHelper)
                 ? builder.AddExecutable("tests", "cmd.exe", ".", "/c", $"if not exist \"%TEST_OUTPUT_DIRECTORY%\\.\" exit /b 99 & exit /b {exitCode}")
                 : builder.AddExecutable("tests", "/bin/sh", ".", "-c", $"test -d \"$TEST_OUTPUT_DIRECTORY\" || exit 99; exit {exitCode}");
         var configured = false;
-        process.WithTestRun(context =>
+        process.WithTesting(context =>
         {
-            Assert.Equal(outputDirectory.FullName, context.OutputPath);
+            Assert.Equal(outputDirectory.FullName, context.RunContext!.OutputPath);
             Assert.True(Directory.Exists(context.OutputPath));
             process.WithEnvironment("TEST_OUTPUT_DIRECTORY", context.OutputPath);
             configured = true;
-            return Task.CompletedTask;
+            context.CollectResults(async collection =>
+            {
+                await collection.WaitForCompletionAsync();
+                collection.PublishResult(new TestResult { Name = "fixture result", Outcome = TestOutcome.Passed });
+            });
         });
-        var remaining = builder.AddParameter("remaining", "value").WithTestRun();
+        Assert.True(configured);
+        var remaining = builder.AddParameter("remaining", "value").WithTesting();
         await using var app = builder.Build();
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
 
@@ -77,6 +87,7 @@ public class TestRunCoordinatorEndToEndTests(ITestOutputHelper outputHelper)
         Assert.Equal(exitCode == 0, await completion.WaitAsync(timeout.Token));
         Assert.Contains(streamEvents, e => e.Resource is { ResourceName: "tests", Outcome: "passed" or "failed" });
         Assert.Contains(streamEvents, e => e.Resource is { ResourceName: "remaining", Outcome: "passed" });
+        Assert.Contains(streamEvents, e => e.Result is { ResourceName: "tests", Name: "fixture result", Outcome: "passed" });
         Assert.False(lifetime.ApplicationStopping.IsCancellationRequested);
         await rpc.InvokeWithCancellationAsync("RequestStopAsync", [], timeout.Token);
         await app.StopAsync(timeout.Token);

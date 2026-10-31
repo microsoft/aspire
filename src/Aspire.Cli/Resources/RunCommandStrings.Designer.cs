@@ -61,11 +61,38 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Run an AppHost until all resources marked with WithTestRun() finish.
+        ///   Looks up a localized string similar to Run an AppHost until all resources marked with WithTesting() and their collectors finish.
         /// </summary>
         internal static string TestDescription {
             get {
                 return ResourceManager.GetString("TestDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string describing a published test result.
+        /// </summary>
+        internal static string TestPublishedResult {
+            get {
+                return ResourceManager.GetString("TestPublishedResult", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized summary of published test outcomes.
+        /// </summary>
+        internal static string TestPublishedSummary {
+            get {
+                return ResourceManager.GetString("TestPublishedSummary", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized skipped outcome.
+        /// </summary>
+        internal static string TestSkipped {
+            get {
+                return ResourceManager.GetString("TestSkipped", resourceCulture);
             }
         }
 

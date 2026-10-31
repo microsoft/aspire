@@ -1973,8 +1973,10 @@ public class AspireRegistrations {
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceEndpointsAllocatedEvent", (h, c) -> new ResourceEndpointsAllocatedEvent(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceReadyEvent", (h, c) -> new ResourceReadyEvent(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceStoppedEvent", (h, c) -> new ResourceStoppedEvent(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceTestingContext", (h, c) -> new ResourceTestingContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsCallbackContext", (h, c) -> new ResourceUrlsCallbackContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsEditor", (h, c) -> new ResourceUrlsEditor(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.TestingOptions", (h, c) -> new TestingOptions(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.TestRunContext", (h, c) -> new TestRunContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.Docker.DockerfileBuilder", (h, c) -> new DockerfileBuilder(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.Docker.DockerfileStage", (h, c) -> new DockerfileStage(h, c));
@@ -3516,25 +3518,25 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
-    public CSharpAppResource withTestRun() {
-        return withTestRun(null);
+    public CSharpAppResource withTesting() {
+        return withTesting(null);
     }
 
-    /** Marks a resource as a test resource. */
-    public CSharpAppResource withTestRun(AspireAction1<TestRunContext> callback) {
+    /** Configures a resource's testing participation and result collectors. */
+    public CSharpAppResource withTesting(AspireAction1<TestingOptions> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         var callbackId = callback == null ? null : getClient().registerCallback(args -> {
-            var arg = (TestRunContext) args[0];
-            callback.invoke(arg);
+            var obj = (TestingOptions) args[0];
+            callback.invoke(obj);
             var __aspireCallbackArguments = new HashMap<String, Object>();
-            __aspireCallbackArguments.put("p0", arg);
+            __aspireCallbackArguments.put("p0", obj);
             return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
         }
-        getClient().invokeCapability("Aspire.Hosting/withTestRun", reqArgs);
+        getClient().invokeCapability("Aspire.Hosting/withTesting", reqArgs);
         return this;
     }
 
@@ -5975,25 +5977,25 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
-    public ContainerRegistryResource withTestRun() {
-        return withTestRun(null);
+    public ContainerRegistryResource withTesting() {
+        return withTesting(null);
     }
 
-    /** Marks a resource as a test resource. */
-    public ContainerRegistryResource withTestRun(AspireAction1<TestRunContext> callback) {
+    /** Configures a resource's testing participation and result collectors. */
+    public ContainerRegistryResource withTesting(AspireAction1<TestingOptions> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         var callbackId = callback == null ? null : getClient().registerCallback(args -> {
-            var arg = (TestRunContext) args[0];
-            callback.invoke(arg);
+            var obj = (TestingOptions) args[0];
+            callback.invoke(obj);
             var __aspireCallbackArguments = new HashMap<String, Object>();
-            __aspireCallbackArguments.put("p0", arg);
+            __aspireCallbackArguments.put("p0", obj);
             return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
         }
-        getClient().invokeCapability("Aspire.Hosting/withTestRun", reqArgs);
+        getClient().invokeCapability("Aspire.Hosting/withTesting", reqArgs);
         return this;
     }
 
@@ -7999,25 +8001,25 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
-    public ContainerResource withTestRun() {
-        return withTestRun(null);
+    public ContainerResource withTesting() {
+        return withTesting(null);
     }
 
-    /** Marks a resource as a test resource. */
-    public ContainerResource withTestRun(AspireAction1<TestRunContext> callback) {
+    /** Configures a resource's testing participation and result collectors. */
+    public ContainerResource withTesting(AspireAction1<TestingOptions> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         var callbackId = callback == null ? null : getClient().registerCallback(args -> {
-            var arg = (TestRunContext) args[0];
-            callback.invoke(arg);
+            var obj = (TestingOptions) args[0];
+            callback.invoke(obj);
             var __aspireCallbackArguments = new HashMap<String, Object>();
-            __aspireCallbackArguments.put("p0", arg);
+            __aspireCallbackArguments.put("p0", obj);
             return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
         }
-        getClient().invokeCapability("Aspire.Hosting/withTestRun", reqArgs);
+        getClient().invokeCapability("Aspire.Hosting/withTesting", reqArgs);
         return this;
     }
 
@@ -10852,25 +10854,25 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
-    public DotnetToolResource withTestRun() {
-        return withTestRun(null);
+    public DotnetToolResource withTesting() {
+        return withTesting(null);
     }
 
-    /** Marks a resource as a test resource. */
-    public DotnetToolResource withTestRun(AspireAction1<TestRunContext> callback) {
+    /** Configures a resource's testing participation and result collectors. */
+    public DotnetToolResource withTesting(AspireAction1<TestingOptions> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         var callbackId = callback == null ? null : getClient().registerCallback(args -> {
-            var arg = (TestRunContext) args[0];
-            callback.invoke(arg);
+            var obj = (TestingOptions) args[0];
+            callback.invoke(obj);
             var __aspireCallbackArguments = new HashMap<String, Object>();
-            __aspireCallbackArguments.put("p0", arg);
+            __aspireCallbackArguments.put("p0", obj);
             return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
         }
-        getClient().invokeCapability("Aspire.Hosting/withTestRun", reqArgs);
+        getClient().invokeCapability("Aspire.Hosting/withTesting", reqArgs);
         return this;
     }
 
@@ -13388,25 +13390,25 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
-    public ExecutableResource withTestRun() {
-        return withTestRun(null);
+    public ExecutableResource withTesting() {
+        return withTesting(null);
     }
 
-    /** Marks a resource as a test resource. */
-    public ExecutableResource withTestRun(AspireAction1<TestRunContext> callback) {
+    /** Configures a resource's testing participation and result collectors. */
+    public ExecutableResource withTesting(AspireAction1<TestingOptions> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         var callbackId = callback == null ? null : getClient().registerCallback(args -> {
-            var arg = (TestRunContext) args[0];
-            callback.invoke(arg);
+            var obj = (TestingOptions) args[0];
+            callback.invoke(obj);
             var __aspireCallbackArguments = new HashMap<String, Object>();
-            __aspireCallbackArguments.put("p0", arg);
+            __aspireCallbackArguments.put("p0", obj);
             return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
         }
-        getClient().invokeCapability("Aspire.Hosting/withTestRun", reqArgs);
+        getClient().invokeCapability("Aspire.Hosting/withTesting", reqArgs);
         return this;
     }
 
@@ -14587,25 +14589,25 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return this;
     }
 
-    public ExternalServiceResource withTestRun() {
-        return withTestRun(null);
+    public ExternalServiceResource withTesting() {
+        return withTesting(null);
     }
 
-    /** Marks a resource as a test resource. */
-    public ExternalServiceResource withTestRun(AspireAction1<TestRunContext> callback) {
+    /** Configures a resource's testing participation and result collectors. */
+    public ExternalServiceResource withTesting(AspireAction1<TestingOptions> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         var callbackId = callback == null ? null : getClient().registerCallback(args -> {
-            var arg = (TestRunContext) args[0];
-            callback.invoke(arg);
+            var obj = (TestingOptions) args[0];
+            callback.invoke(obj);
             var __aspireCallbackArguments = new HashMap<String, Object>();
-            __aspireCallbackArguments.put("p0", arg);
+            __aspireCallbackArguments.put("p0", obj);
             return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
         }
-        getClient().invokeCapability("Aspire.Hosting/withTestRun", reqArgs);
+        getClient().invokeCapability("Aspire.Hosting/withTesting", reqArgs);
         return this;
     }
 
@@ -19510,25 +19512,25 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
-    public ParameterResource withTestRun() {
-        return withTestRun(null);
+    public ParameterResource withTesting() {
+        return withTesting(null);
     }
 
-    /** Marks a resource as a test resource. */
-    public ParameterResource withTestRun(AspireAction1<TestRunContext> callback) {
+    /** Configures a resource's testing participation and result collectors. */
+    public ParameterResource withTesting(AspireAction1<TestingOptions> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         var callbackId = callback == null ? null : getClient().registerCallback(args -> {
-            var arg = (TestRunContext) args[0];
-            callback.invoke(arg);
+            var obj = (TestingOptions) args[0];
+            callback.invoke(obj);
             var __aspireCallbackArguments = new HashMap<String, Object>();
-            __aspireCallbackArguments.put("p0", arg);
+            __aspireCallbackArguments.put("p0", obj);
             return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
         }
-        getClient().invokeCapability("Aspire.Hosting/withTestRun", reqArgs);
+        getClient().invokeCapability("Aspire.Hosting/withTesting", reqArgs);
         return this;
     }
 
@@ -21969,25 +21971,25 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
-    public ProjectResource withTestRun() {
-        return withTestRun(null);
+    public ProjectResource withTesting() {
+        return withTesting(null);
     }
 
-    /** Marks a resource as a test resource. */
-    public ProjectResource withTestRun(AspireAction1<TestRunContext> callback) {
+    /** Configures a resource's testing participation and result collectors. */
+    public ProjectResource withTesting(AspireAction1<TestingOptions> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         var callbackId = callback == null ? null : getClient().registerCallback(args -> {
-            var arg = (TestRunContext) args[0];
-            callback.invoke(arg);
+            var obj = (TestingOptions) args[0];
+            callback.invoke(obj);
             var __aspireCallbackArguments = new HashMap<String, Object>();
-            __aspireCallbackArguments.put("p0", arg);
+            __aspireCallbackArguments.put("p0", obj);
             return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
         }
-        getClient().invokeCapability("Aspire.Hosting/withTestRun", reqArgs);
+        getClient().invokeCapability("Aspire.Hosting/withTesting", reqArgs);
         return this;
     }
 
@@ -23614,6 +23616,71 @@ public class ResourceStoppedEvent extends HandleWrapperBase {
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ResourceStoppedEvent.services", reqArgs);
         return (IServiceProvider) result;
+    }
+
+}
+
+// ===== aspire/ResourceTestingContext.java =====
+// ResourceTestingContext.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceTestingContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class ResourceTestingContext extends HandleWrapperBase {
+    ResourceTestingContext(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    /** Gets the context for the containing test run. */
+    public TestRunContext runContext() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ResourceTestingContext.runContext", reqArgs);
+        return (TestRunContext) result;
+    }
+
+    /** Gets the logical resource name associated with every result published through this context. */
+    public String resourceName() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ResourceTestingContext.resourceName", reqArgs);
+        return (String) result;
+    }
+
+    /** Gets the absolute host path to this resource's private output directory. */
+    public String outputPath() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ResourceTestingContext.outputPath", reqArgs);
+        return (String) result;
+    }
+
+    /** Gets the token used to cancel collection. */
+    public CancellationToken cancellationToken() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ResourceTestingContext.cancellationToken", reqArgs);
+        return (CancellationToken) result;
+    }
+
+    /** Waits until every replica of this resource has reached an authoritative terminal outcome. */
+    public boolean waitForCompletionAsync() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/waitForCompletionAsync", reqArgs);
+        return (Boolean) result;
+    }
+
+    /** Publishes an observed test result for this resource. */
+    public void publishResult(TestResult result) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("result", AspireClient.serializeValue(result));
+        getClient().invokeCapability("Aspire.Hosting.ApplicationModel/publishResult", reqArgs);
     }
 
 }
@@ -25597,25 +25664,25 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
-    public TestDatabaseResource withTestRun() {
-        return withTestRun(null);
+    public TestDatabaseResource withTesting() {
+        return withTesting(null);
     }
 
-    /** Marks a resource as a test resource. */
-    public TestDatabaseResource withTestRun(AspireAction1<TestRunContext> callback) {
+    /** Configures a resource's testing participation and result collectors. */
+    public TestDatabaseResource withTesting(AspireAction1<TestingOptions> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         var callbackId = callback == null ? null : getClient().registerCallback(args -> {
-            var arg = (TestRunContext) args[0];
-            callback.invoke(arg);
+            var obj = (TestingOptions) args[0];
+            callback.invoke(obj);
             var __aspireCallbackArguments = new HashMap<String, Object>();
-            __aspireCallbackArguments.put("p0", arg);
+            __aspireCallbackArguments.put("p0", obj);
             return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
         }
-        getClient().invokeCapability("Aspire.Hosting/withTestRun", reqArgs);
+        getClient().invokeCapability("Aspire.Hosting/withTesting", reqArgs);
         return this;
     }
 
@@ -26374,6 +26441,34 @@ public class TestNestedDto implements JsonSerializable {
         map.put("tags", AspireClient.serializeValue(tags));
         map.put("counts", AspireClient.serializeValue(counts));
         return map;
+    }
+}
+
+// ===== aspire/TestOutcome.java =====
+// TestOutcome.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+/** TestOutcome enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public enum TestOutcome implements WireValueEnum {
+    PASSED("Passed"),
+    FAILED("Failed"),
+    SKIPPED("Skipped");
+
+    private final String value;
+
+    TestOutcome(String value) {
+        this.value = value;
+    }
+
+    public String getValue() { return value; }
+
+    public static TestOutcome fromValue(String value) {
+        for (TestOutcome e : values()) {
+            if (e.value.equals(value)) return e;
+        }
+        throw new IllegalArgumentException("Unknown value: " + value);
     }
 }
 
@@ -27956,25 +28051,25 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
-    public TestRedisResource withTestRun() {
-        return withTestRun(null);
+    public TestRedisResource withTesting() {
+        return withTesting(null);
     }
 
-    /** Marks a resource as a test resource. */
-    public TestRedisResource withTestRun(AspireAction1<TestRunContext> callback) {
+    /** Configures a resource's testing participation and result collectors. */
+    public TestRedisResource withTesting(AspireAction1<TestingOptions> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         var callbackId = callback == null ? null : getClient().registerCallback(args -> {
-            var arg = (TestRunContext) args[0];
-            callback.invoke(arg);
+            var obj = (TestingOptions) args[0];
+            callback.invoke(obj);
             var __aspireCallbackArguments = new HashMap<String, Object>();
-            __aspireCallbackArguments.put("p0", arg);
+            __aspireCallbackArguments.put("p0", obj);
             return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
         }
-        getClient().invokeCapability("Aspire.Hosting/withTestRun", reqArgs);
+        getClient().invokeCapability("Aspire.Hosting/withTesting", reqArgs);
         return this;
     }
 
@@ -28862,6 +28957,55 @@ public enum TestResourceStatus implements WireValueEnum {
     }
 }
 
+// ===== aspire/TestResult.java =====
+// TestResult.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/** TestResult DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class TestResult implements JsonSerializable {
+    private String name;
+    private TestOutcome outcome;
+    private Number duration;
+    private String message;
+
+    public String getName() { return name; }
+    public void setName(String value) { this.name = value; }
+    public TestOutcome getOutcome() { return outcome; }
+    public void setOutcome(TestOutcome value) { this.outcome = value; }
+    public Number getDuration() { return duration; }
+    public void setDuration(Number value) { this.duration = value; }
+    public String getMessage() { return message; }
+    public void setMessage(String value) { this.message = value; }
+
+    @SuppressWarnings("unchecked")
+    public static TestResult fromMap(Map<String, Object> map) {
+        var value = new TestResult();
+        var nameValue = map.get("name");
+        value.setName((String) nameValue);
+        var outcomeValue = map.get("outcome");
+        value.setOutcome(TestOutcome.fromValue((String) outcomeValue));
+        var durationValue = map.get("duration");
+        value.setDuration(durationValue == null ? null : ((Number) durationValue).doubleValue());
+        var messageValue = map.get("message");
+        value.setMessage(messageValue == null ? null : (String) messageValue);
+        return value;
+    }
+
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("name", AspireClient.serializeValue(name));
+        map.put("outcome", AspireClient.serializeValue(outcome));
+        map.put("duration", AspireClient.serializeValue(duration));
+        map.put("message", AspireClient.serializeValue(message));
+        return map;
+    }
+}
+
 // ===== aspire/TestReturnValueContext.java =====
 // TestReturnValueContext.java - GENERATED CODE - DO NOT EDIT
 
@@ -28996,14 +29140,6 @@ public class TestRunContext extends HandleWrapperBase {
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/TestRunContext.outputPath", reqArgs);
         return (String) result;
-    }
-
-    /** Gets the token used to cancel test resource setup. */
-    public CancellationToken cancellationToken() {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/TestRunContext.cancellationToken", reqArgs);
-        return (CancellationToken) result;
     }
 
 }
@@ -30532,25 +30668,25 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
-    public TestVaultResource withTestRun() {
-        return withTestRun(null);
+    public TestVaultResource withTesting() {
+        return withTesting(null);
     }
 
-    /** Marks a resource as a test resource. */
-    public TestVaultResource withTestRun(AspireAction1<TestRunContext> callback) {
+    /** Configures a resource's testing participation and result collectors. */
+    public TestVaultResource withTesting(AspireAction1<TestingOptions> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         var callbackId = callback == null ? null : getClient().registerCallback(args -> {
-            var arg = (TestRunContext) args[0];
-            callback.invoke(arg);
+            var obj = (TestingOptions) args[0];
+            callback.invoke(obj);
             var __aspireCallbackArguments = new HashMap<String, Object>();
-            __aspireCallbackArguments.put("p0", arg);
+            __aspireCallbackArguments.put("p0", obj);
             return __aspireCallbackArguments;
         });
         if (callbackId != null) {
             reqArgs.put("callback", callbackId);
         }
-        getClient().invokeCapability("Aspire.Hosting/withTestRun", reqArgs);
+        getClient().invokeCapability("Aspire.Hosting/withTesting", reqArgs);
         return this;
     }
 
@@ -31108,6 +31244,72 @@ public class TestVaultResource extends ContainerResource {
         reqArgs.put("middleware", AspireClient.serializeValue(middleware));
         getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeRouteMiddleware", reqArgs);
         return this;
+    }
+
+}
+
+// ===== aspire/TestingOptions.java =====
+// TestingOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.TestingOptions. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class TestingOptions extends HandleWrapperBase {
+    TestingOptions(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    /** Gets the containing test run context, or null outside an `aspire test` invocation. */
+    public TestRunContext runContext() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/TestingOptions.runContext", reqArgs);
+        return (TestRunContext) result;
+    }
+
+    /** Gets whether the CLI supplied a test run output destination for this AppHost. */
+    public boolean isTestRun() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/TestingOptions.isTestRun", reqArgs);
+        return (Boolean) result;
+    }
+
+    /** Gets the logical resource name whose testing behavior is being configured. */
+    public String resourceName() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/TestingOptions.resourceName", reqArgs);
+        return (String) result;
+    }
+
+    /** Gets the absolute host path to this resource's private output directory, or null outside testing. */
+    public String outputPath() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/TestingOptions.outputPath", reqArgs);
+        return result == null ? null : (String) result;
+    }
+
+    /** Registers a callback that publishes framework-neutral results for this resource. */
+    public void collectResults(AspireAction1<ResourceTestingContext> collector) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var collectorId = getClient().registerCallback(args -> {
+            var arg = (ResourceTestingContext) args[0];
+            collector.invoke(arg);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
+        });
+        if (collectorId != null) {
+            reqArgs.put("collector", collectorId);
+        }
+        getClient().invokeCapability("Aspire.Hosting.ApplicationModel/collectResults", reqArgs);
     }
 
 }
@@ -32204,6 +32406,7 @@ public final class WithVolumeOptions {
 .aspire/modules/aspire/ResourceNotificationService.java
 .aspire/modules/aspire/ResourceReadyEvent.java
 .aspire/modules/aspire/ResourceStoppedEvent.java
+.aspire/modules/aspire/ResourceTestingContext.java
 .aspire/modules/aspire/ResourceUrlAnnotation.java
 .aspire/modules/aspire/ResourceUrlsCallbackContext.java
 .aspire/modules/aspire/ResourceUrlsEditor.java
@@ -32219,13 +32422,16 @@ public final class WithVolumeOptions {
 .aspire/modules/aspire/TestEnvironmentContext.java
 .aspire/modules/aspire/TestMutableCollectionContext.java
 .aspire/modules/aspire/TestNestedDto.java
+.aspire/modules/aspire/TestOutcome.java
 .aspire/modules/aspire/TestPersistenceMode.java
 .aspire/modules/aspire/TestRedisResource.java
 .aspire/modules/aspire/TestResourceContext.java
 .aspire/modules/aspire/TestResourceStatus.java
+.aspire/modules/aspire/TestResult.java
 .aspire/modules/aspire/TestReturnValueContext.java
 .aspire/modules/aspire/TestRunContext.java
 .aspire/modules/aspire/TestVaultResource.java
+.aspire/modules/aspire/TestingOptions.java
 .aspire/modules/aspire/UpdateCommandStateContext.java
 .aspire/modules/aspire/UpdateCommandStateResourceSnapshot.java
 .aspire/modules/aspire/UrlDisplayLocation.java

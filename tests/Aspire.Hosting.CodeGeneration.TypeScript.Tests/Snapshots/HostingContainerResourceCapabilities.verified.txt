@@ -1316,8 +1316,8 @@
     ]
   },
   {
-    CapabilityId: Aspire.Hosting/withTestRun,
-    MethodName: withTestRun,
+    CapabilityId: Aspire.Hosting/withTesting,
+    MethodName: withTesting,
     TargetType: {
       TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource,
       IsInterface: true

@@ -171,6 +171,64 @@ public class TestRunReporterTests(ITestOutputHelper outputHelper)
         Assert.Null(summary["resources"]![0]!["exitCode"]);
     }
 
+    [Theory]
+    [InlineData("failedResult")]
+    [InlineData("unknownOutcome")]
+    [InlineData("unknownResource")]
+    [InlineData("negativeDuration")]
+    [InlineData("runningCollection")]
+    [InlineData("failedCollection")]
+    [InlineData("negativeCollectorCount")]
+    [InlineData("unknownCollectionState")]
+    public async Task InvalidResultsAndIncompleteCollectionCannotProduceAggregateSuccess(string scenario)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var reporter = CreateReporter(CreateContext(workspace));
+        var resource = Resource("tests-1", "Finished", 0, "passed") with { ExpectedReplicas = 1 };
+        var item = scenario switch
+        {
+            "failedResult" => new TestRunEvent
+            {
+                Result = new PublishedTestResult { ResourceName = resource.ResourceName, Name = "example", Outcome = "failed" }
+            },
+            "unknownOutcome" => new TestRunEvent
+            {
+                Result = new PublishedTestResult { ResourceName = resource.ResourceName, Name = "example", Outcome = "unknown" }
+            },
+            "unknownResource" => new TestRunEvent
+            {
+                Result = new PublishedTestResult { ResourceName = "unregistered", Name = "example", Outcome = "passed" }
+            },
+            "negativeDuration" => new TestRunEvent
+            {
+                Result = new PublishedTestResult { ResourceName = resource.ResourceName, Name = "example", Outcome = "passed", DurationMilliseconds = -1 }
+            },
+            _ => new TestRunEvent
+            {
+                Collection = new TestCollectionState
+                {
+                    ResourceName = resource.ResourceName,
+                    CollectorCount = scenario == "negativeCollectorCount" ? -1 : 1,
+                    Status = scenario switch
+                    {
+                        "runningCollection" => "running",
+                        "failedCollection" => "failed",
+                        "negativeCollectorCount" => "completed",
+                        _ => "unknown"
+                    }
+                }
+            }
+        };
+        var backchannel = new TestAppHostBackchannel
+        {
+            WatchTestRunAsyncCallback = _ => Events(
+                new TestRunEvent { Resource = resource }, item, new TestRunEvent { Passed = true })
+        };
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            reporter.WaitForCompletionAsync(backchannel, TestContext.Current.CancellationToken));
+    }
+
     [Fact]
     public async Task AggregateSuccessCannotHideMissingReplicaOutcomes()
     {

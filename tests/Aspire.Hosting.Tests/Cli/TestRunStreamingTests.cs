@@ -6,12 +6,14 @@ using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Cli;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
+using Aspire.Shared;
 using Microsoft.AspNetCore.InternalTesting;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 
 namespace Aspire.Hosting.Tests;
+
+#pragma warning disable ASPIRETESTING001 // Tests the experimental testing API.
 
 [Trait("Partition", "4")]
 public class TestRunStreamingTests(ITestOutputHelper outputHelper)
@@ -21,7 +23,7 @@ public class TestRunStreamingTests(ITestOutputHelper outputHelper)
     {
         using var notifications = ResourceNotificationServiceTestHelpers.Create();
         var tests = new ContainerResource("tests");
-        tests.Annotations.Add(new TestAnnotation());
+        tests.Annotations.Add(new TestingAnnotation());
         tests.Annotations.Add(new ReplicaAnnotation(2));
         var api = new ContainerResource("api");
         var coordinator = new TestRunCoordinator(new DistributedApplicationModel([tests, api]), notifications,
@@ -62,7 +64,7 @@ public class TestRunStreamingTests(ITestOutputHelper outputHelper)
     {
         using var notifications = ResourceNotificationServiceTestHelpers.Create();
         var tests = new ContainerResource("tests");
-        tests.Annotations.Add(new TestAnnotation());
+        tests.Annotations.Add(new TestingAnnotation());
         await notifications.PublishUpdateAsync(tests, s => s with { State = KnownResourceStates.Finished, ExitCode = 0 });
         var coordinator = new TestRunCoordinator(new DistributedApplicationModel([tests]), notifications,
             TimeProvider.System, NullLogger<TestRunCoordinator>.Instance);
@@ -79,7 +81,7 @@ public class TestRunStreamingTests(ITestOutputHelper outputHelper)
     {
         using var notifications = ResourceNotificationServiceTestHelpers.Create();
         var tests = new ContainerResource("tests");
-        tests.Annotations.Add(new TestAnnotation());
+        tests.Annotations.Add(new TestingAnnotation());
         var coordinator = new TestRunCoordinator(new DistributedApplicationModel([tests]), notifications,
             TimeProvider.System, NullLogger<TestRunCoordinator>.Instance);
         await using var enumerator = coordinator.WatchAsync(TestContext.Current.CancellationToken).GetAsyncEnumerator();
@@ -93,7 +95,7 @@ public class TestRunStreamingTests(ITestOutputHelper outputHelper)
     {
         using var notifications = ResourceNotificationServiceTestHelpers.Create();
         var tests = new ContainerResource("tests");
-        tests.Annotations.Add(new TestAnnotation());
+        tests.Annotations.Add(new TestingAnnotation());
         await notifications.PublishUpdateAsync(tests, s => s with { State = KnownResourceStates.Exited });
         var time = new FakeTimeProvider();
         var coordinator = new TestRunCoordinator(new DistributedApplicationModel([tests]), notifications,
@@ -111,38 +113,41 @@ public class TestRunStreamingTests(ITestOutputHelper outputHelper)
     [InlineData(DistributedApplicationOperation.Run, false, false)]
     [InlineData(DistributedApplicationOperation.Run, true, true)]
     [InlineData(DistributedApplicationOperation.Publish, true, false)]
-    public async Task ContextSetupIsRunOnlyAndRequiresTheCliSuppliedDestination(
-        DistributedApplicationOperation operation, bool supplyPath, bool expectedCallback)
+    public void ConfigurationIsImmediateAndOutputPathsExistOnlyForTesting(
+        DistributedApplicationOperation operation, bool supplyPath, bool expectedOutput)
     {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(operation, outputHelper);
-        var path = Path.GetFullPath("test-output");
+        var path = Path.Combine(workspace.WorkspaceRoot.FullName, "test-output");
         if (supplyPath)
         {
+            SocketPermissionHelper.CreateDirectory(path, repairExisting: false);
             builder.Configuration[KnownConfigNames.TestOutputPath] = path;
         }
-        TestRunContext? captured = null;
+        TestingOptions? captured = null;
+        var configurations = 0;
         var resource = builder.AddParameter("tests", "value");
-        resource.WithTestRun(_ => throw new InvalidOperationException("Replaced callbacks must not execute."));
-        resource.WithTestRun(context =>
+        resource.WithTesting(_ => configurations++);
+        resource.WithTesting(context =>
         {
+            configurations++;
             captured = context;
-            return Task.CompletedTask;
         });
-        await using var app = builder.Build();
-        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
-        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
-
-        await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, model), cancellation.Token);
-
-        Assert.Equal(expectedCallback, captured is not null);
-        if (captured is not null)
+        Assert.Equal(2, configurations);
+        Assert.NotNull(captured);
+        Assert.Equal(expectedOutput, captured.IsTestRun);
+        if (expectedOutput)
         {
-            Assert.Equal(path, captured.OutputPath);
-            Assert.True(captured.CancellationToken.CanBeCanceled);
-            cancellation.Cancel();
-            Assert.True(captured.CancellationToken.IsCancellationRequested);
+            Assert.Equal(path, captured.RunContext!.OutputPath);
+            Assert.StartsWith(Path.Combine(path, "resources") + Path.DirectorySeparatorChar, captured.OutputPath);
+            Assert.True(Directory.Exists(captured.OutputPath));
         }
-        Assert.Single(resource.Resource.Annotations.OfType<TestAnnotation>());
+        else
+        {
+            Assert.Null(captured.OutputPath);
+            Assert.Null(captured.RunContext);
+        }
+        Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
     }
 
     private static async Task CollectAsync(IAsyncEnumerable<TestRunEvent> stream, ConcurrentQueue<TestRunEvent> events,

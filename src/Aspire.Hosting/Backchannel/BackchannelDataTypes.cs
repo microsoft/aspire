@@ -35,7 +35,27 @@ internal sealed record TestResourceState
 internal sealed class TestRunEvent
 {
     public TestResourceState? Resource { get; init; }
+    public PublishedTestResult? Result { get; init; }
+    public TestCollectionState? Collection { get; init; }
     public bool? Passed { get; init; }
+}
+
+internal sealed record PublishedTestResult
+{
+    public required string ResourceName { get; init; }
+    public required string Name { get; init; }
+    public required string Outcome { get; init; }
+    public double? DurationMilliseconds { get; init; }
+    public string? Message { get; init; }
+}
+
+internal sealed record TestCollectionState
+{
+    public required string ResourceName { get; init; }
+    public string? OutputPath { get; init; }
+    public int CollectorCount { get; init; }
+    public required string Status { get; init; }
+    public string? Error { get; init; }
 }
 
 // =============================================================================

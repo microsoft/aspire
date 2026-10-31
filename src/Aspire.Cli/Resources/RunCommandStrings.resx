@@ -268,7 +268,7 @@
     <value>The --no-build option cannot be used when watch mode is enabled.</value>
   </data>
   <data name="TestDescription" xml:space="preserve">
-    <value>Run an AppHost until all resources marked with WithTestRun() finish</value>
+    <value>Run an AppHost until all resources marked with WithTesting() and their collectors finish</value>
   </data>
   <data name="TestIncompatibleOptions" xml:space="preserve">
     <value>aspire test does not support detached execution, profile capture, or extension-managed debug sessions.</value>
@@ -329,5 +329,14 @@
   </data>
   <data name="TestKeepAliveDisconnected" xml:space="preserve">
     <value>The AppHost disconnected while being kept alive for test inspection and did not finish shutting down.</value>
+  </data>
+  <data name="TestPublishedResult" xml:space="preserve">
+    <value>{0}: {1} ({2})</value>
+  </data>
+  <data name="TestPublishedSummary" xml:space="preserve">
+    <value>Published test results: {0} passed, {1} failed, {2} skipped</value>
+  </data>
+  <data name="TestSkipped" xml:space="preserve">
+    <value>skipped</value>
   </data>
 </root>

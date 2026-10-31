@@ -369,6 +369,18 @@ const (
 	UrlDisplayLocationDetailsOnly UrlDisplayLocation = "DetailsOnly"
 )
 
+// TestOutcome defines the outcomes that a resource test collector can publish.
+type TestOutcome string
+
+const (
+	// TestOutcomePassed is the test passed.
+	TestOutcomePassed TestOutcome = "Passed"
+	// TestOutcomeFailed is the test failed.
+	TestOutcomeFailed TestOutcome = "Failed"
+	// TestOutcomeSkipped - The test was skipped.
+	TestOutcomeSkipped TestOutcome = "Skipped"
+)
+
 // TestPersistenceMode - Test persistence mode enum.
 type TestPersistenceMode string
 
@@ -1562,6 +1574,36 @@ func (d *TerminalOptions) ToMap() map[string]any {
 	m := map[string]any{}
 	m["columns"] = serializeValue(d.Columns)
 	m["rows"] = serializeValue(d.Rows)
+	return m
+}
+
+// TestResult describes an individual result published by a framework-neutral
+// resource collector.
+//
+// Collectors translate their framework's results into this shape. Resource
+// identity is supplied by the collection context, not by the result. A result
+// does not replace the resource's process completion outcome, and no individual
+// results are inferred from a process exit code.
+type TestResult struct {
+	// Name is the framework-provided name of the result.
+	Name string `json:"name,omitempty"`
+	// Outcome is the observed outcome of the test.
+	Outcome TestOutcome `json:"outcome,omitempty"`
+	// Duration is the observed duration, or null when the framework does not
+	// provide one.
+	Duration *float64 `json:"duration,omitempty"`
+	// Message is an optional framework diagnostic, such as a failure or skip
+	// reason.
+	Message *string `json:"message,omitempty"`
+}
+
+// ToMap converts the DTO to a map for JSON serialization.
+func (d *TestResult) ToMap() map[string]any {
+	m := map[string]any{}
+	m["name"] = serializeValue(d.Name)
+	m["outcome"] = serializeValue(d.Outcome)
+	if d.Duration != nil { m["duration"] = serializeValue(d.Duration) }
+	if d.Message != nil { m["message"] = serializeValue(d.Message) }
 	return m
 }
 
@@ -3288,19 +3330,27 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	// configuration.
 	WithTerminal(options ...*WithTerminalOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 
-	// WithTestRun marks a resource as a test resource.
+	// WithTesting configures a resource's testing participation and result
+	// collectors.
 	//
-	// Waits for every marked resource, including replicas, then shuts down the
-	// application. Exit code zero passes. Startup failure, a nonzero exit code, or
-	// an unknown terminal exit code fails. This does not change the lifetime of
-	// aspire run. An optional asynchronous setup callback receives the unique host
-	// output path before resources start.
+	// Waits for every marked resource, including replicas, and all collectors
+	// before completion. The application shuts down unless keep-alive was
+	// requested. Exit code zero passes. Startup failure, a nonzero exit code, or an
+	// unknown terminal exit code fails. This does not change the lifetime of aspire
+	// run. Configuration runs immediately. Collectors start alongside resource
+	// execution during testing. The CLI supplies private resource output
+	// destinations; those paths are absent during ordinary runs.
 	//
 	// Parameters:
-	//   - options: Optional parameters; see [WithTestRunOptions].
+	//   - options: Optional parameters; see [WithTestingOptions].
 	//
 	// Returns: The resource builder.
-	WithTestRun(options ...*WithTestRunOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithTesting(options ...*WithTestingOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 
 	// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 	// names add multiple values.
@@ -5376,15 +5426,16 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithTerminal(o
 	return s
 }
 
-// WithTestRun marks a resource as a test resource.
-func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithTestRun(options ...*WithTestRunOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+// WithTesting configures a resource's testing participation and result
+// collectors.
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithTesting(options ...*WithTestingOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	if len(options) > 0 {
-		merged := &WithTestRunOptions{}
+		merged := &WithTestingOptions{}
 		for _, opt := range options {
 			if opt != nil { merged = deepUpdate(merged, opt) }
 		}
@@ -5392,13 +5443,13 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithTestRun(op
 		if merged.Callback != nil {
 			cb := merged.Callback
 			shim := func(args ...any) any {
-				cb(callbackHandleArg(s.client, args, 0, newTestRunContextFromHandle))
+				cb(callbackHandleArg(s.client, args, 0, newTestingOptionsFromHandle))
 				return nil
 			}
 			reqArgs["callback"] = s.client.registerCallback(shim)
 		}
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestRun", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTesting", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -6734,19 +6785,27 @@ type CSharpAppResource interface {
 	// configuration.
 	WithTerminal(options ...*WithTerminalOptions) CSharpAppResource
 
-	// WithTestRun marks a resource as a test resource.
+	// WithTesting configures a resource's testing participation and result
+	// collectors.
 	//
-	// Waits for every marked resource, including replicas, then shuts down the
-	// application. Exit code zero passes. Startup failure, a nonzero exit code, or
-	// an unknown terminal exit code fails. This does not change the lifetime of
-	// aspire run. An optional asynchronous setup callback receives the unique host
-	// output path before resources start.
+	// Waits for every marked resource, including replicas, and all collectors
+	// before completion. The application shuts down unless keep-alive was
+	// requested. Exit code zero passes. Startup failure, a nonzero exit code, or an
+	// unknown terminal exit code fails. This does not change the lifetime of aspire
+	// run. Configuration runs immediately. Collectors start alongside resource
+	// execution during testing. The CLI supplies private resource output
+	// destinations; those paths are absent during ordinary runs.
 	//
 	// Parameters:
-	//   - options: Optional parameters; see [WithTestRunOptions].
+	//   - options: Optional parameters; see [WithTestingOptions].
 	//
 	// Returns: The resource builder.
-	WithTestRun(options ...*WithTestRunOptions) CSharpAppResource
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithTesting(options ...*WithTestingOptions) CSharpAppResource
 
 	// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 	// names add multiple values.
@@ -8535,15 +8594,16 @@ func (s *cSharpAppResource) WithTerminal(options ...*WithTerminalOptions) CSharp
 	return s
 }
 
-// WithTestRun marks a resource as a test resource.
-func (s *cSharpAppResource) WithTestRun(options ...*WithTestRunOptions) CSharpAppResource {
+// WithTesting configures a resource's testing participation and result
+// collectors.
+func (s *cSharpAppResource) WithTesting(options ...*WithTestingOptions) CSharpAppResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	if len(options) > 0 {
-		merged := &WithTestRunOptions{}
+		merged := &WithTestingOptions{}
 		for _, opt := range options {
 			if opt != nil { merged = deepUpdate(merged, opt) }
 		}
@@ -8551,13 +8611,13 @@ func (s *cSharpAppResource) WithTestRun(options ...*WithTestRunOptions) CSharpAp
 		if merged.Callback != nil {
 			cb := merged.Callback
 			shim := func(args ...any) any {
-				cb(callbackHandleArg(s.client, args, 0, newTestRunContextFromHandle))
+				cb(callbackHandleArg(s.client, args, 0, newTestingOptionsFromHandle))
 				return nil
 			}
 			reqArgs["callback"] = s.client.registerCallback(shim)
 		}
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestRun", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTesting", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -10733,19 +10793,27 @@ type ContainerRegistryResource interface {
 	// configuration.
 	WithTerminal(options ...*WithTerminalOptions) ContainerRegistryResource
 
-	// WithTestRun marks a resource as a test resource.
+	// WithTesting configures a resource's testing participation and result
+	// collectors.
 	//
-	// Waits for every marked resource, including replicas, then shuts down the
-	// application. Exit code zero passes. Startup failure, a nonzero exit code, or
-	// an unknown terminal exit code fails. This does not change the lifetime of
-	// aspire run. An optional asynchronous setup callback receives the unique host
-	// output path before resources start.
+	// Waits for every marked resource, including replicas, and all collectors
+	// before completion. The application shuts down unless keep-alive was
+	// requested. Exit code zero passes. Startup failure, a nonzero exit code, or an
+	// unknown terminal exit code fails. This does not change the lifetime of aspire
+	// run. Configuration runs immediately. Collectors start alongside resource
+	// execution during testing. The CLI supplies private resource output
+	// destinations; those paths are absent during ordinary runs.
 	//
 	// Parameters:
-	//   - options: Optional parameters; see [WithTestRunOptions].
+	//   - options: Optional parameters; see [WithTestingOptions].
 	//
 	// Returns: The resource builder.
-	WithTestRun(options ...*WithTestRunOptions) ContainerRegistryResource
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithTesting(options ...*WithTestingOptions) ContainerRegistryResource
 
 	// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 	// names add multiple values.
@@ -11747,15 +11815,16 @@ func (s *containerRegistryResource) WithTerminal(options ...*WithTerminalOptions
 	return s
 }
 
-// WithTestRun marks a resource as a test resource.
-func (s *containerRegistryResource) WithTestRun(options ...*WithTestRunOptions) ContainerRegistryResource {
+// WithTesting configures a resource's testing participation and result
+// collectors.
+func (s *containerRegistryResource) WithTesting(options ...*WithTestingOptions) ContainerRegistryResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	if len(options) > 0 {
-		merged := &WithTestRunOptions{}
+		merged := &WithTestingOptions{}
 		for _, opt := range options {
 			if opt != nil { merged = deepUpdate(merged, opt) }
 		}
@@ -11763,13 +11832,13 @@ func (s *containerRegistryResource) WithTestRun(options ...*WithTestRunOptions) 
 		if merged.Callback != nil {
 			cb := merged.Callback
 			shim := func(args ...any) any {
-				cb(callbackHandleArg(s.client, args, 0, newTestRunContextFromHandle))
+				cb(callbackHandleArg(s.client, args, 0, newTestingOptionsFromHandle))
 				return nil
 			}
 			reqArgs["callback"] = s.client.registerCallback(shim)
 		}
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestRun", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTesting", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -13080,19 +13149,27 @@ type ContainerResource interface {
 	// configuration.
 	WithTerminal(options ...*WithTerminalOptions) ContainerResource
 
-	// WithTestRun marks a resource as a test resource.
+	// WithTesting configures a resource's testing participation and result
+	// collectors.
 	//
-	// Waits for every marked resource, including replicas, then shuts down the
-	// application. Exit code zero passes. Startup failure, a nonzero exit code, or
-	// an unknown terminal exit code fails. This does not change the lifetime of
-	// aspire run. An optional asynchronous setup callback receives the unique host
-	// output path before resources start.
+	// Waits for every marked resource, including replicas, and all collectors
+	// before completion. The application shuts down unless keep-alive was
+	// requested. Exit code zero passes. Startup failure, a nonzero exit code, or an
+	// unknown terminal exit code fails. This does not change the lifetime of aspire
+	// run. Configuration runs immediately. Collectors start alongside resource
+	// execution during testing. The CLI supplies private resource output
+	// destinations; those paths are absent during ordinary runs.
 	//
 	// Parameters:
-	//   - options: Optional parameters; see [WithTestRunOptions].
+	//   - options: Optional parameters; see [WithTestingOptions].
 	//
 	// Returns: The resource builder.
-	WithTestRun(options ...*WithTestRunOptions) ContainerResource
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithTesting(options ...*WithTestingOptions) ContainerResource
 
 	// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 	// names add multiple values.
@@ -15165,15 +15242,16 @@ func (s *containerResource) WithTerminal(options ...*WithTerminalOptions) Contai
 	return s
 }
 
-// WithTestRun marks a resource as a test resource.
-func (s *containerResource) WithTestRun(options ...*WithTestRunOptions) ContainerResource {
+// WithTesting configures a resource's testing participation and result
+// collectors.
+func (s *containerResource) WithTesting(options ...*WithTestingOptions) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	if len(options) > 0 {
-		merged := &WithTestRunOptions{}
+		merged := &WithTestingOptions{}
 		for _, opt := range options {
 			if opt != nil { merged = deepUpdate(merged, opt) }
 		}
@@ -15181,13 +15259,13 @@ func (s *containerResource) WithTestRun(options ...*WithTestRunOptions) Containe
 		if merged.Callback != nil {
 			cb := merged.Callback
 			shim := func(args ...any) any {
-				cb(callbackHandleArg(s.client, args, 0, newTestRunContextFromHandle))
+				cb(callbackHandleArg(s.client, args, 0, newTestingOptionsFromHandle))
 				return nil
 			}
 			reqArgs["callback"] = s.client.registerCallback(shim)
 		}
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestRun", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTesting", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -18416,19 +18494,27 @@ type DotnetToolResource interface {
 	// configuration.
 	WithTerminal(options ...*WithTerminalOptions) DotnetToolResource
 
-	// WithTestRun marks a resource as a test resource.
+	// WithTesting configures a resource's testing participation and result
+	// collectors.
 	//
-	// Waits for every marked resource, including replicas, then shuts down the
-	// application. Exit code zero passes. Startup failure, a nonzero exit code, or
-	// an unknown terminal exit code fails. This does not change the lifetime of
-	// aspire run. An optional asynchronous setup callback receives the unique host
-	// output path before resources start.
+	// Waits for every marked resource, including replicas, and all collectors
+	// before completion. The application shuts down unless keep-alive was
+	// requested. Exit code zero passes. Startup failure, a nonzero exit code, or an
+	// unknown terminal exit code fails. This does not change the lifetime of aspire
+	// run. Configuration runs immediately. Collectors start alongside resource
+	// execution during testing. The CLI supplies private resource output
+	// destinations; those paths are absent during ordinary runs.
 	//
 	// Parameters:
-	//   - options: Optional parameters; see [WithTestRunOptions].
+	//   - options: Optional parameters; see [WithTestingOptions].
 	//
 	// Returns: The resource builder.
-	WithTestRun(options ...*WithTestRunOptions) DotnetToolResource
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithTesting(options ...*WithTestingOptions) DotnetToolResource
 
 	// WithToolIgnoreExistingFeeds configures the tool to use only the specified
 	// package sources, ignoring existing NuGet configuration.
@@ -20270,15 +20356,16 @@ func (s *dotnetToolResource) WithTerminal(options ...*WithTerminalOptions) Dotne
 	return s
 }
 
-// WithTestRun marks a resource as a test resource.
-func (s *dotnetToolResource) WithTestRun(options ...*WithTestRunOptions) DotnetToolResource {
+// WithTesting configures a resource's testing participation and result
+// collectors.
+func (s *dotnetToolResource) WithTesting(options ...*WithTestingOptions) DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	if len(options) > 0 {
-		merged := &WithTestRunOptions{}
+		merged := &WithTestingOptions{}
 		for _, opt := range options {
 			if opt != nil { merged = deepUpdate(merged, opt) }
 		}
@@ -20286,13 +20373,13 @@ func (s *dotnetToolResource) WithTestRun(options ...*WithTestRunOptions) DotnetT
 		if merged.Callback != nil {
 			cb := merged.Callback
 			shim := func(args ...any) any {
-				cb(callbackHandleArg(s.client, args, 0, newTestRunContextFromHandle))
+				cb(callbackHandleArg(s.client, args, 0, newTestingOptionsFromHandle))
 				return nil
 			}
 			reqArgs["callback"] = s.client.registerCallback(shim)
 		}
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestRun", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTesting", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -22747,19 +22834,27 @@ type ExecutableResource interface {
 	// configuration.
 	WithTerminal(options ...*WithTerminalOptions) ExecutableResource
 
-	// WithTestRun marks a resource as a test resource.
+	// WithTesting configures a resource's testing participation and result
+	// collectors.
 	//
-	// Waits for every marked resource, including replicas, then shuts down the
-	// application. Exit code zero passes. Startup failure, a nonzero exit code, or
-	// an unknown terminal exit code fails. This does not change the lifetime of
-	// aspire run. An optional asynchronous setup callback receives the unique host
-	// output path before resources start.
+	// Waits for every marked resource, including replicas, and all collectors
+	// before completion. The application shuts down unless keep-alive was
+	// requested. Exit code zero passes. Startup failure, a nonzero exit code, or an
+	// unknown terminal exit code fails. This does not change the lifetime of aspire
+	// run. Configuration runs immediately. Collectors start alongside resource
+	// execution during testing. The CLI supplies private resource output
+	// destinations; those paths are absent during ordinary runs.
 	//
 	// Parameters:
-	//   - options: Optional parameters; see [WithTestRunOptions].
+	//   - options: Optional parameters; see [WithTestingOptions].
 	//
 	// Returns: The resource builder.
-	WithTestRun(options ...*WithTestRunOptions) ExecutableResource
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithTesting(options ...*WithTestingOptions) ExecutableResource
 
 	// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 	// names add multiple values.
@@ -24528,15 +24623,16 @@ func (s *executableResource) WithTerminal(options ...*WithTerminalOptions) Execu
 	return s
 }
 
-// WithTestRun marks a resource as a test resource.
-func (s *executableResource) WithTestRun(options ...*WithTestRunOptions) ExecutableResource {
+// WithTesting configures a resource's testing participation and result
+// collectors.
+func (s *executableResource) WithTesting(options ...*WithTestingOptions) ExecutableResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	if len(options) > 0 {
-		merged := &WithTestRunOptions{}
+		merged := &WithTestingOptions{}
 		for _, opt := range options {
 			if opt != nil { merged = deepUpdate(merged, opt) }
 		}
@@ -24544,13 +24640,13 @@ func (s *executableResource) WithTestRun(options ...*WithTestRunOptions) Executa
 		if merged.Callback != nil {
 			cb := merged.Callback
 			shim := func(args ...any) any {
-				cb(callbackHandleArg(s.client, args, 0, newTestRunContextFromHandle))
+				cb(callbackHandleArg(s.client, args, 0, newTestingOptionsFromHandle))
 				return nil
 			}
 			reqArgs["callback"] = s.client.registerCallback(shim)
 		}
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestRun", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTesting", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -25583,19 +25679,27 @@ type ExternalServiceResource interface {
 	// configuration.
 	WithTerminal(options ...*WithTerminalOptions) ExternalServiceResource
 
-	// WithTestRun marks a resource as a test resource.
+	// WithTesting configures a resource's testing participation and result
+	// collectors.
 	//
-	// Waits for every marked resource, including replicas, then shuts down the
-	// application. Exit code zero passes. Startup failure, a nonzero exit code, or
-	// an unknown terminal exit code fails. This does not change the lifetime of
-	// aspire run. An optional asynchronous setup callback receives the unique host
-	// output path before resources start.
+	// Waits for every marked resource, including replicas, and all collectors
+	// before completion. The application shuts down unless keep-alive was
+	// requested. Exit code zero passes. Startup failure, a nonzero exit code, or an
+	// unknown terminal exit code fails. This does not change the lifetime of aspire
+	// run. Configuration runs immediately. Collectors start alongside resource
+	// execution during testing. The CLI supplies private resource output
+	// destinations; those paths are absent during ordinary runs.
 	//
 	// Parameters:
-	//   - options: Optional parameters; see [WithTestRunOptions].
+	//   - options: Optional parameters; see [WithTestingOptions].
 	//
 	// Returns: The resource builder.
-	WithTestRun(options ...*WithTestRunOptions) ExternalServiceResource
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithTesting(options ...*WithTestingOptions) ExternalServiceResource
 
 	// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 	// names add multiple values.
@@ -26616,15 +26720,16 @@ func (s *externalServiceResource) WithTerminal(options ...*WithTerminalOptions) 
 	return s
 }
 
-// WithTestRun marks a resource as a test resource.
-func (s *externalServiceResource) WithTestRun(options ...*WithTestRunOptions) ExternalServiceResource {
+// WithTesting configures a resource's testing participation and result
+// collectors.
+func (s *externalServiceResource) WithTesting(options ...*WithTestingOptions) ExternalServiceResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	if len(options) > 0 {
-		merged := &WithTestRunOptions{}
+		merged := &WithTestingOptions{}
 		for _, opt := range options {
 			if opt != nil { merged = deepUpdate(merged, opt) }
 		}
@@ -26632,13 +26737,13 @@ func (s *externalServiceResource) WithTestRun(options ...*WithTestRunOptions) Ex
 		if merged.Callback != nil {
 			cb := merged.Callback
 			shim := func(args ...any) any {
-				cb(callbackHandleArg(s.client, args, 0, newTestRunContextFromHandle))
+				cb(callbackHandleArg(s.client, args, 0, newTestingOptionsFromHandle))
 				return nil
 			}
 			reqArgs["callback"] = s.client.registerCallback(shim)
 		}
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestRun", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTesting", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -29447,19 +29552,27 @@ type ParameterResource interface {
 	// configuration.
 	WithTerminal(options ...*WithTerminalOptions) ParameterResource
 
-	// WithTestRun marks a resource as a test resource.
+	// WithTesting configures a resource's testing participation and result
+	// collectors.
 	//
-	// Waits for every marked resource, including replicas, then shuts down the
-	// application. Exit code zero passes. Startup failure, a nonzero exit code, or
-	// an unknown terminal exit code fails. This does not change the lifetime of
-	// aspire run. An optional asynchronous setup callback receives the unique host
-	// output path before resources start.
+	// Waits for every marked resource, including replicas, and all collectors
+	// before completion. The application shuts down unless keep-alive was
+	// requested. Exit code zero passes. Startup failure, a nonzero exit code, or an
+	// unknown terminal exit code fails. This does not change the lifetime of aspire
+	// run. Configuration runs immediately. Collectors start alongside resource
+	// execution during testing. The CLI supplies private resource output
+	// destinations; those paths are absent during ordinary runs.
 	//
 	// Parameters:
-	//   - options: Optional parameters; see [WithTestRunOptions].
+	//   - options: Optional parameters; see [WithTestingOptions].
 	//
 	// Returns: The resource builder.
-	WithTestRun(options ...*WithTestRunOptions) ParameterResource
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithTesting(options ...*WithTestingOptions) ParameterResource
 
 	// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 	// names add multiple values.
@@ -30562,15 +30675,16 @@ func (s *parameterResource) WithTerminal(options ...*WithTerminalOptions) Parame
 	return s
 }
 
-// WithTestRun marks a resource as a test resource.
-func (s *parameterResource) WithTestRun(options ...*WithTestRunOptions) ParameterResource {
+// WithTesting configures a resource's testing participation and result
+// collectors.
+func (s *parameterResource) WithTesting(options ...*WithTestingOptions) ParameterResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	if len(options) > 0 {
-		merged := &WithTestRunOptions{}
+		merged := &WithTestingOptions{}
 		for _, opt := range options {
 			if opt != nil { merged = deepUpdate(merged, opt) }
 		}
@@ -30578,13 +30692,13 @@ func (s *parameterResource) WithTestRun(options ...*WithTestRunOptions) Paramete
 		if merged.Callback != nil {
 			cb := merged.Callback
 			shim := func(args ...any) any {
-				cb(callbackHandleArg(s.client, args, 0, newTestRunContextFromHandle))
+				cb(callbackHandleArg(s.client, args, 0, newTestingOptionsFromHandle))
 				return nil
 			}
 			reqArgs["callback"] = s.client.registerCallback(shim)
 		}
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestRun", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTesting", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -32559,19 +32673,27 @@ type ProjectResource interface {
 	// configuration.
 	WithTerminal(options ...*WithTerminalOptions) ProjectResource
 
-	// WithTestRun marks a resource as a test resource.
+	// WithTesting configures a resource's testing participation and result
+	// collectors.
 	//
-	// Waits for every marked resource, including replicas, then shuts down the
-	// application. Exit code zero passes. Startup failure, a nonzero exit code, or
-	// an unknown terminal exit code fails. This does not change the lifetime of
-	// aspire run. An optional asynchronous setup callback receives the unique host
-	// output path before resources start.
+	// Waits for every marked resource, including replicas, and all collectors
+	// before completion. The application shuts down unless keep-alive was
+	// requested. Exit code zero passes. Startup failure, a nonzero exit code, or an
+	// unknown terminal exit code fails. This does not change the lifetime of aspire
+	// run. Configuration runs immediately. Collectors start alongside resource
+	// execution during testing. The CLI supplies private resource output
+	// destinations; those paths are absent during ordinary runs.
 	//
 	// Parameters:
-	//   - options: Optional parameters; see [WithTestRunOptions].
+	//   - options: Optional parameters; see [WithTestingOptions].
 	//
 	// Returns: The resource builder.
-	WithTestRun(options ...*WithTestRunOptions) ProjectResource
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithTesting(options ...*WithTestingOptions) ProjectResource
 
 	// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 	// names add multiple values.
@@ -34360,15 +34482,16 @@ func (s *projectResource) WithTerminal(options ...*WithTerminalOptions) ProjectR
 	return s
 }
 
-// WithTestRun marks a resource as a test resource.
-func (s *projectResource) WithTestRun(options ...*WithTestRunOptions) ProjectResource {
+// WithTesting configures a resource's testing participation and result
+// collectors.
+func (s *projectResource) WithTesting(options ...*WithTestingOptions) ProjectResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	if len(options) > 0 {
-		merged := &WithTestRunOptions{}
+		merged := &WithTestingOptions{}
 		for _, opt := range options {
 			if opt != nil { merged = deepUpdate(merged, opt) }
 		}
@@ -34376,13 +34499,13 @@ func (s *projectResource) WithTestRun(options ...*WithTestRunOptions) ProjectRes
 		if merged.Callback != nil {
 			cb := merged.Callback
 			shim := func(args ...any) any {
-				cb(callbackHandleArg(s.client, args, 0, newTestRunContextFromHandle))
+				cb(callbackHandleArg(s.client, args, 0, newTestingOptionsFromHandle))
 				return nil
 			}
 			reqArgs["callback"] = s.client.registerCallback(shim)
 		}
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestRun", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTesting", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -35838,6 +35961,191 @@ func (s *resourceStoppedEvent) Services() ServiceProvider {
 		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
 	}
 	return &serviceProvider{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// ResourceTestingContext publishes collected test results for one logical
+// resource into the containing test run.
+//
+// The resource output path is established before startup and is shared with
+// OutputPath. Results are accepted only while the collector is active.
+// Framework integrations are responsible for reading and translating their own
+// result formats.
+type ResourceTestingContext interface {
+	handleReference
+
+	// CancellationToken gets the token used to cancel collection.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	CancellationToken() (*CancellationToken, error)
+
+	// OutputPath gets the absolute host path to this resource's private output
+	// directory.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	OutputPath() (string, error)
+
+	// PublishResult publishes an observed test result for this resource.
+	//
+	// Results are associated with the resource by the context. Publishing does not
+	// infer any other test results, and a passing result cannot override a resource
+	// execution failure.
+	//
+	// Parameters:
+	//   - result: The framework-neutral result.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	PublishResult(result *TestResult) error
+
+	// ResourceName gets the logical resource name associated with every result
+	// published through this context.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	ResourceName() (string, error)
+
+	// RunContext gets the context for the containing test run.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	RunContext() TestRunContext
+
+	// WaitForCompletionAsync waits until every replica of this resource has reached
+	// an authoritative terminal outcome.
+	//
+	// Collection starts alongside execution. Use this helper before harvesting
+	// files written at process completion. It shares the run's completion tracking,
+	// handles resources that already finished, and waits for late exit-code
+	// notifications. Collector completion itself is not awaited.
+	//
+	// Returns: True if resource execution passed; otherwise false. Published test
+	// results do not affect this value.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WaitForCompletionAsync() (bool, error)
+
+	// Err returns the first error recorded on this wrapper, or nil if the wrapper
+	// resolved successfully and no chained operation has failed.
+	Err() error
+}
+
+// resourceTestingContext is the unexported impl of ResourceTestingContext.
+type resourceTestingContext struct {
+	*resourceBuilderBase
+}
+
+// newResourceTestingContextFromHandle wraps an existing handle as ResourceTestingContext.
+func newResourceTestingContextFromHandle(h *handle, c *client) ResourceTestingContext {
+	return &resourceTestingContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// CancellationToken gets the token used to cancel collection.
+func (s *resourceTestingContext) CancellationToken() (*CancellationToken, error) {
+	if s.err != nil { var zero *CancellationToken; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ResourceTestingContext.cancellationToken", reqArgs)
+	if err != nil {
+		var zero *CancellationToken
+		return zero, err
+	}
+	return decodeAs[*CancellationToken](result)
+}
+
+// OutputPath gets the absolute host path to this resource's private output
+// directory.
+func (s *resourceTestingContext) OutputPath() (string, error) {
+	if s.err != nil { var zero string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ResourceTestingContext.outputPath", reqArgs)
+	if err != nil {
+		var zero string
+		return zero, err
+	}
+	return decodeAs[string](result)
+}
+
+// PublishResult publishes an observed test result for this resource.
+func (s *resourceTestingContext) PublishResult(result *TestResult) error {
+	if s.err != nil { return s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	if result != nil { reqArgs["result"] = serializeValue(result) }
+	_, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/publishResult", reqArgs)
+	return err
+}
+
+// ResourceName gets the logical resource name associated with every result
+// published through this context.
+func (s *resourceTestingContext) ResourceName() (string, error) {
+	if s.err != nil { var zero string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ResourceTestingContext.resourceName", reqArgs)
+	if err != nil {
+		var zero string
+		return zero, err
+	}
+	return decodeAs[string](result)
+}
+
+// RunContext gets the context for the containing test run.
+func (s *resourceTestingContext) RunContext() TestRunContext {
+	if s.err != nil { return &testRunContext{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ResourceTestingContext.runContext", reqArgs)
+	if err != nil {
+		return &testRunContext{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/ResourceTestingContext.runContext returned unexpected type %T", result)
+		return &testRunContext{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &testRunContext{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// WaitForCompletionAsync waits until every replica of this resource has reached
+// an authoritative terminal outcome.
+func (s *resourceTestingContext) WaitForCompletionAsync() (bool, error) {
+	if s.err != nil { var zero bool; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/waitForCompletionAsync", reqArgs)
+	if err != nil {
+		var zero bool
+		return zero, err
+	}
+	return decodeAs[bool](result)
 }
 
 // ResourceUrlsCallbackContext represents a callback context for resource URLs.
@@ -37770,19 +38078,27 @@ type TestDatabaseResource interface {
 	// configuration.
 	WithTerminal(options ...*WithTerminalOptions) TestDatabaseResource
 
-	// WithTestRun marks a resource as a test resource.
+	// WithTesting configures a resource's testing participation and result
+	// collectors.
 	//
-	// Waits for every marked resource, including replicas, then shuts down the
-	// application. Exit code zero passes. Startup failure, a nonzero exit code, or
-	// an unknown terminal exit code fails. This does not change the lifetime of
-	// aspire run. An optional asynchronous setup callback receives the unique host
-	// output path before resources start.
+	// Waits for every marked resource, including replicas, and all collectors
+	// before completion. The application shuts down unless keep-alive was
+	// requested. Exit code zero passes. Startup failure, a nonzero exit code, or an
+	// unknown terminal exit code fails. This does not change the lifetime of aspire
+	// run. Configuration runs immediately. Collectors start alongside resource
+	// execution during testing. The CLI supplies private resource output
+	// destinations; those paths are absent during ordinary runs.
 	//
 	// Parameters:
-	//   - options: Optional parameters; see [WithTestRunOptions].
+	//   - options: Optional parameters; see [WithTestingOptions].
 	//
 	// Returns: The resource builder.
-	WithTestRun(options ...*WithTestRunOptions) TestDatabaseResource
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithTesting(options ...*WithTestingOptions) TestDatabaseResource
 
 	// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 	// names add multiple values.
@@ -39855,15 +40171,16 @@ func (s *testDatabaseResource) WithTerminal(options ...*WithTerminalOptions) Tes
 	return s
 }
 
-// WithTestRun marks a resource as a test resource.
-func (s *testDatabaseResource) WithTestRun(options ...*WithTestRunOptions) TestDatabaseResource {
+// WithTesting configures a resource's testing participation and result
+// collectors.
+func (s *testDatabaseResource) WithTesting(options ...*WithTestingOptions) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	if len(options) > 0 {
-		merged := &WithTestRunOptions{}
+		merged := &WithTestingOptions{}
 		for _, opt := range options {
 			if opt != nil { merged = deepUpdate(merged, opt) }
 		}
@@ -39871,13 +40188,13 @@ func (s *testDatabaseResource) WithTestRun(options ...*WithTestRunOptions) TestD
 		if merged.Callback != nil {
 			cb := merged.Callback
 			shim := func(args ...any) any {
-				cb(callbackHandleArg(s.client, args, 0, newTestRunContextFromHandle))
+				cb(callbackHandleArg(s.client, args, 0, newTestingOptionsFromHandle))
 				return nil
 			}
 			reqArgs["callback"] = s.client.registerCallback(shim)
 		}
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestRun", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTesting", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -41588,19 +41905,27 @@ type TestRedisResource interface {
 	// configuration.
 	WithTerminal(options ...*WithTerminalOptions) TestRedisResource
 
-	// WithTestRun marks a resource as a test resource.
+	// WithTesting configures a resource's testing participation and result
+	// collectors.
 	//
-	// Waits for every marked resource, including replicas, then shuts down the
-	// application. Exit code zero passes. Startup failure, a nonzero exit code, or
-	// an unknown terminal exit code fails. This does not change the lifetime of
-	// aspire run. An optional asynchronous setup callback receives the unique host
-	// output path before resources start.
+	// Waits for every marked resource, including replicas, and all collectors
+	// before completion. The application shuts down unless keep-alive was
+	// requested. Exit code zero passes. Startup failure, a nonzero exit code, or an
+	// unknown terminal exit code fails. This does not change the lifetime of aspire
+	// run. Configuration runs immediately. Collectors start alongside resource
+	// execution during testing. The CLI supplies private resource output
+	// destinations; those paths are absent during ordinary runs.
 	//
 	// Parameters:
-	//   - options: Optional parameters; see [WithTestRunOptions].
+	//   - options: Optional parameters; see [WithTestingOptions].
 	//
 	// Returns: The resource builder.
-	WithTestRun(options ...*WithTestRunOptions) TestRedisResource
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithTesting(options ...*WithTestingOptions) TestRedisResource
 
 	// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 	// names add multiple values.
@@ -44015,15 +44340,16 @@ func (s *testRedisResource) WithTerminal(options ...*WithTerminalOptions) TestRe
 	return s
 }
 
-// WithTestRun marks a resource as a test resource.
-func (s *testRedisResource) WithTestRun(options ...*WithTestRunOptions) TestRedisResource {
+// WithTesting configures a resource's testing participation and result
+// collectors.
+func (s *testRedisResource) WithTesting(options ...*WithTestingOptions) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	if len(options) > 0 {
-		merged := &WithTestRunOptions{}
+		merged := &WithTestingOptions{}
 		for _, opt := range options {
 			if opt != nil { merged = deepUpdate(merged, opt) }
 		}
@@ -44031,13 +44357,13 @@ func (s *testRedisResource) WithTestRun(options ...*WithTestRunOptions) TestRedi
 		if merged.Callback != nil {
 			cb := merged.Callback
 			shim := func(args ...any) any {
-				cb(callbackHandleArg(s.client, args, 0, newTestRunContextFromHandle))
+				cb(callbackHandleArg(s.client, args, 0, newTestingOptionsFromHandle))
 				return nil
 			}
 			reqArgs["callback"] = s.client.registerCallback(shim)
 		}
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestRun", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTesting", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -44571,18 +44897,20 @@ func (s *testReturnValueContext) GetStringValueTaskAsync() (string, error) {
 // TestRunContext provides the output destination for the current aspire test
 // invocation.
 //
-// The CLI creates the directory before launching the AppHost. Test setup
-// callbacks run before resources start and can configure arguments, environment
-// variables, or container bind mounts. This is a host filesystem path;
-// containers must explicitly mount it at their chosen destination.
+// The CLI creates the directory before launching the AppHost, so testing
+// configuration can run immediately during model definition. Resource
+// collectors use their own isolated output paths beneath this run directory.
+// This is a host filesystem path, not an in-container path.
 type TestRunContext interface {
 	handleReference
 
-	// CancellationToken gets the token used to cancel test resource setup.
-	CancellationToken() (*CancellationToken, error)
-
 	// OutputPath gets the absolute host path to the unique output directory for
 	// this invocation.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	OutputPath() (string, error)
 
 	// Err returns the first error recorded on this wrapper, or nil if the wrapper
@@ -44600,21 +44928,6 @@ func newTestRunContextFromHandle(h *handle, c *client) TestRunContext {
 	return &testRunContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// CancellationToken gets the token used to cancel test resource setup.
-func (s *testRunContext) CancellationToken() (*CancellationToken, error) {
-	if s.err != nil { var zero *CancellationToken; return zero, s.err }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"context": s.handle.ToJSON(),
-	}
-	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/TestRunContext.cancellationToken", reqArgs)
-	if err != nil {
-		var zero *CancellationToken
-		return zero, err
-	}
-	return decodeAs[*CancellationToken](result)
-}
-
 // OutputPath gets the absolute host path to the unique output directory for
 // this invocation.
 func (s *testRunContext) OutputPath() (string, error) {
@@ -44629,6 +44942,173 @@ func (s *testRunContext) OutputPath() (string, error) {
 		return zero, err
 	}
 	return decodeAs[string](result)
+}
+
+// TestingOptions configures a resource's output destination and
+// framework-neutral test result collectors.
+//
+// Configuration runs immediately when WithTesting is called, including ordinary
+// runs. Collectors run only during aspire test. Register collectors here; do
+// not execute them. The output destination is a host filesystem path.
+// Containers must explicitly mount it.
+type TestingOptions interface {
+	handleReference
+
+	// CollectResults registers a callback that publishes framework-neutral results
+	// for this resource.
+	//
+	// Callbacks receive a resource-specific context separate from these
+	// configuration options. Collectors start alongside resource execution and may
+	// use WaitForCompletionAsync before reading final artifacts. Multiple
+	// collectors run concurrently. Registration is only allowed during immediate
+	// configuration.
+	//
+	// Parameters:
+	//   - collector: The asynchronous result collector.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	CollectResults(collector func(arg ResourceTestingContext)) error
+
+	// IsTestRun gets whether the CLI supplied a test run output destination for
+	// this AppHost.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	IsTestRun() (bool, error)
+
+	// OutputPath gets the absolute host path to this resource's private output
+	// directory, or null outside testing.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	OutputPath() (*string, error)
+
+	// ResourceName gets the logical resource name whose testing behavior is being
+	// configured.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	ResourceName() (string, error)
+
+	// RunContext gets the containing test run context, or null outside an aspire
+	// test invocation.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	RunContext() TestRunContext
+
+	// Err returns the first error recorded on this wrapper, or nil if the wrapper
+	// resolved successfully and no chained operation has failed.
+	Err() error
+}
+
+// testingOptions is the unexported impl of TestingOptions.
+type testingOptions struct {
+	*resourceBuilderBase
+}
+
+// newTestingOptionsFromHandle wraps an existing handle as TestingOptions.
+func newTestingOptionsFromHandle(h *handle, c *client) TestingOptions {
+	return &testingOptions{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// CollectResults registers a callback that publishes framework-neutral results
+// for this resource.
+func (s *testingOptions) CollectResults(collector func(arg ResourceTestingContext)) error {
+	if s.err != nil { return s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	if collector != nil {
+		cb := collector
+		shim := func(args ...any) any {
+			cb(callbackHandleArg(s.client, args, 0, newResourceTestingContextFromHandle))
+			return nil
+		}
+		reqArgs["collector"] = s.client.registerCallback(shim)
+	}
+	_, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/collectResults", reqArgs)
+	return err
+}
+
+// IsTestRun gets whether the CLI supplied a test run output destination for
+// this AppHost.
+func (s *testingOptions) IsTestRun() (bool, error) {
+	if s.err != nil { var zero bool; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/TestingOptions.isTestRun", reqArgs)
+	if err != nil {
+		var zero bool
+		return zero, err
+	}
+	return decodeAs[bool](result)
+}
+
+// OutputPath gets the absolute host path to this resource's private output
+// directory, or null outside testing.
+func (s *testingOptions) OutputPath() (*string, error) {
+	if s.err != nil { var zero *string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/TestingOptions.outputPath", reqArgs)
+	if err != nil {
+		var zero *string
+		return zero, err
+	}
+	return decodeAs[*string](result)
+}
+
+// ResourceName gets the logical resource name whose testing behavior is being
+// configured.
+func (s *testingOptions) ResourceName() (string, error) {
+	if s.err != nil { var zero string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/TestingOptions.resourceName", reqArgs)
+	if err != nil {
+		var zero string
+		return zero, err
+	}
+	return decodeAs[string](result)
+}
+
+// RunContext gets the containing test run context, or null outside an aspire
+// test invocation.
+func (s *testingOptions) RunContext() TestRunContext {
+	if s.err != nil { return &testRunContext{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/TestingOptions.runContext", reqArgs)
+	if err != nil {
+		return &testRunContext{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/TestingOptions.runContext returned unexpected type %T", result)
+		return &testRunContext{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &testRunContext{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
 // UpdateCommandStateContext - Context for
@@ -45571,14 +46051,14 @@ func (o *WithTerminalOptions) ToMap() map[string]any {
 	return m
 }
 
-// WithTestRunOptions carries optional parameters for WithTestRun.
-type WithTestRunOptions struct {
-	// Callback is an optional callback that configures the resource using the test
-	// output destination before startup.
-	Callback func(arg TestRunContext) `json:"-"`
+// WithTestingOptions carries optional parameters for WithTesting.
+type WithTestingOptions struct {
+	// Callback is an optional synchronous callback that immediately configures
+	// testing options.
+	Callback func(obj TestingOptions) `json:"-"`
 }
 
-func (o *WithTestRunOptions) ToMap() map[string]any {
+func (o *WithTestingOptions) ToMap() map[string]any {
 	m := map[string]any{}
 	if o == nil { return m }
 	return m
@@ -46565,6 +47045,9 @@ func registerWrappers(c *client) {
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceStoppedEvent", func(h *handle, c *client) any {
 		return newResourceStoppedEventFromHandle(h, c)
 	})
+	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceTestingContext", func(h *handle, c *client) any {
+		return newResourceTestingContextFromHandle(h, c)
+	})
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsCallbackContext", func(h *handle, c *client) any {
 		return newResourceUrlsCallbackContextFromHandle(h, c)
 	})
@@ -46606,6 +47089,9 @@ func registerWrappers(c *client) {
 	})
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.TestRunContext", func(h *handle, c *client) any {
 		return newTestRunContextFromHandle(h, c)
+	})
+	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.TestingOptions", func(h *handle, c *client) any {
+		return newTestingOptionsFromHandle(h, c)
 	})
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.UpdateCommandStateContext", func(h *handle, c *client) any {
 		return newUpdateCommandStateContextFromHandle(h, c)

@@ -243,8 +243,8 @@
         <note />
       </trans-unit>
       <trans-unit id="TestDescription">
-        <source>Run an AppHost until all resources marked with WithTestRun() finish</source>
-        <target state="new">Run an AppHost until all resources marked with WithTestRun() finish</target>
+        <source>Run an AppHost until all resources marked with WithTesting() and their collectors finish</source>
+        <target state="new">Run an AppHost until all resources marked with WithTesting() and their collectors finish</target>
         <note />
       </trans-unit>
       <trans-unit id="TestExitCode">
@@ -307,6 +307,16 @@
         <target state="new">pending</target>
         <note />
       </trans-unit>
+      <trans-unit id="TestPublishedResult">
+        <source>{0}: {1} ({2})</source>
+        <target state="new">{0}: {1} ({2})</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TestPublishedSummary">
+        <source>Published test results: {0} passed, {1} failed, {2} skipped</source>
+        <target state="new">Published test results: {0} passed, {1} failed, {2} skipped</target>
+        <note />
+      </trans-unit>
       <trans-unit id="TestResourceStatus">
         <source>{0}: {1} ({2}, exit code {3})</source>
         <target state="new">{0}: {1} ({2}, exit code {3})</target>
@@ -315,6 +325,11 @@
       <trans-unit id="TestRunningHeader">
         <source>Tests are running</source>
         <target state="new">Tests are running</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TestSkipped">
+        <source>skipped</source>
+        <target state="new">skipped</target>
         <note />
       </trans-unit>
       <trans-unit id="TestSummaryFile">

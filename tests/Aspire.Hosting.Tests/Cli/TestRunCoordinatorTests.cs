@@ -10,6 +10,8 @@ using Microsoft.Extensions.Time.Testing;
 
 namespace Aspire.Hosting.Tests;
 
+#pragma warning disable ASPIRETESTING001 // Tests the experimental testing API.
+
 [Trait("Partition", "4")]
 public class TestRunCoordinatorTests
 {
@@ -22,7 +24,7 @@ public class TestRunCoordinatorTests
         var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
             () => coordinator.WaitForCompletionAsync(TestContext.Current.CancellationToken));
 
-        Assert.Equal("No test resources were found. Mark a resource with WithTestRun() before running aspire test.", exception.Message);
+        Assert.Equal("No test resources were found. Mark a resource with WithTesting() before running aspire test.", exception.Message);
     }
 
     [Theory]
@@ -162,20 +164,20 @@ public class TestRunCoordinatorTests
     }
 
     [Fact]
-    public void WithTestRunSupportsAnyResourceAndIsChainable()
+    public void WithTestingSupportsAnyResourceAndIsChainable()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var resource = new ContainerResource("custom");
         var resourceBuilder = builder.AddResource(resource);
 
-        Assert.Same(resourceBuilder, resourceBuilder.WithTestRun());
-        Assert.IsType<TestAnnotation>(Assert.Single(resource.Annotations));
+        Assert.Same(resourceBuilder, resourceBuilder.WithTesting());
+        Assert.IsType<TestingAnnotation>(Assert.Single(resource.Annotations));
     }
 
     private static ContainerResource TestResource(string name)
     {
         var resource = new ContainerResource(name);
-        resource.Annotations.Add(new TestAnnotation());
+        resource.Annotations.Add(new TestingAnnotation());
 
         return resource;
     }

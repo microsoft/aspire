@@ -1,33 +1,37 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
+
 namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
 /// Provides the output destination for the current <c>aspire test</c> invocation.
 /// </summary>
 /// <remarks>
-/// The CLI creates the directory before launching the AppHost. Test setup callbacks run before
-/// resources start and can configure arguments, environment variables, or container bind mounts.
-/// This is a host filesystem path; containers must explicitly mount it at their chosen destination.
+/// The CLI creates the directory before launching the AppHost, so testing configuration can run
+/// immediately during model definition. Resource collectors use their own isolated output paths
+/// beneath this run directory. This is a host filesystem path, not an in-container path.
 /// </remarks>
 /// <example>
 /// <code lang="C#">
 /// var tests = builder.AddExecutable("tests", "test-runner", ".");
-/// tests.WithTestRun(context =>
+/// tests.WithTesting(options =>
 /// {
-///     tests.WithEnvironment("TEST_OUTPUT_DIRECTORY", context.OutputPath);
-///     return Task.CompletedTask;
+///     if (options.OutputPath is { } path)
+///     {
+///         tests.WithEnvironment("TEST_OUTPUT_DIRECTORY", path);
+///     }
 /// });
 /// </code>
 /// </example>
 [AspireExport]
+[Experimental(TestingDiagnostics.DiagnosticId, UrlFormat = TestingDiagnostics.UrlFormat)]
 public sealed class TestRunContext
 {
-    internal TestRunContext(string outputPath, CancellationToken cancellationToken)
+    internal TestRunContext(string outputPath)
     {
         OutputPath = outputPath;
-        CancellationToken = cancellationToken;
     }
 
     /// <summary>
@@ -36,9 +40,4 @@ public sealed class TestRunContext
     [AspireExport]
     public string OutputPath { get; }
 
-    /// <summary>
-    /// Gets the token used to cancel test resource setup.
-    /// </summary>
-    [AspireExport]
-    public CancellationToken CancellationToken { get; }
 }
