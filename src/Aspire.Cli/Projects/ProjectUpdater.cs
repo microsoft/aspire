@@ -838,10 +838,6 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
             }
 
             var declaredVersions = GetDeclaredSdkVersions(document).ToList();
-            if (declaredVersions.Count == 0)
-            {
-                continue;
-            }
 
             // A project can declare the SDK more than once (for example explicit Sdk.props and Sdk.targets
             // imports), so update it when any declared version differs from the target.
@@ -851,11 +847,17 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
             // The current SDK references Aspire.Hosting.AppHost implicitly, and the AppHost's cleanup may remove
             // a PackageVersion shared through central package management, so remove the same legacy references.
             // A project that opts out of the implicit reference still needs its explicit one.
-            var (hasPackageReference, hasOrphanPackageVersion) =
-                await SkipsImplicitAppHostReferenceAsync(projectFile, document, cancellationToken)
-                    ? (false, false)
-                    : DetectLegacyAppHostReferences(projectFile);
-            if (staleVersion is null && !hasPackageReference && !hasOrphanPackageVersion)
+            var (hasPackageReference, hasOrphanPackageVersion) = DetectLegacyAppHostReferences(projectFile);
+            var removeLegacyReferences = declaredVersions.Count > 0 &&
+                (hasPackageReference || hasOrphanPackageVersion) &&
+                !await SkipsImplicitAppHostReferenceAsync(projectFile, document, cancellationToken);
+
+            // A retained explicit reference may rely on that shared central version, so restore the project in
+            // the transaction; if the AppHost's cleanup breaks it, the whole update is rolled back.
+            var validateRetainedReference = hasPackageReference && !removeLegacyReferences &&
+                DetectCentralPackageManagement(projectFile).UsesCentralPackageManagement;
+
+            if (staleVersion is null && !removeLegacyReferences && !validateRetainedReference)
             {
                 continue;
             }
@@ -890,7 +892,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                 });
             }
 
-            if (hasPackageReference || hasOrphanPackageVersion)
+            if (removeLegacyReferences)
             {
                 context.UpdateSteps.Enqueue(new PackageUpdateStep(
                     UpdateCommandStrings.RemovedObsoleteAppHostPackage,
