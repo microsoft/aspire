@@ -59,13 +59,6 @@ namespace Aspire.Hosting;
 [AspireExport]
 public class DistributedApplication : IHost, IAsyncDisposable
 {
-    private static readonly IReadOnlyDictionary<string, string?> s_polyglotConfigurationDefaults = new Dictionary<string, string?>
-    {
-        ["Logging:LogLevel:Default"] = nameof(LogLevel.Information),
-        ["Logging:LogLevel:Microsoft.AspNetCore"] = nameof(LogLevel.Warning),
-        ["Logging:LogLevel:Aspire.Hosting.Dcp"] = nameof(LogLevel.Warning)
-    };
-
     private readonly IHost _host;
     private ResourceCommandService? _resourceCommands;
     private LocaleOverrideContext? _localeOverrideContext;
@@ -248,7 +241,7 @@ public class DistributedApplication : IHost, IAsyncDisposable
             // These values came from the managed server's appsettings.json before polyglot AppHosts
             // used their own content root. Keep them as fallbacks so every user configuration source
             // can override them while existing AppHosts retain the same logging behavior.
-            DefaultConfiguration = s_polyglotConfigurationDefaults
+            DefaultConfiguration = DistributedApplicationOptions.AppHostConfigurationDefaults
         };
 
         if (!string.IsNullOrEmpty(options.ProjectDirectory))

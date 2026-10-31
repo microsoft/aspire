@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Reflection;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
 
@@ -69,6 +70,28 @@ public sealed class DistributedApplicationOptions
     internal string? ContentRootPath { get; set; }
 
     internal IEnumerable<KeyValuePair<string, string?>>? DefaultConfiguration { get; set; }
+
+    // Logging defaults that project-based AppHosts get from the template's appsettings.json.
+    // AppHosts without a project file (C# file-based and polyglot AppHosts) use them as
+    // lowest-priority fallbacks so every user configuration source can still override them.
+    internal static IReadOnlyDictionary<string, string?> AppHostConfigurationDefaults { get; } = new Dictionary<string, string?>
+    {
+        ["Logging:LogLevel:Default"] = nameof(LogLevel.Information),
+        ["Logging:LogLevel:Microsoft.AspNetCore"] = nameof(LogLevel.Warning),
+        ["Logging:LogLevel:Aspire.Hosting.Dcp"] = nameof(LogLevel.Warning)
+    };
+
+    internal IEnumerable<KeyValuePair<string, string?>>? ResolveDefaultConfiguration()
+    {
+        if (DefaultConfiguration is not null)
+        {
+            return DefaultConfiguration;
+        }
+
+        return string.Equals(Path.GetExtension(AppHostFilePath), ".cs", StringComparison.OrdinalIgnoreCase)
+            ? AppHostConfigurationDefaults
+            : null;
+    }
 
     /// <summary>
     /// The directory containing the AppHost project file. If not set, defaults to the directory resolved from assembly metadata.

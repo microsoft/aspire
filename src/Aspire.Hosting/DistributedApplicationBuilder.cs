@@ -206,9 +206,9 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         // HostApplicationBuilder will then add DOTNET_-prefixed env vars and command line args on top.
         // This gives us the priority order: --environment > DOTNET_ENVIRONMENT > ASPIRE_ENVIRONMENT > default.
         var configuration = new ConfigurationManager();
-        if (options.DefaultConfiguration is not null)
+        if (options.ResolveDefaultConfiguration() is { } defaultConfiguration)
         {
-            configuration.AddInMemoryCollection(options.DefaultConfiguration);
+            configuration.AddInMemoryCollection(defaultConfiguration);
         }
         configuration.AddEnvironmentVariables(prefix: AspireEnvironmentVariablePrefix);
         var aspireEnvironmentProvider = ((IConfigurationRoot)configuration).Providers.Last();

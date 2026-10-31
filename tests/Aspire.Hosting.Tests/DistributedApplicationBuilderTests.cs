@@ -198,6 +198,80 @@ public class DistributedApplicationBuilderTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void FileBasedAppHostAppliesManagedLoggingDefaults()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectDirectory = workspace.WorkspaceRoot.FullName;
+
+        var appBuilder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        {
+            ProjectDirectory = projectDirectory,
+            AppHostFilePath = Path.Combine(projectDirectory, "apphost.cs")
+        });
+
+        Assert.Equal("Warning", appBuilder.Configuration["Logging:LogLevel:Microsoft.AspNetCore"]);
+        Assert.Equal("Warning", appBuilder.Configuration["Logging:LogLevel:Aspire.Hosting.Dcp"]);
+
+        using var app = appBuilder.Build();
+        var filterOptions = app.Services.GetRequiredService<IOptions<LoggerFilterOptions>>().Value;
+
+        // Resource service request logging should be hidden by default, matching project-based AppHosts.
+        Assert.Equal(
+            [LogLevel.Warning, LogLevel.Warning],
+            filterOptions.Rules
+                .Where(rule => rule.ProviderName is null && rule.CategoryName == "Microsoft.AspNetCore")
+                .Select(rule => rule.LogLevel));
+        Assert.Equal(
+            [LogLevel.Warning, LogLevel.Warning],
+            filterOptions.Rules
+                .Where(rule => rule.ProviderName is null && rule.CategoryName == "Aspire.Hosting.Dcp")
+                .Select(rule => rule.LogLevel));
+    }
+
+    [Fact]
+    public void FileBasedAppHostLoggingDefaultsCanBeOverridden()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectDirectory = workspace.WorkspaceRoot.FullName;
+
+        var appBuilder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        {
+            Args = ["--Logging:LogLevel:Microsoft.AspNetCore=Debug", "--Logging:LogLevel:Aspire.Hosting.Dcp=Trace"],
+            ProjectDirectory = projectDirectory,
+            AppHostFilePath = Path.Combine(projectDirectory, "apphost.cs")
+        });
+
+        Assert.Equal("Debug", appBuilder.Configuration["Logging:LogLevel:Microsoft.AspNetCore"]);
+        Assert.Equal("Trace", appBuilder.Configuration["Logging:LogLevel:Aspire.Hosting.Dcp"]);
+
+        using var app = appBuilder.Build();
+        var filterOptions = app.Services.GetRequiredService<IOptions<LoggerFilterOptions>>().Value;
+
+        Assert.Equal(
+            LogLevel.Debug,
+            filterOptions.Rules.Last(rule => rule.ProviderName is null && rule.CategoryName == "Microsoft.AspNetCore").LogLevel);
+        Assert.Equal(
+            LogLevel.Trace,
+            filterOptions.Rules.Last(rule => rule.ProviderName is null && rule.CategoryName == "Aspire.Hosting.Dcp").LogLevel);
+    }
+
+    [Fact]
+    public void ProjectAppHostDoesNotApplyManagedLoggingDefaults()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectDirectory = workspace.WorkspaceRoot.FullName;
+
+        var appBuilder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        {
+            ProjectDirectory = projectDirectory,
+            AppHostFilePath = Path.Combine(projectDirectory, "AppHost.csproj")
+        });
+
+        Assert.Null(appBuilder.Configuration["Logging:LogLevel:Microsoft.AspNetCore"]);
+        Assert.Null(appBuilder.Configuration["Logging:LogLevel:Aspire.Hosting.Dcp"]);
+    }
+
+    [Fact]
     public void PipelineOutputServiceUsesAppHostDirectoryByDefault()
     {
         var projectDirectory = OperatingSystem.IsWindows() ? @"C:\projects\Tailspin" : "/projects/Tailspin";
