@@ -427,6 +427,65 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ConfigCommands_BracketArrayPathsRoundTrip()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var settingsPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(settingsPath, """{"plugins":["aspire","other"]}""");
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+
+        Assert.Equal(CliExitCodes.Success, await command.Parse("config set plugins[0] deployment").InvokeAsync().DefaultTimeout());
+
+        var interaction = new TestInteractionService();
+        var readerServices = CliTestHelper.CreateServiceCollection(workspace, outputHelper,
+            options => options.InteractionServiceFactory = _ => interaction);
+        using var readerProvider = readerServices.BuildServiceProvider();
+        var readerCommand = readerProvider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+        Assert.Equal(CliExitCodes.Success, await readerCommand.Parse("config get plugins[0]").InvokeAsync().DefaultTimeout());
+        Assert.Equal(["deployment"], interaction.DisplayedPlainText);
+        Assert.Equal(CliExitCodes.Success, await readerCommand.Parse("config delete plugins[0]").InvokeAsync().DefaultTimeout());
+
+        await Verify(await File.ReadAllTextAsync(settingsPath), "json");
+    }
+
+    [Theory]
+    [InlineData("config set plugins[2] deployment")]
+    [InlineData("config set plugins[-1] deployment")]
+    [InlineData("config get plugins[-1]")]
+    [InlineData("config delete plugins[-1]")]
+    [InlineData("config delete custom[0]")]
+    [InlineData("config set templateSources[0] deployment")]
+    [InlineData("config set templateSources.team.repository[0] deployment")]
+    public async Task ConfigCommands_InvalidArrayPathsReportErrorsAndPreserveFile(string commandLine)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var settingsPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        const string original = """
+            {
+              "plugins": ["aspire"],
+              "custom": {"0": "value"},
+              "templateSources": {
+                "team": {"repository": "https://github.com/example/team"}
+              }
+            }
+            """;
+        await File.WriteAllTextAsync(settingsPath, original);
+        var interaction = new TestInteractionService();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper,
+            options => options.InteractionServiceFactory = _ => interaction);
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, await command.Parse(commandLine).InvokeAsync().DefaultTimeout());
+
+        Assert.Single(interaction.DisplayedErrors);
+        Assert.Empty(interaction.DisplayedSuccess);
+        Assert.Equal(original, await File.ReadAllTextAsync(settingsPath));
+    }
+
+    [Fact]
     public async Task ConfigDeleteCommand_WithFlatKey_RemovesValue()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

@@ -1,0 +1,8 @@
+﻿{
+  custom.0: numeric property,
+  emptyArray: [],
+  emptyObject: {},
+  matrix[0][0].name: first,
+  plugins[0]: aspire,
+  plugins[1]: other
+}

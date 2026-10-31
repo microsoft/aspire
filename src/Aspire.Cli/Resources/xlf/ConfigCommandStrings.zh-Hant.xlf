@@ -7,6 +7,21 @@
         <target state="translated">可用功能</target>
         <note />
       </trans-unit>
+      <trans-unit id="ConfigurationArrayIndexInvalid">
+        <source>Configuration key '{0}' requires a non-negative integer array index.</source>
+        <target state="new">Configuration key '{0}' requires a non-negative integer array index.</target>
+        <note>{0} is the configuration key.</note>
+      </trans-unit>
+      <trans-unit id="ConfigurationArrayIndexOutOfRange">
+        <source>Array index {0} in configuration key '{1}' is out of range. Edit an existing element or append at index {2}.</source>
+        <target state="new">Array index {0} in configuration key '{1}' is out of range. Edit an existing element or append at index {2}.</target>
+        <note>{0} is the requested index, {1} is the configuration key, and {2} is the array length.</note>
+      </trans-unit>
+      <trans-unit id="ConfigurationArrayRequired">
+        <source>Configuration key '{0}' requires an array, but the existing value is not an array.</source>
+        <target state="new">Configuration key '{0}' requires an array, but the existing value is not an array.</target>
+        <note>{0} is the configuration key.</note>
+      </trans-unit>
       <trans-unit id="ConfigurationKeyDeletedGlobally">
         <source>Configuration '{0}' deleted globally.</source>
         <target state="translated">已全域刪除設定 '{0}'。</target>
@@ -16,6 +31,11 @@
         <source>Configuration '{0}' deleted locally.</source>
         <target state="translated">已本機刪除設定 '{0}'。</target>
         <note />
+      </trans-unit>
+      <trans-unit id="ConfigurationKeyInvalid">
+        <source>Configuration key '{0}' is invalid. Use dots for nested properties and brackets containing a non-negative integer for array indices.</source>
+        <target state="new">Configuration key '{0}' is invalid. Use dots for nested properties and brackets containing a non-negative integer for array indices.</target>
+        <note>{0} is the configuration key.</note>
       </trans-unit>
       <trans-unit id="ConfigurationKeySetGlobally">
         <source>Configuration '{0}' set to '{1}' globally.</source>
@@ -38,8 +58,8 @@
         <note />
       </trans-unit>
       <trans-unit id="DeleteCommand_KeyArgumentDescription">
-        <source>The configuration key to delete</source>
-        <target state="translated">要刪除的設定金鑰</target>
+        <source>The configuration key to delete. Use dots for nested properties and [index] for array elements.</source>
+        <target state="needs-review-translation">要刪除的設定金鑰</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteCommand_PromptForGlobal">
@@ -68,8 +88,8 @@
         <note />
       </trans-unit>
       <trans-unit id="GetCommand_KeyArgumentDescription">
-        <source>The configuration key to retrieve</source>
-        <target state="translated">要擷取的設定金鑰</target>
+        <source>The configuration key to retrieve. Use dots for nested properties and [index] for array elements.</source>
+        <target state="needs-review-translation">要擷取的設定金鑰</target>
         <note />
       </trans-unit>
       <trans-unit id="GetCommand_PromptForKey">
@@ -168,8 +188,8 @@
         <note />
       </trans-unit>
       <trans-unit id="SetCommand_KeyArgumentDescription">
-        <source>The configuration key to set</source>
-        <target state="translated">要設定的設定金鑰</target>
+        <source>The configuration key to set. Use dots for nested properties and [index] to create or edit array elements.</source>
+        <target state="needs-review-translation">要設定的設定金鑰</target>
         <note />
       </trans-unit>
       <trans-unit id="SetCommand_PromptForGlobal">
