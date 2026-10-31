@@ -12,6 +12,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Devcontainers.Codespaces;
 using Aspire.Hosting.Eventing;
@@ -46,6 +47,8 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
     {
         KnownConfigNames.DashboardCorsAllowedOrigins // Set on the dashboard's Dashboard:Otlp:Cors type
     };
+
+    private static readonly EventId s_dashboardStoppedUnexpectedlyEventId = new(1, BackchannelLogEventNames.DashboardStoppedUnexpectedly);
 
     private Task? _dashboardLogsTask;
     private CancellationTokenSource? _dashboardLogsCts;
@@ -750,17 +753,25 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
         var defaultDashboardLogger = loggerFactory.CreateLogger("Aspire.Hosting.Dashboard");
 
         var dashboardResourceTasks = new Dictionary<string, Task>();
+        var runningDashboardResourceIds = new HashSet<string>(StringComparer.Ordinal);
 
         try
         {
             await foreach (var notification in resourceNotificationService.WatchAsync(cancellationToken).ConfigureAwait(false))
             {
+                if (!string.Equals(notification.Resource.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName))
+                {
+                    continue;
+                }
+
                 // Track all dashboard resources and start watching their logs.
                 // TODO: In the future when resources can restart, we should handle purging the taskCache.
-                if (string.Equals(notification.Resource.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName) && !dashboardResourceTasks.ContainsKey(notification.ResourceId))
+                if (!dashboardResourceTasks.ContainsKey(notification.ResourceId))
                 {
                     dashboardResourceTasks[notification.ResourceId] = WatchResourceLogsAsync(notification.ResourceId, loggerCache, defaultDashboardLogger, resourceLoggerService, loggerFactory, cancellationToken);
                 }
+
+                ReportUnexpectedDashboardExit(notification, runningDashboardResourceIds, cancellationToken);
             }
         }
         catch (OperationCanceledException)
@@ -774,6 +785,30 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
 
         // The watch task should already be logging exceptions, so we don't need to log them here.
         await Task.WhenAll(dashboardResourceTasks.Values).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+    }
+
+    private void ReportUnexpectedDashboardExit(ResourceEvent notification, HashSet<string> runningDashboardResourceIds, CancellationToken cancellationToken)
+    {
+        var state = notification.Snapshot.State?.Text;
+        if (string.Equals(state, KnownResourceStates.Running, StringComparison.Ordinal))
+        {
+            runningDashboardResourceIds.Add(notification.ResourceId);
+            return;
+        }
+
+        // Failures before the dashboard ever ran are already reported while waiting for it to start, and the
+        // dashboard is expected to stop while the AppHost shuts down (which cancels this watch).
+        if (state is not null &&
+            KnownResourceStates.TerminalStates.Contains(state) &&
+            runningDashboardResourceIds.Remove(notification.ResourceId) &&
+            !cancellationToken.IsCancellationRequested)
+        {
+            distributedApplicationLogger.LogWarning(
+                s_dashboardStoppedUnexpectedlyEventId,
+                "The Aspire dashboard stopped unexpectedly (state: {State}, exit code: {ExitCode}). The dashboard is no longer available; restart the AppHost to restore it.",
+                state,
+                notification.Snapshot.ExitCode?.ToString(CultureInfo.InvariantCulture) ?? "unknown");
+        }
     }
 
     private static async Task WatchResourceLogsAsync(string dashboardResourceId,

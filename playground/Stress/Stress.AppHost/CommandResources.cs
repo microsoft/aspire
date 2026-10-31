@@ -115,6 +115,31 @@ internal static class CommandResources
                 IsHighlighted = true
             });
 
+        // Simulates a dashboard crash so the AppHost's "dashboard stopped unexpectedly" warning can be checked.
+        var dashboardCommands = builder.AddCommandGroup("dashboard-commands", serviceBuilder.Resource);
+        dashboardCommands.WithCommand(
+            name: "crash-dashboard",
+            displayName: "Crash the dashboard",
+            executeCommand: async (c) =>
+            {
+                var notifications = c.Services.GetRequiredService<ResourceNotificationService>();
+                var dashboard = await notifications.WaitForResourceAsync(
+                    "aspire-dashboard",
+                    e => e.Snapshot.State?.Text == KnownResourceStates.Running,
+                    c.CancellationToken).ConfigureAwait(false);
+
+                var pid = dashboard.Snapshot.Properties.FirstOrDefault(p => p.Name == "executable.pid")?.Value;
+                if (pid is null)
+                {
+                    return CommandResults.Failure("The dashboard process ID isn't available.");
+                }
+
+                using var process = System.Diagnostics.Process.GetProcessById(Convert.ToInt32(pid, CultureInfo.InvariantCulture));
+                process.Kill();
+                return CommandResults.Success($"Killed dashboard process {pid}.");
+            },
+            commandOptions: new CommandOptions { Description = "Kills the dashboard process to simulate a crash." });
+
         var argumentCommands = builder.AddCommandGroup("argument-commands", serviceBuilder.Resource);
         argumentCommands.WithCommand(
             name: "echo-command-arguments",

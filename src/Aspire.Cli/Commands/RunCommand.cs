@@ -1300,6 +1300,13 @@ internal sealed class RunCommand : BaseCommand
                             : $"{entry.Message}{Environment.NewLine}{entry.Exception}";
                         fileLoggerProvider.WriteLog(entry.Timestamp, entry.LogLevel, $"AppHost/{shortCategory}", message);
 
+                        // AppHost logs only go to the log file in a terminal, so surface events the user must know about.
+                        if (extensionInteractionService is null &&
+                            string.Equals(entry.EventName, BackchannelLogEventNames.DashboardStoppedUnexpectedly, StringComparison.Ordinal))
+                        {
+                            interactionService.DisplayMessage(KnownEmojis.Warning, entry.Message);
+                        }
+
                         // Preserve the previous RPC volume. Trace and Debug still arrive through the
                         // AppHost console provider and are styled by the extension.
                         if (extensionInteractionService is null || entry.LogLevel is LogLevel.Trace or LogLevel.Debug)

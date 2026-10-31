@@ -181,6 +181,53 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task WatchDashboardLogs_DashboardStopsUnexpectedly_LogsWarning()
+    {
+        // Arrange
+        var testSink = new TestSink();
+        var factory = LoggerFactory.Create(b =>
+        {
+            b.SetMinimumLevel(LogLevel.Trace);
+            b.AddProvider(new TestLoggerProvider(testSink));
+            b.AddXunit(testOutputHelper);
+        });
+        var warnings = Channel.CreateUnbounded<WriteContext>();
+        testSink.MessageLogged += c =>
+        {
+            if (c.LoggerName == typeof(DistributedApplication).FullName && c.LogLevel == LogLevel.Warning)
+            {
+                warnings.Writer.TryWrite(c);
+            }
+        };
+
+        var resourceLoggerService = new ResourceLoggerService();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create(logger: factory.CreateLogger<ResourceNotificationService>());
+        var configuration = new ConfigurationBuilder().Build();
+        var hook = CreateHook(resourceLoggerService, resourceNotificationService, configuration, loggerFactory: factory, distributedApplicationLogger: factory.CreateLogger<DistributedApplication>());
+
+        var model = new DistributedApplicationModel(new ResourceCollection());
+        await hook.OnBeforeStartAsync(new BeforeStartEvent(new TestServiceProvider(), model), CancellationToken.None).DefaultTimeout();
+        var dashboardResource = model.Resources.Single(r => string.Equals(r.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName));
+
+        // Act
+        // A dashboard that never ran is already reported as failing to start, so it shouldn't warn.
+        await resourceNotificationService.PublishUpdateAsync(dashboardResource, s => s with { State = KnownResourceStates.FailedToStart }).DefaultTimeout();
+        await resourceNotificationService.PublishUpdateAsync(dashboardResource, s => s with { State = KnownResourceStates.Running }).DefaultTimeout();
+        await resourceNotificationService.PublishUpdateAsync(dashboardResource, s => s with { State = KnownResourceStates.Exited, ExitCode = 137 }).DefaultTimeout();
+        // Repeated terminal updates for the same exit only warn once.
+        await resourceNotificationService.PublishUpdateAsync(dashboardResource, s => s with { State = KnownResourceStates.Finished, ExitCode = 137 }).DefaultTimeout();
+        await resourceNotificationService.PublishUpdateAsync(dashboardResource, s => s with { State = KnownResourceStates.Running, ExitCode = null }).DefaultTimeout();
+        await resourceNotificationService.PublishUpdateAsync(dashboardResource, s => s with { State = KnownResourceStates.Finished, ExitCode = -1 }).DefaultTimeout();
+
+        // Assert
+        var first = await warnings.Reader.ReadAsync().DefaultTimeout();
+        Assert.Equal("The Aspire dashboard stopped unexpectedly (state: Exited, exit code: 137). The dashboard is no longer available; restart the AppHost to restore it.", first.Message);
+
+        var second = await warnings.Reader.ReadAsync().DefaultTimeout();
+        Assert.Equal("The Aspire dashboard stopped unexpectedly (state: Finished, exit code: -1). The dashboard is no longer available; restart the AppHost to restore it.", second.Message);
+    }
+
+    [Fact]
     public async Task BeforeStartAsync_ExcludeLifecycleCommands_CommandsNotAddedToDashboard()
     {
         // Arrange
