@@ -268,9 +268,17 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                     UpdateCommandStrings.PreparingSdkForUpdateStatus,
                     async () =>
                     {
-                        await nuGetService.AcquirePackageAsync(
-                            ("Aspire.AppHost.Sdk", targetSdkVersion), candidatePackageConfiguration,
-                            nuGetService.GetGlobalPackagesFolder(projectFile.Directory!), cancellationToken);
+                        // Other projects of the solution whose SDK declaration is updated resolve it from
+                        // their own global packages folder, which may differ from the AppHost's.
+                        var globalPackagesFolders = new[] { projectFile }.Concat(updatePlan.SolutionSdkProjects)
+                            .Select(project => nuGetService.GetGlobalPackagesFolder(project.Directory!))
+                            .Distinct(StringComparers.FileSystemPath);
+                        foreach (var globalPackagesFolder in globalPackagesFolders)
+                        {
+                            await nuGetService.AcquirePackageAsync(
+                                ("Aspire.AppHost.Sdk", targetSdkVersion), candidatePackageConfiguration,
+                                globalPackagesFolder, cancellationToken);
+                        }
                         return 0;
                     });
             }
@@ -326,13 +334,18 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                     async () =>
                     {
                         await transaction.VerifyAsync(cancellationToken);
-                        var restoreExitCode = await runner.RestoreAsync(projectFile, new()
+                        // Other projects of the solution are not in the AppHost's restore graph, so restore
+                        // each one whose SDK declaration was updated as part of the same transaction.
+                        foreach (var restoreProject in new[] { projectFile }.Concat(updatePlan.SolutionSdkProjects))
                         {
-                            NuGetRestoreTargetsFile = restorePreview?.TargetsFile ?? repairedRestorePreview?.TargetsFile
-                        }, cancellationToken);
-                        if (restoreExitCode != 0)
-                        {
-                            throw new ProjectUpdaterException(string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.FailedToRestoreAfterUpdateFormat, projectFile.FullName));
+                            var restoreExitCode = await runner.RestoreAsync(restoreProject, new()
+                            {
+                                NuGetRestoreTargetsFile = restorePreview?.TargetsFile ?? repairedRestorePreview?.TargetsFile
+                            }, cancellationToken);
+                            if (restoreExitCode != 0)
+                            {
+                                throw new ProjectUpdaterException(string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.FailedToRestoreAfterUpdateFormat, restoreProject.FullName));
+                            }
                         }
                         return 0;
                     });
@@ -824,13 +837,24 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                 continue;
             }
 
-            var declaredVersion = GetDeclaredSdkVersion(document);
-            if (declaredVersion is null || string.Equals(declaredVersion, latestSdkPackage.Version, StringComparison.OrdinalIgnoreCase))
+            // A project can declare the SDK more than once (for example explicit Sdk.props and Sdk.targets
+            // imports), so update it when any declared version differs from the target.
+            var declaredVersion = GetDeclaredSdkVersions(document)
+                .FirstOrDefault(version => !string.Equals(version, latestSdkPackage.Version, StringComparison.OrdinalIgnoreCase));
+            if (declaredVersion is null)
             {
                 continue;
             }
 
             await CaptureFileAsync(context, projectFile, cancellationToken);
+            var settings = nuGetService.GetNuGetSettings(projectFile.DirectoryName!, cancellationToken);
+            context.AmbientPolicies.TryAdd(projectFile.DirectoryName!, settings.CacheIdentity);
+            foreach (var path in settings.ConfigPaths)
+            {
+                await CaptureFileAsync(context, new FileInfo(path), cancellationToken);
+            }
+            context.ProjectRestoreTargets[projectFile.FullName] = await GetRestoreTargetsAsync(projectFile, cancellationToken);
+            context.SolutionSdkProjects.Add(projectFile);
 
             // Only bump the version in place. Migrating the declaration (as done for the AppHost) would
             // replace Microsoft.NET.Sdk and turn a test project into an AppHost.
@@ -844,6 +868,25 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
             {
                 Files = [projectFile]
             });
+        }
+    }
+
+    private async Task<string> GetRestoreTargetsAsync(FileInfo projectFile, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var document = await GetItemsAndPropertiesAsync(projectFile, cancellationToken);
+            return document.RootElement.TryGetProperty("Properties", out var properties) &&
+                properties.TryGetProperty("NuGetRestoreTargets", out var restoreTargets)
+                    ? restoreTargets.GetString() ?? string.Empty
+                    : string.Empty;
+        }
+        catch (ProjectUpdaterException ex)
+        {
+            // The stale SDK version may not be resolvable, which is what this update repairs.
+            // Fall back to the default restore targets; the restore itself still validates the project.
+            logger.LogDebug(ex, "Could not evaluate {ProjectFile}; using the default restore targets.", projectFile.FullName);
+            return string.Empty;
         }
     }
 
@@ -900,25 +943,16 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         return [.. projects.Values];
     }
 
-    private static string? GetDeclaredSdkVersion(XDocument document)
+    // Unversioned declarations are resolved from global.json, so they already follow the AppHost.
+    private static IEnumerable<string> GetDeclaredSdkVersions(XDocument document)
     {
         foreach (var element in GetUnconditionalSdkDeclarations(document))
         {
-            if (element.Name.LocalName == "Sdk")
+            if (element.Name.LocalName is "Sdk" or "Import")
             {
                 if (element.Attribute("Version")?.Value is { Length: > 0 } version)
                 {
-                    return version.Trim();
-                }
-
-                continue;
-            }
-
-            if (element.Name.LocalName == "Import")
-            {
-                if (element.Attribute("Version")?.Value is { Length: > 0 } importVersion)
-                {
-                    return importVersion.Trim();
+                    yield return version.Trim();
                 }
 
                 continue;
@@ -928,13 +962,10 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
             {
                 if (sdk.StartsWith(AspireAppHostSdkName + "/", StringComparison.OrdinalIgnoreCase))
                 {
-                    return sdk[(AspireAppHostSdkName.Length + 1)..].Trim();
+                    yield return sdk[(AspireAppHostSdkName.Length + 1)..].Trim();
                 }
             }
         }
-
-        // An unversioned declaration is resolved from global.json, so it already follows the AppHost.
-        return null;
     }
 
     private static FileInfo? FindImportedSdkDeclaration(FileInfo projectFile, JsonElement properties, bool required)
@@ -2161,6 +2192,7 @@ internal sealed class UpdateContext(FileInfo appHostProjectFile, PackageChannel 
     public ConcurrentQueue<AnalyzeStep> AnalyzeSteps { get; } = new();
     public HashSet<string> VisitedProjects { get; } = new();
     public Dictionary<string, string> ProjectRestoreTargets { get; } = new(StringComparers.FileSystemPath);
+    public List<FileInfo> SolutionSdkProjects { get; } = [];
     public Dictionary<string, string> AmbientPolicies { get; } = new(StringComparers.FileSystemPath);
     public Dictionary<string, byte[]?> OriginalFiles { get; } = new(StringComparers.FileSystemPath);
     public bool FallbackParsing { get; set; }

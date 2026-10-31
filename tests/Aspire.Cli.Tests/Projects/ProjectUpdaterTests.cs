@@ -1899,6 +1899,15 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
             </Project>
             """);
 
+        // Explicit imports where only Sdk.targets is stale must still be detected and fully updated.
+        var mixedImportsProjectFile = new FileInfo(Path.Combine(workspace.CreateDirectory("Mixed").FullName, "Mixed.csproj"));
+        await File.WriteAllTextAsync(mixedImportsProjectFile.FullName, """
+            <Project>
+              <Import Project="Sdk.props" Sdk="Aspire.AppHost.Sdk" Version="9.5.0" />
+              <Import Project="Sdk.targets" Sdk="Aspire.AppHost.Sdk" Version="9.4.1" />
+            </Project>
+            """);
+
         // A solution that does not contain the AppHost is not built with it and must be left alone.
         const string UnrelatedProjectContent = """
             <Project Sdk="Aspire.AppHost.Sdk/9.4.1">
@@ -1913,6 +1922,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var unrelatedSolutionFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Unrelated.sln"));
         await File.WriteAllTextAsync(unrelatedSolutionFile.FullName, string.Empty);
 
+        var restoredProjects = new List<string>();
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, config =>
         {
             config.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
@@ -1928,9 +1938,14 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                     itemsAndProperties.WithSdkVersion(appHostSdkVersion);
                     return (0, JsonDocument.Parse(itemsAndProperties.ToJsonString()));
                 },
+                RestoreAsyncCallback = (project, _, _) =>
+                {
+                    restoredProjects.Add(project.FullName);
+                    return 0;
+                },
                 GetSolutionProjectsAsyncCallback = (solution, _, _) => solution.Name switch
                 {
-                    "Repro.SLNX" => (0, [appHostProjectFile, testsProjectFile, secondAppHostProjectFile]),
+                    "Repro.SLNX" => (0, [appHostProjectFile, testsProjectFile, secondAppHostProjectFile, mixedImportsProjectFile]),
                     "Unrelated.sln" => (0, [unrelatedProjectFile]),
                     _ => throw new InvalidOperationException($"Unexpected solution: {solution.FullName}"),
                 }
@@ -1953,7 +1968,69 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         Assert.DoesNotContain("9.4.1", testsContent);
 
         Assert.Contains("""<Project Sdk="Aspire.AppHost.Sdk/9.5.0">""", await File.ReadAllTextAsync(secondAppHostProjectFile.FullName));
+        var mixedContent = await File.ReadAllTextAsync(mixedImportsProjectFile.FullName);
+        Assert.Contains("""<Import Project="Sdk.targets" Sdk="Aspire.AppHost.Sdk" Version="9.5.0" />""", mixedContent);
+        Assert.DoesNotContain("9.4.1", mixedContent);
         Assert.Equal(UnrelatedProjectContent, await File.ReadAllTextAsync(unrelatedProjectFile.FullName));
+
+        // Edited projects are not in the AppHost's restore graph, so they are restored in the same transaction.
+        Assert.Equal(
+            [appHostProjectFile.FullName, testsProjectFile.FullName, secondAppHostProjectFile.FullName, mixedImportsProjectFile.FullName],
+            restoredProjects);
+    }
+
+    [Fact]
+    public async Task UpdateProjectFileAsync_RollsBackWhenOtherSolutionProjectFailsToRestore()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        const string AppHostContent = """
+            <Project Sdk="Aspire.AppHost.Sdk/9.4.1">
+            </Project>
+            """;
+        var appHostProjectFile = new FileInfo(Path.Combine(workspace.CreateDirectory("Repro.AppHost").FullName, "Repro.AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostProjectFile.FullName, AppHostContent);
+
+        const string TestsContent = """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <Sdk Name="Aspire.AppHost.Sdk" Version="9.4.1" />
+            </Project>
+            """;
+        var testsProjectFile = new FileInfo(Path.Combine(workspace.CreateDirectory("Repro.AppHost.Tests").FullName, "Repro.AppHost.Tests.csproj"));
+        await File.WriteAllTextAsync(testsProjectFile.FullName, TestsContent);
+        await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "Repro.slnx"), "<Solution />");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, config =>
+        {
+            config.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
+            {
+                SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _, _) => query switch
+                {
+                    "Aspire.AppHost.Sdk" => (0, [new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = PackageSources.NuGetOrg }]),
+                    _ => throw new InvalidOperationException($"Unexpected package query: {query}"),
+                },
+                GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) =>
+                {
+                    var itemsAndProperties = new JsonObject();
+                    itemsAndProperties.WithSdkVersion("9.4.1");
+                    return (0, JsonDocument.Parse(itemsAndProperties.ToJsonString()));
+                },
+                // The sibling cannot resolve the new SDK (for example from its own package sources).
+                RestoreAsyncCallback = (project, _, _) => project.FullName == testsProjectFile.FullName ? 1 : 0,
+                GetSolutionProjectsAsyncCallback = (_, _, _) => (0, [appHostProjectFile, testsProjectFile]),
+            };
+            config.InteractionServiceFactory = _ => new TestInteractionService { ConfirmCallback = (_, _) => true };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var channels = await provider.GetRequiredService<IPackagingService>().GetChannelsAsync().DefaultTimeout();
+        var projectUpdater = provider.GetRequiredService<IProjectUpdater>();
+        var exception = await Assert.ThrowsAsync<ProjectUpdaterException>(
+            () => projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, channels.Single(c => c.Name == "default"))).DefaultTimeout());
+
+        Assert.Contains(testsProjectFile.FullName, exception.Message);
+        Assert.Equal(AppHostContent, await File.ReadAllTextAsync(appHostProjectFile.FullName));
+        Assert.Equal(TestsContent, await File.ReadAllTextAsync(testsProjectFile.FullName));
     }
 
     [Fact]
