@@ -136,11 +136,11 @@ public sealed class PowerShellCommand : IDisposable
             CurrentProcess.BeginOutputReadLine();
             CurrentProcess.BeginErrorReadLine();
 
-            await exitedTcs.Task.WaitAsync(token).ConfigureAwait(false);
+            await exitedTcs.Task.WaitAsync(token).ConfigureAwait(continueOnCapturedContext: false);
 
             _testOutput.WriteLine($"{_msgPrefix}Got the Exited event, waiting on WaitForExitAsync");
             var waitForExitTask = CurrentProcess.WaitForExitAsync(token);
-            var completedTask = await Task.WhenAny(waitForExitTask, Task.Delay(TimeSpan.FromSeconds(5), token)).ConfigureAwait(false);
+            var completedTask = await Task.WhenAny(waitForExitTask, Task.Delay(TimeSpan.FromSeconds(5), token)).ConfigureAwait(continueOnCapturedContext: false);
             if (completedTask != waitForExitTask)
             {
                 _testOutput.WriteLine($"{_msgPrefix}Timed out waiting for it. Ignoring.");
@@ -247,52 +247,5 @@ public sealed class PowerShellCommand : IDisposable
             }
             psi.WorkingDirectory = WorkingDirectory;
         }
-    }
-}
-
-/// <summary>
-/// Result of a command execution.
-/// </summary>
-public readonly struct CommandResult
-{
-    public ProcessStartInfo StartInfo { get; }
-    public int ExitCode { get; }
-    public string Output { get; }
-
-    public CommandResult(ProcessStartInfo startInfo, int exitCode, string output)
-    {
-        StartInfo = startInfo;
-        ExitCode = exitCode;
-        Output = output;
-    }
-
-    public CommandResult EnsureSuccessful(string messagePrefix = "")
-        => EnsureExitCode(0, messagePrefix);
-
-    public CommandResult EnsureExitCode(int expectedExitCode, string messagePrefix = "")
-    {
-        if (ExitCode != expectedExitCode)
-        {
-            var message = $"{messagePrefix} Expected {expectedExitCode} exit code but got {ExitCode}: {StartInfo.FileName} {StartInfo.Arguments}";
-            if (!string.IsNullOrEmpty(Output))
-            {
-                message += $"{System.Environment.NewLine}Output:{System.Environment.NewLine}{Output}";
-            }
-            throw new CommandException(message, this);
-        }
-        return this;
-    }
-}
-
-/// <summary>
-/// Exception thrown when a command fails.
-/// </summary>
-public class CommandException : Exception
-{
-    public CommandResult Result { get; }
-
-    public CommandException(string message, CommandResult result) : base(message)
-    {
-        Result = result;
     }
 }

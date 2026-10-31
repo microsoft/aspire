@@ -88,7 +88,7 @@ conventions:
 prefilter:
   patterns_file: eng/github-ci/ci-skip-entirely-patterns.txt
   keep_routed:
-    - .github/workflows/**                            # routed to Infrastructure.Tests (workflow validation)
+    - .github/workflows/**                            # routed to workflow test projects
     - eng/pipelines/**                                # routed to Infrastructure.Tests (pipeline validation)
     - eng/github-ci/ci-skip-entirely-patterns.txt      # a selector input (read above) -> route to Infrastructure.Tests
 
@@ -512,6 +512,13 @@ path_rules:
       - src/Aspire.Tray/Windows/publish.ps1
     targets: [CLI_BUNDLE, test:Infrastructure.Tests]
     reason: native CLI bundle assembly and publishing inputs
+
+  - paths:
+      - tools/AnalyzeCiFailure/**
+      - .github/workflows/analyze-ci-failure*
+      - eng/test-retry-patterns.json
+    targets: [test:AnalyzeCiFailure.Tests]
+    reason: analyzer commands, sparse-build fixtures, workflow examples and adapters
 
   # --- Infrastructure.Tests-only inputs ----------------------------------------------------
   # Keep inputs grouped by their current coverage so test ownership and obsolete checks are visible.

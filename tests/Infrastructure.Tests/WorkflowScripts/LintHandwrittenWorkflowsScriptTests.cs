@@ -103,7 +103,7 @@ public sealed class LintHandwrittenWorkflowsScriptTests(ITestOutputHelper output
             File.SetUnixFileMode(fakeActionlint, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         }
 
-        return await ProcessRunner.RunAsync(
+        return await TestProcessRunner.RunAsync(
             output,
             "bash",
             [s_scriptPath],

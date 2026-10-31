@@ -1,0 +1,6 @@
+﻿[time] [identity] Invocation initialized.
+[time] [identity] started: Resolving workflow run and pull request
+[time] [identity] completed: Resolving workflow run and pull request duration_ms=<elapsed>
+[time] [jobs] started: Listing workflow jobs
+[time] [jobs] job-log: partial
+[time] [jobs] Listing workflow jobs failed: token=[REDACTED]; : :warning: :injected

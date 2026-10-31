@@ -111,7 +111,15 @@ internal sealed class TriggerMap
             .WithNamingConvention(UnderscoredNamingConvention.Instance)
             .IgnoreUnmatchedProperties()
             .Build();
-        return deserializer.Deserialize<TriggerMap>(yaml);
+        var map = deserializer.Deserialize<TriggerMap>(yaml);
+        foreach (var rule in map.PathRules)
+        {
+            if (rule.ExcludePaths is null || rule.ExcludePaths.Any(string.IsNullOrWhiteSpace))
+            {
+                throw new InvalidDataException("path_rules.exclude_paths must be an array of nonempty glob strings.");
+            }
+        }
+        return map;
     }
 
     // Matches a repo-relative '/'-separated path against a single map glob, using ordinal
@@ -179,6 +187,8 @@ internal sealed class PrefilterConfig
 internal sealed class PathRule
 {
     public List<string> Paths { get; set; } = new();
+
+    public List<string> ExcludePaths { get; set; } = new();
 
     public List<string> Targets { get; set; } = new();
 

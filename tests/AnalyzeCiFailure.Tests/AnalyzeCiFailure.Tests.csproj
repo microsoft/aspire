@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net11.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsTestProject>true</IsTestProject>
+
+    <RunOnGithubActionsLinux>true</RunOnGithubActionsLinux>
+    <RunOnGithubActionsWindows>false</RunOnGithubActionsWindows>
+    <RunOnGithubActionsMacOS>false</RunOnGithubActionsMacOS>
+    <RunOnAzdoHelixWindows>false</RunOnAzdoHelixWindows>
+    <RunOnAzdoHelixLinux>false</RunOnAzdoHelixLinux>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Using Include="Aspire.Tests.Utils" />
+    <Using Remove="Xunit;VerifyXunit;VerifyXunit.Verifier" />
+    <PackageReference Include="xunit.v3.extensibility.core" />
+    <PackageReference Include="xunit.v3.assert" />
+    <PackageReference Include="Verify.XunitV3" />
+    <!-- The analyzer includes its shared helpers; a separate helper assembly would expose duplicate types. -->
+    <ProjectReference Include="../../tools/AnalyzeCiFailure/AnalyzeCiFailure.csproj" />
+    <ProjectReference Include="../AnalyzeCiFailure.TestHost/AnalyzeCiFailure.TestHost.csproj" />
+    <ProjectReference Include="../Aspire.TestUtilities/Aspire.TestUtilities.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="$(TestsSharedDir)TemporaryWorkspace.cs" Link="shared/TemporaryWorkspace.cs" />
+    <Compile Include="../Infrastructure.Tests/Shared/RepoRoot.cs" Link="shared/RepoRoot.cs" />
+    <Compile Include="../Infrastructure.Tests/Shared/CommandResult.cs" Link="shared/CommandResult.cs" />
+  </ItemGroup>
+
+</Project>

@@ -81,7 +81,7 @@ public sealed class CreatePullRequestActionTests(ITestOutputHelper output)
             {{actionScript}}
             """;
 
-        var result = await ProcessRunner.RunAsync(
+        var result = await TestProcessRunner.RunAsync(
             output,
             "bash",
             ["-c", script],

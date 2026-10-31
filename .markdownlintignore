@@ -1,3 +1,5 @@
 # This is for editors; keep .github/workflows/markdownlint.yml in sync
 .dotnet/
 docs/plans/
+# Generated comments and operator-note fixtures are snapshots, not documentation.
+tests/AnalyzeCiFailure.Tests/Snapshots/*.verified.md

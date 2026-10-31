@@ -1,0 +1,3 @@
+<Project>
+  <!-- This tool pins its own package references and does not consume root central package management. -->
+</Project>

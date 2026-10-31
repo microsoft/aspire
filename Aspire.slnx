@@ -517,6 +517,7 @@
     <Project Path="tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj" />
     <Project Path="tests/Aspire.TestUtilities/Aspire.TestUtilities.csproj" />
     <Project Path="tests/ConfigurationSchemaGenerator.Tests/ConfigurationSchemaGenerator.Tests.csproj" />
+    <Project Path="tests/AnalyzeCiFailure.Tests/AnalyzeCiFailure.Tests.csproj" />
     <Project Path="tests/Infrastructure.Tests/Infrastructure.Tests.csproj" />
     <Project Path="tests/QuarantineTools.Tests/QuarantineTools.Tests.csproj" />
   </Folder>
@@ -640,6 +641,7 @@
     <Project Path="tests/testproject/TestProject.WorkerA/TestProject.WorkerA.csproj" />
   </Folder>
   <Folder Name="/Tools/">
+    <Project Path="tools/AnalyzeCiFailure/AnalyzeCiFailure.csproj" />
     <Project Path="src/Tools/ConfigurationSchemaGenerator/ConfigurationSchemaGenerator.csproj" />
     <Project Path="tools/Aspire.TestTools/Aspire.TestTools.csproj" />
     <Project Path="tools/AspireMcpTools/AspireMcpTools.csproj" />
