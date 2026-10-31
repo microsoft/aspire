@@ -1544,8 +1544,10 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
             });
     }
 
-    [Fact]
-    public async Task ResourceCommand_DoesNotPromptForCommandInputsWhenInputIsRedirected()
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task ResourceCommand_DoesNotPromptForCommandInputsWhenPromptIOIsRedirected(bool isPromptInputRedirected, bool isPromptOutputRedirected)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interactionService = new TestInteractionService();
@@ -1562,7 +1564,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
                         CreateArgument("enabled", inputType: "Boolean", value: "true")))
             ]
         };
-        await using var provider = CreateServiceProvider(workspace, outputHelper, backchannel, interactionService, interactive: true, isPromptInputRedirected: true);
+        await using var provider = CreateServiceProvider(workspace, outputHelper, backchannel, interactionService, interactive: true, isPromptInputRedirected: isPromptInputRedirected, isPromptOutputRedirected: isPromptOutputRedirected);
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("""resource web-browser-automation configure""");
@@ -1693,6 +1695,45 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(["teal", "Red", "Blue", InteractionServiceStrings.CustomChoiceLabel], selectionLabels["color:"]);
         Assert.Equal([ResourceCommandStrings.NoChoiceLabel, "Circle", "Square"], selectionLabels["shape:"]);
         AssertJsonObject(backchannel.ExecuteResourceCommandArguments, ("size", ""), ("color", "teal"));
+    }
+
+    [Fact]
+    public async Task ResourceCommand_DoesNotPromptForChoiceInputWithoutChoicesWhenInteractive()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interactionService = new TestInteractionService();
+        var selectionPrompts = new List<string>();
+        interactionService.PromptForSelectionCallback = (promptText, choices, formatter, _) =>
+        {
+            selectionPrompts.Add(promptText);
+            return choices.Cast<object>().First();
+        };
+        interactionService.SetupStringPromptResponse("hello");
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse { Success = true },
+            ResourceSnapshots =
+            [
+                CreateResourceSnapshot(
+                    "web-browser-automation",
+                    CreateCommand(
+                        "configure",
+                        CreateArgument("target", inputType: "Choice", required: true, options: []),
+                        CreateArgument("message")))
+            ]
+        };
+        await using var provider = CreateServiceProvider(workspace, outputHelper, backchannel, interactionService, interactive: true);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("""resource web-browser-automation configure""");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Empty(selectionPrompts);
+        Assert.Equal("message:", Assert.Single(interactionService.StringPromptCalls).PromptText);
+        AssertJsonObject(backchannel.ExecuteResourceCommandArguments, ("message", "hello"));
     }
 
     [Theory]
@@ -2792,7 +2833,8 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
         TestAppHostAuxiliaryBackchannel backchannel,
         TestInteractionService? interactionService = null,
         bool interactive = false,
-        bool isPromptInputRedirected = false)
+        bool isPromptInputRedirected = false,
+        bool isPromptOutputRedirected = false)
     {
         var monitor = new TestAuxiliaryBackchannelMonitor();
         monitor.AddConnection("/tmp/test.sock", backchannel);
@@ -2806,7 +2848,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
             }
             if (interactive)
             {
-                options.CliHostEnvironmentFactory = _ => new TestCliHostEnvironment(supportsInteractiveInput: true, isPromptInputRedirected: isPromptInputRedirected);
+                options.CliHostEnvironmentFactory = _ => new TestCliHostEnvironment(supportsInteractiveInput: true, isPromptInputRedirected: isPromptInputRedirected, isPromptOutputRedirected: isPromptOutputRedirected);
             }
         });
 

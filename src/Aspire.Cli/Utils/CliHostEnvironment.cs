@@ -32,6 +32,12 @@ internal interface ICliHostEnvironment
     /// instead of a terminal or the VS Code extension.
     /// </summary>
     bool IsPromptInputRedirected => false;
+
+    /// <summary>
+    /// Gets whether prompts would be rendered to redirected standard output (e.g., piped or written to a file)
+    /// instead of a terminal or the VS Code extension.
+    /// </summary>
+    bool IsPromptOutputRedirected => false;
 }
 
 /// <summary>
@@ -79,6 +85,12 @@ internal sealed class CliHostEnvironment : ICliHostEnvironment
     /// </summary>
     public bool IsPromptInputRedirected { get; }
 
+    /// <summary>
+    /// Gets whether prompts would be rendered to redirected standard output (e.g., piped or written to a file)
+    /// instead of a terminal or the VS Code extension.
+    /// </summary>
+    public bool IsPromptOutputRedirected { get; }
+
     public CliHostEnvironment(IConfiguration configuration, bool nonInteractive)
         : this(configuration, nonInteractive, Console.IsOutputRedirected)
     {
@@ -91,8 +103,10 @@ internal sealed class CliHostEnvironment : ICliHostEnvironment
 
     internal CliHostEnvironment(IConfiguration configuration, bool nonInteractive, bool isOutputRedirected, bool isInputRedirected)
     {
-        // The VS Code extension answers prompts over its backchannel, so redirected stdin doesn't matter there.
-        IsPromptInputRedirected = isInputRedirected && !IsExtensionPromptEnabled(configuration);
+        // The VS Code extension answers prompts over its backchannel, so redirected stdio doesn't matter there.
+        var extensionPromptEnabled = IsExtensionPromptEnabled(configuration);
+        IsPromptInputRedirected = isInputRedirected && !extensionPromptEnabled;
+        IsPromptOutputRedirected = isOutputRedirected && !extensionPromptEnabled;
 
         // If --non-interactive is explicitly set, disable interactive input and output.
         // ANSI support is still determined from the host configuration so explicit
