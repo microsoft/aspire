@@ -439,7 +439,7 @@ internal sealed class IntegrationHostServerProcess : IAsyncDisposable
         {
             while (true)
             {
-                content = File.Exists(path) ? await File.ReadAllTextAsync(path, timeout.Token) : "";
+                content = File.Exists(path) ? await ReadSharedAsync(path, timeout.Token) : "";
                 var lines = content.Split('\n');
                 // The last element is empty when the content ends with a newline, or a partially written entry otherwise.
                 if (lines.Length - 1 >= count)
@@ -452,6 +452,14 @@ internal sealed class IntegrationHostServerProcess : IAsyncDisposable
         catch (OperationCanceledException) when (!TestContext.Current.CancellationToken.IsCancellationRequested)
         {
             throw new TimeoutException($"Timed out waiting for {count} host PID(s) in '{path}'. Content: '{content}'. Diagnostics: {Diagnostics}");
+        }
+
+        // The host may still hold its append handle; File.ReadAllText's FileShare.Read would fail with a sharing violation on Windows.
+        static async Task<string> ReadSharedAsync(string path, CancellationToken cancellationToken)
+        {
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var reader = new StreamReader(stream);
+            return await reader.ReadToEndAsync(cancellationToken);
         }
     }
 
