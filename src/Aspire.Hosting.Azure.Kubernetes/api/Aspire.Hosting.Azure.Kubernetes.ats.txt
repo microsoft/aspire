@@ -6,6 +6,18 @@ Aspire.Hosting.Azure.Kubernetes/Aspire.Hosting.Azure.Kubernetes.AksNodePoolResou
 Aspire.Hosting.Azure.Kubernetes/Aspire.Hosting.Azure.Kubernetes.AzureKubernetesEnvironmentResource
 Aspire.Hosting.Azure.Kubernetes/Aspire.Hosting.Azure.Kubernetes.AzureKubernetesLoadBalancerResource
 
+# DTO Types
+Aspire.Hosting.Azure.Kubernetes/Aspire.Hosting.Azure.Kubernetes.AksNodePoolConfig # Configuration for an AKS node pool.
+  MaxCount: number # Gets or sets the maximum node count for autoscaling. Must be at least the minimum node count.
+  MinCount: number # Gets or sets the minimum node count for autoscaling. System pools require at least 1; user pools can scale to 0.
+  Mode?: enum:Aspire.Hosting.Azure.Kubernetes.AksNodePoolMode # Gets the mode of the node pool.
+  Name?: string # Gets the name of the node pool.
+  OsSku: string # Gets or sets the Linux OS SKU, such as `AzureLinux` or `Ubuntu`. A `null` value leaves the SKU unspecified so AKS chooses its default.
+  VmSize: string # Gets or sets the VM size for nodes in the pool.
+
+# Enum Types
+enum:Aspire.Hosting.Azure.Kubernetes.AksNodePoolMode = System | User
+
 # Exported Values
 AksNodeVmSizes.StandardAv2.StandardA2V2: string = "Standard_A2_v2"
 AksNodeVmSizes.StandardAv2.StandardA2mV2: string = "Standard_A2m_v2"
@@ -1495,12 +1507,12 @@ Aspire.Hosting.Azure.Kubernetes/addGateway(name: string) -> Aspire.Hosting.Kuber
 Aspire.Hosting.Azure.Kubernetes/addHelmChart(name: string, chartReference: string, chartVersion: string) -> Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.KubernetesHelmChartResource
 Aspire.Hosting.Azure.Kubernetes/addIngress(name: string) -> Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.KubernetesIngressResource
 Aspire.Hosting.Azure.Kubernetes/addLoadBalancer(name: string, subnet: Aspire.Hosting.Azure.Network/Aspire.Hosting.Azure.AzureSubnetResource) -> Aspire.Hosting.Azure.Kubernetes/Aspire.Hosting.Azure.Kubernetes.AzureKubernetesLoadBalancerResource
-Aspire.Hosting.Azure.Kubernetes/addNodePool(name: string, vmSize?: string, minCount?: number, maxCount?: number) -> Aspire.Hosting.Azure.Kubernetes/Aspire.Hosting.Azure.Kubernetes.AksNodePoolResource
+Aspire.Hosting.Azure.Kubernetes/addNodePool(name: string, configure: callback) -> Aspire.Hosting.Azure.Kubernetes/Aspire.Hosting.Azure.Kubernetes.AksNodePoolResource
 Aspire.Hosting.Azure.Kubernetes/addPersistentVolume(name: string) -> Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.KubernetesPersistentVolumeResource
 Aspire.Hosting.Azure.Kubernetes/withContainerRegistry(registry: Aspire.Hosting.Azure.ContainerRegistry/Aspire.Hosting.Azure.AzureContainerRegistryResource) -> Aspire.Hosting.Azure.Kubernetes/Aspire.Hosting.Azure.Kubernetes.AzureKubernetesEnvironmentResource
 Aspire.Hosting.Azure.Kubernetes/withLoadBalancer(loadBalancer: Aspire.Hosting.Azure.Kubernetes/Aspire.Hosting.Azure.Kubernetes.AzureKubernetesLoadBalancerResource) -> Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.KubernetesGatewayResource
 Aspire.Hosting.Azure.Kubernetes/withLoadBalancerOnIngress(loadBalancer: Aspire.Hosting.Azure.Kubernetes/Aspire.Hosting.Azure.Kubernetes.AzureKubernetesLoadBalancerResource) -> Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.KubernetesIngressResource
 Aspire.Hosting.Azure.Kubernetes/withNodePoolSubnet(subnet: Aspire.Hosting.Azure.Network/Aspire.Hosting.Azure.AzureSubnetResource) -> Aspire.Hosting.Azure.Kubernetes/Aspire.Hosting.Azure.Kubernetes.AksNodePoolResource
 Aspire.Hosting.Azure.Kubernetes/withSubnet(subnet: Aspire.Hosting.Azure.Network/Aspire.Hosting.Azure.AzureSubnetResource) -> Aspire.Hosting.Azure.Kubernetes/Aspire.Hosting.Azure.Kubernetes.AzureKubernetesEnvironmentResource
-Aspire.Hosting.Azure.Kubernetes/withSystemNodePool(vmSize?: string, minCount?: number, maxCount?: number) -> Aspire.Hosting.Azure.Kubernetes/Aspire.Hosting.Azure.Kubernetes.AzureKubernetesEnvironmentResource
+Aspire.Hosting.Azure.Kubernetes/withSystemNodePool(configure: callback) -> Aspire.Hosting.Azure.Kubernetes/Aspire.Hosting.Azure.Kubernetes.AzureKubernetesEnvironmentResource
 Aspire.Hosting.Azure.Kubernetes/withWorkloadIdentity(enabled?: boolean) -> Aspire.Hosting.Azure.Kubernetes/Aspire.Hosting.Azure.Kubernetes.AzureKubernetesEnvironmentResource
