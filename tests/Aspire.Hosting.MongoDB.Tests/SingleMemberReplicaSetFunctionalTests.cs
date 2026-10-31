@@ -61,6 +61,40 @@ public class SingleMemberReplicaSetFunctionalTests(ITestOutputHelper testOutputH
 
     [Fact]
     [RequiresFeature(TestFeature.ContainerRuntime)]
+    public async Task InitializationWaitsUntilThePrimaryAcceptsWrites()
+    {
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
+        builder.Services.AddSingleton<IDeveloperCertificateService>(new TestDeveloperCertificateService(
+            [], supportsContainerTrust: true, trustCertificate: true, tlsTerminate: false));
+
+        // Configure the member without the resource's initializer so this test owns replSetInitiate and can write
+        // immediately after initialization reports the primary, before any health polling can hide the race.
+        var mongo = builder.AddMongoDB("mongo");
+        MongoDBBuilderExtensions.ConfigureReplicaSetMember(mongo, "mongo")
+            .WithKeyFile(MongoDBBuilderExtensions.CreateReplicaSetKeyFile(builder, "mongo"))
+            .WithAnnotation(new MongoDBSingleMemberReplicaSetAnnotation("mongo"));
+
+        using var app = builder.Build();
+        using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+        await app.StartAsync(cts.Token);
+        await app.ResourceNotifications.WaitForResourceAsync(mongo.Resource.Name, KnownResourceStates.Running, cts.Token);
+
+        var settings = MongoClientSettings.FromConnectionString(await mongo.Resource.ConnectionStringExpression.GetValueAsync(cts.Token));
+        settings.ServerSelectionTimeout = TimeSpan.FromSeconds(2);
+        settings.ConnectTimeout = TimeSpan.FromSeconds(2);
+        using var client = new MongoClient(settings);
+        await MongoDBSingleMemberReplicaSet.InitializeAndWaitForPrimaryAsync(
+            client.GetDatabase(MongoDBServerResource.DefaultAuthenticationDatabase), "mongo",
+            $"localhost:{mongo.Resource.PrimaryEndpoint.TargetPort}", cts.Token);
+
+        // A newly elected primary reports PRIMARY before it leaves drain mode and accepts writes.
+        await client.GetDatabase("writes").CreateCollectionAsync("items", cancellationToken: cts.Token);
+
+        await app.StopAsync();
+    }
+
+    [Fact]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public Task MongoExpressConnectsWithoutADeveloperCertificate() => VerifyMongoExpressAsync(useTls: false);
 
     [Fact]
