@@ -509,10 +509,22 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
         // Create the Kubernetes resources only after every resource has its OTLP configuration.
         // Creating a resource eagerly creates the resources it references, so configuring OTLP
         // in the same loop would miss resources that are referenced before they are visited.
+        var errors = new List<Exception>();
         foreach (var (r, computeEnvForAnnotation) in pendingResources)
         {
             // Create a Kubernetes compute resource for the resource
-            var serviceResource = await environmentContext.CreateKubernetesResourceAsync(r, executionContext, cancellationToken).ConfigureAwait(false);
+            KubernetesResource serviceResource;
+            try
+            {
+                serviceResource = await environmentContext.CreateKubernetesResourceAsync(r, executionContext, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // Keep processing the remaining resources so every unsupported setting is reported together.
+                errors.Add(ex);
+                continue;
+            }
+
             serviceResource.AddPrintSummaryStep();
 
             // Add deployment target annotation to the resource.
@@ -524,6 +536,8 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
 
             deploymentTargets[r] = serviceResource;
         }
+
+        KubernetesResource.ThrowIfErrors(errors, $"The Kubernetes publisher could not process {errors.Count} resources.");
 
         // Process Ingress resources
         await ProcessIngressResources(appModel, deploymentTargets, logger, context.CancellationToken).ConfigureAwait(false);
