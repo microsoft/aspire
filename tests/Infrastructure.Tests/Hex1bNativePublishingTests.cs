@@ -505,17 +505,15 @@ public sealed class Hex1bNativePublishingTests : IDisposable
     private async Task<(int ExitCode, string StandardOutput, string StandardError, string Output)> RunDotNetAsync(
         string[] arguments, string? packages = null, string? dotnet = null)
     {
-        var startInfo = new ProcessStartInfo(dotnet ?? GetDotNetPath())
+        var startInfo = new ProcessStartInfo
         {
             WorkingDirectory = _workspace.Path,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false
         };
-        foreach (var argument in arguments)
-        {
-            startInfo.ArgumentList.Add(argument);
-        }
+        // The regression test's Windows wrapper is a .cmd file, which must run through cmd.exe.
+        ProcessStartInfoHelper.SetCommand(startInfo, dotnet ?? GetDotNetPath(), arguments, OperatingSystem.IsWindows());
         if (packages is not null)
         {
             startInfo.Environment["NUGET_PACKAGES"] = packages;
