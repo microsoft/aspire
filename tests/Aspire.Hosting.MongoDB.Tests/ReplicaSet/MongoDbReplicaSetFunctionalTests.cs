@@ -70,6 +70,93 @@ public class MongoDbReplicaSetFunctionalTests(ITestOutputHelper testOutputHelper
         await app.StopAsync();
     }
 
+    [Theory]
+    [InlineData("replSetGetConfig", 11602, true, 1)]
+    [InlineData("replSetInitiate", 11602, true, 1)]
+    [InlineData("replSetReconfig", 11602, true, 1)]
+    [InlineData("replSetGetConfig", 13, false, 1)]
+    [InlineData("replSetInitiate", 13, false, 1)]
+    [InlineData("replSetReconfig", 13, false, 1)]
+    [InlineData("replSetReconfig", 11602, false, 10)]
+    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.DevCert)]
+    public async Task VerifyReplicaSetConfigurationHandlesCommandErrors(string command, int errorCode, bool shouldRecover, int expectedFailures)
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
+
+        var mongo = builder.AddMongoDB("mongo1")
+            .WithArgs("--setParameter", "enableTestCommands=1");
+        var secondMember = builder.AddMongoDB("mongo2");
+        long initialFailureCount = 0;
+        var rs = builder.AddMongoDBReplicaSet("rs0")
+            .WithMember(mongo)
+            .WithMember(secondMember)
+            .OnBeforeResourceStarted(async (_, evt, ct) =>
+            {
+                await evt.Services.GetRequiredService<ResourceNotificationService>()
+                    .WaitForResourceHealthyAsync(mongo.Resource.Name, ct);
+
+                var connectionString = await mongo.Resource.ConnectionStringExpression.GetValueAsync(ct);
+                using var client = new MongoClient(connectionString);
+                var admin = client.GetDatabase("admin");
+
+                // Inject the server response before Aspire configures the set, rather than racing an election.
+                // MongoDB's failCommand shape is documented by its own regression tests:
+                // https://github.com/mongodb/mongo/blob/v9.0/jstests/core/testing/failcommand_failpoint.js
+                var result = await admin.RunCommandAsync<BsonDocument>(new BsonDocument
+                {
+                    ["configureFailPoint"] = "failCommand",
+                    ["mode"] = shouldRecover ? new BsonDocument("times", 1) : new BsonString("alwaysOn"),
+                    ["data"] = new BsonDocument
+                    {
+                        ["failCommands"] = new BsonArray { command },
+                        ["errorCode"] = errorCode,
+                    },
+                }, readPreference: ReadPreference.Nearest, cancellationToken: ct);
+                initialFailureCount = result["count"].ToInt64();
+            });
+
+        using var app = builder.Build();
+        await app.StartAsync(cts.Token);
+
+        if (shouldRecover)
+        {
+            await app.ResourceNotifications.WaitForResourceHealthyAsync(rs.Resource.Name, cts.Token);
+        }
+        else
+        {
+            await app.ResourceNotifications.WaitForResourceAsync(rs.Resource.Name, KnownResourceStates.FailedToStart, cts.Token);
+        }
+
+        using var memberClient = new MongoClient(await mongo.Resource.ConnectionStringExpression.GetValueAsync(cts.Token));
+        var admin = memberClient.GetDatabase("admin");
+        var disabled = await admin.RunCommandAsync<BsonDocument>(new BsonDocument
+        {
+            ["configureFailPoint"] = "failCommand",
+            ["mode"] = "off",
+        }, readPreference: ReadPreference.Nearest, cancellationToken: cts.Token);
+        Assert.Equal(expectedFailures, disabled["count"].ToInt64() - initialFailureCount);
+
+        if (shouldRecover)
+        {
+            var connectionString = await rs.Resource.ConnectionStringExpression.GetValueAsync(cts.Token);
+            using var client = new MongoClient(connectionString);
+            var memberIds = await GetMemberIdsByHostAsync(client, cts.Token);
+            Assert.Equal(2, memberIds.Count);
+            Assert.Equal(0, memberIds["mongo1:27017"]);
+            Assert.Equal(1, memberIds["mongo2:27017"]);
+
+            var db = client.GetDatabase(DbName);
+            var pipeline = new ResiliencePipelineBuilder()
+                .AddRetry(new() { MaxRetryAttempts = 10, Delay = TimeSpan.FromSeconds(1) })
+                .Build();
+            await pipeline.ExecuteAsync(async token => await CreateTestDataWithReplicaSetFeaturesAsync(db, token), cts.Token);
+        }
+
+        await app.StopAsync(cts.Token);
+    }
+
     [Fact]
     [RequiresFeature(TestFeature.Docker)]
     [RequiresFeature(TestFeature.DevCert)]

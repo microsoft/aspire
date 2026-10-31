@@ -19,6 +19,21 @@ namespace Aspire.Hosting.MongoDB.Tests;
 public class AddMongoDBReplicaSetTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
+    public void InterruptedDueToReplStateChangeIsTransientDuringReplicaSetConfiguration()
+    {
+        Assert.True(MongoDBReplicaSetBuilderExtensions.IsTransientReplicaSetConfigurationError("InterruptedDueToReplStateChange"));
+    }
+
+    [Theory]
+    [InlineData("NotYetInitialized")]
+    [InlineData("Unauthorized")]
+    [InlineData(null)]
+    public void OtherCommandErrorsAreNotTransientDuringReplicaSetConfiguration(string? codeName)
+    {
+        Assert.False(MongoDBReplicaSetBuilderExtensions.IsTransientReplicaSetConfigurationError(codeName));
+    }
+
+    [Fact]
     public void AddMongoDBReplicaSetAddsHealthCheckAnnotationToResource()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
