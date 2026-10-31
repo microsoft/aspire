@@ -837,56 +837,117 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                 continue;
             }
 
-            // A project can declare the SDK more than once (for example explicit Sdk.props and Sdk.targets
-            // imports), so update it when any declared version differs from the target.
-            var declaredVersion = GetDeclaredSdkVersions(document)
-                .FirstOrDefault(version => !string.Equals(version, latestSdkPackage.Version, StringComparison.OrdinalIgnoreCase));
-            if (declaredVersion is null)
+            var declaredVersions = GetDeclaredSdkVersions(document).ToList();
+            if (declaredVersions.Count == 0)
             {
                 continue;
             }
 
-            await CaptureFileAsync(context, projectFile, cancellationToken);
+            // A project can declare the SDK more than once (for example explicit Sdk.props and Sdk.targets
+            // imports), so update it when any declared version differs from the target.
+            var staleVersion = declaredVersions
+                .FirstOrDefault(version => !string.Equals(version, latestSdkPackage.Version, StringComparison.OrdinalIgnoreCase));
+
+            // The current SDK references Aspire.Hosting.AppHost implicitly, and the AppHost's cleanup may remove
+            // a PackageVersion shared through central package management, so remove the same legacy references.
+            var (hasPackageReference, hasOrphanPackageVersion) = DetectLegacyAppHostReferences(projectFile);
+            if (staleVersion is null && !hasPackageReference && !hasOrphanPackageVersion)
+            {
+                continue;
+            }
+
+            var files = GetSdkUpdateFiles(projectFile);
+            foreach (var file in files)
+            {
+                await CaptureFileAsync(context, file, cancellationToken);
+            }
             var settings = nuGetService.GetNuGetSettings(projectFile.DirectoryName!, cancellationToken);
             context.AmbientPolicies.TryAdd(projectFile.DirectoryName!, settings.CacheIdentity);
             foreach (var path in settings.ConfigPaths)
             {
                 await CaptureFileAsync(context, new FileInfo(path), cancellationToken);
             }
-            context.ProjectRestoreTargets[projectFile.FullName] = await GetRestoreTargetsAsync(projectFile, cancellationToken);
+            await RecordRestoreTargetsAsync(projectFile, context, cancellationToken);
             context.SolutionSdkProjects.Add(projectFile);
 
-            // Only bump the version in place. Migrating the declaration (as done for the AppHost) would
-            // replace Microsoft.NET.Sdk and turn a test project into an AppHost.
-            context.UpdateSteps.Enqueue(new PackageUpdateStep(
-                string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.UpdatePackageFormat, AspireAppHostSdkName, declaredVersion, latestSdkPackage.Version),
-                () => UpdateImportedSdkVersionAsync(projectFile, latestSdkPackage.Version),
-                AspireAppHostSdkName,
-                declaredVersion,
-                latestSdkPackage.Version,
-                projectFile)
+            if (staleVersion is not null)
             {
-                Files = [projectFile]
-            });
+                // Only bump the version in place. Migrating the declaration (as done for the AppHost) would
+                // replace Microsoft.NET.Sdk and turn a test project into an AppHost.
+                context.UpdateSteps.Enqueue(new PackageUpdateStep(
+                    string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.UpdatePackageFormat, AspireAppHostSdkName, staleVersion, latestSdkPackage.Version),
+                    () => UpdateImportedSdkVersionAsync(projectFile, latestSdkPackage.Version),
+                    AspireAppHostSdkName,
+                    staleVersion,
+                    latestSdkPackage.Version,
+                    projectFile)
+                {
+                    Files = [projectFile]
+                });
+            }
+
+            if (hasPackageReference || hasOrphanPackageVersion)
+            {
+                context.UpdateSteps.Enqueue(new PackageUpdateStep(
+                    UpdateCommandStrings.RemovedObsoleteAppHostPackage,
+                    () => RemoveLegacyAppHostPackageReferencesAsync(projectFile, hasPackageReference, hasOrphanPackageVersion),
+                    "Aspire.Hosting.AppHost",
+                    "implicit",
+                    "(removed)",
+                    projectFile)
+                {
+                    Files = files
+                });
+            }
         }
     }
 
-    private async Task<string> GetRestoreTargetsAsync(FileInfo projectFile, CancellationToken cancellationToken)
+    // Edited projects are restored with the candidate restore preview, which overrides the restore targets of
+    // their whole reference graph, so record the original targets of every project reachable from them.
+    private async Task RecordRestoreTargetsAsync(FileInfo projectFile, UpdateContext context, CancellationToken cancellationToken)
     {
-        try
+        var pending = new Queue<FileInfo>([projectFile]);
+        while (pending.TryDequeue(out var project))
         {
-            var document = await GetItemsAndPropertiesAsync(projectFile, cancellationToken);
-            return document.RootElement.TryGetProperty("Properties", out var properties) &&
+            if (context.ProjectRestoreTargets.ContainsKey(project.FullName))
+            {
+                continue;
+            }
+
+            var document = await TryGetItemsAndPropertiesAsync(project, cancellationToken);
+            var root = document?.RootElement;
+            context.ProjectRestoreTargets[project.FullName] =
+                root?.TryGetProperty("Properties", out var properties) == true &&
                 properties.TryGetProperty("NuGetRestoreTargets", out var restoreTargets)
                     ? restoreTargets.GetString() ?? string.Empty
                     : string.Empty;
+
+            if (root?.TryGetProperty("Items", out var items) == true &&
+                items.TryGetProperty("ProjectReference", out var projectReferences))
+            {
+                foreach (var projectReference in projectReferences.EnumerateArray())
+                {
+                    if (projectReference.TryGetProperty("FullPath", out var fullPath) && fullPath.GetString() is { Length: > 0 } path)
+                    {
+                        pending.Enqueue(new FileInfo(path));
+                    }
+                }
+            }
+        }
+    }
+
+    private async Task<JsonDocument?> TryGetItemsAndPropertiesAsync(FileInfo projectFile, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await GetItemsAndPropertiesAsync(projectFile, cancellationToken);
         }
         catch (ProjectUpdaterException ex)
         {
             // The stale SDK version may not be resolvable, which is what this update repairs.
             // Fall back to the default restore targets; the restore itself still validates the project.
             logger.LogDebug(ex, "Could not evaluate {ProjectFile}; using the default restore targets.", projectFile.FullName);
-            return string.Empty;
+            return null;
         }
     }
 
