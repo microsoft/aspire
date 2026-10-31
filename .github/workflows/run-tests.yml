@@ -156,7 +156,7 @@ jobs:
               throw "Docker service is still running."
             }
           }
-          wsl --update --web-download
+          wsl --update --web-download --pre-release
           if ($LASTEXITCODE -ne 0) { throw "WSL update failed: $LASTEXITCODE" }
           wslc version
           if ($LASTEXITCODE -ne 0) { throw "WSLC version check failed: $LASTEXITCODE" }
