@@ -58,7 +58,7 @@ internal sealed class TemplateManagementCommand : ParentCommand
         private void Validate()
         {
             TemplateSourceConfiguration.ValidateName(Name);
-            TemplateSourceConfiguration.Parse(Path, Repository, Ref, $"templateSources.{Name}", requireComplete: true);
+            TemplateSourceConfiguration.Parse(Path, Repository, Ref, $"{AspireConfigFile.TemplateSourcesSectionName}.{Name}", requireComplete: true);
         }
     }
 

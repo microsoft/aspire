@@ -169,9 +169,7 @@ internal sealed class ConfigSourceService(
         var source = new ConfigSource
         {
             Repository = repository!,
-            Path = explicitSource
-                ? environment.GetEnvironmentVariable(CliConfigNames.InitSourcePath) ?? AspireConfigFile.FileName
-                : AspireConfigFile.FileName,
+            Path = GetConfigSourcePath(explicitSource),
             Ref = explicitSource ? environment.GetEnvironmentVariable(CliConfigNames.InitSourceRef) : null
         };
         source.Validate();
@@ -237,7 +235,7 @@ internal sealed class ConfigSourceService(
         var source = new ConfigSource
         {
             Repository = repository,
-            Path = environment.GetEnvironmentVariable(CliConfigNames.InitSourcePath) ?? AspireConfigFile.FileName,
+            Path = GetConfigSourcePath(explicitSource: true),
             Ref = environment.GetEnvironmentVariable(CliConfigNames.InitSourceRef)
         };
         return await GetTemplateSourcesAsync(source, cancellationToken);
@@ -249,26 +247,31 @@ internal sealed class ConfigSourceService(
         var sources = new JsonObject();
         foreach (var (key, value) in snapshot.Configuration)
         {
-            if (!key.Equals("templateSources", StringComparison.OrdinalIgnoreCase))
+            if (!key.Equals(AspireConfigFile.TemplateSourcesSectionName, StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
             if (value is not JsonObject section)
             {
-                throw new TemplateSourceConfigurationException("templateSources", NewCommandStrings.TemplateSourcesMustBeObject);
+                throw new TemplateSourceConfigurationException(AspireConfigFile.TemplateSourcesSectionName, NewCommandStrings.TemplateSourcesMustBeObject);
             }
             foreach (var (name, definition) in section)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 TemplateSourceConfiguration.ValidateName(name);
                 using var document = JsonDocument.Parse(definition?.ToJsonString() ?? "null");
-                TemplateSourceConfiguration.Parse(document.RootElement, $"templateSources.{name}", requireComplete: true);
+                TemplateSourceConfiguration.Parse(document.RootElement, $"{AspireConfigFile.TemplateSourcesSectionName}.{name}", requireComplete: true);
                 sources.Add(name, definition?.DeepClone());
             }
         }
 
         return sources;
     }
+
+    private string GetConfigSourcePath(bool explicitSource) =>
+        explicitSource
+            ? environment.GetEnvironmentVariable(CliConfigNames.InitSourcePath) ?? AspireConfigFile.FileName
+            : AspireConfigFile.FileName;
 
     private async Task ApplySnapshotAsync(ConfigSource source, ConfigSourceSnapshot snapshot, string path, CancellationToken cancellationToken)
     {

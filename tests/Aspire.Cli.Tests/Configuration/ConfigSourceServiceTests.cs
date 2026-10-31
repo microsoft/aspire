@@ -22,14 +22,16 @@ namespace Aspire.Cli.Tests.Configuration;
 
 public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
 {
-    [Fact]
-    public async Task TemplateSources_UsesExplicitEnvironmentSelectorWithoutMaterializingSettings()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("teams/platform.json")]
+    public async Task TemplateSources_UsesExplicitEnvironmentSelectorWithoutMaterializingSettings(string? path)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var environment = new TestEnvironment(new Dictionary<string, string?>
         {
             [CliConfigNames.InitSourceUrl] = "https://git.example/configuration",
-            [CliConfigNames.InitSourcePath] = "teams/platform.json",
+            [CliConfigNames.InitSourcePath] = path,
             [CliConfigNames.InitSourceRef] = "config-preview"
         });
         var detector = new TestConfigSourceDetector { IsInternal = true };
@@ -38,7 +40,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
             ReadConfiguration = (source, _) =>
             {
                 Assert.Equal("https://git.example/configuration", source.Repository);
-                Assert.Equal("teams/platform.json", source.Path);
+                Assert.Equal(path ?? AspireConfigFile.FileName, source.Path);
                 Assert.Equal("config-preview", source.Ref);
                 return Task.FromResult(("version-1", JsonNode.Parse("""
                     {
@@ -768,19 +770,21 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task SelectForCreation_ExplicitSourceBypassesDetection(bool detected)
+    [InlineData(false, null)]
+    [InlineData(true, null)]
+    [InlineData(false, "teams/platform.json")]
+    [InlineData(true, "teams/platform.json")]
+    public async Task SelectForCreation_ExplicitSourceBypassesDetection(bool detected, string? path)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var detector = new TestConfigSourceDetector { IsInternal = detected };
         var git = new TestConfigSourceRepository();
-        var expected = new ConfigSource { Repository = s_source.Repository, Path = s_source.Path, Ref = "preview" };
+        var expected = new ConfigSource { Repository = s_source.Repository, Path = path ?? AspireConfigFile.FileName, Ref = "preview" };
         var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git, detector: detector,
             environment: new TestEnvironment(new Dictionary<string, string?>
             {
                 [CliConfigNames.InitSourceUrl] = s_source.Repository,
-                [CliConfigNames.InitSourcePath] = s_source.Path,
+                [CliConfigNames.InitSourcePath] = path,
                 [CliConfigNames.InitSourceRef] = expected.Ref
             }));
 

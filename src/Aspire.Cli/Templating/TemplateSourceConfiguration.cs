@@ -4,6 +4,7 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Git;
 using Aspire.Cli.Resources;
 
@@ -129,7 +130,7 @@ internal static class TemplateSourceConfiguration
     {
         if (string.IsNullOrWhiteSpace(name) || name.Any(char.IsControl) || name.Contains('.') || name.Contains(':'))
         {
-            throw new TemplateSourceConfigurationException("templateSources", NewCommandStrings.TemplateSourceNameRequired);
+            throw new TemplateSourceConfigurationException(AspireConfigFile.TemplateSourcesSectionName, NewCommandStrings.TemplateSourceNameRequired);
         }
     }
 
@@ -151,11 +152,11 @@ internal static class TemplateSourceConfiguration
     public static string ResolveEditKey(JsonObject settings, string key)
     {
         var parts = key.Replace(':', '.').Split('.');
-        if (!parts[0].Equals("templateSources", StringComparison.OrdinalIgnoreCase))
+        if (!parts[0].Equals(AspireConfigFile.TemplateSourcesSectionName, StringComparison.OrdinalIgnoreCase))
         {
             return key;
         }
-        parts[0] = GetPropertyName(settings, "templateSources", StringComparison.OrdinalIgnoreCase);
+        parts[0] = GetPropertyName(settings, AspireConfigFile.TemplateSourcesSectionName, StringComparison.OrdinalIgnoreCase);
         if (parts.Length > 1 && settings[parts[0]] is JsonObject sources)
         {
             parts[1] = GetPropertyName(sources, parts[1], StringComparisons.TemplateSourceName);
@@ -172,13 +173,13 @@ internal static class TemplateSourceConfiguration
     {
         key = ResolveEditKey(settings, key);
         var parts = key.Replace(':', '.').Split('.');
-        if (!parts[0].Equals("templateSources", StringComparison.OrdinalIgnoreCase))
+        if (!parts[0].Equals(AspireConfigFile.TemplateSourcesSectionName, StringComparison.OrdinalIgnoreCase))
         {
             return key;
         }
         if (parts.Length < 2)
         {
-            throw new TemplateSourceConfigurationException("templateSources", NewCommandStrings.TemplateSourcesMustBeObject);
+            throw new TemplateSourceConfigurationException(AspireConfigFile.TemplateSourcesSectionName, NewCommandStrings.TemplateSourcesMustBeObject);
         }
         ValidateName(parts[1]);
         if (parts.Length > 3 || (parts.Length == 3 && parts[2].ToLowerInvariant() is not ("repository" or "ref" or "path")))
@@ -187,14 +188,14 @@ internal static class TemplateSourceConfiguration
         }
         if (settings[parts[0]] is { } templates && templates is not JsonObject)
         {
-            throw new TemplateSourceConfigurationException("templateSources", NewCommandStrings.TemplateSourcesMustBeObject);
+            throw new TemplateSourceConfigurationException(AspireConfigFile.TemplateSourcesSectionName, NewCommandStrings.TemplateSourcesMustBeObject);
         }
         if (parts.Length == 3 && settings[parts[0]]?[parts[1]] is JsonValue)
         {
             // The general config setter replaces scalar parents with objects. Do not silently
             // discard an existing directory/repository string when adding source fields.
-            throw new TemplateSourceConfigurationException($"templateSources.{parts[1]}",
-                string.Format(CultureInfo.CurrentCulture, NewCommandStrings.TemplateSourceCannotExtendString, $"templateSources.{parts[1]}"));
+            throw new TemplateSourceConfigurationException($"{AspireConfigFile.TemplateSourcesSectionName}.{parts[1]}",
+                string.Format(CultureInfo.CurrentCulture, NewCommandStrings.TemplateSourceCannotExtendString, $"{AspireConfigFile.TemplateSourcesSectionName}.{parts[1]}"));
         }
 
         return key;
@@ -203,10 +204,10 @@ internal static class TemplateSourceConfiguration
     public static void ValidateEditedSource(JsonObject settings, string key)
     {
         var parts = key.Replace(':', '.').Split('.');
-        if (parts[0].Equals("templateSources", StringComparison.OrdinalIgnoreCase))
+        if (parts[0].Equals(AspireConfigFile.TemplateSourcesSectionName, StringComparison.OrdinalIgnoreCase))
         {
             using var document = JsonDocument.Parse(settings[parts[0]]![parts[1]]!.ToJsonString());
-            Parse(document.RootElement, $"templateSources.{parts[1]}", requireComplete: false);
+            Parse(document.RootElement, $"{AspireConfigFile.TemplateSourcesSectionName}.{parts[1]}", requireComplete: false);
         }
     }
 }

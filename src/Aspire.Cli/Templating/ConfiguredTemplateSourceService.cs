@@ -33,7 +33,7 @@ internal sealed class ConfiguredTemplateSourceService(
         var inherited = await configSources.GetTemplateSourcesAsync(cancellationToken);
         var inheritedSettings = new JsonObject
         {
-            ["templateSources"] = inherited
+            [AspireConfigFile.TemplateSourcesSectionName] = inherited
         }.Deserialize(JsonSourceGenerationContext.Default.AspireConfigFile);
         var definitions = TemplateSourceConfiguration.MergeSources(
             inheritedSettings?.TemplateSources ?? [], settings?.TemplateSources ?? []);
@@ -44,10 +44,10 @@ internal sealed class ConfiguredTemplateSourceService(
             TemplateSourceConfiguration.ValidateName(name);
             if (definition is null)
             {
-                throw new TemplateSourceConfigurationException($"templateSources.{name}", NewCommandStrings.InvalidConfiguredTemplateSource);
+                throw new TemplateSourceConfigurationException($"{AspireConfigFile.TemplateSourcesSectionName}.{name}", NewCommandStrings.InvalidConfiguredTemplateSource);
             }
             var source = TemplateSourceConfiguration.Parse(
-                definition.Path, definition.Repository, definition.Ref, $"templateSources.{name}", requireComplete: true);
+                definition.Path, definition.Repository, definition.Ref, $"{AspireConfigFile.TemplateSourcesSectionName}.{name}", requireComplete: true);
             sources.Add(new(name, source));
         }
 

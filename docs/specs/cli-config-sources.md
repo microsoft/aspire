@@ -17,7 +17,7 @@ The `configSource` binding itself is not copied or inherited into a child config
 
 Configuration sources are supported in modern `aspire.config.json` files, not legacy configurations such as `.aspire/settings.json`. This feature does not add legacy migration or compatibility handling. Existing shared discovery behavior is unchanged; incidental behavior with legacy files is not a supported contract.
 
-Source-driven writes to the app configuration and the user-directory tracking copy happen only during initial materialization by `aspire new` or `aspire init`, or an explicit `aspire update --config-source`. Other commands may check for updates and report their availability, but must not apply them. This restriction does not prohibit explicit local configuration edits or a command's unrelated project bookkeeping.
+Source-driven writes to app configuration happen only during initial materialization by `aspire new` or `aspire init`, or an explicit `aspire update --config-source`. Global configuration with a saved binding is refreshed only by that explicit update command. Runtime template discovery and consented template-source listing can also acquire configuration and publish the user-directory tracking snapshot, but use only the `templateSources` overlay without saving inherited values into app or global configuration. Other commands may check for updates and report their availability, but must not apply them. This restriction does not prohibit explicit local configuration edits or a command's unrelated project bookkeeping.
 
 ## Phase 1: Acquire remote configuration
 
@@ -191,7 +191,7 @@ Retain fetched configuration centrally using the resolved Aspire home, including
 
 The usual home is `<user-profile>\.aspire`. The source key distinguishes repository, upstream file path, and configured ref (or an explicit default-branch marker when omitted). Different branch/commit selections have separate tracking and check records, even when they currently resolve to the same commit. The retained filename remains `aspire.config.json`, even for another upstream filename.
 
-The retained JSON and `metadata.json` describe the last successfully fetched source: its identity, selected-file version, resolved commit, and fetch time. They are tracking data, not defaults for command execution. Only initial materialization and explicit config-source updates publish a new fetched snapshot or replace `current`; normal commands must not read this JSON to configure themselves or rewrite it while checking for updates. After successful publication, remove older snapshots under the source cache lock, retaining only the latest snapshot. Failed acquisition leaves the previous snapshot intact; cleanup failures are logged without failing the command.
+The retained JSON and `metadata.json` describe the last successfully fetched source: its identity, selected-file version, resolved commit, and fetch time. They are tracking data, not general defaults for command execution. Initial materialization, explicit config-source updates, runtime template discovery, and consented template-source listing can publish a new fetched snapshot or replace `current`. Runtime template operations read only the selected source's `templateSources` section from their acquired snapshot; they do not apply source values to app or global configuration or fall back to a prior invocation's stale snapshot. Other normal commands must not read this JSON to configure themselves or rewrite it while checking for updates. After successful publication, remove older snapshots under the source cache lock, retaining only the latest snapshot. Failed acquisition leaves the previous snapshot intact; cleanup failures are logged without failing the command.
 
 Keep advisory check state separate in `check.json`: the last successful check time and last observed source-file version. A check is not a fetch-and-apply operation, and must not advance the fetched snapshot's timestamp or a project's applied version. Tracking records must distinguish an actually fetched source from one whose version was only checked.
 
@@ -201,7 +201,7 @@ Publish fetched tracking data before changing the app file. A tracking-publicati
 
 Global source refresh uses the same path-based configuration lock as local refresh. Both local and global `aspire config set` and `aspire config delete` operations acquire that lock so they cannot overwrite a refresh with a stale read or lose an unrelated edit to the refresh.
 
-A tracking copy is shared by source identity, not a record of what every application has applied. An ordinary command must work from its app file even when this directory is missing, another app refreshed the same source, or the retained JSON is unreadable. Problems with the tracking/version check are reported separately; they do not make cached values a fallback runtime provider.
+A tracking copy is shared by source identity, not a record of what every application has applied. Outside the separately acquired runtime template overlay, an ordinary command must work from its app file even when this directory is missing, another app refreshed the same source, or the retained JSON is unreadable. Problems with the tracking/version check are reported separately; they do not make cached values a fallback runtime provider.
 
 Missing `configSource.repository` or `configSource.path` must not prevent general configuration loading or discard the app's saved settings. Validate these fields when the binding is used: an advisory check reports the invalid binding without failing the project operation, while an explicit configuration-source refresh fails before Git acquisition or application-file changes.
 
@@ -220,8 +220,10 @@ Directory cleanup failures are logged at debug level without displaying a UI war
 | `aspire new` / `aspire init` initially creating source-bound app configuration | After consent, fetch, validate, and materialize allowed values; save the binding, applied version, and tracking copy |
 | `aspire update --config-source` | Fetch and explicitly apply allowed values to the nearest local and global configurations with saved bindings, regardless of check age |
 | Other commands scoped to an existing source-bound app, including re-running initialization on an already-bound app | Check for updates when due; never apply source values or rewrite the fetched tracking copy |
-| Commands scoped to an app without a `configSource` in either the nearest local or global configuration | No source check or acquisition |
-| Global commands not scoped to an app, help, and completion | No source check or acquisition |
+| Runtime template discovery in `aspire new` | With an explicit `ASPIRE_INIT_SOURCE_URL`, acquire the source and publish its tracking snapshot; use only `templateSources` at runtime without saving inherited settings |
+| `aspire template source list` | After shared consent (or explicit `--use-config-source` opt-in for JSON), acquire the selected source and publish its tracking snapshot; overlay only `templateSources`, without materializing project files or saving inherited settings |
+| Commands scoped to an app without a `configSource` in either the nearest local or global configuration, excluding the runtime template operations above | No source check or acquisition |
+| Other global commands not scoped to an app, help, and completion | No source check or acquisition |
 
 Compare the selected-file version at the binding's branch or commit with the application's `configSource.appliedVersion`, not with another app's latest fetch. The version identifies the selected file's contents, such as its Git blob identity; unrelated commits to other files do not constitute a configuration update.
 
@@ -357,7 +359,7 @@ Never save inherited template sources into the user's global configuration or th
 
 ## Phase 2: Acquire content from configuration
 
-Skills and integrations are acquired according to the application's saved configuration and normal CLI precedence. Templates use built-in choices and named sources from global configuration and the explicit environment-selected runtime overlay. Content acquisition is separate from fetching or materializing a configuration source, and must not load source settings from the user-directory tracking copy.
+Skills and integrations are acquired according to the application's saved configuration and normal CLI precedence. Templates use built-in choices and named sources from global configuration and the explicit environment-selected runtime overlay. Content acquisition is separate from fetching or materializing a configuration source, and must not treat previously retained tracking copies as runtime configuration providers. Runtime template inheritance uses its separately acquired snapshot as described above.
 
 | Content | Acquisition today | Possible configuration customizations |
 |---|---|---|
