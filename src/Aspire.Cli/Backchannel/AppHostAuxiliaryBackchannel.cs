@@ -18,7 +18,7 @@ namespace Aspire.Cli.Backchannel;
 /// Represents a connection to an AppHost instance via the auxiliary backchannel.
 /// Encapsulates connection management and RPC method calls.
 /// </summary>
-internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
+internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel, IAsyncDisposable
 {
     private static readonly string[] s_clientCapabilities =
     [
@@ -28,9 +28,11 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
         AuxiliaryBackchannelCapabilities.ResourceSnapshotVersions_V1
     ];
     private static readonly TimeSpan s_handshakeTimeout = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan s_defaultGracefulCloseTimeout = TimeSpan.FromSeconds(2);
 
     private readonly ILogger _logger;
     private JsonRpc? _rpc;
+    private readonly Socket? _transportSocket;
     private bool _disposed;
     private readonly ImmutableHashSet<string> _capabilities;
     private readonly ProfilingTelemetry? _profilingTelemetry;
@@ -45,10 +47,12 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
         bool isInScope,
         ImmutableHashSet<string> capabilities,
         ILogger logger,
-        ProfilingTelemetry? profilingTelemetry)
+        ProfilingTelemetry? profilingTelemetry,
+        Socket? transportSocket = null)
     {
         Socket = appHostSocket;
         _rpc = rpc;
+        _transportSocket = transportSocket;
         AppHostInfo = appHostInfo;
         IsInScope = isInScope;
         _capabilities = capabilities;
@@ -215,7 +219,7 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
 
             var capabilitiesSet = capabilities?.ToImmutableHashSet() ?? ImmutableHashSet.Create(AuxiliaryBackchannelCapabilities.V1);
 
-            return new AppHostAuxiliaryBackchannel(appHostSocket, rpc, appHostInfo, isInScope, capabilitiesSet, logger, profilingTelemetry);
+            return new AppHostAuxiliaryBackchannel(appHostSocket, rpc, appHostInfo, isInScope, capabilitiesSet, logger, profilingTelemetry, socket);
         }
         catch
         {
@@ -1126,7 +1130,12 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     #endregion
 
     /// <summary>
-    /// Disposes the auxiliary backchannel connection.
+    /// Gets or sets how long <see cref="DisposeAsync"/> waits for the AppHost to close its side of the connection.
+    /// </summary>
+    internal TimeSpan GracefulCloseTimeout { get; set; } = s_defaultGracefulCloseTimeout;
+
+    /// <summary>
+    /// Disposes the auxiliary backchannel connection immediately.
     /// </summary>
     public void Dispose()
     {
@@ -1138,5 +1147,45 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
         _disposed = true;
         _rpc?.Dispose();
         _rpc = null;
+    }
+
+    /// <summary>
+    /// Closes the auxiliary backchannel connection gracefully. The CLI half-closes the socket so the AppHost
+    /// reads a clean end of stream, then waits (bounded) for the AppHost to close its side before releasing
+    /// the socket. Closing a socket abruptly, for example at process exit, can make the AppHost observe a
+    /// connection reset instead.
+    /// </summary>
+    public async ValueTask DisposeAsync()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        var rpc = _rpc;
+        _rpc = null;
+        if (rpc is null)
+        {
+            return;
+        }
+
+        try
+        {
+            if (_transportSocket is not null && !rpc.Completion.IsCompleted)
+            {
+                _transportSocket.Shutdown(SocketShutdown.Send);
+                await rpc.Completion.WaitAsync(GracefulCloseTimeout).ConfigureAwait(false);
+            }
+        }
+        catch (Exception ex)
+        {
+            // Cleanup must not hide the command's own result; fall through to the immediate close.
+            _logger.LogDebug(ex, "Auxiliary backchannel did not close gracefully.");
+        }
+        finally
+        {
+            rpc.Dispose();
+        }
     }
 }
