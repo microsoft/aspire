@@ -62,6 +62,11 @@
         <target state="translated">значение</target>
         <note />
       </trans-unit>
+      <trans-unit id="InvalidNumberInput">
+        <source>Please enter a valid number.</source>
+        <target state="new">Please enter a valid number.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="SelectAppHostAction">
         <source>connect to</source>
         <target state="translated">подключить к</target>
