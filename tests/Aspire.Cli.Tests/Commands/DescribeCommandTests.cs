@@ -6,6 +6,7 @@ using System.Text.Json.Nodes;
 using System.Runtime.CompilerServices;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
@@ -1188,6 +1189,58 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal("", string.Join("", outputWriter.Logs));
         Assert.NotEmpty(errorWriter.ToString());
+    }
+
+    [Fact]
+    public async Task DescribeCommand_FromSiblingDirectory_UsesAppHostConfiguredInAspireConfig()
+    {
+        // `aspire start` from repo/sibling resolves repo/aspire.config.json's AppHost, so a follow-up
+        // `aspire describe` from the same directory must find that running AppHost.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, ".git"));
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory(Path.Combine("src", "MyApp.AppHost"));
+        var appHostPath = Path.Combine(appHostDirectory.FullName, "MyApp.AppHost.csproj");
+        await File.WriteAllTextAsync(appHostPath, "<Project />");
+        await File.WriteAllTextAsync(
+            Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName),
+            """{"appHost":{"path":"src/MyApp.AppHost/MyApp.AppHost.csproj"}}""");
+        var siblingDirectory = workspace.WorkspaceRoot.CreateSubdirectory("sibling");
+
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        monitor.AddConnection("socket.configured", new TestAppHostAuxiliaryBackchannel
+        {
+            IsInScope = false,
+            AppHostInfo = new AppHostInformation
+            {
+                AppHostPath = appHostPath,
+                ProcessId = 1234
+            },
+            ResourceSnapshots =
+            [
+                new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
+            ]
+        });
+
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.WorkingDirectory = siblingDirectory;
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+            options.OutputTextWriter = outputWriter;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("describe --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var json = string.Join("", outputWriter.Logs);
+        var output = JsonSerializer.Deserialize(json, ResourcesCommandJsonContext.RelaxedEscaping.ResourcesOutput);
+        Assert.NotNull(output);
+        var resource = Assert.Single(output.Resources);
+        Assert.Equal("redis", resource.Name);
     }
 
     private ServiceProvider CreateDescribeTestServices(
