@@ -77,7 +77,8 @@ Optional agent initialization still applies; `--suppress-agent-init` skips it.
 | `TemplateEngineHost` | Register concrete engine components and exclude Git metadata from the engine's source view |
 | [`TemplateHostConfiguration`](../../src/Aspire.Cli/Templating/TemplateHostConfiguration.cs) | Read the selected host file's parameter visibility and prompt labels without merging fallback files |
 | `TemplateParameterPromptState` | Evaluate interactive parameter conditions and order their dependencies using engine types and expressions |
-| [`IGitRunner` / `GitRunner`](../../src/Aspire.Cli/Git/GitRunner.cs) | Resolve refs and acquire exact-commit checkouts |
+| [`IGitClient` / `GitClient`](../../src/Aspire.Cli/Git/GitClient.cs) | Share ref resolution and Git repository operations with configuration-source acquisition |
+| [`GitCommandRunner`](../../src/Aspire.Cli/Git/GitCommandRunner.cs) | Execute Git commands with environment isolation, safe diagnostics, and classified failures |
 | [`TemplateNuGetConfigService`](../../src/Aspire.Cli/Templating/TemplateNuGetConfigService.cs) | Create missing output-root NuGet configuration without taking ownership of template-generated configuration |
 | [`PackageChannel`](../../src/Aspire.Cli/Packaging/PackageChannel.cs) and `PackagingService` | Resolve package-source policy from the running CLI identity and overrides |
 | [`BundleNuGetService`](../../src/Aspire.Cli/NuGet/BundleNuGetService.cs) | Build and persist NuGet policy using the existing configuration hierarchy |
@@ -156,9 +157,13 @@ available. Git's terminal credential prompts are always disabled with
 `GIT_TERMINAL_PROMPT=0`, including when Aspire itself is interactive.
 Authentication must be configured before invocation.
 
-Git processes run through `IProcessExecutionFactory`, with `LC_ALL=C` and
-`--literal-pathspecs`. Repository-routing environment variables are filtered
-case-insensitively:
+Captured template Git commands receive EOF on stdin rather than inheriting the
+CLI's input, so Git hooks or credential helpers cannot consume pending CLI input.
+
+`GitCommandRunner` executes Git processes through `ProcessCaptureRunner`, which
+handles process-tree cancellation and bounded output draining. Git runs with
+`LC_ALL=C` and `--literal-pathspecs`. Repository-routing environment variables
+are filtered case-insensitively:
 
 ```text
 GIT_DIR
@@ -177,10 +182,10 @@ contain private repository information or credentials. The runner classifies
 failures and exposes localized messages through `GitFailure`; callers translate
 them into command errors.
 
-Each public Git operation has a two-minute deadline. Initialization, fetching,
-checkout, and verification share one deadline within a clone operation. Caller
-cancellation remains cancellation; expiry of the runner's own deadline becomes a
-classified timeout.
+The template factory owns separate two-minute deadlines for ref resolution and
+checkout acquisition. Initialization, fetching, checkout, and verification share
+one deadline within a checkout operation. Caller cancellation remains cancellation;
+expiry of the factory's Git deadline becomes a classified timeout.
 
 ## Template parameters and generation
 
@@ -263,6 +268,78 @@ that are normally substituted while packaging. Host metadata does not resolve
 those tokens. To use a raw source directory or a copied Git template, first
 materialize those values or replace them with template symbols, such as the
 `AspireVersion` parameter described below.
+
+### Project-derived prompt defaults
+
+The engine's `defaultValue` is a literal, not an expression. A template can keep
+an override parameter visible while displaying its project-derived fallback by
+opting into `defaultValueSource` in the selected host file:
+
+```json
+{
+  "symbolInfo": {
+    "displayName": { "defaultValueSource": "displayNameValue" },
+    "shortName": { "defaultValueSource": "shortNameValue" }
+  }
+}
+```
+
+Each source names the native `coalesce` symbol that consumes that parameter.
+For example, the corresponding `template.json` symbols can be:
+
+```json
+{
+  "displayName": { "type": "parameter", "datatype": "string", "defaultValue": "" },
+  "shortName": { "type": "parameter", "datatype": "string", "defaultValue": "" },
+  "displayNameValue": {
+    "type": "generated",
+    "generator": "coalesce",
+    "parameters": { "sourceVariableName": "displayName", "fallbackVariableName": "name" },
+    "replaces": "DISPLAY_NAME"
+  },
+  "normalizedName": {
+    "type": "generated",
+    "generator": "regex",
+    "parameters": {
+      "source": "name",
+      "steps": [
+        { "regex": "[^A-Za-z0-9]+", "replacement": "-" },
+        { "regex": "^-+|-+$", "replacement": "" },
+        { "regex": "^$", "replacement": "service" }
+      ]
+    }
+  },
+  "shortNameValue": {
+    "type": "generated",
+    "generator": "coalesce",
+    "parameters": { "sourceVariableName": "shortName", "fallbackVariableName": "normalizedName" },
+    "replaces": "SHORT_NAME"
+  }
+}
+```
+
+For project name `Demo.App`, the prompts display `Demo.App` and `Demo-App`.
+Pressing Enter accepts those fallbacks without submitting the override
+parameters to the engine. A different answer remains explicit input. An answer
+equal to the displayed fallback is also treated as omission. Noninteractive
+generation retains native fallback behavior.
+
+This is a display-only host opt-in, not a new template expression language.
+Targets must be optional string parameters with an empty default, without a
+NuGet `valueSource` or reserved CLI projection. Source graphs may depend only on
+the engine's project-name parameter `name`, the omitted override parameter, and
+native `regex`/`coalesce` symbols. Templates must not redefine the `name` leaf.
+The omitted override may appear only as a coalesce source; `name` may appear as
+a regex source or coalesce fallback, but not as a coalesce source. These
+restrictions avoid previews that disagree with the engine's parameter-default
+and suppliedness semantics. The CLI uses the engine's own macro implementations.
+Every reachable reference, including unused coalesce branches, is validated
+before prompting for the project name or output path. Invalid references,
+cycles, and unsupported dependencies fail before prompting or writing project
+files. Bound values, other parameters (which could contain secrets), and
+nondeterministic generators such as random ports are not previewed.
+Existing literal defaults, choices, conditional prompts, and hidden parameters
+are unchanged when no `defaultValueSource` is specified.
 
 ### NuGet-computed parameter values
 
@@ -594,7 +671,7 @@ whether a source URL appears in XML.
 | [`PackageChannelTests`](../../tests/Aspire.Cli.Tests/Packaging/PackageChannelTests.cs) | Existing channel-based config-creation decisions, including stable custom sources |
 | [`TemplateNuGetConfigServiceTests`](../../tests/Aspire.Cli.Tests/Templating/TemplateNuGetConfigServiceTests.cs) | Independent built-in and template-engine policies, source-based creation, byte-preserving ownership, filename casing, inherited/nested configuration, and idempotence |
 | `NewCommandTests`, `InitCommandTests`, and template-factory tests | Existing built-in new/init consumers of shared channel policy |
-| `GitRunnerTests` and `GitCheckoutTests` | Ref resolution, exact-commit checkouts, environment isolation, deadlines, and classified failures |
+| `GitClientTests`, `GitCommandRunnerTests`, `TemplateEngineFactoryGitTests`, and `TemplateEngineFactoryGitCheckoutTests` | Ref resolution, exact-commit checkouts, environment isolation, deadlines, and classified failures |
 | [`CustomTemplateTests`](../../tests/Aspire.Cli.EndToEnd.Tests/CustomTemplateTests.cs) | Installed native CLI generation without a .NET SDK, including directory, Git, and noninteractive-default scenarios |
 
 NuGet routing assertions use `NuGetTestHelper.GetEligiblePackageSources`, which

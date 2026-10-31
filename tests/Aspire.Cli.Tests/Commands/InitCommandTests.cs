@@ -3,11 +3,15 @@
 
 using System.Text.Json.Nodes;
 using Aspire.Cli.Agents;
+using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Git;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Resources;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Scaffolding;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
@@ -21,6 +25,53 @@ namespace Aspire.Cli.Tests.Commands;
 
 public class InitCommandTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task InitCommand_ReportsAmbientFeedRefusalAsProjectCreationFailure(bool hasSolution)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        if (hasSolution)
+        {
+            await File.WriteAllTextAsync(Path.Combine(workspace.Path, "Test.sln"), "Fake solution file");
+        }
+        var configPath = Path.Combine(workspace.Path, "nuget.config");
+        var original = $$"""
+            <configuration>
+              <packageSources><clear /><add key="company" value="{{SourceForChannel("daily")}}" /></packageSources>
+              <packageSourceMapping><packageSource key="company"><package pattern="Private.*" /></packageSource></packageSourceMapping>
+            </configuration>
+            """;
+        await File.WriteAllTextAsync(configPath, original);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => new TestInteractionService();
+            options.CliExecutionContextFactory = _ => CreateExecutionContextForChannel(workspace.WorkspaceRoot, "daily");
+            options.PackagingServiceFactory = _ => CreateNamedChannelPackagingService("daily");
+            options.NuGetClientFactory = _ => new FakeNuGetClient
+            {
+                GetSettingsCallback = NuGetTestHelper.CreateClient().GetSettings
+            };
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
+            {
+                NewProjectAsyncCallback = (_, _, _, _, _) =>
+                    throw new InvalidOperationException("Refusal must occur before creating an AppHost project.")
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<InitCommand>();
+
+        var exitCode = await command.Parse("init").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToCreateNewProject, exitCode);
+        var interaction = Assert.IsType<TestInteractionService>(provider.GetRequiredService<IInteractionService>());
+        Assert.Equal([string.Format(System.Globalization.CultureInfo.CurrentCulture,
+            UpdateCommandStrings.ChannelFeedAlreadyConfiguredFormat, configPath, "company")], interaction.DisplayedErrors);
+        Assert.Equal(original, await File.ReadAllTextAsync(configPath));
+        Assert.False(File.Exists(Path.Combine(workspace.Path, "apphost.cs")));
+        Assert.False(Directory.Exists(Path.Combine(workspace.Path, "Test.AppHost")));
+    }
+
     /// <summary>
     /// Configures the test packaging service factory to return a single implicit channel
     /// whose template package cache yields one Aspire.ProjectTemplates entry, and pins the
@@ -109,7 +160,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task InitCommand_WhenSolutionExists_InstallsProjectSkillsInWorkspaceWithoutCheckingWorkspaceSource()
+    public async Task InitCommand_WhenSolutionExists_RegistersRemoteAssetsInWorkspaceWithoutCheckingWorkspaceSource()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await File.WriteAllTextAsync(Path.Combine(workspace.Path, "Test.sln"), "Fake solution file");
@@ -132,9 +183,11 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
 
         Assert.True(Directory.Exists(Path.Combine(workspace.Path, "Test.AppHost")));
-        Assert.True(File.Exists(Path.Combine(workspace.Path, ".agents", "skills", CommonAgentApplicators.AspireSkillName, "SKILL.md")));
+        Assert.True(AspireSkillsRemoteConfiguration.HasPluginRegistration(
+            [Path.Combine(workspace.Path, ".github", "copilot", "settings.json")], TestContext.Current.CancellationToken));
+        Assert.False(Directory.Exists(Path.Combine(workspace.Path, ".agents", "skills")));
         Assert.False(File.Exists(Path.Combine(workspace.Path, AspireConfigFile.FileName)));
-        var git = Assert.IsType<TestConfigSourceGitClient>(provider.GetRequiredService<IConfigSourceGitClient>());
+        var git = Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>());
         Assert.Equal(0, git.Calls);
         Assert.Equal(0, git.CheckCalls);
     }
@@ -297,6 +350,23 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var appHost = config["appHost"]!.AsObject();
         Assert.Equal("apphost.cs", appHost["path"]!.GetValue<string>());
         Assert.Null(appHost["language"]);
+    }
+
+    [Fact]
+    public async Task InitCommand_WhenNoSolutionExists_WritesConfigFilesWithOsLineBreaksAndSingleFinalNewline()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        LineEndingAssert.FileUsesOsLineBreaksAndSingleFinalNewline(Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json"));
+        LineEndingAssert.FileUsesOsLineBreaksAndSingleFinalNewline(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.run.json"));
     }
 
     [Fact]
@@ -677,32 +747,18 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task InitCommand_WhenAspireifySkillSelected_PrintsToolSpecificFollowUpCommands()
+    public async Task InitCommand_WhenBundledSkillsSelected_PrintsToolSpecificFollowUpCommands()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var interactionService = new TestInteractionService
         {
-            ConfirmCallback = (_, _) => true
+            ConfirmCallback = (_, defaultValue) => defaultValue
         };
         var subtleMessages = new List<string>();
         interactionService.DisplaySubtleMessageCallback = subtleMessages.Add;
-        interactionService.PromptForSelectionsCallback = (_, choices, _, _) =>
-        {
-            var items = choices.Cast<object>().ToList();
-
-            if (items.FirstOrDefault() is AgentClient)
-            {
-                return [AgentClient.Copilot, AgentClient.ClaudeCode, AgentClient.OpenCode];
-            }
-
-            Assert.All(items, static item => Assert.IsType<SkillDefinition>(item));
-            return items
-                .OfType<SkillDefinition>()
-                .Where(static skill => skill.HasName(CommonAgentApplicators.AspireifySkillName))
-                .Cast<object>()
-                .ToList();
-        };
+        interactionService.PromptForSelectionsCallback = (_, choices, _, _) => choices.Cast<object>()
+            .Where(choice => choice is IAgentClient || choice is string name && name == CommonAgentApplicators.AspireSkillName).ToArray();
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -714,7 +770,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         using var serviceProvider = services.BuildServiceProvider();
         var initCommand = serviceProvider.GetRequiredService<InitCommand>();
 
-        var parseResult = initCommand.Parse("init --language typescript");
+        var parseResult = initCommand.Parse("init --language typescript --aspire-source embedded");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
@@ -725,33 +781,22 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         Assert.Empty(Directory.GetFiles(workspace.WorkspaceRoot.FullName, "*mcp*.json*", SearchOption.AllDirectories));
     }
 
-    [Fact]
-    public async Task InitCommand_WhenAspireifySkillNotSelected_DoesNotPrintFollowUpCommands()
+    [Theory]
+    [InlineData("none")]
+    [InlineData("remote")]
+    public async Task InitCommand_WhenAspireifyNotInstalled_DoesNotPrintFollowUpCommands(string skillsMode)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var interactionService = new TestInteractionService
         {
-            ConfirmCallback = (_, _) => true
+            ConfirmCallback = (_, defaultValue) => defaultValue
         };
 
         var subtleMessages = new List<string>();
         interactionService.DisplaySubtleMessageCallback = subtleMessages.Add;
         interactionService.PromptForSelectionsCallback = (_, choices, _, _) =>
-        {
-            var items = choices.Cast<object>().ToList();
-
-            if (items.FirstOrDefault() is AgentClient)
-            {
-                return [AgentClient.Copilot];
-            }
-
-            return items
-                .OfType<SkillDefinition>()
-                .Where(static skill => skill.HasName(CommonAgentApplicators.AspireSkillName))
-                .Cast<object>()
-                .ToList();
-        };
+            choices.Cast<IAgentClient>().Where(client => string.Equals(client.Id, "claude", StringComparisons.AgentClientId)).Cast<object>().ToArray();
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -763,7 +808,8 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         using var serviceProvider = services.BuildServiceProvider();
         var initCommand = serviceProvider.GetRequiredService<InitCommand>();
 
-        var parseResult = initCommand.Parse("init --language typescript");
+        var skillsOptions = skillsMode == "none" ? "--skills none" : "--skills aspire --aspire-source remote";
+        var parseResult = initCommand.Parse($"init --language typescript {skillsOptions}");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
@@ -816,7 +862,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData("project")]
     [InlineData("global")]
-    public async Task InitCommand_NonInteractive_WithClientScopeAndSkills_InstallsOnlySpecifiedSkills(string scope)
+    public async Task InitCommand_NonInteractive_WithClientScope_InstallsBundledSkills(string scope)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
@@ -824,7 +870,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
-        var parseResult = command.Parse($"init --non-interactive --agents copilot --scope {scope} --skills {CommonAgentApplicators.AspireSkillName}");
+        var parseResult = command.Parse($"init --non-interactive --agents copilot --scope {scope} --skills aspire --aspire-source embedded");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
@@ -838,9 +884,8 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         Assert.False(Directory.Exists(Path.Combine(unselectedRoot.FullName, ".agents", "skills")));
         Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".mcp.json")));
 
-        // aspireify was not requested, so it should not be installed.
-        var aspireifySkillPath = Path.Combine(selectedRoot.FullName, ".agents", "skills", CommonAgentApplicators.AspireifySkillName);
-        Assert.False(Directory.Exists(aspireifySkillPath), $"Expected no aspireify skill directory but found {aspireifySkillPath}");
+        var aspireifySkillPath = Path.Combine(selectedRoot.FullName, ".agents", "skills", CommonAgentApplicators.AspireifySkillName, "SKILL.md");
+        Assert.True(File.Exists(aspireifySkillPath), $"Expected bundled aspireify skill file at {aspireifySkillPath}");
     }
 
     [Fact]
@@ -895,6 +940,26 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         // Pre-existing properties must be preserved.
         Assert.Equal("stable", merged["channel"]!.GetValue<string>());
         Assert.True(merged["features"]!.AsObject()["polyglotSupportEnabled"]!.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task InitCommand_WhenAspireConfigHasNonOsLineBreaks_RewritesItWithOsLineBreaks()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(configPath, "{\n  \"channel\": \"stable\"\n}\n".ReplaceLineEndings(LineEndingAssert.NonOsNewLine));
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        LineEndingAssert.FileUsesOsLineBreaksAndSingleFinalNewline(configPath);
+        Assert.Equal("stable", JsonNode.Parse(await File.ReadAllTextAsync(configPath))!["channel"]!.GetValue<string>());
     }
 
     [Fact]
@@ -2349,14 +2414,15 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         => $"https://feeds.test.invalid/{channelName}-fallback/v3/index.json";
 
     /// <summary>
-    /// Asserts that native NuGet evaluation routes Aspire packages exclusively to the selected channel.
+    /// Asserts that unmapped native restore can use both the channel and ambient feed.
     /// </summary>
     private static void AssertNuGetConfigHasChannelShape(string nugetConfigPath, string channelName)
     {
         var channelSource = SourceForChannel(channelName);
         var workingDirectory = Path.GetDirectoryName(nugetConfigPath)!;
-        Assert.Equal([channelSource], NuGetTestHelper.GetEligiblePackageSources(workingDirectory, "Aspire.AppHost.Sdk"));
-        Assert.Equal([channelSource], NuGetTestHelper.GetEligiblePackageSources(workingDirectory, "Aspire.Hosting.Redis"));
+        string[] expectedSources = ["https://api.nuget.org/v3/index.json", channelSource];
+        Assert.Equal(expectedSources, NuGetTestHelper.GetEligiblePackageSources(workingDirectory, "Aspire.AppHost.Sdk"));
+        Assert.Equal(expectedSources, NuGetTestHelper.GetEligiblePackageSources(workingDirectory, "Aspire.Hosting.Redis"));
     }
 
     private sealed class TestScaffoldingService : IScaffoldingService

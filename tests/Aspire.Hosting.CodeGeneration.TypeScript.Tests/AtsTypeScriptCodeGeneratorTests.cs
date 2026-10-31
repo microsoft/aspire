@@ -1363,7 +1363,6 @@ public class AtsTypeScriptCodeGeneratorTests
             c => c.CapabilityId == "Aspire.Hosting.Kubernetes/withPersistentVolumeName");
         Assert.Equal("withPersistentVolumeName", capability.MethodName);
         Assert.Equal("string", capability.Parameters.Single().Type?.TypeId);
-        Assert.DoesNotContain("withConfiguration", generatedCode);
 
         Assert.Contains(
             generatedCode.Split('\n'),
@@ -1379,6 +1378,70 @@ public class AtsTypeScriptCodeGeneratorTests
         Assert.Contains(
             generatedCode.Split('\n'),
             line => line.Contains("withoutStorageClass()", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Generate_KubernetesPersistentVolume_WithConfigurationExposesBoundedClaimModel()
+    {
+        var scanResult = AtsCapabilityScanner.ScanAssemblies(
+        [
+            typeof(DistributedApplication).Assembly,
+            typeof(global::Aspire.Hosting.Kubernetes.KubernetesPersistentVolumeResource).Assembly
+        ]);
+        var capability = Assert.Single(scanResult.Capabilities,
+            c => c.CapabilityId == "Aspire.Hosting.Kubernetes/withConfiguration");
+        var configure = Assert.Single(capability.Parameters);
+        Assert.False(configure.IsOptional);
+        Assert.NotNull(configure.CallbackParameters);
+        var claimParameter = Assert.Single(configure.CallbackParameters);
+        Assert.Equal(
+            AtsTypeMapping.DeriveTypeId(typeof(global::Aspire.Hosting.Kubernetes.Resources.PersistentVolumeClaim)),
+            claimParameter.Type?.TypeId);
+
+        AssertProperties<global::Aspire.Hosting.Kubernetes.Resources.PersistentVolumeClaim>(
+            ["metadata", "setMetadata", "setSpec", "spec"]);
+        AssertProperties<global::Aspire.Hosting.Kubernetes.Resources.ObjectMetaV1>(
+            ["annotations", "labels", "setLabels"]);
+        AssertProperties<global::Aspire.Hosting.Kubernetes.Resources.PersistentVolumeClaimSpecV1>(
+            ["accessModes", "resources", "setResources", "setStorageClassName", "setVolumeMode", "setVolumeName", "storageClassName", "volumeMode", "volumeName"]);
+        AssertProperties<global::Aspire.Hosting.Kubernetes.Resources.VolumeResourceRequirementsV1>(
+            ["requests"]);
+
+        var defaultSpec = new global::Aspire.Hosting.Kubernetes.Resources.PersistentVolumeClaimSpecV1();
+        Assert.Null(defaultSpec.VolumeMode);
+        Assert.Null(defaultSpec.VolumeName);
+        foreach (var setter in new[] { "setStorageClassName", "setVolumeMode", "setVolumeName" })
+        {
+            var propertySetter = Assert.Single(scanResult.Capabilities,
+                c => c.CapabilityId == $"Aspire.Hosting.Kubernetes.Resources/PersistentVolumeClaimSpecV1.{setter}");
+            Assert.True(Assert.Single(propertySetter.Parameters, p => p.Name == "value").Type?.IsNullable);
+        }
+
+        var generatedCode = _generator.GenerateDistributedApplication(scanResult.ToAtsContext())["aspire.mts"];
+        var volumeInterface = Regex.Match(generatedCode, @"^export interface KubernetesPersistentVolumeResource \{.*?^\}",
+            RegexOptions.Multiline | RegexOptions.Singleline);
+        var callback = Regex.Match(volumeInterface.Value, @"^\s+withConfiguration\(.*$", RegexOptions.Multiline);
+        Assert.True(callback.Success);
+        var declarations = new List<string> { callback.Value.Trim() };
+        foreach (var name in new[] { "PersistentVolumeClaim", "ObjectMetaV1", "PersistentVolumeClaimSpecV1", "VolumeResourceRequirementsV1" })
+        {
+            var match = Regex.Match(generatedCode, $@"^export interface {name} \{{.*?^\}}",
+                RegexOptions.Multiline | RegexOptions.Singleline);
+            Assert.True(match.Success, $"Missing generated interface for {name}.");
+            declarations.Add(match.Value);
+        }
+
+        await Verify(string.Join("\n\n", declarations), "ts");
+
+        void AssertProperties<T>(string[] expected)
+        {
+            var typeId = AtsTypeMapping.DeriveTypeId(typeof(T));
+            Assert.Equal(expected,
+                scanResult.Capabilities
+                    .Where(c => c.TargetTypeId == typeId)
+                    .Select(c => c.MethodName)
+                    .Order(StringComparer.Ordinal));
+        }
     }
 
     // ===== 2-Pass Scanning / Cross-Assembly Expansion Tests =====
@@ -2433,6 +2496,30 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     // ===== DTO Generation Tests =====
+
+    [Fact]
+    public async Task Generate_LegacyAddProject_RetainsDeprecatedBuilderMethod()
+    {
+        var context = AtsCapabilityScanner.ScanAssemblies(
+            [typeof(DistributedApplication).Assembly, typeof(DotnetProjectHostingExtensions).Assembly]).ToAtsContext();
+        var capability = Assert.Single(context.Capabilities, capability => capability.CapabilityId == "Aspire.Hosting/addProject");
+
+        Assert.True(capability.IsObsolete);
+        Assert.False(capability.IsExperimental);
+        Assert.Equal("Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.", capability.ObsoleteMessage);
+        Assert.Equal("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ProjectResource", capability.ReturnType.TypeId);
+        Assert.Equal(["name", "projectPath", "launchProfileOrOptions"], capability.Parameters.Select(parameter => parameter.Name));
+        Assert.True(capability.Parameters[^1].IsOptional);
+
+        var code = _generator.GenerateDistributedApplication(context)["aspire.mts"];
+        var lines = code.Split('\n');
+        var methodIndex = Array.FindIndex(lines, line => line.TrimStart().StartsWith("addProject(", StringComparison.Ordinal));
+        Assert.True(methodIndex >= 0);
+        var commentIndex = Array.FindLastIndex(lines, methodIndex, line => line.Trim() == "/**");
+        Assert.True(commentIndex >= 0);
+
+        await Verify(string.Join('\n', lines[commentIndex..(methodIndex + 1)]).Trim(), extension: "ts");
+    }
 
     [Fact]
     public async Task Generate_DotnetProjectOptions_UsesDtoWithoutChangingLegacyOptions()

@@ -1,0 +1,1194 @@
+﻿/* The summary is rendered inside the resource overview, which already pads and scrolls its content. Adding padding
+   here would indent the summary from the tabs above it, unlike a single resource's overview. */
+.home {
+    width: 100%;
+    container-type: inline-size;
+    outline: none;
+}
+
+.home.graph-view {
+    height: 100%;
+    min-height: 0;
+}
+
+.home-message {
+    display: flex;
+    justify-content: center;
+    padding: 48px 16px;
+}
+
+.overview-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.missing-parameters-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+    gap: 6px;
+    padding: 0 10px;
+    border: 1px solid var(--colorPaletteMarigoldBorderActive);
+    border-radius: var(--aspire-control-radius);
+    background: color-mix(in srgb, var(--warning) 10%, transparent);
+    color: var(--colorNeutralForeground1);
+    font-size: var(--fontSizeBase200);
+    font-weight: var(--fontWeightSemibold);
+    text-decoration: none;
+}
+
+.missing-parameters-link:hover {
+    background: color-mix(in srgb, var(--warning) 16%, transparent);
+}
+
+.missing-parameters-link {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+.missing-parameters-count {
+    display: none;
+}
+
+/* Condense to the key icon and the count when the header row is short on room, so the notice stays readable and the
+   title and layout switcher keep their space. */
+@container (max-width: 700px) {
+    .missing-parameters-label {
+        display: none;
+    }
+
+    .missing-parameters-count {
+        display: inline;
+        min-width: 1ch;
+        text-align: center;
+    }
+
+    .missing-parameters-link {
+        padding: 0 8px;
+    }
+}
+
+.resource-card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+    grid-auto-rows: 236px;
+    gap: 14px;
+}
+
+.resource-card-grid-spacious {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr));
+    grid-auto-rows: 268px;
+    gap: 18px;
+}
+
+.resource-card-grid-compact {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+    grid-auto-rows: 216px;
+    gap: 10px;
+}
+
+.resource-card {
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    min-width: 0;
+    height: 100%;
+    overflow: hidden;
+    border: 1px solid var(--colorNeutralStroke3);
+    border-radius: 12px;
+    background: var(--aspire-control-background);
+}
+
+.resource-card-clickable {
+    cursor: pointer;
+    transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.resource-card-clickable:hover:not(:has(.resource-card-footer:hover)) {
+    border-color: var(--colorNeutralStroke1);
+    background: light-dark(
+        var(--colorNeutralBackground1Hover),
+        color-mix(in srgb, var(--aspire-control-background) 88%, var(--colorNeutralForeground1)));
+}
+
+.resource-card-clickable:focus-visible {
+    outline: 2px solid var(--colorStrokeFocus2);
+    outline-offset: 2px;
+}
+
+.resource-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px 16px 12px;
+    border-bottom: 1px solid var(--colorNeutralStroke3);
+}
+
+.resource-card-title {
+    display: inline-flex;
+    flex: 1 1 auto;
+    min-width: 0;
+    align-items: center;
+    gap: 8px;
+    overflow: hidden;
+    color: var(--colorNeutralForeground1);
+    font-size: 15px;
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.resource-card-title ::deep .resource-name-container {
+    display: inline-flex;
+    width: 100%;
+    min-width: 0;
+    align-items: center;
+    gap: 8px;
+    overflow: hidden;
+}
+
+.resource-card-title ::deep .resource-icon {
+    flex: 0 0 auto;
+}
+
+.resource-card-title ::deep .resource-name-text {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.resource-card-type {
+    flex: 0 0 auto;
+    max-width: 45%;
+    overflow: hidden;
+    color: var(--colorNeutralForeground2);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.resource-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-width: 0;
+    padding: 14px 16px 18px;
+    overflow: hidden;
+}
+
+.resource-card-field {
+    display: grid;
+    gap: 5px;
+    min-width: 0;
+}
+
+.resource-card-label {
+    color: var(--colorNeutralForeground2);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.resource-card-value {
+    flex: 1 1 auto;
+}
+
+.resource-card-parameter .resource-card-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    gap: 16px;
+}
+
+.resource-card-source {
+    display: block;
+    overflow: hidden;
+    color: var(--colorNeutralForeground1);
+    line-height: 20px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.resource-card-unset-value {
+    flex: 0 0 auto;
+    color: var(--colorNeutralForeground2);
+    font-size: 12px;
+}
+
+.resource-card-footer {
+    display: flex;
+    min-height: 48px;
+    min-width: 0;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 12px;
+    padding: 7px 8px 7px 16px;
+    border-top: 1px solid var(--colorNeutralStroke1);
+    background: var(--colorNeutralBackground3);
+    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--colorNeutralForeground1) 5%, transparent);
+}
+
+.resource-card-primary-endpoint {
+    display: inline-flex;
+    flex: 0 0 28px;
+    min-width: 0;
+    width: 28px;
+    height: 28px;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    color: var(--colorBrandForegroundLink);
+    text-decoration: none;
+}
+
+.resource-card-start-time {
+    display: inline-flex;
+    min-width: 0;
+    align-items: center;
+    gap: 6px;
+    overflow: hidden;
+    color: var(--colorNeutralForeground2);
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.resource-card-primary-endpoint:hover {
+    color: var(--colorBrandForegroundLinkHover);
+    background: var(--colorNeutralBackground1Hover);
+}
+
+.resource-card-footer-actions {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 2px;
+    margin-left: auto;
+}
+
+.resource-card-footer-actions ::deep .resource-card-copy-value {
+    width: 28px;
+    min-width: 28px;
+    height: 32px;
+    padding-inline: 0;
+}
+
+.resource-card-grid-spacious .resource-card-header {
+    padding: 20px 20px 16px;
+}
+
+.resource-card-grid-spacious .resource-card-body {
+    gap: 18px;
+    padding: 18px 20px 22px;
+}
+
+.resource-card-grid-spacious .resource-card-footer {
+    min-height: 52px;
+    padding: 9px 12px 9px 20px;
+}
+
+.resource-card-grid-compact .resource-card-header {
+    padding: 10px 12px 8px;
+}
+
+.resource-card-grid-compact .resource-card-type {
+    display: none;
+}
+
+.resource-card-grid-compact .resource-card-body {
+    gap: 8px;
+    padding: 8px 12px 10px;
+}
+
+.resource-card-grid-compact .resource-card-parameter .resource-card-body {
+    gap: 10px;
+}
+
+.resource-card-grid-compact .resource-card-value ::deep .container {
+    align-items: start;
+}
+
+.resource-card-grid-compact .resource-card-footer {
+    min-height: 40px;
+    gap: 8px;
+    padding: 3px 6px 3px 12px;
+}
+
+@container (max-width: 520px) {
+    .resource-card-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.home-resource-graph-layout {
+    --resource-hidden-background: color-mix(in srgb, var(--colorNeutralBackground3) 50%, var(--aspire-page-background));
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+}
+
+.resource-graph-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+.resource-graph {
+    width: 100%;
+    height: 100%;
+}
+
+.resource-graph-controls {
+    position: absolute;
+    right: 24px;
+    bottom: 24px;
+    display: flex;
+    column-gap: 10px;
+}
+
+.resource-graph-controls fluent-button {
+    --aspire-button-background: var(--aspire-page-background);
+    --aspire-button-border-color: transparent;
+    border: var(--strokeWidthThin) solid var(--aspire-button-border-color);
+    background-color: var(--aspire-button-background);
+}
+
+.resource-graph-controls fluent-button:hover {
+    background-color: var(--colorNeutralBackground3);
+}
+
+.resource-graph-controls fluent-button:active,
+.resource-graph-controls fluent-button:hover:active {
+    background-color: var(--resource-graph-secondary-hover-background);
+}
+
+.resource-graph-controls fluent-button > svg {
+    width: 24px;
+    height: 24px;
+}
+
+::deep .resource-graph .texts,
+::deep .resource-graph .nodes {
+    cursor: pointer;
+}
+
+::deep .resource-name {
+    fill: var(--colorNeutralForeground1);
+    font-size: 15px;
+    text-anchor: middle;
+}
+
+::deep .resource-name > text {
+    stroke: var(--colorNeutralBackground1);
+    stroke-width: 4px;
+    paint-order: stroke;
+    stroke-linejoin: round;
+    text-decoration: none;
+}
+
+::deep .resource-name-hitbox,
+::deep .resource-hidden-icon-hitbox {
+    fill: transparent;
+    stroke: none;
+    pointer-events: all;
+}
+
+::deep .resource-node {
+    fill: var(--aspire-page-background);
+    stroke: var(--aspire-page-background);
+}
+
+::deep .resource-group-hover .resource-node {
+    fill: var(--resource-graph-hover-background) !important;
+}
+
+::deep .resource-group-selected .resource-scale {
+    transform: scale(1.2);
+}
+
+::deep .resource-group-selected .resource-node {
+    fill: var(--colorNeutralBackground3) !important;
+}
+
+::deep .resource-group-highlight .resource-node {
+    fill: url(#highlighted-pattern);
+}
+
+::deep .resource-node-border {
+    fill: transparent;
+    stroke: var(--colorNeutralStroke1);
+    stroke-width: 1;
+}
+
+::deep .resource-group-selected .resource-node-border,
+::deep .resource-group-highlight .resource-node-border,
+::deep .resource-group-hover .resource-node-border {
+    stroke: var(--aspire-button-hover-border);
+}
+
+::deep .resource-endpoint {
+    fill: var(--foreground-subtext-rest);
+    font-size: 11px;
+    text-anchor: middle;
+}
+
+::deep .resource-status-circle {
+    fill: var(--aspire-page-background);
+}
+
+::deep .resource-menu-cog {
+    opacity: 0;
+    pointer-events: none;
+    cursor: pointer;
+    transition: opacity .15s ease-in-out;
+}
+
+::deep .resource-group-hover .resource-menu-cog,
+::deep .resource-menu-cog:focus,
+::deep .resource-menu-cog[aria-expanded="true"] {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+@media (hover: none) {
+    ::deep .resource-menu-cog {
+        opacity: 1;
+        pointer-events: auto;
+    }
+}
+
+::deep .resource-menu-cog-background {
+    fill: var(--colorNeutralBackground1);
+    stroke: var(--colorNeutralStroke2);
+    stroke-width: var(--strokeWidthThin);
+}
+
+::deep .resource-menu-cog:hover .resource-menu-cog-background {
+    fill: var(--colorNeutralBackground3);
+    stroke: var(--colorNeutralStroke1Hover);
+}
+
+::deep .resource-menu-cog:focus-visible .resource-menu-cog-background {
+    stroke: var(--colorStrokeFocus1);
+    stroke-width: var(--strokeWidthThick);
+}
+
+::deep .resource-menu-cog[aria-expanded="true"] .resource-menu-cog-background {
+    fill: var(--colorBrandBackground2);
+    stroke: var(--colorBrandStroke1);
+    stroke-width: var(--strokeWidthThin);
+}
+
+::deep .resource-menu-cog[aria-expanded="true"],
+::deep .resource-menu-cog:active {
+    outline: none;
+}
+
+::deep .resource-menu-cog-icon {
+    fill: var(--colorBrandForeground1);
+    pointer-events: none;
+}
+
+::deep .resource-link {
+    stroke: var(--colorNeutralStroke1);
+    stroke-width: 1;
+    marker-end: url(#arrow-normal);
+}
+
+::deep .arrow-normal {
+    fill: var(--colorNeutralStroke1);
+}
+
+::deep .arrow-highlight,
+::deep .arrow-highlight-expand {
+    fill: var(--aspire-button-hover-border);
+}
+
+::deep .resource-link-highlight,
+::deep .resource-link-highlight-expand {
+    stroke: var(--aspire-button-hover-border);
+    stroke-dasharray: 5,5;
+    stroke-width: 2;
+}
+
+::deep .resource-link-highlight {
+    marker-end: url(#arrow-highlight);
+}
+
+::deep .resource-link-highlight-expand {
+    marker-end: url(#arrow-highlight-expand);
+}
+
+/* Shared state palette. Only swatches and icons use it, since status colors don't reach text contrast on every theme. */
+.state-success {
+    --home-state-color: var(--success);
+}
+
+.state-pending {
+    --home-state-color: var(--warning);
+}
+
+.state-warning {
+    --home-state-color: var(--warning);
+}
+
+.state-error {
+    --home-state-color: var(--error);
+}
+
+.state-neutral {
+    --home-state-color: var(--colorNeutralStroke1);
+}
+
+.home-hero {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-bottom: 14px;
+    padding: 18px 20px 16px;
+    overflow: hidden;
+    border: 1px solid var(--colorNeutralStroke3);
+    border-radius: 12px;
+    background:
+        linear-gradient(100deg, color-mix(in srgb, var(--home-state-color) 12%, transparent) 0%, transparent 55%),
+        var(--aspire-control-background);
+}
+
+.home-hero-main {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.home-hero-icon {
+    display: inline-flex;
+    flex: 0 0 44px;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--home-state-color) 16%, transparent);
+}
+
+.home-hero-text {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.home-hero-headline {
+    margin: 0;
+    font-family: var(--aspire-font-display);
+    font-size: 20px;
+    font-weight: 600;
+    /* Headings inherit a 40px line height from the global styles. */
+    line-height: 26px;
+}
+
+.home-hero-sub {
+    color: var(--colorNeutralForeground2);
+    font-size: 12.5px;
+}
+
+.home-health-bar {
+    display: flex;
+    gap: 2px;
+    height: 8px;
+    overflow: hidden;
+    border-radius: 4px;
+    background: var(--colorNeutralBackground3);
+}
+
+.home-health-segment {
+    min-width: 6px;
+    height: 100%;
+    background: var(--home-state-color);
+}
+
+.home-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 20px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    color: var(--colorNeutralForeground2);
+    font-size: 12.5px;
+}
+
+.home-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.home-legend-swatch {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--home-state-color);
+}
+
+.home-legend-value {
+    color: var(--colorNeutralForeground1);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.home-activity {
+    margin-bottom: 14px;
+    padding: 14px 16px 12px;
+    border: 1px solid var(--colorNeutralStroke3);
+    border-radius: 12px;
+    background: var(--aspire-control-background);
+}
+
+.home-activity-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 16px;
+    margin-bottom: 12px;
+}
+
+.home-activity-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.home-activity-title h2 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 20px;
+}
+
+.home-activity-window {
+    color: var(--colorNeutralForeground2);
+    font-size: 12px;
+}
+
+/* Pulsing dot signals the chart updates live. */
+.home-live-dot {
+    position: relative;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--success);
+}
+
+.home-live-dot::after {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: var(--success);
+    content: "";
+    animation: home-live-pulse 2s ease-out infinite;
+}
+
+@keyframes home-live-pulse {
+    0% {
+        opacity: 0.6;
+        transform: scale(1);
+    }
+
+    100% {
+        opacity: 0;
+        transform: scale(2.8);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .home-live-dot::after {
+        animation: none;
+    }
+}
+
+.home-activity-totals {
+    display: flex;
+    gap: 16px;
+    font-size: 12px;
+}
+
+.home-activity-totals a {
+    color: var(--colorNeutralForeground2);
+    text-decoration: none;
+}
+
+.home-activity-totals a:hover {
+    color: var(--colorNeutralForeground1);
+    text-decoration: underline;
+}
+
+.home-activity-totals strong {
+    color: var(--colorNeutralForeground1);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.home-activity-body {
+    display: grid;
+    grid-template-columns: 170px minmax(0, 1fr);
+    gap: 20px;
+    align-items: stretch;
+}
+
+.home-activity-stats {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.home-stat {
+    display: flex;
+    flex-direction: column;
+}
+
+.home-stat-value {
+    font-family: var(--aspire-font-display);
+    font-size: 24px;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+}
+
+.home-stat-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--colorNeutralForeground2);
+    font-size: 11.5px;
+}
+
+.home-stat.error .home-stat-label::before {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--error);
+    content: "";
+}
+
+.home-chart {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.home-chart-svg {
+    width: 100%;
+    height: 150px;
+    overflow: visible;
+}
+
+.home-chart-grid {
+    stroke: var(--colorNeutralStroke3);
+    stroke-dasharray: 3 3;
+    vector-effect: non-scaling-stroke;
+}
+
+.home-chart-baseline {
+    stroke: var(--colorNeutralStroke2);
+    vector-effect: non-scaling-stroke;
+}
+
+.home-chart-bar rect.ok {
+    fill: var(--colorBrandBackground);
+    opacity: 0.75;
+}
+
+.home-chart-bar rect.error {
+    fill: var(--error);
+}
+
+/* The current bucket is still filling, so render it lighter. */
+.home-chart-bar.current rect {
+    opacity: 0.45;
+}
+
+.home-chart-bar:hover rect {
+    opacity: 1;
+}
+
+.home-chart-max {
+    position: absolute;
+    top: -4px;
+    left: 4px;
+    color: var(--colorNeutralForeground3);
+    font-size: 10.5px;
+    font-variant-numeric: tabular-nums;
+}
+
+.home-chart-empty {
+    position: absolute;
+    inset: 0 0 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--colorNeutralForeground2);
+    font-size: 12.5px;
+}
+
+.home-chart-axis {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 4px;
+    color: var(--colorNeutralForeground3);
+    font-size: 11px;
+}
+
+.home-insights {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    margin-bottom: 14px;
+}
+
+.home-insight {
+    min-width: 0;
+    padding: 14px 16px;
+    border: 1px solid var(--colorNeutralStroke3);
+    border-radius: 12px;
+    background: var(--aspire-control-background);
+}
+
+.home-insight-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.home-insight-header h2 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 20px;
+}
+
+.home-insight-hint {
+    margin-inline-start: auto;
+    color: var(--colorNeutralForeground3);
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+.card-header-icon.slow {
+    background: color-mix(in srgb, var(--warning) 18%, transparent);
+    color: var(--warning);
+}
+
+.card-header-icon.hot {
+    background: color-mix(in srgb, var(--error) 18%, transparent);
+    color: var(--error);
+}
+
+.home-insight-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.home-insight-list li + li {
+    border-top: 1px solid var(--colorNeutralStroke3);
+}
+
+.home-insight-list a {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 7px 0;
+    color: var(--colorNeutralForeground1);
+    text-decoration: none;
+}
+
+.home-insight-list a:hover .home-insight-name {
+    text-decoration: underline;
+}
+
+.home-insight-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    min-width: 0;
+}
+
+.home-insight-name {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    overflow: hidden;
+    font-size: 12.5px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.home-insight-value {
+    flex: 0 0 auto;
+    font-size: 12.5px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.home-insight-meter {
+    height: 4px;
+    overflow: hidden;
+    border-radius: 2px;
+    background: var(--colorNeutralBackground3);
+}
+
+.home-insight-meter span {
+    display: block;
+    min-width: 3px;
+    height: 100%;
+    border-radius: 2px;
+}
+
+.home-insight-meter .slow {
+    background: var(--warning);
+}
+
+.home-insight-meter .hot {
+    background: var(--error);
+}
+
+.home-insight-meter .busy {
+    background: var(--colorBrandBackground);
+}
+
+@container (max-width: 700px) {
+    .home-activity-body {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .home-activity-stats {
+        flex-direction: row;
+        gap: 24px;
+    }
+}
+
+@container (max-width: 900px) {
+    .home-insights {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+.home-section {
+    min-width: 0;
+    padding: 14px 16px;
+    border: 1px solid var(--colorNeutralStroke3);
+    border-radius: 12px;
+    background: var(--aspire-control-background);
+}
+
+.home-section-header {
+    display: flex;
+    min-height: 20px;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.home-section-header h2 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    /* Headings inherit a 40px line height from the global styles, which is too tall for a card header. */
+    line-height: 20px;
+}
+
+.home-section-count {
+    padding: 0 7px;
+    border-radius: 9px;
+    background: var(--colorNeutralBackground3);
+    color: var(--colorNeutralForeground2);
+    font-size: 11.5px;
+    line-height: 18px;
+    font-variant-numeric: tabular-nums;
+}
+
+.home-section-link {
+    margin-inline-start: auto;
+    color: var(--colorBrandForegroundLink);
+    font-size: 12.5px;
+    text-decoration: none;
+}
+
+.home-section-link:hover {
+    text-decoration: underline;
+}
+
+.home-empty {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 40px;
+    color: var(--colorNeutralForeground2);
+    font-size: 12.5px;
+}
+
+.home-error-badge {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 9px;
+    background: var(--error);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.home-event-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.home-event-list li {
+    border-top: 1px solid var(--colorNeutralStroke3);
+}
+
+.home-event-list li:first-child {
+    border-top: 0;
+}
+
+.home-event-list a {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 7px 0;
+    color: var(--colorNeutralForeground1);
+    text-decoration: none;
+}
+
+.home-event-list a:hover .home-event-title {
+    text-decoration: underline;
+}
+
+.home-event-title {
+    overflow: hidden;
+    font-size: 12.5px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.home-event-meta {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+    color: var(--colorNeutralForeground2);
+    font-size: 11.5px;
+    white-space: nowrap;
+}
+
+.home-event-resource {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.home-resource-dot {
+    flex: 0 0 auto;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+}
+
+/* The recent problems, side by side. */
+.home-problems {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+    align-items: start;
+}
+
+@container (max-width: 700px) {
+    .home-problems {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+.home-table-resource:focus-visible {
+    outline: 2px solid var(--colorStrokeFocus2);
+    outline-offset: 1px;
+    border-radius: 2px;
+}
+
+.home-table-resource {
+    display: inline-flex;
+    min-width: 0;
+    align-items: center;
+    gap: 6px;
+    color: var(--colorNeutralForeground1);
+    font-size: 13px;
+    text-decoration: none;
+}
+
+/* Table of the summarized resources with their state, endpoints and actions. */
+.home-resource-table {
+    overflow-x: auto;
+}
+
+.home-resource-table table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.home-resource-table th {
+    padding: 0 10px 6px;
+    color: var(--colorNeutralForeground3);
+    font-size: 11.5px;
+    font-weight: 600;
+    text-align: start;
+    white-space: nowrap;
+}
+
+.home-resource-table td {
+    padding: 6px 10px;
+    border-top: 1px solid var(--colorNeutralStroke3);
+    vertical-align: middle;
+}
+
+.home-resource-table th:first-child,
+.home-resource-table td:first-child {
+    padding-inline-start: 0;
+}
+
+.home-resource-table th:last-child,
+.home-resource-table td:last-child {
+    width: 1%;
+    padding-inline-end: 0;
+}
+
+.home-resource-table tbody tr:hover td {
+    background: var(--datagrid-hover-color);
+}
+
+.home-table-type {
+    color: var(--colorNeutralForeground3);
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+
+/* Names stay on one line next to their icon, like in the resources grid. */
+.home-resource-table td:first-child {
+    white-space: nowrap;
+}

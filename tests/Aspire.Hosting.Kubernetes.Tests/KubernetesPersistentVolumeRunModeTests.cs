@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource Kubernetes projection alongside executable/V2 deployment coverage.
 #pragma warning disable ASPIRECOMPUTE002
 
 using System.Runtime.CompilerServices;
@@ -13,15 +14,20 @@ namespace Aspire.Hosting.Kubernetes.Tests;
 
 public class KubernetesPersistentVolumeRunModeTests
 {
-    [Fact]
-    public async Task ProjectAndExecutableUseSharedAspireStoreDirectory()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ProjectAndExecutableUseSharedAspireStoreDirectory(bool useDotnetProject)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
         var kubernetes = builder.AddKubernetesEnvironment("env");
         var volume = kubernetes.AddPersistentVolume("data");
 
-        var project = builder.AddProject<Projects.ServiceA>("project", launchProfileName: null)
-            .WithPersistentVolume(volume, "/srv/data", env: "DATA_PATH");
+        IResourceBuilder<IResourceWithEnvironment> project = useDotnetProject
+            ? builder.AddDotnetProject("project", new Projects.ServiceA().ProjectPath, options => options.ExcludeLaunchProfile = true)
+                .WithPersistentVolume(volume, "/srv/data", env: "DATA_PATH")
+            : builder.AddProject<Projects.ServiceA>("project", launchProfileName: null)
+                .WithPersistentVolume(volume, "/srv/data", env: "DATA_PATH");
         var executable = builder.AddExecutable("executable", "test-command", ".")
             .WithPersistentVolume(volume, "/srv/data", env: "DATA_PATH");
 
@@ -502,3 +508,4 @@ public class KubernetesPersistentVolumeRunModeTests
 
     private sealed class TestComputeResource(string name) : Resource(name), IComputeResource, IResourceWithEnvironment;
 }
+#pragma warning restore CS0618

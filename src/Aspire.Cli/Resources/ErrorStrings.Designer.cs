@@ -61,51 +61,6 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Git could not be started. Install Git and ensure it is on PATH..
-        /// </summary>
-        internal static string GitUnavailable {
-            get {
-                return ResourceManager.GetString("GitUnavailable", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Git authentication failed. Configure Git credentials or SSH authentication before running this command; terminal credential prompts are disabled..
-        /// </summary>
-        internal static string GitAuthenticationFailed {
-            get {
-                return ResourceManager.GetString("GitAuthenticationFailed", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to The Git repository could not be accessed. Check its address, network connectivity, and your access permissions..
-        /// </summary>
-        internal static string GitRepositoryUnavailable {
-            get {
-                return ResourceManager.GetString("GitRepositoryUnavailable", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to The Git command failed. Check the repository and selected reference..
-        /// </summary>
-        internal static string GitCommandFailed {
-            get {
-                return ResourceManager.GetString("GitCommandFailed", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to The Git operation timed out after two minutes..
-        /// </summary>
-        internal static string GitTimedOut {
-            get {
-                return ResourceManager.GetString("GitTimedOut", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to Already connected to AppHost backchannel..
         /// </summary>
         internal static string AlreadyConnectedToBackchannel {
@@ -403,6 +358,51 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Git authentication failed. Configure Git credentials or SSH authentication before running this command; terminal credential prompts are disabled..
+        /// </summary>
+        internal static string GitAuthenticationFailed {
+            get {
+                return ResourceManager.GetString("GitAuthenticationFailed", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The Git command failed. Check the repository and selected reference..
+        /// </summary>
+        internal static string GitCommandFailed {
+            get {
+                return ResourceManager.GetString("GitCommandFailed", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The Git repository could not be accessed. Check its address, network connectivity, and your access permissions..
+        /// </summary>
+        internal static string GitRepositoryUnavailable {
+            get {
+                return ResourceManager.GetString("GitRepositoryUnavailable", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The Git operation timed out after two minutes..
+        /// </summary>
+        internal static string GitTimedOut {
+            get {
+                return ResourceManager.GetString("GitTimedOut", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Git could not be started. Install Git and ensure it is on PATH..
+        /// </summary>
+        internal static string GitUnavailable {
+            get {
+                return ResourceManager.GetString("GitUnavailable", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to The AppHost path cannot be set in global settings. Use &apos;appHost.path&apos; in a local aspire.config.json file instead..
         /// </summary>
         internal static string GlobalAppHostPathCannotBeSetWithConfigCommand {
@@ -423,7 +423,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Hosting integrations authored outside .NET are experimental and disabled by default. Run &apos;aspire config set features.experimentalHostingIntegrations true&apos; to enable them..
         /// </summary>
-        public static string HostingIntegrationsFeatureNotEnabled {
+        internal static string HostingIntegrationsFeatureNotEnabled {
             get {
                 return ResourceManager.GetString("HostingIntegrationsFeatureNotEnabled", resourceCulture);
             }

@@ -220,8 +220,8 @@
 
                         <FluentButton Id="@_copyButtonId"
                                       Class="message-copy-button"
-                                      Title="@copyButtonLabel"
-                                      AdditionalAttributes="@copyButtonAttributes">
+                                      data-tooltip="@copyButtonLabel"
+                                      @attributes="@copyButtonAttributes">
                             <span slot="start">
                                 <FluentIcon Class="copy-icon" Style="display:inline; vertical-align: text-bottom" Icon="Icons.Regular.Size16.Copy" Slot="start" Color="Color.Primary" />
                                 <FluentIcon Class="checkmark-icon" Style="display:none; vertical-align: text-bottom" Icon="Icons.Regular.Size16.Checkmark" Slot="start" Color="Color.Primary" />
@@ -255,7 +255,7 @@
                                 }
                                 <div class="message-header-details">
                                     <span>@Loc[nameof(Dialogs.GenAIDurationLabel)] <strong>@DurationFormatter.FormatDuration(Content.Span.Duration, CultureInfo.CurrentCulture)</strong></span>
-                                    <span title="@tokenTooltip">@Loc[nameof(Dialogs.GenAITokensLabel)] <strong>@tokenText</strong></span>
+                                    <span data-tooltip="@tokenTooltip">@Loc[nameof(Dialogs.GenAITokensLabel)] <strong>@tokenText</strong></span>
                                 </div>
                             </div>
                             @*
@@ -340,9 +340,9 @@
                                     <FluentAccordion Class="tools-list">
                                         @foreach (var toolVM in Content.ToolDefinitions.Where(t => t.ToolDefinition.Type == "function").OrderBy(t => t.ToolDefinition.Name, StringComparer.OrdinalIgnoreCase))
                                         {
-                                            <FluentAccordionItem Id="@toolVM.ElementId" Class="@(toolVM.Highlighted ? "tool-highlighted" : null)" @bind-Expanded="toolVM.Expanded" HeadingTooltip="@GetToolHeadingTooltip(toolVM)">
+                                            <FluentAccordionItem Id="@toolVM.ElementId" Class="@(toolVM.Highlighted ? "tool-highlighted" : null)" @bind-Expanded="toolVM.Expanded">
                                                 <HeaderTemplate>
-                                                    <div class="tool-heading">
+                                                    <div class="tool-heading" data-tooltip="@GetToolHeadingTooltip(toolVM)">
                                                         <FluentBadge Appearance="BadgeAppearance.Filled" Style="min-width: 80px; text-align: center;">
                                                             @toolVM.ToolDefinition.Type
                                                         </FluentBadge>

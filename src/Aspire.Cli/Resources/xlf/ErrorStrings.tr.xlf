@@ -4,22 +4,22 @@
     <body>
       <trans-unit id="AlreadyConnectedToBackchannel">
         <source>Already connected to AppHost backchannel.</source>
-        <target state="needs-review-translation">AppHost arka kanala zaten bağlı.</target>
+        <target state="translated">AppHost arka kanala zaten bağlı.</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostIncompatibleWithCli">
         <source>AppHost is incompatible with the CLI. The AppHost must be updated to a version that supports the {0} capability.</source>
-        <target state="needs-review-translation">AppHost, CLI ile uyumsuzdur. AppHost, bu {0} yeteneğini destekleyen bir sürüme güncelleştirilmelidir.</target>
+        <target state="translated">AppHost, CLI ile uyumsuzdur. AppHost, bu {0} yeteneğini destekleyen bir sürüme güncelleştirilmelidir.</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostWasSpecifiedButDoesntExist">
         <source>AppHost file was specified in '{0}' but it does not exist at '{1}'.</source>
-        <target state="needs-review-translation">AppHost dosyası '{0}' dosyasında belirtilmiş ancak '{1}' konumunda mevcut değil.</target>
+        <target state="translated">AppHost dosyası '{0}' dosyasında belirtilmiş ancak '{1}' konumunda mevcut değil.</target>
         <note>{0} is a path</note>
       </trans-unit>
       <trans-unit id="AppHostsMayNotBeBuildable">
         <source>No buildable AppHosts were found, but there may have been unbuildable AppHosts.</source>
-        <target state="needs-review-translation">Derlenebilir uygulama ana işlemleri bulunamadı, ancak derlenemeyen uygulama ana işlemleri olabilir.</target>
+        <target state="translated">Derlenebilir AppHost bulunamadı ancak derlenemeyen AppHost’lar olabilir.</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireHostingVersionNull">
@@ -39,7 +39,7 @@
       </trans-unit>
       <trans-unit id="CertificateGenerationFailed">
         <source>Failed to generate HTTPS development certificate (result: {0}).</source>
-        <target state="new">Failed to generate HTTPS development certificate (result: {0}).</target>
+        <target state="translated">HTTPS geliştirme sertifikası oluşturulamadı (sonuç: {0}).</target>
         <note />
       </trans-unit>
       <trans-unit id="CertificatesMayNotBeFullyTrusted">
@@ -49,42 +49,42 @@
       </trans-unit>
       <trans-unit id="CertificatesNotTrustedNonInteractive">
         <source>Developer certificates are not trusted. Trust them interactively by running 'aspire certs trust'.</source>
-        <target state="new">Developer certificates are not trusted. Trust them interactively by running 'aspire certs trust'.</target>
+        <target state="translated">Geliştirici sertifikalarına güvenilmiyor. 'aspire certs trust' komutunu çalıştırarak sertifikalara etkileşimli olarak güvenin.</target>
         <note />
       </trans-unit>
       <trans-unit id="CertificatesPartiallyTrustedNonInteractive">
         <source>Developer certificates are only partially trusted. Trust them interactively by running 'aspire certs trust'.</source>
-        <target state="new">Developer certificates are only partially trusted. Trust them interactively by running 'aspire certs trust'.</target>
+        <target state="translated">Geliştirici sertifikaları yalnızca kısmen güveniliyor. 'aspire certs trust' komutunu çalıştırarak sertifikalara etkileşimli olarak güvenin.</target>
         <note />
       </trans-unit>
       <trans-unit id="CodegenDebugHeader">
         <source>Diagnostic details:</source>
-        <target state="new">Diagnostic details:</target>
+        <target state="translated">Tanılama ayrıntıları:</target>
         <note />
       </trans-unit>
       <trans-unit id="CodegenDebugHint">
         <source>Run with '--debug' for full diagnostic details.</source>
-        <target state="new">Run with '--debug' for full diagnostic details.</target>
+        <target state="translated">Tam tanılama ayrıntılarını görmek için '--debug' ile çalıştırın.</target>
         <note />
       </trans-unit>
       <trans-unit id="CodegenIncompatibleSdkSummary">
         <source>{0} SDK code generation failed because the installed Aspire CLI appears to be incompatible with the configured Aspire SDK. Run 'aspire update' to align the CLI and SDK and try again.</source>
-        <target state="new">{0} SDK code generation failed because the installed Aspire CLI appears to be incompatible with the configured Aspire SDK. Run 'aspire update' to align the CLI and SDK and try again.</target>
+        <target state="translated">Yüklü Aspire CLI yapılandırılmış Aspire SDK ile uyumsuz göründüğünden {0} SDK kodu oluşturma işlemi başarısız oldu. CLI ve SDK’yı uyumlu hale getirmek için 'aspire update' komutunu çalıştırın ve tekrar deneyin.</target>
         <note>{0} is the AppHost language display name, e.g. 'TypeScript (Node.js)'.</note>
       </trans-unit>
       <trans-unit id="CodegenVersionSkewWarning">
         <source>The installed Aspire CLI version ({0}) differs from the Aspire SDK version ({1}) used for code generation. If you run into errors, update the Aspire CLI to match or exceed the SDK version.</source>
-        <target state="new">The installed Aspire CLI version ({0}) differs from the Aspire SDK version ({1}) used for code generation. If you run into errors, update the Aspire CLI to match or exceed the SDK version.</target>
+        <target state="translated">Yüklü Aspire CLI sürümü ({0}), kod oluşturma için kullanılan Aspire SDK sürümünden ({1}) farklı. Hatayla karşılaşırsanız, Aspire CLI’yi SDK sürümüyle aynı veya daha yüksek bir sürüme güncelleştirin.</target>
         <note>{0} is the CLI version, {1} is the SDK version used for code generation, including the target version during aspire update.</note>
       </trans-unit>
       <trans-unit id="CommandNotSupportedWithSingleFileAppHost">
         <source>This command is not yet supported with single file AppHosts.</source>
-        <target state="needs-review-translation">Bu komut, tek dosya Uygulama Ana İşlemlerinde henüz desteklenmemektedir.</target>
+        <target state="translated">Bu komut, tek dosya Uygulama Ana İşlemlerinde henüz desteklenmemektedir.</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigurationFileMustBeJsonObject">
         <source>The configuration file '{0}' must contain a JSON object.</source>
-        <target state="new">The configuration file '{0}' must contain a JSON object.</target>
+        <target state="translated">Yapılandırma dosyası '{0}' bir JSON nesnesi içermelidir.</target>
         <note>{0} is the configuration file path that the user authored.</note>
       </trans-unit>
       <trans-unit id="ConfigurationKeyNotFound">
@@ -104,12 +104,12 @@
       </trans-unit>
       <trans-unit id="ConfiguredAppHostPathHasInvalidCharacters">
         <source>The configured AppHost path in '{0}' ('{1}') is empty or contains characters that are not allowed in a file path.</source>
-        <target state="new">The configured AppHost path in '{0}' ('{1}') is empty or contains characters that are not allowed in a file path.</target>
+        <target state="translated">'{0}' ('{1}') içinde yapılandırılan AppHost yolu boş veya dosya yolunda izin verilmeyen karakterler içeriyor.</target>
         <note>{0} is the configuration file path that the user authored, {1} is the field/setting name within that file (for example "appHost.path" or "appHostPath")</note>
       </trans-unit>
       <trans-unit id="ConfiguredAppHostPathMustBeString">
         <source>The configured AppHost path in '{0}' ('{1}') must be a JSON string.</source>
-        <target state="new">The configured AppHost path in '{0}' ('{1}') must be a JSON string.</target>
+        <target state="translated">'{0}' ('{1}') içinde yapılandırılan AppHost yolu bir JSON dizesi olmalıdır.</target>
         <note>{0} is the configuration file path that the user authored, {1} is the field/setting name within that file (for example "appHost.path" or "appHostPath")</note>
       </trans-unit>
       <trans-unit id="CouldNotParseAspireSDKVersion">
@@ -119,7 +119,7 @@
       </trans-unit>
       <trans-unit id="DotNetSdkUnavailableAppHostDiscoveryWarning">
         <source>Warning: Required .NET SDK not found; .NET AppHost projects may be missing from results.</source>
-        <target state="new">Warning: Required .NET SDK not found; .NET AppHost projects may be missing from results.</target>
+        <target state="translated">Uyarı: Gerekli .NET SDK’sı bulunamadı; .NET AppHost projeleri sonuçlarda eksik olabilir.</target>
         <note />
       </trans-unit>
       <trans-unit id="ErrorDeletingConfiguration">
@@ -144,7 +144,7 @@
       </trans-unit>
       <trans-unit id="FailedToParsePackageSearchResults">
         <source>Failed to parse package search results.</source>
-        <target state="new">Failed to parse package search results.</target>
+        <target state="translated">Paket arama sonuçları ayrıştırılamadı.</target>
         <note />
       </trans-unit>
       <trans-unit id="FailedToParseTemplateVersionFromStdout">
@@ -194,32 +194,32 @@
       </trans-unit>
       <trans-unit id="GlobalAppHostPathCannotBeSetWithConfigCommand">
         <source>The AppHost path cannot be set in global settings. Use 'appHost.path' in a local aspire.config.json file instead.</source>
-        <target state="new">The AppHost path cannot be set in global settings. Use 'appHost.path' in a local aspire.config.json file instead.</target>
+        <target state="translated">AppHost yolu genel ayarlarda ayarlanamaz. Bunun yerine yerel aspire.config.json dosyasında 'appHost.path' komutunu kullanın.</target>
         <note />
       </trans-unit>
       <trans-unit id="GlobalAppHostPathIgnored">
         <source>Global settings file '{0}' contains '{1}', which is not supported. AppHost paths must be configured locally.</source>
-        <target state="new">Global settings file '{0}' contains '{1}', which is not supported. AppHost paths must be configured locally.</target>
+        <target state="translated">Genel ayarlar dosyası '{0}' desteklenmeyen '{1}' içeriyor. AppHost yolları yerel olarak yapılandırılmalıdır.</target>
         <note>{0} is the global settings file path, {1} is the configured key such as appHost.path or appHostPath.</note>
       </trans-unit>
       <trans-unit id="HostingIntegrationsFeatureNotEnabled">
         <source>Hosting integrations authored outside .NET are experimental and disabled by default. Run 'aspire config set features.experimentalHostingIntegrations true' to enable them.</source>
-        <target state="new">Hosting integrations authored outside .NET are experimental and disabled by default. Run 'aspire config set features.experimentalHostingIntegrations true' to enable them.</target>
+        <target state="translated">.NET dışında oluşturulan barındırma tümleştirmeleri deneyseldir ve varsayılan olarak devre dışıdır. Bunları etkinleştirmek için 'aspire config set features.experimentalHostingIntegrations true' komutunu çalıştırın.</target>
         <note />
       </trans-unit>
       <trans-unit id="IntegrationBuildFailed">
         <source>The integration project could not be built.</source>
-        <target state="new">The integration project could not be built.</target>
+        <target state="translated">Tümleştirme projesi oluşturulamadı.</target>
         <note />
       </trans-unit>
       <trans-unit id="IntegrationBuildPackageDowngradeFailed">
         <source>The integration project could not be built because a referenced project requires a newer version of Aspire.Hosting than this Aspire CLI ({0}) provides. The AppHost server is the CLI itself, so project references in aspire.config.json must target the same version the CLI ships. Either use an Aspire CLI that matches the referenced projects, or reference published packages instead of local projects.</source>
-        <target state="new">The integration project could not be built because a referenced project requires a newer version of Aspire.Hosting than this Aspire CLI ({0}) provides. The AppHost server is the CLI itself, so project references in aspire.config.json must target the same version the CLI ships. Either use an Aspire CLI that matches the referenced projects, or reference published packages instead of local projects.</target>
+        <target state="translated">Başvurulan bir proje bu Aspire CLI’nin ({0}) sunduğundan daha yeni bir Aspire.Hosting sürümü gerektirdiğinden tümleştirme projesi oluşturulamadı. AppHost sunucusu CLI’nin kendisi olduğundan aspire.config.json dosyasındaki proje başvurularının CLI’nin sunduğuyla aynı sürümü hedeflemesi gerekir. Başvurulan projelerle eşleşen bir Aspire CLI kullanın veya yerel projeler yerine yayımlanmış paketlere başvurun.</target>
         <note>{0} is the version of the running Aspire CLI, for example "13.5.0".</note>
       </trans-unit>
       <trans-unit id="InvalidJsonInConfigFile">
         <source>The configuration file '{0}' contains invalid JSON: {1}</source>
-        <target state="new">The configuration file '{0}' contains invalid JSON: {1}</target>
+        <target state="translated">'{0}' yapılandırma dosyası geçersiz JSON içeriyor: {1}</target>
         <note>{0} is the file path, {1} is the exception message</note>
       </trans-unit>
       <trans-unit id="InvalidLocaleProvided">
@@ -234,17 +234,17 @@
       </trans-unit>
       <trans-unit id="LegacyAppHostPathCannotBeSetWithConfigCommand">
         <source>The legacy AppHost path key 'appHostPath' cannot be set with 'aspire config set'. Use 'appHost.path' in a local aspire.config.json file instead.</source>
-        <target state="new">The legacy AppHost path key 'appHostPath' cannot be set with 'aspire config set'. Use 'appHost.path' in a local aspire.config.json file instead.</target>
+        <target state="translated">Eski AppHost yol anahtarı olan 'appHostPath', 'aspire config set' ile ayarlanamaz. Bunun yerine yerel aspire.config.json dosyasında 'appHost.path' komutunu kullanın.</target>
         <note />
       </trans-unit>
       <trans-unit id="LegacyTypeScriptAppHostWarning">
         <source>This project uses the legacy 'apphost.ts' layout. Run 'aspire update --migrate' to upgrade to the recommended 'apphost.mts' format. The legacy layout continues to work — this is a non-blocking warning.</source>
-        <target state="new">This project uses the legacy 'apphost.ts' layout. Run 'aspire update --migrate' to upgrade to the recommended 'apphost.mts' format. The legacy layout continues to work — this is a non-blocking warning.</target>
+        <target state="translated">Bu proje eski 'apphost.ts' düzenini kullanıyor. Önerilen 'apphost.mts' biçimine yükseltmek için 'aspire update --migrate' komutunu çalıştırın. Eski düzen çalışmaya devam eder; bu engelleyici olmayan bir uyarıdır.</target>
         <note />
       </trans-unit>
       <trans-unit id="MinimumSdkVersionNotMet">
         <source>C# AppHost requires .NET SDK version {0} or later. Detected: {1}.</source>
-        <target state="needs-review-translation">Aspire CLI için .NET SDK sürümünün {0} veya daha yeni olması gerekiyor. Algılanan: {1}.</target>
+        <target state="translated">C# AppHost, .NET SDK sürüm {0} veya üstünü gerektirir. Algılanan: {1}.</target>
         <note />
       </trans-unit>
       <trans-unit id="MultipleProjectFilesFound">
@@ -279,37 +279,37 @@
       </trans-unit>
       <trans-unit id="ProjectFileNotAppHostProject">
         <source>Project file is not an Aspire AppHost project.</source>
-        <target state="needs-review-translation">Proje dosyası bir Aspire AppHost projesi değil.</target>
+        <target state="translated">Proje dosyası bir Aspire AppHost projesi değil.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectFileUnsupportedInCurrentEnvironment">
         <source>Project is not supported in the current environment: {0}</source>
-        <target state="new">Project is not supported in the current environment: {0}</target>
+        <target state="translated">Proje geçerli ortamda desteklenmiyor: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectFilesCreatedButNodeToolsNotFound">
         <source>Project files were created, but Aspire could not run '{0}' automatically because the required JavaScript tooling was not found on PATH. You may see missing package errors or red squiggles in your IDE until you install {1} and run '{0}' in the project directory.</source>
-        <target state="new">Project files were created, but Aspire could not run '{0}' automatically because the required JavaScript tooling was not found on PATH. You may see missing package errors or red squiggles in your IDE until you install {1} and run '{0}' in the project directory.</target>
+        <target state="translated">Proje dosyaları oluşturuldu ancak gerekli JavaScript araçları PATH üzerinde bulunamadığından Aspire, '{0}' komutunu otomatik olarak çalıştıramadı. {1} yükleyip proje dizininde '{0}' komutunu çalıştırana kadar IDE’nizde eksik paket hataları veya kırmızı dalgalı çizgiler görebilirsiniz.</target>
         <note>{0} is the install command, such as 'npm install', 'bun install', 'yarn install', or 'pnpm install'. {1} is the toolchain display name, such as 'Node.js', 'Bun', 'Yarn', or 'pnpm'. Do not translate 'PATH'.</note>
       </trans-unit>
       <trans-unit id="ProjectIsNotAppHost">
         <source>The project does not contain an Aspire AppHost.</source>
-        <target state="needs-review-translation">Proje bir Aspire AppHost içermiyor.</target>
+        <target state="translated">Proje bir Aspire AppHost içermiyor.</target>
         <note />
       </trans-unit>
       <trans-unit id="SdkExportGeneratorPackageNotExportable">
         <source>SDK API export cannot export {0} because that package supplies the selected language's code generator instead of an integration API surface.</source>
-        <target state="new">SDK API export cannot export {0} because that package supplies the selected language's code generator instead of an integration API surface.</target>
+        <target state="translated">Bu paket bir tümleştirme API yüzeyi yerine seçilen dilin kod oluşturucusunu sağladığından SDK API dışarı aktarma işlemi {0} paketini dışarı aktaramıyor.</target>
         <note>{0} is the code-generation package name.</note>
       </trans-unit>
       <trans-unit id="SdkExportLanguageDoesNotSupportCodeGeneration">
         <source>SDK API export is not supported for {0} because it does not use a code generator.</source>
-        <target state="new">SDK API export is not supported for {0} because it does not use a code generator.</target>
+        <target state="translated">Kod oluşturucu kullanmadığından SDK API dışarı aktarma işlemi {0} için desteklenmiyor.</target>
         <note>{0} is the AppHost language display name, for example "C# (.NET)".</note>
       </trans-unit>
       <trans-unit id="SingleFileAppHostFeatureNotEnabled">
         <source>Single file AppHost feature is not enabled. To use .cs AppHost files, enable the feature using configuration.</source>
-        <target state="needs-review-translation">Tek dosya Uygulama Ana İşlemi özelliği etkinleştirilmemiştir. .cs AppHost dosyalarını kullanmak için, yapılandırmaları kullanarak özelliği etkinleştirin.</target>
+        <target state="translated">Tek dosya Uygulama Ana İşlemi özelliği etkinleştirilmemiştir. .cs AppHost dosyalarını kullanmak için, yapılandırmaları kullanarak özelliği etkinleştirin.</target>
         <note />
       </trans-unit>
       <trans-unit id="UnableToRetrieveAssemblyVersion">

@@ -361,21 +361,28 @@ internal sealed class ConfigSourceTestContext
             throw new InvalidOperationException("Git terminal authentication was not enabled.");
         }
 
-        Console.Error.Write("Configuration source Git authentication code: ");
-        Console.Error.Flush();
-        // SSH's stdin carries Git protocol traffic. Like an SSH authentication prompt,
-        // read the challenge response from the controlling terminal instead.
-        using (var terminal = new StreamReader(new FileStream("/dev/tty", FileMode.Open, FileAccess.Read, FileShare.ReadWrite)))
+        var authenticationPath = Path.Combine(workspace, "git-authenticated.txt");
+        // Reference resolution and fetch open separate SSH connections. Reuse the accepted
+        // authentication like an SSH agent so only the first connection challenges the user.
+        if (!File.Exists(authenticationPath))
         {
-            if (await terminal.ReadLineAsync() != "allow-source")
+            Console.Error.Write("Configuration source Git authentication code: ");
+            Console.Error.Flush();
+            // SSH's stdin carries Git protocol traffic. Like an SSH authentication prompt,
+            // read the challenge response from the controlling terminal instead.
+            using (var terminal = new StreamReader(new FileStream("/dev/tty", FileMode.Open, FileAccess.Read, FileShare.ReadWrite)))
             {
-                Console.Error.WriteLine("Configuration source Git authentication failed.");
-                return 1;
+                if (await terminal.ReadLineAsync() != "allow-source")
+                {
+                    Console.Error.WriteLine("Configuration source Git authentication failed.");
+                    return 1;
+                }
             }
+
+            await File.WriteAllTextAsync(authenticationPath, "accepted");
+            Console.Error.WriteLine("Configuration source Git authentication accepted.");
         }
 
-        Console.Error.WriteLine("Configuration source Git authentication accepted.");
-        await File.WriteAllTextAsync(Path.Combine(workspace, "git-authenticated.txt"), "accepted");
         var startInfo = new ProcessStartInfo("git")
         {
             UseShellExecute = false

@@ -43,16 +43,24 @@ graph TB
 
 The AppHost uses `ProxyBlazorService()` to make backend services available to the WASM client, and `ProxyBlazorTelemetry()` to enable client-side telemetry:
 
+The AppHost needs `Aspire.Hosting.Blazor` and `Aspire.Hosting.Dotnet`
+(`aspire add Aspire.Hosting.Blazor` and `aspire add Aspire.Hosting.Dotnet`). The service paths
+below are relative to `BlazorHosted.AppHost`; see the [project migration guide](../../docs/migrate-from-addproject.md).
+
 ```csharp
+#pragma warning disable ASPIREBLAZOR001
+
 var builder = DistributedApplication.CreateBuilder(args);
 
-var weatherApi = builder.AddProject<Projects.BlazorHosted_WeatherApi>("weatherapi");
+var weatherApi = builder.AddDotnetProject("weatherapi", "../BlazorHosted.WeatherApi/BlazorHosted.WeatherApi.csproj");
 
-builder.AddProject<Projects.BlazorHosted>("blazorapp")
+builder.AddDotnetProject("blazorapp", "../BlazorHosted.Server/BlazorHosted.csproj")
     .ProxyBlazorService(weatherApi)
     .ProxyBlazorTelemetry();
 
 builder.Build().Run();
+
+#pragma warning restore ASPIREBLAZOR001
 ```
 
 - `ProxyBlazorService(weatherApi)` — adds a YARP route so the WASM client can reach weatherapi via `/_api/weatherapi/*` on the server, and includes the service URL in the client configuration
@@ -244,7 +252,7 @@ BlazorHosted/
 | Aspect | Hosted Blazor | Standalone with Gateway |
 |--------|---------------|------------------------|
 | **Server** | Developer-owned Blazor Server | Auto-generated Gateway |
-| **AppHost API** | `ProxyBlazorService()` + `ProxyBlazorTelemetry()` | `AddBlazorWasmProject()` + `AddBlazorGateway()` |
+| **AppHost API** | `ProxyBlazorService()` + `ProxyBlazorTelemetry()` | `AddBlazorWasmProject()` + `AddDotnetProjectBlazorGateway()` |
 | **Config delivery** | DOM comment in prerendered HTML | `/_blazor/_configuration` endpoint |
 | **JS initializer** | `beforeWebAssemblyStart` | `onRuntimeConfigLoaded` |
 | **Prerendering** | Supported (server renders first) | Not applicable |

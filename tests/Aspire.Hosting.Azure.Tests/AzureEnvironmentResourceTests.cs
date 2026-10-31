@@ -71,6 +71,7 @@ public class AzureEnvironmentResourceTests(ITestOutputHelper output)
         {
             builder.AddAzureContainerAppEnvironment("env");
         }
+#pragma warning disable CS0618 // Exercise legacy ProjectResource publishing with synthetic project metadata.
         var frontend = builder.AddProject<TestProject>("frontend", launchProfileName: null)
             .WithHttpEndpoint(targetPort: 8080).WithExternalHttpEndpoints();
         var origin = frontend.GetEndpoint("http").BrowserOrigins.First;
@@ -81,6 +82,7 @@ public class AzureEnvironmentResourceTests(ITestOutputHelper output)
             .WithEnvironment("ORIGINS", frontend.GetEndpoint("http").BrowserOrigins.Join())
             .WithEnvironment("ORIGINS_JSON", frontend.GetEndpoint("http").BrowserOrigins.AsJson())
             .WithEnvironment("CONFIG", ReferenceExpression.Create($"origin={origin}"));
+#pragma warning restore CS0618
         using var app = builder.Build();
 
         await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, CancellationToken.None);
@@ -107,6 +109,7 @@ public class AzureEnvironmentResourceTests(ITestOutputHelper output)
         {
             builder.AddAzureContainerAppEnvironment("env");
         }
+#pragma warning disable CS0618 // Exercise legacy ProjectResource publishing with synthetic project metadata.
         var frontend = builder.AddProject<TestProject>("frontend", launchProfileName: null).WithHttpEndpoint(targetPort: 8080);
         var origins = frontend.GetEndpoint("http").BrowserOrigins;
         var backend = builder.AddProject<TestProject>("backend", launchProfileName: null)
@@ -116,6 +119,7 @@ public class AzureEnvironmentResourceTests(ITestOutputHelper output)
             .WithEnvironment("ORIGINS", frontend.GetEndpoint("http").BrowserOrigins.Join())
             .WithEnvironment("ORIGINS_JSON", origins.AsJson())
             .WithEnvironment("CONFIG", ReferenceExpression.Create($"origin={origins.First}"));
+#pragma warning restore CS0618
         using var app = builder.Build();
 
         if (appService)
@@ -250,7 +254,9 @@ public class AzureEnvironmentResourceTests(ITestOutputHelper output)
             .WithParameter("pgdb", pgdb.Resource.ConnectionStringExpression);
         builder.AddContainer("myapp", "mcr.microsoft.com/dotnet/aspnet:8.0")
                         .WithReference(cosmos);
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
         builder.AddProject<TestProject>("fe", launchProfileName: null)
+#pragma warning restore CS0618
                         .WithEnvironment("BLOB_CONTAINER_URL", $"{blobs}/container");
 
         var app = builder.Build();
@@ -288,7 +294,9 @@ public class AzureEnvironmentResourceTests(ITestOutputHelper output)
                 c.Add(output);
             })
             .AddBlobs("blobs");
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
         builder.AddProject<TestProject>("fe", launchProfileName: null)
+#pragma warning restore CS0618
             .WithEnvironment("BLOB_CONTAINER_URL", $"{blobs}/container")
             .WithReference(cosmos);
         var externalResource = new ExternalResourceWithParameters("external")

@@ -4,132 +4,132 @@
     <body>
       <trans-unit id="AllowAnonymousOptionDescription">
         <source>Allow anonymous access to the dashboard</source>
-        <target state="new">Allow anonymous access to the dashboard</target>
+        <target state="translated">ダッシュボードへの匿名アクセスを許可します</target>
         <note />
       </trans-unit>
       <trans-unit id="ApplicationNameOptionDescription">
         <source>The application name displayed in the dashboard and used to scope persisted dashboard data</source>
-        <target state="new">The application name displayed in the dashboard and used to scope persisted dashboard data</target>
+        <target state="translated">ダッシュボードに表示され、永続化されたダッシュボード データのスコープに使用されるアプリケーション名</target>
         <note />
       </trans-unit>
       <trans-unit id="BundleLayoutNotFound">
         <source>The 'aspire dashboard' command requires the CLI bundle, but no bundle layout was found. The bundle provides the dashboard binary and supporting files. Run 'aspire setup --force' to extract the bundle, or reinstall the Aspire CLI.</source>
-        <target state="new">The 'aspire dashboard' command requires the CLI bundle, but no bundle layout was found. The bundle provides the dashboard binary and supporting files. Run 'aspire setup --force' to extract the bundle, or reinstall the Aspire CLI.</target>
+        <target state="translated">'aspire dashboard' コマンドには CLI バンドルが必要ですが、バンドルのレイアウトが見つかりませんでした。バンドルには、ダッシュボードのバイナリとサポート ファイルが含まれています。"aspire setup --force" を実行してバンドルを抽出するか、Aspire CLI を再インストールします。</target>
         <note />
       </trans-unit>
       <trans-unit id="BundleNotAvailable">
         <source>The Aspire dashboard requires the CLI bundle. The bundle was not found.</source>
-        <target state="new">The Aspire dashboard requires the CLI bundle. The bundle was not found.</target>
+        <target state="translated">Aspire ダッシュボードには CLI バンドルが必要です。バンドルが見つかりませんでした。</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigFilePathOptionDescription">
         <source>The path for a JSON configuration file</source>
-        <target state="new">The path for a JSON configuration file</target>
+        <target state="translated">JSON 構成ファイルのパス</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardExitedAddressInUse">
         <source>Dashboard could not start because a configured port is already in use. Use a different port or stop the conflicting process.</source>
-        <target state="new">Dashboard could not start because a configured port is already in use. Use a different port or stop the conflicting process.</target>
+        <target state="translated">構成されたポートが既に使用されているため、ダッシュボードを開始できませんでした。別のポートを使用するか、競合するプロセスを停止してください。</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardExitedUnexpectedError">
         <source>Dashboard exited unexpectedly due to an error. See logs for details.</source>
-        <target state="new">Dashboard exited unexpectedly due to an error. See logs for details.</target>
+        <target state="translated">エラーが発生したため、ダッシュボードが予期せず終了しました。詳細については、ログを参照してください。</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardExitedValidationFailure">
         <source>Dashboard configuration is invalid. Check the provided options and try again.</source>
-        <target state="new">Dashboard configuration is invalid. Check the provided options and try again.</target>
+        <target state="translated">ダッシュボードの構成が無効です。指定されたオプションを確認して、もう一度お試しください。</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardExitedWithError">
         <source>Dashboard exited with exit code {0}.</source>
-        <target state="new">Dashboard exited with exit code {0}.</target>
+        <target state="translated">ダッシュボードが終了コード {0} で終了しました。</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFailedToStart">
         <source>Failed to start Aspire dashboard: {0}</source>
-        <target state="new">Failed to start Aspire dashboard: {0}</target>
+        <target state="translated">Aspire ダッシュボードを起動できませんでした: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardLabel">
         <source>Dashboard</source>
-        <target state="new">Dashboard</target>
+        <target state="translated">ダッシュボード</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardStartTimedOut">
         <source>Dashboard did not become ready within the expected time.</source>
-        <target state="new">Dashboard did not become ready within the expected time.</target>
+        <target state="translated">予想時間内にダッシュボードの準備が整っていません。</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardStarted">
         <source>Dashboard started (PID {0}).</source>
-        <target state="new">Dashboard started (PID {0}).</target>
+        <target state="translated">ダッシュボードが開始されました (PID {0})。</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
         <source>Manage the Aspire dashboard (Preview)</source>
-        <target state="new">Manage the Aspire dashboard (Preview)</target>
+        <target state="translated">Aspire ダッシュボードの管理 (プレビュー)</target>
         <note />
       </trans-unit>
       <trans-unit id="EnsuringDashboardBundle">
         <source>Preparing dashboard bits...</source>
-        <target state="new">Preparing dashboard bits...</target>
+        <target state="translated">ダッシュボードのコンポーネントを準備しています...</target>
         <note />
       </trans-unit>
       <trans-unit id="FrontendUrlOptionDescription">
         <source>One or more HTTP endpoints through which the dashboard frontend is served</source>
-        <target state="new">One or more HTTP endpoints through which the dashboard frontend is served</target>
+        <target state="translated">ダッシュボード フロントエンドを提供する 1 つ以上の HTTP エンドポイント</target>
         <note />
       </trans-unit>
       <trans-unit id="LogsLabel">
         <source>Logs</source>
-        <target state="new">Logs</target>
+        <target state="translated">ログ</target>
         <note />
       </trans-unit>
       <trans-unit id="ManagedBinaryNotFound">
         <source>The CLI bundle layout was found, but the Dashboard executable is missing. The bundle may be corrupted or incomplete. Run 'aspire setup --force' to re-extract the bundle, or reinstall the Aspire CLI.</source>
-        <target state="new">The CLI bundle layout was found, but the Dashboard executable is missing. The bundle may be corrupted or incomplete. Run 'aspire setup --force' to re-extract the bundle, or reinstall the Aspire CLI.</target>
+        <target state="translated">CLI バンドル のレイアウトが見つかりましたが、ダッシュボードの実行可能ファイルがありません。バンドルが破損しているか、不完全である可能性があります。"aspire setup --force" を実行してバンドルを再抽出するか、Aspire CLI を再インストールします。</target>
         <note />
       </trans-unit>
       <trans-unit id="OtlpGrpcLabel">
         <source>OTLP/gRPC</source>
-        <target state="new">OTLP/gRPC</target>
+        <target state="translated">OTLP/gRPC</target>
         <note />
       </trans-unit>
       <trans-unit id="OtlpGrpcUrlOptionDescription">
         <source>The OTLP/gRPC endpoint. This endpoint hosts an OTLP service and receives telemetry using gRPC</source>
-        <target state="new">The OTLP/gRPC endpoint. This endpoint hosts an OTLP service and receives telemetry using gRPC</target>
+        <target state="translated">OTLP/gRPC エンドポイント。このエンドポイントは OTLP サービスをホストし、gRPC を使用してテレメトリを受信します</target>
         <note />
       </trans-unit>
       <trans-unit id="OtlpHttpLabel">
         <source>OTLP/HTTP</source>
-        <target state="new">OTLP/HTTP</target>
+        <target state="translated">OTLP/HTTP</target>
         <note />
       </trans-unit>
       <trans-unit id="OtlpHttpUrlOptionDescription">
         <source>The OTLP/HTTP endpoint. This endpoint hosts an OTLP service and receives telemetry using Protobuf over HTTP</source>
-        <target state="new">The OTLP/HTTP endpoint. This endpoint hosts an OTLP service and receives telemetry using Protobuf over HTTP</target>
+        <target state="translated">OTLP/HTTP エンドポイント。このエンドポイントは OTLP サービスをホストし、HTTP 経由の Protobuf を使用してテレメトリを受信します</target>
         <note />
       </trans-unit>
       <trans-unit id="PersistenceModeOptionDescription">
         <source>The dashboard data persistence mode: None, Run, or Resume</source>
-        <target state="new">The dashboard data persistence mode: None, Run, or Resume</target>
+        <target state="translated">ダッシュボード データの永続化モード: None、Run、または Resume</target>
         <note />
       </trans-unit>
       <trans-unit id="RunDescription">
         <source>Start the Aspire dashboard (Preview)</source>
-        <target state="new">Start the Aspire dashboard (Preview)</target>
+        <target state="translated">Aspire ダッシュボードの開始 (プレビュー)</target>
         <note />
       </trans-unit>
       <trans-unit id="StartingDashboard">
         <source>Starting dashboard...</source>
-        <target state="new">Starting dashboard...</target>
+        <target state="translated">ダッシュボードを起動しています...</target>
         <note />
       </trans-unit>
       <trans-unit id="StoppingDashboard">
         <source>Stopping dashboard.</source>
-        <target state="new">Stopping dashboard.</target>
+        <target state="translated">ダッシュボードを停止しています。</target>
         <note />
       </trans-unit>
     </body>

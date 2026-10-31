@@ -139,7 +139,8 @@ internal sealed class TemplateNuGetConfigService(
             return false;
         }
 
-        if (matchingChannel.Mappings is not { Length: > 0 })
+        if (matchingChannel.Mappings is not { Length: > 0 } &&
+            !string.Equals(matchingChannel.Name, PackageChannelNames.Stable, StringComparisons.ChannelName))
         {
             return false;
         }
@@ -245,7 +246,7 @@ internal sealed class TemplateNuGetConfigService(
             executionContext.NuGetServiceIndexOverride,
             cancellationToken);
         var targetFile = new FileInfo(Path.Combine(outputDirectory.FullName, "nuget.config"));
-        var content = await nuGetService.CreatePersistentNuGetConfigContentAsync(
+        var content = await new DotNetAppHostNuGetConfigMerger(nuGetService).CreatePersistentNuGetConfigContentAsync(
             configuration,
             targetFile,
             originalContent: null,

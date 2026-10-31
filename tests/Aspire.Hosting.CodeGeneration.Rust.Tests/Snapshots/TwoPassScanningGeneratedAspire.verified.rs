@@ -1861,6 +1861,24 @@ impl ResourceUrlAnnotation {
     }
 }
 
+/// TerminalOptions
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct TerminalOptions {
+    #[serde(rename = "columns", alias = "Columns")]
+    pub columns: f64,
+    #[serde(rename = "rows", alias = "Rows")]
+    pub rows: f64,
+}
+
+impl TerminalOptions {
+    pub fn to_map(&self) -> HashMap<String, Value> {
+        let mut map = HashMap::new();
+        map.insert("columns".to_string(), serde_json::to_value(&self.columns).unwrap_or(Value::Null));
+        map.insert("rows".to_string(), serde_json::to_value(&self.rows).unwrap_or(Value::Null));
+        map
+    }
+}
+
 /// TestConfigDto
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct TestConfigDto {
@@ -3152,10 +3170,43 @@ impl CSharpAppResource {
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
 
-    /// Adds an interactive terminal session to a resource using the default terminal options.
-    pub fn with_terminal(&self) -> Result<IResource, Box<dyn std::error::Error>> {
+    /// Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+    pub fn with_trait(&self, name: &str, value: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
+        args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withTrait", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+    pub fn with_tags(&self, tags: Vec<String>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("tags".to_string(), serde_json::to_value(&tags).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withTags", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+    pub fn with_dashboard_position(&self, position: f64) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("position".to_string(), serde_json::to_value(&position).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withDashboardPosition", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+    pub fn with_terminal(&self, configure: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(configure);
+        args.insert("configure".to_string(), Value::String(callback_id));
         let result = self.client.invoke_capability("Aspire.Hosting/withTerminal", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
@@ -4653,10 +4704,43 @@ impl ContainerRegistryResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Adds an interactive terminal session to a resource using the default terminal options.
-    pub fn with_terminal(&self) -> Result<IResource, Box<dyn std::error::Error>> {
+    /// Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+    pub fn with_trait(&self, name: &str, value: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
+        args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withTrait", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+    pub fn with_tags(&self, tags: Vec<String>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("tags".to_string(), serde_json::to_value(&tags).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withTags", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+    pub fn with_dashboard_position(&self, position: f64) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("position".to_string(), serde_json::to_value(&position).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withDashboardPosition", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+    pub fn with_terminal(&self, configure: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(configure);
+        args.insert("configure".to_string(), Value::String(callback_id));
         let result = self.client.invoke_capability("Aspire.Hosting/withTerminal", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
@@ -6098,10 +6182,43 @@ impl ContainerResource {
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
 
-    /// Adds an interactive terminal session to a resource using the default terminal options.
-    pub fn with_terminal(&self) -> Result<IResource, Box<dyn std::error::Error>> {
+    /// Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+    pub fn with_trait(&self, name: &str, value: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
+        args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withTrait", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+    pub fn with_tags(&self, tags: Vec<String>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("tags".to_string(), serde_json::to_value(&tags).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withTags", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+    pub fn with_dashboard_position(&self, position: f64) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("position".to_string(), serde_json::to_value(&position).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withDashboardPosition", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+    pub fn with_terminal(&self, configure: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(configure);
+        args.insert("configure".to_string(), Value::String(callback_id));
         let result = self.client.invoke_capability("Aspire.Hosting/withTerminal", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
@@ -8046,10 +8163,43 @@ impl DotnetToolResource {
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
 
-    /// Adds an interactive terminal session to a resource using the default terminal options.
-    pub fn with_terminal(&self) -> Result<IResource, Box<dyn std::error::Error>> {
+    /// Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+    pub fn with_trait(&self, name: &str, value: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
+        args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withTrait", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+    pub fn with_tags(&self, tags: Vec<String>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("tags".to_string(), serde_json::to_value(&tags).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withTags", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+    pub fn with_dashboard_position(&self, position: f64) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("position".to_string(), serde_json::to_value(&position).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withDashboardPosition", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+    pub fn with_terminal(&self, configure: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(configure);
+        args.insert("configure".to_string(), Value::String(callback_id));
         let result = self.client.invoke_capability("Aspire.Hosting/withTerminal", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
@@ -10028,10 +10178,43 @@ impl ExecutableResource {
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
 
-    /// Adds an interactive terminal session to a resource using the default terminal options.
-    pub fn with_terminal(&self) -> Result<IResource, Box<dyn std::error::Error>> {
+    /// Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+    pub fn with_trait(&self, name: &str, value: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
+        args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withTrait", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+    pub fn with_tags(&self, tags: Vec<String>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("tags".to_string(), serde_json::to_value(&tags).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withTags", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+    pub fn with_dashboard_position(&self, position: f64) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("position".to_string(), serde_json::to_value(&position).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withDashboardPosition", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+    pub fn with_terminal(&self, configure: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(configure);
+        args.insert("configure".to_string(), Value::String(callback_id));
         let result = self.client.invoke_capability("Aspire.Hosting/withTerminal", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
@@ -10873,10 +11056,43 @@ impl ExternalServiceResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Adds an interactive terminal session to a resource using the default terminal options.
-    pub fn with_terminal(&self) -> Result<IResource, Box<dyn std::error::Error>> {
+    /// Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+    pub fn with_trait(&self, name: &str, value: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
+        args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withTrait", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+    pub fn with_tags(&self, tags: Vec<String>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("tags".to_string(), serde_json::to_value(&tags).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withTags", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+    pub fn with_dashboard_position(&self, position: f64) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("position".to_string(), serde_json::to_value(&position).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withDashboardPosition", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+    pub fn with_terminal(&self, configure: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(configure);
+        args.insert("configure".to_string(), Value::String(callback_id));
         let result = self.client.invoke_capability("Aspire.Hosting/withTerminal", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
@@ -14465,10 +14681,43 @@ impl ParameterResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Adds an interactive terminal session to a resource using the default terminal options.
-    pub fn with_terminal(&self) -> Result<IResource, Box<dyn std::error::Error>> {
+    /// Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+    pub fn with_trait(&self, name: &str, value: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
+        args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withTrait", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+    pub fn with_tags(&self, tags: Vec<String>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("tags".to_string(), serde_json::to_value(&tags).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withTags", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+    pub fn with_dashboard_position(&self, position: f64) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("position".to_string(), serde_json::to_value(&position).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withDashboardPosition", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+    pub fn with_terminal(&self, configure: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(configure);
+        args.insert("configure".to_string(), Value::String(callback_id));
         let result = self.client.invoke_capability("Aspire.Hosting/withTerminal", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
@@ -16223,10 +16472,43 @@ impl ProjectResource {
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
 
-    /// Adds an interactive terminal session to a resource using the default terminal options.
-    pub fn with_terminal(&self) -> Result<IResource, Box<dyn std::error::Error>> {
+    /// Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+    pub fn with_trait(&self, name: &str, value: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
+        args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withTrait", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+    pub fn with_tags(&self, tags: Vec<String>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("tags".to_string(), serde_json::to_value(&tags).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withTags", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+    pub fn with_dashboard_position(&self, position: f64) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("position".to_string(), serde_json::to_value(&position).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withDashboardPosition", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+    pub fn with_terminal(&self, configure: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(configure);
+        args.insert("configure".to_string(), Value::String(callback_id));
         let result = self.client.invoke_capability("Aspire.Hosting/withTerminal", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
@@ -18554,10 +18836,43 @@ impl TestDatabaseResource {
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
 
-    /// Adds an interactive terminal session to a resource using the default terminal options.
-    pub fn with_terminal(&self) -> Result<IResource, Box<dyn std::error::Error>> {
+    /// Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+    pub fn with_trait(&self, name: &str, value: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
+        args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withTrait", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+    pub fn with_tags(&self, tags: Vec<String>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("tags".to_string(), serde_json::to_value(&tags).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withTags", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+    pub fn with_dashboard_position(&self, position: f64) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("position".to_string(), serde_json::to_value(&position).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withDashboardPosition", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+    pub fn with_terminal(&self, configure: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(configure);
+        args.insert("configure".to_string(), Value::String(callback_id));
         let result = self.client.invoke_capability("Aspire.Hosting/withTerminal", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
@@ -20203,10 +20518,43 @@ impl TestRedisResource {
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
 
-    /// Adds an interactive terminal session to a resource using the default terminal options.
-    pub fn with_terminal(&self) -> Result<IResource, Box<dyn std::error::Error>> {
+    /// Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+    pub fn with_trait(&self, name: &str, value: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
+        args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withTrait", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+    pub fn with_tags(&self, tags: Vec<String>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("tags".to_string(), serde_json::to_value(&tags).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withTags", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+    pub fn with_dashboard_position(&self, position: f64) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("position".to_string(), serde_json::to_value(&position).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withDashboardPosition", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+    pub fn with_terminal(&self, configure: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(configure);
+        args.insert("configure".to_string(), Value::String(callback_id));
         let result = self.client.invoke_capability("Aspire.Hosting/withTerminal", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
@@ -22072,10 +22420,43 @@ impl TestVaultResource {
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
 
-    /// Adds an interactive terminal session to a resource using the default terminal options.
-    pub fn with_terminal(&self) -> Result<IResource, Box<dyn std::error::Error>> {
+    /// Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values.
+    pub fn with_trait(&self, name: &str, value: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
+        args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withTrait", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
+    pub fn with_tags(&self, tags: Vec<String>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("tags".to_string(), serde_json::to_value(&tags).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withTags", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+    pub fn with_dashboard_position(&self, position: f64) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("position".to_string(), serde_json::to_value(&position).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withDashboardPosition", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
+    pub fn with_terminal(&self, configure: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(configure);
+        args.insert("configure".to_string(), Value::String(callback_id));
         let result = self.client.invoke_capability("Aspire.Hosting/withTerminal", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))

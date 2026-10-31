@@ -86,7 +86,7 @@ public sealed class UpdateChannelNuGetConfigOrderingTests(ITestOutputHelper outp
 
         // Run aspire init non-interactively to scaffold a single-file C# AppHost. We'll
         // overwrite the generated apphost.cs and nuget.config below to set up the bug
-        // pre-condition (stable Aspire packages + only nuget.org configured).
+        // pre-condition (stable Aspire packages + mapped nuget.org source).
         await auto.TypeAsync("aspire init --language csharp");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Created aspire.config.json", timeout: TimeSpan.FromMinutes(2));
@@ -120,11 +120,9 @@ public sealed class UpdateChannelNuGetConfigOrderingTests(ITestOutputHelper outp
             builder.Build().Run();
             """);
 
-        // 2. nuget.config: only nuget.org, no Aspire feed, no packageSourceMapping. This is
-        //    the file shape from the issue. The CLI's NuGetConfigMerger will rewrite it to
-        //    add the local feed plus a <packageSourceMapping> pinning Aspire* to that feed —
-        //    that rewrite is exactly what triggers the regression on the per-package restores
-        //    when the fix is missing.
+        // 2. Start with mapping enabled: the CLI only extends existing mapping policy.
+        //    Adding the local Aspire* mapping must not trigger restore while other Aspire
+        //    references still require their old nuget.org versions.
         await File.WriteAllTextAsync(nugetConfigPath,
             """
             <?xml version="1.0" encoding="utf-8"?>
@@ -133,6 +131,9 @@ public sealed class UpdateChannelNuGetConfigOrderingTests(ITestOutputHelper outp
                 <clear />
                 <add key="nuget.org" value="https://api.nuget.org/v3/index.json" protocolVersion="3" />
               </packageSources>
+              <packageSourceMapping>
+                <packageSource key="nuget.org"><package pattern="*" /></packageSource>
+              </packageSourceMapping>
             </configuration>
             """);
 
@@ -165,8 +166,8 @@ public sealed class UpdateChannelNuGetConfigOrderingTests(ITestOutputHelper outp
         var updatedAppHostCs = await File.ReadAllTextAsync(appHostCsPath);
         var updatedNuGetConfig = await File.ReadAllTextAsync(nugetConfigPath);
 
-        // Pre-condition was actually exercised: nuget.config gained a packageSourceMapping
-        // for Aspire*. If this assertion fails it means the rewrite never happened and the
+        // Pre-condition was actually exercised: nuget.config gained an Aspire* mapping.
+        // If this assertion fails it means the rewrite never happened and the
         // test isn't actually guarding the bug.
         Assert.Contains("packageSourceMapping", updatedNuGetConfig, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Aspire", updatedNuGetConfig, StringComparison.Ordinal);

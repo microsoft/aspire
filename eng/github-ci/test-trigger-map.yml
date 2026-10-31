@@ -328,6 +328,7 @@ path_rules:
       - src/Aspire.Hosting.CodeGeneration.Java/**
       - src/Aspire.Hosting.CodeGeneration.TypeScript/**
       - src/Aspire.Hosting.Docker/**
+      - src/Aspire.Hosting.Go/**
       - src/Aspire.Hosting.Java/**
       - src/Aspire.Hosting.JavaScript/**
       - src/Aspire.Hosting.Redis/**
@@ -436,6 +437,11 @@ path_rules:
       - src/Aspire.ProjectTemplates/templates/**
     targets: [test:Aspire.Cli.Tests]
     reason: CLI tests instantiate template sources and verify frontend package inputs.
+  - paths:
+      - src/Aspire.Hosting.CodeGeneration.Go/AtsGoCodeGenerator.cs
+      - src/Aspire.Hosting.CodeGeneration.Go/GoLanguageSupport.cs
+    targets: [test:Aspire.Cli.Tests]
+    reason: GoAppHostToolingCheckTests reads the go.mod templates to guard the minimum Go version.
   - paths:
       - .github/workflows/update-nix-cli-flake.yml
       - flake.nix
@@ -563,6 +569,7 @@ path_rules:
       - src/Aspire.Dashboard/wwwroot/js/app.js
       - src/Aspire.Dashboard/wwwroot/js/app-terminalwindow.js
       - src/Aspire.Dashboard/wwwroot/js/app-resourcegraph.js
+      - src/Aspire.Dashboard/wwwroot/js/app-dashboard-experience.js
       - src/Aspire.Dashboard/package.json
       - src/Aspire.Dashboard/package-lock.json
       - src/Aspire.Dashboard/wwwroot/js/hex1b-web-terminal/**
@@ -626,6 +633,7 @@ affected_project_rules:
       - Aspire.Hosting.Azure.ConnectorNamespace
       - Aspire.Hosting.Azure.ContainerRegistry
       - Aspire.Hosting.Azure.CosmosDB
+      - Aspire.Hosting.Azure.EntraId
       - Aspire.Hosting.Azure.EventHubs
       - Aspire.Hosting.Azure.FrontDoor
       - Aspire.Hosting.Azure.Functions
@@ -695,6 +703,7 @@ affected_project_rules:
       - Aspire.Hosting.CodeGeneration.TypeScript
       - Aspire.Hosting.Docker
       - Aspire.Hosting.Dotnet
+      - Aspire.Hosting.Go
       - Aspire.Hosting.Java
       - Aspire.Hosting.JavaScript
       - Aspire.Hosting.Redis
@@ -705,7 +714,7 @@ affected_project_rules:
   - projects: [Aspire.Hosting.Azure*, Aspire.Hosting.Dotnet, Aspire.Hosting.Foundry, Aspire.Cli, Aspire.TypeSystem, Aspire.Managed]
     targets: [job:deployment-e2e]
     reason: SCHEDULE/DISPATCH-ONLY today; deploys generated apps with packages added dynamically by tests
-  - projects: [Aspire.Hosting, Aspire.Hosting.AppHost, Aspire.Hosting.PostgreSQL, Aspire.Hosting.Redis]
+  - projects: [Aspire.Hosting, Aspire.Hosting.AppHost, Aspire.Hosting.Dotnet, Aspire.Hosting.PostgreSQL, Aspire.Hosting.Redis]
     targets: [test:Aspire.EndToEnd.Tests]
     reason: OUTERLOOP-ONLY today; builds testproject apphost against built nugets
   - projects:
@@ -714,12 +723,14 @@ affected_project_rules:
       - Aspire.Hosting
       - Aspire.Hosting.AppHost
       - Aspire.Hosting.Blazor
+      - Aspire.Hosting.CodeGeneration.Go
       - Aspire.Hosting.CodeGeneration.Java
       - Aspire.Hosting.CodeGeneration.TypeScript
       - Aspire.Hosting.Docker
       - Aspire.Hosting.Dotnet
       - Aspire.Hosting.EntityFrameworkCore
       - Aspire.Hosting.Garnet
+      - Aspire.Hosting.Go
       - Aspire.Hosting.Java
       - Aspire.Hosting.JavaScript
       - Aspire.Hosting.Kubernetes

@@ -1,0 +1,727 @@
+﻿.resource-overview {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    padding: var(--layout-top-padding) var(--layout-right-padding) 24px var(--layout-left-padding);
+    container-type: inline-size;
+    outline: none;
+}
+
+.overview-message {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 48px 16px;
+    color: var(--colorNeutralForeground2);
+}
+
+.resource-overview.terminal-focused {
+    display: flex;
+    overflow: hidden;
+    padding-bottom: var(--layout-top-padding);
+}
+
+.terminal-focused > .overview-grid {
+    flex: 1;
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+}
+
+/* Keep the cards and terminal mounted so minimizing restores their state without reconnecting. */
+.terminal-focused > .overview-grid > :not(.overview-terminal-card) {
+    display: none;
+}
+
+.resource-overview.terminal-focused > .overview-grid > .overview-terminal-card {
+    flex: 1;
+    height: auto;
+    min-height: 0;
+}
+
+.overview-grid {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.overview-card {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    padding: 14px 16px;
+    border: 1px solid var(--colorNeutralStroke3);
+    border-radius: 12px;
+    background: var(--aspire-control-background);
+}
+
+/* Spans are computed per card from its content (see OverviewCardLayout) and passed in as custom properties. */
+.overview-grid > .overview-card {
+    grid-column: span var(--overview-span, 12);
+}
+
+/* Cards keep their height; what doesn't fit scrolls inside them, below the card's header. The tags card isn't
+   sized: it's one line, and its tag picker opens a popup that a clipped card would cut off. */
+.overview-grid > .overview-card:not(.overview-tags-card) {
+    height: var(--overview-card-height, auto);
+    overflow: hidden;
+}
+
+.overview-grid > .overview-card:not(.overview-tags-card) > :not(.overview-card-header) {
+    flex-shrink: 1;
+    min-height: 0;
+    overflow: auto;
+}
+
+.overview-card-empty .overview-empty {
+    flex: 1 1 auto;
+}
+
+@container (max-width: 1100px) {
+    .overview-grid > .overview-card {
+        grid-column: span var(--overview-span-md, 12);
+    }
+}
+
+@container (max-width: 760px) {
+    .overview-grid > .overview-card {
+        grid-column: span 12;
+    }
+}
+
+/* Tags fit on one line next to the card title, so the card stays short. */
+.overview-parameter-tags {
+    margin-bottom: 14px;
+}
+
+.overview-tags-card {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 16px;
+    padding-block: 10px;
+}
+
+.overview-tags-card .overview-card-header {
+    margin-bottom: 0;
+}
+
+.overview-card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.overview-card-header h2 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    /* Headings inherit a 40px line height from the global styles, which is too tall for a card header. */
+    line-height: 20px;
+}
+
+.overview-card-count {
+    padding: 0 6px;
+    border-radius: 8px;
+    background: var(--colorNeutralBackground3);
+    color: var(--colorNeutralForeground2);
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.overview-card-link {
+    margin-inline-start: auto;
+    color: var(--colorBrandForegroundLink);
+    font-size: 12.5px;
+    text-decoration: none;
+}
+
+.overview-card-link:hover {
+    text-decoration: underline;
+}
+
+/* Card actions get a visible button surface so they read as buttons rather than decorative icons.
+   They stay short enough that the header remains as tall as its title. */
+.overview-card-header ::deep .overview-card-action {
+    --aspire-control-height: 26px;
+    margin-block: -3px;
+}
+
+.overview-card-header ::deep .overview-card-action::part(control) {
+    width: 26px;
+    min-width: 26px;
+    height: 26px;
+    padding: 0;
+    border: 1px solid var(--colorNeutralStroke1);
+    border-radius: 6px;
+    background: var(--colorNeutralBackground1);
+}
+
+.overview-card-header a.overview-card-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    text-decoration: none;
+}
+
+.overview-card-header ::deep .overview-card-action:hover::part(control) {
+    border-color: var(--colorNeutralStroke1Hover);
+    background: var(--colorNeutralBackground1Hover);
+}
+
+.overview-card-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-inline-start: auto;
+}
+
+/* Keep the header as tall as its title so the filter doesn't add space above the card content. */
+.overview-card-actions ::deep .overview-card-filter {
+    width: 160px;
+    margin-block: -6px;
+}
+
+.overview-show-more {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    margin-top: 2px;
+    padding: 6px 0;
+    border: 0;
+    background: transparent;
+    color: var(--colorBrandForegroundLink);
+    font: inherit;
+    font-size: 12.5px;
+    text-align: start;
+    cursor: pointer;
+}
+
+.overview-show-more:hover {
+    text-decoration: underline;
+}
+
+.overview-show-more:focus-visible {
+    outline: 2px solid var(--colorStrokeFocus2);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+.overview-badge {
+    flex: 0 0 auto;
+    padding: 0 6px;
+    border-radius: 8px;
+    background: var(--colorNeutralBackground3);
+    color: var(--colorNeutralForeground2);
+    font-size: 11px;
+}
+
+.overview-badge.overview-volume-type {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.overview-muted {
+    color: var(--colorNeutralForeground2);
+}
+
+/* Match the density of the other card lists, and align the first column with the card header. */
+.overview-card ::deep .overview-property-grid td {
+    font-size: 12.5px;
+}
+
+.overview-card ::deep .overview-property-grid td:first-child {
+    padding-inline-start: 0;
+}
+
+/* Remove the default cell padding on the value column so its mask/visualizer buttons
+   align with the card header's rightmost action button instead of sitting inset from it. */
+.overview-card ::deep .overview-property-grid td:last-child {
+    padding-inline-end: 0;
+}
+
+.overview-console-paused {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+    color: var(--colorNeutralForeground2);
+    font-size: 12px;
+}
+
+.overview-empty {
+    display: flex;
+    align-items: center;
+    flex: 1 1 auto;
+    min-height: 40px;
+    color: var(--colorNeutralForeground2);
+    font-size: 12.5px;
+}
+
+.overview-properties {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 6px 14px;
+    margin: 0;
+    font-size: 13px;
+}
+
+.overview-properties dt {
+    color: var(--colorNeutralForeground2);
+}
+
+.overview-properties dd {
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.overview-mono {
+    font-family: var(--aspire-font-mono);
+    font-size: 12px;
+}
+
+.overview-error-text {
+    color: var(--error);
+    font-weight: 600;
+}
+
+.overview-state {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+/* Status colors don't reach text contrast on every theme, so only the icon carries the state color. */
+.overview-state.state-success ::deep svg {
+    color: var(--success);
+}
+
+.overview-state.state-error ::deep svg {
+    color: var(--error);
+}
+
+.overview-state.state-warning ::deep svg,
+.overview-state.state-pending ::deep svg {
+    color: var(--warning);
+}
+
+.overview-list {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.overview-list li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    padding: 6px 0;
+    border-top: 1px solid var(--colorNeutralStroke3);
+    font-size: 12.5px;
+}
+
+.overview-list li:first-child {
+    border-top: 0;
+}
+
+.overview-list-label {
+    flex: 0 0 auto;
+    max-width: 40%;
+    overflow: hidden;
+    color: var(--colorNeutralForeground2);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Sized and bordered like .overview-card-action so these read as buttons rather than bare icons. */
+.overview-list ::deep .overview-volume-action {
+    --aspire-control-height: 20px;
+    flex: 0 0 auto;
+}
+
+.overview-list ::deep .overview-volume-action::part(control) {
+    width: 20px;
+    min-width: 20px;
+    height: 20px;
+    padding: 0;
+    border: 1px solid var(--colorNeutralStroke1);
+    border-radius: 5px;
+    background: var(--colorNeutralBackground1);
+}
+
+.overview-list ::deep .overview-volume-action:hover::part(control) {
+    border-color: var(--colorNeutralStroke1Hover);
+    background: var(--colorNeutralBackground1Hover);
+}
+
+.overview-list-value {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--colorNeutralForeground1);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+a.overview-list-value {
+    color: var(--colorBrandForegroundLink);
+    text-decoration: none;
+}
+
+a.overview-list-value:hover {
+    text-decoration: underline;
+}
+
+.overview-list-time {
+    flex: 0 0 auto;
+    color: var(--colorNeutralForeground2);
+    font-variant-numeric: tabular-nums;
+}
+
+/* When a row has supplementary ghost text, the primary link keeps its natural width instead of growing to fill
+   the row, leaving the spare space for the ghost text. */
+.overview-list-value:has(+ .overview-list-ghost) {
+    flex: 0 1 auto;
+}
+
+/* Supplementary url text (e.g. the internal address of an endpoint already shown as the row's primary link).
+   It takes whatever room the primary link doesn't need, truncating/disappearing first as the card narrows so it
+   never forces the primary link to truncate. */
+.overview-list-ghost {
+    flex: 1 1 0;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--colorNeutralForeground3);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.overview-level {
+    flex: 0 0 auto;
+    min-width: 58px;
+    font-size: 11.5px;
+    font-weight: 600;
+}
+
+.overview-level.error {
+    color: var(--error);
+}
+
+.overview-level.warning {
+    color: var(--warning);
+}
+
+.overview-dot {
+    display: inline-block;
+    flex: 0 0 8px;
+    width: 8px;
+    height: 8px;
+    margin: 0 2px;
+    border-radius: 50%;
+    background: var(--success);
+}
+
+.overview-stats {
+    display: flex;
+    gap: 22px;
+    margin-bottom: 8px;
+}
+
+.overview-stat {
+    display: flex;
+    flex-direction: column;
+    color: var(--colorNeutralForeground1);
+    text-decoration: none;
+}
+
+a.overview-stat:hover .overview-stat-label {
+    text-decoration: underline;
+}
+
+.overview-stat-value {
+    font-family: var(--aspire-font-display);
+    font-size: 22px;
+    line-height: 1.15;
+    font-variant-numeric: tabular-nums;
+}
+
+.overview-stat-label {
+    color: var(--colorNeutralForeground2);
+    font-size: 11.5px;
+}
+
+.overview-stat.warning .overview-stat-value {
+    color: var(--warning);
+}
+
+.overview-stat.error .overview-stat-value {
+    color: var(--error);
+}
+
+/* The console output fills the card so it lines up with taller cards in the same row. */
+.overview-console {
+    flex: 1 1 auto;
+    overflow: hidden;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: var(--console-background-color, #1b1b1b);
+    color: var(--console-foreground-color, #e6e6e6);
+    font-family: var(--aspire-font-mono);
+    font-size: 11.5px;
+    line-height: 1.6;
+}
+
+.overview-terminal {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    background: var(--terminal-background, var(--colorNeutralBackground1));
+}
+
+.overview-terminal ::deep .terminal-view,
+.overview-terminal ::deep .terminal-frame {
+    height: 100%;
+}
+
+.overview-terminal ::deep .terminal-footer {
+    min-height: 36px;
+    padding: 3px 8px;
+}
+
+.overview-terminal ::deep .terminal-focus-hint {
+    font-size: 11.5px;
+}
+
+.overview-console-line {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.overview-console-line.error {
+    color: #ff8a8a;
+}
+
+.overview-console-time {
+    margin-inline-end: 8px;
+    color: #8a8a8a;
+}
+
+.overview-relationships-card ::deep .relationship-graph {
+    flex: 0 1 auto;
+}
+
+/* Metric instruments are compact tiles that flow into as many columns as the card width allows. */
+.overview-metrics-empty {
+    flex-wrap: wrap;
+    gap: 4px 8px;
+}
+
+/* ::deep so these also style the live tiles rendered by the LiveMetricTiles component. */
+::deep .overview-metric-tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+::deep .overview-metric-tile {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    padding: 8px 10px;
+    border: 1px solid var(--colorNeutralStroke3);
+    border-radius: 8px;
+    color: inherit;
+    text-decoration: none;
+}
+
+::deep .overview-metric-tile:hover {
+    border-color: var(--colorBrandStroke1);
+    background: var(--colorNeutralBackground1Hover);
+}
+
+::deep .overview-metric-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+::deep .overview-metric-name {
+    color: var(--colorBrandForegroundLink);
+    font-size: 12.5px;
+}
+
+.overview-selection-groups {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.overview-selection-group-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 10px;
+    color: var(--colorNeutralForeground2);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 20px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+/* Every card has the same three rows (title, meta, footer), so cards in a row stay the same height. */
+.overview-selection-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 12px;
+}
+
+.overview-selection-item {
+    display: flex;
+    min-width: 0;
+}
+
+.overview-selection-card {
+    flex: 1 1 auto;
+    gap: 6px;
+    padding: 12px 14px;
+}
+
+.overview-selection-card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.overview-selection-card-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--colorNeutralForeground1);
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: none;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+a.overview-selection-card-title:hover {
+    text-decoration: underline;
+}
+
+.overview-selection-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    min-height: 18px;
+    padding-inline-start: 28px;
+    color: var(--colorNeutralForeground2);
+    font-size: 12px;
+}
+
+.overview-selection-footer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    margin-top: auto;
+    padding-top: 8px;
+    border-top: 1px solid var(--colorNeutralStroke3);
+}
+
+.overview-selection-url {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    font-size: 12.5px;
+}
+
+.overview-selection-url > a,
+.overview-selection-url > span:first-child {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.overview-selection-url > a {
+    color: var(--colorBrandForegroundLink);
+    text-decoration: none;
+}
+
+.overview-selection-url > a:hover {
+    text-decoration: underline;
+}
+
+.overview-selection-actions {
+    display: flex;
+    flex: 0 0 auto;
+    gap: 4px;
+}
+
+.overview-selection-action {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: 1px solid var(--colorNeutralStroke1);
+    border-radius: 6px;
+    background: var(--colorNeutralBackground1);
+    color: var(--colorBrandForeground1);
+}
+
+.overview-selection-action:hover {
+    border-color: var(--colorNeutralStroke1Hover);
+    background: var(--colorNeutralBackground1Hover);
+}
+
+.overview-selection-action:focus-visible {
+    outline: 2px solid var(--colorStrokeFocus2);
+    outline-offset: 1px;
+}
+
+.overview-selection-errors {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    min-width: 16px;
+    padding: 0 4px;
+    border-radius: 8px;
+    background: var(--error);
+    color: var(--colorNeutralForegroundOnBrand, #fff);
+    font-size: 10.5px;
+    font-weight: 600;
+    line-height: 16px;
+    text-align: center;
+}
+
+@media (max-width: 767px) {
+    .resource-overview {
+        padding: 12px;
+    }
+}
+
+.overview-status-actions {
+    margin-inline-start: auto;
+}

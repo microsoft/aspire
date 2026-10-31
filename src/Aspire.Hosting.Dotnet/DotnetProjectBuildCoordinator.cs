@@ -204,7 +204,7 @@ internal static class DotnetProjectBuildCoordinator
          snapshot.ExitCode is not null);
 
     private static bool IsProjectFile(string path) =>
-        path.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase);
+        ProjectPathResolver.IsSupportedDotnetProjectFile(path);
 
     private static bool IsSupportedPath(string path) =>
         IsProjectFile(path) || path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase);

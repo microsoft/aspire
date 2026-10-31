@@ -142,6 +142,11 @@ with create_builder() as builder:
 
     # addContainer (pre-existing)
     container = builder.add_container("resource", "image")
+    container.with_tags(["Backend", "API"])
+    container.with_tags(["Service"])
+    container.with_trait("Owner", "Finance")
+    container.with_trait("Owner", "Platform")
+    container.with_dashboard_position(-10)
     container.with_otlp_exporter(protocol="HttpJson")
     # addDockerfile
     docker_container = builder.add_dockerfile("resource", ".")

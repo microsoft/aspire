@@ -33,7 +33,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             logging.AddXunit(output);
         });
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource SDK image and container publishing behavior.
         var servicea = builder.AddProject<Projects.ServiceA>("servicea");
+#pragma warning restore CS0618
 
         using var app = builder.Build();
 
@@ -94,7 +96,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             logging.AddXunit(output);
         });
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource SDK image and container publishing behavior.
         var servicea = builder.AddProject<Projects.ServiceA>("servicea")
+#pragma warning restore CS0618
             .WithDockerfileBaseImage(runtimeImage: "mcr.microsoft.com/dotnet/sdk:10.0-alpine");
 
         using var app = builder.Build();
@@ -159,7 +163,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             logging.AddXunit(output);
         });
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource SDK image and container publishing behavior.
         var servicea = builder.AddProject<Projects.ServiceA>("servicea")
+#pragma warning restore CS0618
             .WithContainerBuildOptions(ctx =>
             {
                 ctx.ImageFormat = ContainerImageFormat.Oci;
@@ -198,7 +204,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             logging.AddXunit(output);
         });
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource SDK image and container publishing behavior.
         var servicea = builder.AddProject<Projects.ServiceA>("servicea")
+#pragma warning restore CS0618
             .WithContainerBuildOptions(ctx => ctx.ImageFormat = ContainerImageFormat.Docker);
 
         using var app = builder.Build();
@@ -228,7 +236,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             logging.AddXunit(output);
         });
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource SDK image and container publishing behavior.
         var servicea = builder.AddProject<Projects.ServiceA>("servicea")
+#pragma warning restore CS0618
             .WithContainerBuildOptions(ctx => ctx.TargetPlatform = ContainerTargetPlatform.LinuxArm64);
 
         using var app = builder.Build();
@@ -347,7 +357,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             logging.AddXunit(output);
         });
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource SDK image and container publishing behavior.
         var servicea = builder.AddProject<Projects.ServiceA>("servicea")
+#pragma warning restore CS0618
             .WithContainerBuildOptions(ctx => ctx.ImageFormat = imageFormat);
 
         using var app = builder.Build();
@@ -379,7 +391,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             logging.AddXunit(output);
         });
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource SDK image and container publishing behavior.
         var servicea = builder.AddProject<Projects.ServiceA>("servicea")
+#pragma warning restore CS0618
             .WithContainerBuildOptions(ctx => ctx.TargetPlatform = targetPlatform);
 
         using var app = builder.Build();
@@ -409,7 +423,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             logging.AddXunit(output);
         });
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource SDK image and container publishing behavior.
         var servicea = builder.AddProject<Projects.ServiceA>("servicea");
+#pragma warning restore CS0618
 
         using var app = builder.Build();
 
@@ -543,7 +559,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         var fakeContainerRuntime = new FakeContainerRuntime(shouldFail: true);
         builder.Services.AddFakeContainerRuntime(fakeContainerRuntime);
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource SDK image and container publishing behavior.
         var servicea = builder.AddProject<Projects.ServiceA>("servicea")
+#pragma warning restore CS0618
             .WithContainerBuildOptions(ctx =>
             {
                 ctx.ImageFormat = ContainerImageFormat.Oci;
@@ -1646,7 +1664,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             logging.AddXunit(output);
         });
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource SDK image and container publishing behavior.
         var servicea = builder.AddProject<Projects.ServiceA>("servicea")
+#pragma warning restore CS0618
             .WithAnnotation(new ContainerBuildOptionsCallbackAnnotation(ctx =>
             {
                 ctx.LocalImageName = "first-name";
@@ -1683,7 +1703,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             logging.AddXunit(output);
         });
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource SDK image and container publishing behavior.
         var servicea = builder.AddProject<Projects.ServiceA>("servicea")
+#pragma warning restore CS0618
             .WithAnnotation(new ContainerBuildOptionsCallbackAnnotation(ctx =>
             {
                 ctx.LocalImageName = "first-name";
@@ -1722,7 +1744,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             logging.AddXunit(output);
         });
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource SDK image and container publishing behavior.
         var servicea = builder.AddProject<Projects.ServiceA>("servicea");
+#pragma warning restore CS0618
 
         using var app = builder.Build();
 
@@ -1858,7 +1882,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             logging.AddXunit(output);
         });
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource SDK image and container publishing behavior.
         var servicea = builder.AddProject<Projects.ServiceA>("servicea")
+#pragma warning restore CS0618
             .WithAnnotation(new ContainerBuildOptionsCallbackAnnotation(async ctx =>
             {
                 await Task.Delay(1);
@@ -1892,7 +1918,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         IResource? capturedResource = null;
         IServiceProvider? capturedServices = null;
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource SDK image and container publishing behavior.
         var servicea = builder.AddProject<Projects.ServiceA>("servicea")
+#pragma warning restore CS0618
             .WithContainerBuildOptions(ctx =>
             {
                 capturedResource = ctx.Resource;
@@ -1930,7 +1958,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
 
         using var workspace = TemporaryWorkspace.Create(output);
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource SDK image and container publishing behavior.
         var servicea = builder.AddProject<Projects.ServiceA>("servicea")
+#pragma warning restore CS0618
             .WithContainerBuildOptions(ctx =>
             {
                 ctx.Destination = ContainerImageDestination.Archive;
@@ -1980,7 +2010,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         var fakeContainerRuntime = new FakeContainerRuntime(shouldFail: false, isRunning: false);
         builder.Services.AddFakeContainerRuntime(fakeContainerRuntime);
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource SDK image and container publishing behavior.
         var servicea = builder.AddProject<Projects.ServiceA>("servicea")
+#pragma warning restore CS0618
             .WithContainerBuildOptions(ctx =>
             {
                 ctx.Destination = ContainerImageDestination.Registry;
@@ -2054,7 +2086,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         using var workspace = TemporaryWorkspace.Create(output);
 
         // Add two projects: one with Archive destination, one without
+#pragma warning disable CS0618 // Retain legacy ProjectResource SDK image and container publishing behavior.
         var servicea = builder.AddProject<Projects.ServiceA>("servicea")
+#pragma warning restore CS0618
             .WithContainerBuildOptions(ctx =>
             {
                 ctx.Destination = ContainerImageDestination.Archive;
@@ -2062,7 +2096,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
                 ctx.ImageFormat = ContainerImageFormat.Oci;
             });
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource SDK image and container publishing behavior.
         var serviceb = builder.AddProject<Projects.ServiceB>("serviceb");
+#pragma warning restore CS0618
 
         using var app = builder.Build();
 
@@ -2095,7 +2131,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         builder.Services.AddFakeContainerRuntime(fakeContainerRuntime);
 
         // Project without any destination set should default to requiring Docker
+#pragma warning disable CS0618 // Retain legacy ProjectResource SDK image and container publishing behavior.
         var servicea = builder.AddProject<Projects.ServiceA>("servicea");
+#pragma warning restore CS0618
 
         using var app = builder.Build();
 

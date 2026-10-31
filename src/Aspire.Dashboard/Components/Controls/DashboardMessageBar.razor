@@ -2,6 +2,7 @@
 @using Aspire.Dashboard.Resources
 @inject Microsoft.FluentUI.AspNetCore.Components.INotificationService NotificationService
 @inject IStringLocalizer<Dialogs> Loc
+@inject NavigationManager NavigationManager
 
 <div role="alert" class="dashboard-message-bar @IntentClass">
     <div class="dashboard-message-bar-icon">
@@ -22,7 +23,7 @@
                 @Content.Message.TrimEnd()
             }
         </span>
-        @if (!string.IsNullOrEmpty(Content.LinkText) && !string.IsNullOrEmpty(Content.LinkUrl))
+        @if (!Content.LinkAsAction && !string.IsNullOrEmpty(Content.LinkText) && !string.IsNullOrEmpty(Content.LinkUrl))
         {
             @* Message bar links are specified by application code, so they don't need automatic URL sanitization. *@
             <span class="dashboard-message-bar-link">
@@ -31,9 +32,13 @@
         }
     </div>
     <div class="dashboard-message-bar-actions">
+        @if (Content.LinkAsAction && !string.IsNullOrEmpty(Content.LinkText) && !string.IsNullOrEmpty(Content.LinkUrl))
+        {
+            <a class="dashboard-message-bar-link-action" href="@Content.LinkUrl">@Content.LinkText</a>
+        }
         @if (!string.IsNullOrEmpty(Content.PrimaryAction))
         {
-            <FluentButton Class="aspire-compact-button aspire-neutral-button dashboard-message-bar-action" OnClick="@(() => CloseAsync(true))">@Content.PrimaryAction</FluentButton>
+            <FluentButton Class="aspire-compact-button aspire-neutral-button dashboard-message-bar-action" OnClick="@OnPrimaryActionAsync">@Content.PrimaryAction</FluentButton>
         }
         @if (!string.IsNullOrEmpty(Content.SecondaryAction))
         {
@@ -78,6 +83,17 @@
         MessageBarIntent.Warning => "intent-warning",
         _ => "intent-info"
     };
+
+    private Task OnPrimaryActionAsync()
+    {
+        if (Content.PrimaryActionUrl is { } url)
+        {
+            NavigationManager.NavigateTo(url);
+            return Task.CompletedTask;
+        }
+
+        return CloseAsync(true);
+    }
 
     private Task CloseAsync(object? data)
     {

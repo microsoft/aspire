@@ -66,6 +66,8 @@ If non-trivial UI changes are detected, add a prominent `### Screenshots / Recor
 
 For non-trivial UI changes, upload screenshots or recordings as GitHub user attachments. Do not commit them to the source branch unless explicitly requested.
 
+To make a recording, use the `create-video` skill: it can record the change from this branch's own build, and its `web` rendition stays under GitHub's 10 MB attachment limit. A short pull request demo needs no narration or slides.
+
 Before uploading, inspect every artifact for secrets, credentials, tokens, customer or confidential data, private URLs, and unintended personal information. Redact or regenerate any artifact that contains sensitive data, and do not upload it until the inspection passes. Treat uploads as permanent public data because this public repository exposes attachments to everyone and the attachment API has no deletion endpoint.
 
 Check attachment support for the command that will write the PR: `gh pr create --help` for a new PR or `gh pr edit --help` for an existing PR. Use `--attach` only when that command advertises it. Prepare local Markdown references for step 5 to insert at the intended location in `pr-body.md`. Use a table for before/after images when appropriate:

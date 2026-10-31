@@ -121,7 +121,11 @@ beforeEach(() => {
             append(style) { this.styles.push(style.textContent); },
         };
         const client = {
-            element: { parentElement: element, shadowRoot: shadow, dataset: {}, style: {}, contains: value => value === client.element },
+            element: {
+                parentElement: element, shadowRoot: shadow, dataset: {}, style: {}, attributes: new Set(),
+                contains: value => value === client.element,
+                toggleAttribute(name, force) { force ? this.attributes.add(name) : this.attributes.delete(name); return !!force; },
+            },
             connected: true,
             peer: { id: "browser-1", primaryId: "cli-1", isPrimary: false },
             geometry: { columns: 100, rows: 30 },
@@ -269,6 +273,7 @@ function mount({ visible = true, dotNetRef, options = {} } = {}) {
     const footer = Object.assign(new EventTarget(), {
         querySelector: () => null,
         querySelectorAll: () => footerControls,
+        contains: element => element === footer || footerControls.includes(element),
         focus() { document.activeElement = this; },
     });
     const viewId = options.viewId ?? `view-${++serial}`;
@@ -301,7 +306,7 @@ function retry() {
     return delay;
 }
 
-test("pointer focus styling ends on keyboard input without changing terminal focus", async () => {
+test("pointer focus styling ends on keyboard navigation outside the terminal without changing focus", async () => {
     const { element } = mount();
     const { client } = attempts[0];
     attempts[0].resolve();
@@ -312,8 +317,8 @@ test("pointer focus styling ends on keyboard input without changing terminal foc
     assert.equal(client.element.dataset.aspirePointerInput, "true");
     assert.equal(pointer.defaultPrevented, false);
 
-    const keyboard = new Event("keydown", { cancelable: true });
-    element.dispatchEvent(keyboard);
+    const keyboard = Object.assign(new Event("keydown", { cancelable: true }), { key: "Tab" });
+    window.dispatchEvent(keyboard);
     assert.equal(client.element.dataset.aspirePointerInput, undefined);
     assert.equal(keyboard.defaultPrevented, false);
     assert.equal(client.focusCalls, focusCalls);
@@ -333,7 +338,7 @@ test("pointer focus listeners follow replacement clients and are removed on disp
     assert.equal(replacement.element.dataset.aspirePointerInput, "true");
 
     terminal.disposeTerminal(id);
-    element.dispatchEvent(new Event("keydown"));
+    window.dispatchEvent(new Event("keydown"));
     assert.equal(replacement.element.dataset.aspirePointerInput, "true");
 });
 
@@ -1776,6 +1781,24 @@ test("disposing unregisters the footer focus listener", async () => {
     assert.equal(attempts[0].client.focusCalls, 1);
 });
 
+test("late layout activation refits without stealing focus from footer controls", async () => {
+    const { id, footerControls } = mount({ options: { autoFit: true } });
+    const { client } = attempts[0];
+    attempts[0].resolve();
+    await settle();
+    attempts[0].role(true);
+    const focusCalls = client.focusCalls;
+    const sizingCalls = client.sizingCalls.length;
+    for (const control of footerControls) {
+        control.focus();
+        terminal.refreshLayout(id);
+        await settle();
+        assert.equal(document.activeElement, control);
+    }
+    assert.equal(client.focusCalls, focusCalls);
+    assert.equal(client.sizingCalls.length, sizingCalls + footerControls.length);
+});
+
 test("font preference follows its surface across remounts but not another surface", async () => {
     const first = mount({ options: { sizeMemoryKey: "memory:dock" } });
     attempts[0].resolve();
@@ -1843,6 +1866,40 @@ test("font stepper states use package bounds instead of the former xterm range",
     assert.equal(state.fontPx, MAX_FONT_SIZE);
     assert.equal(state.canDecreaseFontSize, true);
     assert.equal(state.canIncreaseFontSize, false);
+});
+
+test("the toolbar follows rendered font metrics when a follower is expanded or resized", async () => {
+    const { id } = mount();
+    const attempt = attempts[0];
+    attempt.client.geometry = { columns: 80, rows: 24, cellWidth: 10, cellHeight: 20 };
+    attempt.resolve();
+    await settle();
+    for (const [cellHeight, fontPx] of [[16.25, 13], [40, 32], [10, 8]]) {
+        attempt.options.onLayoutChange({ cellWidth: cellHeight / 2, cellHeight });
+        assert.equal(terminal.getToolbarState(id).fontPx, fontPx);
+    }
+    assert.equal(attempt.client.primaryRequests, 0, "Metric notifications must not take sizing ownership");
+    assert.deepEqual(attempt.client.sizingCalls, []);
+});
+
+test("explicit card expansion reapplies automatic sizing once without reconnecting or fighting later resizes", async () => {
+    const { id, element } = mount({ options: { autoFit: true, sizeMemoryKey: "expansion" } });
+    const attempt = attempts[0];
+    attempt.resolve();
+    await settle();
+    attempt.role(true);
+    terminal.setFontSizeFromHost(id, 18);
+    attempt.role(false);
+    element.clientWidth = 1600;
+    element.clientHeight = 900;
+    terminal.refreshLayout(id);
+    assert.equal(attempt.client.primaryRequests, 2);
+    attempt.role(true);
+    assert.deepEqual(attempt.client.sizingCalls.at(-1), { mode: "auto", fontSize: 18 });
+    attempt.role(false);
+    observers[0].callback();
+    assert.equal(attempt.client.primaryRequests, 2);
+    assert.equal(attempts.length, 1);
 });
 
 test("container-sized surfaces retain the font stepper but reject fixed presets", async () => {

@@ -1,0 +1,8 @@
+a.container-image-link {
+    color: var(--colorBrandForegroundLink);
+    text-decoration: none;
+}
+
+a.container-image-link:hover {
+    text-decoration: underline;
+}

@@ -3,6 +3,7 @@
 
 using System.Text.Json;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Tests.Utils;
 
 namespace Aspire.Cli.Tests.Configuration;
 
@@ -36,6 +37,38 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
         Assert.NotNull(result);
         Assert.Equal("MyApp/MyApp.csproj", result.AppHost?.Path);
         Assert.Equal("daily", result.Channel);
+    }
+
+    [Fact]
+    public async Task LoadAndSave_PreservesTypedTemplateSourcesAndUnmodeledSettings()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(path, """
+            {
+              "TemplateSources": {
+                "local": { "Path": "/templates" },
+                "git": { "repository": "https://example.test/templates", "ref": null, "path": null },
+                "unfinished": { "ref": "main" }
+              },
+              "unrelated": { "enabled": true }
+            }
+            """);
+
+        var config = AspireConfigFile.Load(workspace.Path);
+
+        Assert.NotNull(config);
+        Assert.NotNull(config.TemplateSources);
+        Assert.Equal(["local", "git", "unfinished"], config.TemplateSources.Keys);
+        Assert.Equal("/templates", config.TemplateSources["local"]?.Path);
+        Assert.Equal("https://example.test/templates", config.TemplateSources["git"]?.Repository);
+        Assert.Null(config.TemplateSources["git"]?.Ref);
+        Assert.Null(config.TemplateSources["git"]?.Path);
+        Assert.Equal("main", config.TemplateSources["unfinished"]?.Ref);
+
+        config.Save(workspace.Path);
+
+        await Verify(await File.ReadAllTextAsync(path), "json");
     }
 
     [Fact]
@@ -227,6 +260,22 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
         config.Save(subDir);
 
         Assert.True(File.Exists(Path.Combine(subDir, AspireConfigFile.FileName)));
+    }
+
+    [Fact]
+    public void Save_WritesOsLineBreaksAndSingleFinalNewline()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var config = new AspireConfigFile
+        {
+            AppHost = new AspireConfigAppHost { Path = "src/AppHost/AppHost.csproj" },
+            Channel = "daily"
+        };
+
+        config.Save(workspace.WorkspaceRoot.FullName);
+
+        LineEndingAssert.FileUsesOsLineBreaksAndSingleFinalNewline(Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName));
     }
 
     [Fact]

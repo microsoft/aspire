@@ -16,7 +16,8 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// </summary>
 /// <remarks>
 /// Each test bind-mounts a host-side directory as <c>/root/.aspire/</c> in the container,
-/// enabling direct host-side file creation and verification.
+/// enabling host-side file creation. Private configuration files are exported to
+/// readable test-only copies for host-side verification.
 /// </remarks>
 public sealed class ConfigMigrationTests(ITestOutputHelper output)
 {
@@ -140,10 +141,11 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Migrated aspire.config.json retains non-channel content (features, sdkVersion).
-        AssertFileContains(newConfigPath, "polyglotSupportEnabled");
+        var exportedConfigPath = await ExportGlobalConfigurationAsync(auto, counter, workspace);
+        AssertFileContains(exportedConfigPath, "polyglotSupportEnabled");
 
         // Channel is intentionally dropped from the migrated global config.
-        AssertFileDoesNotContain(newConfigPath, "\"channel\"", "staging");
+        AssertFileDoesNotContain(exportedConfigPath, "\"channel\"", "staging");
 
         // Legacy file is preserved unchanged for backward compatibility, so it still
         // contains the original channel value.
@@ -199,8 +201,9 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Verify aspire.config.json still has "preview" (NOT overwritten with "staging").
-        AssertFileContains(newConfigPath, "preview");
-        AssertFileDoesNotContain(newConfigPath, "staging");
+        var exportedConfigPath = await ExportGlobalConfigurationAsync(auto, counter, workspace);
+        AssertFileContains(exportedConfigPath, "preview");
+        AssertFileDoesNotContain(exportedConfigPath, "staging");
 
         // Cleanup.
         await auto.TypeAsync("aspire config delete channel -g");
@@ -310,10 +313,11 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Migrated aspire.config.json retains non-channel content (features).
-        AssertFileContains(newConfigPath, "polyglotSupportEnabled");
+        var exportedConfigPath = await ExportGlobalConfigurationAsync(auto, counter, workspace);
+        AssertFileContains(exportedConfigPath, "polyglotSupportEnabled");
 
         // Channel is intentionally dropped from the migrated global config.
-        AssertFileDoesNotContain(newConfigPath, "\"channel\"", "staging");
+        AssertFileDoesNotContain(exportedConfigPath, "\"channel\"", "staging");
 
         // Legacy file is preserved unchanged for backward compatibility, so it still
         // contains the original channel value.
@@ -378,7 +382,8 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Verify the file has nested JSON structure (host-side).
-        AssertFileContains(newConfigPath, "features", "polyglotSupportEnabled", "preview");
+        var exportedConfigPath = await ExportGlobalConfigurationAsync(auto, counter, workspace);
+        AssertFileContains(exportedConfigPath, "features", "polyglotSupportEnabled", "preview");
 
         // Verify values are readable via aspire config get.
         await auto.ClearScreenAsync(counter);
@@ -464,13 +469,14 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Migrated aspire.config.json retains non-channel content (features, packages).
-        AssertFileContains(newConfigPath,
+        var exportedConfigPath = await ExportGlobalConfigurationAsync(auto, counter, workspace);
+        AssertFileContains(exportedConfigPath,
             "polyglotSupportEnabled",
             "stagingChannelEnabled",
             "Aspire.Hosting.Redis");
 
         // Channel is intentionally dropped from the migrated global config.
-        AssertFileDoesNotContain(newConfigPath, "\"channel\"", "preview");
+        AssertFileDoesNotContain(exportedConfigPath, "\"channel\"", "preview");
 
         // Legacy file is preserved unchanged for backward compatibility, so it still
         // contains the original channel value.
@@ -558,9 +564,8 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Step 5: Verify aspire.config.json exists with migrated values (host-side).
-        var newConfigPath = Path.Combine(aspireHomeDir, "aspire.config.json");
-
-        AssertFileContains(newConfigPath, "staging", "polyglotSupportEnabled");
+        var exportedConfigPath = await ExportGlobalConfigurationAsync(auto, counter, workspace);
+        AssertFileContains(exportedConfigPath, "staging", "polyglotSupportEnabled");
 
         // Step 6: Verify values are still accessible via the new CLI.
         await auto.ClearScreenAsync(counter);
@@ -576,5 +581,16 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire config delete features.polyglotSupportEnabled -g");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
+    }
+
+    private static async Task<string> ExportGlobalConfigurationAsync(
+        Hex1bTerminalAutomator auto, SequenceCounter counter, TemporaryWorkspace workspace)
+    {
+        // The container writes private files as root; the Linux host runner cannot read them.
+        // Change only the test copy's permissions, not the live CLI configuration.
+        await auto.RunCommandAsync(
+            "cp \"$HOME/.aspire/aspire.config.json\" exported-aspire.config.json && chmod a+r exported-aspire.config.json", counter);
+
+        return Path.Combine(workspace.Path, "exported-aspire.config.json");
     }
 }

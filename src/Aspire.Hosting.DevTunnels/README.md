@@ -18,6 +18,7 @@ From your AppHost directory, add the `Aspire.Hosting.DevTunnels` integration wit
 
 ```bash
 aspire add Aspire.Hosting.DevTunnels
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ### Install the devtunnel CLI
@@ -35,7 +36,7 @@ Before you create a dev tunnel, you first need to download and install the devtu
 ```csharp
 var builder = DistributedApplication.CreateBuilder(args);
 
-var web = builder.AddProject<Projects.WebApp>("web");
+var web = builder.AddDotnetProject("web", "../WebApp/WebApp.csproj");
 
 var tunnel = builder.AddDevTunnel("mytunnel")
                     .WithReference(web);
@@ -69,7 +70,7 @@ var tunnel = builder.AddDevTunnel("publicapi")
 ### Expose only specific endpoint(s)
 
 ```csharp
-var web = builder.AddProject<Projects.WebApp>("web");
+var web = builder.AddDotnetProject("web", "../WebApp/WebApp.csproj");
 
 var tunnel = builder.AddDevTunnel("apitunnel")
                     .WithReference(web.GetEndpoint("api"));  // Only expose the "api" endpoint
@@ -80,7 +81,7 @@ var tunnel = builder.AddDevTunnel("apitunnel")
 You can control anonymous access at the port (endpoint) level using the overload of `WithReference` that accepts a `bool allowAnonymous` parameter:
 
 ```csharp
-var api = builder.AddProject<Projects.Api>("api");
+var api = builder.AddDotnetProject("api", "../Api/Api.csproj");
 
 var tunnel = builder.AddDevTunnel("mixedaccess")
                     .WithReference(api.GetEndpoint("public"), allowAnonymous: true)
@@ -155,7 +156,7 @@ duration or an access-token lifetime. See the [devtunnel CLI expiration document
 ### Multiple tunnels for different audiences
 
 ```csharp
-var web = builder.AddProject<Projects.WebApp>("web");
+var web = builder.AddDotnetProject("web", "../WebApp/WebApp.csproj");
 
 var publicTunnel = builder.AddDevTunnel("public")
                           .WithReference(web)
@@ -172,7 +173,7 @@ var privateTunnel = builder.AddDevTunnel("private")
 When another resource references a dev tunnel via:
 
 ```csharp
-builder.AddProject<Projects.ClientApp>("client")
+builder.AddDotnetProject("client", "../ClientApp/ClientApp.csproj")
        .WithReference(web, publicTunnel);  // Use the tunneled address for 'web'
 ```
 

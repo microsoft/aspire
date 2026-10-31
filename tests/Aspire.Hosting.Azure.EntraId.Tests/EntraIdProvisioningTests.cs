@@ -9,6 +9,7 @@
 using Aspire.Hosting.ApplicationModel;
 using System.Runtime.CompilerServices;
 using Aspire.Hosting.Azure.EntraId.Provisioning;
+using Aspire.Hosting.Dotnet;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Tests.Dcp;
 using Aspire.Hosting.Tests.Utils;
@@ -37,6 +38,97 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
             .WithServicePrincipalOwners(spOwner);
 
         await Verify(entra.Resource.GetBicepTemplateString(), "bicep");
+    }
+
+    [Fact]
+    public async Task WithAppRole_GeneratesAppRolesWithStableIds()
+    {
+        static string Generate()
+        {
+            using var builder = TestDistributedApplicationBuilder.Create();
+            var entra = builder.AddEntraIdApplication("entra-api")
+                .WithAppRole(new EntraIdAppRole("User", "User", "Can use the API."))
+                .WithAppRole(new EntraIdAppRole("Admin", "Administrator", "Can administer the API.", ["User", "Application"]))
+                .WithAppRole(new EntraIdAppRole("Reader", "Reader", "Can read data.", ["Application"], new Guid("11112222-aaaa-3333-bbbb-4444cccc5555")))
+                .WithAppRole(new EntraIdAppRole("Retired", "Retired", "Being removed.", isEnabled: false));
+            return entra.Resource.GetBicepTemplateString();
+        }
+
+        var bicep = Generate();
+        Assert.Equal(bicep, Generate());
+        await Verify(bicep, "bicep");
+    }
+
+    [Fact]
+    public void WithAppRole_ValidatesArguments()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var entra = builder.AddEntraIdApplication("entra-api").WithAppRole(new EntraIdAppRole("Admin", "Admin", "Admin role."));
+
+        Assert.Throws<ArgumentException>(() => entra.WithAppRole(new EntraIdAppRole("Admin", "Other", "Duplicate value.")));
+        Assert.Throws<ArgumentException>(() => entra.WithAppRole(new EntraIdAppRole("Has Space", "Name", "Description.")));
+        Assert.Throws<ArgumentException>(() => entra.WithAppRole(new EntraIdAppRole("Other", "Name", "Description.", [])));
+        Assert.Throws<ArgumentException>(() => entra.WithAppRole(new EntraIdAppRole("Other", "Name", "Description.", id: Guid.Empty)));
+        Assert.Throws<ArgumentException>(() => entra.WithAppRole(new EntraIdAppRole("Other", " ", "Description.")));
+        Assert.Single(entra.Resource.AppRoles);
+    }
+
+    [Theory]
+    [InlineData(".Admin")]
+    [InlineData("Admin\"")]
+    [InlineData("Ad min")]
+    [InlineData("Adm\u00efn")]
+    [InlineData("Admin\n")]
+    public void AppRole_RejectsValuesThatGraphRejects(string value)
+    {
+        Assert.Throws<ArgumentException>(() => new EntraIdAppRole(value, "Name", "Description."));
+    }
+
+    [Theory]
+    [InlineData("Task.Write")]
+    [InlineData("Admin:Read-Only_2")]
+    [InlineData("a!#$%&'()*+,-/:;<=>?@[]^_`{|}~")]
+    public void AppRole_AcceptsValuesThatGraphAllows(string value)
+    {
+        Assert.Equal(value, new EntraIdAppRole(value, "Name", "Description.").Value);
+    }
+
+    [Fact]
+    public void AppRole_RejectsValuesLongerThanGraphAllows()
+    {
+        Assert.Throws<ArgumentException>(() => new EntraIdAppRole(new string('a', 121), "Name", "Description."));
+        Assert.Equal(120, new EntraIdAppRole(new string('a', 120), "Name", "Description.").Value.Length);
+    }
+
+    [Fact]
+    public void AppRoles_CannotBeMutatedThroughTheCollection()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var entra = builder.AddEntraIdApplication("entra-api").WithAppRole(new EntraIdAppRole("Admin", "Admin", "Admin role."));
+
+        var roles = Assert.IsAssignableFrom<IList<EntraIdAppRole>>(entra.Resource.AppRoles);
+        Assert.Throws<NotSupportedException>(() => roles.Add(new EntraIdAppRole("Other", "Other", "Other role.")));
+        Assert.Throws<NotSupportedException>(roles.Clear);
+        Assert.Single(entra.Resource.AppRoles);
+    }
+
+    [Fact]
+    public void WithAppRole_RejectsDuplicateRoleIds()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var id = Guid.NewGuid();
+        var entra = builder.AddEntraIdApplication("entra-api").WithAppRole(new EntraIdAppRole("A", "A", "A role.", id: id));
+
+        Assert.Throws<ArgumentException>(() => entra.WithAppRole(new EntraIdAppRole("B", "B", "B role.", id: id)));
+    }
+
+    [Fact]
+    public void WithAppRole_ExistingApplication_Throws()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var entra = builder.AddExistingEntraApplication("entra-api", "00000000-0000-0000-0000-000000000001", "00000000-0000-0000-0000-000000000002");
+
+        Assert.Throws<InvalidOperationException>(() => entra.WithAppRole(new EntraIdAppRole("Admin", "Admin", "Admin role.")));
     }
 
     [Fact]
@@ -111,14 +203,23 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
         await Verify(entra.Resource.GetBicepTemplateString(), "bicep");
     }
 
-    [Fact]
-    public async Task WithFederatedManagedIdentityCredential_ConsumerIdentity_EmitsClientIdOutputInPublishMode()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task WithFederatedManagedIdentityCredential_ConsumerIdentity_EmitsClientIdOutputInPublishMode(bool useDotnetProject)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var identity = builder.AddAzureUserAssignedIdentity("web-identity");
         var entra = builder.AddEntraIdApplication("entra-web")
             .PublishWithFederatedManagedIdentityCredential();
-        var web = builder.AddResource(new ProjectResource("web")).WithAzureUserAssignedIdentity(identity).WithReference(entra);
+#pragma warning disable CS0618 // Federated credentials must use the assigned consumer identity through either factory.
+        IResourceBuilder<IResourceWithEnvironment> web = useDotnetProject
+            ? builder.AddDotnetProject("web", "web.csproj", options => options.ExcludeLaunchProfile = true)
+                .WithAzureUserAssignedIdentity(identity)
+            : builder.AddProject("web", "web.csproj", options => options.ExcludeLaunchProfile = true)
+                .WithAzureUserAssignedIdentity(identity);
+#pragma warning restore CS0618
+        web.WithReference(entra);
 
         var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
             web.Resource, DistributedApplicationOperation.Publish, TestServiceProvider.Instance);
@@ -127,14 +228,21 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
         Assert.Equal("SignedAssertionFromManagedIdentity", env["AzureAd__ClientCredentials__0__SourceType"]);
     }
 
-    [Fact]
-    public void ValidateManagedIdentities_RejectsResourceWithoutIdentity()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ValidateManagedIdentities_RejectsResourceWithoutIdentity(bool useDotnetProject)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var identity = builder.AddAzureUserAssignedIdentity("web-identity");
         var entra = builder.AddEntraIdApplication("entra-web")
             .PublishWithFederatedManagedIdentityCredential(identity);
-        builder.AddResource(new ProjectResource("web")).WithReference(entra);
+#pragma warning disable CS0618 // Identity validation must not silently skip either project resource type.
+        IResourceBuilder<IResourceWithEnvironment> web = useDotnetProject
+            ? builder.AddDotnetProject("web", "web.csproj", options => options.ExcludeLaunchProfile = true)
+            : builder.AddProject("web", "web.csproj", options => options.ExcludeLaunchProfile = true);
+#pragma warning restore CS0618
+        web.WithReference(entra);
 
         var exception = Assert.Throws<InvalidOperationException>(entra.Resource.ValidateManagedIdentities);
         Assert.Contains("no user-assigned managed identity", exception.Message);
@@ -157,13 +265,20 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
         Assert.Equal("{trusted-identity.outputs.clientId}", env["AzureAd__ClientCredentials__0__ManagedIdentityClientId"]);
     }
 
-    [Fact]
-    public async Task PublishWithFederatedManagedIdentityCredential_EnvironmentCallbackRunBeforeIdentityExists_StillResolvesIt()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PublishWithFederatedManagedIdentityCredential_EnvironmentCallbackRunBeforeIdentityExists_StillResolvesIt(bool useDotnetProject)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var entra = builder.AddEntraIdApplication("entra-web")
             .PublishWithFederatedManagedIdentityCredential();
-        var web = builder.AddResource(new ProjectResource("web")).WithReference(entra);
+#pragma warning disable CS0618 // Cached dependency discovery must preserve late identity resolution for both factories.
+        IResourceBuilder<IResourceWithEnvironment> web = useDotnetProject
+            ? builder.AddDotnetProject("web", "web.csproj", options => options.ExcludeLaunchProfile = true)
+            : builder.AddProject("web", "web.csproj", options => options.ExcludeLaunchProfile = true);
+#pragma warning restore CS0618
+        web.WithReference(entra);
 
         // The Azure resource preparer runs the environment callbacks to discover dependencies before it attaches
         // identities, and a callback's result is cached, so the value must not need the identity at that point.
@@ -1160,14 +1275,20 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task AddExistingEntraApplication_DeployDoesNotRequireAzure(bool useParameters)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task AddExistingEntraApplication_DeployDoesNotRequireAzure(bool useParameters, bool useExport)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(
             DistributedApplicationOperation.Publish, outputHelper, workspace.Path, step: WellKnownPipelineSteps.Deploy);
-        var entra = useParameters
+        var entra = useExport
+            ? builder.AddExistingEntraApplicationForExport("entra-web",
+                useParameters ? builder.AddParameter("tenant-id", TenantId) : TenantId,
+                useParameters ? builder.AddParameter("client-id", ClientId) : ClientId)
+            : useParameters
             ? builder.AddExistingEntraApplication("entra-web",
                 builder.AddParameter("tenant-id", TenantId), builder.AddParameter("client-id", ClientId))
             : builder.AddExistingEntraApplication("entra-web", TenantId, ClientId);
@@ -1389,9 +1510,11 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
     [InlineData(nameof(ProjectResource), false)]
     [InlineData(nameof(ExecutableResource), false)]
     [InlineData(nameof(ContainerResource), false)]
+    [InlineData(nameof(DotnetProjectResource), false)]
     [InlineData(nameof(ProjectResource), true)]
     [InlineData(nameof(ExecutableResource), true)]
     [InlineData(nameof(ContainerResource), true)]
+    [InlineData(nameof(DotnetProjectResource), true)]
     public void WithReference_DoesNotAddImplicitWaits(string resourceType, bool existing)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
@@ -1404,13 +1527,16 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
             nameof(ProjectResource) => builder.AddResource(new ProjectResource("consumer")),
             nameof(ExecutableResource) => builder.AddExecutable("consumer", "node", "."),
             nameof(ContainerResource) => builder.AddContainer("consumer", "test-image"),
+            nameof(DotnetProjectResource) => builder.AddDotnetProject("consumer", "consumer.csproj", options => options.ExcludeLaunchProfile = true),
             _ => throw new ArgumentOutOfRangeException(nameof(resourceType))
         };
 
+        // Modern projects already wait for their build resource; authentication references must preserve those waits.
+        var initialWaits = consumer.Resource.Annotations.OfType<WaitAnnotation>().ToArray();
         Assert.Same(consumer, consumer.WithReference(entra));
         consumer.WithReference(entra, connectionName: "OTHER");
 
-        Assert.Empty(consumer.Resource.Annotations.OfType<WaitAnnotation>());
+        Assert.Equal(initialWaits, consumer.Resource.Annotations.OfType<WaitAnnotation>());
     }
 
     [Fact]

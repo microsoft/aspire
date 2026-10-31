@@ -4,27 +4,27 @@
     <body>
       <trans-unit id="Description">
         <source>Display logs from resources in a running AppHost</source>
-        <target state="needs-review-translation">Afficher les journaux des ressources dans un AppHost Aspire en cours d’exécution.</target>
+        <target state="translated">Afficher les journaux à partir de ressources dans un AppHost en cours d’exécution</target>
         <note />
       </trans-unit>
       <trans-unit id="FollowOptionDescription">
         <source>Stream logs in real-time as they are written</source>
-        <target state="needs-review-translation">Diffuser les journaux en temps réel au fur et à mesure de leur écriture.</target>
+        <target state="translated">Diffusez les journaux en temps réel au fur et à mesure de leur écriture</target>
         <note />
       </trans-unit>
       <trans-unit id="IncludeHiddenOptionDescription">
         <source>Include hidden resources in the output</source>
-        <target state="new">Include hidden resources in the output</target>
+        <target state="translated">Inclure des ressources masquées dans la sortie</target>
         <note />
       </trans-unit>
       <trans-unit id="JsonOptionDescription">
         <source>Output format (Table or Json)</source>
-        <target state="needs-review-translation">Générer les journaux au format JSON (NDJSON).</target>
+        <target state="translated">Format de sortie (Table ou JSON)</target>
         <note />
       </trans-unit>
       <trans-unit id="NoLogsFound">
         <source>No logs found.</source>
-        <target state="new">No logs found.</target>
+        <target state="translated">Aucun journal trouvé.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoResourcesFound">
@@ -34,7 +34,7 @@
       </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
         <source>The name of the resource to get logs for. If not specified, logs from all resources are shown.</source>
-        <target state="needs-review-translation">Le nom de la ressource pour laquelle obtenir les journaux. Si aucun nom n’est spécifié, les journaux d’activité de toutes les ressources sont affichées.</target>
+        <target state="translated">Le nom de la ressource pour laquelle obtenir les journaux. Si aucun nom n’est spécifié, les journaux d’activité de toutes les ressources sont affichées.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceNotFound">
@@ -49,7 +49,7 @@
       </trans-unit>
       <trans-unit id="SearchOptionDescription">
         <source>Full-text search to filter log content. See https://aka.ms/aspire/cli-search for more details</source>
-        <target state="new">Full-text search to filter log content. See https://aka.ms/aspire/cli-search for more details</target>
+        <target state="translated">Recherche en texte intégral pour filtrer le contenu du journal. Consultez https://aka.ms/aspire/cli-search pour plus de détails</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAppHostAction">
@@ -64,7 +64,7 @@
       </trans-unit>
       <trans-unit id="TailOptionDescription">
         <source>Number of lines to show from the end of logs (default: all)</source>
-        <target state="needs-review-translation">Nombre de lignes à afficher à partir de la fin des journaux (par défaut : toutes).</target>
+        <target state="translated">Nombre de lignes à afficher à partir de la fin des journaux (par défaut : toutes)</target>
         <note />
       </trans-unit>
       <trans-unit id="TailRequiresResource">
@@ -74,7 +74,7 @@
       </trans-unit>
       <trans-unit id="TimestampsOptionDescription">
         <source>Show timestamps for each log line</source>
-        <target state="new">Show timestamps for each log line</target>
+        <target state="translated">Afficher les horodatages pour chaque ligne de journal</target>
         <note />
       </trans-unit>
       <trans-unit id="GettingLogs">

@@ -1743,7 +1743,9 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         var projectPath = CreateBuildOutputTestProject(workspace.WorkspaceRoot.FullName, rebuildOutputMarker);
 
         using var builder = CreateBuilder();
+#pragma warning disable CS0618 // Retain supported legacy project command invocation.
         var project = builder.AddProject("myProject", projectPath, options => options.ExcludeLaunchProfile = true);
+#pragma warning restore CS0618
         using var app = builder.Build();
 
         await app.StartAsync().DefaultTimeout(TimeSpan.FromMinutes(2));

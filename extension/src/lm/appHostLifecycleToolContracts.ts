@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
 
-import { type CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
 import { type AppHostIdentityRelation } from '../utils/appHostIdentity';
 import { type AppHostEditorSessionSnapshot, type AppHostLaunchIsolation, type AppHostLaunchTarget, type AppHostStopResult } from '../services/AppHostLaunchService';
+import type { AppHostTargetDiscoveryService } from './appHostTargetResolverContracts';
 import { isValidLaunchProfile } from '../utils/launchProfile';
 
 /**
@@ -140,15 +140,6 @@ export interface AppHostLifecycleLaunchService extends AppHostEditorStateLaunchS
 }
 
 /**
- * Narrow view of `AppHostDiscoveryService`. This is the registry the AppHost view, the
- * status bar, and the Run/Debug commands already resolve against, and it is populated by
- * the CLI's own `aspire ls --format json` output.
- */
-export interface AppHostLifecycleDiscoveryService {
-    discover(workspaceFolder: vscode.WorkspaceFolder, forceRefresh?: boolean, cancellationToken?: vscode.CancellationToken): Promise<readonly CandidateAppHostDisplayInfo[]>;
-}
-
-/**
  * Editor-created sessions for a requested AppHost, plus whether any session's relationship
  * to it could not be proven. See {@link AppHostIdentityRelation}.
  */
@@ -179,9 +170,10 @@ export interface AppHostLifecycleEditorSession {
 
 export interface AppHostLifecycleToolDependencies {
     readonly launchService: AppHostLifecycleLaunchService;
-    readonly discoveryService: AppHostLifecycleDiscoveryService;
+    readonly discoveryService: AppHostTargetDiscoveryService;
 }
 
+export type { AppHostTargetDiscoveryService as AppHostLifecycleDiscoveryService } from './appHostTargetResolverContracts';
 export type { LanguageModelToolRegistration as AppHostLifecycleToolRegistration } from './languageModelToolRegistration';
 
 export function createResult(
