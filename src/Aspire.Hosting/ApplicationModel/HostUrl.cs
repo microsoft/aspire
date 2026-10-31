@@ -9,8 +9,8 @@ using Microsoft.Extensions.Options;
 namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
-/// Represents a URL on the host machine. When referenced in a container resource, localhost will be
-/// replaced with the configured container host name.
+/// Represents a URL on the host machine. When referenced in a container resource, localhost (including
+/// <c>*.localhost</c> host names such as <c>*.dev.localhost</c>) will be replaced with the configured container host name.
 /// </summary>
 public record HostUrl(string Url) : IExpressionValue, IValueProvider, IManifestExpressionProvider
 {
@@ -152,5 +152,7 @@ public record HostUrl(string Url) : IExpressionValue, IValueProvider, IManifestE
         return endpoint.DefaultNetworkID == KnownNetworkIdentifiers.LocalhostNetwork && endpoint.Port == port;
     }
 
-    private static bool IsLocalHost(string host) => host is "localhost" or "127.0.0.1" or "::1" or "[::1]";
+    // *.localhost names (for example *.dev.localhost) also resolve to the host's loopback address.
+    private static bool IsLocalHost(string host) =>
+        EndpointHostHelpers.IsLocalhostOrLocalhostTld(host) || host is "127.0.0.1" or "::1" or "[::1]";
 }
