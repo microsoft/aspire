@@ -4843,7 +4843,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         var kubernetesService = new TestKubernetesService { StoppedExecutableState = ExecutableState.FailedToStart };
         using var app = builder.Build();
-        var appExecutor = CreateAppExecutor(app.Services.GetRequiredService<DistributedApplicationModel>(), kubernetesService: kubernetesService);
+        await using var appExecutor = CreateAppExecutor(app.Services.GetRequiredService<DistributedApplicationModel>(), kubernetesService: kubernetesService);
 
         // A single attempt: the stop outcome is decided by the state DCP reports, not by polling.
         appExecutor.DeleteResourceRetryPipeline = new ResiliencePipelineBuilder<bool>().Build();
@@ -4867,7 +4867,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         var kubernetesService = new TestKubernetesService { StoppedContainerState = ContainerState.FailedToStart };
         using var app = builder.Build();
-        var appExecutor = CreateAppExecutor(app.Services.GetRequiredService<DistributedApplicationModel>(), kubernetesService: kubernetesService);
+        await using var appExecutor = CreateAppExecutor(app.Services.GetRequiredService<DistributedApplicationModel>(), kubernetesService: kubernetesService);
         appExecutor.DeleteResourceRetryPipeline = new ResiliencePipelineBuilder<bool>().Build();
 
         await appExecutor.RunApplicationAsync().DefaultTimeout();
@@ -4889,7 +4889,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         var kubernetesService = new TestKubernetesService { StoppedExecutableState = ExecutableState.Running };
         using var app = builder.Build();
-        var appExecutor = CreateAppExecutor(app.Services.GetRequiredService<DistributedApplicationModel>(), kubernetesService: kubernetesService);
+        await using var appExecutor = CreateAppExecutor(app.Services.GetRequiredService<DistributedApplicationModel>(), kubernetesService: kubernetesService);
         appExecutor.DeleteResourceRetryPipeline = new ResiliencePipelineBuilder<bool>().Build();
 
         await appExecutor.RunApplicationAsync().DefaultTimeout();

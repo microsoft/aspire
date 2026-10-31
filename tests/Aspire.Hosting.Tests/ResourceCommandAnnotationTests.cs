@@ -232,4 +232,18 @@ public class ResourceCommandAnnotationTests
 
         Assert.Equal(expected, CommandsConfigurationExtensions.IsRebuildComplete(resourceEvent, "project-rebuilder"));
     }
+
+    [Theory]
+    [InlineData("Running", true)]
+    [InlineData("Starting", true)]
+    [InlineData("Waiting", false)]
+    [InlineData("NotStarted", false)]
+    [InlineData("Finished", false)]
+    [InlineData("Exited", false)]
+    [InlineData("FailedToStart", false)]
+    [InlineData(null, false)]
+    public void ShouldRestartAfterRebuild_RestartsReplicasThatWereRunningOrStarting(string? preRebuildState, bool expected)
+    {
+        Assert.Equal(expected, CommandsConfigurationExtensions.ShouldRestartAfterRebuild(preRebuildState));
+    }
 }

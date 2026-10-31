@@ -301,7 +301,7 @@ internal static class CommandsConfigurationExtensions
 
             if (exitCode == 0)
             {
-                // Restart replicas that were Running before the rebuild.
+                // Restart replicas that were Running or Starting before the rebuild.
                 // Waiting replicas are already in the startup pipeline — when their deps become
                 // ready, CreateExecutableAsync will launch the freshly-built binary automatically.
                 LogBuildInformation(mainLogger, buildOutput, "Build succeeded. Restarting resource...");
@@ -309,7 +309,7 @@ internal static class CommandsConfigurationExtensions
                 foreach (var name in replicaNames)
                 {
                     var wasActive = preRebuildStates.TryGetValue(name, out var priorState)
-                        && priorState == KnownResourceStates.Running;
+                        && ShouldRestartAfterRebuild(priorState);
 
                     var wasWaiting = preRebuildStates.TryGetValue(name, out var waitState)
                         && waitState == KnownResourceStates.Waiting;
@@ -384,6 +384,11 @@ internal static class CommandsConfigurationExtensions
             }
         }
     }
+
+    // A replica that was Starting (e.g. restarted by a previous rebuild moments ago) was stopped for this
+    // rebuild just like a Running one, so it must be started again rather than restored to a stale state.
+    internal static bool ShouldRestartAfterRebuild(string? preRebuildState) =>
+        preRebuildState == KnownResourceStates.Running || preRebuildState == KnownResourceStates.Starting;
 
     internal static bool IsRebuildComplete(ResourceEvent resourceEvent, string rebuilderInstanceName)
     {
