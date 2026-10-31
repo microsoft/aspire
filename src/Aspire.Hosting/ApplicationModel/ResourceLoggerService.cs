@@ -53,6 +53,9 @@ public class ResourceLoggerService : IDisposable
         }
     }
 
+    internal Task<Stream> GetRawOutputAsync(string resourceName, bool standardError, CancellationToken cancellationToken) =>
+        _consoleLogsService.GetRawOutputAsync(resourceName, standardError, cancellationToken);
+
     /// <summary>
     /// Gets the logger for the resource to write to.
     /// </summary>
