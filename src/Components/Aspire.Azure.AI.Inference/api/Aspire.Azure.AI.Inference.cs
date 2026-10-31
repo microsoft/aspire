@@ -44,6 +44,8 @@ namespace Aspire.Azure.AI.Inference
 
         public string? DeploymentName { get { throw null; } set { } }
 
+        public bool DisableHealthChecks { get { throw null; } set { } }
+
         public bool DisableMetrics { get { throw null; } set { } }
 
         public bool DisableTracing { get { throw null; } set { } }
