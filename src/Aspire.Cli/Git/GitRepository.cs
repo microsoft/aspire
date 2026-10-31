@@ -159,8 +159,8 @@ internal sealed class GitRepository(CliExecutionContext executionContext, IEnvir
         var stdoutReader = process.StandardOutput;
         var stderrReader = process.StandardError;
         using var readCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        var stdoutTask = stdoutReader.ReadToEndAsync(readCts.Token);
-        var stderrTask = stderrReader.ReadToEndAsync(readCts.Token);
+        var stdoutTask = ReadAllTextAsync(stdoutReader, readCts.Token);
+        var stderrTask = ReadAllTextAsync(stderrReader, readCts.Token);
 
         try
         {
@@ -224,6 +224,16 @@ internal sealed class GitRepository(CliExecutionContext executionContext, IEnvir
         {
             logger.LogDebug(ex, "Could not kill git process.");
         }
+    }
+
+    private static async Task<string> ReadAllTextAsync(StreamReader reader, CancellationToken cancellationToken)
+    {
+        // Decode the raw bytes as Process.RunAndCaptureTextAsync does. StreamReader.ReadToEndAsync
+        // strips a leading byte order mark, which in `git ls-files -z` output is part of the first path.
+        var encoding = reader.CurrentEncoding;
+        using var buffer = new MemoryStream();
+        await reader.BaseStream.CopyToAsync(buffer, cancellationToken).ConfigureAwait(false);
+        return encoding.GetString(buffer.GetBuffer(), 0, (int)buffer.Length);
     }
 
     private static void DisposeWhenReadCompletes(Task readTask, StreamReader reader) =>

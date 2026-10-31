@@ -236,6 +236,48 @@ public class GitRepositoryTests(ITestOutputHelper outputHelper)
         }
     }
 
+    [Fact]
+    [SkipOnPlatform(TestPlatforms.Windows, "Uses a POSIX shell script as a fake git executable.")]
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    public async Task GetIncludedFilesAsync_FirstPathStartsWithByteOrderMark_PreservesPath()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        // U+FEFF is a valid file name character. When it starts the first path in the output it
+        // must not be treated as a byte order mark and stripped.
+        var fakeGitDir = Directory.CreateTempSubdirectory("aspire-fake-git-");
+        var fakeGitPath = Path.Combine(fakeGitDir.FullName, "git");
+        await File.WriteAllTextAsync(fakeGitPath, """
+            #!/bin/sh
+            printf '\357\273\277AppHost.csproj\000Other.csproj\000'
+            exit 0
+
+            """);
+        File.SetUnixFileMode(fakeGitPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+
+        try
+        {
+            using var profilingTelemetry = CreateProfilingTelemetry();
+            using var loggerFactory = CreateLoggerFactory();
+            var repo = new GitRepository(workspace.CreateExecutionContext(), new TestEnvironment(), loggerFactory.CreateLogger<GitRepository>(), profilingTelemetry, fakeGitPath);
+
+            var result = await repo.GetIncludedFilesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
+
+            Assert.NotNull(result);
+            Assert.Equal(
+                new[]
+                {
+                    Path.Combine(workspace.WorkspaceRoot.FullName, "\uFEFFAppHost.csproj"),
+                    Path.Combine(workspace.WorkspaceRoot.FullName, "Other.csproj")
+                }.Order(StringComparer.Ordinal),
+                result!.Order(StringComparer.Ordinal));
+        }
+        finally
+        {
+            fakeGitDir.Delete(recursive: true);
+        }
+    }
+
     private static void KillProcessesFromPidFile(string pidFile)
     {
         if (!File.Exists(pidFile))
