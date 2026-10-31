@@ -193,6 +193,32 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task NewCommand_CSharpEmptyTemplate_WritesAppHostSettingsWithProjectTemplateLogLevels()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CreateServiceCollection(workspace);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"new {KnownTemplateId.CSharpEmptyAppHost} --language csharp --name TemplateOut --output ./TemplateOut --localhost-tld false");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        // Single-file AppHosts read apphost.settings.json the same way project AppHosts read appsettings.json,
+        // so it must quiet the resource server and DCP logs like the project templates do.
+        var settingsPath = Path.Combine(workspace.WorkspaceRoot.FullName, "TemplateOut", "apphost.settings.json");
+        Assert.True(File.Exists(settingsPath), $"Expected '{settingsPath}' to be created.");
+
+        using var settings = System.Text.Json.JsonDocument.Parse(await File.ReadAllTextAsync(settingsPath));
+        var logLevels = settings.RootElement.GetProperty("Logging").GetProperty("LogLevel");
+        Assert.Equal("Information", logLevels.GetProperty("Default").GetString());
+        Assert.Equal("Warning", logLevels.GetProperty("Microsoft.AspNetCore").GetString());
+        Assert.Equal("Warning", logLevels.GetProperty("Aspire.Hosting.Dcp").GetString());
+    }
+
+    [Fact]
     public async Task NewCommandInteractiveFlowSmokeTest()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
