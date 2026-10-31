@@ -26,6 +26,11 @@ namespace Aspire.Hosting.Dcp;
 /// This approach was tested against naive incremental allocation, pure random allocation, and
 /// ephemeral port allocation. It was the fastest strategy tested while avoiding the worst-case
 /// failure modes of naive incremental search.
+///
+/// The probe releases the port before the workload binds it, so allocators for different applications
+/// in the same process (for example, tests that run AppHosts in parallel) could otherwise hand out the
+/// same port. Allocated ports are therefore also reserved in a process-wide
+/// <see cref="ProxylessEndpointPortReservations"/> until the allocator is disposed.
 /// </remarks>
 internal sealed class ProxylessEndpointPortAllocator : IDisposable
 {
@@ -36,6 +41,8 @@ internal sealed class ProxylessEndpointPortAllocator : IDisposable
     private readonly bool[] _visited;
     private readonly Dictionary<EndpointAnnotation, int> _reservedPorts = new(ReferenceEqualityComparer.Instance);
     private readonly Func<int, ProtocolType, bool> _tryProbe;
+    private readonly ProxylessEndpointPortReservations _processReservations;
+    private readonly List<int> _processReservedPorts = [];
     private int _visitedCount;
     private int _randomWalkCursor;
     private readonly int _randomWalkStep;
@@ -47,16 +54,17 @@ internal sealed class ProxylessEndpointPortAllocator : IDisposable
             options.Value.ProxylessEndpointPortRangeStart,
             options.Value.ProxylessEndpointPortRangeEnd,
             Random.Shared,
-            TryProbePort)
+            TryProbePort,
+            ProxylessEndpointPortReservations.Shared)
     {
     }
 
-    internal ProxylessEndpointPortAllocator(int rangeStart, int rangeEnd, Random random, Func<int, ProtocolType, bool> tryProbe)
-        : this(rangeStart, rangeEnd, GetRandomOffset(random, rangeStart, rangeEnd), GetRandomCoprimeStep(random, GetRangeSize(rangeStart, rangeEnd)), tryProbe)
+    internal ProxylessEndpointPortAllocator(int rangeStart, int rangeEnd, Random random, Func<int, ProtocolType, bool> tryProbe, ProxylessEndpointPortReservations? processReservations = null)
+        : this(rangeStart, rangeEnd, GetRandomOffset(random, rangeStart, rangeEnd), GetRandomCoprimeStep(random, GetRangeSize(rangeStart, rangeEnd)), tryProbe, processReservations)
     {
     }
 
-    internal ProxylessEndpointPortAllocator(int rangeStart, int rangeEnd, int randomWalkOffset, int randomWalkStep, Func<int, ProtocolType, bool> tryProbe)
+    internal ProxylessEndpointPortAllocator(int rangeStart, int rangeEnd, int randomWalkOffset, int randomWalkStep, Func<int, ProtocolType, bool> tryProbe, ProxylessEndpointPortReservations? processReservations = null)
     {
         PortRange.ValidateRange(rangeStart, rangeEnd, nameof(rangeStart), nameof(rangeEnd));
 
@@ -81,6 +89,7 @@ internal sealed class ProxylessEndpointPortAllocator : IDisposable
         _randomWalkCursor = randomWalkOffset;
         _randomWalkStep = randomWalkStep;
         _tryProbe = tryProbe;
+        _processReservations = processReservations ?? new ProxylessEndpointPortReservations();
     }
 
     public int AllocatePort(EndpointAnnotation endpoint)
@@ -133,6 +142,13 @@ internal sealed class ProxylessEndpointPortAllocator : IDisposable
             }
 
             _disposed = true;
+
+            foreach (var port in _processReservedPorts)
+            {
+                _processReservations.Release(port);
+            }
+
+            _processReservedPorts.Clear();
         }
     }
 
@@ -145,13 +161,21 @@ internal sealed class ProxylessEndpointPortAllocator : IDisposable
             var port = _rangeStart + candidate;
             MarkVisited(candidate);
 
-            // Bind only long enough to confirm the OS currently considers the port available.
-            // After that, the allocator's visited/reserved state prevents Aspire from handing
-            // the same port to another endpoint in this app model.
-            if (_tryProbe(port, protocol))
+            // Reserve the port process-wide before probing so another application's allocator in this
+            // process cannot claim it between the probe releasing it and the workload binding it.
+            if (_processReservations.TryReserve(port))
             {
-                _nextCandidate = _visitedCount == _rangeSize ? null : GetNextIncrementalCandidate(candidate);
-                return port;
+                // Bind only long enough to confirm the OS currently considers the port available.
+                // After that, the allocator's visited/reserved state prevents Aspire from handing
+                // the same port to another endpoint in this app model.
+                if (_tryProbe(port, protocol))
+                {
+                    _processReservedPorts.Add(port);
+                    _nextCandidate = _visitedCount == _rangeSize ? null : GetNextIncrementalCandidate(candidate);
+                    return port;
+                }
+
+                _processReservations.Release(port);
             }
 
             _nextCandidate = GetNextRandomWalkCandidate();
@@ -340,5 +364,32 @@ internal sealed class ProxylessEndpointPortAllocator : IDisposable
             socket.Dispose();
         }
     }
+}
 
+/// <summary>
+/// Tracks ports handed out by live <see cref="ProxylessEndpointPortAllocator"/> instances so that allocators for
+/// different applications in the same process never hand out the same port.
+/// </summary>
+internal sealed class ProxylessEndpointPortReservations
+{
+    private readonly object _lock = new();
+    private readonly HashSet<int> _ports = [];
+
+    public static ProxylessEndpointPortReservations Shared { get; } = new();
+
+    public bool TryReserve(int port)
+    {
+        lock (_lock)
+        {
+            return _ports.Add(port);
+        }
+    }
+
+    public void Release(int port)
+    {
+        lock (_lock)
+        {
+            _ports.Remove(port);
+        }
+    }
 }
