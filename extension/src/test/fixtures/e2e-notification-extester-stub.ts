@@ -3,6 +3,19 @@ import { runInNewContext } from 'vm';
 interface NotificationLike {
     getMessage(): Promise<string>;
     dismiss(): Promise<void>;
+    findElement?(locator: unknown): Promise<unknown>;
+}
+
+/**
+ * A notification toolbar action. Clicking it from a script runs `onClick`, like a DOM click event
+ * reaching the VS Code action item regardless of whether the toolbar is displayed.
+ */
+export class NotificationActionElement {
+    constructor(readonly selector: string, private readonly onClick: () => void) { }
+
+    click(): void {
+        this.onClick();
+    }
 }
 
 export interface TreeItemLike {
@@ -183,6 +196,9 @@ export const VSBrowser = {
                 throw new Error(message ?? 'Timed out waiting for notification.');
             },
             executeScript: async (script: string, ...args: unknown[]): Promise<unknown> => {
+                if (args[0] instanceof NotificationActionElement) {
+                    return runInNewContext(`(function () { ${script} }).apply(undefined, args)`, { args });
+                }
                 if (state.treeRowPolls) {
                     const nextPoll = state.treeRowPolls.shift();
                     if (nextPoll instanceof Error) {

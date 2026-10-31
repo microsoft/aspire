@@ -6,7 +6,7 @@ import type { ExecutableLaunchConfiguration } from '../dcp/types';
 import { getCommandInvocationCount, getDebugLaunchCount, isSamePath, waitForCommandOutcome, waitForDebugLaunch, waitForDebugSessionStartup, waitForExtensionState, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForRunningAppHost, waitForSelectedWorkspaceAppHost, waitForWorkspaceAppHost } from './helpers/assertions';
 import { createEmptyAppHostProject, createExternalSingleFileAppHost, executeE2eControlCommand, getGeneratedAppHostPath, getGeneratedProjectRoot, isProcessAlive, removeExternalSingleFileAppHost, removeGeneratedProject, restoreWorkspaceAppHostConfig, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setDebugLaunchSuppressedForE2E, stopAppHostIfRunning, stopPrimaryAppHostIfRunning, waitForKnownProcessExit, writeFileWithRetry, writeWorkspaceAppHostConfigForPath } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath, getWorkspaceRoot } from './helpers/paths';
-import { chooseActiveQuickPick, executeCommandFromPalette, openAspireView, waitForEditorTitle, waitForNotificationMessage } from './helpers/vscode';
+import { chooseActiveQuickPick, dismissNotification, executeCommandFromPalette, openAspireView, waitForEditorTitle, waitForNotificationMessage } from './helpers/vscode';
 
 interface DebugSessionProcessInfo {
     appHostPath?: string;
@@ -220,7 +220,7 @@ builder.Build().Run();`));
         const notification = await waitForNotificationMessage(
             'Set up Python debugging support to debug resources in this app.',
             60000);
-        await notification.dismiss();
+        await dismissNotification(notification);
     });
 
     test('process-owner cleanup stops the owned CLI and AppHost process tree', async () => {

@@ -666,7 +666,7 @@ export async function dismissAllNotifications(timeoutMs = 30000): Promise<void> 
                 return true;
             }
 
-            await notifications[0].dismiss();
+            await dismissNotification(notifications[0]);
             return false;
         }
         catch (error) {
@@ -678,6 +678,15 @@ export async function dismissAllNotifications(timeoutMs = 30000): Promise<void> 
             throw error;
         }
     }, timeoutMs, 'Timed out dismissing VS Code notifications.');
+}
+
+// VS Code only displays a toast's clear action while the toast is hovered or focused, so
+// Notification.dismiss() hovers before clicking. Toasts re-layout whenever another notification
+// arrives or expires, which can move the toast out from under the pointer and hide the action
+// between its visibility check and the click. Dispatching the click does not depend on hover.
+export async function dismissNotification(notification: Notification): Promise<void> {
+    const clearAction = await notification.findElement(By.css('.codicon-notifications-clear'));
+    await VSBrowser.instance.driver.executeScript('arguments[0].click();', clearAction);
 }
 
 export async function waitForNotificationCountGreaterThan(count: number, timeoutMs = 30000): Promise<void> {
