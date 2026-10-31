@@ -88,7 +88,10 @@ internal static partial class LinuxLayerShell
         {
             gtk_layer_set_anchor(window, edge, 1);
         }
-        gtk_layer_set_exclusive_zone(window, 0);
+        // Drawing and input use full-monitor coordinates, including exclusive bars.
+        // Zone -1 keeps the overlay anchored to the output rather than its workarea.
+        // https://github.com/wmww/gtk-layer-shell/blob/master/protocol/wlr-layer-shell-unstable-v1.xml
+        gtk_layer_set_exclusive_zone(window, -1);
         gtk_layer_set_keyboard_mode(window, keyboard ? 1 : 0); // EXCLUSIVE / NONE
     }
 
