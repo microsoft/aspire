@@ -229,6 +229,17 @@ internal static class CommandsConfigurationExtensions
         LogBuildInformation(mainLogger, buildOutput, "Stopping resource for rebuild...");
         await Task.WhenAll(replicasToStop.Select(name => orchestrator.StopResourceAsync(name, cancellationToken))).ConfigureAwait(false);
 
+        // Capture the state each replica reached after stopping. A replica that was Stopping before the rebuild
+        // may have reached its terminal state by now, which is what it should be restored to.
+        var postStopStates = new Dictionary<string, string?>(StringComparer.Ordinal);
+        foreach (var name in replicaNames)
+        {
+            if (resourceNotificationService.TryGetCurrentState(name, out var evt))
+            {
+                postStopStates[name] = evt.Snapshot.State?.Text;
+            }
+        }
+
         // Set state to Building after replicas are stopped. Leave Waiting replicas in their
         // current state — changing their state text would unblock WaitForInBeforeResourceStartedEvent,
         // causing CreateExecutableAsync to launch the OLD binary while the build is in progress.
@@ -328,12 +339,12 @@ internal static class CommandsConfigurationExtensions
 
                         case RebuildReplicaAction.RestorePriorState:
                             // The replica was not running before the rebuild (e.g. it was stopped). Restore its
-                            // pre-build state so it doesn't stay stuck in "Building", regardless of whether
-                            // sibling replicas were restarted.
-                            await resourceNotificationService.PublishUpdateAsync(projectResource, name, s => s with
-                            {
-                                State = new ResourceStateSnapshot(priorState!, KnownResourceStateStyles.Info)
-                            }).ConfigureAwait(false);
+                            // state so it doesn't stay stuck in "Building", regardless of whether sibling replicas
+                            // were restarted.
+                            postStopStates.TryGetValue(name, out var postStopState);
+                            var restoredState = GetRestoredStateAfterRebuild(priorState!, postStopState);
+                            await resourceNotificationService.PublishUpdateAsync(projectResource, name,
+                                s => RestoreIfStillBuilding(s, restoredState)).ConfigureAwait(false);
                             break;
                     }
                 }
@@ -398,6 +409,20 @@ internal static class CommandsConfigurationExtensions
             ? RebuildReplicaAction.Restart
             : RebuildReplicaAction.RestorePriorState;
     }
+
+    // Prefer the terminal state a replica reached after being stopped for the rebuild over a transient
+    // pre-rebuild state such as Stopping.
+    internal static string GetRestoredStateAfterRebuild(string preRebuildState, string? postStopState) =>
+        postStopState is not null && KnownResourceStates.TerminalStates.Contains(postStopState)
+            ? postStopState
+            : preRebuildState;
+
+    // Only replace the Building state published by the rebuild. If the replica was started (or reached a new
+    // state) while the build ran, its newer snapshot must not be overwritten with the pre-rebuild state.
+    internal static CustomResourceSnapshot RestoreIfStillBuilding(CustomResourceSnapshot snapshot, string restoredState) =>
+        snapshot.State?.Text == KnownResourceStates.Building
+            ? snapshot with { State = new ResourceStateSnapshot(restoredState, KnownResourceStateStyles.Info) }
+            : snapshot;
 
     internal enum RebuildReplicaAction
     {

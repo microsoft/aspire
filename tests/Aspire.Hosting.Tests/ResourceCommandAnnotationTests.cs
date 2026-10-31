@@ -264,4 +264,36 @@ public class ResourceCommandAnnotationTests
     {
         Assert.Equal(expected, CommandsConfigurationExtensions.GetReplicaActionAfterRebuild(hasPreRebuildState, preRebuildState).ToString());
     }
+
+    [Theory]
+    [InlineData("Stopping", "Finished", "Finished")]
+    [InlineData("Stopping", "Exited", "Exited")]
+    [InlineData("Stopping", "Stopping", "Stopping")]
+    [InlineData("Finished", "Finished", "Finished")]
+    [InlineData("FailedToStart", "FailedToStart", "FailedToStart")]
+    [InlineData("NotStarted", "NotStarted", "NotStarted")]
+    [InlineData("Finished", null, "Finished")]
+    public void GetRestoredStateAfterRebuild_PrefersTerminalStateReachedAfterStopping(string preRebuildState, string? postStopState, string expected)
+    {
+        Assert.Equal(expected, CommandsConfigurationExtensions.GetRestoredStateAfterRebuild(preRebuildState, postStopState));
+    }
+
+    [Theory]
+    [InlineData("Building", "Finished")]
+    [InlineData("Starting", "Starting")]
+    [InlineData("Running", "Running")]
+    [InlineData("Exited", "Exited")]
+    public void RestoreIfStillBuilding_OnlyReplacesBuildingState(string currentState, string expected)
+    {
+        var snapshot = new CustomResourceSnapshot
+        {
+            ResourceType = KnownResourceTypes.Project,
+            State = new ResourceStateSnapshot(currentState, null),
+            Properties = []
+        };
+
+        var restored = CommandsConfigurationExtensions.RestoreIfStillBuilding(snapshot, KnownResourceStates.Finished);
+
+        Assert.Equal(expected, restored.State?.Text);
+    }
 }

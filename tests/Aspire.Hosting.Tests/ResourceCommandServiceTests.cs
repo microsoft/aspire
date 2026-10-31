@@ -1794,8 +1794,10 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
 
         using var builder = CreateBuilder();
 #pragma warning disable CS0618 // Retain supported legacy project command invocation.
+        var keepAlivePath = Path.Combine(workspace.WorkspaceRoot.FullName, "keep-alive.txt");
         var project = builder.AddProject("myProject", projectPath, options => options.ExcludeLaunchProfile = true)
-            .WithReplicas(2);
+            .WithReplicas(2)
+            .WithEnvironment(KeepAliveFileEnvironmentVariable, keepAlivePath);
 #pragma warning restore CS0618
 
         using var app = builder.Build();
@@ -1807,22 +1809,43 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         var replicaNames = project.Resource.GetResolvedResourceNames();
         Assert.Equal(2, replicaNames.Length);
 
-        // The test program exits immediately, so both replicas end up Finished.
-        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
-        foreach (var replicaName in replicaNames)
+        // Without the keep-alive file the test program exits immediately, so both replicas end up Finished.
+        using (var finishedCts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration))
         {
-            await resourceNotificationService.WaitForResourceAsync(project.Resource.Name, e => e.ResourceId == replicaName && e.Snapshot.State?.Text == KnownResourceStates.Finished, cts.Token).DefaultTimeout(TimeSpan.FromMinutes(2));
+            foreach (var replicaName in replicaNames)
+            {
+                await resourceNotificationService.WaitForResourceAsync(project.Resource.Name, e => e.ResourceId == replicaName && e.Snapshot.State?.Text == KnownResourceStates.Finished, finishedCts.Token).DefaultTimeout(TimeSpan.FromMinutes(2));
+            }
         }
 
-        // Start only the second replica, so the rebuild restarts it while the first one is inactive.
-        await orchestrator.StartResourceAsync(replicaNames[1], cts.Token).DefaultTimeout(TimeSpan.FromMinutes(2));
+        // Start only the second replica and keep it running, so the rebuild restarts it while the first one is inactive.
+        File.WriteAllText(keepAlivePath, string.Empty);
+        try
+        {
+            using (var restartCts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration))
+            {
+                await orchestrator.StartResourceAsync(replicaNames[1], restartCts.Token).DefaultTimeout(TimeSpan.FromMinutes(2));
+                await resourceNotificationService.WaitForResourceAsync(project.Resource.Name, e => e.ResourceId == replicaNames[1] && e.Snapshot.State?.Text == KnownResourceStates.Running, restartCts.Token).DefaultTimeout(TimeSpan.FromMinutes(2));
+            }
 
-        var result = await app.ResourceCommands.ExecuteCommandAsync(project.Resource, KnownResourceCommands.RebuildCommand).DefaultTimeout(TimeSpan.FromMinutes(2));
-        Assert.True(result.Success, result.Message);
+            Assert.True(resourceNotificationService.TryGetCurrentState(replicaNames[1], out var activeReplica));
+            Assert.Equal(KnownResourceStates.Running, activeReplica.Snapshot.State?.Text);
 
-        // The inactive replica must be restored rather than left in Building, even though its sibling was restarted.
-        Assert.True(resourceNotificationService.TryGetCurrentState(replicaNames[0], out var inactiveReplica));
-        Assert.Equal(KnownResourceStates.Finished, inactiveReplica.Snapshot.State?.Text);
+            var result = await app.ResourceCommands.ExecuteCommandAsync(project.Resource, KnownResourceCommands.RebuildCommand).DefaultTimeout(TimeSpan.FromMinutes(2));
+            Assert.True(result.Success, result.Message);
+
+            // The inactive replica must be restored rather than left in Building, even though its sibling was restarted.
+            Assert.True(resourceNotificationService.TryGetCurrentState(replicaNames[0], out var inactiveReplica));
+            Assert.Equal(KnownResourceStates.Finished, inactiveReplica.Snapshot.State?.Text);
+
+            // The active replica was restarted with the rebuilt binary.
+            using var runningCts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
+            await resourceNotificationService.WaitForResourceAsync(project.Resource.Name, e => e.ResourceId == replicaNames[1] && e.Snapshot.State?.Text == KnownResourceStates.Running, runningCts.Token).DefaultTimeout(TimeSpan.FromMinutes(2));
+        }
+        finally
+        {
+            File.Delete(keepAlivePath);
+        }
     }
 
     [Fact]
@@ -1860,6 +1883,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     }
 
     private const string RebuildCommandBuildEnvironmentVariable = "ASPIRE_TEST_REBUILD_COMMAND_BUILD";
+    private const string KeepAliveFileEnvironmentVariable = "ASPIRE_TEST_KEEP_ALIVE_FILE";
 
     private static string CreateBuildOutputTestProject(string directoryPath, string buildOutputMarker)
     {
@@ -1884,8 +1908,15 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
             """);
 
         File.WriteAllText(programPath,
-            """
+            $$"""
             Console.WriteLine("Hello from rebuild test project.");
+
+            // Stay running while the test's keep-alive file exists, so the process can be observed as active.
+            var keepAlivePath = Environment.GetEnvironmentVariable("{{KeepAliveFileEnvironmentVariable}}");
+            while (!string.IsNullOrEmpty(keepAlivePath) && File.Exists(keepAlivePath))
+            {
+                Thread.Sleep(100);
+            }
             """);
 
         return projectPath;
