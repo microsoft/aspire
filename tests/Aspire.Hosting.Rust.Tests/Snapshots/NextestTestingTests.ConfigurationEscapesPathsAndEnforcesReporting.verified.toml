@@ -1,0 +1,8 @@
+﻿nextest-version = "0.9.143"
+[profile.aspire]
+fail-fast = false
+retries = 0
+[profile.aspire.junit]
+path = "C:\\crate \"with spaces\"\\日本語🦀\u000A\\junit.xml"
+report-skipped = "ignored"
+flaky-fail-status = "failure"
