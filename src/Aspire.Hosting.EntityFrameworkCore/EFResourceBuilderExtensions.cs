@@ -276,14 +276,16 @@ public static class EFResourceBuilderExtensions
                 State = new ResourceStateSnapshot(KnownResourceStates.NotStarted, KnownResourceStateStyles.Info)
             })
             .WithIconName("Database")
-            .WithPipelineStepFactory(CreateMigrationPipelineStep);
+            .WithPipelineStepFactory(context => CreateMigrationPipelineStep(context, generateBundle: null));
 
         AddEFMigrationCommands(innerBuilder, migrationResource, dbContextTypeName);
 
         return innerBuilder;
     }
 
-    internal static IEnumerable<PipelineStep> CreateMigrationPipelineStep(PipelineStepFactoryContext context)
+    internal static IEnumerable<PipelineStep> CreateMigrationPipelineStep(
+        PipelineStepFactoryContext context,
+        Func<EFCoreOperationExecutor, string, Task<EFOperationResult>>? generateBundle)
     {
         if (context.PipelineContext.ExecutionContext.IsRunMode
             || context.Resource is not EFMigrationResource migrationResource
@@ -335,9 +337,7 @@ public static class EFResourceBuilderExtensions
                     stepContext, migrationResource, "migration script",
                     (executor, outputDir) =>
                     {
-                        var outputPath = outputDir is not null
-                            ? Path.Combine(outputDir, migrationResource.Name + ".sql")
-                            : null;
+                        var outputPath = Path.Combine(outputDir, migrationResource.Name + ".sql");
                         return executor.GenerateMigrationScriptAsync(
                             outputPath,
                             migrationResource.ScriptIdempotent,
@@ -377,16 +377,10 @@ public static class EFResourceBuilderExtensions
                 RequiredBySteps = requiredBy,
                 Action = stepContext => ExecutePublishPipelineOperationAsync(
                     stepContext, migrationResource, "migration bundle",
-                    (executor, outputDir) =>
-                    {
-                        var outputPath = outputDir is not null
-                            ? Path.Combine(outputDir, GetBundleFileName(migrationResource))
-                            : null;
-                        return executor.GenerateMigrationBundleAsync(
-                            outputPath,
-                            migrationResource.BundleTargetRuntime,
-                            migrationResource.BundleSelfContained);
-                    })
+                    generateBundle ?? ((executor, outputDir) => executor.GenerateMigrationBundleAsync(
+                        Path.Combine(outputDir, migrationResource.GetBundleFileName()),
+                        migrationResource.BundleTargetRuntime,
+                        migrationResource.BundleSelfContained)))
             });
         }
 
@@ -438,7 +432,7 @@ public static class EFResourceBuilderExtensions
         PipelineStepContext stepContext,
         EFMigrationResource migrationResource,
         string operationName,
-        Func<EFCoreOperationExecutor, string?, Task<EFOperationResult>> executeOperation)
+        Func<EFCoreOperationExecutor, string, Task<EFOperationResult>> executeOperation)
     {
         var logger = stepContext.Logger;
         var pipelineOutputService = stepContext.Services.GetRequiredService<IPipelineOutputService>();
@@ -473,7 +467,7 @@ public static class EFResourceBuilderExtensions
         }
     }
 
-    internal static string GetBundleFileName(EFMigrationResource migrationResource)
+    internal static string GetBundleFileName(this EFMigrationResource migrationResource)
     {
         // The bundle is produced for a specific target runtime, so its extension follows that
         // runtime's conventions — not the host OS running `aspire publish`. When no explicit
