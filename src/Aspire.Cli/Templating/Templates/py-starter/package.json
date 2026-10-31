@@ -18,7 +18,7 @@
     "vscode-jsonrpc": "^8.2.1"
   },
   "engines": {
-    "node": "^20.19.0 || ^22.13.0 || >=24"
+    "node": "^22.18.0 || ^24.11.0 || >=26.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.20.1",

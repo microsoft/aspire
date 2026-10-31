@@ -36,6 +36,12 @@ dotnet pack ./src/Aspire.ProjectTemplates/Aspire.ProjectTemplates.csproj
 
 Template tests can be run using the standard test commands. You can follow the directions in *[repo_root]/tests/Aspire.Templates.Tests/README.md* to run them locally if desired, or simply send a PR and observe the test output there.
 
+### React frontend tooling
+
+The React frontends in the C#, TypeScript, Python, and Java starter templates use a project-local Vite+ dependency through the existing npm scripts. No global `vp` installation is required. The templates require Node.js 22.18+, 24.11+, or 26+ (matching Vite+'s supported release lines).
+
+Keep the frontend manifests, lockfiles, and Vite configuration aligned across `templates/aspire-ts-cs-starter/frontend` and `src/Aspire.Cli/Templating/Templates/{ts,py,java}-starter/frontend`. The `vite` override resolves Vite plugin peer dependencies and Aspire's HTTPS configuration wrapper to the same Vite+ core used by `vp`.
+
 ### Running generated test projects
 
 MSTest and xUnit `v3mtp` templates produce Microsoft.Testing.Platform (MTP) executables. Run these tests with `dotnet run` from the generated test project directory. This works across the supported SDK versions without changing the containing solution's test runner.
