@@ -2794,6 +2794,40 @@ public class AtsTypeScriptCodeGeneratorTests
             .UseFileName("WithDataVolumeOptionsMerged");
     }
 
+    [Fact]
+    public void Generate_CanonicalCapabilityOwnsMethodNamedOptionsInterface_WhenAliasSortsFirst()
+    {
+        // withExecutableVolume and withProjectVolume project to "withVolume" and their IDs sort
+        // ordinally before the canonical withVolume capability. The canonical capability must still
+        // own WithVolumeOptions; the aliases already take "name" positionally, so sharing the
+        // canonical { name, isReadOnly } interface would advertise an option they never read.
+        var code = GenerateTwoPassCode();
+
+        Assert.Contains("withVolume(target: string, options?: WithVolumeOptions): ContainerResourcePromise;", code);
+        Assert.Contains("withVolume(target: string, name: string, env: string, options?: WithProjectVolumeOptions): ProjectResourcePromise;", code);
+        Assert.Contains("withVolume(target: string, name: string, env: string, options?: WithExecutableVolumeOptions): ExecutableResourcePromise;", code);
+
+        Assert.Equal(["name", "isReadOnly"], GetInterfaceMemberNames(code, "WithVolumeOptions"));
+        Assert.Equal(["isReadOnly"], GetInterfaceMemberNames(code, "WithProjectVolumeOptions"));
+        Assert.Equal(["isReadOnly"], GetInterfaceMemberNames(code, "WithExecutableVolumeOptions"));
+    }
+
+    private static string[] GetInterfaceMemberNames(string code, string interfaceName)
+    {
+        var declaration = $"export interface {interfaceName} {{";
+        var interfaceStart = code.IndexOf(declaration, StringComparison.Ordinal);
+        Assert.True(interfaceStart >= 0, $"{interfaceName} interface not found in generated code");
+
+        var bodyStart = interfaceStart + declaration.Length;
+        var bodyEnd = code.IndexOf('}', bodyStart);
+        return code[bodyStart..bodyEnd]
+            .Split('\n')
+            .Select(line => line.Trim())
+            .Where(line => line.Length > 0 && !line.StartsWith("/**", StringComparison.Ordinal) && !line.StartsWith('*'))
+            .Select(line => line[..line.IndexOf('?')])
+            .ToArray();
+    }
+
     private static int CountOccurrences(string text, string pattern)
     {
         var count = 0;
