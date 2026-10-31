@@ -6,6 +6,7 @@
     <PackageTags>aspire integration hosting dotnet csharp framework runtime</PackageTags>
     <Description>C# and .NET application support for Aspire.</Description>
     <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>
+    <EnableAspireIntegrationAnalyzers>true</EnableAspireIntegrationAnalyzers>
   </PropertyGroup>
 
   <ItemGroup>
