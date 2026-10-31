@@ -3,6 +3,7 @@
 
 using System.Reflection;
 using System.Diagnostics;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
@@ -706,6 +707,205 @@ public class AtsJavaCodeGeneratorTests
             run.ExitCode == 0,
             $"Probe failed with exit code {run.ExitCode}.{Environment.NewLine}stdout:{Environment.NewLine}{run.StdOut}{Environment.NewLine}stderr:{Environment.NewLine}{run.StdErr}");
         Assert.Contains("OK", run.StdOut, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task GeneratedTransport_IntegralNumberDtoFieldsDeserializeIntoIntProperties()
+    {
+        // ATS maps every numeric to Java double, so the transport must not write integral values with a
+        // fractional part: System.Text.Json rejects "32.0" for int properties such as GenerateParameterDefault.MinLength.
+        // https://github.com/microsoft/aspire/issues/21344
+        var numberType = new AtsTypeRef { TypeId = AtsConstants.Number, Category = AtsTypeCategory.Primitive };
+        var booleanType = new AtsTypeRef { TypeId = AtsConstants.Boolean, Category = AtsTypeCategory.Primitive };
+        var context = new AtsContext
+        {
+            Capabilities = [],
+            HandleTypes = [],
+            DtoTypes =
+            [
+                new AtsDtoTypeInfo
+                {
+                    Name = "GenerateParameterDefault",
+                    TypeId = "Aspire.Hosting/Aspire.Hosting.ApplicationModel.GenerateParameterDefault",
+                    Properties =
+                    [
+                        new AtsDtoPropertyInfo { Name = "MinLength", Type = numberType },
+                        new AtsDtoPropertyInfo { Name = "Lower", Type = booleanType },
+                        new AtsDtoPropertyInfo { Name = "MinLower", Type = numberType },
+                        new AtsDtoPropertyInfo { Name = "MinUpper", Type = numberType }
+                    ]
+                }
+            ],
+            EnumTypes = []
+        };
+
+        using var workspace = await CreateJavaProbeWorkspaceAsync(context, "aspire/GenerateParameterDefault.java");
+        workspace.WriteSource(
+            "aspire/IntegralNumberDtoProbe.java",
+            """
+            package aspire;
+
+            import java.io.ByteArrayOutputStream;
+            import java.io.InputStream;
+            import java.io.PipedInputStream;
+            import java.io.PipedOutputStream;
+            import java.lang.reflect.Field;
+            import java.lang.reflect.Method;
+            import java.math.BigDecimal;
+            import java.nio.charset.StandardCharsets;
+            import java.util.List;
+            import java.util.Map;
+            import java.util.concurrent.CompletableFuture;
+            import java.util.concurrent.TimeUnit;
+
+            public class IntegralNumberDtoProbe {
+                public static void main(String[] args) throws Exception {
+                    var clientInput = new PipedInputStream(32768);
+                    var serverOutput = new PipedOutputStream(clientInput);
+                    var serverInput = new PipedInputStream(32768);
+                    var clientOutput = new PipedOutputStream(serverInput);
+
+                    var client = new AspireClient("ignored");
+                    setField(client, "inputStream", clientInput);
+                    setField(client, "outputStream", clientOutput);
+
+                    var defaults = new GenerateParameterDefault();
+                    defaults.setMinLength(32);
+                    defaults.setLower(true);
+                    defaults.setMinLower(0);
+                    defaults.setMinUpper(-3);
+
+                    var call = CompletableFuture.supplyAsync(() -> client.invokeCapability("cap.dto", Map.of("value", defaults)));
+                    var request = readMessage(serverInput);
+                    System.out.println("REQUEST:" + request);
+
+                    int marker = request.indexOf("\"id\":") + 5;
+                    int end = marker;
+                    while (Character.isDigit(request.charAt(end))) {
+                        end++;
+                    }
+                    String payload = "{\"jsonrpc\":\"2.0\",\"id\":" + request.substring(marker, end) + ",\"result\":null}";
+                    byte[] body = payload.getBytes(StandardCharsets.UTF_8);
+                    serverOutput.write(("Content-Length: " + body.length + "\r\n\r\n").getBytes(StandardCharsets.UTF_8));
+                    serverOutput.write(body);
+                    serverOutput.flush();
+                    call.get(2, TimeUnit.SECONDS);
+
+                    // Values parsed from JSON responses are BigDecimal and must round-trip without precision loss.
+                    Method toJson = AspireClient.class.getDeclaredMethod("toJson", Object.class);
+                    toJson.setAccessible(true);
+                    var numbers = List.<Object>of(
+                        32.0,
+                        2.5f,
+                        1e20,
+                        new BigDecimal("32.0"),
+                        new BigDecimal("1.0000000000000001"),
+                        new BigDecimal("9007199254740993.0"),
+                        new BigDecimal("1E-400"),
+                        7L);
+                    System.out.println("NUMBERS:" + toJson.invoke(client, numbers));
+
+                    System.out.println("OK");
+                }
+
+                private static void setField(AspireClient client, String name, Object value) throws Exception {
+                    Field field = AspireClient.class.getDeclaredField(name);
+                    field.setAccessible(true);
+                    field.set(client, value);
+                }
+
+                private static String readMessage(InputStream input) throws Exception {
+                    int contentLength = -1;
+                    while (true) {
+                        String line = readLine(input);
+                        if (line.isEmpty()) {
+                            break;
+                        }
+                        if (line.startsWith("Content-Length:")) {
+                            contentLength = Integer.parseInt(line.substring(15).trim());
+                        }
+                    }
+
+                    return new String(input.readNBytes(contentLength), StandardCharsets.UTF_8);
+                }
+
+                private static String readLine(InputStream input) throws Exception {
+                    ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+                    while (true) {
+                        int ch = input.read();
+                        if (ch == -1 || ch == '\n') {
+                            break;
+                        }
+                        if (ch != '\r') {
+                            buffer.write(ch);
+                        }
+                    }
+
+                    return buffer.toString(StandardCharsets.UTF_8);
+                }
+            }
+            """);
+
+        await workspace.CompileAsync();
+        var run = await workspace.RunClassAsync("aspire.IntegralNumberDtoProbe", TimeSpan.FromSeconds(6));
+
+        Assert.True(run.TimedOut is false, $"Probe timed out. stdout:{Environment.NewLine}{run.StdOut}{Environment.NewLine}stderr:{Environment.NewLine}{run.StdErr}");
+        Assert.True(
+            run.ExitCode == 0,
+            $"Probe failed with exit code {run.ExitCode}.{Environment.NewLine}stdout:{Environment.NewLine}{run.StdOut}{Environment.NewLine}stderr:{Environment.NewLine}{run.StdErr}");
+
+        var requestLine = run.StdOut.Split(["\r\n", "\n"], StringSplitOptions.RemoveEmptyEntries).Single(line => line.StartsWith("REQUEST:", StringComparison.Ordinal));
+        var request = JsonNode.Parse(requestLine["REQUEST:".Length..])!;
+        var dtoJson = FindProperty(request, "value");
+        Assert.NotNull(dtoJson);
+
+        // Same options the AppHost server uses to deserialize DTO arguments.
+        var serverOptions = new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        };
+        var defaults = dtoJson.Deserialize<GenerateParameterDefault>(serverOptions);
+
+        Assert.NotNull(defaults);
+        Assert.Equal(32, defaults.MinLength);
+        Assert.True(defaults.Lower);
+        Assert.Equal(0, defaults.MinLower);
+        Assert.Equal(-3, defaults.MinUpper);
+
+        var numbersLine = run.StdOut.Split(["\r\n", "\n"], StringSplitOptions.RemoveEmptyEntries).Single(line => line.StartsWith("NUMBERS:", StringComparison.Ordinal));
+        Assert.Equal("NUMBERS:[32,2.5,1.0E20,32,1.0000000000000001,9007199254740993,1E-400,7]", numbersLine);
+
+        static JsonNode? FindProperty(JsonNode? node, string name)
+        {
+            switch (node)
+            {
+                case JsonObject obj:
+                    foreach (var (key, child) in obj)
+                    {
+                        if (key == name)
+                        {
+                            return child;
+                        }
+                        if (FindProperty(child, name) is { } found)
+                        {
+                            return found;
+                        }
+                    }
+                    break;
+                case JsonArray array:
+                    foreach (var child in array)
+                    {
+                        if (FindProperty(child, name) is { } found)
+                        {
+                            return found;
+                        }
+                    }
+                    break;
+            }
+
+            return null;
+        }
     }
 
     [Fact]
@@ -2680,7 +2880,7 @@ public class AtsJavaCodeGeneratorTests
         Assert.Contains($"public void set{expectedAccessorSuffix}(String value) {{ this.{expectedField} = value; }}", generated);
 
         // Java keyword escaping must not leak into the host's camel-case JSON property names.
-        var wireName = System.Text.Json.JsonNamingPolicy.CamelCase.ConvertName(propertyName);
+        var wireName = JsonNamingPolicy.CamelCase.ConvertName(propertyName);
         Assert.Contains($"map.get(\"{wireName}\")", generated);
         Assert.Contains($"map.put(\"{wireName}\", AspireClient.serializeValue({expectedField}))", generated);
     }
@@ -3160,7 +3360,7 @@ public class AtsJavaCodeGeneratorTests
                             + "\"args\":{\"p0\":[1,null,2.5],\"p1\":[[true,null],[false]]}}}");
                     String callbackResponse = readMessage(serverInput);
                     if (!callbackResponse.contains("\"id\":9001")
-                        || !callbackResponse.contains("\"result\":{\"p0\":[1.0,null,2.5],\"p1\":[[true,null],[false]]}")) {
+                        || !callbackResponse.contains("\"result\":{\"p0\":[1,null,2.5],\"p1\":[[true,null],[false]]}")) {
                         throw new IllegalStateException("unexpected callback response: " + callbackResponse);
                     }
                     writeResult(serverOutput, callbackRequestId, "null");
