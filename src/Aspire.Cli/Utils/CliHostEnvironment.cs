@@ -28,9 +28,10 @@ internal interface ICliHostEnvironment
     bool SupportsAnsi { get; }
 
     /// <summary>
-    /// Gets whether standard input is redirected (e.g., piped or read from a file) rather than attached to a terminal.
+    /// Gets whether prompt answers would be read from redirected standard input (e.g., piped or read from a file)
+    /// instead of a terminal or the VS Code extension.
     /// </summary>
-    bool IsInputRedirected => false;
+    bool IsPromptInputRedirected => false;
 }
 
 /// <summary>
@@ -73,9 +74,10 @@ internal sealed class CliHostEnvironment : ICliHostEnvironment
     public bool SupportsAnsi { get; }
 
     /// <summary>
-    /// Gets whether standard input is redirected (e.g., piped or read from a file) rather than attached to a terminal.
+    /// Gets whether prompt answers would be read from redirected standard input (e.g., piped or read from a file)
+    /// instead of a terminal or the VS Code extension.
     /// </summary>
-    public bool IsInputRedirected { get; } = Console.IsInputRedirected;
+    public bool IsPromptInputRedirected { get; }
 
     public CliHostEnvironment(IConfiguration configuration, bool nonInteractive)
         : this(configuration, nonInteractive, Console.IsOutputRedirected)
@@ -83,7 +85,15 @@ internal sealed class CliHostEnvironment : ICliHostEnvironment
     }
 
     internal CliHostEnvironment(IConfiguration configuration, bool nonInteractive, bool isOutputRedirected)
+        : this(configuration, nonInteractive, isOutputRedirected, Console.IsInputRedirected)
     {
+    }
+
+    internal CliHostEnvironment(IConfiguration configuration, bool nonInteractive, bool isOutputRedirected, bool isInputRedirected)
+    {
+        // The VS Code extension answers prompts over its backchannel, so redirected stdin doesn't matter there.
+        IsPromptInputRedirected = isInputRedirected && !IsExtensionPromptEnabled(configuration);
+
         // If --non-interactive is explicitly set, disable interactive input and output.
         // ANSI support is still determined from the host configuration so explicit
         // output settings such as NO_COLOR or ASPIRE_ANSI_PASS_THRU continue to apply.
@@ -122,6 +132,12 @@ internal sealed class CliHostEnvironment : ICliHostEnvironment
         return supportsAnsi;
     }
 
+    private static bool IsExtensionPromptEnabled(IConfiguration configuration)
+    {
+        return configuration[KnownConfigNames.ExtensionEndpoint] is not null &&
+            configuration[KnownConfigNames.ExtensionPromptEnabled] is "true";
+    }
+
     private static bool DetectInteractiveInput(IConfiguration configuration)
     {
         // Check if explicitly disabled via configuration
@@ -135,8 +151,7 @@ internal sealed class CliHostEnvironment : ICliHostEnvironment
 
         // The extension backchannel provides input independently of the terminal, so ambient CI
         // markers must not suppress prompts when the extension explicitly enables them.
-        if (configuration[KnownConfigNames.ExtensionEndpoint] is not null &&
-            configuration[KnownConfigNames.ExtensionPromptEnabled] is "true")
+        if (IsExtensionPromptEnabled(configuration))
         {
             return true;
         }
