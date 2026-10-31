@@ -30,9 +30,6 @@ internal sealed class ResourceCommand : BaseCommand
     private readonly ILogger<ResourceCommand> _logger;
     private readonly ICliHostEnvironment _hostEnvironment;
 
-    private const string CustomChoiceValue = "__CUSTOM_CHOICE";
-    private const string NoChoiceValue = "__NO_CHOICE";
-
     private static readonly Argument<string> s_resourceArgument = new("resource")
     {
         Description = ResourceCommandStrings.CommandResourceArgumentDescription,
@@ -209,7 +206,9 @@ internal sealed class ResourceCommand : BaseCommand
         JsonObject arguments,
         CancellationToken cancellationToken)
     {
-        var pendingInputs = argumentInputs.Where(input => !arguments.ContainsKey(input.Name)).ToList();
+        // Prompt for dependencies before the dynamic inputs that use them, even when they're declared later,
+        // so dependent inputs are loaded with the final dependency values.
+        var pendingInputs = OrderByDependencies(argumentInputs).Where(input => !arguments.ContainsKey(input.Name)).ToList();
         bool argumentsChanged;
 
         // Disabled inputs can become enabled once the inputs they depend on are answered, even when those
@@ -245,13 +244,47 @@ internal sealed class ResourceCommand : BaseCommand
         while (argumentsChanged && pendingInputs.Count > 0);
     }
 
-    private bool CanPromptForCommandInputs()
+    private static List<ResourceSnapshotCommandArgument> OrderByDependencies(ResourceSnapshotCommandArgument[] argumentInputs)
     {
-        // Prompts read from the terminal, so redirected stdin can't answer them. The VS Code extension
-        // answers prompts over its backchannel, so it can still prompt when stdin is redirected.
-        return _hostEnvironment.SupportsInteractiveInput &&
-            (!_hostEnvironment.IsInputRedirected || ExtensionHelper.IsExtensionHost(InteractionService, out _, out _));
+        var inputsByName = new Dictionary<string, ResourceSnapshotCommandArgument>(StringComparer.Ordinal);
+        foreach (var input in argumentInputs)
+        {
+            inputsByName.TryAdd(input.Name, input);
+        }
+
+        var ordered = new List<ResourceSnapshotCommandArgument>(argumentInputs.Length);
+        var visited = new HashSet<string>(StringComparer.Ordinal);
+
+        void Visit(ResourceSnapshotCommandArgument input)
+        {
+            if (!visited.Add(input.Name))
+            {
+                return;
+            }
+
+            foreach (var dependencyName in input.DynamicLoading?.DependsOnInputs ?? [])
+            {
+                if (inputsByName.TryGetValue(dependencyName, out var dependency))
+                {
+                    Visit(dependency);
+                }
+            }
+
+            ordered.Add(input);
+        }
+
+        foreach (var input in argumentInputs)
+        {
+            Visit(input);
+        }
+
+        return ordered;
     }
+
+    // Prompts read from the terminal, so they can't be answered when stdin is redirected. The host environment
+    // accounts for the VS Code extension, which answers prompts over its backchannel.
+    private bool CanPromptForCommandInputs() =>
+        _hostEnvironment.SupportsInteractiveInput && !_hostEnvironment.IsPromptInputRedirected;
 
     private static async Task<ResourceSnapshotCommandArgument> LoadCurrentArgumentInputAsync(
         IAppHostAuxiliaryBackchannel connection,
@@ -317,23 +350,23 @@ internal sealed class ResourceCommand : BaseCommand
         // Selection prompts have no default, so list the default choice first to make Enter accept it.
         var choices = options
             .OrderByDescending(option => string.Equals(option.Key, input.Value, StringComparison.Ordinal))
-            .Select(option => (Value: option.Key, Label: option.Value ?? option.Key))
+            .Select(option => new CommandArgumentChoice(option.Key, option.Value ?? option.Key, CommandArgumentChoiceKind.Option))
             .ToList();
 
         if (!string.IsNullOrEmpty(input.Value) && !options.ContainsKey(input.Value) && input.AllowCustomChoice)
         {
             // A custom default isn't one of the predefined options, but it should still be the Enter default.
-            choices.Insert(0, (input.Value, input.Value));
+            choices.Insert(0, new CommandArgumentChoice(input.Value, input.Value, CommandArgumentChoiceKind.Option));
         }
         else if (string.IsNullOrEmpty(input.Value) && !input.Required && !options.ContainsKey(string.Empty))
         {
             // Optional choices without a default can be left unset, so offer that as the Enter default.
-            choices.Insert(0, (NoChoiceValue, ResourceCommandStrings.NoChoiceLabel));
+            choices.Insert(0, new CommandArgumentChoice(null, ResourceCommandStrings.NoChoiceLabel, CommandArgumentChoiceKind.None));
         }
 
         if (input.AllowCustomChoice)
         {
-            choices.Add((CustomChoiceValue, InteractionServiceStrings.CustomChoiceLabel));
+            choices.Add(new CommandArgumentChoice(null, InteractionServiceStrings.CustomChoiceLabel, CommandArgumentChoiceKind.Custom));
         }
 
         var selected = await InteractionService.PromptForSelectionAsync(
@@ -342,12 +375,12 @@ internal sealed class ResourceCommand : BaseCommand
             static choice => choice.Label.EscapeMarkup(),
             cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        if (selected.Value == NoChoiceValue)
+        if (selected.Kind == CommandArgumentChoiceKind.None)
         {
             return null;
         }
 
-        if (selected.Value == CustomChoiceValue)
+        if (selected.Kind == CommandArgumentChoiceKind.Custom)
         {
             var customValue = await InteractionService.PromptForStringAsync(
                 promptText,
@@ -771,6 +804,17 @@ internal sealed class ResourceCommand : BaseCommand
         // `--category=fruit`. Missing required values, disabled dependent inputs, and stale choice
         // options must be accepted here so the AppHost can return the next metadata shape.
         LoadArguments
+    }
+
+    // Synthetic menu entries are identified by kind rather than a sentinel value so that every option key
+    // advertised by the AppHost is forwarded unchanged.
+    private sealed record CommandArgumentChoice(string? Value, string Label, CommandArgumentChoiceKind Kind);
+
+    private enum CommandArgumentChoiceKind
+    {
+        Option,
+        None,
+        Custom
     }
 
     private sealed class ResourceCommandHelpAction(ResourceCommand command) : AsynchronousCommandLineAction
