@@ -188,11 +188,14 @@ public class InteractionServiceTests
     }
 
     [Fact]
-    public async Task IsAvailable_BeforeStartHooksPending_ReturnsFalseAndPromptsThrow()
+    public async Task IsAvailable_ConsumersNotReady_ReturnsFalseAndPromptsThrow()
     {
-        var interactionService = CreateInteractionService();
-
-        interactionService.MarkBeforeStartHooksPending();
+        var interactionService = new InteractionService(
+            NullLogger<InteractionService>.Instance,
+            new DistributedApplicationOptions(),
+            new ServiceCollection().BuildServiceProvider(),
+            new ConfigurationBuilder().Build(),
+            new TestInteractionFileUploadStore());
 
         Assert.False(interactionService.IsAvailable);
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
@@ -200,7 +203,7 @@ public class InteractionServiceTests
         Assert.Contains(nameof(BeforeStartEvent), ex.Message);
         Assert.Empty(interactionService.GetCurrentInteractions());
 
-        interactionService.CompleteBeforeStartHooks();
+        interactionService.MarkConsumersReady();
         Assert.True(interactionService.IsAvailable);
     }
 
@@ -275,7 +278,7 @@ public class InteractionServiceTests
             new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
             configuration,
-            new TestInteractionFileUploadStore());
+            new TestInteractionFileUploadStore()).WithConsumersReady();
 
         // Assert
         Assert.Equal(expected, interactionService.IsAvailable);
@@ -303,7 +306,7 @@ public class InteractionServiceTests
             new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
             configuration,
-            new TestInteractionFileUploadStore());
+            new TestInteractionFileUploadStore()).WithConsumersReady();
 
         // Assert - Invalid values should be ignored, defaulting to true (since dashboard is enabled)
         Assert.True(interactionService.IsAvailable);
@@ -326,7 +329,7 @@ public class InteractionServiceTests
             new DistributedApplicationOptions { DisableDashboard = true },
             new ServiceCollection().BuildServiceProvider(),
             configuration,
-            new TestInteractionFileUploadStore());
+            new TestInteractionFileUploadStore()).WithConsumersReady();
 
         // Assert - Both conditions should result in false
         Assert.False(interactionService.IsAvailable);
@@ -1395,7 +1398,7 @@ public class InteractionServiceTests
             options ?? new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
             configuration,
-            fileUploadStore ?? new TestInteractionFileUploadStore());
+            fileUploadStore ?? new TestInteractionFileUploadStore()).WithConsumersReady();
     }
 
     [Fact]

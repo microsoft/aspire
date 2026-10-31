@@ -1729,7 +1729,7 @@ public class ParameterProcessorTests
             new DistributedApplicationOptions { DisableDashboard = disableDashboard },
             new ServiceCollection().BuildServiceProvider(),
             new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build(),
-            new TestInteractionFileUploadStore());
+            new TestInteractionFileUploadStore()).WithConsumersReady();
     }
 
     private sealed class MockDeploymentStateManager : IDeploymentStateManager

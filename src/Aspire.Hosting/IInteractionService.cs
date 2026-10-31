@@ -28,6 +28,15 @@ public interface IInteractionService
     bool IsAvailable { get; }
 
     /// <summary>
+    /// Called by the app host once the consumers that respond to interactions, such as the dashboard and CLI,
+    /// can be reached. Implementations that gate <see cref="IsAvailable"/> on this should report the service as
+    /// available from this point on.
+    /// </summary>
+    internal void MarkConsumersReady()
+    {
+    }
+
+    /// <summary>
     /// Prompts the user for confirmation with a dialog.
     /// </summary>
     /// <param name="title">The title of the dialog.</param>

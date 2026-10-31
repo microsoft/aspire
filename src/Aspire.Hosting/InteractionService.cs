@@ -24,11 +24,10 @@ internal class InteractionService : IInteractionService
     // When set, IsAvailable returns false so command callbacks know not to prompt the user.
     private static readonly AsyncLocal<bool> s_nonInteractiveScope = new();
 
-    // Interactions are answered by the dashboard and the CLI backchannel, which are hosted services
-    // that only start after before-start hooks (e.g. BeforeStartEvent) complete. Until then nothing can
-    // respond to an interaction, so awaiting a prompt would never complete. This is a one-way flag:
-    // DistributedApplication marks startup as pending when it's created and completes it once the hooks finish.
-    private volatile bool _waitingForBeforeStartHooks;
+    // Interactions are answered by consumers such as the dashboard and the CLI backchannel. Those are hosted
+    // services that only start after the app host's before-start hooks (e.g. BeforeStartEvent) complete. Until the
+    // app host marks consumers as ready, nothing can respond to an interaction, so awaiting a prompt would never complete.
+    private volatile bool _consumersReady;
 
     private Action<Interaction>? OnInteractionUpdated { get; set; }
     private readonly object _onInteractionUpdatedLock = new();
@@ -62,7 +61,7 @@ internal class InteractionService : IInteractionService
                 return false;
             }
 
-            if (_waitingForBeforeStartHooks)
+            if (!_consumersReady)
             {
                 return false;
             }
@@ -103,16 +102,12 @@ internal class InteractionService : IInteractionService
     }
 
     /// <summary>
-    /// Marks the app host as not yet having completed its before-start hooks. Until
-    /// <see cref="CompleteBeforeStartHooks"/> is called, <see cref="IsAvailable"/> returns <c>false</c>
-    /// because nothing can respond to interactions yet.
+    /// Marks the consumers that respond to interactions as ready. Until this is called, <see cref="IsAvailable"/>
+    /// returns <c>false</c> because nothing can respond to interactions yet.
     /// </summary>
-    internal void MarkBeforeStartHooksPending() => _waitingForBeforeStartHooks = true;
+    internal void MarkConsumersReady() => _consumersReady = true;
 
-    /// <summary>
-    /// Marks the app host's before-start hooks as completed so interactions can be answered once the host starts.
-    /// </summary>
-    internal void CompleteBeforeStartHooks() => _waitingForBeforeStartHooks = false;
+    void IInteractionService.MarkConsumersReady() => MarkConsumersReady();
 
     public async Task<InteractionResult<bool>> PromptConfirmationAsync(string title, string message, MessageBoxInteractionOptions? options = null, CancellationToken cancellationToken = default)
     {
