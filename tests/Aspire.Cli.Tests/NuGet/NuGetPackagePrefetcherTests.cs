@@ -129,20 +129,25 @@ public class NuGetPackagePrefetcherTests(ITestOutputHelper outputHelper)
 
         var packagingService = new TestPackagingService
         {
-            GetChannelsAsyncCallback = async _ =>
+            // Wait on the token the prefetcher passes in, not stoppingCts.Token. BackgroundService links
+            // its stopping token to stoppingCts during StartAsync, so a registration made here on
+            // stoppingCts.Token runs before the linked token is cancelled. The OCE could then reach the
+            // prefetcher's "when (stoppingToken.IsCancellationRequested)" filter before the filter is
+            // true, logging the non-fatal Debug message instead of the expected cancellation message.
+            GetChannelsAsyncCallback = async cancellationToken =>
             {
                 templateArrived.SetResult();
-                await AsyncTestHelpers.WaitForCancellationAsync(stoppingCts.Token);
+                await AsyncTestHelpers.WaitForCancellationAsync(cancellationToken);
                 throw new UnreachableException();
             }
         };
 
         var updateNotifier = new TestCliUpdateNotifier
         {
-            CheckForCliUpdatesAsyncCallback = async (_, _) =>
+            CheckForCliUpdatesAsyncCallback = async (_, cancellationToken) =>
             {
                 cliArrived.SetResult();
-                await AsyncTestHelpers.WaitForCancellationAsync(stoppingCts.Token);
+                await AsyncTestHelpers.WaitForCancellationAsync(cancellationToken);
             }
         };
 
