@@ -97,7 +97,7 @@ internal sealed class TelemetryLogsCommand : BaseCommand
             return CommandResult.Failure(CliExitCodes.InvalidCommand, TelemetryCommandStrings.LimitMustBePositive);
         }
 
-        using var dashboardApi = await TelemetryCommandHelpers.GetDashboardApiAsync(
+        await using var dashboardApi = await TelemetryCommandHelpers.GetDashboardApiAsync(
             _connectionResolver, _interactionService, _httpClientFactory, _logger, passedAppHostProjectFile, dashboardUrl, apiKey, requireDashboard: true, cancellationToken);
 
         if (!dashboardApi.Success)

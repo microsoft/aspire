@@ -83,7 +83,7 @@ internal sealed class TerminalPsCommand : BaseCommand
             verbose,
             passedAppHostProjectFile?.FullName ?? "<auto-detected>");
 
-        using var connectionResult = await _connectionResolver.ResolveConnectionAsync(
+        await using var connectionResult = await _connectionResolver.ResolveConnectionAsync(
             passedAppHostProjectFile,
             SharedCommandStrings.ScanningForRunningAppHosts,
             string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.SelectAppHost, "list terminals"),

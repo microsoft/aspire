@@ -104,7 +104,7 @@ internal sealed class TerminalTapePlayCommand : BaseCommand
                 string.Format(CultureInfo.CurrentCulture, TerminalCommandStrings.TapeFileReadFailed, tapePath, ex.Message));
         }
 
-        using var connectionResult = await _connectionResolver.ResolveConnectionAsync(
+        await using var connectionResult = await _connectionResolver.ResolveConnectionAsync(
             parseResult.GetValue(_appHostOption),
             SharedCommandStrings.ScanningForRunningAppHosts,
             string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.SelectAppHost, TerminalCommandStrings.TapeSelectAppHostAction),

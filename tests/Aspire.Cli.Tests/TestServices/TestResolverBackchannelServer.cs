@@ -20,6 +20,7 @@ internal sealed class TestResolverBackchannelServer : IDisposable
     private readonly TestResolverRpcTarget _target;
     private readonly TaskCompletionSource _clientDisconnected = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private JsonRpc? _rpc;
+    private Socket? _connectionSocket;
 
     private TestResolverBackchannelServer(string appHostPath, int processId)
     {
@@ -38,11 +39,22 @@ internal sealed class TestResolverBackchannelServer : IDisposable
     public static TestResolverBackchannelServer Start(string appHostPath, int processId)
         => new(appHostPath, processId);
 
+    /// <summary>
+    /// Gets or sets whether the server closes its side as soon as the client disconnects, like a real AppHost.
+    /// </summary>
+    public bool CloseOnClientDisconnect { get; set; } = true;
+
     public Task WaitForClientDisconnectAsync() => _clientDisconnected.Task;
+
+    public void CloseConnection()
+    {
+        _rpc?.Dispose();
+        _connectionSocket?.Dispose();
+    }
 
     public void Dispose()
     {
-        _rpc?.Dispose();
+        CloseConnection();
         _listener.Stop();
     }
 
@@ -53,13 +65,22 @@ internal sealed class TestResolverBackchannelServer : IDisposable
         {
             await socket.ConnectAsync((IPEndPoint)_listener.LocalEndpoint, cancellationToken);
             var serverSocket = await _listener.AcceptSocketAsync(cancellationToken);
-            var stream = new NetworkStream(serverSocket, ownsSocket: true);
+            // JsonRpc disposes its stream when the client disconnects. Keep the socket open until the test closes it.
+            _connectionSocket = serverSocket;
+            var stream = new NetworkStream(serverSocket, ownsSocket: false);
             var messageHandler = new HeaderDelimitedMessageHandler(
                 stream,
                 stream,
                 BackchannelJsonSerializerContext.CreateRpcMessageFormatter());
             _rpc = new JsonRpc(messageHandler, _target);
-            _rpc.Disconnected += (_, _) => _clientDisconnected.TrySetResult();
+            _rpc.Disconnected += (_, _) =>
+            {
+                _clientDisconnected.TrySetResult();
+                if (CloseOnClientDisconnect)
+                {
+                    _ = Task.Run(CloseConnection);
+                }
+            };
             _rpc.StartListening();
             return socket;
         }

@@ -14,6 +14,7 @@ internal sealed class TestAuxiliaryBackchannelServer : IDisposable
     private readonly RpcTarget _target;
     private readonly TaskCompletionSource _clientDisconnected = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private JsonRpc? _rpc;
+    private Socket? _connectionSocket;
 
     public TestAuxiliaryBackchannelServer(string socketPath, string appHostPath)
     {
@@ -27,20 +28,40 @@ internal sealed class TestAuxiliaryBackchannelServer : IDisposable
     public async Task AcceptAsync(CancellationToken cancellationToken)
     {
         var socket = await _listener.AcceptAsync(cancellationToken);
-        var stream = new NetworkStream(socket, ownsSocket: true);
+        // JsonRpc disposes its stream when the client disconnects. Keep the socket open until the test closes it.
+        _connectionSocket = socket;
+        var stream = new NetworkStream(socket, ownsSocket: false);
         var handler = new HeaderDelimitedMessageHandler(stream, stream, BackchannelJsonSerializerContext.CreateRpcMessageFormatter());
         _rpc = new JsonRpc(handler, _target);
-        _rpc.Disconnected += (_, _) => _clientDisconnected.TrySetResult();
+        _rpc.Disconnected += (_, _) =>
+        {
+            _clientDisconnected.TrySetResult();
+            if (CloseOnClientDisconnect)
+            {
+                _ = Task.Run(CloseConnection);
+            }
+        };
         _rpc.StartListening();
     }
 
+    /// <summary>
+    /// Gets or sets whether the server closes its side as soon as the client disconnects, like a real AppHost.
+    /// </summary>
+    public bool CloseOnClientDisconnect { get; set; } = true;
+
     public Task WaitForClientDisconnectAsync() => _clientDisconnected.Task;
+
+    public void CloseConnection()
+    {
+        _rpc?.Dispose();
+        _connectionSocket?.Dispose();
+    }
 
     public void RemoveSocketFile() => File.Delete(_socketPath);
 
     public void Dispose()
     {
-        _rpc?.Dispose();
+        CloseConnection();
         _listener.Dispose();
         RemoveSocketFile();
     }

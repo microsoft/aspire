@@ -25,7 +25,7 @@ namespace Aspire.Cli.Backchannel;
 /// resolver created for the caller and leaves connections borrowed from the backchannel monitor open,
 /// because the monitor owns their lifetime.
 /// </remarks>
-internal sealed class AppHostConnectionResult : IDisposable
+internal sealed class AppHostConnectionResult : IDisposable, IAsyncDisposable
 {
     public IAppHostAuxiliaryBackchannel? Connection { get; init; }
 
@@ -51,6 +51,25 @@ internal sealed class AppHostConnectionResult : IDisposable
         {
             Connection?.Dispose();
         }
+    }
+
+    /// <summary>
+    /// Closes an owned connection gracefully so the AppHost sees a clean disconnect.
+    /// </summary>
+    public ValueTask DisposeAsync()
+    {
+        if (!OwnsConnection)
+        {
+            return ValueTask.CompletedTask;
+        }
+
+        if (Connection is IAsyncDisposable asyncDisposable)
+        {
+            return asyncDisposable.DisposeAsync();
+        }
+
+        Connection?.Dispose();
+        return ValueTask.CompletedTask;
     }
 }
 

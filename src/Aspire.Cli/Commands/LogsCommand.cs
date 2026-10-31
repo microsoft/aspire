@@ -158,7 +158,7 @@ internal sealed class LogsCommand : BaseCommand
             return CommandResult.Failure(CliExitCodes.InvalidCommand, LogsCommandStrings.TailMustBePositive);
         }
 
-        using var result = await _connectionResolver.ResolveConnectionAsync(
+        await using var result = await _connectionResolver.ResolveConnectionAsync(
             passedAppHostProjectFile,
             SharedCommandStrings.ScanningForRunningAppHosts,
             string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.SelectAppHost, LogsCommandStrings.SelectAppHostAction),

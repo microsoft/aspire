@@ -147,6 +147,43 @@ public class AuxiliaryBackchannelMonitorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task DisposeAsync_ClosesMonitorOwnedConnectionsGracefully()
+    {
+        var homeDirectory = CreateSocketSafeHomeDirectory();
+        try
+        {
+            using var profiling = new ProfilingTelemetry(new ConfigurationBuilder().Build());
+            var monitor = new AuxiliaryBackchannelMonitor(
+                new CapturingLogger<AuxiliaryBackchannelMonitor>(), CreateExecutionContext(homeDirectory), new FakeTimeProvider(), profiling);
+            using var server = new TestAuxiliaryBackchannelServer(
+                CreateLiveOwnerSocketPath(homeDirectory), Path.Combine(homeDirectory.FullName, "MyApp.AppHost.csproj"));
+            server.CloseOnClientDisconnect = false;
+            var accepted = server.AcceptAsync(TestContext.Current.CancellationToken);
+
+            await monitor.ScanAsync(TestContext.Current.CancellationToken).DefaultTimeout();
+            await accepted.DefaultTimeout();
+            var connection = Assert.IsType<AppHostAuxiliaryBackchannel>(Assert.Single(monitor.Connections));
+            connection.GracefulCloseTimeout = Timeout.InfiniteTimeSpan;
+
+            // The CLI host disposes the monitor asynchronously before exit. The AppHost must read a clean
+            // end of stream, and the CLI must keep its socket until the AppHost closes its side.
+            var disposeTask = monitor.DisposeAsync().AsTask();
+
+            await server.WaitForClientDisconnectAsync().DefaultTimeout();
+            Assert.False(disposeTask.IsCompleted);
+
+            server.CloseConnection();
+
+            await disposeTask.DefaultTimeout();
+            Assert.Empty(monitor.Connections);
+        }
+        finally
+        {
+            homeDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public void FindConnectionByAppHostPath_WithCaseVariant_FollowsCurrentVolumeBehavior()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

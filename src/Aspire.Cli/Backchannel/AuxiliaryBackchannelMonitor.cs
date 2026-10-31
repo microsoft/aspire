@@ -26,7 +26,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
     ILogger<AuxiliaryBackchannelMonitor> logger,
     CliExecutionContext executionContext,
     TimeProvider timeProvider,
-    ProfilingTelemetry profilingTelemetry) : BackgroundService, IAuxiliaryBackchannelMonitor
+    ProfilingTelemetry profilingTelemetry) : BackgroundService, IAuxiliaryBackchannelMonitor, IAsyncDisposable
 {
     /// <summary>
     /// Identifies the log written on each connect attempt, so tests can observe attempts without
@@ -395,6 +395,26 @@ internal sealed class AuxiliaryBackchannelMonitor(
                 connection.Dispose();
             }
         }
+    }
+
+    /// <summary>
+    /// Stops monitoring and closes the monitor-owned connections gracefully, so AppHosts see clean
+    /// disconnects when the CLI exits.
+    /// </summary>
+    public async ValueTask DisposeAsync()
+    {
+        base.Dispose();
+
+        var connections = new List<AppHostAuxiliaryBackchannel>();
+        foreach (var socketPath in _connectionsBySocketPath.Keys)
+        {
+            if (_connectionsBySocketPath.TryRemove(socketPath, out var connection))
+            {
+                connections.Add(connection);
+            }
+        }
+
+        await Task.WhenAll(connections.Select(static connection => connection.DisposeAsync().AsTask())).ConfigureAwait(false);
     }
 
     private static void DisposeFileProviders(List<PhysicalFileProvider>? fileProviders)

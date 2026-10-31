@@ -283,7 +283,7 @@ internal static class TelemetryCommandHelpers
             // Successful results take ownership of the connection so callers can keep using it.
             if (apiResult?.ConnectionResult is null)
             {
-                result.Dispose();
+                await result.DisposeAsync().ConfigureAwait(false);
             }
         }
     }
@@ -816,7 +816,7 @@ internal sealed record DashboardApiResult(
     string? BaseUrl,
     string? ApiToken,
     string? DashboardUrl,
-    int ExitCode) : IDisposable
+    int ExitCode) : IDisposable, IAsyncDisposable
 {
     /// <summary>
     /// Gets the resolver result that owns <see cref="Connection"/>, if any. Disposing this
@@ -832,6 +832,9 @@ internal sealed record DashboardApiResult(
 
     /// <inheritdoc />
     public void Dispose() => ConnectionResult?.Dispose();
+
+    /// <inheritdoc />
+    public ValueTask DisposeAsync() => ConnectionResult?.DisposeAsync() ?? ValueTask.CompletedTask;
 }
 
 /// <summary>

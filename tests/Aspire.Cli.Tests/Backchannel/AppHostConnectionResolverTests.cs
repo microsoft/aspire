@@ -206,6 +206,67 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ResolveConnectionAsync_WithExplicitProjectFile_DisposeAsyncWaitsForAppHostToClose()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectFile = CreateProjectFile(workspace.WorkspaceRoot, "TestAppHost", "TestAppHost.csproj");
+        using var server = TestResolverBackchannelServer.Start(projectFile.FullName, processId: 1113);
+        server.CloseOnClientDisconnect = false;
+        using var sources = TestConfigSourceServices.Create(executionContext);
+        var resolver = CreateResolver(executionContext, sources, server);
+
+        var result = await resolver.ResolveConnectionAsync(
+            projectFile,
+            "Scanning",
+            "Select",
+            SharedCommandStrings.AppHostNotRunning,
+            TestContext.Current.CancellationToken);
+
+        var connection = Assert.IsType<AppHostAuxiliaryBackchannel>(result.Connection);
+        connection.GracefulCloseTimeout = Timeout.InfiniteTimeSpan;
+
+        var disposeTask = result.DisposeAsync().AsTask();
+
+        // The AppHost reads a clean end of stream while the CLI still holds its socket, and the CLI
+        // releases the socket only after the AppHost closes its side, so the AppHost never sees a reset.
+        await server.WaitForClientDisconnectAsync().DefaultTimeout();
+        Assert.False(disposeTask.IsCompleted);
+
+        server.CloseConnection();
+
+        await disposeTask.DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task ResolveConnectionAsync_WithExplicitProjectFile_DisposeAsyncIsBoundedWhenAppHostDoesNotClose()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectFile = CreateProjectFile(workspace.WorkspaceRoot, "TestAppHost", "TestAppHost.csproj");
+        using var server = TestResolverBackchannelServer.Start(projectFile.FullName, processId: 1114);
+        server.CloseOnClientDisconnect = false;
+        using var sources = TestConfigSourceServices.Create(executionContext);
+        var resolver = CreateResolver(executionContext, sources, server);
+
+        var result = await resolver.ResolveConnectionAsync(
+            projectFile,
+            "Scanning",
+            "Select",
+            SharedCommandStrings.AppHostNotRunning,
+            TestContext.Current.CancellationToken);
+
+        var connection = Assert.IsType<AppHostAuxiliaryBackchannel>(result.Connection);
+        connection.GracefulCloseTimeout = TimeSpan.FromMilliseconds(50);
+        var rpc = connection.Rpc!;
+
+        await result.DisposeAsync().AsTask().DefaultTimeout();
+
+        await server.WaitForClientDisconnectAsync().DefaultTimeout();
+        Assert.True(rpc.IsDisposed);
+    }
+
+    [Fact]
     public async Task GetDashboardApiAsync_WithExplicitProjectFile_KeepsConnectionOpenUntilResultDisposed()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -727,6 +788,20 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
         Assert.False(result.Success);
         Assert.Equal(SharedCommandStrings.AppHostNotRunning, result.ErrorMessage);
         Assert.Equal(CliExitCodes.FailedToFindProject, result.ExitCode);
+    }
+
+    private static AppHostConnectionResolver CreateResolver(CliExecutionContext executionContext, ConfigSourceService sources, TestResolverBackchannelServer server)
+    {
+        return new AppHostConnectionResolver(
+            new TestAuxiliaryBackchannelMonitor(),
+            new TestInteractionService(),
+            new TestProjectLocator(),
+            executionContext,
+            TestHelpers.CreateInteractiveHostEnvironment(),
+            NullLogger<AppHostConnectionResolver>.Instance,
+            new ProfilingTelemetry(new ConfigurationBuilder().Build()),
+            sources,
+            (_, _, _, _) => [server.AppHostSocket]);
     }
 
     private static CliExecutionContext CreateExecutionContext(DirectoryInfo workingDirectory)

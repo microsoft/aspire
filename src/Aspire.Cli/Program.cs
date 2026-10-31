@@ -1239,8 +1239,9 @@ public class Program
             return CliExitCodes.FailedToStartCli;
         }
 
-        // Ensure dispose of app when Main exits.
-        using var appLifetime = app;
+        // Ensure dispose of app when Main exits. The host is disposed asynchronously so services such as the
+        // auxiliary backchannel monitor can close AppHost connections gracefully before the process exits.
+        await using var appLifetime = (IAsyncDisposable)app;
 
         // Immediately get telemetry so background tag calculation is available to command activities.
         var telemetry = app.Services.GetRequiredService<AspireCliTelemetry>();

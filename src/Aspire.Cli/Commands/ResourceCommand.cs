@@ -128,7 +128,7 @@ internal sealed class ResourceCommand : BaseCommand
         var loadArguments = parseResult.GetValue(s_loadArgumentsOption);
         var capturedArguments = parseResult.UnmatchedTokens.ToArray();
 
-        using var result = await _connectionResolver.ResolveConnectionAsync(
+        await using var result = await _connectionResolver.ResolveConnectionAsync(
             passedAppHostProjectFile,
             SharedCommandStrings.ScanningForRunningAppHosts,
             string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.SelectAppHost, ResourceCommandStrings.SelectAppHostAction),
@@ -615,7 +615,7 @@ internal sealed class ResourceCommand : BaseCommand
                 return exitCode;
             }
 
-            using var result = await command._connectionResolver.ResolveConnectionAsync(
+            await using var result = await command._connectionResolver.ResolveConnectionAsync(
                 request.AppHostProjectFile,
                 SharedCommandStrings.ScanningForRunningAppHosts,
                 string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.SelectAppHost, ResourceCommandStrings.SelectAppHostAction),
