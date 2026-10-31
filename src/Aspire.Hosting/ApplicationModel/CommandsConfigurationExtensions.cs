@@ -229,25 +229,23 @@ internal static class CommandsConfigurationExtensions
         LogBuildInformation(mainLogger, buildOutput, "Stopping resource for rebuild...");
         await Task.WhenAll(replicasToStop.Select(name => orchestrator.StopResourceAsync(name, cancellationToken))).ConfigureAwait(false);
 
-        // Capture the state each replica reached after stopping. A replica that was Stopping before the rebuild
-        // may have reached its terminal state by now, which is what it should be restored to.
-        var postStopStates = new Dictionary<string, string?>(StringComparer.Ordinal);
-        foreach (var name in replicaNames)
-        {
-            if (resourceNotificationService.TryGetCurrentState(name, out var evt))
-            {
-                postStopStates[name] = evt.Snapshot.State?.Text;
-            }
-        }
-
         // Set state to Building after replicas are stopped. Leave Waiting replicas in their
         // current state — changing their state text would unblock WaitForInBeforeResourceStartedEvent,
         // causing CreateExecutableAsync to launch the OLD binary while the build is in progress.
-        await resourceNotificationService.PublishUpdateAsync(projectResource, s =>
-            s.State?.Text == KnownResourceStates.Waiting
-                ? s
-                : s with { State = new ResourceStateSnapshot(KnownResourceStates.Building, KnownResourceStateStyles.Info) }
-        ).ConfigureAwait(false);
+        // The state each replica reached after stopping is captured in the same update that replaces it with
+        // Building, so a terminal state published concurrently by the DCP watcher (e.g. Finished after Stopping)
+        // is the one later restored.
+        var postStopStates = new Dictionary<string, string?>(StringComparer.Ordinal);
+        foreach (var name in replicaNames)
+        {
+            await resourceNotificationService.PublishUpdateAsync(projectResource, name, s =>
+            {
+                postStopStates[name] = s.State?.Text;
+                return s.State?.Text == KnownResourceStates.Waiting
+                    ? s
+                    : s with { State = new ResourceStateSnapshot(KnownResourceStates.Building, KnownResourceStateStyles.Info) };
+            }).ConfigureAwait(false);
+        }
 
         // Start forwarding logs from the rebuilder to the main resource's console.
         using var logCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
