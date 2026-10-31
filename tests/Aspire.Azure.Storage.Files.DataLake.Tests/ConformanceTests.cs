@@ -4,7 +4,6 @@
 using Aspire.Components.ConformanceTests;
 using Azure.Identity;
 using Azure.Storage.Files.DataLake;
-using Microsoft.DotNet.RemoteExecutor;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -129,11 +128,11 @@ public sealed class ConformanceTests : ConformanceTests<DataLakeServiceClient, A
 
     [Fact]
     public void TracingEnablesTheRightActivitySource()
-        => RemoteExecutor.Invoke(() => ActivitySourceTest(key: null)).Dispose();
+        => RemoteInvokeWithLogging(() => ActivitySourceTest(key: null), Output);
 
     [Fact]
     public void TracingEnablesTheRightActivitySource_Keyed()
-        => RemoteExecutor.Invoke(() => ActivitySourceTest(key: "key")).Dispose();
+        => RemoteInvokeWithLogging(() => ActivitySourceTest(key: "key"), Output);
 
     private static bool CanConnect()
     {

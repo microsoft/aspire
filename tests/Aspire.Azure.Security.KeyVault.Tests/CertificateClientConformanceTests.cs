@@ -4,7 +4,6 @@
 using Aspire.Components.ConformanceTests;
 using Azure.Identity;
 using Azure.Security.KeyVault.Certificates;
-using Microsoft.DotNet.RemoteExecutor;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -113,11 +112,11 @@ public class CertificateClientConformanceTests : ConformanceTests<CertificateCli
 
     [Fact]
     public void TracingEnablesTheRightActivitySource()
-        => RemoteExecutor.Invoke(() => ActivitySourceTest(key: null)).Dispose();
+        => RemoteInvokeWithLogging(() => ActivitySourceTest(key: null), Output);
 
     [Fact]
     public void TracingEnablesTheRightActivitySource_Keyed()
-        => RemoteExecutor.Invoke(() => ActivitySourceTest(key: "key")).Dispose();
+        => RemoteInvokeWithLogging(() => ActivitySourceTest(key: "key"), Output);
 
     private static bool GetCanConnect()
     {
