@@ -243,6 +243,11 @@ namespace Projects%3B
          cannot supply runtime metadata. DNX layouts are resolved from Aspire home instead. -->
     <PropertyGroup>
       <_AspireCliBundleSelectedCliPath Condition="'$(_AspireResolvedCliInvocationMode)' == 'Aspire'">$(_AspireResolvedCliPath)</_AspireCliBundleSelectedCliPath>
+      <!-- DnxPinned must use the bundle extracted by the exact CLI version paired with the AppHost.
+           Shared Aspire home layouts can come from an older or newer global CLI with a different DCP, so
+           pinned layouts are resolved from, and set up into, a version-specific directory instead.
+           See https://github.com/microsoft/aspire/issues/21463. -->
+      <_AspireCliBundlePinnedVersion Condition="'$(_AspireResolvedCliInvocationMode)' == 'Dnx' and '$(_AspireCliInvocationMode.ToLowerInvariant())' == 'dnxpinned' and $(_AspireCliDnxPackageReference.Contains('@'))">$(_AspireCliDnxPackageReference.Substring($([MSBuild]::Add($(_AspireCliDnxPackageReference.IndexOf('@')), 1))))</_AspireCliBundlePinnedVersion>
       <!-- Suppress the expected invalid-layout warning only when an existing CLI can prepare its
            bundle. Explicit bundle paths and missing explicit CLI paths cannot be recovered. -->
       <_AspireCliBundleWarnOnInvalidPaths>false</_AspireCliBundleWarnOnInvalidPaths>
@@ -251,6 +256,7 @@ namespace Projects%3B
 
     <ResolveAspireCliBundle AspireCliBundlePath="$(AspireCliBundlePath)"
                              AspireCliPath="$(_AspireCliBundleSelectedCliPath)"
+                             PinnedAspireCliVersion="$(_AspireCliBundlePinnedVersion)"
                              SearchPathForAspireCli="false"
                              WarnOnInvalidPaths="$(_AspireCliBundleWarnOnInvalidPaths)">
       <Output TaskParameter="DcpDir" PropertyName="_AspireCliBundleDcpDir" />
@@ -260,6 +266,7 @@ namespace Projects%3B
       <Output TaskParameter="AspireTerminalHostPath" PropertyName="_AspireCliBundleTerminalHostPath" />
       <Output TaskParameter="AspireTerminalHostInvocationArgs" PropertyName="_AspireCliBundleTerminalHostInvocationArgs" />
       <Output TaskParameter="AspireHomeDirectory" PropertyName="_AspireDefaultHomeDirectory" />
+      <Output TaskParameter="AspireCliSetupDirectory" PropertyName="_AspireCliBundleSetupDirectory" />
     </ResolveAspireCliBundle>
 
     <PropertyGroup>
@@ -274,7 +281,7 @@ namespace Projects%3B
     <PropertyGroup Condition="'$(DcpDir)' == '' or ('$(AspireDashboardDir)' == '' and '$(AspireDashboardPath)' == '')">
       <_AspireCliSetupPath Condition="'$(AspireCliPath)' != ''">$(AspireCliPath)</_AspireCliSetupPath>
       <_AspireCliSetupPath Condition="'$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Aspire'">$(_AspireResolvedCliPath)</_AspireCliSetupPath>
-      <_AspireCliSetupHome Condition="'$(_AspireCliSetupHome)' == ''">$(_AspireDefaultHomeDirectory)</_AspireCliSetupHome>
+      <_AspireCliSetupHome Condition="'$(_AspireCliSetupHome)' == ''">$(_AspireCliBundleSetupDirectory)</_AspireCliSetupHome>
       <_AspireCliBundleSetupTimeout Condition="'$(_AspireCliBundleSetupTimeout)' == ''">120000</_AspireCliBundleSetupTimeout>
 
       <_AspireCliSetupExecutable Condition="'$(AspireCliBundlePath)' == '' and Exists('$(_AspireCliSetupPath)')">$(_AspireCliSetupPath)</_AspireCliSetupExecutable>
@@ -308,6 +315,12 @@ namespace Projects%3B
       <_AspireCliSetupArgument Include="DnxInstallPath" Condition="'$(_AspireCliSetupExecutable)' != '' and '$(_AspireCliSetupPath)' == ''">
         <Value>$(_AspireCliSetupHome)</Value>
       </_AspireCliSetupArgument>
+      <!-- The CLI validates an extracted bundle through layout discovery, which does not probe custom
+           install paths. Point discovery at the version-specific pinned layout so setup can validate it. -->
+      <_AspireCliSetupEnvironmentVariable Remove="@(_AspireCliSetupEnvironmentVariable)" />
+      <_AspireCliSetupEnvironmentVariable Include="ASPIRE_LAYOUT_PATH" Condition="'$(_AspireCliSetupExecutable)' != '' and '$(_AspireCliSetupPath)' == '' and '$(_AspireCliBundlePinnedVersion)' != ''">
+        <Value>$(_AspireCliSetupHome)</Value>
+      </_AspireCliSetupEnvironmentVariable>
     </ItemGroup>
 
     <!-- Script installs normally extract during installation. This fallback also covers older
@@ -317,6 +330,7 @@ namespace Projects%3B
             Condition="'$(_AspireCliSetupExecutable)' != '' and ('$(DcpDir)' == '' or ('$(AspireDashboardDir)' == '' and '$(AspireDashboardPath)' == ''))" />
     <RunAspireCliCommand FileName="$(_AspireCliSetupExecutable)"
                          Arguments="@(_AspireCliSetupArgument)"
+                         EnvironmentVariables="@(_AspireCliSetupEnvironmentVariable)"
                          TimeoutMilliseconds="$(_AspireCliBundleSetupTimeout)"
                          Condition="'$(_AspireCliSetupExecutable)' != '' and ('$(DcpDir)' == '' or ('$(AspireDashboardDir)' == '' and '$(AspireDashboardPath)' == ''))">
       <Output TaskParameter="ExitCode" PropertyName="_AspireCliSetupExitCode" />
@@ -327,6 +341,7 @@ namespace Projects%3B
 
     <ResolveAspireCliBundle AspireCliBundlePath="$(AspireCliBundlePath)"
                             AspireCliPath="$(_AspireCliBundleSelectedCliPath)"
+                            PinnedAspireCliVersion="$(_AspireCliBundlePinnedVersion)"
                             SearchPathForAspireCli="false"
                             WarnOnInvalidPaths="false"
                             Condition="'$(_AspireCliSetupExecutable)' != ''">

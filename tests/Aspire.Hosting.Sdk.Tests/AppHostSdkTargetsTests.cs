@@ -909,6 +909,85 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         AssertCliBundleExists(aspireHome, JsonSerializer.Serialize(properties));
     }
 
+    [Fact]
+    public async Task ResolveAspireCliBundlePathsUsesPinnedDnxBundleInsteadOfSharedAspireHomeBundle()
+    {
+        // https://github.com/microsoft/aspire/issues/21463: a complete layout in the shared Aspire home can
+        // belong to a different global CLI (and DCP) version than the CLI package pinned to this AppHost.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var dnxDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "dnx"));
+        await CreateFakeDnxAsync(dnxDirectory.FullName);
+        var aspireHome = Path.Combine(workspace.Path, "aspire-home");
+        var sharedBundle = CreateFakeCliBundle(aspireHome);
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true,
+            """
+              <PropertyGroup>
+                <AspireCliInvocationMode>DnxPinned</AspireCliInvocationMode>
+              </PropertyGroup>
+            """,
+            includeBundlePaths: false);
+        var environment = new Dictionary<string, string>
+        {
+            ["ASPIRE_HOME"] = aspireHome,
+            [GetPathEnvironmentVariableName()] = CreatePathWithoutAspire(dnxDirectory.FullName)
+        };
+
+        var properties = await GetResolveAspireCliBundlePathPropertiesAsync(project, environment, ["-warnaserror"]);
+        var pinnedLayoutDirectory = GetPinnedDnxLayoutDirectory(aspireHome);
+        var pinnedBundle = GetFakeCliBundlePaths(pinnedLayoutDirectory);
+
+        Assert.Equal("Dnx", properties["_AspireResolvedCliInvocationMode"]);
+        Assert.Equal(pinnedBundle.DcpDirectory, Path.TrimEndingDirectorySeparator(properties["DcpDir"]));
+        Assert.Equal(pinnedBundle.DashboardDirectory, Path.TrimEndingDirectorySeparator(properties["AspireDashboardDir"]));
+        Assert.Equal(pinnedBundle.DashboardPath, properties["AspireDashboardPath"]);
+        Assert.NotEqual(sharedBundle.DcpDirectory, Path.TrimEndingDirectorySeparator(properties["DcpDir"]));
+        AssertCliBundleExists(pinnedLayoutDirectory, JsonSerializer.Serialize(properties));
+        AssertCliBundleExists(aspireHome, JsonSerializer.Serialize(properties));
+    }
+
+    [Fact]
+    public async Task ResolveAspireCliBundlePathsReusesExistingPinnedDnxBundle()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var dnxDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "dnx"));
+        await CreateFakeDnxWithSetupExitCodeAsync(dnxDirectory.FullName, 42);
+        var aspireHome = Path.Combine(workspace.Path, "aspire-home");
+        CreateFakeCliBundle(aspireHome);
+        var pinnedBundle = CreateFakeCliBundle(GetPinnedDnxLayoutDirectory(aspireHome));
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true,
+            """
+              <PropertyGroup>
+                <AspireCliInvocationMode>DnxPinned</AspireCliInvocationMode>
+              </PropertyGroup>
+            """,
+            includeBundlePaths: false);
+        var environment = new Dictionary<string, string>
+        {
+            ["ASPIRE_HOME"] = aspireHome,
+            [GetPathEnvironmentVariableName()] = CreatePathWithoutAspire(dnxDirectory.FullName)
+        };
+
+        // The fake DNX fails setup, so success proves the existing pinned layout was used without setup.
+        var properties = await GetResolveAspireCliBundlePathPropertiesAsync(project, environment, ["-warnaserror"]);
+
+        Assert.Equal(pinnedBundle.DcpDirectory, Path.TrimEndingDirectorySeparator(properties["DcpDir"]));
+        Assert.Equal(pinnedBundle.DashboardPath, properties["AspireDashboardPath"]);
+    }
+
+    [Theory]
+    [InlineData("13.5.0", "13.5.0")]
+    [InlineData("13.5.0-preview.1.25301.1+abc", "13.5.0-preview.1.25301.1+abc")]
+    [InlineData("../evil", ".._evil")]
+    [InlineData("..", "__")]
+    public void ResolveAspireCliBundlePinnedLayoutDirectoryStaysUnderAspireHome(string version, string expectedDirectoryName)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var directory = ResolveAspireCliBundle.GetPinnedLayoutDirectory(workspace.Path, version);
+
+        Assert.Equal(Path.Combine(workspace.Path, "dnx", "aspire.cli", expectedDirectoryName), directory);
+    }
+
     [Theory]
     [InlineData("Dnx", false)]
     [InlineData("DnxPinned", false)]
@@ -1776,6 +1855,12 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
                     exit 0
                 fi
                 if [ "$1" = "--yes" ] && { [ "$2" = "aspire.cli@13.5.0" ] || [ "$2" = "aspire.cli" ]; } && [ "$3" = "--" ] && [ "$4" = "setup" ] && [ "$5" = "--install-path" ]; then
+                    # Like the real CLI, setup validates the extracted layout through layout discovery,
+                    # which only probes ASPIRE_LAYOUT_PATH and the Aspire home for a DNX-hosted CLI.
+                    if [ "$6" != "${ASPIRE_LAYOUT_PATH:-}" ] && [ "$6" != "${ASPIRE_HOME:-$HOME/.aspire}" ]; then
+                        echo "Bundle was extracted to $6 but layout validation failed." >&2
+                        exit 1
+                    fi
                     mkdir -p "$6/bundle/dcp" "$6/bundle/managed" "$6/bundle/dashboard"
                     : > "$6/bundle/dcp/dcp"
                     : > "$6/bundle/managed/aspire-managed"
@@ -2179,6 +2264,9 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         Assert.Equal(expectedArguments, properties["RunArguments"]);
         Assert.Equal(project.ProjectDirectory, properties["RunWorkingDirectory"]);
     }
+
+    private static string GetPinnedDnxLayoutDirectory(string aspireHome)
+        => Path.Combine(aspireHome, "dnx", "aspire.cli", AspireCliVersion);
 
     private static void AssertCliBundleExists(string aspireHome, string output)
     {
