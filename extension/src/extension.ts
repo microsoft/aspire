@@ -150,6 +150,10 @@ export async function activate(context: vscode.ExtensionContext) {
   const appHostDiscoveryService = new AppHostDiscoveryService(terminalProvider, configInfoProvider);
   context.subscriptions.push(appHostDiscoveryService);
   const dataRepository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService, configInfoProvider);
+  const updateDebugSessionDataDemand = () => dataRepository.setAppHostDebugSessionActive(
+    aspireExtensionContext.aspireDebugSessions.some(session => session.operationKind === 'run'));
+  context.subscriptions.push(aspireExtensionContext.onDidChangeDebugSessions(updateDebugSessionDataDemand));
+  updateDebugSessionDataDemand();
 
   // Meaningful-engagement reporter must outlive every command callback so it
   // can observe the first invocation. Wire it before any command is

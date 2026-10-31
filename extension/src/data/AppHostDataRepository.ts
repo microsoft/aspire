@@ -96,6 +96,8 @@ export class AppHostDataRepository {
     // ── Mode / panel state ──
     private _viewMode: ViewMode = 'workspace';
     private _panelVisible = false;
+    private _hasVisibleAppHostEditor = false;
+    private _hasActiveAppHostDebugSession = false;
     private _openAppHostPaths: readonly string[] = [];
     private _dataKeepAliveCount = 0;
     private _hasEverBeenDataActive = false;
@@ -212,8 +214,13 @@ export class AppHostDataRepository {
         });
         this._fetchWorkspaceAppHost();
         this._configChangeDisposable = vscode.workspace.onDidChangeConfiguration(e => {
-            if ((e.affectsConfiguration('aspire.appHostsPollingInterval') || e.affectsConfiguration('aspire.globalAppHostsPollingInterval')) && this._dataActive) {
+            const loggingChanged = e.affectsConfiguration('aspire.enableAspireCliDebugLogging');
+            if ((loggingChanged || e.affectsConfiguration('aspire.appHostsPollingInterval') || e.affectsConfiguration('aspire.globalAppHostsPollingInterval')) && this._dataActive) {
                 this._psPoller.startPsPolling();
+                if (loggingChanged) {
+                    this._stopAllDescribes();
+                    this._reconcileDescribes();
+                }
             }
         });
     }
@@ -321,6 +328,19 @@ export class AppHostDataRepository {
         this._syncPolling(resumedFromInactive);
     }
 
+    setAppHostDebugSessionActive(active: boolean): void {
+        if (this._hasActiveAppHostDebugSession === active) {
+            return;
+        }
+        const wasDataActive = this._dataActive;
+        this._hasActiveAppHostDebugSession = active;
+        const resumedFromInactive = !wasDataActive && this._dataActive && this._hasEverBeenDataActive;
+        if (this._dataActive) {
+            this._hasEverBeenDataActive = true;
+        }
+        this._syncPolling(resumedFromInactive);
+    }
+
     /**
      * Keeps the running AppHost data sources active for a background consumer that cannot depend on
      * the Aspire panel or an AppHost editor remaining open.
@@ -346,25 +366,19 @@ export class AppHostDataRepository {
     }
 
     /**
-     * Reports the current set of open AppHost editor tabs — focused or backgrounded — so the sources
-     * can follow AppHosts the user is working on, even outside a workspace folder.
-     *
-     * Any open AppHost tab both surfaces its running host in the workspace panel and keeps the data
-     * sources alive (see {@link _dataActive}). Keying keep-alive on the *open* set rather than the
-     * currently *visible* subset is deliberate: switching between editor tabs (which momentarily
-     * changes which editors are visible) must not change the open set, otherwise `aspire ps`/`describe`
-     * would wind down and immediately respawn, churning the CLI processes on every tab switch.
-     *
-     * Data sources wind down only once the panel is hidden and no AppHost tab remains open.
+     * Keeps open AppHost tabs in workspace scope, but only visible AppHost editors require live data.
+     * Background tabs must not keep polling alive after the user leaves the Aspire UI.
      */
-    setAppHostFilesOpen(openAppHostPaths: readonly string[]): void {
+    setAppHostFilesOpen(openAppHostPaths: readonly string[], hasVisibleAppHostEditor: boolean): void {
         const unchanged = openAppHostPaths.length === this._openAppHostPaths.length
-            && openAppHostPaths.every((openPath, index) => openPath === this._openAppHostPaths[index]);
+            && openAppHostPaths.every((openPath, index) => openPath === this._openAppHostPaths[index])
+            && hasVisibleAppHostEditor === this._hasVisibleAppHostEditor;
         if (unchanged) {
             return;
         }
         const wasDataActive = this._dataActive;
         this._openAppHostPaths = openAppHostPaths;
+        this._hasVisibleAppHostEditor = hasVisibleAppHostEditor;
         const becameDataActive = !wasDataActive && this._dataActive;
         const resumedFromInactive = becameDataActive && this._hasEverBeenDataActive;
         if (this._dataActive) {
@@ -655,12 +669,8 @@ export class AppHostDataRepository {
 
     // ── PS polling lifecycle ──
 
-    /**
-     * Sources are active while the panel is visible, at least one AppHost tab is open (visible or
-     * backgrounded), or a background consumer holds a keep-alive lease.
-     */
     private get _dataActive(): boolean {
-        return this._panelVisible || this._openAppHostPaths.length > 0 || this._dataKeepAliveCount > 0;
+        return this._panelVisible || this._hasVisibleAppHostEditor || this._hasActiveAppHostDebugSession || this._dataKeepAliveCount > 0;
     }
 
     private _syncPolling(refreshBeforeFollowOnResume = false): void {
@@ -1207,6 +1217,7 @@ export class AppHostDataRepository {
         const describeProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
             createProcessGroup: true,
             noExtensionVariables: true,
+            backgroundQuery: true,
             lineCallback: (line) => {
                 if (this._describeStreams.get(appHostPath) !== stream || stream.process !== describeProcess) {
                     return;
@@ -1455,7 +1466,7 @@ export class AppHostDataRepository {
     }
 
     private async _runCliJson<T>(command: string, args: string[], options: RunCliCommandOptions = {}): Promise<T> {
-        const { stdout } = await this._cliRunner.runCliCommand(command, args, options);
+        const { stdout } = await this._cliRunner.runCliCommand(command, args, { ...options, backgroundQuery: true });
 
         try {
             return parseCliJsonOutput<T>(stdout);

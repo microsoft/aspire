@@ -1,10 +1,12 @@
 import * as assert from 'assert';
+import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
-import { getCommandInvocationCount, isSamePath, waitForCommandOutcome, waitForRepositoryIdle, waitForRunningAppHost, waitForWorkspaceAppHost } from './helpers/assertions';
-import { executeE2eControlCommand, runE2eTeardown, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
-import { getPrimaryAppHostProjectPath, getWorkspaceRoot } from './helpers/paths';
-import { dismissAllNotifications, getNotificationMessages, openAspireView, takeNotificationAction, waitForEditorTitle, waitForNotificationMessage } from './helpers/vscode';
+import { getCommandInvocationCount, isSamePath, waitForCommandOutcome, waitForExtensionState, waitForRepositoryIdle, waitForRunningAppHost, waitForWorkspaceAppHost } from './helpers/assertions';
+import { executeE2eControlCommand, getPsFollowProcesses, getWorkspaceSettingsPath, runE2eTeardown, stopPrimaryAppHostIfRunning, writeWorkspaceSetting } from './helpers/fixtures';
+import { readExtensionLogs } from './helpers/logs';
+import { getPrimaryAppHostProjectPath, getRunRoot, getWorkspaceRoot } from './helpers/paths';
+import { dismissAllNotifications, getNotificationMessages, hideAspireView, openAspireView, takeNotificationAction, waitForEditorTitle, waitForNotificationMessage } from './helpers/vscode';
 
 interface CliResult {
     exitCode: number | null;
@@ -26,6 +28,87 @@ suite('CLI diagnostic log actions E2E', function () {
             () => executeE2eControlCommand({ name: 'closeAllEditors' }),
             () => dismissAllNotifications(),
         ], 'CLI diagnostic log actions E2E teardown failed.');
+    });
+
+    test('status polling creates no diagnostic files by default and stops when Aspire UI is hidden', async function () {
+        if (process.platform !== 'win32') {
+            this.skip();
+        }
+
+        await openAspireView();
+        await waitForWorkspaceAppHost();
+        await waitForRepositoryIdle();
+
+        const pollingSetting = 'aspire.appHostsPollingInterval';
+        const debugLoggingSetting = 'aspire.enableAspireCliDebugLogging';
+        const settings = JSON.parse(fs.readFileSync(getWorkspaceSettingsPath(), 'utf8')) as Record<string, unknown>;
+        const runRoot = getRunRoot();
+        assert.ok(runRoot, 'An isolated E2E run root is required.');
+        const logsDirectory = path.join(runRoot, 'aspire-home', 'logs');
+        const logFiles = () => fs.existsSync(logsDirectory) ? fs.readdirSync(logsDirectory).filter(file => file.endsWith('.log')).sort() : [];
+        const statusSpawns = () => readExtensionLogs().split(/\r?\n/).filter(
+            line => line.includes('Spawning Aspire CLI process:') && /\sps\s/.test(line)).length;
+
+        try {
+            writeWorkspaceSetting(debugLoggingSetting, false);
+            writeWorkspaceSetting(pollingSetting, 1000);
+            await executeE2eControlCommand({ name: 'openFile', filePath: getPrimaryAppHostProjectPath() });
+            await waitForExtensionState(() => getPsFollowProcesses().some(process => !process.exited), 'status follower to start');
+            await waitForRepositoryIdle();
+            const activeFiles = logFiles();
+            const activeSpawns = statusSpawns();
+            for (let interval = 0; interval < 4; interval++) {
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                assert.deepStrictEqual(logFiles(), activeFiles, 'Background queries must not create CLI diagnostic files by default.');
+                assert.strictEqual(getPsFollowProcesses().filter(process => !process.exited).length, 1);
+            }
+            assert.ok(statusSpawns() > activeSpawns, 'Authoritative queries must retain the configured cadence while following.');
+
+            await hideAspireView();
+            assert.ok(getPsFollowProcesses().some(process => !process.exited), 'The visible AppHost editor still needs live data.');
+
+            await executeE2eControlCommand({ name: 'openFile', filePath: getWorkspaceSettingsPath() });
+            await waitForExtensionState(() => getPsFollowProcesses().every(process => process.exited), 'all status followers to exit');
+            // Allow a one-shot query already in flight during the visibility change to finish.
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            const idleFiles = logFiles();
+            const idleSpawns = statusSpawns();
+            for (let interval = 0; interval < 4; interval++) {
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                assert.deepStrictEqual(logFiles(), idleFiles, 'Hidden Aspire UI must not keep accumulating CLI logs.');
+                assert.strictEqual(statusSpawns(), idleSpawns, 'Hidden Aspire UI must not keep spawning status queries.');
+            }
+
+            await openAspireView();
+            await waitForExtensionState(() => getPsFollowProcesses().some(process => !process.exited), 'status watching to resume');
+        } finally {
+            writeWorkspaceSetting(pollingSetting, settings[pollingSetting]);
+            writeWorkspaceSetting(debugLoggingSetting, settings[debugLoggingSetting]);
+        }
+    });
+
+    test('background CLI diagnostic files can be enabled for troubleshooting', async function () {
+        if (process.platform !== 'win32') {
+            this.skip();
+        }
+
+        const setting = 'aspire.enableAspireCliDebugLogging';
+        const settings = JSON.parse(fs.readFileSync(getWorkspaceSettingsPath(), 'utf8')) as Record<string, unknown>;
+        const runRoot = getRunRoot();
+        assert.ok(runRoot, 'An isolated E2E run root is required.');
+        const logsDirectory = path.join(runRoot, 'aspire-home', 'logs');
+        const logFiles = () => fs.existsSync(logsDirectory) ? fs.readdirSync(logsDirectory).filter(file => file.endsWith('.log')) : [];
+        const previousFiles = new Set(logFiles());
+        try {
+            writeWorkspaceSetting(setting, true);
+            await openAspireView();
+            await waitForExtensionState(() => logFiles().some(file =>
+                !previousFiles.has(file)
+                && fs.readFileSync(path.join(logsDirectory, file), 'utf8').includes('Command: aspire ps --follow --format json')),
+            'opt-in file diagnostics for the background status follower');
+        } finally {
+            writeWorkspaceSetting(setting, settings[setting]);
+        }
     });
 
     test('opens the current CLI log selected from the failure notification', async function () {

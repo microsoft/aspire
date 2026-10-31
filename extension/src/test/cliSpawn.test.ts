@@ -7,7 +7,8 @@ import * as os from 'os';
 import * as path from 'path';
 import { PassThrough } from 'stream';
 import * as sinon from 'sinon';
-import { getCliSpawnCommand, getCliSpawnDiagnostics, mergeCliSpawnEnvironment, spawnCliProcess, terminateCliProcess } from '../utils/process/cliProcess';
+import * as vscode from 'vscode';
+import { getBackgroundCliArgs, getCliSpawnCommand, getCliSpawnDiagnostics, mergeCliSpawnEnvironment, onDidSpawnCliProcess, spawnCliProcess, terminateCliProcess } from '../utils/process/cliProcess';
 import { terminalCommandArgumentControlCharacters } from '../loc/strings';
 import type { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { canVsCodeQuoteCommandShimLaunch, getCmdShimSpawnCommandWithoutVerbatimArguments } from '../utils/cmdShim';
@@ -17,6 +18,75 @@ import { getPsFollowProcessLogPath, readPsFollowProcesses } from '../testing/psF
 
 import { removeDirectorySafely } from './testHelpers';
 suite('spawnCliProcess tests', () => {
+    for (const platform of ['win32', 'linux', 'darwin'] as const) {
+        for (const enableFileLogging of [false, true]) {
+            test(`background file logging on ${platform} honors debug logging ${enableFileLogging}`, () => {
+                const args = ['ps', '--follow', '--format', 'json', '--nologo'];
+                const originalArgs = [...args];
+                const result = getBackgroundCliArgs(args, enableFileLogging, platform);
+
+                assert.deepStrictEqual(result, platform === 'win32' && !enableFileLogging
+                    ? [...originalArgs, '--log-file', '\\\\.\\NUL']
+                    : originalArgs);
+                assert.deepStrictEqual(args, originalArgs);
+            });
+        }
+    }
+
+    test('background logging preserves explicit root destinations and forwarded arguments', () => {
+        for (const logOption of [['--log-file', 'diagnostics.log'], ['--log-file=diagnostics.log']]) {
+            const args = ['ps', '--format', 'json', ...logOption, '--', '--log-file', 'forwarded.log'];
+            assert.deepStrictEqual(getBackgroundCliArgs(args, false, 'win32'), args);
+        }
+
+        assert.deepStrictEqual(
+            getBackgroundCliArgs(['ps', '--format', 'json', '--', '--log-file', 'forwarded.log'], false, 'win32'),
+            ['ps', '--format', 'json', '--log-file', '\\\\.\\NUL', '--', '--log-file', 'forwarded.log']);
+    });
+
+    for (const backgroundQuery of [false, true]) {
+        for (const enableFileLogging of [false, true]) {
+            test(`spawn applies file policy only to background queries (${backgroundQuery}, debug ${enableFileLogging})`, () => {
+                const sandbox = sinon.createSandbox();
+                const configuration = {
+                    ...vscode.workspace.getConfiguration('aspire'),
+                    get: sandbox.stub().withArgs('enableAspireCliDebugLogging', false).returns(enableFileLogging),
+                };
+                sandbox.stub(vscode.workspace, 'getConfiguration').withArgs('aspire').returns(configuration);
+                sandbox.stub(process, 'platform').value('win32');
+                const childProcess = createTestChildProcess(4810);
+                const spawnStub = sandbox.stub(nodeChildProcess, 'spawn').returns(childProcess);
+                const stdoutCallback = sandbox.stub();
+                const stderrCallback = sandbox.stub();
+                const terminalProvider = { createEnvironment: () => ({}) } as AspireTerminalProvider;
+                let observedArgs: readonly string[] | undefined;
+                const subscription = onDidSpawnCliProcess(event => { observedArgs = event.args; });
+
+                try {
+                    const args = ['ps', '--format', 'json'];
+                    spawnCliProcess(terminalProvider, 'aspire.exe', args, {
+                        backgroundQuery,
+                        stdoutCallback,
+                        stderrCallback,
+                    });
+                    const expected = backgroundQuery && !enableFileLogging
+                        ? [...args, '--log-file', '\\\\.\\NUL']
+                        : args;
+                    assert.deepStrictEqual(spawnStub.firstCall.args[1], expected);
+                    assert.deepStrictEqual(observedArgs, expected);
+
+                    childProcess.stdout.emit('data', '[]');
+                    childProcess.stderr.emit('data', 'Query failed');
+                    sinon.assert.calledOnceWithExactly(stdoutCallback, '[]');
+                    sinon.assert.calledOnceWithExactly(stderrCallback, 'Query failed');
+                } finally {
+                    subscription.dispose();
+                    sandbox.restore();
+                }
+            });
+        }
+    }
+
     test('records native ps followers before output and across extension-host tracker replacement', () => {
         const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-native-ps-'));
         const stateFile = path.join(directory, 'state.json');

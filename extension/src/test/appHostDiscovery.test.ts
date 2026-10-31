@@ -241,6 +241,7 @@ suite('AppHost discovery', () => {
                 assert.strictEqual(firstResult, undefined);
                 assert.strictEqual(secondResult, undefined);
                 assert.strictEqual(spawnStub.callCount, 1);
+                assert.strictEqual(spawnStub.firstCall.args[3]?.backgroundQuery, true);
             }
             finally {
                 service.dispose();

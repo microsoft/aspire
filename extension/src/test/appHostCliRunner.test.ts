@@ -142,6 +142,26 @@ suite('data/appHostCliRunner tests', () => {
             }
         });
 
+        test('forwards background logging without changing ordinary commands', async () => {
+            spawnStub.callsFake((_provider: unknown, _cliPath: string, _args: string[], options: cliModule.SpawnProcessOptions) => {
+                const child = new TestChildProcess();
+                child.exitCode = 0;
+                options.stdoutCallback?.('[]');
+                options.processExitCallback?.(0);
+                return child;
+            });
+            const runner = new AppHostCliRunner(terminalProvider);
+            try {
+                await runner.runCliCommand('ps', ['ps', '--format', 'json']);
+                await runner.runCliCommand('ps', ['ps', '--format', 'json'], { backgroundQuery: true });
+
+                assert.strictEqual(spawnStub.firstCall.args[3].backgroundQuery, undefined);
+                assert.strictEqual(spawnStub.secondCall.args[3].backgroundQuery, true);
+            } finally {
+                runner.dispose();
+            }
+        });
+
         test('uses a supplied concrete CLI path without resolving it again', async () => {
             const cliProcess = new TestChildProcess();
             spawnStub.callsFake((_provider: unknown, _cliPath: string, _args: string[], options: cliModule.SpawnProcessOptions) => {

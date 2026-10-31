@@ -168,6 +168,7 @@ suite('configInfoProvider tests', () => {
         assert.strictEqual(workingDirectory, workspaceFolder.uri.fsPath);
         assert.deepStrictEqual(spawnStub.firstCall.args[2], ['config', 'info', '--json', '--nologo']);
         assert.strictEqual(spawnStub.firstCall.args[3]?.noExtensionVariables, true);
+        assert.strictEqual(spawnStub.firstCall.args[3]?.backgroundQuery, true);
     });
 
     test('getConfigInfo runs in the targeted folder rather than the first one', async () => {
@@ -345,7 +346,10 @@ suite('configInfoProvider tests', () => {
         const spawnStub = sinon.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, command, args, options) => {
             assert.strictEqual(command, '/exact/aspire');
             assert.deepStrictEqual(args, ['doctor', '--format', 'json', '--nologo']);
-            assert.deepStrictEqual(options?.env, [{ name: 'ASPIRE_NON_INTERACTIVE', value: 'true' }]);
+            assert.deepStrictEqual(options?.env, [
+                { name: 'ASPIRE_NON_INTERACTIVE', value: 'true' },
+            ]);
+            assert.strictEqual(options?.backgroundQuery, true);
             assert.strictEqual(options?.workingDirectory, '/captured/workspace');
             const output = JSON.parse(createDoctorVersionOutput('13.5.0', '13.6.0'));
             output.checks.push({
@@ -602,6 +606,7 @@ suite('configInfoProvider tests', () => {
         for (const call of spawnStub.getCalls().filter(call => call.args[2]?.[0] === '--version')) {
             assert.strictEqual(call.args[3]?.createProcessGroup, true);
             assert.strictEqual(call.args[3]?.noExtensionVariables, true);
+            assert.strictEqual(call.args[3]?.backgroundQuery, true);
         }
     });
 
