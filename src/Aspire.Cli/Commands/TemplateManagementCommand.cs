@@ -5,6 +5,7 @@ using System.CommandLine;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Templating;
@@ -57,7 +58,7 @@ internal sealed class TemplateManagementCommand : ParentCommand
         private void Validate()
         {
             TemplateSourceConfiguration.ValidateName(Name);
-            TemplateSourceConfiguration.Parse(Path, Repository, Ref, $"templateSources.{Name}", requireComplete: true);
+            TemplateSourceConfiguration.Parse(Path, Repository, Ref, $"{AspireConfigFile.TemplateSourcesSectionName}.{Name}", requireComplete: true);
         }
     }
 
@@ -82,6 +83,7 @@ internal sealed class TemplateManagementCommand : ParentCommand
         {
             _store = store;
             Options.Add(_format);
+            Options.Add(ConfigSourceService.s_useSourceOption);
         }
 
         protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -89,7 +91,13 @@ internal sealed class TemplateManagementCommand : ParentCommand
             JsonObject sources;
             try
             {
-                sources = await _store.ListAsync(cancellationToken);
+                var json = parseResult.GetValue(_format) == OutputFormat.Json;
+                // Machine-readable listing is local-only unless explicitly opted in. Do not
+                // even select a candidate by default: that can validate settings or run detection.
+                var source = !json || parseResult.GetValue(ConfigSourceService.s_useSourceOption) is true
+                    ? await ConfigSources.ResolveAndAcquireConfigSourceAsync(parseResult, allowInteractiveInput: !json, cancellationToken)
+                    : null;
+                sources = await _store.ListAsync(source, cancellationToken);
             }
             catch (TemplateSourceConfigurationException ex)
             {

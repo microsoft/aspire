@@ -821,7 +821,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         var services = CreateCreationServices(workspace);
         using var provider = services.BuildServiceProvider();
         var result = provider.GetRequiredService<RootCommand>().Parse(
-            $"new {templateOptions} --name CreatedProject --output \"{output}\" --suppress-agent-init --use-config-source {accepted.ToString().ToLowerInvariant()} --non-interactive");
+            $"new {templateOptions} --name CreatedProject --output \"{output}\" --suppress-agent-init --use-config-source{(accepted ? "" : " false")} --non-interactive");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -839,7 +839,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var provider = CreateCreationServices(workspace).BuildServiceProvider();
         var result = provider.GetRequiredService<RootCommand>().Parse(
-            "init --file-based --language csharp --suppress-agent-init --use-config-source true --non-interactive");
+            "init --file-based --language csharp --suppress-agent-init --use-config-source --non-interactive");
 
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
         Assert.Equivalent(s_source, AspireConfigFile.Load(workspace.Path)!.ConfigSource, strict: true);

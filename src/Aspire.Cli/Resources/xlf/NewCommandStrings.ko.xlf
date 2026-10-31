@@ -308,8 +308,8 @@
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceListDescription">
-        <source>List named template sources from global configuration without discovering templates.</source>
-        <target state="new">List named template sources from global configuration without discovering templates.</target>
+        <source>List named template sources without discovering templates.</source>
+        <target state="new">List named template sources without discovering templates.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceListEmpty">

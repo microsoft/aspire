@@ -1,0 +1,8 @@
+﻿┌───────────┬─────────────────────────────────────────────────┐
+│ Name      │ Configuration                                   │
+├───────────┼─────────────────────────────────────────────────┤
+│ git-proof │ repository: https://git.example/proof-templates │
+│           │ ref: templates/preview                          │
+│           │ path: templates/proof                           │
+│ Personal  │ path: ./personal                                │
+└───────────┴─────────────────────────────────────────────────┘

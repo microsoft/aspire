@@ -6,6 +6,7 @@ using System.Text.Json.Nodes;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Templating;
 using Aspire.Cli.Tests.Agents;
+using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Microsoft.AspNetCore.InternalTesting;
@@ -96,7 +97,8 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
         TestPosixAcl.Set(path, "user::rw-,user:65534:r--,group::---,mask::r--,other::---");
         var acl = TestPosixAcl.Get(path);
         var mode = File.GetUnixFileMode(path);
-        var store = new TemplateSourceStore(service, workspace.CreateExecutionContext(), NullLogger<TemplateSourceStore>.Instance);
+        using var configSources = TestConfigSourceServices.Create(workspace.CreateExecutionContext());
+        var store = new TemplateSourceStore(service, workspace.CreateExecutionContext(), NullLogger<TemplateSourceStore>.Instance, configSources);
 
         switch (mutation)
         {

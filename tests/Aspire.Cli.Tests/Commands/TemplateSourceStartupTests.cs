@@ -202,7 +202,7 @@ public class TemplateSourceStartupTests(ITestOutputHelper outputHelper)
                 var store = host.Services.GetRequiredService<TemplateSourceStore>();
                 var error = await Assert.ThrowsAsync<TemplateSourceConfigurationException>(() => args[^1] switch
                 {
-                    "list" => store.ListAsync(CancellationToken.None),
+                    "list" => store.ListAsync(null, CancellationToken.None),
                     "company" => store.RemoveAsync("company", CancellationToken.None),
                     _ => store.AddAsync("extra", new JsonObject { ["repository"] = "https://example.com/extra" }, CancellationToken.None)
                 }).DefaultTimeout();
