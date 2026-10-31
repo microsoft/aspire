@@ -52,6 +52,37 @@ suite('E2E Mocha reporter', () => {
         }
     });
 
+    test('rejects empty, missing, all-skipped, and inconsistent successful test reports', () => {
+        const { assertExecutedMochaTests } = require(path.join(__dirname, '..', '..', 'scripts', 'e2e-mocha-results.cjs'));
+        const { shouldAllowAdvisoryTestFailure } = require(getProcessFailureModulePath());
+        const completedTest = { title: 'starts a Functions worker' };
+        assert.doesNotThrow(() => assertExecutedMochaTests({
+            tests: [completedTest],
+            passes: [completedTest],
+            failures: [],
+        }));
+
+        for (const results of [
+            undefined,
+            {},
+            { tests: [], passes: [], pending: [], failures: [] },
+            { tests: [completedTest], passes: [], pending: [completedTest], failures: [] },
+            { tests: [completedTest], passes: [completedTest], failures: [completedTest] },
+            { tests: [completedTest], passes: [completedTest] },
+        ]) {
+            let failure: unknown;
+            assert.throws(() => {
+                try {
+                    assertExecutedMochaTests(results);
+                } catch (error) {
+                    failure = error;
+                    throw error;
+                }
+            });
+            assert.strictEqual(shouldAllowAdvisoryTestFailure(failure, results, false), false);
+        }
+    });
+
     test('only classifies completed test failures as advisory', () => {
         const { hasCompletedMochaTestFailures } = require(path.join(__dirname, '..', '..', 'scripts', 'e2e-mocha-results.cjs'));
         const failedTest = {

@@ -4,15 +4,17 @@ import fs = require('fs');
 import http = require('http');
 import https = require('https');
 import * as path from 'path';
+import { spawnSync } from 'node:child_process';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
-import { prepareDebugSession } from '../debugger/debuggerExtensions';
-import { azureFunctionsDebuggerExtension } from '../debugger/languages/azureFunctions';
+import { getResourceDebuggerExtensions, prepareDebugSession } from '../debugger/debuggerExtensions';
+import { azureFunctionsDebuggerExtension, externalBuildAzureFunctionsDebuggerExtension } from '../debugger/languages/azureFunctions';
 import { DotNetService } from '../debugger/languages/dotnet';
 import { cleanupRun, registerRunCleanup } from '../debugger/runCleanupRegistry';
 import { AspireDebugSession } from '../debugger/AspireDebugSession';
-import { AspireResourceExtendedDebugConfiguration, AzureFunctionsLaunchConfiguration, EnvVar, LaunchOptions } from '../dcp/types';
-import { azureFunctionsCmdDelayedExpansion, azureFunctionsCmdPercentArgument, azureFunctionsInvalidProcessId, azureFunctionsUnsupportedTaskShell } from '../loc/strings';
+import { AspireResourceExtendedDebugConfiguration, AzureFunctionsExternalBuildLaunchConfiguration, AzureFunctionsLaunchConfiguration, EnvVar, LaunchOptions } from '../dcp/types';
+import { azureFunctionsCmdDelayedExpansion, azureFunctionsCmdPercentArgument, azureFunctionsExternalBuildEvaluationFailed, azureFunctionsInvalidExternalBuildConfiguration, azureFunctionsInvalidProcessId, azureFunctionsUnsupportedTaskShell } from '../loc/strings';
+import { getSupportedCapabilities } from '../capabilities';
 import { extensionLogOutputChannel } from '../utils/logging';
 
 suite('Azure Functions Debugger Extension Tests', () => {
@@ -41,6 +43,338 @@ suite('Azure Functions Debugger Extension Tests', () => {
     teardown(() => {
         cleanupRun('azure-functions-test-run');
         sinon.restore();
+    });
+
+    suite('externally built Functions', () => {
+        const projectPath = path.join('/workspace', 'FunctionsApp', 'FunctionsApp.csproj');
+        const targetPath = path.join('/workspace', 'FunctionsApp', 'bin', 'Release', 'custom', 'FunctionsApp.dll');
+        const hostDirectory = path.join('/workspace', 'FunctionsApp', 'custom-host');
+        const buildWorkingDirectory = path.join('/workspace', 'sdk-context');
+
+        for (const debug of [false, true]) {
+            for (const forceBuild of [false, true]) {
+                test(`preserves the coordinated build context and task lifecycle (debug=${debug}, forceBuild=${forceBuild})`, async () => {
+                    const buildEnvironment = { BUILD_FLAVOR: 'custom', BUILD_ONLY_SECRET: 'private-build-value' };
+                    const launchConfiguration: AzureFunctionsExternalBuildLaunchConfiguration = {
+                        ...createExternalBuildLaunchConfiguration(projectPath),
+                        build_configuration: 'Release',
+                        build_environment: buildEnvironment,
+                        build_working_directory: buildWorkingDirectory,
+                    };
+                    const buildDotNetProject = sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
+                    const getDotNetTargetPath = sinon.stub(DotNetService.prototype, 'getDotNetTargetPath').resolves(targetPath);
+                    const getRunProperties = sinon.stub(DotNetService.prototype, 'getDotNetProjectRunProperties').resolves({
+                        targetPath,
+                        runCommand: 'func',
+                        runArguments: 'host start --must-not-be-duplicated',
+                        runWorkingDirectory: hostDirectory,
+                    });
+                    sinon.stub(fs, 'existsSync').callsFake(value => value === targetPath || value === hostDirectory);
+                    const ownedDirectory = path.join(hostDirectory, 'aspire-functions-worker-external');
+                    fsMkdtempSync.returns(ownedDirectory);
+                    const statusServer = await createFuncHostStatusServer(() => funcHostStatus);
+                    const args = ['--port', String(statusServer.port), '--verbose'];
+                    const debugConfiguration = createDebugConfiguration(projectPath, args);
+                    const runtimeEnvironment = [
+                        ...createEnvironmentVariables(),
+                        { name: 'BUILD_FLAVOR', value: 'runtime' },
+                        { name: 'RUNTIME_ONLY', value: 'runtime-value' },
+                    ];
+
+                    try {
+                        const resourceSession = await externalBuildAzureFunctionsDebuggerExtension.createDebugSessionConfigurationCallback!(
+                            launchConfiguration,
+                            args,
+                            runtimeEnvironment,
+                            { ...createLaunchOptions(debug), forceBuild },
+                            debugConfiguration);
+
+                        sinon.assert.notCalled(buildDotNetProject);
+                        sinon.assert.notCalled(getDotNetTargetPath);
+                        sinon.assert.calledOnceWithExactly(getRunProperties, projectPath, 'Release', buildEnvironment, buildWorkingDirectory);
+                        sinon.assert.callOrder(getRunProperties, activateAzureFunctionsExtension, vscode.tasks.executeTask as sinon.SinonStub);
+                        assert.deepStrictEqual(buildEnvironment, { BUILD_FLAVOR: 'custom', BUILD_ONLY_SECRET: 'private-build-value' });
+                        const task = taskHarness.getExecutedTask()!;
+                        const execution = task.execution as vscode.ShellExecution;
+                        assert.strictEqual(execution.options?.cwd, hostDirectory);
+                        assert.deepStrictEqual(execution.options?.env, Object.fromEntries(runtimeEnvironment.map(entry => [entry.name, entry.value])));
+                        assert.deepStrictEqual(task.definition, {
+                            type: 'func',
+                            command: 'host start',
+                            args: [
+                                ...args,
+                                ...(debug ? ['--dotnet-isolated-debug'] : []),
+                                '--enable-json-output',
+                                '--json-output-file', 'aspire-functions-worker-external/worker-startup.json',
+                            ],
+                        });
+                        sinon.assert.calledOnceWithExactly(fsMkdtempSync, path.join(hostDirectory, 'aspire-functions-worker-'));
+                        if (debug) {
+                            assert.strictEqual(resourceSession, undefined);
+                            assert.strictEqual(debugConfiguration.type, 'coreclr');
+                            assert.strictEqual(debugConfiguration.request, 'attach');
+                            assert.strictEqual(debugConfiguration.processId, String(defaultWorkerPid));
+                            assert.strictEqual(debugConfiguration.program, undefined);
+                            assert.strictEqual(debugConfiguration.env, undefined);
+                            cleanupRun(debugConfiguration.runId);
+                            taskHarness.end(0);
+                        } else {
+                            assert.ok(resourceSession);
+                            assert.strictEqual(resourceSession.processId, defaultWorkerPid);
+                            const stop = resourceSession.stopSession();
+                            taskHarness.end(0);
+                            await stop;
+                            assert.strictEqual(await resourceSession.termination, -1);
+                        }
+                        sinon.assert.calledOnce(taskHarness.getExecution()!.terminate as sinon.SinonStub);
+                        sinon.assert.calledOnceWithExactly(fsRmSync, ownedDirectory, { recursive: true, force: true });
+                        sinon.assert.notCalled(process.kill as sinon.SinonStub);
+                    } finally {
+                        await close(statusServer.server);
+                    }
+                });
+            }
+        }
+
+        for (const buildEnvironment of [undefined, {}]) {
+            test(`uses SDK default configuration with ${buildEnvironment === undefined ? 'omitted' : 'empty'} build environment`, async () => {
+                const launchConfiguration = {
+                    ...createExternalBuildLaunchConfiguration(projectPath),
+                    build_environment: buildEnvironment,
+                };
+                const buildDotNetProject = sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
+                const getRunProperties = sinon.stub(DotNetService.prototype, 'getDotNetProjectRunProperties').resolves({
+                    targetPath,
+                    runCommand: 'func',
+                    runArguments: 'host start',
+                    runWorkingDirectory: hostDirectory,
+                });
+                sinon.stub(fs, 'existsSync').returns(true);
+
+                await externalBuildAzureFunctionsDebuggerExtension.createDebugSessionConfigurationCallback!(
+                    launchConfiguration, [], [], createLaunchOptions(true), createDebugConfiguration(projectPath));
+
+                sinon.assert.calledOnceWithExactly(getRunProperties, projectPath, undefined, buildEnvironment, path.dirname(projectPath));
+                sinon.assert.notCalled(buildDotNetProject);
+                cleanupRun('azure-functions-test-run');
+                taskHarness.end(0);
+            });
+        }
+
+        for (const debug of [false, true]) {
+            test(`prepares the existing Functions orchestration and debugger settings (debug=${debug})`, async () => {
+                sinon.stub(DotNetService.prototype, 'getDotNetProjectRunProperties').resolves({
+                    targetPath,
+                    runCommand: 'func',
+                    runArguments: 'host start',
+                    runWorkingDirectory: hostDirectory,
+                });
+                sinon.stub(fs, 'existsSync').returns(true);
+                const buildDotNetProject = sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
+                const startDebugging = sinon.stub(vscode.debug, 'startDebugging').resolves(false);
+                const statusServer = await createFuncHostStatusServer(() => 'Running');
+
+                try {
+                    const prepared = await prepareDebugSession(
+                        {
+                            type: 'aspire', request: 'launch', name: 'Aspire', program: '',
+                            debuggers: {
+                                'azure-functions': { justMyCode: true, stopAtEntry: false },
+                                'azure-functions-with-external-build.v1': { stopAtEntry: true },
+                            },
+                        },
+                        createExternalBuildLaunchConfiguration(projectPath),
+                        ['--port', String(statusServer.port)],
+                        [],
+                        createLaunchOptions(debug),
+                        externalBuildAzureFunctionsDebuggerExtension);
+
+                    assert.strictEqual(prepared.debugConfiguration.resourceType, 'azure-functions-with-external-build.v1');
+                    assert.strictEqual(prepared.debugConfiguration.targetPath, projectPath);
+                    assert.strictEqual(prepared.debugConfiguration.justMyCode, true);
+                    assert.strictEqual(prepared.debugConfiguration.stopAtEntry, true);
+                    assert.strictEqual(prepared.debugConfiguration.noDebug, !debug);
+                    assert.strictEqual(prepared.debugConfiguration.request, debug ? 'attach' : 'launch');
+                    assert.strictEqual(!!prepared.alreadyStartedSession, !debug);
+                    sinon.assert.notCalled(startDebugging);
+                    sinon.assert.notCalled(buildDotNetProject);
+                    if (prepared.alreadyStartedSession) {
+                        const stop = prepared.alreadyStartedSession.stopSession();
+                        taskHarness.end(0);
+                        await stop;
+                    } else {
+                        cleanupRun('azure-functions-test-run');
+                        taskHarness.end(0);
+                    }
+                } finally {
+                    await close(statusServer.server);
+                }
+            });
+        }
+
+        test('cancels worker discovery and terminates the external-build task without rebuilding', async () => {
+            let startedPolling!: () => void;
+            const polling = new Promise<void>(resolve => startedPolling = resolve);
+            fsReadFileSync.callsFake(() => {
+                startedPolling();
+                throw Object.assign(new Error('worker metadata does not exist'), { code: 'ENOENT' });
+            });
+            stubFuncHostStatusRequests(() => 'Starting', () => { });
+            sinon.stub(DotNetService.prototype, 'getDotNetProjectRunProperties').resolves({
+                targetPath,
+                runCommand: 'func',
+                runArguments: 'host start',
+                runWorkingDirectory: hostDirectory,
+            });
+            sinon.stub(fs, 'existsSync').returns(true);
+            const buildDotNetProject = sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
+            const launch = externalBuildAzureFunctionsDebuggerExtension.createDebugSessionConfigurationCallback!(
+                createExternalBuildLaunchConfiguration(projectPath), [], [], createLaunchOptions(false), createDebugConfiguration(projectPath));
+            const rejected = assert.rejects(launch);
+            await polling;
+
+            cleanupRun('azure-functions-test-run');
+            taskHarness.end(0);
+            await rejected;
+            sinon.assert.notCalled(buildDotNetProject);
+            sinon.assert.calledOnce(taskHarness.getExecution()!.terminate as sinon.SinonStub);
+            sinon.assert.calledOnceWithExactly(fsRmSync, defaultTempPath, { recursive: true, force: true });
+        });
+
+        const invalidMetadata: Array<[string, Record<string, unknown>]> = [
+            ['missing project', { project_path: undefined }],
+            ['empty project', { project_path: ' ' }],
+            ['relative project', { project_path: 'FunctionsApp.csproj' }],
+            ['non-string project', { project_path: 17 }],
+            ['NUL project', { project_path: `${projectPath}\0` }],
+            ['missing SDK directory', { build_working_directory: undefined }],
+            ['empty SDK directory', { build_working_directory: '' }],
+            ['relative SDK directory', { build_working_directory: 'sdk-context' }],
+            ['non-string SDK directory', { build_working_directory: 17 }],
+            ['missing build suppression', { suppress_build: undefined }],
+            ['disabled build suppression', { suppress_build: false }],
+            ['non-boolean build suppression', { suppress_build: 'true' }],
+            ['empty build configuration', { build_configuration: '' }],
+            ['non-string build configuration', { build_configuration: 17 }],
+            ['newline build configuration', { build_configuration: 'Release\nDebug' }],
+            ['null build environment', { build_environment: null }],
+            ['non-object build environment', { build_environment: 'private-build-value' }],
+            ['array build environment', { build_environment: [] }],
+            ['invalid environment name', { build_environment: { 'INVALID=NAME': 'private-build-value' } }],
+            ['empty environment name', { build_environment: { '': 'private-build-value' } }],
+            ['non-string environment value', { build_environment: { BUILD_FLAVOR: 17 } }],
+            ['NUL environment value', { build_environment: { BUILD_FLAVOR: 'private-build-value\0' } }],
+            ['unknown mode', { mode: 'Unsupported' }],
+        ];
+        for (const [label, invalidFields] of invalidMetadata) {
+            test(`rejects ${label} without rebuilding or exposing build environment`, async () => {
+                const launchConfiguration = {
+                    ...createExternalBuildLaunchConfiguration(projectPath),
+                    build_environment: { BUILD_ONLY_SECRET: 'private-build-value' },
+                    ...invalidFields,
+                } as AzureFunctionsExternalBuildLaunchConfiguration;
+                const buildDotNetProject = sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
+                const getRunProperties = sinon.stub(DotNetService.prototype, 'getDotNetProjectRunProperties');
+
+                assert.throws(
+                    () => externalBuildAzureFunctionsDebuggerExtension.getProjectFile(launchConfiguration),
+                    { message: azureFunctionsInvalidExternalBuildConfiguration });
+                await assert.rejects(
+                    externalBuildAzureFunctionsDebuggerExtension.createDebugSessionConfigurationCallback!(
+                        launchConfiguration, [], [], { ...createLaunchOptions(false), forceBuild: true }, createDebugConfiguration(projectPath)),
+                    { message: azureFunctionsInvalidExternalBuildConfiguration });
+                sinon.assert.notCalled(buildDotNetProject);
+                sinon.assert.notCalled(getRunProperties);
+                sinon.assert.notCalled(activateAzureFunctionsExtension);
+                sinon.assert.notCalled(vscode.tasks.executeTask as sinon.SinonStub);
+            });
+        }
+
+        test('sanitizes evaluation failures instead of rebuilding with defaults', async () => {
+            const buildDotNetProject = sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
+            sinon.stub(DotNetService.prototype, 'getDotNetProjectRunProperties').rejects(
+                new Error('MSBuild failed with BUILD_ONLY_SECRET=private-build-value'));
+            const info = sinon.stub(extensionLogOutputChannel, 'info');
+            const warn = sinon.stub(extensionLogOutputChannel, 'warn');
+            const error = sinon.stub(extensionLogOutputChannel, 'error');
+            const launchConfiguration: AzureFunctionsExternalBuildLaunchConfiguration = {
+                ...createExternalBuildLaunchConfiguration(projectPath),
+                build_environment: { BUILD_ONLY_SECRET: 'private-build-value' },
+            };
+
+            await assert.rejects(
+                externalBuildAzureFunctionsDebuggerExtension.createDebugSessionConfigurationCallback!(
+                    launchConfiguration,
+                    [], [], createLaunchOptions(false), createDebugConfiguration(projectPath)),
+                { message: azureFunctionsExternalBuildEvaluationFailed(projectPath) });
+            assert.strictEqual(JSON.stringify([...info.args, ...warn.args, ...error.args]).includes('private-build-value'), false);
+            sinon.assert.notCalled(buildDotNetProject);
+            sinon.assert.notCalled(vscode.tasks.executeTask as sinon.SinonStub);
+        });
+
+        for (const missingPath of [targetPath, hostDirectory]) {
+            test(`rejects missing prebuilt ${missingPath === targetPath ? 'output' : 'host directory'} without rebuilding`, async () => {
+                const buildDotNetProject = sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
+                sinon.stub(DotNetService.prototype, 'getDotNetProjectRunProperties').resolves({
+                    targetPath,
+                    runCommand: 'func',
+                    runArguments: 'host start',
+                    runWorkingDirectory: hostDirectory,
+                });
+                sinon.stub(fs, 'existsSync').callsFake(value => value !== missingPath);
+
+                await assert.rejects(
+                    externalBuildAzureFunctionsDebuggerExtension.createDebugSessionConfigurationCallback!(
+                        createExternalBuildLaunchConfiguration(projectPath), [], [], createLaunchOptions(false), createDebugConfiguration(projectPath)),
+                    /does not exist.*building is suppressed/);
+                sinon.assert.notCalled(buildDotNetProject);
+                sinon.assert.notCalled(vscode.tasks.executeTask as sinon.SinonStub);
+            });
+        }
+
+        for (const invalidProperties of [
+            { targetPath: '' },
+            { targetPath: 'relative.dll' },
+            { runWorkingDirectory: undefined },
+            { runWorkingDirectory: 'relative-directory' },
+        ]) {
+            test(`rejects invalid SDK run properties: ${Object.keys(invalidProperties)[0]}`, async () => {
+                const buildDotNetProject = sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
+                sinon.stub(DotNetService.prototype, 'getDotNetProjectRunProperties').resolves({
+                    targetPath,
+                    runCommand: 'func',
+                    runArguments: 'host start',
+                    runWorkingDirectory: hostDirectory,
+                    ...invalidProperties,
+                });
+                await assert.rejects(
+                    externalBuildAzureFunctionsDebuggerExtension.createDebugSessionConfigurationCallback!(
+                        createExternalBuildLaunchConfiguration(projectPath), [], [], createLaunchOptions(false), createDebugConfiguration(projectPath)),
+                    { message: azureFunctionsInvalidExternalBuildConfiguration });
+                sinon.assert.notCalled(buildDotNetProject);
+                sinon.assert.notCalled(vscode.tasks.executeTask as sinon.SinonStub);
+            });
+        }
+
+        test('propagates task startup failure and cleans external-build run state', async () => {
+            const buildDotNetProject = sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
+            sinon.stub(DotNetService.prototype, 'getDotNetProjectRunProperties').resolves({
+                targetPath,
+                runCommand: 'func',
+                runArguments: 'host start',
+                runWorkingDirectory: hostDirectory,
+            });
+            sinon.stub(fs, 'existsSync').returns(true);
+            taskHarness.endOnStart(23);
+
+            await assert.rejects(
+                externalBuildAzureFunctionsDebuggerExtension.createDebugSessionConfigurationCallback!(
+                    createExternalBuildLaunchConfiguration(projectPath), [], [], createLaunchOptions(true), createDebugConfiguration(projectPath)),
+                /Azure Functions task exited with code 23 before startup completed/);
+            sinon.assert.notCalled(buildDotNetProject);
+            sinon.assert.calledOnceWithExactly(fsRmSync, defaultTempPath, { recursive: true, force: true });
+            sinon.assert.notCalled(process.kill as sinon.SinonStub);
+        });
     });
 
     test('builds the project and returns the worker process in run mode', async () => {
@@ -78,6 +412,24 @@ suite('Azure Functions Debugger Extension Tests', () => {
         } finally {
             await close(statusServer.server);
         }
+    });
+
+    test('keeps unconditional legacy builds despite V2-only suppression metadata and force-build options', async () => {
+        const projectPath = path.join('/workspace', 'FunctionsApp', 'FunctionsApp.csproj');
+        const targetPath = path.join(defaultBuildOutputPath, 'FunctionsApp.dll');
+        const buildDotNetProject = sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
+        const getDotNetTargetPath = sinon.stub(DotNetService.prototype, 'getDotNetTargetPath').resolves(targetPath);
+        const getRunProperties = sinon.stub(DotNetService.prototype, 'getDotNetProjectRunProperties');
+
+        await azureFunctionsDebuggerExtension.createDebugSessionConfigurationCallback!(
+            { ...createLaunchConfiguration(projectPath), suppress_build: true } as AzureFunctionsLaunchConfiguration,
+            [], [], { ...createLaunchOptions(true), forceBuild: true }, createDebugConfiguration(projectPath));
+
+        sinon.assert.calledOnceWithExactly(buildDotNetProject, projectPath);
+        sinon.assert.calledOnceWithExactly(getDotNetTargetPath, projectPath);
+        sinon.assert.notCalled(getRunProperties);
+        cleanupRun('azure-functions-test-run');
+        taskHarness.end(0);
     });
 
     test('executes a registered func host task with a VS Code-accepted definition in run mode', async () => {
@@ -124,7 +476,7 @@ suite('Azure Functions Debugger Extension Tests', () => {
             });
             assert.strictEqual(
                 shellExecution.commandLine,
-                `func host start --port ${statusServer.port} --cert "${certificatePath}" --password ")456Y7R.D*S3Fwdr7mAv-p" --enable-json-output --json-output-file ${defaultWorkerPidArgument}`);
+                `func host start --port ${statusServer.port} --cert '${certificatePath}' --password ')456Y7R.D*S3Fwdr7mAv-p' --enable-json-output --json-output-file ${defaultWorkerPidArgument}`);
             sinon.assert.callOrder(
                 activateAzureFunctionsExtension,
                 vscode.tasks.onDidStartTaskProcess as sinon.SinonStub,
@@ -278,6 +630,46 @@ suite('Azure Functions Debugger Extension Tests', () => {
         sinon.assert.calledOnce(taskHarness.getEndListenerDispose());
         sinon.assert.notCalled(process.kill as sinon.SinonStub);
     });
+
+    for (const executable of ['powershell.exe', 'pwsh.exe']) {
+        test(`round-trips task arguments through ${executable} native command parsing`, async function () {
+            if (process.platform !== 'win32') {
+                this.skip();
+            }
+
+            const probe = spawnSync(executable, ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', 'exit 0']);
+            if (probe.error && 'code' in probe.error && probe.error.code === 'ENOENT') {
+                this.skip();
+            }
+            assert.strictEqual(probe.status, 0, String(probe.error ?? probe.stderr));
+
+            const projectPath = path.join('/workspace', 'FunctionsApp', 'FunctionsApp.csproj');
+            const targetPath = path.join(defaultBuildOutputPath, 'FunctionsApp.dll');
+            sinon.stub(DotNetService.prototype, 'getDotNetTargetPath').resolves(targetPath);
+            sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
+            stubTaskShell('win32', { path: executable });
+            const args = ['--password', "Aspire E2E p@ss'\\word", '--literal', "a\\\"b'$value`", '--empty', ''];
+
+            await azureFunctionsDebuggerExtension.createDebugSessionConfigurationCallback!(
+                createLaunchConfiguration(projectPath), args, [], createLaunchOptions(true), createDebugConfiguration(projectPath));
+            const task = taskHarness.getExecutedTask()!;
+            const execution = task.execution as vscode.ShellExecution;
+            const command = `function func { ConvertTo-Json -Compress -InputObject @($args) }; ${execution.commandLine}`;
+            // Match the task terminal's native -Command boundary. Ordinary execFile quoting
+            // would protect the complete script and miss quotes lost before PowerShell parses it.
+            const result = spawnSync(executable, ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', command], {
+                encoding: 'utf8',
+                timeout: 20000,
+                windowsVerbatimArguments: true,
+                env: { ...process.env, POWERSHELL_TELEMETRY_OPTOUT: '1' },
+            });
+
+            assert.strictEqual(result.status, 0, result.stderr || String(result.error));
+            assert.deepStrictEqual(JSON.parse(result.stdout.trim()), ['host', 'start', ...task.definition.args]);
+            cleanupRun('azure-functions-test-run');
+            taskHarness.end(0);
+        });
+    }
 
     test('quotes HTTPS arguments for a configured cmd task shell', async () => {
         const projectPath = path.join('/workspace', 'FunctionsApp', 'FunctionsApp.csproj');
@@ -1129,11 +1521,55 @@ suite('Azure Functions Debugger Extension Tests', () => {
     });
 });
 
+suite('Azure Functions launch capabilities', () => {
+    teardown(() => sinon.restore());
+
+    test('advertises SDK-style project files for external builds without changing legacy file types', () => {
+        assert.deepStrictEqual(externalBuildAzureFunctionsDebuggerExtension.getSupportedFileTypes(), ['.csproj', '.fsproj', '.vbproj']);
+        assert.deepStrictEqual(azureFunctionsDebuggerExtension.getSupportedFileTypes(), ['.cs', '.csproj']);
+        for (const extension of ['csproj', 'fsproj', 'vbproj']) {
+            const projectPath = path.join('/workspace', 'Functions', `Functions.${extension}`);
+            assert.strictEqual(
+                externalBuildAzureFunctionsDebuggerExtension.getProjectFile(createExternalBuildLaunchConfiguration(projectPath)),
+                projectPath);
+        }
+    });
+
+    for (const [hasCsharp, hasFunctions] of [[false, false], [true, false], [false, true], [true, true]]) {
+        test(`requires both debugger prerequisites (C#=${hasCsharp}, Functions=${hasFunctions})`, () => {
+            const installed = new Set([
+                ...(hasCsharp ? ['ms-dotnettools.csharp'] : []),
+                ...(hasFunctions ? ['ms-azuretools.vscode-azurefunctions'] : []),
+            ]);
+            sinon.stub(vscode.extensions, 'getExtension').callsFake(extensionId =>
+                installed.has(extensionId) ? { id: extensionId } as vscode.Extension<unknown> : undefined);
+            const types = new Set(['azure-functions', 'azure-functions-with-external-build.v1']);
+            const expected = hasCsharp && hasFunctions ? [...types] : [];
+
+            assert.deepStrictEqual(getSupportedCapabilities().filter(type => types.has(type)), expected);
+            assert.deepStrictEqual(getResourceDebuggerExtensions().filter(extension => types.has(extension.resourceType)).map(extension => extension.resourceType), expected);
+            assert.strictEqual(getSupportedCapabilities().includes('project-with-external-build.v1'), hasCsharp);
+            assert.ok(getSupportedCapabilities().includes('azure-functions-node'));
+            assert.ok(getResourceDebuggerExtensions().some(extension => extension.resourceType === 'azure-functions-node'));
+        });
+    }
+});
+
 function createLaunchConfiguration(projectPath: string): AzureFunctionsLaunchConfiguration {
     return {
         type: 'azure-functions',
         mode: 'NoDebug',
         project_path: projectPath,
+    };
+}
+
+function createExternalBuildLaunchConfiguration(projectPath: string): AzureFunctionsExternalBuildLaunchConfiguration {
+    return {
+        type: 'azure-functions-with-external-build.v1',
+        mode: 'NoDebug',
+        project_path: projectPath,
+        build_working_directory: path.dirname(projectPath),
+        suppress_build: true,
     };
 }
 

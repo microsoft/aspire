@@ -29,7 +29,6 @@
   <ItemGroup>
     <ProjectReference Include="..\Deployers.ApiService\Deployers.ApiService.csproj" />
     <ProjectReference Include="..\..\AzureFunctionsEndToEnd\AzureFunctionsEndToEnd.ApiService\AzureFunctionsEndToEnd.ApiService.csproj" />
-    <ProjectReference Include="..\..\AzureFunctionsEndToEnd\AzureFunctionsEndToEnd.Functions\AzureFunctionsEndToEnd.Functions.csproj" />
   </ItemGroup>
 
 </Project>

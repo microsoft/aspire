@@ -2533,7 +2533,9 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
         builder.AddAzureContainerAppEnvironment("env");
 
+#pragma warning disable CS0618 // Preserve legacy Functions publishing coverage alongside the V2 tests.
         builder.AddAzureFunctionsProject<TestFunctionsProject>("funcjob")
+#pragma warning restore CS0618
             .PublishAsAzureContainerAppJob();
 
         using var app = builder.Build();

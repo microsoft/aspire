@@ -233,8 +233,17 @@ export interface AzureFunctionsLaunchConfiguration extends ExecutableLaunchConfi
     project_path: string;
 }
 
-export function isAzureFunctionsLaunchConfiguration(obj: any): obj is AzureFunctionsLaunchConfiguration {
-    return obj && obj.type === 'azure-functions';
+export interface AzureFunctionsExternalBuildLaunchConfiguration extends ExecutableLaunchConfiguration {
+    type: "azure-functions-with-external-build.v1";
+    project_path: string;
+    build_configuration?: string;
+    build_environment?: Record<string, string>;
+    build_working_directory: string;
+    suppress_build: true;
+}
+
+export function isAzureFunctionsLaunchConfiguration(obj: any): obj is AzureFunctionsLaunchConfiguration | AzureFunctionsExternalBuildLaunchConfiguration {
+    return obj && (obj.type === 'azure-functions' || obj.type === 'azure-functions-with-external-build.v1');
 }
 
 export interface AzureFunctionsNodeLaunchConfiguration extends ExecutableLaunchConfiguration {

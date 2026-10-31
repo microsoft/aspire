@@ -4,11 +4,32 @@ import * as path from 'path';
 import {
     getLaunchConfigurationExecutablePaths,
     getLaunchConfigurationTargetPath,
+    isAzureFunctionsLaunchConfiguration,
+    isProjectLaunchConfiguration,
+    type AzureFunctionsExternalBuildLaunchConfiguration,
     type AzureFunctionsNodeLaunchConfiguration,
     type ExecutableLaunchConfiguration,
 } from '../dcp/types';
 
 suite('DCP launch configuration types', () => {
+    test('keeps external-build Functions distinct from ordinary project launches', () => {
+        const configuration: AzureFunctionsExternalBuildLaunchConfiguration = {
+            type: 'azure-functions-with-external-build.v1',
+            mode: 'Debug',
+            project_path: '/workspace/Functions/Functions.csproj',
+            build_configuration: 'Release',
+            build_environment: { SECRET_PATH: '/private/build-environment' },
+            build_working_directory: '/workspace/sdk-context',
+            suppress_build: true,
+        };
+        assert.ok(isAzureFunctionsLaunchConfiguration(configuration));
+        assert.strictEqual(isProjectLaunchConfiguration(configuration), false);
+        assert.strictEqual(getLaunchConfigurationTargetPath(configuration), configuration.project_path);
+        assert.deepStrictEqual(getLaunchConfigurationExecutablePaths(configuration), []);
+        assert.strictEqual(isAzureFunctionsLaunchConfiguration({ type: 'project-with-external-build.v1' }), false);
+        assert.strictEqual(isAzureFunctionsLaunchConfiguration({ type: 'azure-functions-node' }), false);
+    });
+
     test('derives Node Functions resource target paths from the app directory', () => {
         for (const language of ['typescript', 'javascript'] as const) {
             for (const [appDirectory, expected] of [
@@ -33,6 +54,13 @@ suite('DCP launch configuration types', () => {
         const cases: readonly [unknown, string | undefined][] = [
             [{ type: 'project', project_path: '/workspace/Api/Api.csproj' }, '/workspace/Api/Api.csproj'],
             [{ type: 'azure-functions', project_path: '/workspace/Functions/Functions.csproj' }, '/workspace/Functions/Functions.csproj'],
+            [{ type: 'azure-functions-with-external-build.v1', project_path: '/workspace/Functions/Functions.csproj' }, '/workspace/Functions/Functions.csproj'],
+            [{
+                type: 'azure-functions-with-external-build.v1',
+                project_path: '',
+                build_working_directory: '/workspace/sdk-context',
+                build_environment: { SECRET_PATH: '/private/build-environment' },
+            }, undefined],
             [{ type: 'maui', project_path: '/workspace/App/App.csproj' }, '/workspace/App/App.csproj'],
             [{
                 type: 'node',

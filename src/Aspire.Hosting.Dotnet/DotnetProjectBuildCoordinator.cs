@@ -30,28 +30,45 @@ internal static class DotnetProjectBuildCoordinator
 
     public static CoordinatorState? Prepare(
         IDistributedApplicationBuilder builder,
-        DotnetProjectMetadata projectMetadata)
+        DotnetProjectMetadata projectMetadata,
+        string externalBuildCapability)
     {
-        if (!builder.ExecutionContext.IsRunMode || !ShouldCoordinateBuild(builder))
+        if (!builder.ExecutionContext.IsRunMode)
+        {
+            return null;
+        }
+
+        var coordinateBuild = ShouldCoordinateBuild(builder, externalBuildCapability);
+        if (!coordinateBuild && externalBuildCapability == KnownLaunchConfigurationTypes.ProjectWithExternalBuild)
         {
             return null;
         }
 
         var state = s_states.GetValue(builder, static builder => new CoordinatorState(builder));
-        if (IsSupportedPath(projectMetadata.ProjectPath))
+        if (coordinateBuild)
         {
-            projectMetadata.SuppressBuild = true;
-            if (IsProjectFile(projectMetadata.ProjectPath))
-            {
-                projectMetadata.SetProjectPath(state.AddProject(projectMetadata.ProjectPath, projectMetadata.BuildConfiguration));
-            }
-            else
-            {
-                state.EnsureBuildResource(projectMetadata.BuildConfiguration);
-            }
+            PrepareBuild(state, projectMetadata);
         }
 
         return state;
+    }
+
+    private static void PrepareBuild(CoordinatorState state, DotnetProjectMetadata projectMetadata)
+    {
+        if (!IsSupportedPath(projectMetadata.ProjectPath))
+        {
+            return;
+        }
+
+        projectMetadata.SuppressBuild = true;
+        if (IsProjectFile(projectMetadata.ProjectPath))
+        {
+            projectMetadata.SetProjectPath(state.AddProject(projectMetadata.ProjectPath, projectMetadata.BuildConfiguration));
+        }
+        else
+        {
+            state.EnsureBuildResource(projectMetadata.BuildConfiguration);
+        }
     }
 
     public static void Configure(
@@ -63,15 +80,33 @@ internal static class DotnetProjectBuildCoordinator
             return;
         }
 
+        var metadata = resourceBuilder.Resource.GetProjectMetadata();
+        if (metadata is DotnetProjectMetadata managedMetadata &&
+            !metadata.SuppressBuild &&
+            !resourceBuilder.Resource.SupportsDebugging(resourceBuilder.ApplicationBuilder.Configuration, out _))
+        {
+            // A connected IDE can support ordinary projects without supporting this framework.
+            // Such a resource uses process execution, not an IDE-built fallback.
+            PrepareBuild(state, managedMetadata);
+        }
+
         state.AddResource(resourceBuilder.Resource);
-        resourceBuilder.WithAnnotation(new DotnetProgramBuildCompletionAnnotation(
-            (services, cancellationToken) =>
-                state.WaitForBuildCompletionAsync(resourceBuilder.Resource, services, cancellationToken)));
+        if (resourceBuilder.Resource.GetProjectMetadata().SuppressBuild)
+        {
+            AddBuildCompletionAnnotation(resourceBuilder.Resource, state);
+        }
 
         // Preserve the eagerly visible dependency used by model tests and tooling. BeforeStart replaces
         // the build plan after all resource environment callbacks and SDK roots are known, then adds the
         // final build barrier as an additional dependency.
         state.AddEagerBuildDependencies();
+    }
+
+    private static void AddBuildCompletionAnnotation(DotnetProjectResource resource, CoordinatorState state)
+    {
+        resource.Annotations.Add(new DotnetProgramBuildCompletionAnnotation(
+            (services, cancellationToken) =>
+                state.WaitForBuildCompletionAsync(resource, services, cancellationToken)));
     }
 
     private static DotnetProjectBuildResource AddBuildResource(
@@ -209,7 +244,7 @@ internal static class DotnetProjectBuildCoordinator
     private static bool IsSupportedPath(string path) =>
         IsProjectFile(path) || path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase);
 
-    private static bool ShouldCoordinateBuild(IDistributedApplicationBuilder builder)
+    private static bool ShouldCoordinateBuild(IDistributedApplicationBuilder builder, string externalBuildCapability)
     {
         if (string.IsNullOrEmpty(builder.Configuration[DebugSessionPortConfigurationKey]))
         {
@@ -219,8 +254,7 @@ internal static class DotnetProjectBuildCoordinator
         return DebugSessionInfoParser.TryGetSupportedLaunchConfigurations(
                 builder.Configuration[DebugSessionInfoConfigurationKey],
                 out var supportedLaunchConfigurations)
-            && supportedLaunchConfigurations?.Contains(
-                KnownLaunchConfigurationTypes.ProjectWithExternalBuild) is true;
+            && supportedLaunchConfigurations?.Contains(externalBuildCapability) is true;
     }
 
     internal sealed class CoordinatorState : IDisposable
@@ -327,6 +361,7 @@ internal static class DotnetProjectBuildCoordinator
                 var resource = registration.Resource;
                 if (_eagerDependencyRollbacks.ContainsKey(resource) ||
                     resource.Annotations.OfType<DotnetProjectMetadata>().SingleOrDefault() is not { } metadata ||
+                    !metadata.SuppressBuild ||
                     !IsSupportedPath(metadata.ProjectPath))
                 {
                     continue;
@@ -429,7 +464,26 @@ internal static class DotnetProjectBuildCoordinator
                 .Select(registration => registration.Resource)
                 .ToArray();
 
+            // Fluent lifetime or process-execution configuration can disable IDE launching after
+            // the factory selected an IDE-built fallback. Recheck before freezing build ownership.
+            foreach (var registration in activeRegistrations)
+            {
+                var resource = registration.Resource;
+                if (resource.GetProjectMetadata() is DotnetProjectMetadata { SuppressBuild: false } metadata &&
+                    !resource.SupportsDebugging(_builder.Configuration, out _))
+                {
+                    PrepareBuild(this, metadata);
+                    if (metadata.SuppressBuild)
+                    {
+                        AddBuildCompletionAnnotation(resource, this);
+                    }
+                }
+            }
+
             var resourceEntries = activeRegistrations
+                // Specialized IDE-built fallbacks consume the final initial-build barrier, but are
+                // never traversal inputs and must keep the IDE's build suppression flag false.
+                .Where(registration => registration.Resource.GetProjectMetadata().SuppressBuild)
                 .Select(registration => new ProjectEntry(
                     registration,
                     registration.Resource.Annotations.OfType<DotnetProjectMetadata>().Single()))

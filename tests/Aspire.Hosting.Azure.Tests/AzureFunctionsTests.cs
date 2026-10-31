@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIRECOMMAND001
 #pragma warning disable ASPIREAZUREFUNCTIONS001
+#pragma warning disable CS0618 // Deliberate coverage of the retained legacy Azure Functions API.
 
 using System.Reflection;
 using System.Text.Json.Nodes;

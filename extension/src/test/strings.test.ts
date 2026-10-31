@@ -26,6 +26,20 @@ suite('utils/strings tests', () => {
         assert.ok(xlf.includes(`<trans-unit id="aspire-vscode.strings.${name}">`));
     });
 
+    test('Functions external-build errors have localized catalog entries without payload values', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const packageNls = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'package.nls.json'), 'utf8')) as Record<string, string>;
+        const xlf = fs.readFileSync(path.join(extensionRoot, 'loc', 'xlf', 'aspire-vscode.xlf'), 'utf8');
+
+        assert.strictEqual(packageNls['aspire-vscode.strings.azureFunctionsInvalidExternalBuildConfiguration'], locStrings.azureFunctionsInvalidExternalBuildConfiguration);
+        assert.strictEqual(
+            packageNls['aspire-vscode.strings.azureFunctionsExternalBuildEvaluationFailed']?.replace('{0}', 'Functions.csproj'),
+            locStrings.azureFunctionsExternalBuildEvaluationFailed('Functions.csproj'));
+        for (const name of ['azureFunctionsInvalidExternalBuildConfiguration', 'azureFunctionsExternalBuildEvaluationFailed']) {
+            assert.ok(xlf.includes(`<trans-unit id="aspire-vscode.strings.${name}">`));
+        }
+    });
+
 	test('formatText formats correctly ', () => {
         const input = 'This is a test :ice: :rocket: :bug: :microscope: :linked_paperclips: :chart_increasing: :chart_decreasing: :locked_with_key: :play_button: :check_mark: :cross_mark: :hammer_and_wrench:';
         const expectedOutput = 'This is a test 🧊 🚀 🐛 🔬 🔗 📈 📉 🔒 ▶️ ✅ ❌ 🛠️';

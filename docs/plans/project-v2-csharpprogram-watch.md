@@ -568,10 +568,14 @@ single-instance-only restriction or silently fall back to non-watch behavior.
 | C# AppHost composition/topology | Resolve the automatic execution-service overlap and run-hook recursion described in Session 8. Rebuild/start/reconnect ownership must remain explicit when an AppHost restarts or the model changes. | 8 |
 | Future tool upgrades | Reverify version, approved-feed availability, runtime, protocol, and build/launch semantics before changing the pin, including any new prebuilt-output contract for D7. | 4, 6, 8 |
 
-**Azure Functions remains deferred in this slice**, not removed from the overall no-take-back goal.
-`AzureFunctionsProjectResource : ProjectResource` and its `azure-functions` / `func host start` path
-remain in use. A V2-backed Functions resource needs Functions-host/isolated-worker watch validation and
-an explicit package-dependency/launch design; ordinary `.NET resource` watching does not establish that.
+**Azure Functions watch remains deferred**, not removed from the overall no-take-back goal.
+The [Functions integration](../../src/Aspire.Hosting.Azure.Functions/README.md) provides
+`AddAzureFunctions` and `AzureFunctionsResource : DotnetProjectResource` for non-watch execution,
+coordinated initial builds, and capability-negotiated Functions debugging. The legacy
+`AzureFunctionsProjectResource : ProjectResource` API remains available and obsolete.
+Functions still starts Core Tools and attaches to the isolated worker; an IDE-built fallback
+does not imply external-build support. Watch requires separate Functions-host/isolated-worker
+validation and must not replace that specialized launch chain with ordinary .NET worker execution.
 
 **Annotation-based resource flavoring** ([#8984][resource-flavoring]) remains compatible directionally:
 shared annotations/capabilities and run state avoid unnecessarily binding every behavior to a concrete

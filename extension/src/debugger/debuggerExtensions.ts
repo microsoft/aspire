@@ -1,6 +1,6 @@
 import path from "path";
 import * as vscode from 'vscode';
-import { ExecutableLaunchConfiguration, EnvVar, LaunchOptions, AspireResourceExtendedDebugConfiguration, AspireExtendedDebugConfiguration, AspireResourceDebugSession, getLaunchConfigurationExecutablePaths, getLaunchConfigurationTargetPath, isProjectLaunchConfiguration } from "../dcp/types";
+import { ExecutableLaunchConfiguration, EnvVar, LaunchOptions, AspireResourceExtendedDebugConfiguration, AspireExtendedDebugConfiguration, AspireResourceDebugSession, getLaunchConfigurationExecutablePaths, getLaunchConfigurationTargetPath, isAzureFunctionsLaunchConfiguration, isProjectLaunchConfiguration } from "../dcp/types";
 import { debugProject, runProject } from "../loc/strings";
 import { getEnvironmentForChildProcess, mergeEnvs } from "../utils/environment";
 import { extensionLogOutputChannel } from "../utils/logging";
@@ -9,7 +9,7 @@ import { isAzureFunctionsExtensionInstalled, isBunInstalled, isCsharpInstalled, 
 import { pythonDebuggerExtension } from "./languages/python";
 import { nodeDebuggerExtension } from "./languages/node";
 import { browserDebuggerExtension } from "./languages/browser";
-import { azureFunctionsDebuggerExtension, azureFunctionsNodeDebuggerExtension } from "./languages/azureFunctions";
+import { azureFunctionsDebuggerExtension, azureFunctionsNodeDebuggerExtension, externalBuildAzureFunctionsDebuggerExtension } from "./languages/azureFunctions";
 import { goDebuggerExtension } from "./languages/go";
 import { createDefaultRustDebuggerExtension } from "./languages/rust";
 import { bunDebuggerExtension } from "./languages/bun";
@@ -59,6 +59,11 @@ export function applyDebuggerConfigurationOverrides(
 
     if (isProjectLaunchConfiguration({ type: launchConfigurationType }) && debugSessionConfig.debuggers['project']) {
         Object.assign(configuration, debugSessionConfig.debuggers['project']);
+    }
+
+    // Keep existing Functions debugger settings when hosting moves to coordinated builds.
+    if (isAzureFunctionsLaunchConfiguration({ type: launchConfigurationType }) && debugSessionConfig.debuggers['azure-functions']) {
+        Object.assign(configuration, debugSessionConfig.debuggers['azure-functions']);
     }
 
     if (launchConfigurationType !== 'project' && debugSessionConfig.debuggers[launchConfigurationType]) {
@@ -131,6 +136,7 @@ export function getResourceDebuggerExtensions(platform: NodeJS.Platform = proces
 
         if (isAzureFunctionsExtensionInstalled()) {
             extensions.push(azureFunctionsDebuggerExtension);
+            extensions.push(externalBuildAzureFunctionsDebuggerExtension);
         }
     }
 

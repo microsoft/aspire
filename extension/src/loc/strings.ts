@@ -48,6 +48,8 @@ export const azureFunctionsInvalidProcessId = (processId: string) => vscode.l10n
 export const azureFunctionsTaskExitedBeforeStartup = (exitCode: number) => vscode.l10n.t('Azure Functions task exited with code {0} before startup completed.', exitCode);
 export const azureFunctionsHostStartupTimedOut = (timeoutSeconds: number, port: number) => vscode.l10n.t('Timed out after {0} seconds waiting for the Azure Functions host to start on port {1}.', timeoutSeconds, port);
 export const azureFunctionsWorkerStartupTimedOut = (timeoutSeconds: number) => vscode.l10n.t('Timed out after {0} seconds waiting for the Azure Functions worker process to start.', timeoutSeconds);
+export const azureFunctionsInvalidExternalBuildConfiguration = vscode.l10n.t('The Azure Functions external-build launch configuration is invalid. An absolute project path and build working directory, suppress_build=true, and valid optional build configuration and environment are required. Aspire will not rebuild the project.');
+export const azureFunctionsExternalBuildEvaluationFailed = (projectPath: string) => vscode.l10n.t('Could not evaluate the prebuilt Azure Functions project {0} using its supplied build context. Check the project and build settings. Aspire will not rebuild the project.', projectPath);
 export const aspireOutputChannelName = vscode.l10n.t('Aspire Extension');
 export const fieldRequired = vscode.l10n.t('This field is required.');
 export const runProject = (projectName: string) => vscode.l10n.t('Run {0}', projectName);

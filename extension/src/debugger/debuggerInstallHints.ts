@@ -89,7 +89,10 @@ export function getDebuggerInstallHintForResource(
     platform: NodeJS.Platform = process.platform
 ): DebuggerInstallHint | undefined {
     const launchConfigurationType = resource.properties?.[launchConfigurationTypePropertyName];
-    let hint = launchConfigurationType ? debuggerInstallHints.get(launchConfigurationType) : undefined;
+    const hintType = launchConfigurationType === 'azure-functions-with-external-build.v1'
+        ? 'azure-functions'
+        : launchConfigurationType;
+    let hint = hintType ? debuggerInstallHints.get(hintType) : undefined;
     if (launchConfigurationType === 'rust') {
         const selectedExtensionId = getRustExtensionId(
             platform,

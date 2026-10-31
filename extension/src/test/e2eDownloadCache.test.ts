@@ -2336,6 +2336,39 @@ suite('E2E download cache', () => {
         assert.ok(!fs.existsSync(path.join(storageDirectory, cache.CACHE_MANIFEST_NAME)));
     });
 
+    test('copies long Windows workbench paths into run-local storage without modifying cache', () => {
+        const root = fs.realpathSync.native(createTestRoot('wp'));
+        const cacheRoot = path.join(root, 'c');
+        const groupDirectory = cache.getDownloadCacheEntryGroupDirectory(cacheRoot, { ...defaultCacheKey, platform: 'win32' });
+        const cachedVsCodeDirectory = path.join(getCacheEntryDirectory(groupDirectory, 1), getVsCodeDirectoryName('win32', 'x64'));
+        const workbenchSuffix = path.join('resources', 'app', 'out', 'vs', 'code', 'electron-browser', 'workbench', 'workbench.html');
+        // Reach MAX_PATH even in a short checkout such as D:\a\aspire\aspire.
+        const versionDirectory = 'v'.repeat(Math.max(1, 260 - path.join(cachedVsCodeDirectory, workbenchSuffix).length - 1));
+        const workbenchRelativePath = path.join(versionDirectory, workbenchSuffix);
+        const result = cache.ensureDownloadCache(getDefaultCacheOptions(cacheRoot, {
+            platform: 'win32',
+            populate(stagingDirectory) {
+                const layout = populateFakeDownload(stagingDirectory, { platform: 'win32', architecture: 'x64' });
+                writeFile(path.join(stagingDirectory, layout.vscodeDirectory, workbenchRelativePath), 'cached workbench');
+            },
+        }));
+        const cachedWorkbench = path.join(result.cacheDirectory, result.manifest.vscodeDirectory, workbenchRelativePath);
+        assert.ok(cachedWorkbench.length >= 260);
+        const storageDirectory = path.join(root, 'run');
+
+        cache.projectDownloadCache(result, storageDirectory);
+
+        const projectedVsCode = path.join(storageDirectory, result.manifest.vscodeDirectory);
+        assert.strictEqual(fs.lstatSync(projectedVsCode).isSymbolicLink(), false);
+        const projectedWorkbench = path.join(projectedVsCode, workbenchRelativePath);
+        assert.strictEqual(fs.readFileSync(projectedWorkbench, 'utf8'), 'cached workbench');
+        fs.writeFileSync(projectedWorkbench, 'run-local change');
+        assert.strictEqual(fs.readFileSync(cachedWorkbench, 'utf8'), 'cached workbench');
+        cache.removePathWithoutFollowingLinks(storageDirectory);
+        assert.strictEqual(fs.readFileSync(cachedWorkbench, 'utf8'), 'cached workbench');
+        assert.deepStrictEqual(readManifest(result.cacheDirectory), result.manifest);
+    });
+
     test('removes a projected run root without following links into the shared cache', () => {
         const root = createTestRoot('link-safe-run-root-cleanup');
         const result = cache.ensureDownloadCache(getDefaultCacheOptions(path.join(root, 'cache'), {

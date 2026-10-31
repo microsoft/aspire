@@ -59,7 +59,7 @@ builder.AddDockerfile("python-app", "../Deployers.Dockerfile")
     .WithEnvironment("TEST_SCENARIO", "build-args-and-secrets")
     .WithComputeEnvironment(aca);
 
-builder.AddAzureFunctionsProject<Projects.AzureFunctionsEndToEnd_Functions>("func-app")
+builder.AddAzureFunctions("func-app", "../../AzureFunctionsEndToEnd/AzureFunctionsEndToEnd.Functions/AzureFunctionsEndToEnd.Functions.csproj")
     .WithExternalHttpEndpoints()
     .WithComputeEnvironment(aca)
     .WithReference(eventHub).WaitFor(eventHub)

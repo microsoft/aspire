@@ -48,6 +48,18 @@ function hasCompletedMochaTestFailures(results) {
     && !isBlockingHarnessFailure(failure.err));
 }
 
+function assertExecutedMochaTests(results) {
+  if (!Array.isArray(results?.tests) || results.tests.length === 0 ||
+      !Array.isArray(results?.passes) || results.passes.length === 0) {
+    throw new Error('No passing E2E tests were recorded. Empty or all-skipped runs are not successful.');
+  }
+
+  if (!Array.isArray(results.failures) || results.failures.length > 0) {
+    throw new Error('E2E results contain failures or are incomplete despite a successful test-process exit.');
+  }
+}
+
 module.exports = {
   hasCompletedMochaTestFailures,
+  assertExecutedMochaTests,
 };

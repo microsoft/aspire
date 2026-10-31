@@ -105,6 +105,8 @@
   "aspire-vscode.strings.azureFunctionsTaskExitedBeforeStartup": "Azure Functions task exited with code {0} before startup completed.",
   "aspire-vscode.strings.azureFunctionsHostStartupTimedOut": "Timed out after {0} seconds waiting for the Azure Functions host to start on port {1}.",
   "aspire-vscode.strings.azureFunctionsWorkerStartupTimedOut": "Timed out after {0} seconds waiting for the Azure Functions worker process to start.",
+  "aspire-vscode.strings.azureFunctionsInvalidExternalBuildConfiguration": "The Azure Functions external-build launch configuration is invalid. An absolute project path and build working directory, suppress_build=true, and valid optional build configuration and environment are required. Aspire will not rebuild the project.",
+  "aspire-vscode.strings.azureFunctionsExternalBuildEvaluationFailed": "Could not evaluate the prebuilt Azure Functions project {0} using its supplied build context. Check the project and build settings. Aspire will not rebuild the project.",
   "aspire-vscode.strings.rpcServerError": "RPC server error: {0}.",
   "aspire-vscode.strings.aspireOutputChannelName": "Aspire Extension",
   "aspire-vscode.strings.fieldRequired": "This field is required.",

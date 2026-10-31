@@ -88,7 +88,10 @@ shared integration-authoring seams remain experimental.
 Use the canonical [AddProject migration guide](../../docs/migrate-from-addproject.md) for all six
 overload mappings, C#/polyglot null differences, compile-correct typed/fluent examples,
 build ownership, EF, composition, and retained legacy exceptions. Existing legacy calls keep
-their launch/publishing behavior; Functions and MAUI migrate separately.
+their launch/publishing behavior. Use `AddAzureFunctions` from the
+[Functions integration](../Aspire.Hosting.Azure.Functions/README.md) for .NET isolated-worker
+Functions apps; ordinary `AddDotnetProject` does not replace the Functions host/debug contract.
+MAUI retains its specialized factory.
 
 F#/VB support covers SDK-style project files, not scripts or old project systems. The new
 service/AppHost watcher is not implemented. Rebuild and non-watch debugging do not imply
@@ -214,6 +217,39 @@ Where equivalent, use shared project-file or `Directory.Build.props` settings so
 evaluate the same values. Runtime `WithEnvironment` is not an equivalent workaround. See the
 [EF Core integration guidance](../Aspire.Hosting.EntityFrameworkCore/README.md#coordinated-builds-and-custom-build-inputs)
 for the remaining compatibility risk.
+
+## Authoring specialized .NET integrations
+
+The experimental generic `AddDotnetProject<TResource>` overload supports resources derived from
+`DotnetProjectResource`. It accepts a resource name/path, a factory receiving the resource name
+and resolved working directory, an integration-specific external-build capability, and a resource
+configuration callback. It returns the specialized builder without replacing its resource object.
+Callers opt into diagnostic `ASPIREPROJECTS001`.
+
+| Shared factory | Integration configuration callback |
+|---|---|
+| Resolves paths and supplies one managed metadata annotation | Chooses common or full framework defaults |
+| Constructs and registers the resource | Configures framework endpoints, storage, and additional telemetry |
+| Coordinates builds using the supplied capability | Selects IDE launch support and produces its specialized payload |
+| Configures the SDK-selected process invocation and tool arguments | Consumes the supplied program/profile arguments in custom IDE launchers |
+| Enables SDK container publishing | Adds framework-specific deployment annotations |
+
+The configuration callback runs after metadata is attached and before final launch wiring observes
+the selected debug-support annotation. Do not register the resource again, replace its metadata,
+or copy the coordinator into the integration.
+
+Use experimental `WithDotnetBaseDefaults` for common .NET profile/environment, telemetry/logging,
+metadata validation, and Rebuild infrastructure without ASP.NET endpoint or web-server settings.
+Use `WithProjectDefaults` for the full ordinary-project behavior, including Kestrel/application URL
+discovery and web-server certificate/port configuration. Apply only one of these defaults helpers,
+once per resource. Neither helper replaces the factory's build/launch/publishing responsibilities.
+
+An IDE must advertise the integration's own external-build contract before Aspire coordinates that
+integration's IDE build. Ordinary `project-with-external-build.v1` support is not sufficient for a
+specialized launcher such as Functions. A specialized IDE-built fallback is not a coordinated build
+input, but waits for an existing coordinated initial-build batch before launching. This intentionally
+allows an unrelated failed initial build to block the fallback; no batch is created solely for it.
+The framework integration documents and diagnoses any build-setting differences in that fallback.
 
 ## Publishing
 

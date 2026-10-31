@@ -345,7 +345,7 @@ suite('E2E launch profile', () => {
 
             const missingSpec = path.join(fixtureRoot, 'usefulnessSurvey.e2e.test.js');
             assert.notStrictEqual(result.status, 0);
-            assert.ok(result.stderr.includes(`did not match compiled test files for: ${missingSpec}`), result.stderr);
+            assert.ok(result.stderr.includes(`did not match compiled test files for: ${missingSpec.split(path.sep).join('/')}`), result.stderr);
             assert.deepStrictEqual(fs.readdirSync(tempRoot), []);
             assert.ok(fs.existsSync(path.join(fixtureRoot, 'cliPathRejectionNotification.e2e.test.js')));
             assert.ok(!fs.existsSync(missingSpec));
@@ -762,8 +762,6 @@ suite('E2E launch profile', () => {
         assert.ok(runner.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_CSHARP_VSIX', selectingFeatureFlag)"));
         assert.ok(runner.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_AZURE_RESOURCE_GROUPS_VSIX', 'ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS')"));
         assert.ok(runner.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_AZURE_FUNCTIONS_VSIX', 'ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS')"));
-        assert.ok(runner.includes("const executable = isWindows ? (process.env.ComSpec || 'cmd.exe') : displayName;"));
-        assert.ok(runner.includes("const args = isWindows ? ['/d', '/s', '/c', 'func.cmd --version'] : ['--version'];"));
         assert.ok(runner.includes("const certificatePassword = String.raw`Aspire E2E p@ss'\\word`;"));
         assert.ok(runner.includes('commandLineArgs: `--useHttps --cert "${certificatePath}" --password "${certificatePassword}"`'));
         assert.ok(runStep.includes('ASPIRE_EXTENSION_E2E_SHARD: ${{ matrix.shardName }}'));
@@ -864,13 +862,118 @@ result = resolveDebuggerVsixPaths();`, sandbox);
         });
     }
 
-    for (const [includeAzureFunctions, includeWinUi, includeResourceDebug] of [
-        [false, false, false],
-        [true, false, false],
-        [false, true, false],
-        [false, false, true],
+    for (const spec of ['out\\test-e2e\\test-e2e\\azureFunctions.e2e.test.js', 'out/test-e2e/test-e2e/azureFunctions.e2e.test.js']) {
+        test(`normalizes the Windows E2E spec glob before passing it to ExTester: ${spec}`, () => {
+            const runner = fs.readFileSync(path.resolve(__dirname, '..', '..', 'scripts', 'run-e2e.js'), 'utf8');
+            const source = ts.createSourceFile('run-e2e.js', runner, ts.ScriptTarget.Latest, true);
+            const declaration = source.statements.find(statement => ts.isVariableStatement(statement) &&
+                statement.declarationList.declarations.some(item => ts.isIdentifier(item.name) && item.name.text === 'testSpec'));
+            const normalize = source.statements.find(statement => ts.isFunctionDeclaration(statement) && statement.name?.text === 'toPosixPath');
+            assert.ok(declaration);
+            assert.ok(normalize);
+            const sandbox = { path: path.win32, process: { env: { ASPIRE_EXTENSION_E2E_SPEC: spec } }, result: '' };
+            vm.runInNewContext(`${normalize.getText(source)}\n${declaration.getText(source)}\nresult = testSpec;`, sandbox);
+            assert.strictEqual(sandbox.result, 'out/test-e2e/test-e2e/azureFunctions.e2e.test.js');
+        });
+    }
+
+    for (const scenario of ['windows-native', 'windows-npm', 'linux-native', 'windows-broken-native', 'windows-inaccessible-native']) {
+        test(`probes Core Tools without changing installation method: ${scenario}`, () => {
+            const runner = fs.readFileSync(path.resolve(__dirname, '..', '..', 'scripts', 'run-e2e.js'), 'utf8');
+            const source = ts.createSourceFile('run-e2e.js', runner, ts.ScriptTarget.Latest, true);
+            const validate = source.statements.find(statement => ts.isFunctionDeclaration(statement) && statement.name?.text === 'validateAzureFunctionsCoreTools');
+            assert.ok(validate);
+            const calls: Array<{ executable: string; args: string[] }> = [];
+            const run = () => vm.runInNewContext(`${validate.getText(source)}\nvalidateAzureFunctionsCoreTools();`, {
+                isWindows: scenario !== 'linux-native',
+                process: { env: { ComSpec: 'C:\\Windows\\System32\\cmd.exe' } },
+                extensionRoot: 'extension',
+                getAspireCliEnvironment: () => ({}),
+                spawnSync: (executable: string, args: string[]) => {
+                    calls.push({ executable, args: Array.from(args) });
+                    if (scenario === 'windows-npm' && executable === 'func.exe') {
+                        return { error: { code: 'ENOENT', message: 'not found' } };
+                    }
+                    if (scenario === 'windows-broken-native') {
+                        return { status: 7, stdout: '', stderr: 'broken installation' };
+                    }
+                    if (scenario === 'windows-inaccessible-native') {
+                        return { error: { code: 'EACCES', message: 'access denied' } };
+                    }
+                    return { status: 0, stdout: '4.12.1' };
+                },
+            });
+            if (scenario === 'windows-broken-native') {
+                assert.throws(run, /Core Tools failed --version with code 7/);
+            } else if (scenario === 'windows-inaccessible-native') {
+                assert.throws(run, /Unable to execute Azure Functions Core Tools \(func.exe\): access denied/);
+            } else {
+                run();
+            }
+            assert.deepStrictEqual(calls, [
+                { executable: scenario === 'linux-native' ? 'func' : 'func.exe', args: ['--version'] },
+                ...(scenario === 'windows-npm'
+                    ? [{ executable: 'C:\\Windows\\System32\\cmd.exe', args: ['/d', '/s', '/c', 'func.cmd --version'] }]
+                    : []),
+            ]);
+        });
+    }
+
+    for (const missingAsset of [undefined, 'dashboard', 'terminalhost', 'apphost-server']) {
+        test(`uses an explicit runtime layout with a source-built CLI: ${missingAsset ?? 'complete'}`, () => {
+            const runner = fs.readFileSync(path.resolve(__dirname, '..', '..', 'scripts', 'run-e2e.js'), 'utf8');
+            const source = ts.createSourceFile('run-e2e.js', runner, ts.ScriptTarget.Latest, true);
+            const prepare = source.statements.find(statement => ts.isFunctionDeclaration(statement) && statement.name?.text === 'prepareCliBundle');
+            assert.ok(prepare);
+            const bundleRoot = path.resolve('runtime-layout');
+            const calls: unknown[] = [];
+            const sandbox = {
+                path,
+                process: { platform: 'win32', env: { AspireCliBundlePath: bundleRoot } },
+                fs: { existsSync: (file: string) => missingAsset === undefined || path.dirname(file) !== path.join(bundleRoot, missingAsset) },
+                console: { log: () => undefined },
+                spawnSync: (...args: unknown[]) => calls.push(args),
+            };
+            const run = () => vm.runInNewContext(`${prepare.getText(source)}\nprepareCliBundle('fresh-cli.exe');`, sandbox);
+            if (missingAsset === undefined) {
+                run();
+            } else {
+                assert.throws(run, /explicit AspireCliBundlePath layout is incomplete/);
+            }
+            assert.deepStrictEqual(calls, []);
+        });
+    }
+
+    test('still extracts the embedded runtime when no explicit layout is supplied', () => {
+        const runner = fs.readFileSync(path.resolve(__dirname, '..', '..', 'scripts', 'run-e2e.js'), 'utf8');
+        const source = ts.createSourceFile('run-e2e.js', runner, ts.ScriptTarget.Latest, true);
+        const prepare = source.statements.find(statement => ts.isFunctionDeclaration(statement) && statement.name?.text === 'prepareCliBundle');
+        assert.ok(prepare);
+        const calls: unknown[][] = [];
+        vm.runInNewContext(`${prepare.getText(source)}\nprepareCliBundle('bundled-cli.exe');`, {
+            path,
+            process: { platform: 'win32', env: {} },
+            fs: { existsSync: () => false },
+            extensionRoot: 'extension',
+            getAspireCliEnvironment: () => ({ ASPIRE_HOME: 'run-home' }),
+            spawnSync: (...args: unknown[]) => {
+                calls.push(args);
+                return { status: 0 };
+            },
+        });
+        assert.strictEqual(calls.length, 1);
+        assert.strictEqual(calls[0][0], 'bundled-cli.exe');
+        assert.deepStrictEqual(Array.from(calls[0][1] as string[]), ['setup', '--install-path', 'run-home']);
+    });
+
+    for (const [includeAzureFunctions, includeWinUi, legacyFunctions, includeResourceDebug] of [
+        [false, false, false, false],
+        [true, false, false, false],
+        [true, false, true, false],
+        [false, true, false, false],
+        [false, false, false, true],
     ]) {
-        test(`generates V2 path resources with Dotnet references (Functions=${includeAzureFunctions}, WinUI=${includeWinUi}, ResourceDebug=${includeResourceDebug})`, () => {
+        test(`generates path-resource fixtures (Functions=${includeAzureFunctions}, WinUI=${includeWinUi}, legacy=${legacyFunctions}, ResourceDebug=${includeResourceDebug})`, () => {
             const runner = fs.readFileSync(path.resolve(__dirname, '..', '..', 'scripts', 'run-e2e.js'), 'utf8');
             const source = ts.createSourceFile('run-e2e.js', runner, ts.ScriptTarget.Latest, true);
             const writer = source.statements.find(statement => ts.isFunctionDeclaration(statement) && statement.name?.text === 'writeAppHostProject');
@@ -881,6 +984,7 @@ writeAppHostProject('AppHost', '13.6.0-test', ${includeAzureFunctions}, ${includ
                 path,
                 workspaceRoot: 'workspace',
                 csharpFileHeader: '',
+                process: { env: { ASPIRE_EXTENSION_E2E_SKIP_CURRENT_CLI_REGRESSIONS: legacyFunctions ? 'true' : 'false' } },
                 fs: {
                     mkdirSync: () => undefined,
                     writeFileSync: (file: string, content: string) => files.set(file, content),
@@ -890,8 +994,11 @@ writeAppHostProject('AppHost', '13.6.0-test', ${includeAzureFunctions}, ${includ
             const appHost = files.get(path.join('workspace', 'AppHost', 'AppHost.cs'));
             assert.ok(project);
             assert.ok(appHost);
-            assert.strictEqual(project.match(/<Project Sdk="([^"]+)">/)?.[1], includeAzureFunctions ? 'Aspire.AppHost.Sdk/13.6.0-test' : 'Microsoft.NET.Sdk');
-            assert.deepStrictEqual([...project.matchAll(/<PackageReference Include="Aspire.Hosting.AppHost" Version="([^"]+)"/g)].map(match => match[1]), includeAzureFunctions ? [] : ['13.6.0-test']);
+            assert.strictEqual(project.match(/<Project Sdk="([^"]+)">/)?.[1], legacyFunctions ? 'Aspire.AppHost.Sdk/13.6.0-test' : 'Microsoft.NET.Sdk');
+            assert.strictEqual(project.match(/<Configuration>([^<]+)<\/Configuration>/)?.[1], includeAzureFunctions && !legacyFunctions ? 'Release' : undefined);
+            assert.strictEqual(project.match(/<Optimize>([^<]+)<\/Optimize>/)?.[1], includeAzureFunctions && !legacyFunctions ? 'false' : undefined);
+            assert.strictEqual(project.match(/<DebugType>([^<]+)<\/DebugType>/)?.[1], includeAzureFunctions && !legacyFunctions ? 'portable' : undefined);
+            assert.deepStrictEqual([...project.matchAll(/<PackageReference Include="Aspire.Hosting.AppHost" Version="([^"]+)"/g)].map(match => match[1]), legacyFunctions ? [] : ['13.6.0-test']);
             assert.match(project, /<PackageReference Include="Aspire.Hosting.Dotnet" Version="13.6.0-test"/);
             assert.deepStrictEqual([...project.matchAll(/<PackageReference Include="Aspire.Hosting.Go" Version="([^"]+)"/g)].map(match => match[1]), includeResourceDebug ? ['13.6.0-test'] : []);
             assert.deepStrictEqual([...project.matchAll(/<ProjectReference Include="([^"]+)"/g)].map(match => match[1]), []);
@@ -902,10 +1009,41 @@ writeAppHostProject('AppHost', '13.6.0-test', ${includeAzureFunctions}, ${includ
                 ...(includeResourceDebug ? [['e2e-custom-output-worker', '../AspireE2E.CustomOutputWorker/AspireE2E.CustomOutputWorker.csproj']] : []),
             ]);
             assert.strictEqual(appHost.includes('options => options.LaunchProfileName = "E2E"'), includeWinUi);
-            assert.strictEqual(appHost.includes('builder.AddAzureFunctionsProject("e2e-functions", "../AspireE2E.Functions/AspireE2E.Functions.csproj")'), includeAzureFunctions);
+            assert.strictEqual(appHost.includes('builder.AddAzureFunctionsProject("e2e-functions", "../AspireE2E.Functions/AspireE2E.Functions.csproj")'), legacyFunctions);
+            assert.strictEqual(appHost.includes('builder.AddAzureFunctions("e2e-functions", "../AspireE2E.Functions/AspireE2E.Functions.csproj")'), includeAzureFunctions && !legacyFunctions);
+            assert.strictEqual(appHost.includes('typeof(Program).Assembly.GetCustomAttribute<AssemblyConfigurationAttribute>()'), includeAzureFunctions && !legacyFunctions);
+            assert.strictEqual(appHost.includes('File.WriteAllText(Path.Combine(builder.AppHostDirectory, "apphost-build-configuration.txt"), appHostConfiguration)'), includeAzureFunctions && !legacyFunctions);
+            assert.strictEqual(appHost.includes('.WithBuildEnvironment("ASPIRE_FUNCTIONS_E2E_BUILD_FLAVOR", "custom")'), includeAzureFunctions && !legacyFunctions);
             assert.strictEqual(appHost.includes('builder.AddGoApp("e2e-go", "../AspireE2E.Go", gcFlags: "all=-N -l")'), includeResourceDebug);
         });
     }
+
+    test('generates the pinned Functions workload with build-context and build-count probes', () => {
+        const runner = fs.readFileSync(path.resolve(__dirname, '..', '..', 'scripts', 'run-e2e.js'), 'utf8');
+        const source = ts.createSourceFile('run-e2e.js', runner, ts.ScriptTarget.Latest, true);
+        const writer = source.statements.find(statement => ts.isFunctionDeclaration(statement) && statement.name?.text === 'writeAzureFunctionsProject');
+        assert.ok(writer);
+        const files = new Map<string, string>();
+        vm.runInNewContext(`${writer.getText(source)}\nwriteAzureFunctionsProject('Functions');`, {
+            path,
+            workspaceRoot: 'workspace',
+            csharpFileHeader: '',
+            run: () => undefined,
+            fs: {
+                mkdirSync: () => undefined,
+                writeFileSync: (file: string, content: string) => files.set(file, content),
+            },
+        });
+        const project = files.get(path.join('workspace', 'Functions', 'Functions.csproj'))!;
+        const sourceCode = files.get(path.join('workspace', 'Functions', 'HttpsFunction.cs'))!;
+        assert.match(project, /Microsoft.Azure.Functions.Worker.Sdk" Version="2.0.7"/);
+        assert.match(project, /<OutputPath Condition="'\$\(ASPIRE_FUNCTIONS_E2E_BUILD_FLAVOR\)' == 'custom'">bin\/custom\/\$\(Configuration\)\//);
+        assert.match(project, /<OutputPath Condition="'\$\(ASPIRE_FUNCTIONS_E2E_RUNTIME_ONLY\)' != ''">bin\/wrong\/\$\(Configuration\)\//);
+        assert.match(project, /AfterTargets="Build" Condition="'\$\(DesignTimeBuild\)' != 'true'"/);
+        assert.match(project, /Lines="\$\(Configuration\)\|\$\(ASPIRE_FUNCTIONS_E2E_BUILD_FLAVOR\)\|\$\(TargetPath\)"/);
+        assert.ok(sourceCode.includes('Route = "build-proof"'));
+        assert.ok(sourceCode.includes('assembly.Location, Environment.CurrentDirectory'));
+    });
 
     for (const enableBrowserDebuggerE2E of [false, true]) {
         test(`prewarms the fixture with ${enableBrowserDebuggerE2E ? 'restore and build before browser debugging' : 'restore only for other shards'}`, () => {

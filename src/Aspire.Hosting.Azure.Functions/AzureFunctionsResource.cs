@@ -3,12 +3,52 @@
 
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Dotnet;
 
 namespace Aspire.Hosting.Azure;
 
 internal interface IAzureFunctionsResource : IResource
 {
     AzureStorageResource? HostStorage { get; set; }
+}
+
+/// <summary>
+/// Represents an SDK-style Azure Functions project built and launched using the .NET project infrastructure.
+/// </summary>
+/// <param name="name">The resource name used within the distributed application.</param>
+/// <param name="workingDirectory">The default working directory containing the Functions project.</param>
+/// <remarks>
+/// Use <see cref="AzureFunctionsProjectResourceExtensions.AddAzureFunctions"/> to register the project,
+/// configure host storage and endpoints, and enable coordinated builds and SDK container publishing.
+/// Local execution starts Azure Functions Core Tools, which hosts the isolated .NET worker.
+/// Constructing this resource directly does not register it or configure those behaviors.
+/// </remarks>
+[AspireExport(ExposeProperties = true)]
+public class AzureFunctionsResource(string name, string workingDirectory)
+    : DotnetProjectResource(name, workingDirectory), IAzureFunctionsResource, IResourceWithCustomWithReference<AzureFunctionsResource>
+{
+    internal AzureStorageResource? HostStorage { get; set; }
+
+    AzureStorageResource? IAzureFunctionsResource.HostStorage
+    {
+        get => HostStorage;
+        set => HostStorage = value;
+    }
+
+    static IResourceBuilder<TDestination>? IResourceWithCustomWithReference<AzureFunctionsResource>.TryWithReference<TDestination>(
+        IResourceBuilder<TDestination> builder,
+        IResourceBuilder<IResource> source,
+        string? connectionName,
+        bool optional,
+        string? name)
+    {
+        if (builder is not IResourceBuilder<AzureFunctionsResource> functionsBuilder)
+        {
+            return null;
+        }
+
+        return (IResourceBuilder<TDestination>?)global::Aspire.Hosting.AzureFunctionsProjectResourceExtensions.TryWithReference(functionsBuilder, source, connectionName, optional, name);
+    }
 }
 
 /// <summary>
@@ -37,6 +77,8 @@ public enum AzureFunctionsLanguage
 /// to support Functions-specific customizations, like the mapping of connection strings and configurations
 /// for host storage.
 /// </remarks>
+/// <param name="name">The resource name used within the distributed application.</param>
+[Obsolete("Use AzureFunctionsResource and AddAzureFunctions instead. This legacy resource retains ProjectResource compatibility.")]
 public class AzureFunctionsProjectResource(string name) : ProjectResource(name), IAzureFunctionsResource, IResourceWithCustomWithReference<AzureFunctionsProjectResource>
 {
     internal AzureStorageResource? HostStorage { get; set; }

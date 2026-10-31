@@ -265,6 +265,9 @@
     <trans-unit id="aspire-vscode.strings.appHostSourceNotFound">
       <source xml:lang="en">Could not determine the AppHost source file to open.</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.azureFunctionsExternalBuildEvaluationFailed">
+      <source xml:lang="en">Could not evaluate the prebuilt Azure Functions project {0} using its supplied build context. Check the project and build settings. Aspire will not rebuild the project.</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.blazorWasmDebugRelayFailed">
       <source xml:lang="en">Could not prepare Blazor WebAssembly debugging. See the Aspire output for details, then try again.</source>
     </trans-unit>
@@ -1107,6 +1110,9 @@
     </trans-unit>
     <trans-unit id="views.appHosts.errorWelcome">
       <source xml:lang="en">The Aspire panel workspace view requires Aspire CLI 13.2.0 or newer and an AppHost that references Aspire.Hosting 13.2.0 or newer. Install or update the Aspire CLI and update your AppHost package to get started.&#10;[Update Aspire CLI](command:aspire-vscode.updateSelf)&#10;[Refresh](command:aspire-vscode.globalRefreshAppHosts)</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.azureFunctionsInvalidExternalBuildConfiguration">
+      <source xml:lang="en">The Azure Functions external-build launch configuration is invalid. An absolute project path and build working directory, suppress_build=true, and valid optional build configuration and environment are required. Aspire will not rebuild the project.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.missingBlazorClientProject">
       <source xml:lang="en">The Blazor client project &apos;{0}&apos; does not exist. Restore or rebuild the AppHost, then start debugging again.</source>

@@ -72,4 +72,17 @@
     <PackageReference Include="Verify.XunitV3" />
   </ItemGroup>
 
+  <Target Name="AddFunctionsRuntimePackageMetadata" BeforeTargets="GetAssemblyAttributes">
+    <!-- The focused Functions runtime fixture uses the repository's evaluated package versions without
+         importing repository build targets into its isolated generated project. -->
+    <ItemGroup>
+      <_FunctionsRuntimePackage Include="@(PackageVersion)"
+        Condition="'%(PackageVersion.Identity)' == 'Microsoft.Azure.Functions.Worker' or
+                   '%(PackageVersion.Identity)' == 'Microsoft.Azure.Functions.Worker.Sdk' or
+                   '%(PackageVersion.Identity)' == 'Microsoft.Azure.Functions.Worker.Extensions.Http.AspNetCore' or
+                   '%(PackageVersion.Identity)' == 'Microsoft.Azure.Functions.Worker.Extensions.Storage.Queues'" />
+      <AssemblyMetadata Include="FunctionsRuntimePackage.%(_FunctionsRuntimePackage.Identity)" Value="%(_FunctionsRuntimePackage.Version)" />
+    </ItemGroup>
+  </Target>
+
 </Project>

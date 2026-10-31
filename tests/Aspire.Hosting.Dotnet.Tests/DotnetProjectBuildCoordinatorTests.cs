@@ -284,6 +284,112 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         Assert.True(project.Resource.SupportsDebugging(builder.Configuration, out _));
     }
 
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public async Task SpecializedIdeBuiltFallbackWaitsForExistingFinalBatch(bool fallbackFirst, bool includeCoordinatedProjects)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        builder.Configuration["DEBUG_SESSION_PORT"] = "localhost:12345";
+        builder.Configuration[KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(new RunSessionInfo
+        {
+            ProtocolsSupported = ["test"],
+            SupportedLaunchConfigurations = [KnownLaunchConfigurationTypes.Project, KnownLaunchConfigurationTypes.ProjectWithExternalBuild]
+        });
+
+        var fallbackPath = CreateProject(workspace.Path, "Functions", "Functions.csproj");
+        IResourceBuilder<TestDotnetProjectResource> AddFallback() =>
+            builder.AddDotnetProject(
+                "functions", fallbackPath,
+                static (name, directory) => new TestDotnetProjectResource(name, directory),
+                "test-functions-with-external-build.v1",
+                resource => resource.WithDotnetBaseDefaults(new ProjectResourceOptions { ExcludeLaunchProfile = true }));
+
+        var fallback = fallbackFirst ? AddFallback() : null;
+        var paths = new List<string>();
+        if (includeCoordinatedProjects)
+        {
+            foreach (var name in new[] { "Api", "Worker" })
+            {
+                var path = CreateProject(workspace.Path, name, $"{name}.csproj");
+                paths.Add(NormalizeProjectPath(path));
+                builder.AddDotnetProject(name.ToLowerInvariant(), path, options => options.ExcludeLaunchProfile = true)
+                    .WithBuildEnvironment("BUILD_FLAVOR", name);
+            }
+        }
+
+        fallback ??= AddFallback();
+        Action<EnvironmentCallbackContext> unexpectedBuild = _ => throw new InvalidOperationException("The IDE owns this build environment.");
+        fallback.WithBuildEnvironment(unexpectedBuild);
+        await using var app = builder.Build();
+        await PublishBeforeStartAsync(builder, app);
+
+        Assert.False(fallback.Resource.GetProjectMetadata().SuppressBuild);
+        Assert.Empty(fallback.Resource.Annotations.OfType<DotnetProgramBuildCompletionAnnotation>());
+        var builds = builder.Resources.OfType<DotnetProjectBuildResource>().ToArray();
+        Assert.Equal(paths, builds.SelectMany(build => build.ProjectPaths));
+        if (includeCoordinatedProjects)
+        {
+            Assert.Equal(2, builds.Length);
+            AssertBuildDependency(fallback.Resource, builds[^1]);
+        }
+        else
+        {
+            Assert.Empty(builds);
+            Assert.Empty(fallback.Resource.Annotations.OfType<WaitAnnotation>());
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SpecializedProcessFallbackConfiguredAfterFactoryBuilds(bool persistent)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        builder.Configuration["DEBUG_SESSION_PORT"] = "localhost:12345";
+        builder.Configuration[KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(new RunSessionInfo
+        {
+            ProtocolsSupported = ["test"],
+            SupportedLaunchConfigurations = [KnownLaunchConfigurationTypes.Project, KnownLaunchConfigurationTypes.ProjectWithExternalBuild]
+        });
+        var path = CreateProject(workspace.Path, "Functions", "Functions.csproj");
+        var resource = builder.AddDotnetProject(
+            "functions", path,
+            static (name, directory) => new TestDotnetProjectResource(name, directory),
+            "test-functions-with-external-build.v1",
+            resource => resource.WithDotnetBaseDefaults(new ProjectResourceOptions { ExcludeLaunchProfile = true }));
+        Assert.False(resource.Resource.GetProjectMetadata().SuppressBuild);
+
+        if (persistent)
+        {
+#pragma warning disable ASPIREPERSISTENCE001
+            resource.WithPersistentLifetime();
+#pragma warning restore ASPIREPERSISTENCE001
+        }
+        else
+        {
+            resource.WithAnnotation(new ForceProcessExecutionAnnotation());
+        }
+
+        resource.WithBuildEnvironment("BUILD_FLAVOR", "specialized");
+        await using var app = builder.Build();
+        await PublishBeforeStartAsync(builder, app);
+
+        Assert.False(resource.Resource.SupportsDebugging(builder.Configuration, out _));
+        Assert.True(resource.Resource.GetProjectMetadata().SuppressBuild);
+        Assert.Single(resource.Resource.Annotations.OfType<DotnetProgramBuildCompletionAnnotation>());
+        var build = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        Assert.Equal([NormalizeProjectPath(path)], build.ProjectPaths);
+        AssertBuildDependency(resource.Resource, build);
+    }
+
     [Fact]
     public void ExternalBuildDebugSessionCreatesCoordinatedBuild()
     {
@@ -2381,7 +2487,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             outputHelper);
         var projectPath = CreateProject(workspace.Path, "Service", "Service.csproj");
         var metadata = new DotnetProjectMetadata(projectPath, "DebugLocal", "service");
-        var coordinator = DotnetProjectBuildCoordinator.Prepare(builder, metadata);
+        var coordinator = DotnetProjectBuildCoordinator.Prepare(builder, metadata, KnownLaunchConfigurationTypes.ProjectWithExternalBuild);
         var resource = new DotnetProjectResource("service", Path.GetDirectoryName(projectPath)!);
         var resourceBuilder = builder.AddResource(resource).WithAnnotation(metadata);
         DotnetProjectBuildCoordinator.Configure(resourceBuilder, coordinator);
@@ -2405,14 +2511,14 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             outputHelper);
         var removedProjectPath = CreateProject(workspace.Path, "Removed", "Removed.csproj");
         var removedMetadata = new DotnetProjectMetadata(removedProjectPath, "RemovedConfiguration", "removed");
-        var coordinator = DotnetProjectBuildCoordinator.Prepare(builder, removedMetadata);
+        var coordinator = DotnetProjectBuildCoordinator.Prepare(builder, removedMetadata, KnownLaunchConfigurationTypes.ProjectWithExternalBuild);
         var removedResource = new DotnetProjectResource("removed", Path.GetDirectoryName(removedProjectPath)!);
         var removedBuilder = builder.AddResource(removedResource).WithAnnotation(removedMetadata);
         DotnetProjectBuildCoordinator.Configure(removedBuilder, coordinator);
 
         var activeProjectPath = CreateProject(workspace.Path, "Active", "Active.csproj");
         var activeMetadata = new DotnetProjectMetadata(activeProjectPath, "ActiveConfiguration", "active");
-        coordinator = DotnetProjectBuildCoordinator.Prepare(builder, activeMetadata);
+        coordinator = DotnetProjectBuildCoordinator.Prepare(builder, activeMetadata, KnownLaunchConfigurationTypes.ProjectWithExternalBuild);
         var activeResource = new DotnetProjectResource("active", Path.GetDirectoryName(activeProjectPath)!);
         var activeBuilder = builder.AddResource(activeResource).WithAnnotation(activeMetadata);
         DotnetProjectBuildCoordinator.Configure(activeBuilder, coordinator);

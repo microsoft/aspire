@@ -18,6 +18,7 @@ const {
 } = require('./e2e-download-retry');
 const { shouldAllowAdvisoryTestFailure } = require('./e2e-process-failure.cjs');
 const { runWithProcessTreeTimeout } = require('./e2e-process-runner.cjs');
+const { assertExecutedMochaTests } = require('./e2e-mocha-results.cjs');
 
 const extensionRoot = path.resolve(__dirname, '..');
 const extensionPackageJson = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'package.json'), 'utf8'));
@@ -34,7 +35,9 @@ const requestedTempRoot = verifyExtesterFeedOnly ? '' : process.env.ASPIRE_EXTEN
 // `finally` that `main()` installs, so a throw once the root exists leaves an `aev-*` directory
 // behind with nothing alive to remove it; work that can fail belongs in `main()` instead, which is
 // why `prepareRunDirectories` is a function rather than a module-scope block.
-const testSpec = process.env.ASPIRE_EXTENSION_E2E_SPEC || 'out/test-e2e/**/*.e2e.test.js';
+// ExTester passes this to a glob matcher: `out\test-e2e\example.js` escapes its
+// separators there instead of selecting the same file that fs.existsSync sees.
+const testSpec = toPosixPath(process.env.ASPIRE_EXTENSION_E2E_SPEC || 'out/test-e2e/**/*.e2e.test.js');
 const matchedTestSpecs = verifyExtesterFeedOnly ? [] : findSpecMatches(testSpec);
 // Java specs need the Java language server and the Java debug adapter (neither of which Aspire
 // ships) and a Java workspace in place of the scaffolded C# one, so they cannot share a run with
@@ -787,6 +790,7 @@ async function main() {
         timeout: getRunTestsTimeoutMs(),
         useShell: shouldUseShellForCommand(process.execPath),
       });
+      assertExecutedMochaTests(readMochaResults());
     }
     catch (error) {
       testFailure = error;
@@ -918,6 +922,28 @@ function validateCliPath(resolvedCliPath) {
 }
 
 function prepareCliBundle(resolvedCliPath) {
+  const explicitBundlePath = process.env.AspireCliBundlePath;
+  if (explicitBundlePath) {
+    const bundleRoot = path.resolve(explicitBundlePath);
+    const executableSuffix = process.platform === 'win32' ? '.exe' : '';
+    const requiredAssets = [
+      path.join('dcp', `dcp${executableSuffix}`),
+      path.join('dashboard', `Aspire.Dashboard${executableSuffix}`),
+      path.join('managed', `aspire-managed${executableSuffix}`),
+      path.join('terminalhost', `Aspire.TerminalHost${executableSuffix}`),
+      path.join('apphost-server', `aspire-apphost-server${executableSuffix}`),
+    ];
+    const missingAssets = requiredAssets.filter(asset => !fs.existsSync(path.join(bundleRoot, asset)));
+    if (missingAssets.length > 0) {
+      throw new Error(`The explicit AspireCliBundlePath layout is incomplete: ${missingAssets.join(', ')}.`);
+    }
+
+    // Source-built CLIs do not register `setup` without an embedded payload.
+    // Keep using that fresh CLI while MSBuild and the CLI resolve this verified runtime layout.
+    console.log(`Using explicit runtime layout: ${bundleRoot}`);
+    return;
+  }
+
   // Each run has a fresh ASPIRE_HOME; direct dotnet fixture builds need its native bundle.
   const result = spawnSync(resolvedCliPath, ['setup', '--install-path', getAspireCliEnvironment().ASPIRE_HOME], {
     cwd: extensionRoot,
@@ -1424,19 +1450,22 @@ function resolveRequiredVsixPath(environmentVariable, selectingFeatureFlag) {
 }
 
 function validateAzureFunctionsCoreTools() {
-  // Node cannot launch .cmd files directly on Windows, so invoke the trusted, constant
-  // Core Tools command through ComSpec instead.
-  // https://nodejs.org/api/child_process.html#spawning-bat-and-cmd-files-on-windows
-  const displayName = isWindows ? 'func.cmd' : 'func';
-  const executable = isWindows ? (process.env.ComSpec || 'cmd.exe') : displayName;
-  const args = isWindows ? ['/d', '/s', '/c', 'func.cmd --version'] : ['--version'];
-  const result = spawnSync(executable, args, {
+  let displayName = isWindows ? 'func.exe' : 'func';
+  const options = {
     cwd: extensionRoot,
     env: getAspireCliEnvironment(),
     shell: false,
     encoding: 'utf8',
     timeout: 60000,
-  });
+  };
+  let result = spawnSync(displayName, ['--version'], options);
+  if (isWindows && result.error?.code === 'ENOENT') {
+    // Official Windows archives provide func.exe; npm installs instead expose func.cmd.
+    // Node cannot launch .cmd files directly, so use ComSpec only for that fallback.
+    // https://nodejs.org/api/child_process.html#spawning-bat-and-cmd-files-on-windows
+    displayName = 'func.cmd';
+    result = spawnSync(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', 'func.cmd --version'], options);
+  }
 
   if (result.error) {
     throw new Error(`Unable to execute Azure Functions Core Tools (${displayName}): ${result.error.message}`);
@@ -1783,11 +1812,17 @@ builder.Build().Run();
 function writeAppHostProject(projectName, resolvedAppHostSdkVersion, includeAzureFunctions, includeWinUi, includeResourceDebug) {
   const projectDirectory = path.join(workspaceRoot, projectName);
   fs.mkdirSync(projectDirectory, { recursive: true });
-  // Keep the Functions lane's SDK machinery; ordinary V2 resources no longer need generated metadata.
-  const projectSdk = includeAzureFunctions ? `Aspire.AppHost.Sdk/${resolvedAppHostSdkVersion}` : 'Microsoft.NET.Sdk';
-  const appHostPackageReference = includeAzureFunctions
+  // Old-package compatibility must not compile the new factory or require its build contract.
+  const legacyFunctions = includeAzureFunctions && process.env.ASPIRE_EXTENSION_E2E_SKIP_CURRENT_CLI_REGRESSIONS === 'true';
+  const projectSdk = legacyFunctions ? `Aspire.AppHost.Sdk/${resolvedAppHostSdkVersion}` : 'Microsoft.NET.Sdk';
+  const appHostPackageReference = legacyFunctions
     ? ''
     : `    <PackageReference Include="Aspire.Hosting.AppHost" Version="${resolvedAppHostSdkVersion}" />\n`;
+  // Dotnet resources inherit configuration from the AppHost's AssemblyConfigurationAttribute.
+  // Build this AppHost in Release, retaining portable, unoptimized symbols for its breakpoint proof.
+  const appHostBuildProperties = includeAzureFunctions && !legacyFunctions
+    ? '    <Configuration>Release</Configuration>\n    <Optimize>false</Optimize>\n    <DebugType>portable</DebugType>\n'
+    : '';
   const azureFunctionsPackageReference = includeAzureFunctions
     ? `    <PackageReference Include="Aspire.Hosting.Azure.Functions" Version="${resolvedAppHostSdkVersion}" />\n`
     : '';
@@ -1801,7 +1836,7 @@ function writeAppHostProject(projectName, resolvedAppHostSdkVersion, includeAzur
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-  </PropertyGroup>
+${appHostBuildProperties}  </PropertyGroup>
 
   <ItemGroup>
 ${appHostPackageReference}${azureFunctionsPackageReference}    <PackageReference Include="Aspire.Hosting.Dotnet" Version="${resolvedAppHostSdkVersion}" />
@@ -1811,7 +1846,13 @@ ${goPackageReference}  </ItemGroup>
 `);
 
   const azureFunctionsResource = includeAzureFunctions
-    ? `builder.AddAzureFunctionsProject("e2e-functions", "../AspireE2E.Functions/AspireE2E.Functions.csproj");\n\n`
+    ? legacyFunctions
+      ? `builder.AddAzureFunctionsProject("e2e-functions", "../AspireE2E.Functions/AspireE2E.Functions.csproj");\n\n`
+      : `builder.AddAzureFunctions("e2e-functions", "../AspireE2E.Functions/AspireE2E.Functions.csproj")
+    .WithBuildEnvironment("ASPIRE_FUNCTIONS_E2E_BUILD_FLAVOR", "custom")
+    .WithEnvironment("ASPIRE_FUNCTIONS_E2E_RUNTIME_ONLY", "runtime-value");
+
+`
     : '';
   const goResource = includeResourceDebug
     ? `builder.AddGoApp("e2e-go", "../AspireE2E.Go", gcFlags: "all=-N -l")
@@ -1829,16 +1870,22 @@ ${goPackageReference}  </ItemGroup>
   const winUiResource = includeWinUi
     ? 'builder.AddDotnetProject("e2e-winui", "../AspireE2E.WinUI/AspireE2E.WinUI.csproj", options => options.LaunchProfileName = "E2E");\n\n'
     : '';
+  const appHostConfigurationProof = includeAzureFunctions && !legacyFunctions
+    ? `var appHostConfiguration = typeof(Program).Assembly.GetCustomAttribute<AssemblyConfigurationAttribute>()?.Configuration ?? "<none>";
+File.WriteAllText(Path.Combine(builder.AppHostDirectory, "apphost-build-configuration.txt"), appHostConfiguration);
+
+`
+    : '';
   fs.writeFileSync(path.join(projectDirectory, 'AppHost.cs'), `${csharpFileHeader}#pragma warning disable ASPIREINTERACTION001
 #pragma warning disable ASPIREPIPELINES001 // Older published SDKs still mark pipeline APIs experimental.
 #pragma warning disable ASPIRETERMINAL001
 
-using Aspire.Hosting.Pipelines;
+${includeAzureFunctions && !legacyFunctions ? 'using System.Reflection;\n' : ''}using Aspire.Hosting.Pipelines;
 
 // The E2E fixture intentionally covers interaction command arguments and terminal metadata while those APIs are still experimental.
 var builder = DistributedApplication.CreateBuilder(args);
 
-builder.AddDotnetProject("e2e-worker", "../AspireE2E.Worker/AspireE2E.Worker.csproj")
+${appHostConfigurationProof}builder.AddDotnetProject("e2e-worker", "../AspireE2E.Worker/AspireE2E.Worker.csproj")
     .WithHttpEndpoint(name: "http")
     .WithCommand(
         "echo-arguments",
@@ -2072,6 +2119,10 @@ function writeAzureFunctionsProject(projectName) {
     <OutputType>Exe</OutputType>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <Optimize>false</Optimize>
+    <DebugType>portable</DebugType>
+    <OutputPath Condition="'$(ASPIRE_FUNCTIONS_E2E_BUILD_FLAVOR)' == 'custom'">bin/custom/$(Configuration)/</OutputPath>
+    <OutputPath Condition="'$(ASPIRE_FUNCTIONS_E2E_RUNTIME_ONLY)' != ''">bin/wrong/$(Configuration)/</OutputPath>
   </PropertyGroup>
 
   <ItemGroup>
@@ -2079,6 +2130,7 @@ function writeAzureFunctionsProject(projectName) {
     <PackageReference Include="Microsoft.Azure.Functions.Worker" Version="2.52.0" />
     <PackageReference Include="Microsoft.Azure.Functions.Worker.Extensions.Http.AspNetCore" Version="2.1.0" />
     <PackageReference Include="Microsoft.Azure.Functions.Worker.Sdk" Version="2.0.7" />
+    <AssemblyMetadata Include="E2EBuildFlavor" Value="$(ASPIRE_FUNCTIONS_E2E_BUILD_FLAVOR)" />
   </ItemGroup>
 
   <ItemGroup>
@@ -2086,6 +2138,10 @@ function writeAzureFunctionsProject(projectName) {
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
+
+  <Target Name="RecordFunctionsE2EBuild" AfterTargets="Build" Condition="'$(DesignTimeBuild)' != 'true'">
+    <WriteLinesToFile File="$(MSBuildProjectDirectory)/build-invocations.txt" Lines="$(Configuration)|$(ASPIRE_FUNCTIONS_E2E_BUILD_FLAVOR)|$(TargetPath)" Overwrite="false" />
+  </Target>
 
 </Project>
 `);
@@ -2102,6 +2158,7 @@ builder.Build().Run();
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
+using System.Reflection;
 
 public sealed class HttpsFunction
 {
@@ -2109,6 +2166,19 @@ public sealed class HttpsFunction
     public IActionResult Run([HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "https-proof")] HttpRequest request)
     {
         return new OkObjectResult("Aspire HTTPS Functions E2E");
+    }
+
+    [Function("BuildContextFunction")]
+    public IActionResult BuildContext([HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "build-proof")] HttpRequest request)
+    {
+        var assembly = typeof(HttpsFunction).Assembly;
+        var configuration = assembly.GetCustomAttribute<AssemblyConfigurationAttribute>()?.Configuration;
+        var flavor = assembly.GetCustomAttributes<AssemblyMetadataAttribute>().Single(attribute => attribute.Key == "E2EBuildFlavor").Value;
+        return new OkObjectResult(string.Join("|",
+            configuration, flavor,
+            Environment.GetEnvironmentVariable("ASPIRE_FUNCTIONS_E2E_BUILD_FLAVOR") ?? "<none>",
+            Environment.GetEnvironmentVariable("ASPIRE_FUNCTIONS_E2E_RUNTIME_ONLY") ?? "<none>",
+            assembly.Location, Environment.CurrentDirectory));
     }
 }
 `);
@@ -2802,6 +2872,8 @@ async function copyWorkspaceProjectSources(cleanupErrors) {
     await copyDiagnosticSource(path.join(sourceDirectory, 'App.xaml'), path.join(destinationDirectory, 'App.xaml'), cleanupErrors);
     await copyDiagnosticSource(path.join(sourceDirectory, 'App.xaml.cs'), path.join(destinationDirectory, 'App.xaml.cs'), cleanupErrors);
     await copyDiagnosticSource(path.join(sourceDirectory, 'AppHost.cs'), path.join(destinationDirectory, 'AppHost.cs'), cleanupErrors);
+    await copyDiagnosticSource(path.join(sourceDirectory, 'apphost-build-configuration.txt'), path.join(destinationDirectory, 'apphost-build-configuration.txt'), cleanupErrors);
+    await copyDiagnosticSource(path.join(sourceDirectory, 'build-invocations.txt'), path.join(destinationDirectory, 'build-invocations.txt'), cleanupErrors);
     await copyDiagnosticSource(path.join(sourceDirectory, 'Program.cs'), path.join(destinationDirectory, 'Program.cs'), cleanupErrors);
     await copyDiagnosticSource(path.join(sourceDirectory, 'app.manifest'), path.join(destinationDirectory, 'app.manifest'), cleanupErrors);
     await copyDiagnosticSource(path.join(sourceDirectory, 'Properties', 'launchSettings.json'), path.join(destinationDirectory, 'Properties', 'launchSettings.json'), cleanupErrors);
