@@ -331,6 +331,33 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void PublishAsync_KeepsCollectedErrorsWhenCallbackThrows()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.AddKubernetesEnvironment("env");
+
+        builder.AddContainer("web", "nginx")
+            .WithBindMount("./web-data", "/data")
+            .WithEnvironment(context =>
+            {
+                if (context.Resource is not null)
+                {
+                    throw new InvalidOperationException("environment callback failed");
+                }
+            })
+            .WithArgs(context => context.Args.Add(new[] { "--verbose" }));
+
+        using var app = builder.Build();
+        var ex = Assert.ThrowsAny<Exception>(app.Run);
+
+        var message = ex.ToString();
+        Assert.Contains("Resource 'web' has bind mounts", message);
+        Assert.Contains("environment callback failed", message);
+        Assert.Contains("Failed to process command line argument 0 on resource 'web': Unsupported value type: String[]", message);
+    }
+
+    [Fact]
     public void KubernetesManifestResourceWithFieldThrowsWhenIntermediatePathIsScalar()
     {
         var manifest = new KubernetesManifestResource("example.com/v1", "Example", "example");

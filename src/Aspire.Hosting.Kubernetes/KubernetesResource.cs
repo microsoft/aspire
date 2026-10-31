@@ -232,8 +232,24 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
 
         ProcessProbes();
 
-        await ProcessEnvironmentAsync(context, executionContext, errors, cancellationToken).ConfigureAwait(false);
-        await ProcessArgumentsAsync(context, executionContext, errors, cancellationToken).ConfigureAwait(false);
+        // Callbacks can throw before any value is processed; keep their exceptions alongside earlier errors.
+        try
+        {
+            await ProcessEnvironmentAsync(context, executionContext, errors, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            errors.Add(ex);
+        }
+
+        try
+        {
+            await ProcessArgumentsAsync(context, executionContext, errors, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            errors.Add(ex);
+        }
 
         ThrowIfErrors(errors, $"The Kubernetes publisher could not process resource '{resource.Name}'.");
 
