@@ -510,6 +510,86 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task SetConfigurationAsync_IndexedKey_UpdatesExistingArrayElement()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var (service, settingsFilePath) = CreateService(workspace, """
+            {
+              "skillSources": {
+                "team": {
+                  "repository": "example/team",
+                  "plugins": ["aspire", "other"]
+                }
+              }
+            }
+            """);
+
+        await service.SetConfigurationAsync("skillSources.team.plugins.0", "deployment", isGlobal: false);
+
+        var team = JsonNode.Parse(File.ReadAllText(settingsFilePath))!["skillSources"]!["team"]!;
+        var plugins = Assert.IsType<JsonArray>(team["plugins"]);
+        Assert.Equal(["deployment", "other"], plugins.Select(p => p!.GetValue<string>()));
+        Assert.Equal("example/team", team["repository"]!.GetValue<string>());
+
+        var config = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
+        Assert.NotNull(config?.ExtensionData);
+        var loadedPlugins = config.ExtensionData["skillSources"].GetProperty("team").GetProperty("plugins");
+        Assert.Equal(JsonValueKind.Array, loadedPlugins.ValueKind);
+        Assert.Equal(["deployment", "other"], loadedPlugins.EnumerateArray().Select(p => p.GetString()));
+    }
+
+    [Theory]
+    [InlineData("[]", "0", new[] { "aspire" })]
+    [InlineData("""["aspire"]""", "1", new[] { "aspire", "other" })]
+    public async Task SetConfigurationAsync_IndexedKey_AppendsNextArrayElement(string existingArray, string index, string[] expected)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var (service, settingsFilePath) = CreateService(workspace, $$"""{ "plugins": {{existingArray}} }""");
+
+        await service.SetConfigurationAsync($"plugins.{index}", expected[^1], isGlobal: false);
+
+        var plugins = Assert.IsType<JsonArray>(JsonNode.Parse(File.ReadAllText(settingsFilePath))!["plugins"]);
+        Assert.Equal(expected, plugins.Select(p => p!.GetValue<string>()));
+        Assert.NotNull(AspireConfigFile.Load(workspace.WorkspaceRoot.FullName));
+    }
+
+    [Fact]
+    public async Task SetConfigurationAsync_IndexedKey_UpdatesPropertyOfObjectInArray()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var (service, settingsFilePath) = CreateService(workspace, """
+            { "items": [ { "name": "a", "kind": "x" }, { "name": "b" } ] }
+            """);
+
+        await service.SetConfigurationAsync("items.0.name", "renamed", isGlobal: false);
+
+        var items = Assert.IsType<JsonArray>(JsonNode.Parse(File.ReadAllText(settingsFilePath))!["items"]);
+        Assert.Equal(2, items.Count);
+        Assert.Equal("renamed", items[0]!["name"]!.GetValue<string>());
+        Assert.Equal("x", items[0]!["kind"]!.GetValue<string>());
+        Assert.Equal("b", items[1]!["name"]!.GetValue<string>());
+    }
+
+    [Theory]
+    [InlineData("plugins.3")]
+    [InlineData("plugins.name")]
+    [InlineData("plugins.-1")]
+    public async Task SetConfigurationAsync_InvalidArrayIndex_ThrowsAndPreservesFile(string key)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        const string original = """{ "plugins": ["aspire", "other"] }""";
+        var (service, settingsFilePath) = CreateService(workspace, original);
+
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() => service.SetConfigurationAsync(key, "value", isGlobal: false));
+        Assert.Contains("'plugins' is an array", ex.Message);
+        Assert.Equal(original, File.ReadAllText(settingsFilePath));
+    }
+
+    [Fact]
     public async Task SetConfigurationAsync_WritesBooleanStringAsJsonString()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

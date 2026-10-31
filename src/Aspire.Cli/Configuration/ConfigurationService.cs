@@ -247,25 +247,79 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
         // This prevents duplicate key errors when loading the configuration
         RemoveConflictingFlattenedKeys(settings, keyParts);
 
-        var currentObject = settings;
+        JsonNode currentNode = settings;
 
-        // Navigate to the parent object, creating objects as needed
+        // Navigate to the parent container, creating objects as needed. Existing arrays are
+        // preserved when the segment is an element index so other elements are not lost.
         for (int i = 0; i < keyParts.Length - 1; i++)
         {
             var part = keyParts[i];
+            var child = GetChild(currentNode, part, keyParts, i);
 
-            // If the property doesn't exist or isn't an object, replace it with a new object
-            if (!currentObject.ContainsKey(part) || currentObject[part] is not JsonObject)
+            // If the child doesn't exist or isn't a container, replace it with a new object
+            if (child is not JsonObject and not JsonArray)
             {
-                currentObject[part] = new JsonObject();
+                child = new JsonObject();
+                SetChild(currentNode, part, child, keyParts, i);
             }
 
-            currentObject = currentObject[part]!.AsObject();
+            currentNode = child;
         }
 
         // Set the final value
-        var finalKey = keyParts[keyParts.Length - 1];
-        currentObject[finalKey] = value;
+        var lastIndex = keyParts.Length - 1;
+        SetChild(currentNode, keyParts[lastIndex], JsonValue.Create(value), keyParts, lastIndex);
+    }
+
+    private static JsonNode? GetChild(JsonNode container, string part, string[] keyParts, int partIndex)
+    {
+        if (container is JsonArray array)
+        {
+            var index = ParseArrayIndex(array, part, keyParts, partIndex);
+            return index < array.Count ? array[index] : null;
+        }
+
+        return container.AsObject()[part];
+    }
+
+    private static void SetChild(JsonNode container, string part, JsonNode? child, string[] keyParts, int partIndex)
+    {
+        if (container is JsonArray array)
+        {
+            var index = ParseArrayIndex(array, part, keyParts, partIndex);
+            if (index == array.Count)
+            {
+                array.Add(child);
+            }
+            else
+            {
+                array[index] = child;
+            }
+
+            return;
+        }
+
+        container.AsObject()[part] = child;
+    }
+
+    /// <summary>
+    /// Parses a key segment addressing an element of an existing JSON array. Valid indexes are
+    /// existing elements or the next element (<c>Count</c>), which appends to the array.
+    /// </summary>
+    private static int ParseArrayIndex(JsonArray array, string part, string[] keyParts, int partIndex)
+    {
+        if (int.TryParse(part, NumberStyles.None, CultureInfo.InvariantCulture, out var index) && index <= array.Count)
+        {
+            return index;
+        }
+
+        var arrayPath = string.Join(".", keyParts.Take(partIndex));
+        throw new ArgumentException(string.Format(
+            CultureInfo.CurrentCulture,
+            "'{0}' is an array, so '{1}' must be an element index from 0 to {2}.",
+            arrayPath,
+            part,
+            array.Count));
     }
 
     /// <summary>
@@ -285,7 +339,7 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
         for (int i = 1; i < keyParts.Length; i++)
         {
             var partialKey = string.Join(":", keyParts.Take(i));
-            if (settings.ContainsKey(partialKey) && settings[partialKey] is not JsonObject)
+            if (settings.ContainsKey(partialKey) && settings[partialKey] is not JsonObject and not JsonArray)
             {
                 // This is a flattened value that conflicts with our nested structure
                 settings.Remove(partialKey);
