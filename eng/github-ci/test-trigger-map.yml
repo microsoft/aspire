@@ -126,6 +126,8 @@ ignore:
   # Schedule/dispatch-only workflows that regenerate API/ATS surface baselines; no PR-CI path.
   - .github/workflows/generate-api-diffs.yml
   - .github/workflows/generate-ats-diffs.yml
+  # Used only by the independently scheduled outerloop Podman deployment scenario.
+  - tests/Shared/Docker/Dockerfile.e2e-podman
   # NOTE: src/Shared/**/*.cs and tests/Shared/**/*.cs are deliberately NOT ignored -- Layer 1 attributes
   # them to their consuming projects and the run-all fallback treats any attributed file as owned, so
   # they are selected precisely without an entry. **/*.md and other no-CI files are dropped by
@@ -182,26 +184,19 @@ path_rules:
     targets: [ALL]
     reason: shared Arcade/build infrastructure can affect build, restore, and test execution across the repo
 
-  # tests/Shared build & fixture infra that is NOT link-compiled source (Layer 1 cannot attribute
-  # these the way it does the *.cs here, and they are imported/consumed broadly): props/targets/
-  # packages, the EmptyProject/InstallSdk/RepoTesting closure, Docker e2e images, Playwright config,
-  # template fixtures, and test certificates -> err toward ALL. The link-compiled tests/Shared/**/*.cs
-  # are handled precisely by Layer 1 (see the `ignore` section), NOT routed here.
+  # RepoTesting is imported by all tests. Other evaluated shared inputs and imports belong to Layer 1;
+  # runtime-only fixtures have narrow rules below, and unknown shared inputs still fall back to ALL.
   - paths:
-      - tests/Shared/*.props
-      - tests/Shared/*.targets
-      - tests/Shared/*.proj
-      - tests/Shared/*.config
       - tests/Shared/RepoTesting/**/*.props
       - tests/Shared/RepoTesting/**/*.targets
-      - tests/Shared/Docker/**/*.config
-      - tests/Shared/Docker/**/*.sh
-      - tests/Shared/Docker/**/Dockerfile*
-      - tests/Shared/TemplatesTesting/**/*.targets
-      - tests/Shared/TemplatesTesting/data/**
-      - tests/Shared/TestCertificates/**/*.pfx
     targets: [ALL]
-    reason: shared test build inputs and fixtures are consumed across multiple test lanes
+    reason: broad test imports
+
+  - paths:
+      - tests/Shared/EmptyProject.proj
+      - tests/Shared/nuget-with-package-source-mapping.config
+    targets: [test:Aspire.Templates.Tests, test:Aspire.Cli.EndToEnd.Tests, test:Aspire.EndToEnd.Tests]
+    reason: isolated build and restore configuration copied into NuGet-dependent test archives
 
   # Local composite actions used by regular PR CI. Route each action to the work it can affect; when
   # the blast radius is not precise enough, keep the conservative full-matrix target.
@@ -376,6 +371,19 @@ path_rules:
 
   # --- outerloop / e2e test targets: loose paths (production projects in affected_project_rules) --------
   - paths:
+      - tests/Shared/TemplatesTesting/data/**
+      - tests/Shared/InstallSdk.targets # invoked dynamically through MSBuild, not imported
+    targets: [test:Aspire.Templates.Tests, test:Aspire.EndToEnd.Tests]
+    reason: template fixture data (including deleted inputs) and runtime test SDK installation
+  - paths:
+      - tests/Shared/TestCertificates/*.pfx
+    targets: [test:Aspire.Dashboard.Tests, test:Aspire.Dashboard.Playwright.Tests]
+    reason: shared certificate content, including deleted inputs absent from the HEAD graph
+  - paths:
+      - tests/Shared/TestCertificates/testCert.pfx
+    targets: [test:Aspire.Hosting.Tests]
+    reason: runtime certificate input for DcpHostNotificationTests
+  - paths:
       - tests/Aspire.Dashboard.Tests/Shared/MockDashboardClient.cs
       - tests/Aspire.Dashboard.Tests/Shared/TerminalTestProducer.cs
       - tests/Shared/Playwright/**
@@ -427,6 +435,12 @@ path_rules:
   - paths:
       - .github/workflows/build-cli-e2e-image.yml
       - eng/scripts/load-cli-e2e-images.sh
+      - tests/Shared/Docker/**/*.config
+      - tests/Shared/Docker/**/*.sh
+      - tests/Shared/Docker/Dockerfile.e2e
+      - tests/Shared/Docker/Dockerfile.e2e-polyglot-base
+      - tests/Shared/Docker/Dockerfile.e2e-polyglot-go
+      - tests/Shared/Docker/Dockerfile.e2e-polyglot-java
     targets: [test:Aspire.Cli.EndToEnd.Tests]
     reason: builds or loads the CLI E2E images consumed only by Aspire.Cli.EndToEnd.Tests
   - paths:

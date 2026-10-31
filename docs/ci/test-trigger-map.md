@@ -200,7 +200,7 @@ global.json, NuGet.config
 Directory.Build.*, Directory.Packages.props
 eng/Build.props, eng/Testing.props, eng/Versions.props, eng/*.targets
 eng/common/**, eng/OuterPreBuild.proj
-tests/Shared/**/*.props, tests/Shared/**/*.targets, tests/Shared/Dockerfile*
+tests/Shared/RepoTesting/**/*.props, tests/Shared/RepoTesting/**/*.targets
 .github/workflows/tests.yml, run-tests.yml, ...
 ```
 
@@ -281,6 +281,25 @@ Highlights:
   `Infrastructure.Tests` guard instead of the expensive extension E2E matrix.
   Dedicated package-input directories use broad `/**` rules when enumerating
   files or RIDs would let a newly added input silently miss its consumers.
+
+Shared test archive support needs explicit routing. `run-tests.yml` builds
+`RequiresNugets` projects with `PrepareForHelix=true`, then unpacks their archives
+and runs them outside the repository. `Aspire.RepoTesting.targets` copies
+`tests/Shared/EmptyProject.proj` as empty `Directory.Build.props` and
+`Directory.Build.targets` to isolate those builds from parent configuration.
+It also copies `tests/Shared/nuget-with-package-source-mapping.config` as
+`nuget.config` so restores use the built Aspire packages.
+
+Those copies are conditional on archive preparation, which the selector's
+normal project graph does not enable. Their path rules therefore cover the
+archived .NET test consumers explicitly. Polyglot validation uses its own CLI
+package cache setup, not these test archives; consuming built NuGet packages
+alone does not make a job a consumer of these support files.
+
+Other non-obvious shared-input edges include files invoked rather than imported
+(`InstallSdk.targets`) and certificates read directly at runtime by Hosting
+tests. Shared fixture path rules also preserve coverage for deleted or renamed
+inputs that disappear from the HEAD-only graph.
 
 Native Dashboard validation is a custom job, not an MSBuild test-project
 selection. Its path rule explicitly covers the native browser fixture's shared
