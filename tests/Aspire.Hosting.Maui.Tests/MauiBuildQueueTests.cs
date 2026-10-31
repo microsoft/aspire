@@ -553,6 +553,57 @@ public class MauiBuildQueueTests
     }
 
     [Fact]
+    public async Task CancelQueuedResource_BeforeSemaphoreWait_ThrowsOperationCanceledException()
+    {
+        await using var env = await BuildQueueTestEnvironment.CreateAsync();
+
+        // Hold the semaphore with Android.
+        var task1 = Task.Run(() => env.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(env.Android, env.Services),
+            CancellationToken.None));
+
+        await env.Subscriber.WaitForBuildStartedAsync(env.Android);
+
+        // Command state callbacks run synchronously while the "Queued" snapshot is published, which is
+        // after the handler registers its cancellation source but before it waits on the semaphore.
+        // Cancelling from there deterministically hits the already-cancelled SemaphoreSlim.WaitAsync path.
+        var cancelledWhileQueued = false;
+        env.MacCatalyst.Annotations.Add(new ResourceCommandAnnotation(
+            name: "cancel-when-queued",
+            displayName: "Cancel when queued",
+            updateState: context =>
+            {
+                if (context.ResourceSnapshot.State?.Text == "Queued" && !cancelledWhileQueued)
+                {
+                    cancelledWhileQueued = env.CancelResource(env.MacCatalyst.Name);
+                }
+
+                return ResourceCommandState.Hidden;
+            },
+            executeCommand: _ => Task.FromResult(CommandResults.Success()),
+            displayDescription: null,
+            parameter: null,
+            confirmationMessage: null,
+            iconName: null,
+            iconVariant: null,
+            isHighlighted: false));
+
+        var ex = await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => env.Eventing.PublishAsync(
+                new BeforeResourceStartedEvent(env.MacCatalyst, env.Services),
+                CancellationToken.None).DefaultTimeout());
+
+        Assert.True(cancelledWhileQueued);
+        Assert.IsType<OperationCanceledException>(ex);
+
+        Assert.True(env.Parent.TryGetLastAnnotation<MauiBuildQueueAnnotation>(out var annotation));
+        Assert.Equal(0, annotation!.BuildSemaphore.CurrentCount);
+
+        env.Subscriber.CompleteBuild(env.Android);
+        await task1.DefaultTimeout();
+    }
+
+    [Fact]
     public async Task StopCommand_QueuedOrBuildingResource_CancelsBuild()
     {
         await using var env = await BuildQueueTestEnvironment.CreateAsync();
