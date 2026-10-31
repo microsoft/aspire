@@ -30,8 +30,8 @@ Steps with no dependencies run first, followed by steps that depend on them.
  14. destroy-prereq
  15. aks-get-credentials-for-destroy-aks
  16. prepare-aks-identities-aks
- 17. azure-prepare-resources
- 18. validate-compute-environments
+ 17. validate-compute-environments
+ 18. azure-prepare-resources
  19. prepare-aks-aks
  20. prepare-deployment-targets-aks
  21. validate-kubernetes
@@ -77,7 +77,7 @@ Step: aks-get-credentials-for-destroy-aks
 
 Step: azure-prepare-resources
     Description: Prepares the Azure resources.
-    Dependencies: ✓ prepare-aks-identities-aks
+    Dependencies: ✓ prepare-aks-identities-aks, ✓ validate-compute-environments
     Resource: azure-environment (AzureEnvironmentResource)
 
 Step: before-start
@@ -316,10 +316,10 @@ If targeting 'aks-get-credentials-for-destroy-aks':
     [1] aks-get-credentials-for-destroy-aks
 
 If targeting 'azure-prepare-resources':
-  Direct dependencies: prepare-aks-identities-aks
-  Total steps: 2
+  Direct dependencies: prepare-aks-identities-aks, validate-compute-environments
+  Total steps: 3
   Execution order:
-    [0] prepare-aks-identities-aks
+    [0] prepare-aks-identities-aks | validate-compute-environments (parallel)
     [1] azure-prepare-resources
 
 If targeting 'before-start':
