@@ -66,7 +66,9 @@ internal abstract class BaseCommand : Command
     protected AspireCliTelemetry Telemetry { get; }
     protected ConfigSourceService ConfigSources { get; }
 
-    protected virtual string? CancellationMessage => null;
+    // "Stopping Aspire." reads as "the AppHost is stopping", so only commands that own a running
+    // AppHost (such as `aspire run`) should use it. Other commands report a neutral cancellation.
+    protected virtual string? CancellationMessage => InteractionServiceStrings.OperationCancelled;
 
     private void DisplayCancellationMessage(ConsoleOutput? consoleOverride = null)
     {

@@ -403,7 +403,7 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Cancelled, exitCode);
 
         var cancellation = Assert.Single(testInteractionService.DisplayedCancellations);
-        Assert.Null(cancellation.Message);
+        Assert.Equal(InteractionServiceStrings.OperationCancelled, cancellation.Message);
         Assert.Equal(ConsoleOutput.Error, cancellation.ConsoleOverride);
     }
 
@@ -437,7 +437,7 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
 
         var cancellation = Assert.Single(testInteractionService.DisplayedCancellations);
-        Assert.Null(cancellation.Message);
+        Assert.Equal(InteractionServiceStrings.StoppingAspire, cancellation.Message);
         Assert.Null(cancellation.ConsoleOverride);
     }
 
