@@ -28,8 +28,10 @@ public static class AzurePrivateEndpointExtensions
     /// multiple private endpoints that use the same zone name.
     /// </para>
     /// <para>
-    /// When a private endpoint is added, the target resource (or its parent) is automatically
-    /// configured to deny public network access. To override this behavior, use
+    /// When supported by the target integration, the target resource (or its parent) is automatically
+    /// configured to deny public network access. Check the target integration's documentation for
+    /// exceptions and any separate configuration required to restrict public access.
+    /// To override automatic lockdown, use
     /// <see cref="AzureProvisioningResourceExtensions.ConfigureInfrastructure{T}"/> to customize
     /// the network settings.
     /// </para>
