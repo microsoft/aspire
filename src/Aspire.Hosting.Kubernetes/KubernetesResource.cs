@@ -338,7 +338,7 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
                     {
                         Path = endpointProbeAnnotation.Path,
                         Port = GetEndpointValue(endpointMapping, EndpointProperty.TargetPort),
-                        Scheme = endpointMapping.Scheme,
+                        Scheme = GetProbeScheme(endpointProbeAnnotation.EndpointReference.EndpointAnnotation, endpointMapping),
                     },
                 };
             }
@@ -354,6 +354,22 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
                 Probes.Add((probeAnnotation.Type, probe));
             }
         }
+    }
+
+    private string GetProbeScheme(EndpointAnnotation endpoint, EndpointMapping endpointMapping)
+    {
+        // The default https endpoint of a project is not served over TLS: it is left out of HTTPS_PORTS and
+        // Kestrel overrides, and it has the http endpoint's target port (see ProcessEndpoints and
+        // SetBothPortsEnvVariables), so a probe on it must use HTTP.
+        if (resource.TryGetLastAnnotation<ProjectLaunchDefaultsAnnotation>(out var launchDefaults) &&
+            endpoint == launchDefaults.DefaultHttpsEndpoint)
+        {
+            return "HTTP";
+        }
+
+        // Kubernetes only accepts the uppercase "HTTP" and "HTTPS" values for httpGet.scheme:
+        // https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#Probe
+        return endpointMapping.Scheme == "https" ? "HTTPS" : "HTTP";
     }
 
     private async Task ProcessArgumentsAsync(KubernetesEnvironmentContext environmentContext, DistributedApplicationExecutionContext executionContext, CancellationToken cancellationToken)
