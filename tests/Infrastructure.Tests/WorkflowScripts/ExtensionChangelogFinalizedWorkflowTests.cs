@@ -241,6 +241,31 @@ public sealed class ExtensionChangelogFinalizedWorkflowTests(ITestOutputHelper o
         Assert.Equal(0, gateResult.ExitCode);
     }
 
+    [Fact]
+    [RequiresTools(["bash", "git"])]
+    public async Task ReleaseBranchGatePassesWhenCurrentSectionExceedsPipeBuffer()
+    {
+        // The marker and first bullet come before far more text than a pipe buffer holds. A matcher that
+        // exits on the first match (grep -q) must not make the gate fail because its writer got SIGPIPE.
+        var releaseNotes = string.Join(
+            "\n",
+            Enumerable.Range(1, 20_000).Select(i => $"- Release note line {i} with enough padding to fill the pipe buffer."));
+
+        var repository = await CreateReleaseBranchRepositoryAsync(
+            currentSectionBodyFactory: (fromSha, toSha) => $$"""
+                <!-- aspire-ext-changelog-finalized from={{fromSha}} to={{toSha}} base=1.98.0 -->
+
+                ### Fixes
+
+                {{releaseNotes}}
+                """,
+            addExtensionChangeOnMain: false);
+
+        var gateResult = await RunGateScriptAsync(repository.ReleaseBranchEnvironment);
+
+        Assert.True(gateResult.ExitCode == 0, gateResult.Output);
+    }
+
     private async Task WriteChangelogAsync(string content)
     {
         var changelogPath = Path.Combine(_workspace.Path, "extension", "CHANGELOG.md");
