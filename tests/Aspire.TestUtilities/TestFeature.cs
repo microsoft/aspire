@@ -11,7 +11,7 @@ public enum TestFeature
     DevCert = 1 << 2,
 
     /// <summary>
-    /// A container runtime is available. Satisfied by either Docker or Podman, so use this for tests
+    /// A container runtime is available. Satisfied by Docker, Podman, or WSLC on Windows CI, so use this for tests
     /// that just need to run containers. Prefer it over <see cref="Docker"/>.
     /// </summary>
     ContainerRuntime = 1 << 3,
