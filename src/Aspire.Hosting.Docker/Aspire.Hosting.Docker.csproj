@@ -9,6 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="..\Aspire.Hosting\ApplicationModel\ModelName.cs" Link="Shared\ModelName.cs" />
     <Compile Include="..\Aspire.Hosting\Dcp\Process\ProcessResult.cs" Link="Shared\ProcessResult.cs" />
     <Compile Include="..\Aspire.Hosting\Dcp\Process\ProcessSpec.cs" Link="Shared\ProcessSpec.cs" />
     <Compile Include="..\Aspire.Hosting\Dcp\Process\ProcessOutputCapture.cs" Link="Shared\ProcessOutputCapture.cs" />

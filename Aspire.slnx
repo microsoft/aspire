@@ -173,6 +173,11 @@
     <Project Path="playground/BlazorHosted/BlazorHosted.TimeApi/BlazorHosted.TimeApi.csproj" />
     <Project Path="playground/BlazorHosted/BlazorHosted.WeatherApi/BlazorHosted.WeatherApi.csproj" />
   </Folder>
+  <Folder Name="/playground/ComposeAdoption/">
+    <Project Path="playground/ComposeAdoption/AppHost/ComposeAdoption.AppHost.csproj" />
+    <Project Path="playground/ComposeAdoption/Api/ComposeAdoption.Api.csproj" />
+    <Project Path="playground/ComposeAdoption/Gateway/ComposeAdoption.Gateway.csproj" />
+  </Folder>
   <Folder Name="/playground/BlazorStandalone/">
     <Project Path="playground/BlazorStandalone/BlazorStandalone.AppHost/BlazorStandalone.AppHost.csproj" />
     <Project Path="playground/BlazorStandalone/BlazorStandalone.ClientServiceDefaults/BlazorStandalone.ClientServiceDefaults.csproj" />
