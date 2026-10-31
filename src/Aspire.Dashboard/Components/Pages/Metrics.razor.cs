@@ -799,8 +799,13 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
         // doesn't replace it. Without a single selected resource (all resources, or several), no resource is named
         // and the page lists the instruments of every selected resource. A remembered name could also be stale,
         // for example a replica from an earlier run.
+        //
+        // The exception is an open instrument chart in a multi-resource selection: the chart belongs to one of the
+        // selected resources, and changing its duration or view must keep showing it. Dropping the resource there
+        // would navigate back to the aggregate instrument list. The name is only kept while it's part of the
+        // selection, so a stale name still can't replace it.
         var resourceName = ResourcesLayout is { } layout
-            ? (layout.IsMultiSelection ? null : layout.SelectedResourceName)
+            ? (layout.IsMultiSelection ? GetSelectedChartResourceName(serializable) : layout.SelectedResourceName)
             : serializable.ResourceName;
         var url = DashboardUrls.MetricsUrl(
             resource: resourceName,
@@ -814,6 +819,13 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
 
         return ResourcesLayout?.AddSelectionToUrl(url) ?? url;
     }
+
+    private string? GetSelectedChartResourceName(MetricsPageState serializable) =>
+        serializable is { InstrumentName: not null, ResourceName: { } name } &&
+        _selectionResourceViewModels is { } selectionResources &&
+        selectionResources.Any(r => string.Equals(r.Name, name, StringComparisons.ResourceName))
+            ? name
+            : null;
 
     private async Task OnShowRunningTotalChangedAsync(bool showRunningTotal)
     {

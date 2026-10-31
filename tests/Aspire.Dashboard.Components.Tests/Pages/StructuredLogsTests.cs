@@ -1,8 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Threading.Channels;
 using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Controls.Grid;
+using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
@@ -12,7 +14,9 @@ using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
+using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
+using Aspire.Tests.Shared.DashboardModel;
 using Bunit;
 using Google.Protobuf.Collections;
 using Microsoft.AspNetCore.Components;
@@ -403,6 +407,66 @@ public partial class StructuredLogsTests : DashboardTestContext
         var grid = cut.FindComponent<AspireFluentDataGrid<LogSummary>>();
         await grid.InvokeAsync(grid.Instance.RefreshDataAndRenderAsync);
         cut.WaitForAssertion(() => Assert.Equal(expectedMessageCount, cut.FindComponents<DashboardMessageBar>().Count));
+    }
+
+    [Fact]
+    public async Task ResourcesLayout_SelectedResourceSendsTelemetryAfterPageOpened_ShowsOnlyThatResource()
+    {
+        SetupStructureLogsServices();
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api"), ModelTestHelpers.CreateResource("worker")],
+            resourceChannelProvider: () => channel));
+        Services.GetRequiredService<DimensionManager>().InvokeOnViewportInformationChanged(viewport);
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.StructuredLogsUrl("api"));
+
+        // The page opens before either resource has sent telemetry.
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport).Add(p => p.Body, builder =>
+        {
+            builder.OpenComponent<StructuredLogs>(0);
+            builder.AddAttribute(1, nameof(StructuredLogs.ResourceName), "api");
+            builder.CloseComponent();
+        }));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        var page = cut.FindComponent<StructuredLogs>();
+        var grid = page.FindComponent<AspireFluentDataGrid<LogSummary>>();
+
+        var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
+
+        // Another resource's error arrives before the selected resource's first telemetry.
+        await AddLogAsync(repository, "worker", SeverityNumber.Error);
+        await AddLogAsync(repository, "api", SeverityNumber.Info);
+
+        // Telemetry from the selected resource scopes the page to it.
+        cut.WaitForAssertion(() => Assert.Equal("api", page.Instance.PageViewModel.SelectedResource.Name));
+
+        await AddLogAsync(repository, "worker", SeverityNumber.Error);
+
+        var result = await cut.InvokeAsync(() => grid.Instance.ItemsProvider!(new GridItemsProviderRequest<LogSummary>
+        {
+            StartIndex = 0,
+            Count = 100
+        }).AsTask());
+
+        // Another resource's logs aren't shown, and its errors aren't marked as read by viewing the selected resource.
+        Assert.Equal(["api"], result.Items.Select(item => item.Resource.ResourceName));
+        Assert.Equal(2, repository.GetResourceUnviewedErrorLogsCount().Single(entry => entry.Key.Name == "worker").Value);
+
+        static Task AddLogAsync(SqliteTelemetryRepository repository, string name, SeverityNumber severity)
+        {
+            // Without an instance ID, the telemetry resource's name matches the app model resource's name.
+            var resource = CreateResource(name);
+            resource.Attributes.Remove(resource.Attributes.Single(attribute => attribute.Key == OtlpResource.SERVICE_INSTANCE_ID));
+            return repository.AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
+            {
+                new ResourceLogs
+                {
+                    Resource = resource,
+                    ScopeLogs = { new ScopeLogs { Scope = CreateScope(), LogRecords = { CreateLogRecord(severity: severity) } } }
+                }
+            });
+        }
     }
 
     private void SetupStructureLogsServices()
