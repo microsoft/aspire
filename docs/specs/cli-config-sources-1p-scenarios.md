@@ -114,7 +114,7 @@ The relevant excerpt from the project's file is:
 
 This is an excerpt, not a replacement for the generated file. Maya keeps its AppHost, SDK, package, and other project-owned settings.
 
-Only [allowlisted top-level settings](cli-config-sources.md#materialize-an-allowlist-into-the-app-configuration) are copied, not the entire source JSON. Currently only `skillSources` is allowed, and it is copied in full when supplied. Other source values, including `docs`, AppHost paths, SDK/channel selection, packages, and arbitrary feature settings, are not imported.
+Only [allowlisted top-level settings](cli-config-sources.md#materialize-an-allowlist-into-the-app-configuration) are copied, not the entire source JSON. `skillSources` and `integrationSources` are allowed, and each is copied in full when supplied. Other source values, including `docs`, AppHost paths, SDK/channel selection, packages, and arbitrary feature settings, are not imported.
 
 Maya commits the resulting app file with the application. It contains neither Git credentials nor an absolute tracking path, so another machine can use the saved values immediately.
 

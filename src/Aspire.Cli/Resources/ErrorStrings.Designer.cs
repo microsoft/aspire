@@ -448,6 +448,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Invalid integration source configuration at &apos;{0}&apos;. Specify a NuGet source without embedded credentials and, optionally, a non-empty list of allowed package patterns (exact IDs, prefixes ending in *, or *)..
+        /// </summary>
+        internal static string InvalidIntegrationSource {
+            get {
+                return ResourceManager.GetString("InvalidIntegrationSource", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to The configuration file &apos;{0}&apos; contains invalid JSON: {1}.
         /// </summary>
         internal static string InvalidJsonInConfigFile {

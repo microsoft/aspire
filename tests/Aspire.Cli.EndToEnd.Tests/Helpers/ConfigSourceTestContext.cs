@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.IO.Compression;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Hex1b.Automation;
@@ -15,6 +16,7 @@ internal sealed class ConfigSourceTestContext
     private const string SshRepository = "ssh://git@config-source.example/config";
 
     private readonly string _root;
+    private readonly string _feedRoot;
     private readonly Hex1bTerminalAutomator _auto;
     private readonly SequenceCounter _counter;
     private readonly CancellationToken _cancellationToken;
@@ -25,6 +27,7 @@ internal sealed class ConfigSourceTestContext
         TemporaryWorkspace workspace, Hex1bTerminalAutomator auto, SequenceCounter counter, CancellationToken cancellationToken)
     {
         _root = workspace.WorkspaceRoot.FullName;
+        _feedRoot = CliE2ETestHelpers.ToContainerPath(Path.Combine(_root, "integration-feed"), workspace);
         _auto = auto;
         _counter = counter;
         _cancellationToken = cancellationToken;
@@ -60,6 +63,47 @@ internal sealed class ConfigSourceTestContext
         await _auto.RunCommandAsync($"{NewCommand} --use-config-source true --non-interactive", _counter,
             timeout: TimeSpan.FromMinutes(3));
         await ConfigureProjectAsync();
+    }
+
+    public async Task AddAndAssertIntegrationSourcesAsync()
+    {
+        foreach (var (feed, id) in new[]
+        {
+            ("team", "Contoso.Hosting.Configured"),
+            ("team", "Excluded.Package"),
+            ("other", "Fabrikam.Hosting.Configured")
+        })
+        {
+            var directory = Directory.CreateDirectory(Path.Combine(_root, "integration-feed", feed));
+            using var archive = ZipFile.Open(Path.Combine(directory.FullName, $"{id}.1.0.0.nupkg"), ZipArchiveMode.Create);
+            await using (var writer = new StreamWriter(archive.CreateEntry($"{id}.nuspec").Open()))
+            {
+                await writer.WriteAsync($"""
+                    <?xml version="1.0"?>
+                    <package><metadata><id>{id}</id><version>1.0.0</version><authors>Aspire Tests</authors><description>Integration source fixture</description></metadata></package>
+                    """);
+            }
+            await using var content = new StreamWriter(archive.CreateEntry("content/readme.txt").Open());
+            await content.WriteAsync("Integration source fixture.");
+        }
+
+        await _auto.RunCommandAsync(
+            "aspire integration list --format json --non-interactive > \"$ASPIRE_E2E_WORKSPACE/integrations.json\"", _counter);
+        var integrations = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(_root, "integrations.json"), _cancellationToken))!.AsArray();
+        Assert.Equal(
+            ["Contoso.Hosting.Configured", "Fabrikam.Hosting.Configured"],
+            integrations.Select(item => item!["package"]!.GetValue<string>()).Order());
+
+        foreach (var id in new[] { "Contoso.Hosting.Configured", "Fabrikam.Hosting.Configured" })
+        {
+            await _auto.RunCommandAsync($"aspire add {id} --version 1.0.0 --non-interactive", _counter,
+                timeout: TimeSpan.FromMinutes(3));
+        }
+
+        await _auto.RunCommandAsync("cat apphost.cs > \"$ASPIRE_E2E_WORKSPACE/actual-apphost.cs\"", _counter);
+        var appHost = await File.ReadAllTextAsync(Path.Combine(_root, "actual-apphost.cs"), _cancellationToken);
+        Assert.Contains("Contoso.Hosting.Configured@1.0.0", appHost);
+        Assert.Contains("Fabrikam.Hosting.Configured@1.0.0", appHost);
     }
 
     public async Task InitializeSolutionAsync()
@@ -342,6 +386,11 @@ internal sealed class ConfigSourceTestContext
                   "plugins": ["{{version}}", "deployment"],
                   "openCodeV2Catalog": "https://skills.example/{{version}}/"
                 }
+              },
+              "integrationSources": {
+                "default": { "enabled": false },
+                "team": { "source": "{{_feedRoot}}/team", "patterns": ["Contoso.Hosting.*"] },
+                "other": { "source": "{{_feedRoot}}/other", "patterns": ["Fabrikam.Hosting.*"] }
               },
               "docs": {
                 "llmsTxtUrl": "https://excluded.example/{{version}}/llms.txt"

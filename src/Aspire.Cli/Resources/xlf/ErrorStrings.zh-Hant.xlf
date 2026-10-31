@@ -217,6 +217,11 @@
         <target state="translated">無法建置整合專案，因為參考的專案需要比此 Aspire CLI ({0}) 所提供更新的 Requires.Hosting 版本。AppHost 伺服器是 CLI 本身，因此 aspire.config.json 中的專案參考必須以 CLI 隨附的相同版本為目標。使用符合所參考專案的 Aspire CLI，或參考已發佈的套件，而不是本機專案。</target>
         <note>{0} is the version of the running Aspire CLI, for example "13.5.0".</note>
       </trans-unit>
+      <trans-unit id="InvalidIntegrationSource">
+        <source>Invalid integration source configuration at '{0}'. Specify a NuGet source without embedded credentials and, optionally, a non-empty list of allowed package patterns (exact IDs, prefixes ending in *, or *).</source>
+        <target state="new">Invalid integration source configuration at '{0}'. Specify a NuGet source without embedded credentials and, optionally, a non-empty list of allowed package patterns (exact IDs, prefixes ending in *, or *).</target>
+        <note>{0} is the configuration key. Do not translate NuGet or *.</note>
+      </trans-unit>
       <trans-unit id="InvalidJsonInConfigFile">
         <source>The configuration file '{0}' contains invalid JSON: {1}</source>
         <target state="translated">設定檔 '{0}' 包含無效的 JSON: {1}</target>

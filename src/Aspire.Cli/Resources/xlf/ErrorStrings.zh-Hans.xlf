@@ -217,6 +217,11 @@
         <target state="translated">无法生成集成项目，因为引用的项目需要 Aspire.Hosting 的版本高于此 Aspire CLI ({0})提供的版本。AppHost 服务器就是 CLI 本身，因此 aspire.config.json 中的项目引用必须以 CLI 附带的相同版本为目标。请使用与引用的项目匹配的 Aspire CLI，或引用已发布的包而不是本地项目。</target>
         <note>{0} is the version of the running Aspire CLI, for example "13.5.0".</note>
       </trans-unit>
+      <trans-unit id="InvalidIntegrationSource">
+        <source>Invalid integration source configuration at '{0}'. Specify a NuGet source without embedded credentials and, optionally, a non-empty list of allowed package patterns (exact IDs, prefixes ending in *, or *).</source>
+        <target state="new">Invalid integration source configuration at '{0}'. Specify a NuGet source without embedded credentials and, optionally, a non-empty list of allowed package patterns (exact IDs, prefixes ending in *, or *).</target>
+        <note>{0} is the configuration key. Do not translate NuGet or *.</note>
+      </trans-unit>
       <trans-unit id="InvalidJsonInConfigFile">
         <source>The configuration file '{0}' contains invalid JSON: {1}</source>
         <target state="translated">配置文件 "{0}" 包含无效的 JSON: {1}</target>

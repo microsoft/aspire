@@ -217,6 +217,11 @@
         <target state="translated">참조된 프로젝트에서 이 Aspire CLI({0})가 제공하는 버전보다 최신 버전의 Aspire.Hosting을 요구하므로 통합 프로젝트를 빌드할 수 없습니다. AppHost 서버는 CLI 자체이므로 aspire.config.json의 프로젝트 참조는 CLI에 포함된 버전과 동일한 버전을 대상으로 해야 합니다. 참조된 프로젝트와 일치하는 Aspire CLI를 사용하거나 로컬 프로젝트 대신 게시된 패키지를 참조하세요.</target>
         <note>{0} is the version of the running Aspire CLI, for example "13.5.0".</note>
       </trans-unit>
+      <trans-unit id="InvalidIntegrationSource">
+        <source>Invalid integration source configuration at '{0}'. Specify a NuGet source without embedded credentials and, optionally, a non-empty list of allowed package patterns (exact IDs, prefixes ending in *, or *).</source>
+        <target state="new">Invalid integration source configuration at '{0}'. Specify a NuGet source without embedded credentials and, optionally, a non-empty list of allowed package patterns (exact IDs, prefixes ending in *, or *).</target>
+        <note>{0} is the configuration key. Do not translate NuGet or *.</note>
+      </trans-unit>
       <trans-unit id="InvalidJsonInConfigFile">
         <source>The configuration file '{0}' contains invalid JSON: {1}</source>
         <target state="translated">구성 파일 '{0}'에 잘못된 JSON이 포함되어 있습니다. {1}</target>

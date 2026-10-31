@@ -23,6 +23,78 @@ namespace Aspire.Cli.Tests.Commands;
 
 public class AddCommandTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AddCommandUsesConfiguredIntegrationSourceForDiscoveryVersionsAndRestore(bool specifyVersion)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appDirectory = workspace.CreateDirectory("selected");
+        var appHostFile = new FileInfo(Path.Combine(appDirectory.FullName, "apphost.ts"));
+        File.WriteAllText(appHostFile.FullName, string.Empty);
+        File.WriteAllText(Path.Combine(appDirectory.FullName, AspireConfigFile.FileName), """
+            {"integrationSources":{"default":{"enabled":false},"team":{"source":"https://example.com/team","patterns":["Acme.Hosting.*"]}}}
+            """);
+        File.WriteAllText(Path.Combine(workspace.Path, AspireConfigFile.FileName), """
+            {"integrationSources":{"default":{"enabled":false},"old":{"source":"https://example.com/old","patterns":["Old.*"]}}}
+            """);
+        File.WriteAllText(Path.Combine(appDirectory.FullName, "nuget.config"), """
+            <configuration>
+              <packageSources><clear /><add key="sdk" value="https://example.com/sdk" /><add key="public" value="https://api.nuget.org/v3/index.json" /></packageSources>
+              <packageSourceMapping><clear /><packageSource key="sdk"><package pattern="Aspire*" /></packageSource><packageSource key="public"><package pattern="*" /></packageSource></packageSourceMapping>
+            </configuration>
+            """);
+        var cache = new FakeNuGetPackageCache
+        {
+            GetPackagesAsyncCallback = (_, query, filter, _, config, _, _) =>
+            {
+                Assert.Equal("Acme.Hosting.", query);
+                Assert.True(filter!("Acme.Hosting.Redis"));
+                Assert.False(filter("Unapproved.Package"));
+                Assert.Equal("https://example.com/team",
+                    Assert.Single(XDocument.Load(config!.FullName).Root!.Element("packageSources")!.Elements("add")).Attribute("value")!.Value);
+                return Task.FromResult<IEnumerable<NuGetPackage>>(
+                    [new() { Id = "Acme.Hosting.Redis", Version = "2.0.0", Source = "https://example.com/team" }]);
+            },
+            GetPackageVersionsAsyncCallback = (_, id, _, config, _, _) =>
+            {
+                Assert.Equal("Acme.Hosting.Redis", id);
+                Assert.Equal("https://example.com/team",
+                    Assert.Single(XDocument.Load(config!.FullName).Root!.Element("packageSources")!.Elements("add")).Attribute("value")!.Value);
+                return Task.FromResult<IEnumerable<NuGetPackage>>(
+                    [new() { Id = id, Version = "1.0.0", Source = "https://example.com/team" }]);
+            }
+        };
+        AddPackageContext? added = null;
+        var factory = new TestTypeScriptStarterProjectFactory((_, _, _) => Task.FromResult(true));
+        factory.Project.AddPackageAsyncCallback = (context, _) =>
+        {
+            added = context;
+            return Task.FromResult(true);
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+            options.NuGetClientFactory = _ => NuGetTestHelper.CreateClient();
+        });
+        services.AddSingleton<Aspire.Cli.NuGet.INuGetPackageCache>(cache);
+        services.AddSingleton<IAppHostProjectFactory>(factory);
+        using var provider = services.BuildServiceProvider();
+        var versionArgument = specifyVersion ? " --version 1.0.0" : "";
+
+        var exitCode = await provider.GetRequiredService<AddCommand>()
+            .Parse($"add Acme.Hosting.Redis --apphost \"{appHostFile.FullName}\"{versionArgument}").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(added);
+        Assert.Equal("Acme.Hosting.Redis", added.PackageId);
+        Assert.Equal(specifyVersion ? "1.0.0" : "2.0.0", added.PackageVersion);
+        Assert.Null(added.Source);
+        Assert.Null(added.SourcePackagePattern);
+        Assert.Null(added.RequestedChannel);
+        await Verify(await File.ReadAllTextAsync(Path.Combine(appDirectory.FullName, "nuget.config")), "xml").UseParameters(specifyVersion);
+    }
+
     [Fact]
     public async Task AddCommandWithHelpArgumentReturnsZero()
     {

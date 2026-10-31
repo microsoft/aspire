@@ -7,6 +7,7 @@ using Aspire.Cli.Interaction;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Utils;
+using Microsoft.Extensions.Logging;
 using Semver;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
@@ -20,7 +21,11 @@ internal sealed class IntegrationPackageSearchService(
     IProjectLocator projectLocator,
     IInteractionService interactionService,
     CliExecutionContext executionContext,
-    IAppHostProjectFactory projectFactory)
+    IAppHostProjectFactory projectFactory,
+    IConfigurationService configurationService,
+    INuGetPackageCache nuGetPackageCache,
+    IFeatures features,
+    ILogger<IntegrationPackageSearchService> logger)
 {
     private const double FuzzyMatchThreshold = 0.3;
 
@@ -39,7 +44,7 @@ internal sealed class IntegrationPackageSearchService(
         string? sourceOverride,
         CancellationToken cancellationToken)
     {
-        var channels = await GetSearchChannelsAsync(configuredChannel, sourceOverride, cancellationToken);
+        var channels = await GetSearchChannelsAsync(workingDirectory, configuredChannel, sourceOverride, cancellationToken);
         var sourceMappings = string.IsNullOrWhiteSpace(sourceOverride)
             ? null
             : PackageSourceOverrideMappings.CreateForSourceOnlyOperations(sourceOverride);
@@ -91,7 +96,7 @@ internal sealed class IntegrationPackageSearchService(
         string? sourceOverride,
         CancellationToken cancellationToken)
     {
-        var channels = await GetSearchChannelsAsync(configuredChannel, sourceOverride, cancellationToken);
+        var channels = await GetSearchChannelsAsync(workingDirectory, configuredChannel, sourceOverride, cancellationToken);
         var sourceMappings = string.IsNullOrWhiteSpace(sourceOverride)
             ? null
             : PackageSourceOverrideMappings.CreateForSourceOnlyOperations(sourceOverride);
@@ -123,6 +128,34 @@ internal sealed class IntegrationPackageSearchService(
     }
 
     private async Task<IEnumerable<PackageChannel>> GetSearchChannelsAsync(
+        DirectoryInfo workingDirectory,
+        string? configuredChannel,
+        string? sourceOverride,
+        CancellationToken cancellationToken)
+    {
+        if (!string.IsNullOrWhiteSpace(sourceOverride))
+        {
+            return await GetDefaultSearchChannelsAsync(configuredChannel, sourceOverride, cancellationToken);
+        }
+
+        var sources = IntegrationSourceConfiguration.Resolve(workingDirectory, new FileInfo(configurationService.GetSettingsFilePath(isGlobal: true)));
+        var channels = sources.Any(source => source.Source is null)
+            ? (await GetDefaultSearchChannelsAsync(configuredChannel, sourceOverride: null, cancellationToken)).ToList()
+            : [];
+        channels.AddRange(sources.Where(source => source.Source is not null).Select(source =>
+            new PackageChannel(
+                $"integration:{source.Name}",
+                PackageChannelQuality.Both,
+                source.Patterns!.Select(pattern => new PackageMapping(pattern, source.Source!)).ToArray(),
+                nuGetPackageCache, features, logger)
+            {
+                IntegrationSource = source
+            }));
+
+        return channels;
+    }
+
+    private async Task<IEnumerable<PackageChannel>> GetDefaultSearchChannelsAsync(
         string? configuredChannel,
         string? sourceOverride,
         CancellationToken cancellationToken)

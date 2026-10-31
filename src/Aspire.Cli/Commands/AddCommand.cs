@@ -376,6 +376,24 @@ internal sealed class AddCommand : BaseCommand
                 }
             }
 
+            if (source is null && selectedNuGetPackage.Channel.IntegrationSource?.Source is { } integrationSource)
+            {
+                // Persist an exact package mapping so later builds can still restore the integration.
+                // Unlike --source, this keeps ambient feeds available for the SDK and dependencies.
+                var configuration = _nugetService.BuildAppHostConfiguration(
+                    effectiveAppHostProjectFile.Directory!,
+                    "integration-add",
+                    [new PackageMapping(selectedNuGetPackage.Package.Id, integrationSource)],
+                    cancellationToken);
+                await new DotNetAppHostNuGetConfigMerger(_nugetService).CreateOrUpdateAsync(
+                    effectiveAppHostProjectFile.Directory!,
+                    configuration,
+                    createIfMissing: true,
+                    globalPackagesFolder: null,
+                    confirmationCallback: null,
+                    cancellationToken);
+            }
+
             context = new AddPackageContext
             {
                 AppHostFile = effectiveAppHostProjectFile,
@@ -479,6 +497,11 @@ internal sealed class AddCommand : BaseCommand
         string packageId,
         string? source)
     {
+        if (channel.IntegrationSource is not null)
+        {
+            // Named integration sources select the package feed, not the AppHost's SDK channel.
+            return null;
+        }
         if (channel.Type is PackageChannelType.Explicit)
         {
             return channel.Name;

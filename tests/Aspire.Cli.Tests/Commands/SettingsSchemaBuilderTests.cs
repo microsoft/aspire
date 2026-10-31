@@ -12,6 +12,23 @@ public class SettingsSchemaBuilderTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public void BuildSchema_IncludesNamedIntegrationSources(bool global)
+    {
+        foreach (var schema in new[]
+        {
+            SettingsSchemaBuilder.BuildSchema(excludeLocalOnly: global),
+            SettingsSchemaBuilder.BuildConfigFileSchema(excludeLocalOnly: global)
+        })
+        {
+            var sources = Assert.Single(schema.Properties, property => property.Name == "integrationSources");
+            Assert.Equal("object", sources.AdditionalPropertiesType);
+            Assert.Equal(["enabled", "source", "patterns"], sources.SubProperties!.Select(property => property.Name));
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public void BuildSchema_IncludesNamedSkillSources(bool global)
     {
         foreach (var schema in new[]

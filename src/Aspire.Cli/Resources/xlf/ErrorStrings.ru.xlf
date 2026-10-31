@@ -217,6 +217,11 @@
         <target state="translated">Проект интеграции не удалось создать, поскольку для указанного проекта требуется более новая версия Aspire.Hosting, чем та, которую предоставляет данный интерфейс командной строки Aspire ({0}). Сервер узла приложений (AppHost) — это сам интерфейс командной строки (CLI), поэтому в aspire.config.json необходимо указывать ссылки на проекты той же версии, с которой поставляется CLI. Используйте интерфейс командной строки Aspire, совместимый с указанными проектами, или сошлитесь на опубликованные пакеты вместо локальных проектов.</target>
         <note>{0} is the version of the running Aspire CLI, for example "13.5.0".</note>
       </trans-unit>
+      <trans-unit id="InvalidIntegrationSource">
+        <source>Invalid integration source configuration at '{0}'. Specify a NuGet source without embedded credentials and, optionally, a non-empty list of allowed package patterns (exact IDs, prefixes ending in *, or *).</source>
+        <target state="new">Invalid integration source configuration at '{0}'. Specify a NuGet source without embedded credentials and, optionally, a non-empty list of allowed package patterns (exact IDs, prefixes ending in *, or *).</target>
+        <note>{0} is the configuration key. Do not translate NuGet or *.</note>
+      </trans-unit>
       <trans-unit id="InvalidJsonInConfigFile">
         <source>The configuration file '{0}' contains invalid JSON: {1}</source>
         <target state="translated">Файл конфигурации "{0}" содержит некорректный JSON: {1}</target>

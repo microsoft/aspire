@@ -217,6 +217,11 @@
         <target state="translated">Nie można skompilować projektu integracji, ponieważ projekt, do którego istnieje odwołanie, wymaga nowszej wersji pliku Aspire.Hosting, niż zapewnia ten interfejs wiersza polecenia platformy Aspire ({0}). Serwer środowiska AppHost jest interfejsem wiersza polecenia, dlatego odwołania do projektu w pliku aspire.config.json muszą być przeznaczone dla tej samej wersji, która jest dostarczana przez interfejs wiersza polecenia. Użyj interfejsu wiersza polecenia platformy Aspire, który pasuje do przywoływanych projektów, lub odwołaj się do opublikowanych pakietów zamiast projektów lokalnych.</target>
         <note>{0} is the version of the running Aspire CLI, for example "13.5.0".</note>
       </trans-unit>
+      <trans-unit id="InvalidIntegrationSource">
+        <source>Invalid integration source configuration at '{0}'. Specify a NuGet source without embedded credentials and, optionally, a non-empty list of allowed package patterns (exact IDs, prefixes ending in *, or *).</source>
+        <target state="new">Invalid integration source configuration at '{0}'. Specify a NuGet source without embedded credentials and, optionally, a non-empty list of allowed package patterns (exact IDs, prefixes ending in *, or *).</target>
+        <note>{0} is the configuration key. Do not translate NuGet or *.</note>
+      </trans-unit>
       <trans-unit id="InvalidJsonInConfigFile">
         <source>The configuration file '{0}' contains invalid JSON: {1}</source>
         <target state="translated">Plik konfiguracji „{0}” zawiera nieprawidłowy kod JSON: {1}</target>

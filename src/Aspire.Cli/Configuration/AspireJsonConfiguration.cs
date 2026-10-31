@@ -5,6 +5,7 @@ using System.ComponentModel;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Aspire.Cli.Agents.AspireSkills;
+using Aspire.Cli.Packaging;
 
 namespace Aspire.Cli.Configuration;
 
@@ -79,6 +80,10 @@ internal sealed class AspireJsonConfiguration
     [JsonPropertyName(SkillSource.SectionName)]
     [Description("Named agent skill sources, merged across configuration layers. The built-in default source remains enabled unless explicitly disabled.")]
     public Dictionary<string, SkillSource>? SkillSources { get; set; }
+
+    [JsonPropertyName(IntegrationSourceConfiguration.SectionName)]
+    [Description("Named NuGet integration sources and allowed package patterns, merged across configuration layers.")]
+    public Dictionary<string, IntegrationSourceConfiguration>? IntegrationSources { get; set; }
 
     /// <summary>
     /// Captures any additional properties not explicitly defined in this class.
