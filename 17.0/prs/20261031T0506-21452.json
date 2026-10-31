@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Blazor gateway origin resolved for deployment network",
+  "mergedAt": "2026-10-31T05:06:43Z",
+  "number": 21452,
+  "runDate": "2026-10-31T06:10:00Z",
+  "status": "included",
+  "title": "Forward ValueProviderContext in Blazor GatewayOriginReference"
+}

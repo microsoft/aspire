@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Blazor WebAssembly gateway origins now resolve on the network requested by the deployment instead of localhost, fixing hangs and leaked localhost URLs when deploying (for example to Azure Container Apps).",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🌐",
+  "firstMergedAt": "2026-10-31T05:06:43Z",
+  "lastMergedAt": "2026-10-31T05:06:43Z",
+  "name": "Blazor gateway origin resolved for deployment network",
+  "owner": "davidfowl",
+  "prs": [
+    21452
+  ]
+}

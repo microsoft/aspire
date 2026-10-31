@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Kubernetes publish now includes OTLP environment variables in the ConfigMap of resources referenced before they are processed, so referenced projects send telemetry to the dashboard.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "📡",
+  "firstMergedAt": "2026-10-31T05:54:27Z",
+  "lastMergedAt": "2026-10-31T05:54:27Z",
+  "name": "OTLP configured for referenced Kubernetes resources",
+  "owner": "davidfowl",
+  "prs": [
+    21520
+  ]
+}

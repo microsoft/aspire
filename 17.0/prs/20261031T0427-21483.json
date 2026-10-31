@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only flaky test fix",
+  "mergedAt": "2026-10-31T04:27:31Z",
+  "number": 21483,
+  "runDate": "2026-10-31T06:10:00Z",
+  "status": "excluded",
+  "title": "Fix flaky VS Code storage diagnostics lock tests killed by the holder timeout"
+}

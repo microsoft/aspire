@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "OTLP configured for referenced Kubernetes resources",
+  "mergedAt": "2026-10-31T05:54:27Z",
+  "number": 21520,
+  "runDate": "2026-10-31T06:10:00Z",
+  "status": "included",
+  "title": "Configure OTLP for Kubernetes resources referenced before they are processed"
+}
