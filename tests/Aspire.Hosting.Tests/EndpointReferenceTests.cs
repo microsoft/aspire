@@ -128,6 +128,48 @@ public class EndpointReferenceTests
     }
 
     [Fact]
+    public async Task GetValueAsync_IPV4Host_WithCustomTargetHost_UsesAllocatedAddress()
+    {
+        var resource = new TestResource("test");
+        var annotation = new EndpointAnnotation(ProtocolType.Tcp, uriScheme: "tcp", name: "tcp")
+        {
+            TargetHost = "[::1]"
+        };
+        resource.Annotations.Add(annotation);
+
+        var endpointRef = new EndpointReference(resource, annotation);
+        var ipv4Expr = endpointRef.Property(EndpointProperty.IPV4Host);
+
+        // A customized TargetHost means the endpoint is not on 127.0.0.1, so the value has to wait for the
+        // address the orchestrator actually allocated instead of answering with the loopback literal.
+        var getValueTask = ipv4Expr.GetValueAsync(CancellationToken.None);
+        Assert.False(getValueTask.IsCompleted);
+
+        annotation.AllocatedEndpoint = new AllocatedEndpoint(annotation, "[::1]", 1433);
+
+        var ipv4 = await getValueTask;
+        Assert.Equal("[::1]", ipv4);
+    }
+
+    [Fact]
+    public async Task GetValueAsync_IPV4Host_WithLocalhostTldTargetHost_ReturnsImmediately()
+    {
+        var resource = new TestResource("test");
+        var annotation = new EndpointAnnotation(ProtocolType.Tcp, uriScheme: "http", name: "http")
+        {
+            TargetHost = "myapp.dev.localhost"
+        };
+        resource.Annotations.Add(annotation);
+
+        var endpointRef = new EndpointReference(resource, annotation);
+        var ipv4Expr = endpointRef.Property(EndpointProperty.IPV4Host);
+
+        // A *.localhost name resolves to the caller's own loopback, so the literal is still correct here.
+        var ipv4 = await ipv4Expr.GetValueAsync(CancellationToken.None);
+        Assert.Equal("127.0.0.1", ipv4);
+    }
+
+    [Fact]
     public async Task GetValueAsync_TargetPort_WithStaticPort_ReturnsImmediately()
     {
         var resource = new TestResource("test");
