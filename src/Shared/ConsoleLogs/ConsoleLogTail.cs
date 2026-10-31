@@ -17,7 +17,8 @@ namespace Aspire.Shared.ConsoleLogs;
 /// Lines are ordered by their timestamp when one is available, then by arrival order. On the app host,
 /// application output and <c>[sys]</c> lines are read from separate streams, so a <c>[sys]</c> line can
 /// arrive before older application output. Ordering by timestamp before trimming keeps such a line when it
-/// belongs inside the window. Lines without a timestamp sort right after the line that arrived before them.
+/// belongs inside the window. Lines without a timestamp sort after every line that arrived before them, matching
+/// how the CLI appends them, so a late line with an older timestamp can't pull them back out of the window.
 /// </para>
 /// </remarks>
 internal sealed class ConsoleLogTailBuffer<T>
@@ -33,7 +34,7 @@ internal sealed class ConsoleLogTailBuffer<T>
     private readonly PriorityQueue<Entry, Entry> _applicationLines;
     private readonly List<Entry> _systemLines = [];
     private int _systemLinePruneThreshold = MinimumSystemLinePruneThreshold;
-    private DateTimeOffset _lastTimestamp = DateTimeOffset.MinValue;
+    private DateTimeOffset _latestTimestamp = DateTimeOffset.MinValue;
     private long _sequence;
 
     public ConsoleLogTailBuffer(int tail, Func<T, bool> isSystemLog, Func<T, DateTimeOffset?>? getTimestamp = null)
@@ -75,12 +76,13 @@ internal sealed class ConsoleLogTailBuffer<T>
 
     public void Add(T item)
     {
-        if (_getTimestamp?.Invoke(item) is { } timestamp)
+        var timestamp = _getTimestamp?.Invoke(item);
+        if (timestamp > _latestTimestamp)
         {
-            _lastTimestamp = timestamp;
+            _latestTimestamp = timestamp.Value;
         }
 
-        var entry = new Entry(item, _lastTimestamp, _sequence++);
+        var entry = new Entry(item, timestamp ?? _latestTimestamp, _sequence++);
 
         if (_isSystemLog(item))
         {

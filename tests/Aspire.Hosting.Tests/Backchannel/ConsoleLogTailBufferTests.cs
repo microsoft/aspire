@@ -84,6 +84,19 @@ public class ConsoleLogTailBufferTests
     }
 
     [Fact]
+    public void Items_KeepsUntimestampedLineAfterOlderSystemLine()
+    {
+        // A late [sys] line with an older timestamp mustn't move an untimestamped line that arrives after it
+        // back in time. The CLI keeps untimestamped lines at the end, so this line is the latest.
+        var buffer = CreateServerBuffer(tail: 1);
+        buffer.Add("2026-01-01T00:00:05.0000000Z app line 1");
+        buffer.Add("2026-01-01T00:00:01.0000000Z [sys] Starting process...");
+        buffer.Add("app line 2");
+
+        Assert.Equal(["app line 2"], buffer.Items);
+    }
+
+    [Fact]
     public void Items_PrunesOldSystemLinesWithoutDroppingOnesInTheWindow()
     {
         var buffer = CreateServerBuffer(tail: 1);
