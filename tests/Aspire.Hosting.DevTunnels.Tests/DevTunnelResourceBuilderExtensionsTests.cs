@@ -804,8 +804,10 @@ public class DevTunnelResourceBuilderExtensionsTests
         {
             try
             {
-                await urlCallbackStarted.Task.DefaultTimeout();
+                // Bound cold app startup by the test-wide token, like the other cases. Only the
+                // tunnel URL callback itself is bounded by DefaultTimeout.
                 await startTask;
+                await urlCallbackStarted.Task.DefaultTimeout();
                 var stopped = await app.ResourceCommands.ExecuteCommandAsync(tunnel.Resource, "stop", cts.Token).DefaultTimeout();
                 Assert.True(stopped.Success);
                 await app.ResourceNotifications.WaitForResourceAsync(tunnelPort.Name, KnownResourceStates.Finished, cts.Token);
