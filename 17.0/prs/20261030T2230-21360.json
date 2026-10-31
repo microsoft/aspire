@@ -1,0 +1,9 @@
+{
+  "author": "karolz-ms",
+  "comment": "AddProject deprecation and Project V2 migration",
+  "mergedAt": "2026-10-30T22:30:50Z",
+  "number": 21360,
+  "runDate": "2026-10-31T00:10:00Z",
+  "status": "included",
+  "title": "Deprecate AddProject and complete Project V2 migration"
+}

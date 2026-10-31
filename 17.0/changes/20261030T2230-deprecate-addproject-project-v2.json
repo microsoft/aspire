@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "\ud83c\udfe0",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "`AddProject` is deprecated in favor of the Project V2 APIs, which add SDK-style F# and VB project support, stable project consumer helpers, and generalized Entity Framework APIs. See the migration guide for moving existing AppHosts.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\ud83d\ude9a",
+  "firstMergedAt": "2026-10-30T22:30:50Z",
+  "lastMergedAt": "2026-10-30T22:30:50Z",
+  "name": "Deprecate AddProject and complete Project V2 migration",
+  "owner": "karolz-ms",
+  "prs": [
+    21360
+  ]
+}

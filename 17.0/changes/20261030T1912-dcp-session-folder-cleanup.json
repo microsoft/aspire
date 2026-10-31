@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "\ud83c\udfe0",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed a race where the AppHost deleted the DCP session folder on disposal while DCP was still reading its kubeconfig during cleanup; DCP now owns deleting the folder once started.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\uddc2\ufe0f",
+  "firstMergedAt": "2026-10-30T19:12:26Z",
+  "lastMergedAt": "2026-10-30T19:12:26Z",
+  "name": "DCP session folder left for DCP to clean up",
+  "owner": "davidfowl",
+  "prs": [
+    21472
+  ]
+}

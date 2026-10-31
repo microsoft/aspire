@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Bug fix for DCP session folder cleanup race",
+  "mergedAt": "2026-10-30T19:12:26Z",
+  "number": 21472,
+  "runDate": "2026-10-31T00:10:00Z",
+  "status": "included",
+  "title": "Leave the DCP session folder for DCP to delete once it has started"
+}

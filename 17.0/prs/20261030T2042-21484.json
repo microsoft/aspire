@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Dependency version bump",
+  "mergedAt": "2026-10-30T20:42:56Z",
+  "number": 21484,
+  "runDate": "2026-10-31T00:10:00Z",
+  "status": "excluded",
+  "title": "Update CLI NuGet dependencies to 8.0.0-rc.133"
+}

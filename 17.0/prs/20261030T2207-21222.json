@@ -1,0 +1,9 @@
+{
+  "author": "curllog",
+  "comment": "Bug fix for Redis output cache on .NET 11",
+  "mergedAt": "2026-10-30T22:07:58Z",
+  "number": 21222,
+  "runDate": "2026-10-31T00:10:00Z",
+  "status": "included",
+  "title": "Register core output caching services in Redis output cache integration"
+}
