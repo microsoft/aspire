@@ -252,9 +252,9 @@ internal sealed class LogsCommand : BaseCommand
             entries = entries.Where(e => MatchesSearch(e, search)).ToList();
         }
 
-        if (tail.HasValue && entries.Count > tail.Value)
+        if (tail.HasValue)
         {
-            entries = entries.Skip(entries.Count - tail.Value).ToList();
+            entries = TakeLastLogEntries(entries, tail.Value);
         }
 
         // Output the logs
@@ -319,11 +319,7 @@ internal sealed class LogsCommand : BaseCommand
             }
 
             // Output last N lines
-            var tailedEntries = entries.Count > tail.Value
-                ? entries.Skip(entries.Count - tail.Value)
-                : entries;
-
-            foreach (var entry in tailedEntries)
+            foreach (var entry in TakeLastLogEntries(entries, tail.Value))
             {
                 OutputLogLine(entry, format, timestamps);
             }
@@ -468,6 +464,12 @@ internal sealed class LogsCommand : BaseCommand
             var dimTimestamp = timestampPrefix.Length > 0 ? $"[dim]{timestampPrefix.EscapeMarkup()}[/]" : string.Empty;
             InteractionService.DisplayMarkupLine($"{dimTimestamp}[{color}][[{displayName.EscapeMarkup()}]][/] {escapedContent}");
         }
+    }
+
+    private static IList<LogEntry> TakeLastLogEntries(IList<LogEntry> entries, int tail)
+    {
+        // [sys] orchestration lines don't count toward --tail, so it returns the last N lines of resource output.
+        return ConsoleLogTail.TakeLast(entries, tail, static entry => ConsoleLogTail.IsSystemLog(entry.Content)).ToList();
     }
 
     private static string FormatTimestamp(DateTime timestamp)

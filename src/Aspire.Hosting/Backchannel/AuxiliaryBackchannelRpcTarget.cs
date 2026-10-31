@@ -1645,9 +1645,10 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
                 ? tail.GetValueOrDefault()
                 : 0;
 
-            // Queue<T> capacity only preallocates storage; the dequeue/enqueue logic below
-            // enforces the fixed-size tail window.
-            Queue<ResourceLogLine>? tailBuffer = serverTailLineCount > 0 ? new Queue<ResourceLogLine>(serverTailLineCount) : null;
+            // [sys] orchestration lines don't count toward the tail so it returns the last N lines of resource output.
+            var tailBuffer = serverTailLineCount > 0
+                ? new ConsoleLogTailBuffer<ResourceLogLine>(serverTailLineCount, static line => ConsoleLogTail.IsSystemLogWithOptionalTimestamp(line.Content))
+                : null;
 
             // Read each resource in parallel and filter before writing to the JSON-RPC stream.
             // This keeps large non-matching log histories inside the AppHost instead of forcing
@@ -1711,12 +1712,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             {
                 if (tailBuffer is not null)
                 {
-                    if (tailBuffer.Count == serverTailLineCount)
-                    {
-                        tailBuffer.Dequeue();
-                    }
-
-                    tailBuffer.Enqueue(logLine);
+                    tailBuffer.Add(logLine);
                     continue;
                 }
 
@@ -1731,7 +1727,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 
             if (tailBuffer is not null)
             {
-                foreach (var logLine in tailBuffer)
+                foreach (var logLine in tailBuffer.Items)
                 {
                     if (yieldedCount == 0)
                     {

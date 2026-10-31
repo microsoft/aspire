@@ -1304,6 +1304,78 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal("Second timeout error", log.Content);
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData(" --follow")]
+    public async Task LogsCommand_Tail_DoesNotCountSystemLines(string followArgument)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+
+        using var provider = CreateLogsTestServices(workspace, outputWriter, disableAnsi: true,
+            logLines:
+            [
+                new ResourceLogLine { ResourceName = "redis", LineNumber = 1, Content = "2025-01-15T10:30:00Z [sys] Starting process...", IsError = false },
+                new ResourceLogLine { ResourceName = "redis", LineNumber = 2, Content = "2025-01-15T10:30:01Z app line 1", IsError = false },
+                new ResourceLogLine { ResourceName = "redis", LineNumber = 3, Content = "2025-01-15T10:30:02Z app line 2", IsError = false },
+                new ResourceLogLine { ResourceName = "redis", LineNumber = 4, Content = "2025-01-15T10:30:03Z [sys] Restarting process...", IsError = false },
+                new ResourceLogLine { ResourceName = "redis", LineNumber = 5, Content = "2025-01-15T10:30:04Z app line 3", IsError = false },
+                new ResourceLogLine { ResourceName = "redis", LineNumber = 6, Content = "2025-01-15T10:30:05Z [sys] Process exited", IsError = false }
+            ],
+            configureConnection: connection =>
+            {
+                // Old AppHosts don't apply Tail on the server, so the CLI's tail is the only one applied.
+                connection.SupportsV2 = false;
+                connection.GetConsoleLogsHandler = static (_, _) => throw new InvalidOperationException("Old AppHosts should use the legacy console log RPC.");
+                connection.GetResourceLogsHandler = (resourceName, follow, cancellationToken) =>
+                    follow ? AsyncEnumerable.Empty<ResourceLogLine>() : connection.LogLines.ToAsyncEnumerable();
+            });
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"logs redis --tail 2{followArgument}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var logLines = outputWriter.Logs.Where(l => l.StartsWith("[redis]", StringComparison.Ordinal)).ToList();
+        Assert.Collection(logLines,
+            line => Assert.Equal("[redis] app line 2", line),
+            line => Assert.Equal("[redis] [sys] Restarting process...", line),
+            line => Assert.Equal("[redis] app line 3", line),
+            line => Assert.Equal("[redis] [sys] Process exited", line));
+    }
+
+    [Theory]
+    [InlineData(1, new[] { "[redis] app line 3" })]
+    [InlineData(3, new[] { "[redis] app line 1", "[redis] app line 2", "[redis] app line 3" })]
+    [InlineData(4, new[] { "[redis] [sys] Starting process...", "[redis] app line 1", "[redis] app line 2", "[redis] app line 3" })]
+    public async Task LogsCommand_Tail_StartsAtNthFromLastApplicationLine(int tail, string[] expectedLines)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+
+        // AppHosts tail by arrival order, so an older [sys] line can arrive after the application lines.
+        using var provider = CreateLogsTestServices(workspace, outputWriter, disableAnsi: true,
+            logLines:
+            [
+                new ResourceLogLine { ResourceName = "redis", LineNumber = 2, Content = "2025-01-15T10:30:01Z app line 1", IsError = false },
+                new ResourceLogLine { ResourceName = "redis", LineNumber = 3, Content = "2025-01-15T10:30:02Z app line 2", IsError = false },
+                new ResourceLogLine { ResourceName = "redis", LineNumber = 4, Content = "2025-01-15T10:30:03Z app line 3", IsError = false },
+                new ResourceLogLine { ResourceName = "redis", LineNumber = 1, Content = "2025-01-15T10:30:00Z [sys] Starting process...", IsError = false }
+            ]);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"logs redis --tail {tail}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var logLines = outputWriter.Logs.Where(l => l.StartsWith("[redis]", StringComparison.Ordinal)).ToArray();
+        Assert.Equal(expectedLines, logLines);
+    }
+
     [Fact]
     public async Task LogsCommand_AllResourcesSnapshot_UsesLegacyLogsRpc()
     {
