@@ -28,6 +28,9 @@ namespace Aspire.Hosting.Azure;
 /// <para>
 /// Aspire creates new registrations using a resource-group-scoped Microsoft Graph Bicep deployment.
 /// Use <c>AddExistingEntraApplication</c> to reference an existing registration without deploying infrastructure.
+/// Registration-only builder APIs throw on existing references. Converting a resource with
+/// <c>AsExistingApplication</c> also throws if registration-only configuration was already applied.
+/// Consumer configuration and explicit metadata describing existing API URIs and scopes remain supported.
 /// </para>
 /// <para>
 /// References to this resource inject configuration as environment variables.
@@ -136,9 +139,42 @@ public class EntraIdApplicationResource : AzureProvisioningResource, IResourceWi
 
     internal void EnsureCanBeExistingApplication()
     {
-        if (ClientCredentials.OfType<EntraIdLocalDeveloperCertificateCredential>().Any())
+        var incompatibleSetting = this switch
         {
-            throw new InvalidOperationException("A registration using RunWithLocalDeveloperCertificateCredential cannot be converted to an existing application. Existing registrations remain caller-managed.");
+            _ when _redirectUriValues.Count > 0 => nameof(EntraIdResourceExtensions.WithRedirectUris),
+            _ when ApplicationOwners.Count > 0 => nameof(EntraIdResourceExtensions.WithApplicationOwners),
+            _ when ServicePrincipalOwners.Count > 0 => nameof(EntraIdResourceExtensions.WithServicePrincipalOwners),
+            _ when EnableIdTokenIssuance => nameof(EntraIdResourceExtensions.WithIdTokenIssuance),
+            _ when AppRoles.Count > 0 => nameof(EntraIdResourceExtensions.WithAppRole),
+            _ when PreAuthorizedClients.Count > 0 => nameof(EntraIdResourceExtensions.WithPreAuthorizedApplication),
+            _ when ApiAccess.Any(a => a.Consented.Count > 0) => nameof(EntraIdResourceExtensions.WithAdminConsent),
+            _ when UsesDefaultApplicationIdUri => nameof(EntraIdResourceExtensions.WithApplicationIdUri),
+            _ when HasLocalDeveloperCertificateConfiguration || ClientCredentials.OfType<EntraIdLocalDeveloperCertificateCredential>().Any()
+                => nameof(EntraIdResourceExtensions.RunWithLocalDeveloperCertificateCredential),
+            _ when HasPublishFederationConfiguration || ClientCredentials.OfType<EntraIdFederatedIdentityCredential>().Any(c => c.IsResourceBacked)
+                => nameof(EntraIdResourceExtensions.PublishWithFederatedManagedIdentityCredential),
+            _ => null
+        };
+        if (incompatibleSetting is not null)
+        {
+            throw new InvalidOperationException(
+                $"Entra ID application '{Name}' cannot be converted to an existing registration because '{incompatibleSetting}' requires a registration created by Aspire. " +
+                $"Remove that registration-only configuration before calling AsExistingApplication and configure it on the registration yourself. " +
+                "Aspire does not modify existing registrations. For an existing API, use WithApplicationIdUri with its registered URI.");
+        }
+    }
+
+    // Keep intent even in the mode where these APIs do nothing, so conversion is independent of run/publish mode.
+    internal bool HasLocalDeveloperCertificateConfiguration { get; set; }
+
+    internal bool HasPublishFederationConfiguration { get; set; }
+
+    internal void ThrowIfExistingApplication(string guidance)
+    {
+        if (IsExistingApplication)
+        {
+            throw new InvalidOperationException(
+                $"Entra ID application '{Name}' is an existing registration, and Aspire does not modify existing registrations. {guidance}");
         }
     }
 
@@ -769,7 +805,7 @@ public class EntraIdApplicationResource : AzureProvisioningResource, IResourceWi
     /// </summary>
     /// <remarks>
     /// Defaults to <see langword="false"/>. This does not enable implicit access-token issuance and is not required
-    /// for authorization-code-only flows. Existing registrations are not modified.
+    /// for authorization-code-only flows. Existing registrations are not modified; configure their Authentication settings manually.
     /// </remarks>
     public bool EnableIdTokenIssuance { get; set; }
 

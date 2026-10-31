@@ -240,7 +240,13 @@ Each registration deploys as its own module. Pre-authorization makes the API's m
 
 #### Existing registrations
 
-Existing registrations are configuration only. On one, call `WithApplicationIdUri` and `WithScope` (with `EntraIdScope.Id` set to the ID the registration defines) so callers can declare permissions to it and build scope names with `GetScopeUri`. An existing client registration's declarations and consent aren't deployed.
+Aspire does not modify existing registrations. To reference an existing API's scopes, supply its registered URI with `WithApplicationIdUri("api://the-registered-uri")` and describe its scopes with `WithScope`. Set `EntraIdScope.Id` to the registered scope ID when callers declare permissions. The parameterless `WithApplicationIdUri()` is only for new registrations.
+
+Consumer settings, including credentials, audiences, and `WithApiPermissions` for `DownstreamApis`, remain supported. They must match the existing registration; they do not register credentials, change supported account types, or grant permissions.
+
+Methods that change a registration, such as redirect URI, owner, role, consent, and certificate or federation provisioning methods, throw on existing references. Configure those settings in the [Microsoft Entra admin center](https://entra.microsoft.com) instead. `AsExistingApplication` also rejects registration-only settings applied before conversion.
+
+Use `AddExistingEntraApplication` to avoid enabling Azure provisioning. `AddEntraIdApplication(...).AsExistingApplication(...)` retains Azure setup but does not provision the registration.
 
 #### TypeScript
 
