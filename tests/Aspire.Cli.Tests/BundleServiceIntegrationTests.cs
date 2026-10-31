@@ -107,6 +107,75 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
         }
     }
 
+    /// <summary>
+    /// The default dashboard data root is <c>$ASPIRE_HOME/dashboard</c>, which is the same path as the
+    /// legacy top-level bundle <c>dashboard/</c> directory when the bundle is extracted to Aspire home.
+    /// Extraction must not delete persisted dashboard data (including a running dashboard's database).
+    /// </summary>
+    [Theory]
+    [InlineData("runs", false)]
+    [InlineData("resumes", false)]
+    [InlineData("apps", false)]
+    [InlineData("runs", true)]
+    [InlineData("resumes", true)]
+    [InlineData("apps", true)]
+    public async Task ExtractAsync_PreservesDashboardDataInLayoutRoot(string dataDirectoryName, bool includeLegacyDashboardExecutable)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var layoutRoot = workspace.WorkspaceRoot.FullName;
+        var dashboardDir = Path.Combine(layoutRoot, BundleDiscovery.DashboardDirectoryName);
+        var dashboardDataDir = Path.Combine(dashboardDir, dataDirectoryName, "run-1");
+        Directory.CreateDirectory(dashboardDataDir);
+        var databasePath = Path.Combine(dashboardDataDir, "dashboard.db");
+        File.WriteAllText(databasePath, "telemetry");
+        if (includeLegacyDashboardExecutable)
+        {
+            File.WriteAllText(Path.Combine(dashboardDir, BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName)), "dashboard");
+        }
+
+        var provider = new TestBundlePayloadProvider(CreateFakeBundlePayload());
+        var service = CreateService(provider, new TestLayoutDiscovery(layoutRoot));
+
+        try
+        {
+            var result = await service.ExtractAsync(layoutRoot, force: true);
+
+            Assert.Equal(BundleExtractResult.Extracted, result);
+            Assert.True(File.Exists(databasePath), $"Dashboard data at {databasePath} should not be deleted by bundle extraction.");
+            Assert.Equal("telemetry", File.ReadAllText(databasePath));
+        }
+        finally
+        {
+            CleanupReparsePoints(layoutRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ExtractAsync_RemovesLegacyDashboardLayoutDirectory()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var layoutRoot = workspace.WorkspaceRoot.FullName;
+        var legacyDashboardDir = Path.Combine(layoutRoot, BundleDiscovery.DashboardDirectoryName);
+        Directory.CreateDirectory(Path.Combine(legacyDashboardDir, "wwwroot"));
+        File.WriteAllText(Path.Combine(legacyDashboardDir, BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName)), "dashboard");
+        File.WriteAllText(Path.Combine(legacyDashboardDir, "wwwroot", "index.html"), "<html></html>");
+
+        var provider = new TestBundlePayloadProvider(CreateFakeBundlePayload());
+        var service = CreateService(provider, new TestLayoutDiscovery(layoutRoot));
+
+        try
+        {
+            var result = await service.ExtractAsync(layoutRoot, force: true);
+
+            Assert.Equal(BundleExtractResult.Extracted, result);
+            Assert.False(Directory.Exists(legacyDashboardDir), "Legacy dashboard layout directory should be removed after extraction.");
+        }
+        finally
+        {
+            CleanupReparsePoints(layoutRoot);
+        }
+    }
+
     [Fact]
     public async Task ExtractAsync_MissingDashboardExecutable_RepairsLayout()
     {
