@@ -14,7 +14,7 @@ internal sealed partial class LinuxPanelAccessibility(nint container, Action<Pan
     private readonly Dictionary<PanelAccessibleKey, Control> _controls = [];
     private PanelAccessibleKey[] _order = [];
 
-    internal unsafe void Update(TrayPanelScene scene, double x, double y, PanelTargetKey? focus)
+    internal unsafe void Update(TrayPanelScene scene, double x, double y, double scale, PanelTargetKey? focus)
     {
         var keys = scene.Accessibility.Select(element => element.Key).ToArray();
         foreach (var key in _controls.Keys.Except(keys).ToArray())
@@ -78,8 +78,8 @@ internal sealed partial class LinuxPanelAccessibility(nint container, Action<Pan
             {
                 gtk_label_set_text(control.Widget, element.Name);
             }
-            var bounds = element.VisibleBounds;
-            LinuxPanelNative.gtk_fixed_move(container, control.Widget, (int)Math.Round(x + bounds.X), (int)Math.Round(y + bounds.Y));
+            var bounds = PlaceControl(element.VisibleBounds, x, y, scale);
+            LinuxPanelNative.gtk_fixed_move(container, control.Widget, (int)Math.Round(bounds.X), (int)Math.Round(bounds.Y));
             LinuxPanelNative.gtk_widget_set_size_request(control.Widget, Math.Max(1, (int)Math.Ceiling(bounds.Width)),
                 Math.Max(1, (int)Math.Ceiling(bounds.Height)));
             if (element.IsOffscreen)
@@ -100,13 +100,18 @@ internal sealed partial class LinuxPanelAccessibility(nint container, Action<Pan
                 var widget = _controls[key].Widget;
                 Gtk.g_object_ref_sink(widget);
                 gtk_container_remove(container, widget);
-                var bounds = scene.Accessibility.Single(element => element.Key == key).VisibleBounds;
-                LinuxPanelNative.gtk_fixed_put(container, widget, (int)Math.Round(x + bounds.X), (int)Math.Round(y + bounds.Y));
+                var bounds = PlaceControl(scene.Accessibility.Single(element => element.Key == key).VisibleBounds, x, y, scale);
+                LinuxPanelNative.gtk_fixed_put(container, widget, (int)Math.Round(bounds.X), (int)Math.Round(bounds.Y));
                 Gtk.g_object_unref(widget);
             }
             _order = keys;
         }
         Focus(focus);
+    }
+
+    internal static PanelRect PlaceControl(PanelRect bounds, double x, double y, double scale)
+    {
+        return new(x + bounds.X * scale, y + bounds.Y * scale, bounds.Width * scale, bounds.Height * scale);
     }
 
     internal void Focus(PanelTargetKey? target)

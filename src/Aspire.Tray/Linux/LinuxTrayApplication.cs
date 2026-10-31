@@ -84,8 +84,7 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
             _panel = new(controller, _applications, ExecutePanelAction, LinuxDesktopEnvironment.RequirePanelBackend());
             _panelIcon = new(_watcher, icon, (x, y) => _pending.Enqueue(() =>
             {
-                _panel.SetAnchor(new(x, y, 0, 0));
-                _panel.Toggle();
+                _panel.Activate(x, y);
             }));
         }
         else

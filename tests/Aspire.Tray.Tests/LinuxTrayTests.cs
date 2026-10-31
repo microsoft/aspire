@@ -96,7 +96,7 @@ public class LinuxTrayTests
     [InlineData(500, 820, 320, 616)]
     public void FlyoutPlacementFollowsTheIconAndStaysInsideTheWorkarea(double anchorX, double anchorY, double x, double y)
     {
-        var bounds = LinuxTrayPanel.Place(new(0, 30, 1000, 770), anchorX, anchorY, 180);
+        var bounds = LinuxTrayPanel.Place(new(0, 30, 1000, 770), anchorX, anchorY, 180, 1);
 
         Assert.Equal(new PanelRect(x, y, TrayPanel.Width, 180), bounds);
     }
@@ -104,9 +104,70 @@ public class LinuxTrayTests
     [Fact]
     public void FlyoutPlacementSupportsMonitorsWithNegativeCoordinates()
     {
-        var bounds = LinuxTrayPanel.Place(new(-1920, 30, 1920, 1050), -900, 15, 300);
+        var bounds = LinuxTrayPanel.Place(new(-1920, 30, 1920, 1050), -900, 15, 300, 1);
 
         Assert.Equal(new PanelRect(-1080, 34, TrayPanel.Width, 300), bounds);
+    }
+
+    [Theory]
+    [InlineData(-1, 1)]
+    [InlineData(96, 1)]
+    [InlineData(120, 1.25)]
+    [InlineData(139.2, 1.45)]
+    [InlineData(163.2, 1.7)]
+    [InlineData(192, 2)]
+    public void FlyoutScaleUsesGtkFontResolution(double resolution, double expected)
+    {
+        Assert.Equal(expected, LinuxTrayPanel.GetScale(resolution), precision: 10);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-96)]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    public void InvalidDesktopResolutionFailsExplicitly(double resolution)
+    {
+        Assert.Throws<InvalidOperationException>(() => LinuxTrayPanel.GetScale(resolution));
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(1.25)]
+    [InlineData(1.45)]
+    [InlineData(1.7)]
+    [InlineData(2)]
+    public void ScaledFlyoutPlacementKeepsMarginsAndFitsTheWorkarea(double scale)
+    {
+        var workarea = new PanelRect(-1920, 30, 1920, 1050);
+        var bounds = LinuxTrayPanel.Place(workarea, -20, workarea.Bottom, 300, scale);
+
+        Assert.Equal(TrayPanel.Width * scale, bounds.Width);
+        Assert.Equal(300 * scale, bounds.Height);
+        Assert.Equal(workarea.Right - 4 * scale, bounds.Right, precision: 10);
+        Assert.Equal(workarea.Bottom - 4 * scale, bounds.Bottom, precision: 10);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(1.25)]
+    [InlineData(1.45)]
+    [InlineData(1.7)]
+    [InlineData(2)]
+    public void ScaledAccessibleBoundsAndPointerCoordinatesMatchTheScene(double scale)
+    {
+        var geometry = new PanelRect(-1920, 30, 1920, 1050);
+        var panel = LinuxTrayPanel.Place(geometry, -900, 15, 300, scale);
+        var target = new PanelRect(20, 100, 64, 30);
+        var control = LinuxPanelAccessibility.PlaceControl(target, panel.X - geometry.X, panel.Y - geometry.Y, scale);
+
+        var (x, y) = LinuxTrayPanel.ToPanelPoint(panel, geometry, control.CenterX, control.CenterY, scale);
+
+        Assert.Equal(target.CenterX, x, precision: 10);
+        Assert.Equal(target.CenterY, y, precision: 10);
+        Assert.Equal(target.Width * scale, control.Width);
+        Assert.Equal(target.Height * scale, control.Height);
+        Assert.True(target.Contains(x, y));
     }
 
     [Theory]

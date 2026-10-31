@@ -124,6 +124,15 @@ button actions, and switch state to screen readers. The shared keyboard navigati
 inline confirmations and Settings view are retained, including Ctrl+, for Settings.
 External applications open outside the popup, and shutdown releases popup input.
 
+Panel geometry, text, and accessible click targets follow GTK's desktop/font
+resolution, including fractional X11/XWayland scaling and `GDK_DPI_SCALE`.
+GTK and the Wayland compositor handle output/buffer scaling separately, without
+applying it twice. Font-resolution changes resize an open panel; output geometry
+or buffer-scale changes dismiss it, and the next activation uses the new settings.
+On Plasma Wayland, tray activation coordinates are translated using KWin's current
+per-output geometry and scale, including when the tray itself runs under XWayland.
+Changing the primary monitor does not reuse an old output's coordinate mapping.
+
 The GNOME native menu follows the shared flyout's information hierarchy: an Aspire header
 with the same overall status summary, **RUNNING** and **PINNED** sections when nonempty,
 a counted **Recently opened** submenu when history is available, and Settings,

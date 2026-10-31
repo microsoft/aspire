@@ -23,6 +23,7 @@ internal sealed class LinuxTrayPanel : IDisposable
     private nint _seat;
     private PanelRect _workarea;
     private PanelRect _bounds;
+    private double _scale = 1;
     private nint _monitor;
     private nuint _previousFocus;
     private int _anchorX;
@@ -59,10 +60,16 @@ internal sealed class LinuxTrayPanel : IDisposable
                 || _surfaces.Any(surface =>
                 {
                     LinuxPanelNative.gdk_monitor_get_geometry(surface.Monitor, out var geometry);
-                    return surface.Geometry != new PanelRect(geometry.X, geometry.Y, geometry.Width, geometry.Height);
+                    return surface.Geometry != new PanelRect(geometry.X, geometry.Y, geometry.Width, geometry.Height)
+                        || surface.DeviceScale != LinuxPanelNative.gdk_monitor_get_scale_factor(surface.Monitor);
                 }))
             {
                 Hide();
+            }
+            else if (_scale != ReadScale())
+            {
+                Position();
+                Layout();
             }
         }
     }
@@ -72,6 +79,35 @@ internal sealed class LinuxTrayPanel : IDisposable
         _anchorX = (int)Math.Round(anchor.CenterX);
         _anchorY = (int)Math.Round(anchor.Bottom);
         _hasAnchor = true;
+    }
+
+    internal void Activate(int x, int y)
+    {
+        if (Visible || Environment.TickCount64 - _hiddenAt < 250)
+        {
+            Hide();
+            return;
+        }
+        try
+        {
+            SetActivationAnchor(x, y);
+            Toggle();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or IOException or UnauthorizedAccessException)
+        {
+            ReportFailure(ex);
+        }
+    }
+
+    private void SetActivationAnchor(int x, int y)
+    {
+        var anchor = new PanelRect(x, y, 0, 0);
+        if (LinuxPlasmaAnchor.IsRequired(Environment.GetEnvironmentVariable("XDG_CURRENT_DESKTOP"),
+            Environment.GetEnvironmentVariable("XDG_SESSION_TYPE")))
+        {
+            anchor = LinuxPlasmaAnchor.Translate(anchor);
+        }
+        SetAnchor(anchor);
     }
 
     internal LinuxTrayPanel(TrayController controller, IReadOnlyList<LinuxFolderApplication> applications,
@@ -197,10 +233,12 @@ internal sealed class LinuxTrayPanel : IDisposable
             {
                 var monitor = LinuxPanelNative.gdk_display_get_monitor(display, index);
                 LinuxPanelNative.gdk_monitor_get_geometry(monitor, out var geometry);
-                return (Monitor: monitor, Geometry: new PanelRect(geometry.X, geometry.Y, geometry.Width, geometry.Height));
+                return (Monitor: monitor, Geometry: new PanelRect(geometry.X, geometry.Y, geometry.Width, geometry.Height),
+                    DeviceScale: LinuxPanelNative.gdk_monitor_get_scale_factor(monitor));
             }).ToArray();
         if (monitors.Length == _surfaces.Count && monitors.Zip(_surfaces).All(pair =>
             pair.First.Monitor == pair.Second.Monitor && pair.First.Geometry == pair.Second.Geometry
+            && pair.First.DeviceScale == pair.Second.DeviceScale
             && !pair.Second.Destroyed && pair.Second.Main == (pair.First.Monitor == _monitor)))
         {
             return;
@@ -213,7 +251,7 @@ internal sealed class LinuxTrayPanel : IDisposable
         }
         foreach (var monitor in monitors)
         {
-            var surface = CreateSurface(monitor.Monitor, monitor.Geometry, monitor.Monitor == _monitor);
+            var surface = CreateSurface(monitor.Monitor, monitor.Geometry, monitor.DeviceScale, monitor.Monitor == _monitor);
             _surfaces.Add(surface);
             if (surface.Main)
             {
@@ -234,7 +272,7 @@ internal sealed class LinuxTrayPanel : IDisposable
         }
     }
 
-    private unsafe Surface CreateSurface(nint monitor, PanelRect geometry, bool main)
+    private unsafe Surface CreateSurface(nint monitor, PanelRect geometry, int deviceScale, bool main)
     {
         var window = LinuxPanelNative.gtk_window_new(0);
         if (window == 0)
@@ -248,7 +286,7 @@ internal sealed class LinuxTrayPanel : IDisposable
             var area = LinuxPanelNative.gtk_drawing_area_new();
             var container = LinuxPanelNative.gtk_fixed_new();
             retainedMonitor = Gtk.g_object_ref_sink(monitor);
-            var surface = new Surface(window, area, container, retainedMonitor, geometry, main);
+            var surface = new Surface(window, area, container, retainedMonitor, geometry, deviceScale, main);
             Gtk.gtk_window_set_title(window, "Aspire");
             LinuxPanelNative.gtk_window_set_decorated(window, 0);
             LinuxPanelNative.gtk_window_set_resizable(window, 0);
@@ -331,6 +369,7 @@ internal sealed class LinuxTrayPanel : IDisposable
 
     private void Position()
     {
+        _scale = ReadScale();
         var display = LinuxPanelNative.gdk_display_get_default();
         if (LinuxPanelNative.gdk_display_get_n_monitors(display) == 0)
         {
@@ -351,29 +390,66 @@ internal sealed class LinuxTrayPanel : IDisposable
         _monitor = LinuxPanelNative.gdk_display_get_monitor_at_point(display, _anchorX, _anchorY);
         LinuxPanelNative.gdk_monitor_get_workarea(_monitor, out var workarea);
         _workarea = new(workarea.X, workarea.Y, workarea.Width, workarea.Height);
-        if (workarea.Width < TrayPanel.Width + 8 || workarea.Height < TrayPanel.HeaderHeight + TrayPanel.FooterHeight + TrayPanel.RowHeight + 16)
+        if (workarea.Width < (TrayPanel.Width + 8) * _scale
+            || workarea.Height < (TrayPanel.HeaderHeight + TrayPanel.FooterHeight + TrayPanel.RowHeight + 16) * _scale)
         {
             throw new InvalidOperationException("The output is too small to display the Aspire panel.");
         }
-        _panel.MaxHeight = Math.Min(TrayPanel.DefaultMaxHeight, workarea.Height - 16);
+        _panel.MaxHeight = Math.Min(TrayPanel.DefaultMaxHeight, workarea.Height / _scale - 16);
     }
 
-    internal static PanelRect Place(PanelRect workarea, double anchorX, double anchorY, double height)
+    private static double ReadScale()
     {
-        var left = workarea.X + 4;
-        var right = Math.Max(left, workarea.Right - TrayPanel.Width - 4);
-        var x = Math.Clamp(anchorX - TrayPanel.Width / 2, left, right);
-        var y = anchorY >= workarea.Bottom ? workarea.Bottom - height - 4 : Math.Max(workarea.Y + 4, anchorY + 4);
-        y = Math.Clamp(y, workarea.Y + 4, Math.Max(workarea.Y + 4, workarea.Bottom - height - 4));
-        return new(x, y, TrayPanel.Width, height);
+        // GTK already scales Cairo surfaces and event coordinates for integer output
+        // scaling. Its font resolution carries the additional desktop/text scale,
+        // including Xft.dpi on X11/XWayland and GDK_DPI_SCALE. Absolute Pango sizes
+        // bypass that resolution, so apply it to the entire shared scene instead.
+        // https://docs.gtk.org/gdk3/method.Screen.set_resolution.html
+        return GetScale(LinuxPanelNative.gdk_screen_get_resolution(
+            LinuxPanelNative.gdk_display_get_default_screen(LinuxPanelNative.gdk_display_get_default())));
+    }
+
+    internal static double GetScale(double resolution)
+    {
+        // GDK uses -1 when no font resolution has been set; its default is 96 DPI.
+        // https://docs.gtk.org/gdk3/method.Screen.get_resolution.html
+        if (resolution == -1)
+        {
+            return 1;
+        }
+        if (!double.IsFinite(resolution) || resolution <= 0)
+        {
+            throw new InvalidOperationException("GTK reported an invalid desktop font resolution.");
+        }
+
+        return resolution / 96;
+    }
+
+    internal static PanelRect Place(PanelRect workarea, double anchorX, double anchorY, double height, double scale)
+    {
+        var margin = 4 * scale;
+        var width = TrayPanel.Width * scale;
+        height *= scale;
+        var left = workarea.X + margin;
+        var right = Math.Max(left, workarea.Right - width - margin);
+        var x = Math.Clamp(anchorX - width / 2, left, right);
+        var y = anchorY >= workarea.Bottom ? workarea.Bottom - height - margin : Math.Max(workarea.Y + margin, anchorY + margin);
+        y = Math.Clamp(y, workarea.Y + margin, Math.Max(workarea.Y + margin, workarea.Bottom - height - margin));
+        return new(x, y, width, height);
+    }
+
+    internal static (double X, double Y) ToPanelPoint(PanelRect bounds, PanelRect geometry, double x, double y, double scale)
+    {
+        return ((x - bounds.X + geometry.X) / scale, (y - bounds.Y + geometry.Y) / scale);
     }
 
     private void Layout()
     {
         var height = (int)Math.Ceiling(_panel.Scene.Height);
-        _bounds = Place(_workarea, _anchorX, _anchorY, height);
+        _bounds = Place(_workarea, _anchorX, _anchorY, height, _scale);
         var surface = _surfaces.Single(surface => surface.Main);
-        _accessibility!.Update(_panel.Scene, _bounds.X - surface.Geometry.X, _bounds.Y - surface.Geometry.Y, _panel.FocusedTarget);
+        _accessibility!.Update(_panel.Scene, _bounds.X - surface.Geometry.X, _bounds.Y - surface.Geometry.Y,
+            _scale, _panel.FocusedTarget);
         LinuxPanelNative.gtk_widget_queue_draw(_area);
     }
 
@@ -391,8 +467,7 @@ internal sealed class LinuxTrayPanel : IDisposable
             x = translatedX;
             y = translatedY;
         }
-        x -= _bounds.X - surface.Geometry.X;
-        y -= _bounds.Y - surface.Geometry.Y;
+        (x, y) = ToPanelPoint(_bounds, surface.Geometry, x, y, _scale);
         switch (LinuxPanelNative.gdk_event_get_event_type(nativeEvent))
         {
             case 14: // GDK_MAP
@@ -506,6 +581,7 @@ internal sealed class LinuxTrayPanel : IDisposable
         }
         LinuxPanelNative.cairo_save(context);
         LinuxPanelNative.cairo_translate(context, _bounds.X - surface.Geometry.X, _bounds.Y - surface.Geometry.Y);
+        LinuxPanelNative.cairo_scale(context, _scale, _scale);
         foreach (var command in _panel.Scene.Commands)
         {
             RenderCommand(context, command);
@@ -584,7 +660,7 @@ internal sealed class LinuxTrayPanel : IDisposable
                 PanelTextAlignment.Trailing => 2,
                 _ => 0
             });
-            var scale = LinuxPanelNative.gtk_widget_get_scale_factor(_area);
+            var scale = _scale * LinuxPanelNative.gtk_widget_get_scale_factor(_area);
             var y = text.MaxLines > 1 ? text.Bounds.Y
                 : Math.Round(text.Baseline * scale) / scale - LinuxPanelNative.pango_layout_get_baseline(layout) / 1024d;
             LinuxPanelNative.cairo_save(context);
@@ -703,7 +779,7 @@ internal sealed class LinuxTrayPanel : IDisposable
         _window = _area = 0;
     }
 
-    private sealed record Surface(nint Window, nint Area, nint Fixed, nint Monitor, PanelRect Geometry, bool Main)
+    private sealed record Surface(nint Window, nint Area, nint Fixed, nint Monitor, PanelRect Geometry, int DeviceScale, bool Main)
     {
         public bool Destroyed { get; set; }
     }
@@ -722,6 +798,9 @@ internal static partial class LinuxPanelNative
     [LibraryImport("libgdk-3.so.0")] internal static partial nint gdk_display_get_monitor(nint display, int index);
     [LibraryImport("libgdk-3.so.0")] internal static partial nint gdk_display_get_primary_monitor(nint display);
     [LibraryImport("libgdk-3.so.0")] internal static partial void gdk_monitor_get_geometry(nint monitor, out Rectangle geometry);
+    [LibraryImport("libgdk-3.so.0")] internal static partial int gdk_monitor_get_scale_factor(nint monitor);
+    [LibraryImport("libgdk-3.so.0")] internal static partial nint gdk_display_get_default_screen(nint display);
+    [LibraryImport("libgdk-3.so.0")] internal static partial double gdk_screen_get_resolution(nint screen);
     [LibraryImport("libgdk-3.so.0")] internal static partial void gdk_window_set_override_redirect(nint window, int redirect);
     [LibraryImport("libgdk-3.so.0")] internal static partial nint gdk_x11_display_get_xdisplay(nint display);
     [LibraryImport("libgdk-3.so.0")] internal static partial nuint gdk_x11_window_get_xid(nint window);

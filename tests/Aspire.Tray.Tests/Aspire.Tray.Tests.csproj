@@ -31,6 +31,7 @@
     <Compile Include="$(RepoRoot)src/Aspire.Tray/Linux/LinuxDesktopEnvironment.cs" Link="Linux/LinuxDesktopEnvironment.cs" />
     <Compile Include="$(RepoRoot)src/Aspire.Tray/Linux/LinuxStatusNotifierItem.cs" Link="Linux/LinuxStatusNotifierItem.cs" />
     <Compile Include="$(RepoRoot)src/Aspire.Tray/Linux/LinuxPanelAccessibility.cs" Link="Linux/LinuxPanelAccessibility.cs" />
+    <Compile Include="$(RepoRoot)src/Aspire.Tray/Linux/LinuxPlasmaAnchor.cs" Link="Linux/LinuxPlasmaAnchor.cs" />
     <Compile Include="$(RepoRoot)src/Aspire.Tray/Linux/LinuxTrayMenu.cs" Link="Linux/LinuxTrayMenu.cs" />
     <Compile Include="$(RepoRoot)src/Aspire.Tray/Linux/LinuxTrayStartupSettings.cs" Link="Linux/LinuxTrayStartupSettings.cs" />
     <Compile Include="$(RepoRoot)src/Aspire.Tray/Linux/LinuxTrayRuntime.cs" Link="Linux/LinuxTrayRuntime.cs" />
