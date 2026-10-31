@@ -122,6 +122,11 @@
         <target state="translated">'{0}' に完全一致する項目が見つかりませんでした。非対話型モードでは、統合名はパッケージ ID またはフレンドリ名と完全に一致する必要があります。あいまいフォールバックが無効になっているため、誤ったパッケージがサイレントに選択されるのを防ぎます。</target>
         <note>{0} is the integration name provided by the user.</note>
       </trans-unit>
+      <trans-unit id="NonInteractiveRequiresIntegrationName">
+        <source>An integration name is required in non-interactive mode. Specify the package id or friendly name, for example 'aspire add redis'.</source>
+        <target state="new">An integration name is required in non-interactive mode. Specify the package id or friendly name, for example 'aspire add redis'.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="PackageAddedSuccessfully">
         <source>The package {0}::{1} was added successfully.</source>
         <target state="translated">パッケージ {0}::{1} が正常に追加されました。</target>

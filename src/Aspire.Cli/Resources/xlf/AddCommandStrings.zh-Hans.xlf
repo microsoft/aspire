@@ -122,6 +122,11 @@
         <target state="translated">找不到“{0}”的完全匹配项。在非交互模式下，集成名称必须与包 ID 或友好名称完全匹配；已禁用模糊回退，以防止以无提示方式选择错误的包。</target>
         <note>{0} is the integration name provided by the user.</note>
       </trans-unit>
+      <trans-unit id="NonInteractiveRequiresIntegrationName">
+        <source>An integration name is required in non-interactive mode. Specify the package id or friendly name, for example 'aspire add redis'.</source>
+        <target state="new">An integration name is required in non-interactive mode. Specify the package id or friendly name, for example 'aspire add redis'.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="PackageAddedSuccessfully">
         <source>The package {0}::{1} was added successfully.</source>
         <target state="translated">已成功添加包 {0}::{1}。</target>

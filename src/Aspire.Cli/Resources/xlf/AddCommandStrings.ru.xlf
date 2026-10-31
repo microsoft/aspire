@@ -122,6 +122,11 @@
         <target state="translated">Не найдено точное совпадение для "{0}". В неинтерактивном режиме имя интеграции должно точно совпадать с идентификатором пакета или понятным именем, нечеткий резервный поиск отключен, чтобы без уведомления не выбрать неверный пакет.</target>
         <note>{0} is the integration name provided by the user.</note>
       </trans-unit>
+      <trans-unit id="NonInteractiveRequiresIntegrationName">
+        <source>An integration name is required in non-interactive mode. Specify the package id or friendly name, for example 'aspire add redis'.</source>
+        <target state="new">An integration name is required in non-interactive mode. Specify the package id or friendly name, for example 'aspire add redis'.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="PackageAddedSuccessfully">
         <source>The package {0}::{1} was added successfully.</source>
         <target state="translated">Пакет {0}::{1} загружен успешно.</target>

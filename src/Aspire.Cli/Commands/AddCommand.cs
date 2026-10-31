@@ -277,6 +277,14 @@ internal sealed class AddCommand : BaseCommand
                 ? ProfilingTelemetry.Values.AddPackageMatchKindExact
                 : ProfilingTelemetry.Values.AddPackageMatchKindNone;
 
+            // Without an integration name there is nothing to match, so non-interactive mode would
+            // otherwise auto-select the first package in the full list and add it
+            // (https://github.com/microsoft/aspire/issues/16357).
+            if (integrationName is null && !_hostEnvironment.SupportsInteractiveInput)
+            {
+                return AddCommandFailure(CliExitCodes.FailedToAddPackage, AddCommandStrings.NonInteractiveRequiresIntegrationName);
+            }
+
             // Non-interactive mode never falls back to fuzzy search: in interactive mode the user picks
             // from the fuzzy candidates, but a script/CI invocation would otherwise silently auto-select
             // distinctPackages.First() in GetPackageByInteractiveFlow and install the wrong package

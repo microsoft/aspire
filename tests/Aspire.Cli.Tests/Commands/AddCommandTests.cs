@@ -4101,6 +4101,58 @@ public class AddCommandFuzzySearchTests(ITestOutputHelper outputHelper)
         Assert.Contains(string.Format(AddCommandStrings.NonInteractiveRequiresExactPackageMatch, "kube"), testInteractionService.DisplayedErrors);
     }
 
+    [Theory]
+    [InlineData("add")]
+    [InlineData("add --version 9.2.0")]
+    public async Task AddCommand_NonInteractive_NoIntegrationName_FailsInsteadOfAddingFirstPackage_Regression16357(string commandLine)
+    {
+        // Regression for https://github.com/microsoft/aspire/issues/16357: `aspire add --non-interactive`
+        // with no integration argument used to auto-select the first package in the full list and add it.
+        var addPackageWasCalled = false;
+        var testInteractionService = new TestInteractionService();
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.SearchPackagesAsyncCallback = (dir, query, exactMatch, prerelease, take, skip, nugetSource, useCache, options, cancellationToken) =>
+                {
+                    return (
+                        0,
+                        new NuGetPackage[]
+                        {
+                            new() { Id = "Aspire.Hosting.Azure", Source = "nuget", Version = "9.2.0" },
+                            new() { Id = "Aspire.Hosting.Redis", Source = "nuget", Version = "9.2.0" }
+                        });
+                };
+
+                runner.AddPackageAsyncCallback = (projectFilePath, packageName, packageVersion, nugetSource, noRestore, options, cancellationToken) =>
+                {
+                    addPackageWasCalled = true;
+                    return 0;
+                };
+
+                return runner;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<AddCommand>();
+        var result = command.Parse(commandLine);
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToAddPackage, exitCode);
+        Assert.False(addPackageWasCalled, "AddPackageAsync must not be called when no integration name is given in non-interactive mode.");
+        Assert.Contains(AddCommandStrings.NonInteractiveRequiresIntegrationName, testInteractionService.DisplayedErrors);
+    }
+
     [Fact]
     public async Task AddCommand_NonInteractive_ExactMatchWithoutVersion_StillSucceeds()
     {

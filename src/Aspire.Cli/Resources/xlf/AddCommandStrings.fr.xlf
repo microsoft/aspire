@@ -122,6 +122,11 @@
         <target state="translated">Aucune correspondance exacte n’a été trouvée pour '{0}'. En mode non interactif, le nom de l’intégration doit correspondre exactement à un ID de package ou à un nom convivial ; Le repli flou est désactivé pour empêcher la sélection silencieuse du mauvais package.</target>
         <note>{0} is the integration name provided by the user.</note>
       </trans-unit>
+      <trans-unit id="NonInteractiveRequiresIntegrationName">
+        <source>An integration name is required in non-interactive mode. Specify the package id or friendly name, for example 'aspire add redis'.</source>
+        <target state="new">An integration name is required in non-interactive mode. Specify the package id or friendly name, for example 'aspire add redis'.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="PackageAddedSuccessfully">
         <source>The package {0}::{1} was added successfully.</source>
         <target state="translated">Le package {0}::{1} a été ajouté avec succès.</target>
