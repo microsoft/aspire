@@ -789,6 +789,13 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
 
     private void ReportUnexpectedDashboardExit(ResourceEvent notification, HashSet<string> runningDashboardResourceIds, CancellationToken cancellationToken)
     {
+        // A dashboard with lifecycle commands (a project-backed dashboard) can be stopped or restarted on purpose,
+        // which is indistinguishable from a crash here, and the user can restart it without restarting the AppHost.
+        if (!notification.Resource.HasAnnotationOfType<ExcludeLifecycleCommandsAnnotation>())
+        {
+            return;
+        }
+
         var state = notification.Snapshot.State?.Text;
         if (string.Equals(state, KnownResourceStates.Running, StringComparison.Ordinal))
         {
