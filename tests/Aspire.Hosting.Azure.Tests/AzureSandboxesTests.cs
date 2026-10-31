@@ -20,6 +20,7 @@ using Aspire.Hosting.Utils;
 using Azure.Core;
 using Azure.Provisioning.Resources;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Azure.Tests;
@@ -1586,13 +1587,20 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public async Task AzureDevComputeClientKeepsCancellationAfterRejectedCreateDefinite()
     {
-        var handler = new RecordingHandler(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.Forbidden)));
+        var requestCount = 0;
+        var handler = new RecordingHandler(_ =>
+        {
+            Interlocked.Increment(ref requestCount);
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Forbidden));
+        });
+        // Cancel when the client logs the 403 retry warning, after the rejection has been received and
+        // before the retry delay starts. A wall-clock timeout could fire while the request is still in flight.
+        using var cancellationTokenSource = new CancellationTokenSource();
         var client = new AzureDevComputeClient(
             new HttpClient(handler),
             new RecordingTokenCredential(),
-            NullLogger.Instance,
+            new CancelOnWarningLogger(cancellationTokenSource),
             TimeSpan.FromMinutes(1));
-        using var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromMilliseconds(10));
 
         var exception = await Assert.ThrowsAsync<AzureDevComputeCreateException>(() => client.CreateDiskImageAsync(
             new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
@@ -1603,6 +1611,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
             },
             cancellationTokenSource.Token));
 
+        Assert.Equal(1, requestCount);
         Assert.False(exception.ResponseMayHaveBeenLost);
         Assert.IsType<TaskCanceledException>(exception.OriginalException);
     }
@@ -3629,6 +3638,21 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         public Task SaveSectionAsync(DeploymentStateSection section, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task DeleteSectionAsync(DeploymentStateSection section, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task ClearAllStateAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    private sealed class CancelOnWarningLogger(CancellationTokenSource cancellationTokenSource) : ILogger
+    {
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            if (logLevel == LogLevel.Warning)
+            {
+                cancellationTokenSource.Cancel();
+            }
+        }
     }
 
     private sealed class RecordingHandler(Func<HttpRequestMessage, Task<HttpResponseMessage>> handler) : HttpMessageHandler
