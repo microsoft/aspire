@@ -5,9 +5,11 @@ import { error as webDriverError } from 'selenium-webdriver';
 interface NotificationLike {
     getMessage(): Promise<string>;
     dismiss(): Promise<void>;
+    findElement?(locator: unknown): Promise<unknown>;
 }
 
 interface NotificationExtesterStubModule {
+    NotificationActionElement: new (selector: string, onClick: () => void) => unknown;
     getNotificationWaitState(): {
         notificationPollCount: number;
         pollResults: Array<NotificationLike | false>;
@@ -21,6 +23,7 @@ interface NotificationExtesterStubModule {
 }
 
 interface VscodeHelpersModule {
+    dismissAllNotifications(timeoutMs?: number): Promise<void>;
     waitForCodeLensText(fileName: string, expectedText: string, timeoutMs?: number): Promise<string[]>;
     waitForEditorTitle(expectedText: string, timeoutMs?: number): Promise<string>;
     waitForNotificationMessage(expectedText: string, timeoutMs?: number): Promise<NotificationLike>;
@@ -135,6 +138,26 @@ suite('waitForNotificationMessage', () => {
                 error.name === 'NoSuchSessionError' &&
                 error.message.includes('Open editor titles:'),
         );
+    });
+
+    test('dismisses notifications without depending on the pointer hovering the toast', async () => {
+        const { stub, vscode } = loadNotificationWaitModules();
+        const clickedSelectors: string[] = [];
+        const notification: NotificationLike = {
+            getMessage: async () => "Required option '--message' was not provided.",
+            // VS Code hides the clear action once the toast moves out from under the pointer.
+            dismiss: async () => {
+                throw new webDriverError.ElementNotInteractableError('element not interactable');
+            },
+            findElement: async locator => new stub.NotificationActionElement(String(locator), () => clickedSelectors.push(String(locator))),
+        };
+
+        stub.setNotificationPolls([[notification], []]);
+
+        await vscode.dismissAllNotifications(5000);
+
+        assert.deepStrictEqual(clickedSelectors, ['.codicon-notifications-clear']);
+        assert.strictEqual(stub.getNotificationWaitState().notificationPollCount, 2);
     });
 
     test('waits for the tab to exist and for the provider to produce lenses', async () => {
