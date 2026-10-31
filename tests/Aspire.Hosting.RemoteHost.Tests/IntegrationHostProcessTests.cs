@@ -25,7 +25,7 @@ public class IntegrationHostProcessTests(IntegrationHostProcessFixture fixture, 
         await server.Exit.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
         await server.DisposeAsync();
 
-        Assert.NotEqual(0, server.ExitCode);
+        Assert.Equal(IntegrationHostProcessFixture.HostFailureExitCode, server.ExitCode);
         Assert.Contains("lifetime-test", server.Diagnostics);
         Assert.Contains("registration started: attempt", server.Diagnostics);
         Assert.Contains("supervisor PID", server.Diagnostics);
@@ -49,7 +49,7 @@ public class IntegrationHostProcessTests(IntegrationHostProcessFixture fixture, 
         await server.Exit.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
         await server.DisposeAsync();
 
-        Assert.NotEqual(0, server.ExitCode);
+        Assert.Equal(IntegrationHostProcessFixture.HostFailureExitCode, server.ExitCode);
         Assert.Contains("changed its capability signatures", server.Diagnostics);
         Assert.Contains("Restart the AppHost session and regenerate its SDK", server.Diagnostics);
         Assert.Contains("failed after 1 restart attempts", server.Diagnostics);
@@ -119,7 +119,7 @@ public class IntegrationHostProcessTests(IntegrationHostProcessFixture fixture, 
         await server.Exit.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
         await server.DisposeAsync();
 
-        Assert.NotEqual(0, server.ExitCode);
+        Assert.Equal(IntegrationHostProcessFixture.HostFailureExitCode, server.ExitCode);
         Assert.Contains("failed after 3 restart attempts. Stopping the AppHost session.", server.Diagnostics);
         Assert.Contains("Integration host recovery failed; the AppHost session was stopped.", server.Diagnostics);
         Assert.Equal("4", await File.ReadAllTextAsync(Path.Combine(server.Directory, "generation")));
@@ -217,7 +217,7 @@ public class IntegrationHostProcessTests(IntegrationHostProcessFixture fixture, 
         await server.Exit.WaitAsync(TimeSpan.FromSeconds(15), TestContext.Current.CancellationToken);
         await server.DisposeAsync();
 
-        Assert.NotEqual(0, server.ExitCode);
+        Assert.Equal(IntegrationHostProcessFixture.HostFailureExitCode, server.ExitCode);
         Assert.Contains("Cannot launch integration host 'lifetime-test' [test/node]", server.Diagnostics);
         Assert.Contains("Command 'aspire-missing-integration-runtime' not found. Please ensure it is installed and in your PATH.", server.Diagnostics);
         Assert.False(File.Exists(Path.Combine(server.Directory, "host-pids")));
@@ -231,6 +231,7 @@ public class IntegrationHostProcessTests(IntegrationHostProcessFixture fixture, 
         await server.Exit.WaitAsync(TimeSpan.FromSeconds(15), TestContext.Current.CancellationToken);
         await server.DisposeAsync();
 
+        Assert.Equal(IntegrationHostProcessFixture.HostFailureExitCode, server.ExitCode);
         Assert.Contains("original-runtime-startup-error", server.Diagnostics);
         Assert.Contains("exited with code 23", server.Diagnostics);
     }

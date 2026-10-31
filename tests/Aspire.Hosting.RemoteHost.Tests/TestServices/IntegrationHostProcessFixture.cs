@@ -138,6 +138,9 @@ public sealed class IntegrationHostProcessFixture : IAsyncLifetime
         return ValueTask.CompletedTask;
     }
 
+    // Exit code the generated test server uses for handled server failures (see HostProgram).
+    public const int HostFailureExitCode = 87;
+
     private const string HostProgram = """
         using System.Reflection;
         using System.Text.Json;
@@ -157,8 +160,18 @@ public sealed class IntegrationHostProcessFixture : IAsyncLifetime
         builder.Services.Insert(0, ServiceDescriptor.Singleton<IHostedService, StopSignal>());
         using var host = builder.Build();
         var launcher = host.Services.GetServices<IHostedService>().Single(service => service.GetType().Name == "IntegrationHostLauncher");
-        await host.RunAsync();
-        launcher.GetType().GetMethod("ThrowIfFailed", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(launcher, null);
+        try
+        {
+            await host.RunAsync();
+            launcher.GetType().GetMethod("ThrowIfFailed", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(launcher, null);
+        }
+        catch (Exception ex)
+        {
+            // Expected server failures must not crash the process: CI enables crash dumps for child
+            // processes, and writing a full dump can outlast the tests' exit deadlines.
+            Console.Error.WriteLine(ex is TargetInvocationException { InnerException: { } inner } ? inner : ex);
+            Environment.ExitCode = 87;
+        }
 
         public sealed class NodeLanguageSupport : ILanguageSupport
         {
