@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
@@ -43,6 +44,21 @@ internal static class InteractionCommands
                 _ = interactionService.PromptNotificationAsync("No dismiss", "The command successfully executed.", new NotificationInteractionOptions { Intent = MessageIntent.Information, ShowDismiss = false });
 
                 return CommandResults.Success();
+            })
+            .WithCommand("code-block-interaction", "Code block interactions", executeCommand: commandContext =>
+            {
+                var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
+                var message = $"""
+                    Docker desktop failed to start. Please start it manually.
+                    ```
+                    {new StackTrace()}
+                    ```
+                    """;
+
+                _ = interactionService.PromptNotificationAsync("Container runtime unhealthy", message, new NotificationInteractionOptions { Intent = MessageIntent.Error, EnableMessageMarkdown = true });
+                _ = interactionService.PromptMessageBoxAsync("Container runtime unhealthy", message, new MessageBoxInteractionOptions { Intent = MessageIntent.Error, EnableMessageMarkdown = true });
+
+                return Task.FromResult(CommandResults.Success());
             })
             .WithCommand("html-interaction", "HTML interactions", executeCommand: async commandContext =>
             {
