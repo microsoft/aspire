@@ -380,12 +380,11 @@ internal sealed class AddCommand : BaseCommand
             {
                 // Persist an exact package mapping so later builds can still restore the integration.
                 // Unlike --source, this keeps ambient feeds available for the SDK and dependencies.
-                var configuration = _nugetService.BuildConfiguration(
+                var configuration = _nugetService.BuildAppHostConfiguration(
                     effectiveAppHostProjectFile.Directory!,
                     "integration-add",
                     [new PackageMapping(selectedNuGetPackage.Package.Id, integrationSource)],
-                    restrictToSelectedSources: false,
-                    cancellationToken: cancellationToken);
+                    cancellationToken);
                 await new DotNetAppHostNuGetConfigMerger(_nugetService).CreateOrUpdateAsync(
                     effectiveAppHostProjectFile.Directory!,
                     configuration,
