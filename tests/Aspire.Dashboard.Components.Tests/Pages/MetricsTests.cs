@@ -300,9 +300,15 @@ public partial class MetricsTests : DashboardTestContext
             releaseRenderer.Wait();
         }));
         rendererHeld.Wait();
-        table.FindAll("fluent-button").Single(button => button.TextContent.Trim() == "2").Click();
-        releaseRenderer.Set();
-        await holdRendererTask.DefaultTimeout();
+        try
+        {
+            table.FindAll("fluent-button").Single(button => button.TextContent.Trim() == "2").Click();
+        }
+        finally
+        {
+            releaseRenderer.Set();
+            await holdRendererTask.DefaultTimeout();
+        }
         await dialogShown.Task.DefaultTimeout();
         var dialog = Assert.Single(dialogs);
         Assert.Same(instrumentViewModel.Instrument, dialog.Instrument);
