@@ -1526,17 +1526,26 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, await runTask.DefaultTimeout());
     }
 
-    [Fact]
-    public async Task RunAsyncCanKeepLifecycleOwnershipInsteadOfDelegatingToExtension()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RunAsyncCanKeepLifecycleOwnershipInsteadOfDelegatingToExtension(bool singleFile)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, singleFile ? "AppHost.cs" : "AppHost.csproj"));
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
+        var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "test results");
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.DotNetCliExecutionFactoryFactory = _ => new TestProcessExecutionFactory
             {
-                CreateExecutionCallback = (args, env, _, _) => new ExitedProcessExecution(args, env, exitCode: 42)
+                CreateExecutionCallback = (args, env, _, _) =>
+                {
+                    var environmentIndex = Array.IndexOf(args, "--environment");
+                    Assert.True(environmentIndex >= 0);
+                    Assert.Equal($"{KnownConfigNames.TestOutputPath}={outputPath}", args[environmentIndex + 1]);
+                    return new ExitedProcessExecution(args, env, exitCode: 42);
+                }
             };
             options.InteractionServiceFactory = sp => new TestExtensionInteractionService(sp)
             {
@@ -1559,7 +1568,8 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         var exitCode = await runner.RunAsync(projectFile, watch: false, noBuild: false, noRestore: false, args: [],
             env: new Dictionary<string, string>
             {
-                [KnownConfigNames.UnixSocketPath] = Path.Combine(workspace.WorkspaceRoot.FullName, "cli.sock")
+                [KnownConfigNames.UnixSocketPath] = Path.Combine(workspace.WorkspaceRoot.FullName, "cli.sock"),
+                [KnownConfigNames.TestOutputPath] = outputPath
             }, backchannel, invocationOptions, TestContext.Current.CancellationToken).DefaultTimeout();
 
         Assert.Equal(42, exitCode);

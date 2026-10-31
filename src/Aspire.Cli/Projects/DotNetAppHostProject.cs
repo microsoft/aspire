@@ -1586,6 +1586,10 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         {
             ConfigureSingleFileRunEnvironment(effectiveAppHostFile, env, args: context.UnmatchedTokens);
         }
+        if (context.IsTestRun && context.EnvironmentVariables.TryGetValue(KnownConfigNames.TestOutputPath, out var testOutputPath))
+        {
+            env[KnownConfigNames.TestOutputPath] = testOutputPath;
+        }
 
         env[KnownConfigNames.DcpWorkloadId] = AppHostWorkloadId.Create(effectiveAppHostFile);
 

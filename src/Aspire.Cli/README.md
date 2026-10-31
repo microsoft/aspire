@@ -70,8 +70,47 @@ when cancelled. Missing test annotations, an incompatible AppHost, startup
 failure, premature AppHost exit, or shutdown failure also return a nonzero code
 with diagnostics. A test that never reaches a terminal state continues running
 until cancelled. Detached execution, JSON output, profile capture, and
-extension-managed debug sessions are not supported. Per-resource reporting,
-test result collection, and test output directories are not provided yet.
+extension-managed debug sessions are not supported. Framework-specific test
+result parsing and collection are not provided.
+
+Each invocation creates a unique directory under `~/.aspire/testruns` (or the
+configured Aspire home) before the AppHost starts. Use a setup callback to
+configure a resource's artifact destination:
+
+```csharp
+var tests = builder.AddExecutable("tests", "test-runner", ".");
+tests.WithTestRun(context =>
+{
+    tests.WithEnvironment("TEST_OUTPUT_DIRECTORY", context.OutputPath);
+    return Task.CompletedTask;
+});
+```
+
+Callbacks run before resources start, only for `aspire test`. `TestRunContext`
+provides the absolute host output path and a setup cancellation token. Container
+resources must explicitly bind-mount that path and configure their in-container
+destination; their process identity must have access to the mounted directory.
+
+Interactive runs show a **Tests are running** header, stream the annotated
+resources' state changes and replicas, and finish with a resource outcome table.
+The CLI prints the output directory and a clickable `summary.json` path, falling
+back to a plain path when terminal hyperlinks are unavailable.
+
+`summary.json` is updated during execution and finalized after shutdown. Its
+versioned JSON includes the run ID, output path, start/completion timestamps,
+overall status, CLI exit code, diagnostic, and each observed resource's name,
+instance ID, state, exit code, expected replica count, and outcome. It describes
+resource completion, not individual framework test counts. Cancelled and failed
+runs retain observed outcomes and mark unfinished resources `incomplete`; an
+artifact write failure is reported and cannot turn a failed run into success.
+
+On Unix, the dedicated test-run directories are created with mode `0700` and
+CLI-owned files with mode `0600`. On Windows, directories use protected
+current-user-only ACLs and files inherit those permissions, rather than Unix
+modes. Unsafe symbolic-link paths and writable Unix ancestors below the trusted
+home/temp roots are rejected. Existing dedicated `testruns` permissions are
+hardened without changing the Aspire home directory's permissions. These
+permissions do not configure files written by test frameworks.
 
 ### Resource Management
 

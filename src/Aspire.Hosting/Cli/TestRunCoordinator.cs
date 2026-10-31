@@ -2,7 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Backchannel;
 using Microsoft.Extensions.Logging;
+using System.Runtime.CompilerServices;
+using System.Threading.Channels;
 
 namespace Aspire.Hosting.Cli;
 
@@ -20,6 +23,114 @@ internal sealed class TestRunCoordinator(
     public async Task<bool> WaitForCompletionAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        return await WaitForCompletionAsync(GetTestResources(), onCompleted: null, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async IAsyncEnumerable<TestRunEvent> WatchAsync([EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        var channel = Channel.CreateUnbounded<TestRunEvent>();
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var producer = ProduceAsync(channel.Writer, stop.Token);
+        try
+        {
+            await foreach (var item in channel.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+            {
+                yield return item;
+            }
+        }
+        finally
+        {
+            stop.Cancel();
+            await producer.ConfigureAwait(false);
+        }
+    }
+
+    private async Task ProduceAsync(ChannelWriter<TestRunEvent> writer, CancellationToken cancellationToken)
+    {
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        Task? observations = null;
+        Task<bool>? completion = null;
+        Exception? failure = null;
+        bool? passed = null;
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var resources = GetTestResources();
+            foreach (var resource in resources)
+            {
+                writer.TryWrite(new TestRunEvent
+                {
+                    Resource = new TestResourceState
+                    {
+                        ResourceName = resource.Name,
+                        State = KnownResourceStates.NotStarted,
+                        ExpectedReplicas = resource.GetReplicaCount()
+                    }
+                });
+            }
+
+            observations = ObserveAsync(resources, writer, stop.Token);
+            completion = WaitForCompletionAsync(resources,
+                result => writer.TryWrite(new TestRunEvent { Resource = result }), stop.Token);
+            if (await Task.WhenAny(observations, completion).ConfigureAwait(false) == observations)
+            {
+                await observations.ConfigureAwait(false);
+                throw new DistributedApplicationException("The test resource notification stream ended before test completion.");
+            }
+
+            passed = await completion.ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            failure = ex;
+        }
+        finally
+        {
+            stop.Cancel();
+            // Drain both producers before publishing completion. Final outcomes are explicitly
+            // queued by the waiters, so cancellation of observation cannot lose terminal snapshots.
+            foreach (var task in new Task?[] { observations, completion })
+            {
+                if (task is null)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    await task.ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (stop.IsCancellationRequested)
+                {
+                }
+                catch (Exception ex)
+                {
+                    failure ??= ex;
+                }
+            }
+        }
+
+        if (failure is null)
+        {
+            writer.TryWrite(new TestRunEvent { Passed = passed });
+        }
+        writer.TryComplete(failure);
+    }
+
+    private async Task ObserveAsync(IResource[] resources, ChannelWriter<TestRunEvent> writer, CancellationToken cancellationToken)
+    {
+        var names = resources.ToDictionary(r => r.Name, StringComparers.ResourceName);
+        await foreach (var item in notifications.WatchAsync(cancellationToken).ConfigureAwait(false))
+        {
+            if (names.TryGetValue(item.Resource.Name, out var resource))
+            {
+                writer.TryWrite(new TestRunEvent { Resource = ToState(resource, item.ResourceId, item.Snapshot) });
+            }
+        }
+    }
+
+    private IResource[] GetTestResources()
+    {
         var resources = model.Resources.Where(r => r.TryGetLastAnnotation<TestAnnotation>(out _)).ToArray();
         if (resources.Length == 0)
         {
@@ -34,14 +145,20 @@ internal sealed class TestRunCoordinator(
             }
         }
 
+        return resources;
+    }
+
+    private async Task<bool> WaitForCompletionAsync(IResource[] resources, Action<TestResourceState>? onCompleted, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
         // Observe every resource concurrently. A failed test must not stop other tests or their dependencies.
-        var results = await Task.WhenAll(resources.Select(r => WaitForResourceAsync(r, cancellationToken))).ConfigureAwait(false);
+        var results = await Task.WhenAll(resources.Select(r => WaitForResourceAsync(r, onCompleted, cancellationToken))).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
 
         return results.All(result => result);
     }
 
-    private async Task<bool> WaitForResourceAsync(IResource resource, CancellationToken cancellationToken)
+    private async Task<bool> WaitForResourceAsync(IResource resource, Action<TestResourceState>? onCompleted, CancellationToken cancellationToken)
     {
         var completed = new HashSet<string>(StringComparers.ResourceName);
         var passed = true;
@@ -63,6 +180,7 @@ internal sealed class TestRunCoordinator(
                 // A model-level startup failure occurs before DCP creates any replicas.
                 if (terminal.ResourceId == resource.Name)
                 {
+                    onCompleted?.Invoke(ToState(resource, terminal.ResourceId, snapshot) with { Outcome = "failed" });
                     return false;
                 }
             }
@@ -99,10 +217,25 @@ internal sealed class TestRunCoordinator(
             }
 
             completed.Add(terminal.ResourceId);
+            var outcome = snapshot.State?.Text == KnownResourceStates.FailedToStart ||
+                snapshot.State?.Text == KnownResourceStates.RuntimeUnhealthy || snapshot.ExitCode != 0
+                ? "failed"
+                : "passed";
+            onCompleted?.Invoke(ToState(resource, terminal.ResourceId, snapshot) with { Outcome = outcome });
         }
 
         return passed;
     }
+
+    private static TestResourceState ToState(IResource resource, string resourceId, CustomResourceSnapshot snapshot) => new()
+    {
+        ResourceName = resource.Name,
+        // Nonterminal model snapshots are placeholders, not additional DCP replicas.
+        ResourceId = resourceId == resource.Name && !IsTerminal(snapshot) ? null : resourceId,
+        State = snapshot.State?.Text,
+        ExitCode = snapshot.ExitCode,
+        ExpectedReplicas = resource.GetReplicaCount()
+    };
 
     private static bool IsTerminal(CustomResourceSnapshot snapshot) =>
         KnownResourceStates.TerminalStates.Contains(snapshot.State?.Text, StringComparers.ResourceState) ||

@@ -468,6 +468,23 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _innerBuilder.Services.AddHostedService<CliOrphanDetector>();
         _innerBuilder.Services.AddSingleton<BackchannelService>();
         _innerBuilder.Services.AddSingleton<TestRunCoordinator>();
+        Eventing.Subscribe<BeforeStartEvent>(async (e, cancellationToken) =>
+        {
+            if (ExecutionContext.IsRunMode && e.Services.GetRequiredService<IConfiguration>()[KnownConfigNames.TestOutputPath] is { } outputPath)
+            {
+                // This hook runs before DCP prepares resource environment variables and arguments.
+                // The path is supplied at process launch, not by a later backchannel request.
+                var context = new TestRunContext(Path.GetFullPath(outputPath), cancellationToken);
+                foreach (var resource in e.Model.Resources.ToArray())
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (resource.TryGetLastAnnotation<TestAnnotation>(out var annotation) && annotation.Callback is { } callback)
+                    {
+                        await callback(context).WaitAsync(cancellationToken).ConfigureAwait(false);
+                    }
+                }
+            }
+        });
         _innerBuilder.Services.AddHostedService<BackchannelService>(sp => sp.GetRequiredService<BackchannelService>());
         _innerBuilder.Services.AddSingleton<ProfilingTelemetry>();
         _innerBuilder.Services.AddSingleton<AppHostStartupState>();

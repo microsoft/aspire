@@ -493,6 +493,123 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Failed to create or write test run artifacts: {0}.
+        /// </summary>
+        internal static string TestArtifactFailure {
+            get {
+                return ResourceManager.GetString("TestArtifactFailure", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Tests are running.
+        /// </summary>
+        internal static string TestRunningHeader {
+            get {
+                return ResourceManager.GetString("TestRunningHeader", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Test output: {0}.
+        /// </summary>
+        internal static string TestOutputDirectory {
+            get {
+                return ResourceManager.GetString("TestOutputDirectory", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Test run {0}.
+        /// </summary>
+        internal static string TestSummaryHeader {
+            get {
+                return ResourceManager.GetString("TestSummaryHeader", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Summary JSON: {0}.
+        /// </summary>
+        internal static string TestSummaryFile {
+            get {
+                return ResourceManager.GetString("TestSummaryFile", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0}: {1} ({2}, exit code {3}).
+        /// </summary>
+        internal static string TestResourceStatus {
+            get {
+                return ResourceManager.GetString("TestResourceStatus", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Outcome.
+        /// </summary>
+        internal static string TestOutcome {
+            get {
+                return ResourceManager.GetString("TestOutcome", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Exit code.
+        /// </summary>
+        internal static string TestExitCode {
+            get {
+                return ResourceManager.GetString("TestExitCode", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to passed.
+        /// </summary>
+        internal static string TestPassed {
+            get {
+                return ResourceManager.GetString("TestPassed", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to failed.
+        /// </summary>
+        internal static string TestFailed {
+            get {
+                return ResourceManager.GetString("TestFailed", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to cancelled.
+        /// </summary>
+        internal static string TestCancelled {
+            get {
+                return ResourceManager.GetString("TestCancelled", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to incomplete.
+        /// </summary>
+        internal static string TestIncomplete {
+            get {
+                return ResourceManager.GetString("TestIncomplete", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to pending.
+        /// </summary>
+        internal static string TestPending {
+            get {
+                return ResourceManager.GetString("TestPending", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Timed out waiting {0}s for AppHost to start. If the AppHost is still building or starting, set {1} to a higher value and try again..
         /// </summary>
         internal static string TimeoutWaitingForAppHost {

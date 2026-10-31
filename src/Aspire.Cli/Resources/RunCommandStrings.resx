@@ -279,4 +279,43 @@
   <data name="TestAppHostExitedEarly" xml:space="preserve">
     <value>The AppHost exited before all test resources completed.</value>
   </data>
+  <data name="TestRunningHeader" xml:space="preserve">
+    <value>Tests are running</value>
+  </data>
+  <data name="TestOutputDirectory" xml:space="preserve">
+    <value>Test output: {0}</value>
+  </data>
+  <data name="TestSummaryHeader" xml:space="preserve">
+    <value>Test run {0}</value>
+  </data>
+  <data name="TestSummaryFile" xml:space="preserve">
+    <value>Summary JSON: {0}</value>
+  </data>
+  <data name="TestResourceStatus" xml:space="preserve">
+    <value>{0}: {1} ({2}, exit code {3})</value>
+  </data>
+  <data name="TestOutcome" xml:space="preserve">
+    <value>Outcome</value>
+  </data>
+  <data name="TestExitCode" xml:space="preserve">
+    <value>Exit code</value>
+  </data>
+  <data name="TestPassed" xml:space="preserve">
+    <value>passed</value>
+  </data>
+  <data name="TestFailed" xml:space="preserve">
+    <value>failed</value>
+  </data>
+  <data name="TestCancelled" xml:space="preserve">
+    <value>cancelled</value>
+  </data>
+  <data name="TestIncomplete" xml:space="preserve">
+    <value>incomplete</value>
+  </data>
+  <data name="TestPending" xml:space="preserve">
+    <value>pending</value>
+  </data>
+  <data name="TestArtifactFailure" xml:space="preserve">
+    <value>Failed to create or write test run artifacts: {0}</value>
+  </data>
 </root>

@@ -16,6 +16,7 @@ public static class TestResourceBuilderExtensions
     /// <ats-summary>Marks a resource as a test resource.</ats-summary>
     /// <typeparam name="T">The resource type.</typeparam>
     /// <param name="builder">The resource builder.</param>
+    /// <param name="callback">An optional callback that configures the resource using the test output destination before startup.</param>
     /// <returns>The resource builder.</returns>
     /// <remarks>
     /// <para>
@@ -38,14 +39,15 @@ public static class TestResourceBuilderExtensions
     /// Waits for every marked resource, including replicas, then shuts down the application.
     /// Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
     /// This does not change the lifetime of aspire run.
+    /// An optional asynchronous setup callback receives the unique host output path before resources start.
     /// </ats-remarks>
     /// <ats-returns>The resource builder.</ats-returns>
     /// <exception cref="ArgumentNullException">The builder is null.</exception>
     [AspireExport]
-    public static IResourceBuilder<T> WithTestRun<T>(this IResourceBuilder<T> builder) where T : IResource
+    public static IResourceBuilder<T> WithTestRun<T>(this IResourceBuilder<T> builder, Func<TestRunContext, Task>? callback = null) where T : IResource
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        return builder.WithAnnotation(new TestAnnotation());
+        return builder.WithAnnotation(new TestAnnotation(callback), ResourceAnnotationMutationBehavior.Replace);
     }
 }

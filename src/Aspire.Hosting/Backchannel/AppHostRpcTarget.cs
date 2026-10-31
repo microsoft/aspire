@@ -180,6 +180,20 @@ internal class AppHostRpcTarget(
         return await serviceProvider.GetRequiredService<Cli.TestRunCoordinator>().WaitForCompletionAsync(linked.Token).ConfigureAwait(false);
     }
 
+    public async IAsyncEnumerable<TestRunEvent> WatchTestRunAsync([EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        if (!executionContext.IsRunMode)
+        {
+            throw new DistributedApplicationException("Test resources can only be executed in run mode.");
+        }
+
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, lifetime.ApplicationStopping, _shutdownCts.Token);
+        await foreach (var item in serviceProvider.GetRequiredService<Cli.TestRunCoordinator>().WatchAsync(linked.Token).ConfigureAwait(false))
+        {
+            yield return item;
+        }
+    }
+
     /// <summary>
     /// Cancels inflight streaming RPC calls to allow graceful shutdown.
     /// This should be called before stopping the application to prevent JSON-RPC errors on clients.
@@ -252,7 +266,8 @@ internal class AppHostRpcTarget(
             "baseline.v2",
             "pipeline-steps.v1",
             "pipeline-steps.v2",
-            "test-lifetime.v1"
+            "test-lifetime.v1",
+            "test-reporting.v1"
             });
     }
 #pragma warning restore CA1822

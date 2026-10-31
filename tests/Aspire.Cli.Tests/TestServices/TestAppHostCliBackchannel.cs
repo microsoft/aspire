@@ -11,6 +11,7 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
     public TaskCompletionSource? RequestStopAsyncCalled { get; set; }
     public Func<Task>? RequestStopAsyncCallback { get; set; }
     public Func<CancellationToken, Task<bool>>? WaitForTestCompletionAsyncCallback { get; set; }
+    public Func<CancellationToken, IAsyncEnumerable<TestRunEvent>>? WatchTestRunAsyncCallback { get; set; }
     public TaskCompletionSource? NotifyAppHostReadyAsyncCalled { get; set; }
 
     public TaskCompletionSource? GetDashboardUrlsAsyncCalled { get; set; }
@@ -56,6 +57,33 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
 
     public Task<bool> WaitForTestCompletionAsync(CancellationToken cancellationToken) =>
         WaitForTestCompletionAsyncCallback?.Invoke(cancellationToken) ?? throw new InvalidOperationException("Test completion was not configured.");
+
+    public async IAsyncEnumerable<TestRunEvent> WatchTestRunAsync([EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        if (WatchTestRunAsyncCallback is { } callback)
+        {
+            await foreach (var item in callback(cancellationToken).ConfigureAwait(false))
+            {
+                yield return item;
+            }
+        }
+        else
+        {
+            var passed = await WaitForTestCompletionAsync(cancellationToken).ConfigureAwait(false);
+            yield return new TestRunEvent
+            {
+                Resource = new TestResourceState
+                {
+                    ResourceName = "tests",
+                    ResourceId = "tests",
+                    State = "Finished",
+                    ExitCode = passed ? 0 : 1,
+                    Outcome = passed ? "passed" : "failed"
+                }
+            };
+            yield return new TestRunEvent { Passed = passed };
+        }
+    }
 
     public Task<DashboardUrlsState> GetDashboardUrlsAsync(CancellationToken cancellationToken)
     {
@@ -239,7 +267,7 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
         }
         else
         {
-            return ["baseline.v2", "pipeline-steps.v1", "pipeline-steps.v2", "test-lifetime.v1"];
+            return ["baseline.v2", "pipeline-steps.v1", "pipeline-steps.v2", "test-lifetime.v1", "test-reporting.v1"];
         }
     }
 

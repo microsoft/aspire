@@ -7,6 +7,7 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Hosting;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using StreamJsonRpc;
@@ -16,13 +17,15 @@ namespace Aspire.Cli.Tests.Commands;
 public class TestCommandTests(ITestOutputHelper outputHelper)
 {
     [Theory]
-    [InlineData(true, 0, 0)]
-    [InlineData(false, 0, 23)]
-    [InlineData(true, 130, 0)]
-    [InlineData(true, 143, 0)]
-    [InlineData(true, 137, 23)]
-    [InlineData(true, 42, 23)]
-    public async Task CompletionUsesTestOutcomeAndOrderlyShutdown(bool passed, int appHostExitCode, int expectedExitCode)
+    [InlineData(true, 0, 0, false)]
+    [InlineData(false, 0, 23, false)]
+    [InlineData(true, 130, 0, false)]
+    [InlineData(true, 143, 0, false)]
+    [InlineData(true, 137, 23, false)]
+    [InlineData(true, 42, 23, false)]
+    [InlineData(true, 0, 23, true)]
+    [InlineData(false, 0, 23, true)]
+    public async Task CompletionUsesTestOutcomeAndOrderlyShutdown(bool passed, int appHostExitCode, int expectedExitCode, bool artifactFailure)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = CreateAppHost(workspace);
@@ -30,6 +33,7 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
         var waiting = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var stopped = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
         var stopRequested = false;
+        string? summaryPath = null;
         var backchannel = new TestAppHostBackchannel
         {
             WaitForTestCompletionAsyncCallback = ct =>
@@ -40,6 +44,11 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
             RequestStopAsyncCallback = () =>
             {
                 stopRequested = true;
+                if (artifactFailure && !Directory.Exists(summaryPath!))
+                {
+                    File.Delete(summaryPath!);
+                    Directory.CreateDirectory(summaryPath!);
+                }
                 stopped.TrySetResult(appHostExitCode);
                 return Task.CompletedTask;
             }
@@ -50,6 +59,11 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
             RunAsyncCallback = async (context, ct) =>
             {
                 launched = context;
+                var outputPath = context.EnvironmentVariables[KnownConfigNames.TestOutputPath];
+                summaryPath = Path.Combine(outputPath, "summary.json");
+                Assert.True(Directory.Exists(outputPath));
+                var summary = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(Path.Combine(outputPath, "summary.json")))!;
+                Assert.Equal("running", summary["status"]!.GetValue<string>());
                 context.BuildCompletionSource!.TrySetResult(true);
                 context.BackchannelCompletionSource!.TrySetResult(backchannel);
                 return await stopped.Task.WaitAsync(ct);
@@ -71,6 +85,16 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
         Assert.NotNull(launched);
         Assert.True(launched.IsTestRun);
         Assert.True(launched.NoBuild);
+        if (artifactFailure)
+        {
+            Assert.True(Directory.Exists(summaryPath));
+        }
+        else
+        {
+            var completedSummary = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(summaryPath!))!;
+            Assert.Equal(expectedExitCode, completedSummary["cliExitCode"]!.GetValue<int>());
+            Assert.Equal(expectedExitCode == 0 ? "passed" : "failed", completedSummary["status"]!.GetValue<string>());
+        }
     }
 
     [Theory]
@@ -84,7 +108,7 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
         var tornDown = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var backchannel = new TestAppHostBackchannel
         {
-            GetCapabilitiesAsyncCallback = _ => Task.FromResult(failure == "old-host" ? new[] { "baseline.v2" } : new[] { "test-lifetime.v1" }),
+            GetCapabilitiesAsyncCallback = _ => Task.FromResult(failure == "old-host" ? new[] { "baseline.v2" } : new[] { "test-reporting.v1" }),
             WaitForTestCompletionAsyncCallback = _ => failure == "no-tests"
                 ? Task.FromException<bool>(new InvalidOperationException("No test resources were found."))
                 : Task.FromException<bool>(new ConnectionLostException("AppHost disconnected."))
@@ -114,12 +138,18 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(expectedExitCode, exitCode);
         await tornDown.Task.DefaultTimeout();
+        var summaryPath = Assert.Single(Directory.GetFiles(workspace.CreateExecutionContext().AspireHomeDirectory.FullName,
+            "summary.json", SearchOption.AllDirectories));
+        var summary = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(summaryPath))!;
+        Assert.Equal("failed", summary["status"]!.GetValue<string>());
+        Assert.Equal(expectedExitCode, summary["cliExitCode"]!.GetValue<int>());
     }
 
     [Theory]
-    [InlineData("test", 130)]
-    [InlineData("run", 0)]
-    public async Task CancellationPreservesNormalRunButDoesNotPassAnIncompleteTest(string commandName, int expectedExitCode)
+    [InlineData("test", 130, false)]
+    [InlineData("test", 130, true)]
+    [InlineData("run", 0, false)]
+    public async Task CancellationPreservesNormalRunButDoesNotPassAnIncompleteTest(string commandName, int expectedExitCode, bool artifactFailure)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = CreateAppHost(workspace);
@@ -157,6 +187,12 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
                 }
                 finally
                 {
+                    if (artifactFailure)
+                    {
+                        var summaryPath = Path.Combine(context.EnvironmentVariables[KnownConfigNames.TestOutputPath], "summary.json");
+                        File.Delete(summaryPath);
+                        Directory.CreateDirectory(summaryPath);
+                    }
                     tornDown.TrySetResult();
                 }
             }
@@ -170,6 +206,14 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(expectedExitCode, await execution.DefaultTimeout());
         await tornDown.Task.DefaultTimeout();
+        if (commandName == "test" && !artifactFailure)
+        {
+            var summaryPath = Assert.Single(Directory.GetFiles(workspace.CreateExecutionContext().AspireHomeDirectory.FullName,
+                "summary.json", SearchOption.AllDirectories));
+            var summary = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(summaryPath))!;
+            Assert.Equal("cancelled", summary["status"]!.GetValue<string>());
+            Assert.Equal(130, summary["cliExitCode"]!.GetValue<int>());
+        }
     }
 
     [Theory]
@@ -308,8 +352,11 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
         await tornDown.Task.DefaultTimeout();
     }
 
-    private IServiceCollection CreateServices(TemporaryWorkspace workspace, FileInfo appHostFile, TestAppHostProjectFactory factory) =>
-        CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+    private IServiceCollection CreateServices(TemporaryWorkspace workspace, FileInfo appHostFile, TestAppHostProjectFactory factory)
+    {
+        Directory.CreateDirectory(workspace.CreateExecutionContext().HomeDirectory.FullName);
+
+        return CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.EnabledFeatures = [KnownFeatures.DefaultWatchEnabled];
             options.ProjectLocatorFactory = _ => new TestProjectLocator
@@ -319,6 +366,7 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
             };
             options.AppHostProjectFactory = _ => factory;
         });
+    }
 
     private static FileInfo CreateAppHost(TemporaryWorkspace workspace)
     {

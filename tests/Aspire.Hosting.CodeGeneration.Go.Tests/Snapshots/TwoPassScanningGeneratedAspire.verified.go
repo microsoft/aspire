@@ -3293,10 +3293,14 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	// Waits for every marked resource, including replicas, then shuts down the
 	// application. Exit code zero passes. Startup failure, a nonzero exit code, or
 	// an unknown terminal exit code fails. This does not change the lifetime of
-	// aspire run.
+	// aspire run. An optional asynchronous setup callback receives the unique host
+	// output path before resources start.
+	//
+	// Parameters:
+	//   - options: Optional parameters; see [WithTestRunOptions].
 	//
 	// Returns: The resource builder.
-	WithTestRun() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+	WithTestRun(options ...*WithTestRunOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 
 	// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 	// names add multiple values.
@@ -5373,11 +5377,26 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithTerminal(o
 }
 
 // WithTestRun marks a resource as a test resource.
-func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithTestRun() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithTestRun(options ...*WithTestRunOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithTestRunOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.Callback != nil {
+			cb := merged.Callback
+			shim := func(args ...any) any {
+				cb(callbackHandleArg(s.client, args, 0, newTestRunContextFromHandle))
+				return nil
+			}
+			reqArgs["callback"] = s.client.registerCallback(shim)
+		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestRun", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -6720,10 +6739,14 @@ type CSharpAppResource interface {
 	// Waits for every marked resource, including replicas, then shuts down the
 	// application. Exit code zero passes. Startup failure, a nonzero exit code, or
 	// an unknown terminal exit code fails. This does not change the lifetime of
-	// aspire run.
+	// aspire run. An optional asynchronous setup callback receives the unique host
+	// output path before resources start.
+	//
+	// Parameters:
+	//   - options: Optional parameters; see [WithTestRunOptions].
 	//
 	// Returns: The resource builder.
-	WithTestRun() CSharpAppResource
+	WithTestRun(options ...*WithTestRunOptions) CSharpAppResource
 
 	// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 	// names add multiple values.
@@ -8513,11 +8536,26 @@ func (s *cSharpAppResource) WithTerminal(options ...*WithTerminalOptions) CSharp
 }
 
 // WithTestRun marks a resource as a test resource.
-func (s *cSharpAppResource) WithTestRun() CSharpAppResource {
+func (s *cSharpAppResource) WithTestRun(options ...*WithTestRunOptions) CSharpAppResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithTestRunOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.Callback != nil {
+			cb := merged.Callback
+			shim := func(args ...any) any {
+				cb(callbackHandleArg(s.client, args, 0, newTestRunContextFromHandle))
+				return nil
+			}
+			reqArgs["callback"] = s.client.registerCallback(shim)
+		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestRun", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -10700,10 +10738,14 @@ type ContainerRegistryResource interface {
 	// Waits for every marked resource, including replicas, then shuts down the
 	// application. Exit code zero passes. Startup failure, a nonzero exit code, or
 	// an unknown terminal exit code fails. This does not change the lifetime of
-	// aspire run.
+	// aspire run. An optional asynchronous setup callback receives the unique host
+	// output path before resources start.
+	//
+	// Parameters:
+	//   - options: Optional parameters; see [WithTestRunOptions].
 	//
 	// Returns: The resource builder.
-	WithTestRun() ContainerRegistryResource
+	WithTestRun(options ...*WithTestRunOptions) ContainerRegistryResource
 
 	// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 	// names add multiple values.
@@ -11706,11 +11748,26 @@ func (s *containerRegistryResource) WithTerminal(options ...*WithTerminalOptions
 }
 
 // WithTestRun marks a resource as a test resource.
-func (s *containerRegistryResource) WithTestRun() ContainerRegistryResource {
+func (s *containerRegistryResource) WithTestRun(options ...*WithTestRunOptions) ContainerRegistryResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithTestRunOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.Callback != nil {
+			cb := merged.Callback
+			shim := func(args ...any) any {
+				cb(callbackHandleArg(s.client, args, 0, newTestRunContextFromHandle))
+				return nil
+			}
+			reqArgs["callback"] = s.client.registerCallback(shim)
+		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestRun", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -13028,10 +13085,14 @@ type ContainerResource interface {
 	// Waits for every marked resource, including replicas, then shuts down the
 	// application. Exit code zero passes. Startup failure, a nonzero exit code, or
 	// an unknown terminal exit code fails. This does not change the lifetime of
-	// aspire run.
+	// aspire run. An optional asynchronous setup callback receives the unique host
+	// output path before resources start.
+	//
+	// Parameters:
+	//   - options: Optional parameters; see [WithTestRunOptions].
 	//
 	// Returns: The resource builder.
-	WithTestRun() ContainerResource
+	WithTestRun(options ...*WithTestRunOptions) ContainerResource
 
 	// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 	// names add multiple values.
@@ -15105,11 +15166,26 @@ func (s *containerResource) WithTerminal(options ...*WithTerminalOptions) Contai
 }
 
 // WithTestRun marks a resource as a test resource.
-func (s *containerResource) WithTestRun() ContainerResource {
+func (s *containerResource) WithTestRun(options ...*WithTestRunOptions) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithTestRunOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.Callback != nil {
+			cb := merged.Callback
+			shim := func(args ...any) any {
+				cb(callbackHandleArg(s.client, args, 0, newTestRunContextFromHandle))
+				return nil
+			}
+			reqArgs["callback"] = s.client.registerCallback(shim)
+		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestRun", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -18345,10 +18421,14 @@ type DotnetToolResource interface {
 	// Waits for every marked resource, including replicas, then shuts down the
 	// application. Exit code zero passes. Startup failure, a nonzero exit code, or
 	// an unknown terminal exit code fails. This does not change the lifetime of
-	// aspire run.
+	// aspire run. An optional asynchronous setup callback receives the unique host
+	// output path before resources start.
+	//
+	// Parameters:
+	//   - options: Optional parameters; see [WithTestRunOptions].
 	//
 	// Returns: The resource builder.
-	WithTestRun() DotnetToolResource
+	WithTestRun(options ...*WithTestRunOptions) DotnetToolResource
 
 	// WithToolIgnoreExistingFeeds configures the tool to use only the specified
 	// package sources, ignoring existing NuGet configuration.
@@ -20191,11 +20271,26 @@ func (s *dotnetToolResource) WithTerminal(options ...*WithTerminalOptions) Dotne
 }
 
 // WithTestRun marks a resource as a test resource.
-func (s *dotnetToolResource) WithTestRun() DotnetToolResource {
+func (s *dotnetToolResource) WithTestRun(options ...*WithTestRunOptions) DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithTestRunOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.Callback != nil {
+			cb := merged.Callback
+			shim := func(args ...any) any {
+				cb(callbackHandleArg(s.client, args, 0, newTestRunContextFromHandle))
+				return nil
+			}
+			reqArgs["callback"] = s.client.registerCallback(shim)
+		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestRun", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -22657,10 +22752,14 @@ type ExecutableResource interface {
 	// Waits for every marked resource, including replicas, then shuts down the
 	// application. Exit code zero passes. Startup failure, a nonzero exit code, or
 	// an unknown terminal exit code fails. This does not change the lifetime of
-	// aspire run.
+	// aspire run. An optional asynchronous setup callback receives the unique host
+	// output path before resources start.
+	//
+	// Parameters:
+	//   - options: Optional parameters; see [WithTestRunOptions].
 	//
 	// Returns: The resource builder.
-	WithTestRun() ExecutableResource
+	WithTestRun(options ...*WithTestRunOptions) ExecutableResource
 
 	// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 	// names add multiple values.
@@ -24430,11 +24529,26 @@ func (s *executableResource) WithTerminal(options ...*WithTerminalOptions) Execu
 }
 
 // WithTestRun marks a resource as a test resource.
-func (s *executableResource) WithTestRun() ExecutableResource {
+func (s *executableResource) WithTestRun(options ...*WithTestRunOptions) ExecutableResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithTestRunOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.Callback != nil {
+			cb := merged.Callback
+			shim := func(args ...any) any {
+				cb(callbackHandleArg(s.client, args, 0, newTestRunContextFromHandle))
+				return nil
+			}
+			reqArgs["callback"] = s.client.registerCallback(shim)
+		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestRun", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -25474,10 +25588,14 @@ type ExternalServiceResource interface {
 	// Waits for every marked resource, including replicas, then shuts down the
 	// application. Exit code zero passes. Startup failure, a nonzero exit code, or
 	// an unknown terminal exit code fails. This does not change the lifetime of
-	// aspire run.
+	// aspire run. An optional asynchronous setup callback receives the unique host
+	// output path before resources start.
+	//
+	// Parameters:
+	//   - options: Optional parameters; see [WithTestRunOptions].
 	//
 	// Returns: The resource builder.
-	WithTestRun() ExternalServiceResource
+	WithTestRun(options ...*WithTestRunOptions) ExternalServiceResource
 
 	// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 	// names add multiple values.
@@ -26499,11 +26617,26 @@ func (s *externalServiceResource) WithTerminal(options ...*WithTerminalOptions) 
 }
 
 // WithTestRun marks a resource as a test resource.
-func (s *externalServiceResource) WithTestRun() ExternalServiceResource {
+func (s *externalServiceResource) WithTestRun(options ...*WithTestRunOptions) ExternalServiceResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithTestRunOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.Callback != nil {
+			cb := merged.Callback
+			shim := func(args ...any) any {
+				cb(callbackHandleArg(s.client, args, 0, newTestRunContextFromHandle))
+				return nil
+			}
+			reqArgs["callback"] = s.client.registerCallback(shim)
+		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestRun", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -29319,10 +29452,14 @@ type ParameterResource interface {
 	// Waits for every marked resource, including replicas, then shuts down the
 	// application. Exit code zero passes. Startup failure, a nonzero exit code, or
 	// an unknown terminal exit code fails. This does not change the lifetime of
-	// aspire run.
+	// aspire run. An optional asynchronous setup callback receives the unique host
+	// output path before resources start.
+	//
+	// Parameters:
+	//   - options: Optional parameters; see [WithTestRunOptions].
 	//
 	// Returns: The resource builder.
-	WithTestRun() ParameterResource
+	WithTestRun(options ...*WithTestRunOptions) ParameterResource
 
 	// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 	// names add multiple values.
@@ -30426,11 +30563,26 @@ func (s *parameterResource) WithTerminal(options ...*WithTerminalOptions) Parame
 }
 
 // WithTestRun marks a resource as a test resource.
-func (s *parameterResource) WithTestRun() ParameterResource {
+func (s *parameterResource) WithTestRun(options ...*WithTestRunOptions) ParameterResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithTestRunOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.Callback != nil {
+			cb := merged.Callback
+			shim := func(args ...any) any {
+				cb(callbackHandleArg(s.client, args, 0, newTestRunContextFromHandle))
+				return nil
+			}
+			reqArgs["callback"] = s.client.registerCallback(shim)
+		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestRun", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -32412,10 +32564,14 @@ type ProjectResource interface {
 	// Waits for every marked resource, including replicas, then shuts down the
 	// application. Exit code zero passes. Startup failure, a nonzero exit code, or
 	// an unknown terminal exit code fails. This does not change the lifetime of
-	// aspire run.
+	// aspire run. An optional asynchronous setup callback receives the unique host
+	// output path before resources start.
+	//
+	// Parameters:
+	//   - options: Optional parameters; see [WithTestRunOptions].
 	//
 	// Returns: The resource builder.
-	WithTestRun() ProjectResource
+	WithTestRun(options ...*WithTestRunOptions) ProjectResource
 
 	// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 	// names add multiple values.
@@ -34205,11 +34361,26 @@ func (s *projectResource) WithTerminal(options ...*WithTerminalOptions) ProjectR
 }
 
 // WithTestRun marks a resource as a test resource.
-func (s *projectResource) WithTestRun() ProjectResource {
+func (s *projectResource) WithTestRun(options ...*WithTestRunOptions) ProjectResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithTestRunOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.Callback != nil {
+			cb := merged.Callback
+			shim := func(args ...any) any {
+				cb(callbackHandleArg(s.client, args, 0, newTestRunContextFromHandle))
+				return nil
+			}
+			reqArgs["callback"] = s.client.registerCallback(shim)
+		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestRun", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -37604,10 +37775,14 @@ type TestDatabaseResource interface {
 	// Waits for every marked resource, including replicas, then shuts down the
 	// application. Exit code zero passes. Startup failure, a nonzero exit code, or
 	// an unknown terminal exit code fails. This does not change the lifetime of
-	// aspire run.
+	// aspire run. An optional asynchronous setup callback receives the unique host
+	// output path before resources start.
+	//
+	// Parameters:
+	//   - options: Optional parameters; see [WithTestRunOptions].
 	//
 	// Returns: The resource builder.
-	WithTestRun() TestDatabaseResource
+	WithTestRun(options ...*WithTestRunOptions) TestDatabaseResource
 
 	// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 	// names add multiple values.
@@ -39681,11 +39856,26 @@ func (s *testDatabaseResource) WithTerminal(options ...*WithTerminalOptions) Tes
 }
 
 // WithTestRun marks a resource as a test resource.
-func (s *testDatabaseResource) WithTestRun() TestDatabaseResource {
+func (s *testDatabaseResource) WithTestRun(options ...*WithTestRunOptions) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithTestRunOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.Callback != nil {
+			cb := merged.Callback
+			shim := func(args ...any) any {
+				cb(callbackHandleArg(s.client, args, 0, newTestRunContextFromHandle))
+				return nil
+			}
+			reqArgs["callback"] = s.client.registerCallback(shim)
+		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestRun", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -41403,10 +41593,14 @@ type TestRedisResource interface {
 	// Waits for every marked resource, including replicas, then shuts down the
 	// application. Exit code zero passes. Startup failure, a nonzero exit code, or
 	// an unknown terminal exit code fails. This does not change the lifetime of
-	// aspire run.
+	// aspire run. An optional asynchronous setup callback receives the unique host
+	// output path before resources start.
+	//
+	// Parameters:
+	//   - options: Optional parameters; see [WithTestRunOptions].
 	//
 	// Returns: The resource builder.
-	WithTestRun() TestRedisResource
+	WithTestRun(options ...*WithTestRunOptions) TestRedisResource
 
 	// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 	// names add multiple values.
@@ -43822,11 +44016,26 @@ func (s *testRedisResource) WithTerminal(options ...*WithTerminalOptions) TestRe
 }
 
 // WithTestRun marks a resource as a test resource.
-func (s *testRedisResource) WithTestRun() TestRedisResource {
+func (s *testRedisResource) WithTestRun(options ...*WithTestRunOptions) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithTestRunOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.Callback != nil {
+			cb := merged.Callback
+			shim := func(args ...any) any {
+				cb(callbackHandleArg(s.client, args, 0, newTestRunContextFromHandle))
+				return nil
+			}
+			reqArgs["callback"] = s.client.registerCallback(shim)
+		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestRun", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -44352,6 +44561,69 @@ func (s *testReturnValueContext) GetStringValueTaskAsync() (string, error) {
 		"context": s.handle.ToJSON(),
 	}
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getStringValueTaskAsync", reqArgs)
+	if err != nil {
+		var zero string
+		return zero, err
+	}
+	return decodeAs[string](result)
+}
+
+// TestRunContext provides the output destination for the current aspire test
+// invocation.
+//
+// The CLI creates the directory before launching the AppHost. Test setup
+// callbacks run before resources start and can configure arguments, environment
+// variables, or container bind mounts. This is a host filesystem path;
+// containers must explicitly mount it at their chosen destination.
+type TestRunContext interface {
+	handleReference
+
+	// CancellationToken gets the token used to cancel test resource setup.
+	CancellationToken() (*CancellationToken, error)
+
+	// OutputPath gets the absolute host path to the unique output directory for
+	// this invocation.
+	OutputPath() (string, error)
+
+	// Err returns the first error recorded on this wrapper, or nil if the wrapper
+	// resolved successfully and no chained operation has failed.
+	Err() error
+}
+
+// testRunContext is the unexported impl of TestRunContext.
+type testRunContext struct {
+	*resourceBuilderBase
+}
+
+// newTestRunContextFromHandle wraps an existing handle as TestRunContext.
+func newTestRunContextFromHandle(h *handle, c *client) TestRunContext {
+	return &testRunContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// CancellationToken gets the token used to cancel test resource setup.
+func (s *testRunContext) CancellationToken() (*CancellationToken, error) {
+	if s.err != nil { var zero *CancellationToken; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/TestRunContext.cancellationToken", reqArgs)
+	if err != nil {
+		var zero *CancellationToken
+		return zero, err
+	}
+	return decodeAs[*CancellationToken](result)
+}
+
+// OutputPath gets the absolute host path to the unique output directory for
+// this invocation.
+func (s *testRunContext) OutputPath() (string, error) {
+	if s.err != nil { var zero string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/TestRunContext.outputPath", reqArgs)
 	if err != nil {
 		var zero string
 		return zero, err
@@ -45294,6 +45566,19 @@ type WithTerminalOptions struct {
 }
 
 func (o *WithTerminalOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil { return m }
+	return m
+}
+
+// WithTestRunOptions carries optional parameters for WithTestRun.
+type WithTestRunOptions struct {
+	// Callback is an optional callback that configures the resource using the test
+	// output destination before startup.
+	Callback func(arg TestRunContext) `json:"-"`
+}
+
+func (o *WithTestRunOptions) ToMap() map[string]any {
 	m := map[string]any{}
 	if o == nil { return m }
 	return m
@@ -46318,6 +46603,9 @@ func registerWrappers(c *client) {
 	})
 	c.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestReturnValueContext", func(h *handle, c *client) any {
 		return newTestReturnValueContextFromHandle(h, c)
+	})
+	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.TestRunContext", func(h *handle, c *client) any {
+		return newTestRunContextFromHandle(h, c)
 	})
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.UpdateCommandStateContext", func(h *handle, c *client) any {
 		return newUpdateCommandStateContextFromHandle(h, c)

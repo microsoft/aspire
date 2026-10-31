@@ -356,6 +356,15 @@ type ResourceUrlsCallbackContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.A
 /** Provides an ATS-first editor for resource URLs within polyglot callbacks. */
 type ResourceUrlsEditorHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsEditor'>;
 
+/**
+ * Provides the output destination for the current `aspire test` invocation.
+ *
+ * The CLI creates the directory before launching the AppHost. Test setup callbacks run before
+ * resources start and can configure arguments, environment variables, or container bind mounts.
+ * This is a host filesystem path; containers must explicitly mount it at their chosen destination.
+ */
+type TestRunContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.TestRunContext'>;
+
 /** Context for {@link ResourceCommandAnnotation.UpdateState}. */
 type UpdateCommandStateContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.UpdateCommandStateContext'>;
 
@@ -1978,6 +1987,11 @@ export interface WithRequiredOptions {
 export interface WithTerminalOptions {
     /** An optional callback to configure the terminal options. */
     configure?: (obj: TerminalOptions) => Promise<void>;
+}
+
+export interface WithTestRunOptions {
+    /** An optional callback that configures the resource using the test output destination before startup. */
+    callback?: (arg: TestRunContext) => Promise<void>;
 }
 
 export interface WithUrlOptions {
@@ -9363,6 +9377,72 @@ const TestReturnValueContextPromiseImpl = $aspireCreateFluentPromiseClass<TestRe
 }));
 
 // ============================================================================
+// TestRunContext
+// ============================================================================
+
+/**
+ * Provides the output destination for the current `aspire test` invocation.
+ *
+ * The CLI creates the directory before launching the AppHost. Test setup callbacks run before
+ * resources start and can configure arguments, environment variables, or container bind mounts.
+ * This is a host filesystem path; containers must explicitly mount it at their chosen destination.
+ */
+export interface TestRunContext {
+    toJSON(): MarshalledHandle;
+    /** Gets the absolute host path to the unique output directory for this invocation. */
+    outputPath(): Promise<string>;
+    /** Gets the token used to cancel test resource setup. */
+    cancellationToken(): Promise<CancellationToken>;
+}
+
+export interface TestRunContextPromise extends PromiseLike<TestRunContext> {
+    /** Gets the absolute host path to the unique output directory for this invocation. */
+    outputPath(): Promise<string>;
+    /** Gets the token used to cancel test resource setup. */
+    cancellationToken(): Promise<CancellationToken>;
+}
+
+// ============================================================================
+// TestRunContextImpl
+// ============================================================================
+
+/**
+ * Provides the output destination for the current `aspire test` invocation.
+ *
+ * The CLI creates the directory before launching the AppHost. Test setup callbacks run before
+ * resources start and can configure arguments, environment variables, or container bind mounts.
+ * This is a host filesystem path; containers must explicitly mount it at their chosen destination.
+ */
+class TestRunContextImpl implements TestRunContext {
+    constructor(private _handle: TestRunContextHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    async outputPath(): Promise<string> {
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting.ApplicationModel/TestRunContext.outputPath',
+            { context: this._handle }
+        );
+    }
+
+    async cancellationToken(): Promise<CancellationToken> {
+        const result = await this._client.invokeCapability<string | null>(
+            'Aspire.Hosting.ApplicationModel/TestRunContext.cancellationToken',
+            { context: this._handle }
+        );
+        return CancellationToken.fromValue(result);
+    }
+
+}
+
+/** @internal */
+const TestRunContextPromiseImpl = $aspireCreateFluentPromiseClass<TestRunContext, TestRunContextPromise>((): $aspireFluentPromiseTransitions => ({
+    ["outputPath"]: null,
+    ["cancellationToken"]: null,
+}));
+
+// ============================================================================
 // UpdateCommandStateContext
 // ============================================================================
 
@@ -13248,9 +13328,11 @@ export interface ContainerRegistryResource {
      * Waits for every marked resource, including replicas, then shuts down the application.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
+     * An optional asynchronous setup callback receives the unique host output path before resources start.
+     * @param options Additional options.
      * @returns The resource builder.
      */
-    withTestRun(): ContainerRegistryResourcePromise;
+    withTestRun(options?: WithTestRunOptions): ContainerRegistryResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -13619,9 +13701,11 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      * Waits for every marked resource, including replicas, then shuts down the application.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
+     * An optional asynchronous setup callback receives the unique host output path before resources start.
+     * @param options Additional options.
      * @returns The resource builder.
      */
-    withTestRun(): ContainerRegistryResourcePromise;
+    withTestRun(options?: WithTestRunOptions): ContainerRegistryResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -14541,8 +14625,14 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
     }
 
     /** @internal */
-    private async _withTestRunInternal(): Promise<ContainerRegistryResource> {
+    private async _withTestRunInternal(callback?: (arg: TestRunContext) => Promise<void>): Promise<ContainerRegistryResource> {
+        const callbackId = callback ? registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as TestRunContextHandle;
+            const arg = new TestRunContextImpl(argHandle, this._client);
+            await callback(arg);
+        }) : undefined;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (callback !== undefined) rpcArgs.callback = callbackId;
         const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
             'Aspire.Hosting/withTestRun',
             rpcArgs
@@ -14556,10 +14646,13 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
      * Waits for every marked resource, including replicas, then shuts down the application.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
+     * An optional asynchronous setup callback receives the unique host output path before resources start.
+     * @param options Additional options.
      * @returns The resource builder.
      */
-    withTestRun(): ContainerRegistryResourcePromise {
-        return new ContainerRegistryResourcePromiseImpl(this._withTestRunInternal(), this._client);
+    withTestRun(options?: WithTestRunOptions): ContainerRegistryResourcePromise {
+        const callback = options?.callback;
+        return new ContainerRegistryResourcePromiseImpl(this._withTestRunInternal(callback), this._client);
     }
 
     /** @internal */
@@ -15945,9 +16038,11 @@ export interface ContainerResource {
      * Waits for every marked resource, including replicas, then shuts down the application.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
+     * An optional asynchronous setup callback receives the unique host output path before resources start.
+     * @param options Additional options.
      * @returns The resource builder.
      */
-    withTestRun(): ContainerResourcePromise;
+    withTestRun(options?: WithTestRunOptions): ContainerResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -16812,9 +16907,11 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * Waits for every marked resource, including replicas, then shuts down the application.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
+     * An optional asynchronous setup callback receives the unique host output path before resources start.
+     * @param options Additional options.
      * @returns The resource builder.
      */
-    withTestRun(): ContainerResourcePromise;
+    withTestRun(options?: WithTestRunOptions): ContainerResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -19163,8 +19260,14 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
-    private async _withTestRunInternal(): Promise<ContainerResource> {
+    private async _withTestRunInternal(callback?: (arg: TestRunContext) => Promise<void>): Promise<ContainerResource> {
+        const callbackId = callback ? registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as TestRunContextHandle;
+            const arg = new TestRunContextImpl(argHandle, this._client);
+            await callback(arg);
+        }) : undefined;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (callback !== undefined) rpcArgs.callback = callbackId;
         const result = await this._client.invokeCapability<ContainerResourceHandle>(
             'Aspire.Hosting/withTestRun',
             rpcArgs
@@ -19178,10 +19281,13 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * Waits for every marked resource, including replicas, then shuts down the application.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
+     * An optional asynchronous setup callback receives the unique host output path before resources start.
+     * @param options Additional options.
      * @returns The resource builder.
      */
-    withTestRun(): ContainerResourcePromise {
-        return new ContainerResourcePromiseImpl(this._withTestRunInternal(), this._client);
+    withTestRun(options?: WithTestRunOptions): ContainerResourcePromise {
+        const callback = options?.callback;
+        return new ContainerResourcePromiseImpl(this._withTestRunInternal(callback), this._client);
     }
 
     /** @internal */
@@ -20555,9 +20661,11 @@ export interface CSharpAppResource {
      * Waits for every marked resource, including replicas, then shuts down the application.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
+     * An optional asynchronous setup callback receives the unique host output path before resources start.
+     * @param options Additional options.
      * @returns The resource builder.
      */
-    withTestRun(): CSharpAppResourcePromise;
+    withTestRun(options?: WithTestRunOptions): CSharpAppResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -21262,9 +21370,11 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * Waits for every marked resource, including replicas, then shuts down the application.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
+     * An optional asynchronous setup callback receives the unique host output path before resources start.
+     * @param options Additional options.
      * @returns The resource builder.
      */
-    withTestRun(): CSharpAppResourcePromise;
+    withTestRun(options?: WithTestRunOptions): CSharpAppResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -23201,8 +23311,14 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
-    private async _withTestRunInternal(): Promise<CSharpAppResource> {
+    private async _withTestRunInternal(callback?: (arg: TestRunContext) => Promise<void>): Promise<CSharpAppResource> {
+        const callbackId = callback ? registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as TestRunContextHandle;
+            const arg = new TestRunContextImpl(argHandle, this._client);
+            await callback(arg);
+        }) : undefined;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (callback !== undefined) rpcArgs.callback = callbackId;
         const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
             'Aspire.Hosting/withTestRun',
             rpcArgs
@@ -23216,10 +23332,13 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * Waits for every marked resource, including replicas, then shuts down the application.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
+     * An optional asynchronous setup callback receives the unique host output path before resources start.
+     * @param options Additional options.
      * @returns The resource builder.
      */
-    withTestRun(): CSharpAppResourcePromise {
-        return new CSharpAppResourcePromiseImpl(this._withTestRunInternal(), this._client);
+    withTestRun(options?: WithTestRunOptions): CSharpAppResourcePromise {
+        const callback = options?.callback;
+        return new CSharpAppResourcePromiseImpl(this._withTestRunInternal(callback), this._client);
     }
 
     /** @internal */
@@ -24631,9 +24750,11 @@ export interface DotnetToolResource {
      * Waits for every marked resource, including replicas, then shuts down the application.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
+     * An optional asynchronous setup callback receives the unique host output path before resources start.
+     * @param options Additional options.
      * @returns The resource builder.
      */
-    withTestRun(): DotnetToolResourcePromise;
+    withTestRun(options?: WithTestRunOptions): DotnetToolResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -25374,9 +25495,11 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * Waits for every marked resource, including replicas, then shuts down the application.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
+     * An optional asynchronous setup callback receives the unique host output path before resources start.
+     * @param options Additional options.
      * @returns The resource builder.
      */
-    withTestRun(): DotnetToolResourcePromise;
+    withTestRun(options?: WithTestRunOptions): DotnetToolResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -27428,8 +27551,14 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
-    private async _withTestRunInternal(): Promise<DotnetToolResource> {
+    private async _withTestRunInternal(callback?: (arg: TestRunContext) => Promise<void>): Promise<DotnetToolResource> {
+        const callbackId = callback ? registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as TestRunContextHandle;
+            const arg = new TestRunContextImpl(argHandle, this._client);
+            await callback(arg);
+        }) : undefined;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (callback !== undefined) rpcArgs.callback = callbackId;
         const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
             'Aspire.Hosting/withTestRun',
             rpcArgs
@@ -27443,10 +27572,13 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * Waits for every marked resource, including replicas, then shuts down the application.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
+     * An optional asynchronous setup callback receives the unique host output path before resources start.
+     * @param options Additional options.
      * @returns The resource builder.
      */
-    withTestRun(): DotnetToolResourcePromise {
-        return new DotnetToolResourcePromiseImpl(this._withTestRunInternal(), this._client);
+    withTestRun(options?: WithTestRunOptions): DotnetToolResourcePromise {
+        const callback = options?.callback;
+        return new DotnetToolResourcePromiseImpl(this._withTestRunInternal(callback), this._client);
     }
 
     /** @internal */
@@ -28812,9 +28944,11 @@ export interface ExecutableResource {
      * Waits for every marked resource, including replicas, then shuts down the application.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
+     * An optional asynchronous setup callback receives the unique host output path before resources start.
+     * @param options Additional options.
      * @returns The resource builder.
      */
-    withTestRun(): ExecutableResourcePromise;
+    withTestRun(options?: WithTestRunOptions): ExecutableResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -29516,9 +29650,11 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * Waits for every marked resource, including replicas, then shuts down the application.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
+     * An optional asynchronous setup callback receives the unique host output path before resources start.
+     * @param options Additional options.
      * @returns The resource builder.
      */
-    withTestRun(): ExecutableResourcePromise;
+    withTestRun(options?: WithTestRunOptions): ExecutableResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -31460,8 +31596,14 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
-    private async _withTestRunInternal(): Promise<ExecutableResource> {
+    private async _withTestRunInternal(callback?: (arg: TestRunContext) => Promise<void>): Promise<ExecutableResource> {
+        const callbackId = callback ? registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as TestRunContextHandle;
+            const arg = new TestRunContextImpl(argHandle, this._client);
+            await callback(arg);
+        }) : undefined;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (callback !== undefined) rpcArgs.callback = callbackId;
         const result = await this._client.invokeCapability<ExecutableResourceHandle>(
             'Aspire.Hosting/withTestRun',
             rpcArgs
@@ -31475,10 +31617,13 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * Waits for every marked resource, including replicas, then shuts down the application.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
+     * An optional asynchronous setup callback receives the unique host output path before resources start.
+     * @param options Additional options.
      * @returns The resource builder.
      */
-    withTestRun(): ExecutableResourcePromise {
-        return new ExecutableResourcePromiseImpl(this._withTestRunInternal(), this._client);
+    withTestRun(options?: WithTestRunOptions): ExecutableResourcePromise {
+        const callback = options?.callback;
+        return new ExecutableResourcePromiseImpl(this._withTestRunInternal(callback), this._client);
     }
 
     /** @internal */
@@ -32522,9 +32667,11 @@ export interface ExternalServiceResource {
      * Waits for every marked resource, including replicas, then shuts down the application.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
+     * An optional asynchronous setup callback receives the unique host output path before resources start.
+     * @param options Additional options.
      * @returns The resource builder.
      */
-    withTestRun(): ExternalServiceResourcePromise;
+    withTestRun(options?: WithTestRunOptions): ExternalServiceResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -32898,9 +33045,11 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      * Waits for every marked resource, including replicas, then shuts down the application.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
+     * An optional asynchronous setup callback receives the unique host output path before resources start.
+     * @param options Additional options.
      * @returns The resource builder.
      */
-    withTestRun(): ExternalServiceResourcePromise;
+    withTestRun(options?: WithTestRunOptions): ExternalServiceResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -33844,8 +33993,14 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
     }
 
     /** @internal */
-    private async _withTestRunInternal(): Promise<ExternalServiceResource> {
+    private async _withTestRunInternal(callback?: (arg: TestRunContext) => Promise<void>): Promise<ExternalServiceResource> {
+        const callbackId = callback ? registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as TestRunContextHandle;
+            const arg = new TestRunContextImpl(argHandle, this._client);
+            await callback(arg);
+        }) : undefined;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (callback !== undefined) rpcArgs.callback = callbackId;
         const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
             'Aspire.Hosting/withTestRun',
             rpcArgs
@@ -33859,10 +34014,13 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
      * Waits for every marked resource, including replicas, then shuts down the application.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
+     * An optional asynchronous setup callback receives the unique host output path before resources start.
+     * @param options Additional options.
      * @returns The resource builder.
      */
-    withTestRun(): ExternalServiceResourcePromise {
-        return new ExternalServiceResourcePromiseImpl(this._withTestRunInternal(), this._client);
+    withTestRun(options?: WithTestRunOptions): ExternalServiceResourcePromise {
+        const callback = options?.callback;
+        return new ExternalServiceResourcePromiseImpl(this._withTestRunInternal(callback), this._client);
     }
 
     /** @internal */
@@ -34805,9 +34963,11 @@ export interface ParameterResource {
      * Waits for every marked resource, including replicas, then shuts down the application.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
+     * An optional asynchronous setup callback receives the unique host output path before resources start.
+     * @param options Additional options.
      * @returns The resource builder.
      */
-    withTestRun(): ParameterResourcePromise;
+    withTestRun(options?: WithTestRunOptions): ParameterResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -35223,9 +35383,11 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * Waits for every marked resource, including replicas, then shuts down the application.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
+     * An optional asynchronous setup callback receives the unique host output path before resources start.
+     * @param options Additional options.
      * @returns The resource builder.
      */
-    withTestRun(): ParameterResourcePromise;
+    withTestRun(options?: WithTestRunOptions): ParameterResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -36249,8 +36411,14 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     }
 
     /** @internal */
-    private async _withTestRunInternal(): Promise<ParameterResource> {
+    private async _withTestRunInternal(callback?: (arg: TestRunContext) => Promise<void>): Promise<ParameterResource> {
+        const callbackId = callback ? registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as TestRunContextHandle;
+            const arg = new TestRunContextImpl(argHandle, this._client);
+            await callback(arg);
+        }) : undefined;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (callback !== undefined) rpcArgs.callback = callbackId;
         const result = await this._client.invokeCapability<ParameterResourceHandle>(
             'Aspire.Hosting/withTestRun',
             rpcArgs
@@ -36264,10 +36432,13 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
      * Waits for every marked resource, including replicas, then shuts down the application.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
+     * An optional asynchronous setup callback receives the unique host output path before resources start.
+     * @param options Additional options.
      * @returns The resource builder.
      */
-    withTestRun(): ParameterResourcePromise {
-        return new ParameterResourcePromiseImpl(this._withTestRunInternal(), this._client);
+    withTestRun(options?: WithTestRunOptions): ParameterResourcePromise {
+        const callback = options?.callback;
+        return new ParameterResourcePromiseImpl(this._withTestRunInternal(callback), this._client);
     }
 
     /** @internal */
@@ -37535,9 +37706,11 @@ export interface ProjectResource {
      * Waits for every marked resource, including replicas, then shuts down the application.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
+     * An optional asynchronous setup callback receives the unique host output path before resources start.
+     * @param options Additional options.
      * @returns The resource builder.
      */
-    withTestRun(): ProjectResourcePromise;
+    withTestRun(options?: WithTestRunOptions): ProjectResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -38242,9 +38415,11 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * Waits for every marked resource, including replicas, then shuts down the application.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
+     * An optional asynchronous setup callback receives the unique host output path before resources start.
+     * @param options Additional options.
      * @returns The resource builder.
      */
-    withTestRun(): ProjectResourcePromise;
+    withTestRun(options?: WithTestRunOptions): ProjectResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -40182,8 +40357,14 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
-    private async _withTestRunInternal(): Promise<ProjectResource> {
+    private async _withTestRunInternal(callback?: (arg: TestRunContext) => Promise<void>): Promise<ProjectResource> {
+        const callbackId = callback ? registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as TestRunContextHandle;
+            const arg = new TestRunContextImpl(argHandle, this._client);
+            await callback(arg);
+        }) : undefined;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (callback !== undefined) rpcArgs.callback = callbackId;
         const result = await this._client.invokeCapability<ProjectResourceHandle>(
             'Aspire.Hosting/withTestRun',
             rpcArgs
@@ -40197,10 +40378,13 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * Waits for every marked resource, including replicas, then shuts down the application.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
+     * An optional asynchronous setup callback receives the unique host output path before resources start.
+     * @param options Additional options.
      * @returns The resource builder.
      */
-    withTestRun(): ProjectResourcePromise {
-        return new ProjectResourcePromiseImpl(this._withTestRunInternal(), this._client);
+    withTestRun(options?: WithTestRunOptions): ProjectResourcePromise {
+        const callback = options?.callback;
+        return new ProjectResourcePromiseImpl(this._withTestRunInternal(callback), this._client);
     }
 
     /** @internal */
@@ -41731,9 +41915,11 @@ export interface TestDatabaseResource {
      * Waits for every marked resource, including replicas, then shuts down the application.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
+     * An optional asynchronous setup callback receives the unique host output path before resources start.
+     * @param options Additional options.
      * @returns The resource builder.
      */
-    withTestRun(): TestDatabaseResourcePromise;
+    withTestRun(options?: WithTestRunOptions): TestDatabaseResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -42598,9 +42784,11 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * Waits for every marked resource, including replicas, then shuts down the application.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
+     * An optional asynchronous setup callback receives the unique host output path before resources start.
+     * @param options Additional options.
      * @returns The resource builder.
      */
-    withTestRun(): TestDatabaseResourcePromise;
+    withTestRun(options?: WithTestRunOptions): TestDatabaseResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -44948,8 +45136,14 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _withTestRunInternal(): Promise<TestDatabaseResource> {
+    private async _withTestRunInternal(callback?: (arg: TestRunContext) => Promise<void>): Promise<TestDatabaseResource> {
+        const callbackId = callback ? registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as TestRunContextHandle;
+            const arg = new TestRunContextImpl(argHandle, this._client);
+            await callback(arg);
+        }) : undefined;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (callback !== undefined) rpcArgs.callback = callbackId;
         const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
             'Aspire.Hosting/withTestRun',
             rpcArgs
@@ -44963,10 +45157,13 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * Waits for every marked resource, including replicas, then shuts down the application.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
+     * An optional asynchronous setup callback receives the unique host output path before resources start.
+     * @param options Additional options.
      * @returns The resource builder.
      */
-    withTestRun(): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._withTestRunInternal(), this._client);
+    withTestRun(options?: WithTestRunOptions): TestDatabaseResourcePromise {
+        const callback = options?.callback;
+        return new TestDatabaseResourcePromiseImpl(this._withTestRunInternal(callback), this._client);
     }
 
     /** @internal */
@@ -46517,9 +46714,11 @@ export interface TestRedisResource {
      * Waits for every marked resource, including replicas, then shuts down the application.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
+     * An optional asynchronous setup callback receives the unique host output path before resources start.
+     * @param options Additional options.
      * @returns The resource builder.
      */
-    withTestRun(): TestRedisResourcePromise;
+    withTestRun(options?: WithTestRunOptions): TestRedisResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -47468,9 +47667,11 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * Waits for every marked resource, including replicas, then shuts down the application.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
+     * An optional asynchronous setup callback receives the unique host output path before resources start.
+     * @param options Additional options.
      * @returns The resource builder.
      */
-    withTestRun(): TestRedisResourcePromise;
+    withTestRun(options?: WithTestRunOptions): TestRedisResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -49922,8 +50123,14 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _withTestRunInternal(): Promise<TestRedisResource> {
+    private async _withTestRunInternal(callback?: (arg: TestRunContext) => Promise<void>): Promise<TestRedisResource> {
+        const callbackId = callback ? registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as TestRunContextHandle;
+            const arg = new TestRunContextImpl(argHandle, this._client);
+            await callback(arg);
+        }) : undefined;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (callback !== undefined) rpcArgs.callback = callbackId;
         const result = await this._client.invokeCapability<TestRedisResourceHandle>(
             'Aspire.Hosting/withTestRun',
             rpcArgs
@@ -49937,10 +50144,13 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * Waits for every marked resource, including replicas, then shuts down the application.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
+     * An optional asynchronous setup callback receives the unique host output path before resources start.
+     * @param options Additional options.
      * @returns The resource builder.
      */
-    withTestRun(): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._withTestRunInternal(), this._client);
+    withTestRun(options?: WithTestRunOptions): TestRedisResourcePromise {
+        const callback = options?.callback;
+        return new TestRedisResourcePromiseImpl(this._withTestRunInternal(callback), this._client);
     }
 
     /** @internal */
@@ -51768,9 +51978,11 @@ export interface TestVaultResource {
      * Waits for every marked resource, including replicas, then shuts down the application.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
+     * An optional asynchronous setup callback receives the unique host output path before resources start.
+     * @param options Additional options.
      * @returns The resource builder.
      */
-    withTestRun(): TestVaultResourcePromise;
+    withTestRun(options?: WithTestRunOptions): TestVaultResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -52637,9 +52849,11 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * Waits for every marked resource, including replicas, then shuts down the application.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
+     * An optional asynchronous setup callback receives the unique host output path before resources start.
+     * @param options Additional options.
      * @returns The resource builder.
      */
-    withTestRun(): TestVaultResourcePromise;
+    withTestRun(options?: WithTestRunOptions): TestVaultResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -54989,8 +55203,14 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _withTestRunInternal(): Promise<TestVaultResource> {
+    private async _withTestRunInternal(callback?: (arg: TestRunContext) => Promise<void>): Promise<TestVaultResource> {
+        const callbackId = callback ? registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as TestRunContextHandle;
+            const arg = new TestRunContextImpl(argHandle, this._client);
+            await callback(arg);
+        }) : undefined;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (callback !== undefined) rpcArgs.callback = callbackId;
         const result = await this._client.invokeCapability<TestVaultResourceHandle>(
             'Aspire.Hosting/withTestRun',
             rpcArgs
@@ -55004,10 +55224,13 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * Waits for every marked resource, including replicas, then shuts down the application.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
+     * An optional asynchronous setup callback receives the unique host output path before resources start.
+     * @param options Additional options.
      * @returns The resource builder.
      */
-    withTestRun(): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._withTestRunInternal(), this._client);
+    withTestRun(options?: WithTestRunOptions): TestVaultResourcePromise {
+        const callback = options?.callback;
+        return new TestVaultResourcePromiseImpl(this._withTestRunInternal(callback), this._client);
     }
 
     /** @internal */
@@ -56370,9 +56593,11 @@ export interface Resource {
      * Waits for every marked resource, including replicas, then shuts down the application.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
+     * An optional asynchronous setup callback receives the unique host output path before resources start.
+     * @param options Additional options.
      * @returns The resource builder.
      */
-    withTestRun(): ResourcePromise;
+    withTestRun(options?: WithTestRunOptions): ResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -56741,9 +56966,11 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      * Waits for every marked resource, including replicas, then shuts down the application.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
+     * An optional asynchronous setup callback receives the unique host output path before resources start.
+     * @param options Additional options.
      * @returns The resource builder.
      */
-    withTestRun(): ResourcePromise;
+    withTestRun(options?: WithTestRunOptions): ResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -57664,8 +57891,14 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     }
 
     /** @internal */
-    private async _withTestRunInternal(): Promise<Resource> {
+    private async _withTestRunInternal(callback?: (arg: TestRunContext) => Promise<void>): Promise<Resource> {
+        const callbackId = callback ? registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as TestRunContextHandle;
+            const arg = new TestRunContextImpl(argHandle, this._client);
+            await callback(arg);
+        }) : undefined;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (callback !== undefined) rpcArgs.callback = callbackId;
         const result = await this._client.invokeCapability<IResourceHandle>(
             'Aspire.Hosting/withTestRun',
             rpcArgs
@@ -57679,10 +57912,13 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
      * Waits for every marked resource, including replicas, then shuts down the application.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
+     * An optional asynchronous setup callback receives the unique host output path before resources start.
+     * @param options Additional options.
      * @returns The resource builder.
      */
-    withTestRun(): ResourcePromise {
-        return new ResourcePromiseImpl(this._withTestRunInternal(), this._client);
+    withTestRun(options?: WithTestRunOptions): ResourcePromise {
+        const callback = options?.callback;
+        return new ResourcePromiseImpl(this._withTestRunInternal(callback), this._client);
     }
 
     /** @internal */
@@ -60454,6 +60690,7 @@ registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hos
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestMutableCollectionContext', (handle, client) => new TestMutableCollectionContextImpl(handle as TestMutableCollectionContextHandle, client));
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestResourceContext', (handle, client) => new TestResourceContextImpl(handle as TestResourceContextHandle, client));
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestReturnValueContext', (handle, client) => new TestReturnValueContextImpl(handle as TestReturnValueContextHandle, client));
+registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.TestRunContext', (handle, client) => new TestRunContextImpl(handle as TestRunContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.UpdateCommandStateContext', (handle, client) => new UpdateCommandStateContextImpl(handle as UpdateCommandStateContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.IAspireStore', (handle, client) => new AspireStoreImpl(handle as IAspireStoreHandle, client));
 registerHandleWrapper('Microsoft.Extensions.Configuration.Abstractions/Microsoft.Extensions.Configuration.IConfiguration', (handle, client) => new ConfigurationImpl(handle as IConfigurationHandle, client));

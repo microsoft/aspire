@@ -3204,9 +3204,11 @@ impl CSharpAppResource {
     }
 
     /// Marks a resource as a test resource.
-    pub fn with_test_run(&self) -> Result<IResource, Box<dyn std::error::Error>> {
+    pub fn with_test_run(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
         let result = self.client.invoke_capability("Aspire.Hosting/withTestRun", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
@@ -4747,9 +4749,11 @@ impl ContainerRegistryResource {
     }
 
     /// Marks a resource as a test resource.
-    pub fn with_test_run(&self) -> Result<IResource, Box<dyn std::error::Error>> {
+    pub fn with_test_run(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
         let result = self.client.invoke_capability("Aspire.Hosting/withTestRun", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
@@ -6234,9 +6238,11 @@ impl ContainerResource {
     }
 
     /// Marks a resource as a test resource.
-    pub fn with_test_run(&self) -> Result<IResource, Box<dyn std::error::Error>> {
+    pub fn with_test_run(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
         let result = self.client.invoke_capability("Aspire.Hosting/withTestRun", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
@@ -8224,9 +8230,11 @@ impl DotnetToolResource {
     }
 
     /// Marks a resource as a test resource.
-    pub fn with_test_run(&self) -> Result<IResource, Box<dyn std::error::Error>> {
+    pub fn with_test_run(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
         let result = self.client.invoke_capability("Aspire.Hosting/withTestRun", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
@@ -10186,9 +10194,11 @@ impl ExecutableResource {
     }
 
     /// Marks a resource as a test resource.
-    pub fn with_test_run(&self) -> Result<IResource, Box<dyn std::error::Error>> {
+    pub fn with_test_run(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
         let result = self.client.invoke_capability("Aspire.Hosting/withTestRun", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
@@ -11073,9 +11083,11 @@ impl ExternalServiceResource {
     }
 
     /// Marks a resource as a test resource.
-    pub fn with_test_run(&self) -> Result<IResource, Box<dyn std::error::Error>> {
+    pub fn with_test_run(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
         let result = self.client.invoke_capability("Aspire.Hosting/withTestRun", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
@@ -14707,9 +14719,11 @@ impl ParameterResource {
     }
 
     /// Marks a resource as a test resource.
-    pub fn with_test_run(&self) -> Result<IResource, Box<dyn std::error::Error>> {
+    pub fn with_test_run(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
         let result = self.client.invoke_capability("Aspire.Hosting/withTestRun", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
@@ -16507,9 +16521,11 @@ impl ProjectResource {
     }
 
     /// Marks a resource as a test resource.
-    pub fn with_test_run(&self) -> Result<IResource, Box<dyn std::error::Error>> {
+    pub fn with_test_run(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
         let result = self.client.invoke_capability("Aspire.Hosting/withTestRun", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
@@ -18880,9 +18896,11 @@ impl TestDatabaseResource {
     }
 
     /// Marks a resource as a test resource.
-    pub fn with_test_run(&self) -> Result<IResource, Box<dyn std::error::Error>> {
+    pub fn with_test_run(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
         let result = self.client.invoke_capability("Aspire.Hosting/withTestRun", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
@@ -20571,9 +20589,11 @@ impl TestRedisResource {
     }
 
     /// Marks a resource as a test resource.
-    pub fn with_test_run(&self) -> Result<IResource, Box<dyn std::error::Error>> {
+    pub fn with_test_run(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
         let result = self.client.invoke_capability("Aspire.Hosting/withTestRun", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
@@ -21360,6 +21380,49 @@ impl TestReturnValueContext {
         args.insert("context".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getIntValueTaskAsync", args)?;
         Ok(serde_json::from_value(result)?)
+    }
+}
+
+/// Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.TestRunContext
+pub struct TestRunContext {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for TestRunContext {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl TestRunContext {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+
+    /// Gets the absolute host path to the unique output directory for this invocation.
+    pub fn output_path(&self) -> Result<String, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/TestRunContext.outputPath", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Gets the token used to cancel test resource setup.
+    pub fn cancellation_token(&self) -> Result<CancellationToken, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/TestRunContext.cancellationToken", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(CancellationToken::new(handle, self.client.clone()))
     }
 }
 
@@ -22482,9 +22545,11 @@ impl TestVaultResource {
     }
 
     /// Marks a resource as a test resource.
-    pub fn with_test_run(&self) -> Result<IResource, Box<dyn std::error::Error>> {
+    pub fn with_test_run(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
         let result = self.client.invoke_capability("Aspire.Hosting/withTestRun", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))

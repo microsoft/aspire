@@ -175,10 +175,11 @@ internal sealed class RunCommand : BaseCommand
     }
 
     protected override Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken) =>
-        ExecuteRunAsync(parseResult, testMode: false, cancellationToken);
+        ExecuteRunAsync(parseResult, testRun: null, cancellationToken);
 
-    internal async Task<CommandResult> ExecuteRunAsync(ParseResult parseResult, bool testMode, CancellationToken cancellationToken)
+    internal async Task<CommandResult> ExecuteRunAsync(ParseResult parseResult, Aspire.Cli.Testing.TestRunReporter? testRun, CancellationToken cancellationToken)
     {
+        var testMode = testRun is not null;
         var passedAppHostProjectFile = parseResult.GetValue(AppHostLauncher.s_appHostOption);
         var detach = parseResult.GetValue(s_detachOption);
         var noBuild = parseResult.GetValue(s_noBuildOption);
@@ -385,6 +386,10 @@ internal sealed class RunCommand : BaseCommand
                 BackchannelCompletionSource = backchannelCompletionSource,
             };
             ProfilingTelemetry.AddCurrentContextToEnvironment(context.EnvironmentVariables);
+            if (testRun is not null)
+            {
+                context.EnvironmentVariables[KnownConfigNames.TestOutputPath] = testRun.OutputPath;
+            }
             if (captureProfile)
             {
                 ProfileCaptureEnvironment.AddCurrentToEnvironment(context.EnvironmentVariables);
@@ -534,13 +539,13 @@ internal sealed class RunCommand : BaseCommand
                 if (testMode)
                 {
                     var capabilities = await backchannel.GetCapabilitiesAsync(cancellationToken).ConfigureAwait(false);
-                    if (!capabilities.Contains("test-lifetime.v1", StringComparer.Ordinal))
+                    if (!capabilities.Contains("test-reporting.v1", StringComparer.Ordinal))
                     {
                         return CommandResult.Failure(CliExitCodes.AppHostIncompatible, RunCommandStrings.TestAppHostIncompatible);
                     }
 
                     using var completionCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                    var completion = backchannel.WaitForTestCompletionAsync(completionCts.Token);
+                    var completion = testRun!.WaitForCompletionAsync(backchannel, completionCts.Token);
                     try
                     {
                         var finished = await Task.WhenAny(completion, runTask).WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -557,6 +562,7 @@ internal sealed class RunCommand : BaseCommand
                     finally
                     {
                         completionCts.Cancel();
+                        ObserveFaults(completion);
                     }
                 }
                 else if (captureProfile)

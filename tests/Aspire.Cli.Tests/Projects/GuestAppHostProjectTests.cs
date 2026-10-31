@@ -2181,6 +2181,11 @@ public class GuestAppHostProjectTests : IDisposable
     {
         var appHostFile = new FileInfo(Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.ts"));
         await File.WriteAllTextAsync(appHostFile.FullName, "// test apphost");
+        var properties = _workspace.CreateDirectory("Properties");
+        await File.WriteAllTextAsync(Path.Combine(properties.FullName, "launchSettings.json"), """
+            { "profiles": { "default": { "environmentVariables": { "ASPIRE_TEST_OUTPUT_PATH": "stale-run" } } } }
+            """);
+        var outputPath = _workspace.CreateDirectory("test results").FullName;
         var command = OperatingSystem.IsWindows() ? "cmd.exe" : "/bin/sh";
         var runtime = new RuntimeSpec
         {
@@ -2209,6 +2214,10 @@ public class GuestAppHostProjectTests : IDisposable
         {
             LaunchAppHostCallback = () => throw new InvalidOperationException("Tests must not use the extension launcher.")
         };
+        var sessionFactory = new FakeAppHostServerSessionFactory
+        {
+            Session = new FakeAppHostServerSession(new FakeAppHostRpcClient { RuntimeSpec = runtime })
+        };
         var project = CreateGuestAppHostProject(
             interactionService: interaction,
             configuration: new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
@@ -2220,19 +2229,22 @@ public class GuestAppHostProjectTests : IDisposable
                 CreateAsyncCallback = (path, _) =>
                     Task.FromResult<IAppHostServerProject>(new FakeSucceedingAppHostServerProject(path))
             },
-            serverSessionFactory: new FakeAppHostServerSessionFactory
-            {
-                Session = new FakeAppHostServerSession(new FakeAppHostRpcClient { RuntimeSpec = runtime })
-            });
+            serverSessionFactory: sessionFactory);
 
         var exitCode = await project.RunAsync(new AppHostProjectContext
         {
             AppHostFile = appHostFile,
             WorkingDirectory = _workspace.WorkspaceRoot,
-            IsTestRun = true
+            IsTestRun = true,
+            EnvironmentVariables = new Dictionary<string, string>
+            {
+                [KnownConfigNames.TestOutputPath] = outputPath
+            }
         }, TestContext.Current.CancellationToken).DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(sessionFactory.CapturedEnvironmentVariables);
+        Assert.Equal(outputPath, sessionFactory.CapturedEnvironmentVariables[KnownConfigNames.TestOutputPath]);
     }
 
     [Theory]

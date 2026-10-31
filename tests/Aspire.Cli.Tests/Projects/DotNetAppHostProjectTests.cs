@@ -399,6 +399,40 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
+    public async Task RunAsync_SingleFileTestDestinationOverridesStaleLaunchProfile()
+    {
+        var appHostFile = CreateSingleFileAppHost();
+        await File.WriteAllTextAsync(Path.Combine(appHostFile.DirectoryName!, "apphost.run.json"), """
+            { "profiles": { "default": { "environmentVariables": { "ASPIRE_TEST_OUTPUT_PATH": "stale-run" } } } }
+            """);
+        var outputPath = _workspace.CreateDirectory("test results").FullName;
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, _, _) => 0,
+            RunAsyncCallback = (_, watch, _, _, _, env, _, options, _) =>
+            {
+                Assert.False(watch);
+                Assert.True(options.DisableExtensionLaunch);
+                Assert.Equal(outputPath, env![KnownConfigNames.TestOutputPath]);
+                return Task.FromResult(0);
+            }
+        };
+        var project = CreateDotNetAppHostProject(runner);
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            NoBuild = true,
+            NoRestore = true,
+            IsTestRun = true,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            EnvironmentVariables = new Dictionary<string, string> { [KnownConfigNames.TestOutputPath] = outputPath }
+        }, TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
     public async Task FindAndStopRunningInstanceAsync_CleansUpDeadPidSocketAndReturnsNoRunningInstance()
     {
         var appHostFile = CreateSingleFileAppHost();

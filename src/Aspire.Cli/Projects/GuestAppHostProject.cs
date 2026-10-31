@@ -650,6 +650,12 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             {
                 launchSettingsEnvVars[KnownConfigNames.AspireSecretsFile] = aspireSecretsFile;
             }
+            if (context.IsTestRun && context.EnvironmentVariables.TryGetValue(KnownConfigNames.TestOutputPath, out var testOutputPath))
+            {
+                // Hosting executes test setup in the server, not in the guest AppHost client.
+                // Apply this after launch-profile/configuration projection so the current run wins.
+                launchSettingsEnvVars[KnownConfigNames.TestOutputPath] = testOutputPath;
+            }
 
             // Check if hot reload (watch mode) is enabled
             var enableHotReload = !context.IsTestRun && _features.IsFeatureEnabled(KnownFeatures.DefaultWatchEnabled, defaultValue: false);

@@ -232,14 +232,79 @@
         <target state="new">This AppHost does not support aspire test. Update its Aspire.Hosting package to a version that supports test resource lifetimes.</target>
         <note />
       </trans-unit>
+      <trans-unit id="TestArtifactFailure">
+        <source>Failed to create or write test run artifacts: {0}</source>
+        <target state="new">Failed to create or write test run artifacts: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TestCancelled">
+        <source>cancelled</source>
+        <target state="new">cancelled</target>
+        <note />
+      </trans-unit>
       <trans-unit id="TestDescription">
         <source>Run an AppHost until all resources marked with WithTestRun() finish</source>
         <target state="new">Run an AppHost until all resources marked with WithTestRun() finish</target>
         <note />
       </trans-unit>
+      <trans-unit id="TestExitCode">
+        <source>Exit code</source>
+        <target state="new">Exit code</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TestFailed">
+        <source>failed</source>
+        <target state="new">failed</target>
+        <note />
+      </trans-unit>
       <trans-unit id="TestIncompatibleOptions">
         <source>aspire test does not support detached execution, JSON output, profile capture, or extension-managed debug sessions.</source>
         <target state="new">aspire test does not support detached execution, JSON output, profile capture, or extension-managed debug sessions.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TestIncomplete">
+        <source>incomplete</source>
+        <target state="new">incomplete</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TestOutcome">
+        <source>Outcome</source>
+        <target state="new">Outcome</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TestOutputDirectory">
+        <source>Test output: {0}</source>
+        <target state="new">Test output: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TestPassed">
+        <source>passed</source>
+        <target state="new">passed</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TestPending">
+        <source>pending</source>
+        <target state="new">pending</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TestResourceStatus">
+        <source>{0}: {1} ({2}, exit code {3})</source>
+        <target state="new">{0}: {1} ({2}, exit code {3})</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TestRunningHeader">
+        <source>Tests are running</source>
+        <target state="new">Tests are running</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TestSummaryFile">
+        <source>Summary JSON: {0}</source>
+        <target state="new">Summary JSON: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TestSummaryHeader">
+        <source>Test run {0}</source>
+        <target state="new">Test run {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="TimeoutWaitingForAppHost">
