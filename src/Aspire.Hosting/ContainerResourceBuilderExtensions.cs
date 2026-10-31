@@ -335,7 +335,7 @@ public static class ContainerResourceBuilderExtensions
         if (existing is not null)
         {
             if (existing.Type == ContainerMountType.BindMount &&
-                string.Equals(existing.Source, sourcePath, StringComparison.Ordinal) &&
+                IsSameBindMountSource(existing.Source, sourcePath) &&
                 existing.IsReadOnly == isReadOnly)
             {
                 return builder;
@@ -1660,6 +1660,22 @@ public static class ContainerResourceBuilderExtensions
         var umask = umaskValue is { } value ? (UnixFileMode)value : (UnixFileMode?)null;
 
         return builder.WithContainerFiles(destinationPath, callback, defaultOwner, defaultGroup, umask);
+    }
+
+    private static bool IsSameBindMountSource(string? existingSource, string source)
+    {
+        if (existingSource is null)
+        {
+            return false;
+        }
+
+        // Only normalize fully qualified host paths. Rooted but unqualified paths (such as a Docker socket
+        // path on Windows) are used as-is when mounting, so they are compared as-is too.
+        static string Normalize(string path) =>
+            Path.TrimEndingDirectorySeparator(Path.IsPathFullyQualified(path) ? Path.GetFullPath(path) : path);
+
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        return string.Equals(Normalize(existingSource), Normalize(source), comparison);
     }
 
     private static int? GetIntegralContainerFilesOption(double? value, string paramName, int minValue, int maxValue)

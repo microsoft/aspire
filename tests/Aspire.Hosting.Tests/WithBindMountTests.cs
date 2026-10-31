@@ -40,6 +40,21 @@ public class WithBindMountTests
     }
 
     [Fact]
+    public void EquivalentAbsoluteSourcesAreIdentical()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var source = Path.GetFullPath("bind-source", builder.AppHostDirectory);
+
+        var container = builder.AddContainer("container", "image")
+            .WithBindMount("bind-source", "/mnt/data")
+            .WithBindMount(Path.Combine(source, "."), "/mnt/data")
+            .WithBindMount(source + Path.DirectorySeparatorChar, "/mnt/data");
+
+        var mount = Assert.Single(container.Resource.Annotations.OfType<ContainerMountAnnotation>());
+        Assert.Equal(source, mount.Source);
+    }
+
+    [Fact]
     public void DifferentTargetsAreBothAdded()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
