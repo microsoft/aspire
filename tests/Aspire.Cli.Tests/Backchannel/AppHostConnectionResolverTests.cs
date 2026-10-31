@@ -3,6 +3,7 @@
 
 using System.Globalization;
 using Aspire.Cli.Backchannel;
+using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
@@ -200,6 +201,55 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
         Assert.False(server.WaitForClientDisconnectAsync().IsCompleted);
 
         result.Dispose();
+
+        await server.WaitForClientDisconnectAsync().DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task GetDashboardApiAsync_WithExplicitProjectFile_KeepsConnectionOpenUntilResultDisposed()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectFile = CreateProjectFile(workspace.WorkspaceRoot, "TestAppHost", "TestAppHost.csproj");
+        using var server = TestResolverBackchannelServer.Start(projectFile.FullName, processId: 1112);
+        server.Target.DashboardInfo = new GetDashboardInfoResponse
+        {
+            ApiBaseUrl = "http://localhost:18888",
+            ApiToken = "test-token",
+            DashboardUrls = ["http://localhost:18888/login?t=abc"]
+        };
+        using var sources = TestConfigSourceServices.Create(executionContext);
+        var resolver = new AppHostConnectionResolver(
+            new TestAuxiliaryBackchannelMonitor(),
+            new TestInteractionService(),
+            new TestProjectLocator(),
+            executionContext,
+            TestHelpers.CreateInteractiveHostEnvironment(),
+            NullLogger<AppHostConnectionResolver>.Instance,
+            new ProfilingTelemetry(new ConfigurationBuilder().Build()),
+            sources,
+            (_, _, _, _) => [server.AppHostSocket]);
+
+        var dashboardApi = await TelemetryCommandHelpers.GetDashboardApiAsync(
+            resolver,
+            new TestInteractionService(),
+            new TestHttpClientFactory(),
+            NullLogger.Instance,
+            projectFile,
+            dashboardUrl: null,
+            apiKey: null,
+            requireDashboard: true,
+            TestContext.Current.CancellationToken);
+
+        Assert.True(dashboardApi.Success);
+        Assert.Equal("http://localhost:18888", dashboardApi.BaseUrl);
+
+        // Commands such as 'aspire export' keep using the connection after the helper returns.
+        var dashboardInfo = await dashboardApi.Connection!.GetDashboardInfoV2Async(TestContext.Current.CancellationToken);
+        Assert.Equal("test-token", dashboardInfo?.ApiToken);
+        Assert.False(server.WaitForClientDisconnectAsync().IsCompleted);
+
+        dashboardApi.Dispose();
 
         await server.WaitForClientDisconnectAsync().DefaultTimeout();
     }

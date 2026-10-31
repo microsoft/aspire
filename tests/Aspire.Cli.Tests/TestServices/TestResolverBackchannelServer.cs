@@ -108,6 +108,14 @@ internal sealed class TestResolverRpcTarget(string appHostPath, int processId)
 
     public ResourceSnapshot[] Resources { get; set; } = [];
 
+    public GetDashboardInfoResponse DashboardInfo { get; set; } = new() { DashboardUrls = [] };
+
+    public Task<GetDashboardInfoResponse> GetDashboardInfoAsync(GetDashboardInfoRequest? request = null)
+    {
+        _ = request;
+        return Task.FromResult(DashboardInfo);
+    }
+
     public ConcurrentQueue<ExecuteResourceCommandRequest> ExecutedCommands { get; } = new();
 
     public Task<GetResourcesResponse> GetResourcesAsync(GetResourcesRequest? request = null)

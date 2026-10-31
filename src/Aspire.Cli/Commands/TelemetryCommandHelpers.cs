@@ -265,13 +265,35 @@ internal static class TelemetryCommandHelpers
             return new DashboardApiResult(true, null, dashboardUrl, token, displayDashboardUrl, 0);
         }
 
-        using var result = await connectionResolver.ResolveConnectionAsync(
+        var result = await connectionResolver.ResolveConnectionAsync(
             projectFile,
             SharedCommandStrings.ScanningForRunningAppHosts,
             string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.SelectAppHost, TelemetryCommandStrings.SelectAppHostAction),
             SharedCommandStrings.AppHostNotRunning,
             cancellationToken);
 
+        DashboardApiResult? apiResult = null;
+        try
+        {
+            apiResult = await GetDashboardApiFromConnectionAsync(result, interactionService, requireDashboard, cancellationToken).ConfigureAwait(false);
+            return apiResult;
+        }
+        finally
+        {
+            // Successful results take ownership of the connection so callers can keep using it.
+            if (apiResult?.ConnectionResult is null)
+            {
+                result.Dispose();
+            }
+        }
+    }
+
+    private static async Task<DashboardApiResult> GetDashboardApiFromConnectionAsync(
+        AppHostConnectionResult result,
+        IInteractionService interactionService,
+        bool requireDashboard,
+        CancellationToken cancellationToken)
+    {
         if (!result.Success)
         {
             var exitCode = AppHostConnectionResultHandler.DisplayFailureAsInformation(result, interactionService);
@@ -293,7 +315,7 @@ internal static class TelemetryCommandHelpers
             }
 
             // Dashboard is optional — return success with null API info
-            return new DashboardApiResult(true, connection, null, null, null, 0);
+            return new DashboardApiResult(true, connection, null, null, null, 0) { ConnectionResult = result };
         }
 
         var apiBaseUrl = DashboardUrls.NormalizeDashboardRequestUrl(dashboardInfo.ApiBaseUrl, stripLoginPath: false) ?? string.Empty;
@@ -302,7 +324,7 @@ internal static class TelemetryCommandHelpers
         // Preserve the original hostname (e.g. *.dev.localhost) for display URLs.
         var extractedDashboardUrl = ExtractDashboardBaseUrl(dashboardInfo.DashboardUrls?.FirstOrDefault());
 
-        return new DashboardApiResult(true, connection, apiBaseUrl, dashboardInfo.ApiToken, extractedDashboardUrl, 0);
+        return new DashboardApiResult(true, connection, apiBaseUrl, dashboardInfo.ApiToken, extractedDashboardUrl, 0) { ConnectionResult = result };
     }
 
     /// <summary>
@@ -794,13 +816,22 @@ internal sealed record DashboardApiResult(
     string? BaseUrl,
     string? ApiToken,
     string? DashboardUrl,
-    int ExitCode)
+    int ExitCode) : IDisposable
 {
+    /// <summary>
+    /// Gets the resolver result that owns <see cref="Connection"/>, if any. Disposing this
+    /// result releases the connection when it was opened for this command.
+    /// </summary>
+    internal AppHostConnectionResult? ConnectionResult { get; init; }
+
     /// <summary>
     /// Creates a failed result with the specified exit code.
     /// </summary>
     public static DashboardApiResult Failure(int exitCode)
         => new(false, null, null, null, null, exitCode);
+
+    /// <inheritdoc />
+    public void Dispose() => ConnectionResult?.Dispose();
 }
 
 /// <summary>
