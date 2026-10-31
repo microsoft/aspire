@@ -447,6 +447,62 @@ public class ResourceNotificationTests
     }
 
     [Fact]
+    public async Task WaitForDependenciesReportsEveryFailedResourceReadyEvent()
+    {
+        var dependency1 = new CustomResource("dependency1");
+        var dependency2 = new CustomResource("dependency2");
+        var resource = new CustomResource("resource");
+        resource.Annotations.Add(new WaitAnnotation(dependency1, WaitType.WaitUntilHealthy));
+        resource.Annotations.Add(new WaitAnnotation(dependency2, WaitType.WaitUntilHealthy));
+
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        foreach (var (dependency, message) in new[] { (dependency1, "failure 1"), (dependency2, "failure 2") })
+        {
+            await notificationService.PublishUpdateAsync(dependency, s => s with
+            {
+                State = KnownResourceStates.Running,
+                ResourceReadyEvent = new EventSnapshot(Task.FromException(new InvalidOperationException(message)))
+            }).DefaultTimeout();
+        }
+
+        var exception = await Assert.ThrowsAsync<AggregateException>(
+            () => notificationService.WaitForDependenciesAsync(resource, CancellationToken.None)).DefaultTimeout();
+
+        Assert.Collection(exception.InnerExceptions.OrderBy(e => e.Message),
+            e => Assert.Equal("failure 1", Assert.IsType<InvalidOperationException>(e).Message),
+            e => Assert.Equal("failure 2", Assert.IsType<InvalidOperationException>(e).Message));
+        Assert.Contains("Resource 'resource' failed waiting for 2 dependencies.", exception.Message);
+    }
+
+    [Fact]
+    public async Task WaitForDependenciesRethrowsSingleFailedResourceReadyEvent()
+    {
+        var dependency1 = new CustomResource("dependency1");
+        var dependency2 = new CustomResource("dependency2");
+        var resource = new CustomResource("resource");
+        resource.Annotations.Add(new WaitAnnotation(dependency1, WaitType.WaitUntilHealthy));
+        resource.Annotations.Add(new WaitAnnotation(dependency2, WaitType.WaitUntilHealthy));
+
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        await notificationService.PublishUpdateAsync(dependency1, s => s with
+        {
+            State = KnownResourceStates.Running,
+            ResourceReadyEvent = new EventSnapshot(Task.FromException(new InvalidOperationException("failure 1")))
+        }).DefaultTimeout();
+        await notificationService.PublishUpdateAsync(dependency2, s => s with
+        {
+            State = KnownResourceStates.Running,
+            ResourceReadyEvent = new EventSnapshot(Task.CompletedTask)
+        }).DefaultTimeout();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => notificationService.WaitForDependenciesAsync(resource, CancellationToken.None)).DefaultTimeout();
+        Assert.Equal("failure 1", exception.Message);
+    }
+
+    [Fact]
     public async Task WaitForDependenciesPublishesAndUpdatesWaitingForHealthyDependencies()
     {
         var dependency1 = new CustomResource("dependency1");
