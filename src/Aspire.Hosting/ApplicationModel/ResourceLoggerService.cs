@@ -23,6 +23,7 @@ public class ResourceLoggerService : IDisposable
     private readonly CancellationTokenSource _disposing = new();
     private int _disposed;
     private IConsoleLogsService _consoleLogsService = new FakeConsoleLogsService();
+
     private Action<(string, ResourceLoggerState)>? _loggerAdded;
     private event Action<(string, ResourceLoggerState)> LoggerAdded
     {
@@ -40,6 +41,9 @@ public class ResourceLoggerService : IDisposable
             _loggerAdded -= value;
         }
     }
+
+    internal Task<Stream> GetRawOutputAsync(string resourceName, bool standardError, CancellationToken cancellationToken) =>
+        _consoleLogsService.GetRawOutputAsync(resourceName, standardError, cancellationToken);
 
     /// <summary>
     /// Gets the logger for the resource to write to.

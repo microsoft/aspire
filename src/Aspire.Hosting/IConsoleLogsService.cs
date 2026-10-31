@@ -8,4 +8,7 @@ namespace Aspire.Hosting;
 internal interface IConsoleLogsService
 {
     IAsyncEnumerable<IReadOnlyList<LogEntry>> GetAllLogsAsync(string resourceName, CancellationToken cancellationToken);
+
+    Task<Stream> GetRawOutputAsync(string resourceName, bool standardError, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("Raw process output is unavailable from this console log service.");
 }
