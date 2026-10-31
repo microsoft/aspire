@@ -122,6 +122,8 @@
     <InternalsVisibleTo Include="Aspire.Hosting.Java.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.JavaScript.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Python.Tests" />
+    <!-- Nextest uses the native launch guards and deferred value resolution also used by Go testing. -->
+    <InternalsVisibleTo Include="Aspire.Hosting.Rust" />
     <InternalsVisibleTo Include="Aspire.Hosting.Rust.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Testing.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Containers.Tests" />
