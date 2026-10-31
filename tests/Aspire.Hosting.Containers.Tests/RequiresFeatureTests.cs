@@ -9,26 +9,27 @@ namespace Aspire.Hosting.Containers.Tests;
 public class RequiresFeatureTests
 {
     [Theory]
-    [InlineData("")]
-    [InlineData("docker")]
-    [InlineData("podman")]
-    [InlineData("wslc")]
-    [InlineData("WSLC")]
-    public void CiContainerFeatures_KeepDockerAndTestcontainersSeparate(string runtime)
+    [InlineData("GITHUB_JOB")]
+    [InlineData("BUILD_BUILDID")]
+    [InlineData("HELIX_WORKITEM_ROOT")]
+    public void CiContainerFeatures_KeepDockerAndTestcontainersSeparate(string ciVariable)
     {
-        RemoteExecutor.Invoke(static runtime =>
+        RemoteExecutor.Invoke(static ciVariable =>
         {
-            Environment.SetEnvironmentVariable("GITHUB_JOB", "test");
-            Environment.SetEnvironmentVariable("ASPIRE_CONTAINER_RUNTIME", runtime);
+            Environment.SetEnvironmentVariable("GITHUB_JOB", null);
+            Environment.SetEnvironmentVariable("BUILD_BUILDID", null);
+            Environment.SetEnvironmentVariable("HELIX_WORKITEM_ROOT", null);
+            Environment.SetEnvironmentVariable(ciVariable, "test");
+            Environment.SetEnvironmentVariable("ASPIRE_CONTAINER_RUNTIME", null);
             // CI capability is an expectation, not a probe that silently skips when setup fails.
             Environment.SetEnvironmentVariable("PATH", "");
 
             var expectedContainerRuntime = OperatingSystem.IsLinux()
-                || (OperatingSystem.IsWindows() && runtime.Equals("wslc", StringComparison.OrdinalIgnoreCase));
+                || (OperatingSystem.IsWindows() && ciVariable == "GITHUB_JOB");
             Assert.Equal(expectedContainerRuntime, RequiresFeatureAttribute.IsFeatureSupported(TestFeature.ContainerRuntime));
             Assert.Equal(OperatingSystem.IsLinux(), RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Docker));
             Assert.Equal(OperatingSystem.IsLinux(), RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Testcontainers));
-            Assert.False(TestcontainersPodmanConfiguration.IsConfigurationInitialized);
-        }, runtime).Dispose();
+            Assert.Equal(OperatingSystem.IsLinux(), TestcontainersPodmanConfiguration.IsConfigurationInitialized);
+        }, ciVariable).Dispose();
     }
 }

@@ -96,7 +96,6 @@ jobs:
           Write-Output "NUGET_PACKAGES=${{ github.workspace }}/.nuget/packages" >> $env:GITHUB_ENV
           echo "TEST_RUN_PATH=${{ github.workspace }}\run-tests" >> $env:GITHUB_ENV
           echo ${{ github.workspace }}\.dotnet >> $env:GITHUB_PATH
-          echo "ASPIRE_CONTAINER_RUNTIME=wslc" >> $env:GITHUB_ENV
           echo "WSL_UTF8=1" >> $env:GITHUB_ENV
 
       - name: Checkout code

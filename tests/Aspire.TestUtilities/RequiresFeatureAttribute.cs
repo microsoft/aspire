@@ -90,7 +90,8 @@ public class RequiresFeatureAttribute(TestFeature feature) : Attribute, ITraitAt
     // would let those tests skip silently, which is not desirable.
     //
     // scenarios:
-    // - Windows CI: supported when the runner explicitly selects WSLC.
+    // - Windows GitHub Actions: WSLC is installed and verified by run-tests.yml.
+    // - Other Windows CI: containers are not available.
     // - Linux - Local, or CI: always assume that a container runtime is installed
     //
     // Locally there is no such expectation, so probe PATH instead: a developer machine may have Podman
@@ -102,9 +103,7 @@ public class RequiresFeatureAttribute(TestFeature feature) : Attribute, ITraitAt
         if (PlatformDetection.IsRunningOnCI)
         {
             return OperatingSystem.IsLinux()
-                || (OperatingSystem.IsWindows()
-                    && string.Equals(Environment.GetEnvironmentVariable("ASPIRE_CONTAINER_RUNTIME"),
-                        KnownContainerRuntimes.Wslc, StringComparison.OrdinalIgnoreCase));
+                || (OperatingSystem.IsWindows() && PlatformDetection.IsRunningOnGithubActions);
         }
 
         return IsOnPath(KnownContainerRuntimes.Docker) || IsOnPath(KnownContainerRuntimes.Podman);
@@ -131,9 +130,9 @@ public class RequiresFeatureAttribute(TestFeature feature) : Attribute, ITraitAt
     {
         // Windows WSLC runners do not provide a Docker API endpoint. Do not initialize
         // Testcontainers configuration just because DCP can run containers there.
-        if (PlatformDetection.IsRunningOnCI)
+        if (PlatformDetection.IsRunningOnCI && !IsDockerSupported())
         {
-            return IsDockerSupported();
+            return false;
         }
 
         if (!IsContainerRuntimeSupported())
@@ -144,6 +143,11 @@ public class RequiresFeatureAttribute(TestFeature feature) : Attribute, ITraitAt
         // Configuration can set process-wide environment variables, so keep it scoped to tests that
         // actually use Testcontainers rather than generic DCP-backed container tests.
         TestcontainersPodmanConfiguration.EnsureConfigured();
+
+        if (PlatformDetection.IsRunningOnCI)
+        {
+            return true;
+        }
 
         // A Docker install always exposes the socket or named pipe Testcontainers probes by default, so
         // the CLI being on PATH is enough. Podman only works if we managed to find an API socket for it.
