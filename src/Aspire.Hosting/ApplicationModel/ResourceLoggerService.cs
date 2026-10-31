@@ -23,21 +23,33 @@ public class ResourceLoggerService : IDisposable
     private readonly CancellationTokenSource _disposing = new();
     private int _disposed;
     private IConsoleLogsService _consoleLogsService = new FakeConsoleLogsService();
+    // Guards logger creation and LoggerAdded registration so every handler observes each logger exactly once:
+    // either through the creation announcement or through the replay of existing loggers when it registers.
+    private readonly object _loggerAddedLock = new();
     private Action<(string, ResourceLoggerState)>? _loggerAdded;
-    private event Action<(string, ResourceLoggerState)> LoggerAdded
+    // Internal for testing.
+    internal event Action<(string, ResourceLoggerState)> LoggerAdded
     {
         add
         {
-            _loggerAdded += value;
+            KeyValuePair<string, ResourceLoggerState>[] existingLoggers;
+            lock (_loggerAddedLock)
+            {
+                _loggerAdded += value;
+                existingLoggers = _loggers.ToArray();
+            }
 
-            foreach (var logger in _loggers)
+            foreach (var logger in existingLoggers)
             {
                 value((logger.Key, logger.Value));
             }
         }
         remove
         {
-            _loggerAdded -= value;
+            lock (_loggerAddedLock)
+            {
+                _loggerAdded -= value;
+            }
         }
     }
 
@@ -344,14 +356,32 @@ public class ResourceLoggerService : IDisposable
     }
 
     // Internal for testing.
-    internal ResourceLoggerState GetResourceLoggerState(string resourceName) =>
-        _loggers.GetOrAdd(resourceName, (name, context) =>
+    internal ResourceLoggerState GetResourceLoggerState(string resourceName)
+    {
+        if (_loggers.TryGetValue(resourceName, out var existing))
         {
-            var state = new ResourceLoggerState(name, TimeProvider);
-            context._loggerAdded?.Invoke((name, state));
-            return state;
-        },
-        this);
+            return existing;
+        }
+
+        ResourceLoggerState state;
+        Action<(string, ResourceLoggerState)>? loggerAdded;
+        lock (_loggerAddedLock)
+        {
+            if (_loggers.TryGetValue(resourceName, out existing))
+            {
+                return existing;
+            }
+
+            // Publish the logger before capturing handlers. Handlers registered after this point replay it
+            // from _loggers; handlers registered before it are notified below.
+            state = new ResourceLoggerState(resourceName, TimeProvider);
+            _loggers[resourceName] = state;
+            loggerAdded = _loggerAdded;
+        }
+
+        loggerAdded?.Invoke((resourceName, state));
+        return state;
+    }
 
     internal bool HasActiveSubscribers(string resourceName)
     {
