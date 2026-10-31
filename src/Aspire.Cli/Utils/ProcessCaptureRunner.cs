@@ -148,15 +148,27 @@ internal static class ProcessCaptureRunner
             // milliseconds). Cap the post-exit drain, but allow more time than the
             // post-kill path: the peer has already exited normally, so losing recently
             // emitted stdout/stderr would make diagnostics flaky under CI load.
-            var capture = await SwallowCaptureAsync(captureTask, createEmptyCapture, logger, s_postExitCaptureWaitBound).ConfigureAwait(false);
+            await ((Task)captureTask).WaitAsync(s_postExitCaptureWaitBound, CancellationToken.None).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+            if (!captureTask.IsCompleted)
+            {
+                // The drain bound expired before EOF (pipes inherited by descendants, or
+                // reader continuations delayed under load). Output written before exit is
+                // already buffered by the capture, so signal the reads to stop rather than
+                // abandoning the task: captures that return partial output on cancellation
+                // keep it, instead of the caller seeing an empty capture for a process that
+                // exited successfully after writing its result.
+                logger.LogDebug(
+                    "Process output capture did not complete within {Bound}s after exit; cancelling reads.",
+                    s_postExitCaptureWaitBound.TotalSeconds);
+                timeoutCts.Cancel();
+            }
+
+            var capture = await SwallowCaptureAsync(captureTask, createEmptyCapture, logger, s_postKillCaptureWaitBound).ConfigureAwait(false);
             var exitCode = process.ExitCode;
 
-            // If the bounded drain timed out (pipes inherited by descendants), the
-            // capture task is still awaiting on timeoutCts.Token. Disposing the CTS in
-            // the `using` does NOT cancel it, so without an explicit Cancel here the
-            // task could linger up to the remaining wall-clock timeout budget after we
-            // return, holding inherited stdout/stderr handles open for that long.
-            // Cancelling drives the read to terminate promptly.
+            // Ensure the capture task cannot linger up to the remaining wall-clock
+            // timeout budget after we return. Disposing the CTS in the `using` does NOT
+            // cancel it, so cancel explicitly (a no-op when already cancelled above).
             timeoutCts.Cancel();
 
             return new ProcessCaptureResult<TCapture>(
