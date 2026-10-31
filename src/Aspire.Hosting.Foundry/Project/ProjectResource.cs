@@ -49,6 +49,11 @@ public class AzureCognitiveServicesProjectResource :
                 Description = $"Prepares Microsoft Foundry project {name} for deployment.",
                 Action = context =>
                 {
+                    if (context.ExecutionContext.IsPublishMode)
+                    {
+                        ValidateComputeResourcesAreHostedAgents(context.Model);
+                    }
+
                     if (DefaultContainerRegistry is not null &&
                         (this.HasAnnotationOfType<ContainerRegistryReferenceAnnotation>() ||
                          !this.HasAnnotationOfType<RequiresHostedAgentRegistryAnnotation>()))
@@ -89,6 +94,25 @@ public class AzureCognitiveServicesProjectResource :
             steps.Add(computeUrls);
             return steps;
         }));
+    }
+
+    private void ValidateComputeResourcesAreHostedAgents(DistributedApplicationModel model)
+    {
+        var unregisteredComputeResources = model.Resources
+            .OfType<IComputeResource>()
+            .Where(resource => resource.GetComputeEnvironment() == this)
+            .Where(resource => resource.GetDeploymentTargetAnnotation(this)?.DeploymentTarget is not AzureHostedAgentResource)
+            .ToList();
+
+        if (unregisteredComputeResources.Count == 0)
+        {
+            return;
+        }
+
+        var resourceNames = string.Join("', '", unregisteredComputeResources.Select(resource => resource.Name));
+        throw new InvalidOperationException(
+            $"Compute resource(s) '{resourceNames}' are assigned to Microsoft Foundry project '{Name}' but are not configured as hosted agents. " +
+            "Register each resource with '.AsHostedAgent(project)' (or 'asHostedAgent(project)' in polyglot app hosts), or assign it to a different compute environment.");
     }
 
     /// <inheritdoc/>
