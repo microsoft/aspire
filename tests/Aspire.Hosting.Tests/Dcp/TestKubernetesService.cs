@@ -420,7 +420,11 @@ internal sealed class TestKubernetesService : IKubernetesService
                     {
                         exe.Status = new ExecutableStatus();
                     }
-                    exe.Status.State = ExecutableState.Finished;
+                    // Like DCP, an Executable that never started stays FailedToStart when it is stopped.
+                    if (exe.Status.State != ExecutableState.FailedToStart)
+                    {
+                        exe.Status.State = ExecutableState.Finished;
+                    }
                     changed = true;
                 }
 

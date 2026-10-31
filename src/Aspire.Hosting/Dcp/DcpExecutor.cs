@@ -1201,7 +1201,9 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
                         patch = CreatePatch(e, obj => obj.Spec.Stop = true);
                         await _kubernetesService.PatchAsync(e, patch, attemptCancellationToken).ConfigureAwait(false);
                         var eu = await _kubernetesService.GetAsync<Executable>(e.Metadata.Name, cancellationToken: attemptCancellationToken).ConfigureAwait(false);
-                        if (eu.Status?.State == ExecutableState.Finished || eu.Status?.State == ExecutableState.Terminated)
+                        // FailedToStart is terminal: the process is not running (DCP reports it, for example, when
+                        // the stop request reaches the Executable before its process was started).
+                        if (eu.Status?.State == ExecutableState.Finished || eu.Status?.State == ExecutableState.Terminated || eu.Status?.State == ExecutableState.FailedToStart)
                         {
                             _logger.LogDebug("Executable '{ResourceName}' was stopped.", resourceReference.DcpResourceName);
                             return true;
