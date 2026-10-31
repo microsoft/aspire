@@ -93,6 +93,10 @@ public sealed class IntegrationHostProcessFixture : IAsyncLifetime
         {
             await File.WriteAllTextAsync(Path.Combine(directory.FullName, "stall-discovery"), "");
         }
+        if (options?.DelayHostPidWrite == true)
+        {
+            await File.WriteAllTextAsync(Path.Combine(directory.FullName, "delay-host-pid-write"), "");
+        }
 
         return new IntegrationHostServerProcess(directory.FullName, _hostAssembly, useAppHostExecutable, output);
     }
@@ -202,7 +206,15 @@ public sealed class IntegrationHostProcessFixture : IAsyncLifetime
         }
         const generation = fs.existsSync('generation') ? Number(fs.readFileSync('generation', 'utf8')) + 1 : 1;
         fs.writeFileSync('generation', String(generation));
-        fs.appendFileSync('host-pids', `${process.pid}\n`);
+        if (fs.existsSync('delay-host-pid-write')) {
+            // Widen the window between creating host-pids and writing the PID so readers observe the empty file.
+            const fd = fs.openSync('host-pids', 'a');
+            Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000);
+            fs.writeSync(fd, `${process.pid}\n`);
+            fs.closeSync(fd);
+        } else {
+            fs.appendFileSync('host-pids', `${process.pid}\n`);
+        }
         if (fs.existsSync('skip-registration')) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0);
         const path = process.env.REMOTE_APP_HOST_SOCKET_PATH;
         const socket = net.createConnection(process.platform === 'win32' ? `\\\\.\\pipe\\${path}` : path);
@@ -294,6 +306,7 @@ internal sealed record IntegrationHostTestOptions
     public TimeSpan? DiscoveryTimeout { get; init; }
     public int? MaxRestartAttempts { get; init; }
     public bool StallDiscovery { get; init; }
+    public bool DelayHostPidWrite { get; init; }
 }
 
 internal sealed class IntegrationHostServerProcess : IAsyncDisposable
@@ -414,6 +427,33 @@ internal sealed class IntegrationHostServerProcess : IAsyncDisposable
     }
 
     public int[] HostProcessIds => File.ReadAllLines(Path.Combine(Directory, "host-pids")).Select(int.Parse).ToArray();
+
+    // The host creates host-pids before writing its PID, so wait for complete newline-terminated entries rather than the file.
+    public async Task<int[]> WaitForHostProcessIdsAsync(int count)
+    {
+        var path = Path.Combine(Directory, "host-pids");
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(10));
+        var content = "";
+        try
+        {
+            while (true)
+            {
+                content = File.Exists(path) ? await File.ReadAllTextAsync(path, timeout.Token) : "";
+                var lines = content.Split('\n');
+                // The last element is empty when the content ends with a newline, or a partially written entry otherwise.
+                if (lines.Length - 1 >= count)
+                {
+                    return lines[..^1].Select(int.Parse).ToArray();
+                }
+                await Task.Delay(25, timeout.Token);
+            }
+        }
+        catch (OperationCanceledException) when (!TestContext.Current.CancellationToken.IsCancellationRequested)
+        {
+            throw new TimeoutException($"Timed out waiting for {count} host PID(s) in '{path}'. Content: '{content}'. Diagnostics: {Diagnostics}");
+        }
+    }
 
     public static async Task AssertExitedAsync(int processId)
     {
