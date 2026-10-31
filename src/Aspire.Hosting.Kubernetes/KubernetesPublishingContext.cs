@@ -388,9 +388,13 @@ internal sealed class KubernetesPublishingContext(
         var templatesFolder = Path.Combine(OutputPath, "templates", resource.Name);
         Directory.CreateDirectory(templatesFolder);
 
+        // Different kinds may legitimately share a name (e.g. a Service and a ServiceExport targeting it),
+        // so make file names unique rather than letting a later template silently overwrite an earlier one.
+        var usedFileNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         foreach (var templatedItem in templatedItems)
         {
-            var fileName = GetFilename(resource.Name, templatedItem);
+            var fileName = GetUniqueFilename(GetFilename(resource.Name, templatedItem), templatedItem, usedFileNames);
             var outputFile = Path.Combine(templatesFolder, fileName);
             var yaml = _serializer.Serialize(templatedItem);
 
@@ -398,6 +402,28 @@ internal sealed class KubernetesPublishingContext(
             await writer.WriteLineAsync(HelmExtensions.TemplateFileSeparator).ConfigureAwait(false);
             await writer.WriteAsync(yaml).ConfigureAwait(false);
         }
+    }
+
+    private static string GetUniqueFilename(string fileName, BaseKubernetesResource templatedItem, HashSet<string> usedFileNames)
+    {
+        if (usedFileNames.Add(fileName))
+        {
+            return fileName;
+        }
+
+        var baseName = Path.GetFileNameWithoutExtension(fileName);
+        if (!string.IsNullOrWhiteSpace(templatedItem.Kind))
+        {
+            baseName = $"{baseName}-{templatedItem.Kind.ToLowerInvariant()}";
+        }
+
+        var candidate = $"{baseName}.yaml";
+        for (var i = 2; !usedFileNames.Add(candidate); i++)
+        {
+            candidate = $"{baseName}-{i}.yaml";
+        }
+
+        return candidate;
     }
 
     private static string GetFilename(string baseName, BaseKubernetesResource templatedItem)
