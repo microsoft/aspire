@@ -13,8 +13,10 @@ using Aspire.Cli.Backchannel;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging;
+using Spectre.Console;
 
 namespace Aspire.Cli.Commands;
 
@@ -26,6 +28,7 @@ internal sealed class ResourceCommand : BaseCommand
     private readonly IProjectLocator _projectLocator;
     private readonly AppHostConnectionResolver _connectionResolver;
     private readonly ILogger<ResourceCommand> _logger;
+    private readonly ICliHostEnvironment _hostEnvironment;
 
     private static readonly Argument<string> s_resourceArgument = new("resource")
     {
@@ -87,6 +90,7 @@ internal sealed class ResourceCommand : BaseCommand
         _projectLocator = projectLocator;
         _connectionResolver = connectionResolver;
         _logger = logger;
+        _hostEnvironment = services.HostEnvironment;
 
         Arguments.Add(s_resourceArgument);
         Arguments.Add(s_commandArgument);
@@ -142,13 +146,26 @@ internal sealed class ResourceCommand : BaseCommand
 
         var connection = result.Connection!;
         var command = await GetCommandMetadataAsync(connection, resourceName, commandName, includeHidden, cancellationToken).ConfigureAwait(false);
-        var commandArgumentsResult = CreateCommandArguments(command, capturedArguments, loadArguments ? CommandArgumentParseMode.LoadArguments : CommandArgumentParseMode.Execute);
+        // Match the dashboard: when the user can answer prompts, ask for any command inputs that weren't
+        // passed on the command line instead of silently using their defaults. Non-interactive callers
+        // (--non-interactive, CI, redirected stdin) keep the flag-only behavior.
+        var parseMode = loadArguments
+            ? CommandArgumentParseMode.LoadArguments
+            : command?.ArgumentInputs is { Length: > 0 } && CanPromptForCommandInputs()
+                ? CommandArgumentParseMode.PromptForMissing
+                : CommandArgumentParseMode.Execute;
+        var commandArgumentsResult = CreateCommandArguments(command, capturedArguments, parseMode);
         if (commandArgumentsResult.ErrorMessage is { } errorMessage)
         {
             return CommandResult.Failure(CliExitCodes.InvalidCommand, errorMessage);
         }
 
         var commandArguments = commandArgumentsResult.Arguments;
+
+        if (parseMode == CommandArgumentParseMode.PromptForMissing && commandArguments is JsonObject promptedArguments)
+        {
+            await PromptForMissingCommandArgumentsAsync(connection, resourceName, commandName, command!.ArgumentInputs, promptedArguments, cancellationToken).ConfigureAwait(false);
+        }
 
         if (loadArguments)
         {
@@ -179,6 +196,210 @@ internal sealed class ResourceCommand : BaseCommand
             commandName,
             commandArguments,
             cancellationToken));
+    }
+
+    private async Task PromptForMissingCommandArgumentsAsync(
+        IAppHostAuxiliaryBackchannel connection,
+        string resourceName,
+        string commandName,
+        ResourceSnapshotCommandArgument[] argumentInputs,
+        JsonObject arguments,
+        CancellationToken cancellationToken)
+    {
+        // Prompt for dependencies before the dynamic inputs that use them, even when they're declared later,
+        // so dependent inputs are loaded with the final dependency values.
+        var pendingInputs = OrderByDependencies(argumentInputs).Where(input => !arguments.ContainsKey(input.Name)).ToList();
+        bool argumentsChanged;
+
+        // Disabled inputs can become enabled once the inputs they depend on are answered, even when those
+        // dependencies are declared later. Keep revisiting deferred inputs until no new values are entered.
+        do
+        {
+            argumentsChanged = false;
+            for (var i = 0; i < pendingInputs.Count; i++)
+            {
+                var input = pendingInputs[i];
+                if (input.DynamicLoading is not null)
+                {
+                    // Dynamic inputs can change their choices, default value or enabled state based on the values
+                    // entered so far, so ask the AppHost for fresh metadata before prompting.
+                    input = await LoadCurrentArgumentInputAsync(connection, resourceName, commandName, arguments, input, cancellationToken).ConfigureAwait(false);
+                }
+
+                if (input.Disabled)
+                {
+                    continue;
+                }
+
+                pendingInputs.RemoveAt(i--);
+
+                var value = await PromptForCommandArgumentAsync(input, cancellationToken).ConfigureAwait(false);
+                if (value is not null)
+                {
+                    arguments[input.Name] = value;
+                    argumentsChanged = true;
+                }
+            }
+        }
+        while (argumentsChanged && pendingInputs.Count > 0);
+    }
+
+    private static List<ResourceSnapshotCommandArgument> OrderByDependencies(ResourceSnapshotCommandArgument[] argumentInputs)
+    {
+        var inputsByName = new Dictionary<string, ResourceSnapshotCommandArgument>(StringComparers.InteractionInputName);
+        foreach (var input in argumentInputs)
+        {
+            inputsByName.TryAdd(input.Name, input);
+        }
+
+        var ordered = new List<ResourceSnapshotCommandArgument>(argumentInputs.Length);
+        var visited = new HashSet<string>(StringComparers.InteractionInputName);
+
+        void Visit(ResourceSnapshotCommandArgument input)
+        {
+            if (!visited.Add(input.Name))
+            {
+                return;
+            }
+
+            foreach (var dependencyName in input.DynamicLoading?.DependsOnInputs ?? [])
+            {
+                if (inputsByName.TryGetValue(dependencyName, out var dependency))
+                {
+                    Visit(dependency);
+                }
+            }
+
+            ordered.Add(input);
+        }
+
+        foreach (var input in argumentInputs)
+        {
+            Visit(input);
+        }
+
+        return ordered;
+    }
+
+    // Prompts read from the terminal, so they can't be answered when stdin is redirected. The host environment
+    // accounts for the VS Code extension, which answers prompts over its backchannel.
+    private bool CanPromptForCommandInputs() =>
+        _hostEnvironment.SupportsInteractiveInput && !_hostEnvironment.IsPromptInputRedirected && !_hostEnvironment.IsPromptOutputRedirected;
+
+    private static async Task<ResourceSnapshotCommandArgument> LoadCurrentArgumentInputAsync(
+        IAppHostAuxiliaryBackchannel connection,
+        string resourceName,
+        string commandName,
+        JsonObject arguments,
+        ResourceSnapshotCommandArgument input,
+        CancellationToken cancellationToken)
+    {
+        var response = await connection.ExecuteResourceCommandAsync(
+            resourceName,
+            commandName,
+            new ExecuteResourceCommandOptions
+            {
+                Arguments = arguments.DeepClone(),
+                ValidateOnly = true,
+                NonInteractive = true,
+                ReturnArgumentInputs = true
+            },
+            cancellationToken).ConfigureAwait(false);
+
+        return response.ArgumentInputs?.FirstOrDefault(loaded => string.Equals(loaded.Name, input.Name, StringComparisons.InteractionInputName)) ?? input;
+    }
+
+    private async Task<string?> PromptForCommandArgumentAsync(ResourceSnapshotCommandArgument input, CancellationToken cancellationToken)
+    {
+        var promptText = $"{(input.Label ?? input.Name).EscapeMarkup()}:";
+
+        if (IsBooleanInput(input))
+        {
+            var confirmed = await InteractionService.PromptConfirmAsync(
+                promptText,
+                PromptBinding.CreateDefault(bool.TryParse(input.Value, out var defaultValue) && defaultValue),
+                cancellationToken).ConfigureAwait(false);
+            return confirmed.ToString().ToLowerInvariant();
+        }
+
+        if (string.Equals(input.InputType, "Choice", StringComparison.OrdinalIgnoreCase))
+        {
+            if (input.Options is { Count: > 0 } options)
+            {
+                return await PromptForChoiceArgumentAsync(input, promptText, options, cancellationToken).ConfigureAwait(false);
+            }
+
+            if (!input.AllowCustomChoice)
+            {
+                // Nothing can be selected, so leave the input unset and let the AppHost validate it like an omitted option.
+                return null;
+            }
+        }
+
+        Func<string, ValidationResult>? validator = IsNumberInput(input)
+            ? static value => string.IsNullOrWhiteSpace(value) || double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out _)
+                ? ValidationResult.Success()
+                : ValidationResult.Error(ResourceCommandStrings.InvalidNumberInput)
+            : null;
+
+        var value = await InteractionService.PromptForStringAsync(
+            promptText,
+            validator,
+            isSecret: string.Equals(input.InputType, "SecretText", StringComparison.OrdinalIgnoreCase),
+            required: input.Required,
+            binding: PromptBinding.CreateDefault(input.Value),
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        // An empty answer to an optional text prompt leaves the input unset, matching an omitted option.
+        return string.IsNullOrEmpty(value) ? null : value;
+    }
+
+    private async Task<string?> PromptForChoiceArgumentAsync(ResourceSnapshotCommandArgument input, string promptText, Dictionary<string, string?> options, CancellationToken cancellationToken)
+    {
+        // Selection prompts have no default, so list the default choice first to make Enter accept it.
+        var choices = options
+            .OrderByDescending(option => string.Equals(option.Key, input.Value, StringComparison.Ordinal))
+            .Select(option => new CommandArgumentChoice(option.Key, option.Value ?? option.Key, CommandArgumentChoiceKind.Option))
+            .ToList();
+
+        if (!string.IsNullOrEmpty(input.Value) && !options.ContainsKey(input.Value) && input.AllowCustomChoice)
+        {
+            // A custom default isn't one of the predefined options, but it should still be the Enter default.
+            choices.Insert(0, new CommandArgumentChoice(input.Value, input.Value, CommandArgumentChoiceKind.Option));
+        }
+        else if (string.IsNullOrEmpty(input.Value) && !input.Required && !options.ContainsKey(string.Empty))
+        {
+            // Optional choices without a default can be left unset, so offer that as the Enter default.
+            choices.Insert(0, new CommandArgumentChoice(null, ResourceCommandStrings.NoChoiceLabel, CommandArgumentChoiceKind.None));
+        }
+
+        if (input.AllowCustomChoice)
+        {
+            choices.Add(new CommandArgumentChoice(null, InteractionServiceStrings.CustomChoiceLabel, CommandArgumentChoiceKind.Custom));
+        }
+
+        var selected = await InteractionService.PromptForSelectionAsync(
+            promptText,
+            choices,
+            static choice => choice.Label.EscapeMarkup(),
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (selected.Kind == CommandArgumentChoiceKind.None)
+        {
+            return null;
+        }
+
+        if (selected.Kind == CommandArgumentChoiceKind.Custom)
+        {
+            var customValue = await InteractionService.PromptForStringAsync(
+                promptText,
+                required: input.Required,
+                binding: PromptBinding.CreateDefault(input.Value),
+                cancellationToken: cancellationToken).ConfigureAwait(false);
+            return string.IsNullOrEmpty(customValue) ? null : customValue;
+        }
+
+        return selected.Value;
     }
 
     private static async Task<CommandResult> LoadCommandArgumentsAsync(
@@ -464,14 +685,14 @@ internal sealed class ResourceCommand : BaseCommand
 
     private static bool ShouldValidateChoiceOptions(ResourceSnapshotCommandArgument argument, CommandArgumentParseMode parseMode)
     {
-        return parseMode == CommandArgumentParseMode.Execute &&
+        return parseMode != CommandArgumentParseMode.LoadArguments &&
             argument.DynamicLoading is null &&
             !argument.AllowCustomChoice;
     }
 
     private static bool ShouldValidateDisabledOption(ResourceSnapshotCommandArgument argument, CommandArgumentParseMode parseMode)
     {
-        return parseMode == CommandArgumentParseMode.Execute &&
+        return parseMode != CommandArgumentParseMode.LoadArguments &&
             argument.DynamicLoading is null &&
             argument.Disabled;
     }
@@ -584,10 +805,25 @@ internal sealed class ResourceCommand : BaseCommand
         // AppHost because their metadata can change after load callbacks run.
         Execute,
 
+        // Interactive command execution. Same as Execute, except missing required inputs are not
+        // rejected because the CLI prompts for every input that wasn't passed on the command line.
+        PromptForMissing,
+
         // Dynamic-input probing sends partial prompt state to the AppHost, such as only
         // `--category=fruit`. Missing required values, disabled dependent inputs, and stale choice
         // options must be accepted here so the AppHost can return the next metadata shape.
         LoadArguments
+    }
+
+    // Synthetic menu entries are identified by kind rather than a sentinel value so that every option key
+    // advertised by the AppHost is forwarded unchanged.
+    private sealed record CommandArgumentChoice(string? Value, string Label, CommandArgumentChoiceKind Kind);
+
+    private enum CommandArgumentChoiceKind
+    {
+        Option,
+        None,
+        Custom
     }
 
     private sealed class ResourceCommandHelpAction(ResourceCommand command) : AsynchronousCommandLineAction

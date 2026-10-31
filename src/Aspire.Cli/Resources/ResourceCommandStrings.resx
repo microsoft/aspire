@@ -73,6 +73,9 @@
   <data name="ArgumentRequired" xml:space="preserve">
     <value>The '{0}' argument is required.</value>
   </data>
+  <data name="InvalidNumberInput" xml:space="preserve">
+    <value>Please enter a valid number.</value>
+  </data>
   <data name="AvailableResourceCommands" xml:space="preserve">
     <value>Available resource commands:</value>
   </data>
@@ -96,5 +99,9 @@
   </data>
   <data name="CommandSpecificHelpDefaultValue" xml:space="preserve">
     <value>Default: {0}.</value>
+  </data>
+  <data name="NoChoiceLabel" xml:space="preserve">
+    <value>(None)</value>
+    <comment>Selection choice that leaves an optional command input unset.</comment>
   </data>
 </root>

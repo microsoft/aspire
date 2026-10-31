@@ -67,7 +67,9 @@ public sealed class ResourceCommandTests(ITestOutputHelper output)
         await auto.WaitUntilTextAsync("ValueMissing", timeout: TimeSpan.FromSeconds(10));
         await auto.WaitForSuccessPromptAsync(counter);
 
-        await auto.TypeAsync("aspire resource greeting set-parameter --value 'Hello world'");
+        // Interactive sessions prompt for omitted command inputs (such as SaveToUserSecrets), so keep this
+        // scenario flag-only to exercise the provided value without answering prompts.
+        await auto.TypeAsync("aspire resource greeting set-parameter --value 'Hello world' --non-interactive");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Resource 'greeting' set successfully.", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
@@ -86,7 +88,7 @@ public sealed class ResourceCommandTests(ITestOutputHelper output)
         await auto.WaitUntilTextAsync("Hello world", timeout: TimeSpan.FromSeconds(10));
         await auto.WaitForSuccessPromptAsync(counter);
 
-        await auto.TypeAsync("aspire resource greeting delete-parameter");
+        await auto.TypeAsync("aspire resource greeting delete-parameter --non-interactive");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Resource 'greeting' deleted successfully.", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
@@ -99,6 +101,102 @@ public sealed class ResourceCommandTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("ValueMissing", timeout: TimeSpan.FromSeconds(10));
         await auto.WaitForSuccessPromptAsync(counter);
+
+        await auto.TypeAsync("aspire stop");
+        await auto.EnterAsync();
+        await auto.WaitUntilAppHostStoppedSuccessfullyAsync(timeout: TimeSpan.FromMinutes(1));
+        await auto.WaitForSuccessPromptAsync(counter);
+    }
+
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public async Task ResourceCommand_PromptsForOmittedInputsAndUsesDefaultsWhenNonInteractive()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        var projectSuffix = Guid.NewGuid().ToString("N")[..6];
+        var projectName = $"ResourceCmdInputsApp_{projectSuffix}";
+
+        var workspace = TemporaryWorkspace.Create(output);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+        await auto.AspireNewAsync(projectName, counter, template: AspireTemplate.EmptyAppHost);
+
+        await auto.TypeAsync($"cd {projectName}");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        var appHostFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, projectName, "apphost.cs");
+        var content = File.ReadAllText(appHostFilePath);
+        var sdkLine = content.Split('\n', 2)[0].TrimEnd('\r');
+
+        // Every input has a default value, so the result shows which values were prompted for and forwarded.
+        var newContent = $$"""
+            {{sdkLine}}
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            builder.AddParameter("greeter").WithCommand(
+                name: "greet",
+                displayName: "Greet",
+                executeCommand: context =>
+                {
+                    var name = context.Arguments.GetString("name") ?? "Aspire";
+                    var punctuation = context.Arguments.GetString("punctuation") ?? "!";
+                    var greeting = string.Join(" ", Enumerable.Repeat($"Hello, {name}{punctuation}", context.Arguments.GetInt32("times")));
+                    return Task.FromResult(CommandResults.Success("Greeted.", greeting));
+                },
+                commandOptions: new CommandOptions
+                {
+                    Arguments =
+                    [
+                        new InteractionInput { Name = "name", Label = "Name", InputType = InputType.Text, Value = "Aspire" },
+                        new InteractionInput { Name = "times", Label = "Times", InputType = InputType.Number, Value = "1" },
+                        new InteractionInput
+                        {
+                            Name = "punctuation",
+                            Label = "Punctuation",
+                            InputType = InputType.Choice,
+                            Value = "!",
+                            Options = [KeyValuePair.Create("!", "Exclamation"), KeyValuePair.Create(".", "Period")]
+                        }
+                    ]
+                });
+
+            builder.Build().Run();
+            """;
+
+        File.WriteAllText(appHostFilePath, newContent);
+
+        await auto.TypeAsync("aspire start");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync(RunCommandStrings.AppHostStartedSuccessfully, timeout: TimeSpan.FromMinutes(3));
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        // Interactive: accept the default name, change the number, and pick a different choice.
+        await auto.TypeAsync("aspire resource greeter greet");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("Name:", timeout: TimeSpan.FromSeconds(30));
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("Times:", timeout: TimeSpan.FromSeconds(30));
+        await auto.TypeAsync("2");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("Period", timeout: TimeSpan.FromSeconds(30));
+        await auto.DownAsync();
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("Hello, Aspire. Hello, Aspire.", timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
+
+        // Non-interactive: no prompts, so the AppHost applies every default.
+        await auto.TypeAsync("aspire resource greeter greet --non-interactive");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("Hello, Aspire!", timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
         await auto.TypeAsync("aspire stop");
         await auto.EnterAsync();
