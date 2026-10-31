@@ -1646,8 +1646,13 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
                 : 0;
 
             // [sys] orchestration lines don't count toward the tail so it returns the last N lines of resource output.
+            // They're read from a separate stream than the process output, so the buffer orders lines by timestamp
+            // (the order the CLI displays them in) before trimming rather than by arrival order.
             var tailBuffer = serverTailLineCount > 0
-                ? new ConsoleLogTailBuffer<ResourceLogLine>(serverTailLineCount, static line => ConsoleLogTail.IsSystemLogWithOptionalTimestamp(line.Content))
+                ? new ConsoleLogTailBuffer<ResourceLogLine>(
+                    serverTailLineCount,
+                    static line => ConsoleLogTail.IsSystemLogWithOptionalTimestamp(line.Content),
+                    static line => ConsoleLogTail.GetTimestamp(line.Content))
                 : null;
 
             // Read each resource in parallel and filter before writing to the JSON-RPC stream.

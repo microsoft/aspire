@@ -7,53 +7,109 @@ namespace Aspire.Shared.ConsoleLogs;
 /// Keeps the trailing window of console log lines that contains the last <c>tail</c> application lines.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Orchestration lines emitted by the app host (prefixed with <c>[sys]</c>) don't count toward the limit,
 /// so a tail of N returns the last N lines of application output. The window starts at the Nth-from-last
 /// application line, and <c>[sys]</c> lines after that point are kept so start/stop events stay visible.
 /// When there are fewer than N application lines, every line is kept.
+/// </para>
+/// <para>
+/// Lines are ordered by their timestamp when one is available, then by arrival order. On the app host,
+/// application output and <c>[sys]</c> lines are read from separate streams, so a <c>[sys]</c> line can
+/// arrive before older application output. Ordering by timestamp before trimming keeps such a line when it
+/// belongs inside the window. Lines without a timestamp sort right after the line that arrived before them.
+/// </para>
 /// </remarks>
 internal sealed class ConsoleLogTailBuffer<T>
 {
-    private readonly Queue<T> _items = new();
+    // [sys] lines older than every kept application line can never be returned again, because the earliest
+    // kept application line only moves forward. Prune them once there are this many so a long-running
+    // resource with many restarts doesn't keep every [sys] line in memory.
+    private const int SystemLinePruneThreshold = 1024;
+
     private readonly int _tail;
     private readonly Func<T, bool> _isSystemLog;
-    private int _applicationLineCount;
+    private readonly Func<T, DateTimeOffset?>? _getTimestamp;
+    private readonly PriorityQueue<Entry, Entry> _applicationLines;
+    private readonly List<Entry> _systemLines = [];
+    private DateTimeOffset _lastTimestamp = DateTimeOffset.MinValue;
+    private long _sequence;
 
-    public ConsoleLogTailBuffer(int tail, Func<T, bool> isSystemLog)
+    public ConsoleLogTailBuffer(int tail, Func<T, bool> isSystemLog, Func<T, DateTimeOffset?>? getTimestamp = null)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(tail, 1);
         ArgumentNullException.ThrowIfNull(isSystemLog);
 
         _tail = tail;
         _isSystemLog = isSystemLog;
+        _getTimestamp = getTimestamp;
+        _applicationLines = new PriorityQueue<Entry, Entry>(tail + 1, EntryComparer.Instance);
     }
 
-    public IEnumerable<T> Items => _applicationLineCount < _tail
-        ? _items
-        : _items.SkipWhile(_isSystemLog);
+    public IEnumerable<T> Items
+    {
+        get
+        {
+            var entries = new List<Entry>(_applicationLines.Count + _systemLines.Count);
+            foreach (var (entry, _) in _applicationLines.UnorderedItems)
+            {
+                entries.Add(entry);
+            }
+
+            if (_applicationLines.Count < _tail)
+            {
+                entries.AddRange(_systemLines);
+            }
+            else
+            {
+                var earliestKept = _applicationLines.Peek();
+                entries.AddRange(_systemLines.Where(e => EntryComparer.Instance.Compare(e, earliestKept) > 0));
+            }
+
+            entries.Sort(EntryComparer.Instance);
+            return entries.ConvertAll(e => e.Item);
+        }
+    }
 
     public void Add(T item)
     {
-        _items.Enqueue(item);
+        if (_getTimestamp?.Invoke(item) is { } timestamp)
+        {
+            _lastTimestamp = timestamp;
+        }
+
+        var entry = new Entry(item, _lastTimestamp, _sequence++);
 
         if (_isSystemLog(item))
         {
+            _systemLines.Add(entry);
+            if (_systemLines.Count > SystemLinePruneThreshold && _applicationLines.Count == _tail)
+            {
+                var earliestKept = _applicationLines.Peek();
+                _systemLines.RemoveAll(e => EntryComparer.Instance.Compare(e, earliestKept) < 0);
+            }
+
             return;
         }
 
-        _applicationLineCount++;
-        if (_applicationLineCount <= _tail)
+        _applicationLines.Enqueue(entry, entry);
+        if (_applicationLines.Count > _tail)
         {
-            return;
+            _applicationLines.Dequeue();
         }
+    }
 
-        // Drop the oldest application line together with any [sys] lines that precede it.
-        // Items trims any [sys] lines left in front of the new oldest application line.
-        while (_isSystemLog(_items.Dequeue()))
+    private readonly record struct Entry(T Item, DateTimeOffset Timestamp, long Sequence);
+
+    private sealed class EntryComparer : IComparer<Entry>
+    {
+        public static readonly EntryComparer Instance = new();
+
+        public int Compare(Entry x, Entry y)
         {
+            var result = x.Timestamp.CompareTo(y.Timestamp);
+            return result != 0 ? result : x.Sequence.CompareTo(y.Sequence);
         }
-
-        _applicationLineCount--;
     }
 }
 
@@ -98,4 +154,12 @@ internal static class ConsoleLogTail
             ? IsSystemLog(result.Value.ModifiedText)
             : IsSystemLog(content);
     }
+
+    /// <summary>
+    /// Returns the timestamp at the start of <paramref name="content"/>, or <see langword="null"/> when there isn't one.
+    /// </summary>
+    public static DateTimeOffset? GetTimestamp(string? content) =>
+        content is not null && TimestampParser.TryParseConsoleTimestamp(content, out var result)
+            ? result.Value.Timestamp
+            : null;
 }
