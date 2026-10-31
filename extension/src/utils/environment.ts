@@ -83,6 +83,11 @@ export const enum EnvironmentVariables {
     ASPIRE_NON_INTERACTIVE = "ASPIRE_NON_INTERACTIVE"
 }
 
+// While debugging, the developer can pause on a breakpoint (e.g. before builder.Build()) for an
+// arbitrarily long time, so extension-managed debug sessions give the CLI a 24h AppHost startup
+// budget unless ASPIRE_CLI_START_TIMEOUT is configured explicitly.
+export const debugCliStartTimeoutSeconds = '86400';
+
 export const nonInteractiveCliEnvironment: EnvVar[] = [
     { name: EnvironmentVariables.ASPIRE_NON_INTERACTIVE, value: 'true' },
 ];

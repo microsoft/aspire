@@ -5,7 +5,7 @@ import { extensionLogOutputChannel } from './logging';
 import { RpcServerConnectionInfo } from '../server/AspireRpcServer';
 import { DcpServerConnectionInfo } from '../dcp/types';
 import { getRunSessionInfo, getSupportedCapabilities } from '../capabilities';
-import { EnvironmentVariables, getEnvironmentForChildProcess } from './environment';
+import { debugCliStartTimeoutSeconds, EnvironmentVariables, getEnvironmentForChildProcess } from './environment';
 import { CliPathResolutionResult, CliPathResolver, resolveCliPath } from './cliPath';
 import { ASPIRE_CLI_PATH_ENV_VAR, getForwardableAspireCliPath, getForwardableResolvedAspireCliPath } from './cliPathEnvironment';
 import { CliPathResolutionTarget, getCliPathTargetKey, windowCliPathTarget } from './cliPathVariables';
@@ -473,7 +473,7 @@ export class AspireTerminalProvider implements vscode.Disposable {
         // Aspire CLI doesn't hit its normal ~120s startup timeout and tear down the debug session.
         // An explicitly configured ASPIRE_CLI_START_TIMEOUT still wins.
         if (noDebug === false && !hasConfiguredEnvironmentVariable(env, EnvironmentVariables.ASPIRE_CLI_START_TIMEOUT)) {
-            env[EnvironmentVariables.ASPIRE_CLI_START_TIMEOUT] = '86400';
+            env[EnvironmentVariables.ASPIRE_CLI_START_TIMEOUT] = debugCliStartTimeoutSeconds;
         }
 
         // if DCP debug logging is enabled, set DCP-specific logging environment variables
