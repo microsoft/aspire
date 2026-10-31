@@ -406,6 +406,7 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
                 }
             }
         });
+        await using var watchCleanup = StopWatchOnDispose(cts, watchTask);
 
         // Wait for initial span to be received
         await WaitForWatchSignalAsync(firstSpanReceived.Task, watchTask);
@@ -524,6 +525,7 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
                 }
             }
         });
+        await using var watchCleanup = StopWatchOnDispose(cts, watchTask);
 
         // Wait for initial log to be received
         await WaitForWatchSignalAsync(firstLogReceived.Task, watchTask);
@@ -991,6 +993,7 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
                 }
             }
         });
+        await using var watchCleanup = StopWatchOnDispose(cts, watchTask);
 
         // Wait for initial log to be received (proves watcher is registered)
         await WaitForWatchSignalAsync(firstLogReceived.Task, watchTask);
@@ -1082,6 +1085,7 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
                 }
             }
         });
+        await using var watchCleanup = StopWatchOnDispose(cts, watchTask);
 
         // Wait for initial log to be received (proves watcher is registered)
         await WaitForWatchSignalAsync(firstLogReceived.Task, watchTask);
@@ -1169,6 +1173,7 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
                 }
             }
         });
+        await using var watchCleanup = StopWatchOnDispose(cts, watchTask);
 
         // Wait for initial matching log to be received
         await WaitForWatchSignalAsync(firstLogReceived.Task, watchTask);
@@ -1266,6 +1271,7 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
                 }
             }
         });
+        await using var watchCleanup = StopWatchOnDispose(cts, watchTask);
 
         await WaitForWatchSignalAsync(firstLogReceived.Task, watchTask);
 
@@ -1363,6 +1369,7 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
                 }
             }
         });
+        await using var watchCleanup = StopWatchOnDispose(cts, watchTask);
 
         await WaitForWatchSignalAsync(firstSpanReceived.Task, watchTask);
 
@@ -1488,6 +1495,7 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
                 firstSpanReceived.TrySetResult();
             }
         });
+        await using var watchCleanup = StopWatchOnDispose(cts, watchTask);
         failSnapshotRead.Value = false;
 
         // Assert
@@ -1497,8 +1505,21 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
     }
 
     // Watches outlive each bounded wait, so a slow initial snapshot on a loaded CI runner can't cancel the watch
-    // before the test observes it. Disposing the source stops the watch when a test fails early.
+    // before the test observes it. StopWatchOnDispose stops the watch when a test fails early.
     private static CancellationTokenSource CreateWatchCancellationTokenSource() => new(TestConstants.LongTimeoutTimeSpan);
+
+    private static WatchCleanup StopWatchOnDispose(CancellationTokenSource cts, Task watchTask) => new(cts, watchTask);
+
+    private sealed class WatchCleanup(CancellationTokenSource cts, Task watchTask) : IAsyncDisposable
+    {
+        public async ValueTask DisposeAsync()
+        {
+            // Stop and drain the watch before the repository deletes its database. The outcome is ignored so that
+            // cleanup can't replace the test's own failure; successful tests have already observed the watch.
+            cts.Cancel();
+            await watchTask.WaitAsync(TestConstants.DefaultTimeoutTimeSpan).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+        }
+    }
 
     private static async Task WaitForWatchSignalAsync(
         Task signal,
