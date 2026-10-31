@@ -81,6 +81,19 @@ public class WithBindMountTests
     }
 
     [Fact]
+    public void SocketPathsDifferingOnlyByCaseConflict()
+    {
+        // On Windows these are rooted but not fully qualified and are resolved by a (possibly Linux) container
+        // runtime, so they must not be case-folded; on Linux they are distinct paths. Either way they conflict.
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var container = builder.AddContainer("container", "image")
+            .WithBindMount("/var/run/agent.sock", "/var/run/agent.sock");
+
+        Assert.Throws<InvalidOperationException>(() => container.WithBindMount("/var/run/AGENT.sock", "/var/run/agent.sock"));
+        Assert.Single(container.Resource.Annotations.OfType<ContainerMountAnnotation>());
+    }
+
+    [Fact]
     public void ConflictingReadOnlyForSameTargetThrows()
     {
         using var builder = TestDistributedApplicationBuilder.Create();

@@ -1669,13 +1669,19 @@ public static class ContainerResourceBuilderExtensions
             return false;
         }
 
-        // Only normalize fully qualified host paths. Rooted but unqualified paths (such as a Docker socket
-        // path on Windows) are used as-is when mounting, so they are compared as-is too.
-        static string Normalize(string path) =>
-            Path.TrimEndingDirectorySeparator(Path.IsPathFullyQualified(path) ? Path.GetFullPath(path) : path);
+        // Only normalize (and on Windows, case-fold) fully qualified host paths. Rooted but unqualified paths
+        // (such as a Docker socket path on Windows) are resolved by the container runtime, possibly on a
+        // case-sensitive file system, so they must match exactly.
+        if (!Path.IsPathFullyQualified(existingSource) || !Path.IsPathFullyQualified(source))
+        {
+            return string.Equals(existingSource, source, StringComparison.Ordinal);
+        }
 
         var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
-        return string.Equals(Normalize(existingSource), Normalize(source), comparison);
+        return string.Equals(
+            Path.TrimEndingDirectorySeparator(Path.GetFullPath(existingSource)),
+            Path.TrimEndingDirectorySeparator(Path.GetFullPath(source)),
+            comparison);
     }
 
     private static int? GetIntegralContainerFilesOption(double? value, string paramName, int minValue, int maxValue)
