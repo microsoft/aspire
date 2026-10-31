@@ -6,6 +6,7 @@
 
 using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Publishing;
+using Aspire.Hosting.Tests.Utils;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Tests.Publishing;
@@ -343,6 +344,99 @@ public class ContainerRuntimeBaseTests
         Assert.Equal(ContainerImageInspectionStatus.Failed, result.Status);
         Assert.StartsWith("Podman returned invalid image metadata for 'registry/image:tag':", result.ErrorMessage);
         Assert.False(result.TryGetManifest("linux", "amd64", out _));
+    }
+
+    [Fact]
+    public async Task LoginToRegistryAsync_SerializesOverlappingLoginsToDifferentRegistries()
+    {
+        var processRunner = new TestProcessRunner();
+        var firstResult = new TaskCompletionSource<ProcessResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var secondResult = new TaskCompletionSource<ProcessResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        processRunner.EnqueuePending(firstResult.Task);
+        processRunner.EnqueuePending(secondResult.Task);
+        var concurrency = TrackLoginConcurrency(processRunner);
+        var runtime = new TestContainerRuntime(processRunner);
+
+        var firstLogin = runtime.LoginToRegistryAsync("first.azurecr.io", "user", "first-password", CancellationToken.None);
+        var secondLogin = runtime.LoginToRegistryAsync("second.azurecr.io", "user", "second-password", CancellationToken.None);
+
+        // Both pipeline login steps have been invoked, but only the first login command may be updating credentials.
+        var first = Assert.Single(processRunner.ProcessSpecs);
+        Assert.Equal("first-password", first.StandardInputContent);
+        Assert.False(secondLogin.IsCompleted);
+
+        firstResult.SetResult(new ProcessResult(0));
+        await firstLogin.WaitAsync(TimeSpan.FromSeconds(30));
+
+        var second = await concurrency.SecondStarted.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        Assert.Equal("second-password", second.StandardInputContent);
+        Assert.Equal(1, processRunner.Disposables[0].DisposeCallCount);
+
+        secondResult.SetResult(new ProcessResult(0));
+        await secondLogin.WaitAsync(TimeSpan.FromSeconds(30));
+        Assert.Equal(1, concurrency.MaxActive);
+    }
+
+    [Fact]
+    public async Task LoginToRegistryAsync_CanceledWhileWaitingDoesNotStartLogin()
+    {
+        var processRunner = new TestProcessRunner();
+        var firstResult = new TaskCompletionSource<ProcessResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        processRunner.EnqueuePending(firstResult.Task);
+        var runtime = new TestContainerRuntime(processRunner);
+        using var cts = new CancellationTokenSource();
+
+        var firstLogin = runtime.LoginToRegistryAsync("first.azurecr.io", "user", "first-password", CancellationToken.None);
+        var secondLogin = runtime.LoginToRegistryAsync("second.azurecr.io", "user", "second-password", cts.Token);
+
+        cts.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => secondLogin).WaitAsync(TimeSpan.FromSeconds(30));
+
+        var first = Assert.Single(processRunner.ProcessSpecs);
+        Assert.Equal("first-password", first.StandardInputContent);
+        firstResult.SetResult(new ProcessResult(0));
+        await firstLogin.WaitAsync(TimeSpan.FromSeconds(30));
+
+        // A canceled waiter must not leave the login lock held.
+        await runtime.LoginToRegistryAsync("third.azurecr.io", "user", "third-password", CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(30));
+        Assert.Collection(
+            processRunner.ProcessSpecs,
+            spec => Assert.Equal("first-password", spec.StandardInputContent),
+            spec => Assert.Equal("third-password", spec.StandardInputContent));
+    }
+
+    private static LoginConcurrency TrackLoginConcurrency(TestProcessRunner processRunner)
+    {
+        var concurrency = new LoginConcurrency();
+        processRunner.RunCallback = spec =>
+        {
+            // The runner records the process disposable before invoking the callback.
+            var disposable = processRunner.Disposables[^1];
+            disposable.OnDisposeAsync = () =>
+            {
+                Interlocked.Decrement(ref concurrency.Active);
+                return ValueTask.CompletedTask;
+            };
+
+            var active = Interlocked.Increment(ref concurrency.Active);
+            concurrency.MaxActive = Math.Max(concurrency.MaxActive, active);
+
+            if (processRunner.ProcessSpecs.Count == 2)
+            {
+                concurrency.SecondStarted.TrySetResult(spec);
+            }
+        };
+
+        return concurrency;
+    }
+
+    private sealed class LoginConcurrency
+    {
+        public int Active;
+
+        public int MaxActive { get; set; }
+
+        public TaskCompletionSource<ProcessSpec> SecondStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
     }
 
     private sealed class TestContainerRuntime(IProcessRunner? processRunner = null, string? runtimeExecutable = null) : ContainerRuntimeBase<TestContainerRuntime>(NullLogger<TestContainerRuntime>.Instance, processRunner ?? new DefaultProcessRunner())
