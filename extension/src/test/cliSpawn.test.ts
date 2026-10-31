@@ -1052,6 +1052,84 @@ suite('spawnCliProcess tests', () => {
         }
     });
 
+    test('accepts a failed taskkill when the leader already finished on its own before its exit was observed', async () => {
+        // Windows denies TerminateProcess for a process that is already exiting, so a forced taskkill
+        // that races a short-lived CLI command's own successful exit fails before Node observes the exit.
+        const platformStub = sinon.stub(process, 'platform').value('win32');
+        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+        const taskkillProcess = Object.assign(new EventEmitter(), { kill: sinon.stub().returns(true) });
+        const spawnStub = sinon.stub(nodeChildProcess, 'spawn').returns(
+            taskkillProcess as unknown as nodeChildProcess.ChildProcessWithoutNullStreams);
+        const child = createTestChildProcess(5100);
+        // libuv reports ESRCH, and ChildProcess.kill returns false, once the process has already exited.
+        child.kill.returns(false);
+
+        try {
+            let settled: 'resolved' | 'rejected' | undefined;
+            let rejection: unknown;
+            const termination = terminateCliProcess(child, 'test Aspire CLI', { force: true }).then(
+                () => { settled = 'resolved'; },
+                error => { settled = 'rejected'; rejection = error; });
+            taskkillProcess.emit('close', 255);
+            await clock.tickAsync(0);
+            sinon.assert.calledOnceWithExactly(child.kill, 'SIGKILL');
+
+            (child as unknown as { exitCode: number | null }).exitCode = 0;
+            child.emit('exit', 0, null);
+            child.emit('close', 0, null);
+            await clock.tickAsync(0);
+            await termination;
+
+            assert.strictEqual(settled, 'resolved', `Expected the natural exit to satisfy termination, but got: ${String(rejection)}`);
+            sinon.assert.calledOnce(spawnStub);
+            assert.deepStrictEqual(spawnStub.firstCall.args[1], ['/pid', '5100', '/t', '/f']);
+            assert.strictEqual(child.listenerCount('close'), 0);
+            assert.strictEqual(child.listenerCount('exit'), 0);
+            assert.strictEqual(taskkillProcess.listenerCount('close'), 0);
+            assert.strictEqual(taskkillProcess.listenerCount('error'), 0);
+            assert.strictEqual(clock.countTimers(), 0);
+        }
+        finally {
+            spawnStub.restore();
+            clock.restore();
+            platformStub.restore();
+        }
+    });
+
+    test('preserves a failed taskkill when the leader was terminated rather than finishing on its own', async () => {
+        const platformStub = sinon.stub(process, 'platform').value('win32');
+        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+        const taskkillProcess = Object.assign(new EventEmitter(), { kill: sinon.stub().returns(true) });
+        const spawnStub = sinon.stub(nodeChildProcess, 'spawn').returns(
+            taskkillProcess as unknown as nodeChildProcess.ChildProcessWithoutNullStreams);
+        const child = createTestChildProcess(5101);
+        child.kill.returns(false);
+
+        try {
+            let rejection: unknown;
+            const termination = terminateCliProcess(child, 'test Aspire CLI', { force: true }).catch(error => { rejection = error; });
+            taskkillProcess.emit('close', 255);
+            await clock.tickAsync(0);
+
+            // taskkill /f terminates the leader with exit code 1. Its descendants are not proven gone.
+            (child as unknown as { exitCode: number | null }).exitCode = 1;
+            child.emit('exit', 1, null);
+            child.emit('close', 1, null);
+            await clock.tickAsync(0);
+            await termination;
+
+            assert.match(String(rejection), /taskkill for test Aspire CLI exited with code 255 while PID 5101 remained live/);
+            assert.strictEqual(child.listenerCount('close'), 0);
+            assert.strictEqual(child.listenerCount('exit'), 0);
+            assert.strictEqual(clock.countTimers(), 0);
+        }
+        finally {
+            spawnStub.restore();
+            clock.restore();
+            platformStub.restore();
+        }
+    });
+
     test('rejects when a Windows child does not close after successful taskkill', async () => {
         const platformStub = sinon.stub(process, 'platform').value('win32');
         const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
