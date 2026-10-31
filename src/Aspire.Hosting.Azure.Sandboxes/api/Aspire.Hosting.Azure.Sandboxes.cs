@@ -8,47 +8,41 @@
 //------------------------------------------------------------------------------
 namespace Aspire.Hosting
 {
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static partial class AzureSandboxesExtensions
     {
         [AspireExport]
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureSandboxGroupResource> AddAzureSandboxGroup(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
         [AspireExport("publishComputeResourceAsAzureSandbox", MethodName = "publishAsAzureSandbox")]
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        public static ApplicationModel.IResourceBuilder<T> PublishAsAzureSandbox<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<Azure.AzureSandboxGroupResource> sandboxGroup, Azure.AzureSandboxOptions? options = null)
+        public static ApplicationModel.IResourceBuilder<T> PublishAsAzureSandbox<T>(this ApplicationModel.IResourceBuilder<T> builder, Azure.AzureSandboxOptions? options = null)
             where T : ApplicationModel.IComputeResource { throw null; }
 
         [AspireExportIgnore(Reason = "Use the AzureSandboxOptions overload from ATS.")]
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        public static ApplicationModel.IResourceBuilder<T> PublishAsAzureSandbox<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<Azure.AzureSandboxGroupResource> sandboxGroup, System.Action<Azure.AzureSandboxOptions> configure)
+        public static ApplicationModel.IResourceBuilder<T> PublishAsAzureSandbox<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Action<Azure.AzureSandboxOptions> configure)
             where T : ApplicationModel.IComputeResource { throw null; }
 
         [AspireExport]
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public static ApplicationModel.IResourceBuilder<Azure.AzureSandboxGroupResource> WithAcrPullIdentity(this ApplicationModel.IResourceBuilder<Azure.AzureSandboxGroupResource> builder, ApplicationModel.IResourceBuilder<Azure.AzureUserAssignedIdentityResource> identity) { throw null; }
+
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureSandboxGroupResource> WithNoManagedIdentity(this ApplicationModel.IResourceBuilder<Azure.AzureSandboxGroupResource> builder) { throw null; }
 
         [AspireExport]
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureSandboxGroupResource> WithSystemAssignedIdentity(this ApplicationModel.IResourceBuilder<Azure.AzureSandboxGroupResource> builder) { throw null; }
 
         [AspireExport]
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureSandboxGroupResource> WithUserAssignedIdentity(this ApplicationModel.IResourceBuilder<Azure.AzureSandboxGroupResource> builder, ApplicationModel.IResourceBuilder<Azure.AzureUserAssignedIdentityResource> identity) { throw null; }
     }
 }
 
 namespace Aspire.Hosting.Azure
 {
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public enum AzureSandboxAutoDeleteTrigger
     {
         AfterSuspend = 0,
         AfterCreation = 1
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public enum AzureSandboxAutoSuspendMode
     {
         None = 0,
@@ -57,7 +51,6 @@ namespace Aspire.Hosting.Azure
     }
 
     [AspireDto]
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public sealed partial class AzureSandboxEndpointOptions
     {
         public bool? Anonymous { get { throw null; } set { } }
@@ -66,7 +59,6 @@ namespace Aspire.Hosting.Azure
     }
 
     [AspireExport]
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public sealed partial class AzureSandboxGroupResource : AzureProvisioningResource, IAzureComputeEnvironmentResource, ApplicationModel.IComputeEnvironmentResource, ApplicationModel.IResource
     {
         public AzureSandboxGroupResource(string name, System.Action<AzureResourceInfrastructure> configureInfrastructure) : base(default!, default!) { }
@@ -91,7 +83,6 @@ namespace Aspire.Hosting.Azure
     }
 
     [AspireDto]
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public sealed partial class AzureSandboxOptions
     {
         public bool? AutoDeleteEnabled { get { throw null; } set { } }
@@ -108,12 +99,9 @@ namespace Aspire.Hosting.Azure
 
         public AzureSandboxEndpointOptions[]? Endpoints { get { throw null; } set { } }
 
-        public System.TimeSpan? PublicEndpointReadyTimeout { get { throw null; } set { } }
-
         public AzureSandboxTier Tier { get { throw null; } set { } }
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public enum AzureSandboxTier
     {
         ExtraSmall = 0,
