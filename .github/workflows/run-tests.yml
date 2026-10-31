@@ -141,6 +141,15 @@ jobs:
         if: runner.os == 'Linux'
         run: docker info
 
+      - name: Pin container runtime to Docker (Windows)
+        # Windows images ship WSL, which puts wslc.exe on PATH. Without a configured runtime, DCP
+        # runs `wslc info` and `wslc network list` on every AppHost start. On these hosted runners
+        # that correlates with workers freezing and being reported as "lost communication".
+        # Docker is the only runtime used on these runners. See https://github.com/microsoft/aspire/issues/21570
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: '"ASPIRE_CONTAINER_RUNTIME=docker" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append'
+
       - name: Download prebuilt CLI E2E Docker image
         if: ${{ fromJson(inputs.properties).requiresCliArchive == true && runner.os == 'Linux' }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
