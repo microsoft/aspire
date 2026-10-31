@@ -232,6 +232,42 @@ public partial class GitCommandRunnerTests
         Assert.Equal(configuration, await File.ReadAllTextAsync(config));
     }
 
+    [Fact]
+    [RequiresTools(["git", "ssh"])]
+    public async Task ConfigureUnattendedSsh_RelativePathEntriesUseGitDirectoryBeforeAbsoluteFallback()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var directory = Directory.CreateDirectory(Path.Combine(workspace.Path,
+            "git", "acquisition", "snapshot", "nested", "repository", "working", "directory"));
+        var config = Path.Combine(workspace.Path, "gitconfig");
+        await File.WriteAllTextAsync(config, "");
+        var ssh = PathLookupHelper.ResolveExecutablePath("ssh");
+        var sshDirectory = Path.GetDirectoryName(ssh)!;
+        var relative = Path.GetRelativePath(Environment.CurrentDirectory, sshDirectory);
+        string[] arguments = ["ls-remote", "--", "ssh://git@example.test/repository"];
+        var runner = CreateRunner();
+        var info = runner.CreateStartInfo(directory.FullName, arguments, GitCommandMode.Unattended);
+        IsolateGit(info, workspace.Path, config);
+        info.Environment["PATH"] = $"{relative}{Path.PathSeparator}{sshDirectory}{Path.PathSeparator}{info.Environment["PATH"]}";
+
+        await runner.ConfigureUnattendedSshAsync(info, arguments, TestContext.Current.CancellationToken);
+
+        Assert.Equal($"'{ssh.Replace("'", "'\\''", StringComparison.Ordinal)}' -o BatchMode=yes", info.Environment["GIT_SSH_COMMAND"]);
+    }
+
+    [Fact]
+    public void NormalizeSshPath_ResolvesRelativeEntriesAndSkipsMalformedEntries()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var gitDirectory = Path.Combine(workspace.Path, "git-directory");
+        var absolute = Path.Combine(workspace.Path, "absolute");
+        var path = $"tools{Path.PathSeparator}\0invalid{Path.PathSeparator}{absolute}{Path.PathSeparator}{Path.PathSeparator}";
+
+        var normalized = GitCommandRunner.NormalizeSshPath(path, gitDirectory);
+
+        Assert.Equal($"{Path.Combine(gitDirectory, "tools")}{Path.PathSeparator}{absolute}", normalized);
+    }
+
     private static string ShellPath(string path) => path.Replace("\\", "/", StringComparison.Ordinal).Replace("'", "'\\''", StringComparison.Ordinal);
 
     private static void IsolateGit(ProcessStartInfo info, string home, string config)

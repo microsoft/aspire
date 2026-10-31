@@ -210,7 +210,7 @@ internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, ILog
         {
             if (gitStartInfo.Environment.TryGetValue(key, out var value) && value is not null)
             {
-                pathEnvironment[key] = value;
+                pathEnvironment[key] = key == "PATH" ? NormalizeSshPath(value, gitStartInfo.WorkingDirectory) : value;
             }
         }
         if (!PathLookupHelper.TryResolveExecutablePath(executable, out var resolved, pathEnvironment))
@@ -241,6 +241,27 @@ internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, ILog
         cancellationToken.ThrowIfCancellationRequested();
         return !result.Cancelled && result.FailureKind is null && result.ExitCode == 0
             && result.Capture?.StartsWith("OpenSSH_", StringComparison.Ordinal) is true ? executable : null;
+    }
+
+    internal static string NormalizeSshPath(string path, string workingDirectory)
+    {
+        var directories = new List<string>();
+        foreach (var directory in path.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+        {
+            try
+            {
+                // Existence checks and execution must use the same base directory.
+                // The CLI invocation directory can differ from Git's private snapshot.
+                directories.Add(Path.GetFullPath(directory, workingDirectory));
+            }
+            catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+            {
+                // Match PathLookupHelper's treatment of malformed PATH entries:
+                // skip only that entry and continue to later executable candidates.
+            }
+        }
+
+        return string.Join(Path.PathSeparator, directories);
     }
 
     internal static void FilterEnvironment(IDictionary<string, string?> environment, GitCommandMode mode)
