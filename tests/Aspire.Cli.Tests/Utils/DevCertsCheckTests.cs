@@ -237,6 +237,26 @@ public class DevCertsCheckTests
         Assert.Contains("older version", versionResult.Message);
     }
 
+    [Theory]
+    [InlineData(CertificateManager.CurrentMinimumAspNetCoreCertificateVersion)]
+    [InlineData(CertificateManager.CurrentAspNetCoreCertificateVersion - 1)]
+    public void EvaluateCertificateResults_OldTrustedCert_VersionWarningDetailsReferenceCurrentVersion(int version)
+    {
+        var certs = new List<DevCertInfo>
+        {
+            CreateDevCertInfo(CertificateManager.TrustLevel.Full, "AAAA1111BBBB2222", version),
+        };
+
+        var results = DevCertsCheck.EvaluateCertificateResults(certs, new HostEnvironment());
+
+        var versionResult = Assert.Single(results, r => r.Name == DevCertsCheck.VersionCheckName);
+        Assert.Contains($"(v{version})", versionResult.Message);
+        // The details must reference the same threshold that triggered the warning, otherwise
+        // a warning for e.g. v5 would claim only versions "< v4" are affected.
+        Assert.Contains($"< v{CertificateManager.CurrentAspNetCoreCertificateVersion}", versionResult.Details);
+        Assert.DoesNotContain($"< v{CertificateManager.CurrentMinimumAspNetCoreCertificateVersion})", versionResult.Details);
+    }
+
     [Fact]
     public void EvaluateCertificateResults_MultipleCerts_AllTrusted_NoVersionWarning()
     {
