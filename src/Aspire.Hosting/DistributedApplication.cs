@@ -87,6 +87,10 @@ public class DistributedApplication : IHost, IAsyncDisposable
         // > Evaluation of native methods in this context is not supported.
         _model = host.Services.GetRequiredService<DistributedApplicationModel>();
         ResourceNotifications = host.Services.GetRequiredService<ResourceNotificationService>();
+
+        // Interactions can't be answered until the host has run its before-start hooks and started the
+        // dashboard and CLI backchannel, so the interaction service is unavailable until then.
+        host.Services.GetService<IInteractionService>()?.MarkConsumersReady(false);
     }
 
     /// <summary>
@@ -727,6 +731,10 @@ public class DistributedApplication : IHost, IAsyncDisposable
         {
             beforeStartActivity.SetError(ex);
             throw;
+        }
+        finally
+        {
+            _host.Services.GetService<IInteractionService>()?.MarkConsumersReady(true);
         }
     }
 
