@@ -52,10 +52,11 @@ public class AzureKustoHealthCheckTests
 
         var result = await healthCheck.CheckHealthAsync(new HealthCheckContext(), cts.Token);
 
-        // The fake endpoint answers with 400, so the check is unhealthy, but the request must have reached it.
+        // The request must reach the IPv4-only endpoint. If it never connects, the timeout cancels the accept and fails the test.
+        await acceptTask;
+
+        // The fake endpoint answers with 400, so the check is unhealthy.
         Assert.Equal(HealthStatus.Unhealthy, result.Status);
-        Assert.True(acceptTask.IsCompletedSuccessfully, $"The health check never connected to the IPv4 loopback endpoint. Result: {result.Exception}");
-        cts.Cancel();
     }
 
     private static Socket? TryBindIPv6Loopback(int port)
