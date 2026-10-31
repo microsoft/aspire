@@ -156,9 +156,13 @@ internal sealed class GitRepository(CliExecutionContext executionContext, IEnvir
         using var process = Process.Start(startInfo) ?? throw new InvalidOperationException($"Failed to start '{startInfo.FileName}'.");
         activity.SetProcessId(process.Id);
 
+        // Process.Dispose doesn't close the redirected streams once they've been accessed, so
+        // dispose the readers explicitly to release the pipe handles.
+        using var stdoutReader = process.StandardOutput;
+        using var stderrReader = process.StandardError;
         using var readCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        var stdoutTask = process.StandardOutput.ReadToEndAsync(readCts.Token);
-        var stderrTask = process.StandardError.ReadToEndAsync(readCts.Token);
+        var stdoutTask = stdoutReader.ReadToEndAsync(readCts.Token);
+        var stderrTask = stderrReader.ReadToEndAsync(readCts.Token);
 
         try
         {
