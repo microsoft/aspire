@@ -268,9 +268,17 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                     UpdateCommandStrings.PreparingSdkForUpdateStatus,
                     async () =>
                     {
-                        await nuGetService.AcquirePackageAsync(
-                            ("Aspire.AppHost.Sdk", targetSdkVersion), candidatePackageConfiguration,
-                            nuGetService.GetGlobalPackagesFolder(projectFile.Directory!), cancellationToken);
+                        // Other projects of the solution whose SDK declaration is updated resolve it from
+                        // their own global packages folder, which may differ from the AppHost's.
+                        var globalPackagesFolders = new[] { projectFile }.Concat(updatePlan.SolutionSdkProjects)
+                            .Select(project => nuGetService.GetGlobalPackagesFolder(project.Directory!))
+                            .Distinct(StringComparers.FileSystemPath);
+                        foreach (var globalPackagesFolder in globalPackagesFolders)
+                        {
+                            await nuGetService.AcquirePackageAsync(
+                                ("Aspire.AppHost.Sdk", targetSdkVersion), candidatePackageConfiguration,
+                                globalPackagesFolder, cancellationToken);
+                        }
                         return 0;
                     });
             }
@@ -326,13 +334,18 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                     async () =>
                     {
                         await transaction.VerifyAsync(cancellationToken);
-                        var restoreExitCode = await runner.RestoreAsync(projectFile, new()
+                        // Other projects of the solution are not in the AppHost's restore graph, so restore
+                        // each one whose SDK declaration was updated as part of the same transaction.
+                        foreach (var restoreProject in new[] { projectFile }.Concat(updatePlan.SolutionSdkProjects))
                         {
-                            NuGetRestoreTargetsFile = restorePreview?.TargetsFile ?? repairedRestorePreview?.TargetsFile
-                        }, cancellationToken);
-                        if (restoreExitCode != 0)
-                        {
-                            throw new ProjectUpdaterException(string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.FailedToRestoreAfterUpdateFormat, projectFile.FullName));
+                            var restoreExitCode = await runner.RestoreAsync(restoreProject, new()
+                            {
+                                NuGetRestoreTargetsFile = restorePreview?.TargetsFile ?? repairedRestorePreview?.TargetsFile
+                            }, cancellationToken);
+                            if (restoreExitCode != 0)
+                            {
+                                throw new ProjectUpdaterException(string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.FailedToRestoreAfterUpdateFormat, restoreProject.FullName));
+                            }
                         }
                         return 0;
                     });
@@ -578,7 +591,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
 
     private async Task<JsonDocument> GetItemsAndPropertiesAsync(FileInfo projectFile, CancellationToken cancellationToken)
     {
-        return await GetItemsAndPropertiesAsync(projectFile, ["PackageReference", "ProjectReference"], ["AspireHostingSDKVersion", "ManagePackageVersionsCentrally", "NuGetRestoreTargets", "_UsingAspireAppHostSdk", "_AspireAppHostPackageVersion", "DirectoryBuildPropsPath", "DirectoryBuildTargetsPath", "MSBuildAllProjects", "MSBuildProjectFullPath"], cancellationToken);
+        return await GetItemsAndPropertiesAsync(projectFile, ["PackageReference", "ProjectReference"], ["AspireHostingSDKVersion", "ManagePackageVersionsCentrally", "NuGetRestoreTargets", "_UsingAspireAppHostSdk", "_AspireAppHostPackageVersion", "DirectoryBuildPropsPath", "DirectoryBuildTargetsPath", "MSBuildAllProjects", "MSBuildProjectFullPath", SkipAddAspireDefaultReferencesProperty], cancellationToken);
     }
 
     private async Task<JsonDocument> GetItemsAndPropertiesAsync(FileInfo projectFile, string[] items, string[] properties, CancellationToken cancellationToken)
@@ -759,6 +772,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
             // `aspire update` can recover from a partial migration.
             // See https://github.com/microsoft/aspire/issues/15476.
             EnqueueLegacyAppHostCleanupStepIfNeeded(context);
+            await EnqueueSolutionProjectSdkUpdateStepsAsync(context, latestSdkPackage!, cancellationToken);
             return;
         }
 
@@ -790,6 +804,275 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                 : [.. GetSdkUpdateFiles(context.AppHostProjectFile), importedSdkFile]
         };
         context.UpdateSteps.Enqueue(sdkUpdateStep);
+
+        if (latestSdkPackage is not null)
+        {
+            await EnqueueSolutionProjectSdkUpdateStepsAsync(context, latestSdkPackage, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Projects that are built together with the AppHost (for example an AppHost test project, or another
+    /// AppHost in the same solution) must declare the same Aspire.AppHost.Sdk version. Otherwise MSBuild
+    /// reports MSB4240 and silently keeps whichever version it resolved first.
+    /// See https://github.com/microsoft/aspire/issues/11458.
+    /// </summary>
+    private async Task EnqueueSolutionProjectSdkUpdateStepsAsync(UpdateContext context, NuGetPackageCli latestSdkPackage, CancellationToken cancellationToken)
+    {
+        // Cleanup of the AppHost or of another project can remove a central Aspire.Hosting.AppHost PackageVersion,
+        // which other projects sharing that Directory.Packages.props may still need (directly or through
+        // imported files). Analyze every project first so all affected central files are known.
+        var affectedCentralPackagesFiles = new HashSet<string>(StringComparers.FileSystemPath);
+        if (DetectCentralPackageManagement(context.AppHostProjectFile).DirectoryPackagesPropsFile is { } appHostCentralPackagesFile &&
+            DetectLegacyAppHostReferences(context.AppHostProjectFile).HasOrphanPackageVersion)
+        {
+            affectedCentralPackagesFiles.Add(appHostCentralPackagesFile.FullName);
+        }
+
+        var analyses = new List<(FileInfo ProjectFile, string? StaleVersion, bool RemoveLegacyReferences, bool HasPackageReference, bool HasOrphanPackageVersion, string? CentralPackagesFile)>();
+        foreach (var projectFile in await GetOtherSolutionProjectsAsync(context.AppHostProjectFile, cancellationToken))
+        {
+            if (!ProjectFileExtensions.Supported.Contains(projectFile.Extension) || !projectFile.Exists)
+            {
+                continue;
+            }
+
+            XDocument document;
+            try
+            {
+                document = XDocument.Load(projectFile.FullName);
+            }
+            catch (XmlException ex)
+            {
+                logger.LogDebug(ex, "Skipping Aspire.AppHost.Sdk check for unparseable project {ProjectFile}.", projectFile.FullName);
+                continue;
+            }
+
+            var declaredVersions = GetDeclaredSdkVersions(document).ToList();
+
+            // A project can declare the SDK more than once (for example explicit Sdk.props and Sdk.targets
+            // imports), so update it when any declared version differs from the target.
+            var staleVersion = declaredVersions
+                .FirstOrDefault(version => !string.Equals(version, latestSdkPackage.Version, StringComparison.OrdinalIgnoreCase));
+
+            // The current SDK references Aspire.Hosting.AppHost implicitly, and the AppHost's cleanup may remove
+            // a PackageVersion shared through central package management, so remove the same legacy references.
+            // A project that opts out of the implicit reference still needs its explicit one.
+            var (hasPackageReference, hasOrphanPackageVersion) = DetectLegacyAppHostReferences(projectFile);
+            var removeLegacyReferences = declaredVersions.Count > 0 &&
+                (hasPackageReference || hasOrphanPackageVersion) &&
+                !await SkipsImplicitAppHostReferenceAsync(projectFile, document, cancellationToken);
+
+            var centralPackagesFile = DetectCentralPackageManagement(projectFile).DirectoryPackagesPropsFile?.FullName;
+            if (removeLegacyReferences && hasOrphanPackageVersion && centralPackagesFile is not null)
+            {
+                affectedCentralPackagesFiles.Add(centralPackagesFile);
+            }
+
+            analyses.Add((projectFile, staleVersion, removeLegacyReferences, hasPackageReference, hasOrphanPackageVersion, centralPackagesFile));
+        }
+
+        foreach (var (projectFile, staleVersion, removeLegacyReferences, hasPackageReference, hasOrphanPackageVersion, centralPackagesFile) in analyses)
+        {
+            // A retained reference may rely on a removed central version, so restore the project in the
+            // transaction; if a cleanup breaks it, the whole update is rolled back.
+            var validateRetainedReference = !removeLegacyReferences &&
+                centralPackagesFile is not null &&
+                affectedCentralPackagesFiles.Contains(centralPackagesFile);
+
+            if (staleVersion is null && !removeLegacyReferences && !validateRetainedReference)
+            {
+                continue;
+            }
+
+            var files = GetSdkUpdateFiles(projectFile);
+            foreach (var file in files)
+            {
+                await CaptureFileAsync(context, file, cancellationToken);
+            }
+            var settings = nuGetService.GetNuGetSettings(projectFile.DirectoryName!, cancellationToken);
+            context.AmbientPolicies.TryAdd(projectFile.DirectoryName!, settings.CacheIdentity);
+            foreach (var path in settings.ConfigPaths)
+            {
+                await CaptureFileAsync(context, new FileInfo(path), cancellationToken);
+            }
+            await RecordRestoreTargetsAsync(projectFile, context, cancellationToken);
+            context.SolutionSdkProjects.Add(projectFile);
+
+            if (staleVersion is not null)
+            {
+                // Only bump the version in place. Migrating the declaration (as done for the AppHost) would
+                // replace Microsoft.NET.Sdk and turn a test project into an AppHost.
+                context.UpdateSteps.Enqueue(new PackageUpdateStep(
+                    string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.UpdatePackageFormat, AspireAppHostSdkName, staleVersion, latestSdkPackage.Version),
+                    () => UpdateImportedSdkVersionAsync(projectFile, latestSdkPackage.Version),
+                    AspireAppHostSdkName,
+                    staleVersion,
+                    latestSdkPackage.Version,
+                    projectFile)
+                {
+                    Files = [projectFile]
+                });
+            }
+
+            if (removeLegacyReferences)
+            {
+                context.UpdateSteps.Enqueue(new PackageUpdateStep(
+                    UpdateCommandStrings.RemovedObsoleteAppHostPackage,
+                    () => RemoveLegacyAppHostPackageReferencesAsync(projectFile, hasPackageReference, hasOrphanPackageVersion),
+                    "Aspire.Hosting.AppHost",
+                    "implicit",
+                    "(removed)",
+                    projectFile)
+                {
+                    Files = files
+                });
+            }
+        }
+    }
+
+    private const string SkipAddAspireDefaultReferencesProperty = "SkipAddAspireDefaultReferences";
+
+    private async Task<bool> SkipsImplicitAppHostReferenceAsync(FileInfo projectFile, XDocument document, CancellationToken cancellationToken)
+    {
+        if (await TryGetItemsAndPropertiesAsync(projectFile, cancellationToken) is { } evaluation)
+        {
+            return evaluation.RootElement.TryGetProperty("Properties", out var properties) &&
+                properties.TryGetProperty(SkipAddAspireDefaultReferencesProperty, out var value) &&
+                string.Equals(value.GetString(), "true", StringComparison.OrdinalIgnoreCase);
+        }
+
+        // Evaluation can fail while the declared SDK is unresolvable; fall back to the project file itself.
+        return document.Descendants().Any(element =>
+            element.Name.LocalName == SkipAddAspireDefaultReferencesProperty &&
+            string.Equals(element.Value.Trim(), "true", StringComparison.OrdinalIgnoreCase));
+    }
+
+    // Edited projects are restored with the candidate restore preview, which overrides the restore targets of
+    // their whole reference graph, so record the original targets of every project reachable from them.
+    private async Task RecordRestoreTargetsAsync(FileInfo projectFile, UpdateContext context, CancellationToken cancellationToken)
+    {
+        var pending = new Queue<FileInfo>([projectFile]);
+        while (pending.TryDequeue(out var project))
+        {
+            if (context.ProjectRestoreTargets.ContainsKey(project.FullName))
+            {
+                continue;
+            }
+
+            var document = await TryGetItemsAndPropertiesAsync(project, cancellationToken);
+            var root = document?.RootElement;
+            context.ProjectRestoreTargets[project.FullName] =
+                root?.TryGetProperty("Properties", out var properties) == true &&
+                properties.TryGetProperty("NuGetRestoreTargets", out var restoreTargets)
+                    ? restoreTargets.GetString() ?? string.Empty
+                    : string.Empty;
+
+            if (root?.TryGetProperty("Items", out var items) == true &&
+                items.TryGetProperty("ProjectReference", out var projectReferences))
+            {
+                foreach (var projectReference in projectReferences.EnumerateArray())
+                {
+                    if (projectReference.TryGetProperty("FullPath", out var fullPath) && fullPath.GetString() is { Length: > 0 } path)
+                    {
+                        pending.Enqueue(new FileInfo(path));
+                    }
+                }
+            }
+        }
+    }
+
+    private async Task<JsonDocument?> TryGetItemsAndPropertiesAsync(FileInfo projectFile, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await GetItemsAndPropertiesAsync(projectFile, cancellationToken);
+        }
+        catch (ProjectUpdaterException ex)
+        {
+            // The stale SDK version may not be resolvable, which is what this update repairs.
+            // Fall back to the default restore targets; the restore itself still validates the project.
+            logger.LogDebug(ex, "Could not evaluate {ProjectFile}; using the default restore targets.", projectFile.FullName);
+            return null;
+        }
+    }
+
+    private async Task<IReadOnlyList<FileInfo>> GetOtherSolutionProjectsAsync(FileInfo appHostFile, CancellationToken cancellationToken)
+    {
+        var projects = new Dictionary<string, FileInfo>(StringComparers.FileSystemPath);
+        for (var directory = appHostFile.Directory; directory is not null; directory = directory.Parent)
+        {
+            FileInfo[] solutionFiles;
+            try
+            {
+                // Solution file names are matched case-insensitively on every OS. "*.sln*" also matches
+                // other extensions, so filter on the exact extension.
+                solutionFiles = directory.GetFiles("*.sln*", new EnumerationOptions { MatchCasing = MatchCasing.CaseInsensitive })
+                    .Where(file => string.Equals(file.Extension, ".sln", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(file.Extension, ".slnx", StringComparison.OrdinalIgnoreCase))
+                    .ToArray();
+            }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+            {
+                break;
+            }
+
+            foreach (var solutionFile in solutionFiles)
+            {
+                var (exitCode, solutionProjects) = await runner.GetSolutionProjectsAsync(solutionFile, new ProcessInvocationOptions(), cancellationToken);
+                if (exitCode != 0)
+                {
+                    logger.LogDebug("Could not list the projects in {SolutionFile}; exit code {ExitCode}.", solutionFile.FullName, exitCode);
+                    continue;
+                }
+
+                var normalizedProjects = solutionProjects
+                    .Select(project => new FileInfo(project.FullName.Replace('\\', Path.DirectorySeparatorChar)))
+                    .ToArray();
+                if (!normalizedProjects.Any(project => IsAppHostProject(project, appHostFile)))
+                {
+                    continue;
+                }
+
+                foreach (var project in normalizedProjects.Where(project => !IsAppHostProject(project, appHostFile)))
+                {
+                    projects.TryAdd(project.FullName, project);
+                }
+            }
+
+            // Solutions outside the repository are not built with this AppHost.
+            if (Directory.Exists(Path.Combine(directory.FullName, ".git")) || File.Exists(Path.Combine(directory.FullName, ".git")))
+            {
+                break;
+            }
+        }
+
+        return [.. projects.Values];
+    }
+
+    // Unversioned declarations are resolved from global.json, so they already follow the AppHost.
+    private static IEnumerable<string> GetDeclaredSdkVersions(XDocument document)
+    {
+        foreach (var element in GetUnconditionalSdkDeclarations(document))
+        {
+            if (element.Name.LocalName is "Sdk" or "Import")
+            {
+                if (element.Attribute("Version")?.Value is { Length: > 0 } version)
+                {
+                    yield return version.Trim();
+                }
+
+                continue;
+            }
+
+            foreach (var sdk in (element.Attribute("Sdk")?.Value ?? string.Empty).Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                if (sdk.StartsWith(AspireAppHostSdkName + "/", StringComparison.OrdinalIgnoreCase))
+                {
+                    yield return sdk[(AspireAppHostSdkName.Length + 1)..].Trim();
+                }
+            }
+        }
     }
 
     private static FileInfo? FindImportedSdkDeclaration(FileInfo projectFile, JsonElement properties, bool required)
@@ -2016,6 +2299,7 @@ internal sealed class UpdateContext(FileInfo appHostProjectFile, PackageChannel 
     public ConcurrentQueue<AnalyzeStep> AnalyzeSteps { get; } = new();
     public HashSet<string> VisitedProjects { get; } = new();
     public Dictionary<string, string> ProjectRestoreTargets { get; } = new(StringComparers.FileSystemPath);
+    public List<FileInfo> SolutionSdkProjects { get; } = [];
     public Dictionary<string, string> AmbientPolicies { get; } = new(StringComparers.FileSystemPath);
     public Dictionary<string, byte[]?> OriginalFiles { get; } = new(StringComparers.FileSystemPath);
     public bool FallbackParsing { get; set; }
