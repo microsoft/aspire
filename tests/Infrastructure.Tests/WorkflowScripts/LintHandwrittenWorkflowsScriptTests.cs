@@ -91,17 +91,13 @@ public sealed class LintHandwrittenWorkflowsScriptTests(ITestOutputHelper output
         // file set the script selects, without depending on a real actionlint install.
         var binDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "bin")).FullName;
         var fakeActionlint = Path.Combine(binDirectory, "actionlint");
-        await File.WriteAllTextAsync(
+        await ExecutableFile.WriteAsync(
             fakeActionlint,
             """
             #!/usr/bin/env bash
             printf '%s\n' "$@" > "$FAKE_ACTIONLINT_ARGUMENTS"
             exit "$FAKE_ACTIONLINT_EXIT_CODE"
             """);
-        if (!OperatingSystem.IsWindows())
-        {
-            File.SetUnixFileMode(fakeActionlint, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-        }
 
         return await ProcessRunner.RunAsync(
             output,
