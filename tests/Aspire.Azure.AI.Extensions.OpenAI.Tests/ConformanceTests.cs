@@ -55,10 +55,18 @@ public class AzureOpenAIConformanceTests : ConformanceTests<IChatClient, AzureOp
     public void TracingEnablesTheRightActivitySource_Keyed()
         => RemoteInvokeWithLogging(() => new AzureOpenAIConformanceTests().ActivitySourceTest("key"), Output);
 
+    [Fact]
+    public void TracingTestDoesNotLaunchDeveloperCredentialTools()
+        => RemoteActivitySourceTestDoesNotLaunchDeveloperCredentialTools(() => new AzureOpenAIConformanceTests().ActivitySourceTest(null));
+
     protected override void SetHealthCheck(AzureOpenAISettings options, bool enabled)
         => throw new NotImplementedException();
     protected override void SetMetrics(AzureOpenAISettings options, bool enabled)
         => options.DisableMetrics = !enabled;
+    // The test endpoint isn't reachable, so make TriggerActivity fail fast instead of letting the component fall back to
+    // DefaultAzureCredential, whose credential chain can take longer than the RemoteExecutor timeout.
+    protected override void ConfigureActivitySourceTestOptions(AzureOpenAISettings options)
+        => options.Credential = UnavailableTokenCredential.Instance;
     protected override void SetTracing(AzureOpenAISettings options, bool enabled)
         => options.DisableTracing = !enabled;
     protected override void TriggerActivity(IChatClient service)
@@ -110,10 +118,18 @@ public class AzureProjectOpenAIConformanceTests : ConformanceTests<IChatClient, 
     public void TracingEnablesTheRightActivitySource_Keyed()
         => RemoteInvokeWithLogging(() => new AzureProjectOpenAIConformanceTests().ActivitySourceTest("key"), Output);
 
+    [Fact]
+    public void TracingTestDoesNotLaunchDeveloperCredentialTools()
+        => RemoteActivitySourceTestDoesNotLaunchDeveloperCredentialTools(() => new AzureProjectOpenAIConformanceTests().ActivitySourceTest(null));
+
     protected override void SetHealthCheck(AzureProjectOpenAISettings options, bool enabled)
         => throw new NotImplementedException();
     protected override void SetMetrics(AzureProjectOpenAISettings options, bool enabled)
         => options.DisableMetrics = !enabled;
+    // The test endpoint isn't reachable, so make TriggerActivity fail fast instead of letting the component fall back to
+    // DefaultAzureCredential, whose credential chain can take longer than the RemoteExecutor timeout.
+    protected override void ConfigureActivitySourceTestOptions(AzureProjectOpenAISettings options)
+        => options.Credential = UnavailableTokenCredential.Instance;
     protected override void SetTracing(AzureProjectOpenAISettings options, bool enabled)
         => options.DisableTracing = !enabled;
     protected override void TriggerActivity(IChatClient service)
