@@ -222,9 +222,11 @@ public partial class MetricsTests : DashboardTestContext
         Services.AddSingleton<BrowserTimeProvider>(timeProvider);
         Services.AddSingleton<TimeProvider>(new FakeTimeProvider(timeProvider.UtcNow));
         var dialogs = new ConcurrentQueue<ExemplarsDialogViewModel>();
+        var dialogShown = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         Services.AddSingleton<IDialogService>(new TestDialogService((content, _) =>
         {
             dialogs.Enqueue(Assert.IsType<ExemplarsDialogViewModel>(content));
+            dialogShown.TrySetResult();
             return Task.CompletedTask;
         }));
         var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
@@ -288,7 +290,20 @@ public partial class MetricsTests : DashboardTestContext
                 cell => Assert.Equal("empty-data", Assert.Single(cell.Children).ClassName));
         });
 
+        // Click() only queues the event when the renderer is busy, e.g. with the chart's background update.
+        // Hold the renderer so the test always covers that ordering, then wait for the dialog to be shown.
+        using var rendererHeld = new ManualResetEventSlim();
+        using var releaseRenderer = new ManualResetEventSlim();
+        var holdRendererTask = Task.Run(() => cut.InvokeAsync(() =>
+        {
+            rendererHeld.Set();
+            releaseRenderer.Wait();
+        }));
+        rendererHeld.Wait();
         table.FindAll("fluent-button").Single(button => button.TextContent.Trim() == "2").Click();
+        releaseRenderer.Set();
+        await holdRendererTask.DefaultTimeout();
+        await dialogShown.Task.DefaultTimeout();
         var dialog = Assert.Single(dialogs);
         Assert.Same(instrumentViewModel.Instrument, dialog.Instrument);
         Assert.Equal([2d, 22d], dialog.Exemplars.Select(exemplar => exemplar.Value).Order());
