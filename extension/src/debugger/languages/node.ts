@@ -2,6 +2,7 @@ import * as net from "net";
 import * as path from "path";
 import { AspireResourceExtendedDebugConfiguration, ExecutableLaunchConfiguration, JavaScriptRuntimeLaunchConfiguration, isJavaScriptRuntimeLaunchConfiguration } from "../../dcp/types";
 import { denoAppHostRunCommandMissing, denoInspectorAddressUnavailable, nodeDisplayName, nodeLabel, invalidLaunchConfiguration } from "../../loc/strings";
+import { debugCliStartTimeoutSeconds, EnvironmentVariables, getEnvironmentForChildProcess } from "../../utils/environment";
 import { extensionLogOutputChannel } from "../../utils/logging";
 import { ResourceDebuggerExtension } from "../debuggerExtensions";
 import { getJavaScriptRuntimeDisplayName, getJavaScriptRuntimeTargetPath, jsRuntimeBaseFileTypes, launchMethodDirect, launchMethodPackageManager, resolveJavaScriptLaunchMethod } from "./javascriptRuntime";
@@ -22,6 +23,48 @@ function isDenoRuntimeExecutable(runtimeExecutable: string | undefined): boolean
 
     const extension = path.extname(runtimeExecutable);
     return path.basename(runtimeExecutable, extension).toLowerCase() === 'deno';
+}
+
+// Mirrors the CLI's default AppHost startup budget (WaitCommand.DefaultTimeoutSeconds).
+const defaultAppHostStartupTimeoutSeconds = 120;
+
+type EnvironmentRecord = { [key: string]: unknown } | undefined;
+
+function findEnvironmentValue(env: EnvironmentRecord, name: string, platform: NodeJS.Platform): string | undefined {
+    if (!env) {
+        return undefined;
+    }
+
+    // Windows environment variable names are case-insensitive, matching how the CLI process resolves them.
+    const key = env[name] !== undefined || platform !== 'win32'
+        ? name
+        : Object.keys(env).find(k => k.toUpperCase() === name.toUpperCase());
+    const value = key === undefined ? undefined : env[key];
+    return value === undefined || value === null ? undefined : String(value);
+}
+
+/**
+ * js-debug gives up on attachSimplePort after its 10-second default `timeout`, which starts before
+ * it spawns the runtime. A Deno AppHost blocked in --inspect-wait cannot start until js-debug
+ * attaches, so an early give-up leaves Deno waiting forever while the CLI keeps waiting for the
+ * AppHost. Keep polling for the inspector for as long as the CLI waits for the AppHost to start.
+ *
+ * The CLI's ASPIRE_CLI_START_TIMEOUT is resolved the same way the extension builds the CLI spawn
+ * environment: the root launch configuration's env wins over the inherited extension host
+ * environment, and debug sessions otherwise get the long debug startup budget.
+ */
+export function getAppHostInspectorAttachTimeoutMs(
+    launchConfigurationEnv: EnvironmentRecord,
+    inheritedEnv: EnvironmentRecord,
+    platform: NodeJS.Platform = process.platform): number {
+    const name = EnvironmentVariables.ASPIRE_CLI_START_TIMEOUT;
+    const inheritedTimeout = findEnvironmentValue(inheritedEnv, name, platform);
+    const configuredTimeout = (findEnvironmentValue(launchConfigurationEnv, name, platform)
+        ?? (inheritedTimeout ? inheritedTimeout : debugCliStartTimeoutSeconds)).trim();
+    const timeoutSeconds = /^\d+$/.test(configuredTimeout) && Number(configuredTimeout) > 0
+        ? Number(configuredTimeout)
+        : defaultAppHostStartupTimeoutSeconds;
+    return timeoutSeconds * 1000;
 }
 
 async function getAvailableLoopbackPort(): Promise<number> {
@@ -81,6 +124,9 @@ export const nodeDebuggerExtension: ResourceDebuggerExtension = {
                 const inspectorPort = await getAvailableLoopbackPort();
                 runtimeArgs.splice(runArgumentIndex + 1, 0, `--inspect-wait=127.0.0.1:${inspectorPort}`);
                 debugConfiguration.attachSimplePort = inspectorPort;
+                debugConfiguration.timeout = getAppHostInspectorAttachTimeoutMs(
+                    launchOptions.debugSession?.configuration?.env,
+                    getEnvironmentForChildProcess());
             }
 
             debugConfiguration.runtimeArgs = runtimeArgs;
