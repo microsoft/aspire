@@ -5,6 +5,7 @@
 
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Publishing;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -20,6 +21,7 @@ public class ContainerRuntimeResolverTests
         var services = new ServiceCollection();
         services.AddKeyedSingleton<IContainerRuntime, FakeContainerRuntime>("docker");
         services.AddKeyedSingleton<IContainerRuntime, FakeContainerRuntime>("podman");
+        services.AddKeyedSingleton<IContainerRuntime, FakeContainerRuntime>("wslc");
         var sp = serviceProvider ?? services.BuildServiceProvider();
 
         var dcpOptions = Options.Create(new DcpOptions { ContainerRuntime = configuredRuntime });
@@ -53,6 +55,8 @@ public class ContainerRuntimeResolverTests
     [InlineData("podman")]
     [InlineData("PODMAN")]
     [InlineData("Docker")]
+    [InlineData("wslc")]
+    [InlineData("WSLC")]
     public async Task ResolveAsync_ConfiguredRuntime_ReturnsKeyedService(string configuredRuntime)
     {
         var resolver = CreateResolver(configuredRuntime);
@@ -60,6 +64,28 @@ public class ContainerRuntimeResolverTests
         var runtime = await resolver.ResolveAsync();
 
         Assert.NotNull(runtime);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_BuiltInWslcIsWindowsOnly()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.Services.Configure<DcpOptions>(options => options.ContainerRuntime = "WSLC");
+        using var app = builder.Build();
+        var resolver = app.Services.GetRequiredService<IContainerRuntimeResolver>();
+
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.IsType<WslcContainerRuntime>(await resolver.ResolveAsync());
+        }
+        else
+        {
+            var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
+                () => resolver.ResolveAsync());
+            Assert.Equal(
+                "WSLc container publishing is only supported on Windows. Use Docker or Podman on this host.",
+                exception.Message);
+        }
     }
 
     [Fact]

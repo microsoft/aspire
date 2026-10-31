@@ -54,9 +54,9 @@ public class DockerContainerRuntimeTests
         Assert.Equal("buildx version", processSpecs[0].Arguments);
         var builderName = AssertAndGetBuilderName(processSpecs[1].Arguments);
         Assert.Equal(
-            $"buildx build --file \"Dockerfile\" --tag \"myapp:latest\" --builder \"{builderName}\" " +
-            $"--output \"{outputType},dest={archivePath}\" \"{GetNormalizedContextPath()}\"",
-            processSpecs[2].Arguments);
+            ["buildx", "build", "--file", "Dockerfile", "--tag", "myapp:latest", "--builder", builderName,
+                "--output", $"{outputType},dest={archivePath}", GetNormalizedContextPath()],
+            processSpecs[2].ArgumentList);
         Assert.Equal($"buildx rm \"{builderName}\"", processSpecs[3].Arguments);
     }
 
@@ -206,15 +206,15 @@ public class DockerContainerRuntimeTests
         await BuildImageAsync(runtime, options);
 
         var archivePath = ResourceExtensions.GetContainerImageArchivePath("out", "myapp:latest");
-        var platformArgument = expectedPlatforms is null ? string.Empty : $" --platform \"{expectedPlatforms}\"";
+        string[] platformArguments = expectedPlatforms is null ? [] : ["--platform", expectedPlatforms];
         Assert.Collection(
             processRunner.ProcessSpecs,
             check => Assert.Equal("buildx version", check.Arguments),
             context => Assert.Equal("context show", context.Arguments),
             build => Assert.Equal(
-                $"buildx build --file \"Dockerfile\" --tag \"myapp:latest\" --builder \"desktop-linux\"" +
-                $"{platformArgument} \"{GetNormalizedContextPath()}\"",
-                build.Arguments),
+                ["buildx", "build", "--file", "Dockerfile", "--tag", "myapp:latest", "--builder", "desktop-linux",
+                    .. platformArguments, GetNormalizedContextPath()],
+                build.ArgumentList),
             save => Assert.Equal(
                 $"image save --output \"{archivePath}\" \"myapp:latest\"",
                 save.Arguments));
@@ -258,9 +258,9 @@ public class DockerContainerRuntimeTests
             check => Assert.Equal("buildx version", check.Arguments),
             context => Assert.Equal("context show", context.Arguments),
             build => Assert.Equal(
-                $"buildx build --file \"Dockerfile\" --tag \"myapp:latest\" --builder \"desktop-linux\" " +
-                $"--platform \"linux/amd64,linux/arm64\" \"{GetNormalizedContextPath()}\"",
-                build.Arguments));
+                ["buildx", "build", "--file", "Dockerfile", "--tag", "myapp:latest", "--builder", "desktop-linux",
+                    "--platform", "linux/amd64,linux/arm64", GetNormalizedContextPath()],
+                build.ArgumentList));
     }
 
     [Fact]
@@ -288,9 +288,9 @@ public class DockerContainerRuntimeTests
             check => Assert.Equal("buildx version", check.Arguments),
             context => Assert.Equal("context show", context.Arguments),
             build => Assert.Equal(
-                $"buildx build --file \"Dockerfile\" --tag \"myapp:latest\" --builder \"desktop-linux\" " +
-                $"--platform \"linux/amd64\" \"{GetNormalizedContextPath()}\"",
-                build.Arguments));
+                ["buildx", "build", "--file", "Dockerfile", "--tag", "myapp:latest", "--builder", "desktop-linux",
+                    "--platform", "linux/amd64", GetNormalizedContextPath()],
+                build.ArgumentList));
     }
 
     [Fact]
@@ -425,9 +425,9 @@ public class DockerContainerRuntimeTests
             processRunner.ProcessSpecs,
             check => Assert.Equal("buildx version", check.Arguments),
             build => Assert.Equal(
-                $"buildx build --file \"Dockerfile\" --tag \"myapp:latest\" " +
-                $"--output \"type=docker\" \"{GetNormalizedContextPath()}\"",
-                build.Arguments));
+                ["buildx", "build", "--file", "Dockerfile", "--tag", "myapp:latest",
+                    "--output", "type=docker", GetNormalizedContextPath()],
+                build.ArgumentList));
     }
 
     private static Task BuildImageAsync(
