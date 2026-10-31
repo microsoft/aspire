@@ -45,17 +45,19 @@ public class IntegrationHostDiscoveryThreadPoolTests
         // completing, so hill climbing never injected workers. Cap the pool at the floor to model
         // that deterministically instead of depending on host-specific injection timing.
         Assert.True(ThreadPool.SetMaxThreads(Math.Max(minWorkerThreads, Environment.ProcessorCount), maxCompletionPortThreads));
-        using var releaseSlots = new ManualResetEventSlim();
-        using var slotsOccupied = new CountdownEvent(slots);
+        var releaseSlots = new ManualResetEventSlim();
+        var slotsOccupied = new CountdownEvent(slots);
+        var occupiedSlots = new Task[slots];
         try
         {
             for (var i = 0; i < slots; i++)
             {
-                ThreadPool.UnsafeQueueUserWorkItem(_ =>
+                // Queued from a dedicated (non-pool) thread, so these land in the global pool queue.
+                occupiedSlots[i] = Task.Factory.StartNew(() =>
                 {
                     slotsOccupied.Signal();
                     releaseSlots.Wait(TimeSpan.FromSeconds(30));
-                }, (object?)null, preferLocal: false);
+                }, CancellationToken.None, TaskCreationOptions.None, TaskScheduler.Default);
             }
             // Without headroom some slots cannot start because test infrastructure already holds a
             // worker; any slots still queued then sit ahead of the discovery continuations.
@@ -67,6 +69,12 @@ public class IntegrationHostDiscoveryThreadPoolTests
         {
             releaseSlots.Set();
             ThreadPool.SetMaxThreads(maxWorkerThreads, maxCompletionPortThreads);
+            // Only dispose once every slot has finished using the events.
+            if (Task.WaitAll(occupiedSlots, TimeSpan.FromSeconds(30)))
+            {
+                releaseSlots.Dispose();
+                slotsOccupied.Dispose();
+            }
         }
     }
 
