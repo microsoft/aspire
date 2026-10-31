@@ -20,7 +20,7 @@ In the AppHost, add an Oracle database resource and reference it from another re
 **C#**
 
 ```csharp
-var db = builder.AddOracle("oracle").AddDatabase("mydb");
+var db = builder.AddOracle("oracle").AddDatabase("db");
 
 var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(db);
@@ -29,11 +29,13 @@ var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.cs
 **TypeScript**
 
 ```typescript
-const db = await builder.addOracle("oracle").addDatabase("mydb");
+const db = await builder.addOracle("oracle").addDatabase("db");
 
 const myService = await builder.addNodeApp("myService", "../my-service", "server.js")
                        .withReference(db);
 ```
+
+By default, `AddDatabase` connects to the Oracle Free container's default pluggable database, `FREEPDB1`. To connect to a different service or pluggable database that your container creates, pass it with the `databaseName` parameter.
 
 ## Connection Properties
 
