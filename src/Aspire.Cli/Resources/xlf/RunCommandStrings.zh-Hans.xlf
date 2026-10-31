@@ -257,14 +257,34 @@
         <target state="new">failed</target>
         <note />
       </trans-unit>
+      <trans-unit id="TestFormatDescription">
+        <source>Output format for test resource results (JSON or table)</source>
+        <target state="new">Output format for test resource results (JSON or table)</target>
+        <note />
+      </trans-unit>
       <trans-unit id="TestIncompatibleOptions">
-        <source>aspire test does not support detached execution, JSON output, profile capture, or extension-managed debug sessions.</source>
-        <target state="new">aspire test does not support detached execution, JSON output, profile capture, or extension-managed debug sessions.</target>
+        <source>aspire test does not support detached execution, profile capture, or extension-managed debug sessions.</source>
+        <target state="new">aspire test does not support detached execution, profile capture, or extension-managed debug sessions.</target>
         <note />
       </trans-unit>
       <trans-unit id="TestIncomplete">
         <source>incomplete</source>
         <target state="new">incomplete</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TestKeepAliveDescription">
+        <source>Keep the CLI and AppHost running after tests complete for dashboard inspection</source>
+        <target state="new">Keep the CLI and AppHost running after tests complete for dashboard inspection</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TestKeepAliveDisconnected">
+        <source>The AppHost disconnected while being kept alive for test inspection and did not finish shutting down.</source>
+        <target state="new">The AppHost disconnected while being kept alive for test inspection and did not finish shutting down.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TestKeepAliveMessage">
+        <source>Tests have completed. The CLI and AppHost are still running for inspection. Press Ctrl+C to stop.</source>
+        <target state="new">Tests have completed. The CLI and AppHost are still running for inspection. Press Ctrl+C to stop.</target>
         <note />
       </trans-unit>
       <trans-unit id="TestOutcome">

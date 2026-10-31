@@ -8,6 +8,12 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Hosting;
+using Aspire.Cli.Interaction;
+using Aspire.Cli.Utils;
+using System.Text;
+using System.Text.Json.Nodes;
+using Microsoft.Extensions.Logging.Abstractions;
+using Spectre.Console;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using StreamJsonRpc;
@@ -98,10 +104,13 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData("old-host", 9)]
-    [InlineData("no-tests", 2)]
-    [InlineData("connection-lost", 2)]
-    public async Task FailureBeforeCompletionTearsDownTheAppHost(string failure, int expectedExitCode)
+    [InlineData("old-host", 9, false)]
+    [InlineData("no-tests", 2, false)]
+    [InlineData("connection-lost", 2, false)]
+    [InlineData("old-host", 9, true)]
+    [InlineData("no-tests", 2, true)]
+    [InlineData("connection-lost", 2, true)]
+    public async Task FailureBeforeCompletionTearsDownTheAppHost(string failure, int expectedExitCode, bool json)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = CreateAppHost(workspace);
@@ -130,10 +139,13 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
                 }
             }
         };
-        using var provider = CreateServices(workspace, appHostFile, factory).BuildServiceProvider();
+        var interaction = new TestInteractionService();
+        var services = CreateServices(workspace, appHostFile, factory);
+        services.AddSingleton<IInteractionService>(interaction);
+        using var provider = services.BuildServiceProvider();
 
         var exitCode = await provider.GetRequiredService<RootCommand>()
-            .Parse(["test", "--apphost", appHostFile.FullName])
+            .Parse(["test", "--apphost", appHostFile.FullName, "--format", json ? "json" : "table"])
             .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken).DefaultTimeout();
 
         Assert.Equal(expectedExitCode, exitCode);
@@ -143,13 +155,19 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
         var summary = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(summaryPath))!;
         Assert.Equal("failed", summary["status"]!.GetValue<string>());
         Assert.Equal(expectedExitCode, summary["cliExitCode"]!.GetValue<int>());
+        if (json)
+        {
+            Assert.Equal(File.ReadAllText(summaryPath), Assert.Single(interaction.DisplayedRawText).Text);
+        }
     }
 
     [Theory]
-    [InlineData("test", 130, false)]
-    [InlineData("test", 130, true)]
-    [InlineData("run", 0, false)]
-    public async Task CancellationPreservesNormalRunButDoesNotPassAnIncompleteTest(string commandName, int expectedExitCode, bool artifactFailure)
+    [InlineData("test", 130, false, false)]
+    [InlineData("test", 130, true, false)]
+    [InlineData("test", 130, false, true)]
+    [InlineData("test", 130, true, true)]
+    [InlineData("run", 0, false, false)]
+    public async Task CancellationPreservesNormalRunButDoesNotPassAnIncompleteTest(string commandName, int expectedExitCode, bool artifactFailure, bool json)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = CreateAppHost(workspace);
@@ -197,8 +215,11 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
                 }
             }
         };
-        using var provider = CreateServices(workspace, appHostFile, factory).BuildServiceProvider();
-        var execution = provider.GetRequiredService<RootCommand>().Parse([commandName, "--apphost", appHostFile.FullName])
+        var interaction = new TestInteractionService();
+        var services = CreateServices(workspace, appHostFile, factory);
+        services.AddSingleton<IInteractionService>(interaction);
+        using var provider = services.BuildServiceProvider();
+        var execution = provider.GetRequiredService<RootCommand>().Parse([commandName, "--apphost", appHostFile.FullName, "--format", json ? "json" : "table"])
             .InvokeAsync(cancellationToken: cts.Token);
 
         await ready.Task.DefaultTimeout();
@@ -206,6 +227,12 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(expectedExitCode, await execution.DefaultTimeout());
         await tornDown.Task.DefaultTimeout();
+        if (json)
+        {
+            var output = JsonNode.Parse(Assert.Single(interaction.DisplayedRawText).Text)!;
+            Assert.Equal("cancelled", output["status"]!.GetValue<string>());
+            Assert.Equal(expectedExitCode, output["cliExitCode"]!.GetValue<int>());
+        }
         if (commandName == "test" && !artifactFailure)
         {
             var summaryPath = Assert.Single(Directory.GetFiles(workspace.CreateExecutionContext().AspireHomeDirectory.FullName,
@@ -259,7 +286,6 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
 
     [Theory]
     [InlineData("--detach")]
-    [InlineData("--format json")]
     [InlineData("--capture-profile")]
     public async Task IncompatibleOptionsFailBeforeLaunching(string options)
     {
@@ -272,12 +298,400 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.InvalidCommand,
             await provider.GetRequiredService<RootCommand>().Parse($"test {options}").InvokeAsync().DefaultTimeout());
+        Assert.False(Directory.Exists(Path.Combine(workspace.CreateExecutionContext().AspireHomeDirectory.FullName, "testruns")));
     }
 
     [Theory]
-    [InlineData(0)]
-    [InlineData(42)]
-    public async Task AppHostStartupFailureNeverPasses(int exitCode)
+    [InlineData(true, 0)]
+    [InlineData(false, 23)]
+    public async Task JsonOutputIsOneSummaryObjectAndMatchesThePersistedFile(bool passed, int expectedExitCode)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = CreateAppHost(workspace);
+        var stopped = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var backchannel = new TestAppHostBackchannel
+        {
+            WaitForTestCompletionAsyncCallback = _ => Task.FromResult(passed),
+            RequestStopAsyncCallback = () => { stopped.TrySetResult(0); return Task.CompletedTask; }
+        };
+        var factory = new TestAppHostProjectFactory
+        {
+            RunAsyncCallback = async (context, ct) =>
+            {
+                context.BuildCompletionSource!.TrySetResult(true);
+                context.BackchannelCompletionSource!.TrySetResult(backchannel);
+                return await stopped.Task.WaitAsync(ct);
+            }
+        };
+        var stdout = new StringBuilder();
+        var stderr = new StringBuilder();
+        var interaction = CreateConsoleInteraction(workspace, stdout, stderr);
+        var services = CreateServices(workspace, appHostFile, factory);
+        services.AddSingleton<IInteractionService>(interaction);
+        using var provider = services.BuildServiceProvider();
+
+        var exitCode = await provider.GetRequiredService<RootCommand>()
+            .Parse(["test", "--apphost", appHostFile.FullName, "--format", "json"])
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.Equal(expectedExitCode, exitCode);
+        var json = JsonNode.Parse(stdout.ToString())!;
+        Assert.Equal(passed ? "passed" : "failed", json["status"]!.GetValue<string>());
+        Assert.Equal(expectedExitCode, json["cliExitCode"]!.GetValue<int>());
+        var summaryPath = json["summaryPath"]!.GetValue<string>();
+        Assert.Equal(Path.Combine(json["outputPath"]!.GetValue<string>(), "summary.json"), summaryPath);
+        Assert.Equal(File.ReadAllText(summaryPath), stdout.ToString().TrimEnd());
+        var resource = Assert.Single(json["resources"]!.AsArray())!;
+        Assert.Equal(passed ? 0 : 1, resource["exitCode"]!.GetValue<int>());
+        Assert.Equal(passed ? "passed" : "failed", resource["outcome"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task UnsupportedJsonOptionsProduceAnErrorObjectWithoutCreatingTestArtifacts()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = CreateAppHost(workspace);
+        var factory = new TestAppHostProjectFactory { RunAsyncCallback = (_, _) => throw new InvalidOperationException("Must not launch.") };
+        var stdout = new StringBuilder();
+        var stderr = new StringBuilder();
+        var services = CreateServices(workspace, appHostFile, factory);
+        services.AddSingleton<IInteractionService>(CreateConsoleInteraction(workspace, stdout, stderr));
+        using var provider = services.BuildServiceProvider();
+
+        var exitCode = await provider.GetRequiredService<RootCommand>().Parse(["test", "--format", "json", "--detach"])
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        var json = JsonNode.Parse(stdout.ToString())!;
+        Assert.Equal(CliExitCodes.InvalidCommand, json["cliExitCode"]!.GetValue<int>());
+        Assert.Equal(RunCommandStrings.TestIncompatibleOptions, json["error"]!.GetValue<string>());
+        Assert.Null(json["outputPath"]);
+        Assert.Null(json["summaryPath"]);
+        Assert.False(Directory.Exists(Path.Combine(workspace.CreateExecutionContext().AspireHomeDirectory.FullName, "testruns")));
+    }
+
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    [InlineData(false, true)]
+    public async Task KeepAliveReportsCompletionOnceAndHoldsBothProcessesUntilCancellation(bool passed, bool json)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = CreateAppHost(workspace);
+        using var cancellation = new CancellationTokenSource();
+        var summaryShown = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var tornDown = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var completionQueries = 0;
+        var stopRequested = false;
+        string? summaryPath = null;
+        var backchannel = new TestAppHostBackchannel
+        {
+            WaitForDisconnectAsyncCalled = json ? summaryShown : null,
+            WaitForTestCompletionAsyncCallback = _ => { completionQueries++; return Task.FromResult(passed); },
+            RequestStopAsyncCallback = () => { stopRequested = true; return Task.CompletedTask; }
+        };
+        var factory = new TestAppHostProjectFactory
+        {
+            RunAsyncCallback = async (context, ct) =>
+            {
+                summaryPath = Path.Combine(context.EnvironmentVariables[KnownConfigNames.TestOutputPath], "summary.json");
+                context.BuildCompletionSource!.TrySetResult(true);
+                context.BackchannelCompletionSource!.TrySetResult(backchannel);
+                try
+                {
+                    await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+                    return 0;
+                }
+                finally
+                {
+                    tornDown.TrySetResult();
+                }
+            }
+        };
+        var summaryMessages = 0;
+        var interaction = new TestInteractionService
+        {
+            DisplaySubtleMessageCallback = message =>
+            {
+                if (!json && message.StartsWith(RunCommandStrings.TestSummaryFile.Replace("{0}", "", StringComparison.Ordinal), StringComparison.Ordinal))
+                {
+                    summaryMessages++;
+                    summaryShown.TrySetResult();
+                }
+            },
+            DisplayRawTextCallback = _ => { summaryMessages++; summaryShown.TrySetResult(); }
+        };
+        var stdout = new StringBuilder();
+        var stderr = new StringBuilder();
+        var services = CreateServices(workspace, appHostFile, factory);
+        services.AddSingleton<IInteractionService>(json ? CreateConsoleInteraction(workspace, stdout, stderr) : interaction);
+        services.AddSingleton<ICliHostEnvironment>(TestHelpers.CreateInteractiveHostEnvironment());
+        using var provider = services.BuildServiceProvider();
+        var execution = provider.GetRequiredService<RootCommand>()
+            .Parse(["test", "--apphost", appHostFile.FullName, "--keep-alive", "--format", json ? "json" : "table"])
+            .InvokeAsync(cancellationToken: cancellation.Token);
+
+        await summaryShown.Task.DefaultTimeout();
+        Assert.False(execution.IsCompleted);
+        Assert.False(tornDown.Task.IsCompleted);
+        Assert.False(stopRequested);
+        Assert.Equal(1, completionQueries);
+        var beforeStop = JsonNode.Parse(File.ReadAllText(summaryPath!))!;
+        Assert.Equal(passed ? "passed" : "failed", beforeStop["status"]!.GetValue<string>());
+        Assert.NotNull(beforeStop["completedAt"]);
+        Assert.Null(beforeStop["cliExitCode"]);
+        if (json)
+        {
+            Assert.Equal(File.ReadAllText(summaryPath!), stdout.ToString().TrimEnd());
+            Assert.Equal(passed ? "passed" : "failed", JsonNode.Parse(stdout.ToString())!["status"]!.GetValue<string>());
+        }
+        else
+        {
+            Assert.Single(interaction.DisplayedRenderables);
+        }
+        cancellation.Cancel();
+        Assert.Equal(CliExitCodes.Cancelled, await execution.DefaultTimeout());
+        await tornDown.Task.DefaultTimeout();
+        if (json)
+        {
+            Assert.Equal(beforeStop.ToJsonString(), JsonNode.Parse(stdout.ToString())!.ToJsonString());
+        }
+        else
+        {
+            Assert.Equal(1, summaryMessages);
+        }
+        Assert.Equal(1, completionQueries);
+        var afterStop = JsonNode.Parse(File.ReadAllText(summaryPath!))!;
+        Assert.Equal("cancelled", afterStop["status"]!.GetValue<string>());
+        Assert.Equal(130, afterStop["cliExitCode"]!.GetValue<int>());
+        Assert.Equal(beforeStop["completedAt"]!.GetValue<string>(), afterStop["completedAt"]!.GetValue<string>());
+        Assert.Equal(passed ? "passed" : "failed", afterStop["resources"]![0]!["outcome"]!.GetValue<string>());
+    }
+
+    [Theory]
+    [InlineData("connection")]
+    [InlineData("artifact")]
+    public async Task KeepAliveDoesNotHoldAnIncompleteOrUnwritableRun(string failure)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = CreateAppHost(workspace);
+        var tornDown = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        string? outputPath = null;
+        var backchannel = new TestAppHostBackchannel
+        {
+            WaitForTestCompletionAsyncCallback = _ =>
+            {
+                if (failure == "connection")
+                {
+                    return Task.FromException<bool>(new ConnectionLostException("AppHost disconnected."));
+                }
+                var path = Path.Combine(outputPath!, "summary.json");
+                File.Delete(path);
+                Directory.CreateDirectory(path);
+                return Task.FromResult(true);
+            }
+        };
+        var factory = new TestAppHostProjectFactory
+        {
+            RunAsyncCallback = async (context, ct) =>
+            {
+                outputPath = context.EnvironmentVariables[KnownConfigNames.TestOutputPath];
+                context.BuildCompletionSource!.TrySetResult(true);
+                context.BackchannelCompletionSource!.TrySetResult(backchannel);
+                try { await Task.Delay(Timeout.InfiniteTimeSpan, ct); return 0; }
+                finally { tornDown.TrySetResult(); }
+            }
+        };
+        var interaction = new TestInteractionService();
+        var services = CreateServices(workspace, appHostFile, factory);
+        services.AddSingleton<IInteractionService>(interaction);
+        using var provider = services.BuildServiceProvider();
+
+        var exitCode = await provider.GetRequiredService<RootCommand>()
+            .Parse(["test", "--apphost", appHostFile.FullName, "--keep-alive", "--format", "json"])
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.NotEqual(CliExitCodes.Success, exitCode);
+        await tornDown.Task.DefaultTimeout();
+        var json = JsonNode.Parse(Assert.Single(interaction.DisplayedRawText).Text)!;
+        Assert.Equal("failed", json["status"]!.GetValue<string>());
+        Assert.Equal(exitCode, json["cliExitCode"]!.GetValue<int>());
+        Assert.NotNull(json["error"]);
+    }
+
+    private static ConsoleInteractionService CreateConsoleInteraction(TemporaryWorkspace workspace, StringBuilder stdout, StringBuilder stderr,
+        AnsiSupport ansi = AnsiSupport.No)
+    {
+        IAnsiConsole CreateConsole(StringBuilder output)
+        {
+            var console = AnsiConsole.Create(new AnsiConsoleSettings
+            {
+                Ansi = ansi,
+                Out = new AnsiConsoleOutput(new StringWriter(output)),
+                Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+            });
+            console.Profile.Width = int.MaxValue;
+            return console;
+        }
+        return new ConsoleInteractionService(new ConsoleEnvironment(CreateConsole(stdout), CreateConsole(stderr), TextReader.Null),
+            workspace.CreateExecutionContext(), TestHelpers.CreateInteractiveHostEnvironment(),
+            new EnvironmentProcessPathProvider(), NullLoggerFactory.Instance, new ConsoleLogBufferContext());
+    }
+
+    [Theory]
+    [InlineData(true, 0, 0)]
+    [InlineData(false, 0, 23)]
+    [InlineData(true, 42, 23)]
+    public async Task KeepAlivePreservesOutcomesWhenTheAppHostStops(bool passed, int processExitCode, int expectedExitCode)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = CreateAppHost(workspace);
+        var inspecting = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var processExit = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var timeProvider = new SignalingFakeTimeProvider(AppHostRunner.s_gracefulShutdownBudget);
+        var backchannel = new TestAppHostBackchannel
+        {
+            WaitForTestCompletionAsyncCallback = _ => Task.FromResult(passed),
+            WaitForDisconnectAsyncCalled = inspecting
+        };
+        string? summaryPath = null;
+        var factory = new TestAppHostProjectFactory
+        {
+            RunAsyncCallback = (context, ct) =>
+            {
+                summaryPath = Path.Combine(context.EnvironmentVariables[KnownConfigNames.TestOutputPath], "summary.json");
+                context.BuildCompletionSource!.TrySetResult(true);
+                context.BackchannelCompletionSource!.TrySetResult(backchannel);
+                return processExit.Task.WaitAsync(ct);
+            }
+        };
+        var interaction = new TestInteractionService();
+        var services = CreateServices(workspace, appHostFile, factory);
+        services.AddSingleton<IInteractionService>(interaction);
+        services.AddSingleton<TimeProvider>(timeProvider);
+        using var provider = services.BuildServiceProvider();
+        var execution = provider.GetRequiredService<RootCommand>()
+            .Parse(["test", "--apphost", appHostFile.FullName, "--keep-alive", "--format", "json"])
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
+
+        await inspecting.Task.DefaultTimeout();
+        Assert.False(execution.IsCompleted);
+        backchannel.DisconnectCompletionSource.TrySetResult();
+        await timeProvider.TimerCreated.Task.DefaultTimeout();
+        processExit.TrySetResult(processExitCode);
+        Assert.Equal(expectedExitCode, await execution.DefaultTimeout());
+        var final = JsonNode.Parse(File.ReadAllText(summaryPath!))!;
+        Assert.Equal(expectedExitCode, final["cliExitCode"]!.GetValue<int>());
+        Assert.Equal(passed ? "passed" : "failed", final["resources"]![0]!["outcome"]!.GetValue<string>());
+        Assert.Single(interaction.DisplayedRawText);
+    }
+
+    [Fact]
+    public async Task KeepAliveDisconnectWithoutProcessExitFailsAndTearsDownTheAppHost()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = CreateAppHost(workspace);
+        var inspecting = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var tornDown = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var timeProvider = new SignalingFakeTimeProvider(AppHostRunner.s_gracefulShutdownBudget);
+        var backchannel = new TestAppHostBackchannel
+        {
+            WaitForTestCompletionAsyncCallback = _ => Task.FromResult(true),
+            WaitForDisconnectAsyncCalled = inspecting
+        };
+        string? summaryPath = null;
+        var factory = new TestAppHostProjectFactory
+        {
+            RunAsyncCallback = async (context, ct) =>
+            {
+                summaryPath = Path.Combine(context.EnvironmentVariables[KnownConfigNames.TestOutputPath], "summary.json");
+                context.BuildCompletionSource!.TrySetResult(true);
+                context.BackchannelCompletionSource!.TrySetResult(backchannel);
+                try
+                {
+                    await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+                    return 0;
+                }
+                finally
+                {
+                    tornDown.TrySetResult();
+                }
+            }
+        };
+        var interaction = new TestInteractionService();
+        var services = CreateServices(workspace, appHostFile, factory);
+        services.AddSingleton<IInteractionService>(interaction);
+        services.AddSingleton<TimeProvider>(timeProvider);
+        using var provider = services.BuildServiceProvider();
+        var execution = provider.GetRequiredService<RootCommand>()
+            .Parse(["test", "--apphost", appHostFile.FullName, "--keep-alive", "--format", "json"])
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
+
+        await inspecting.Task.DefaultTimeout();
+        backchannel.DisconnectCompletionSource.TrySetResult();
+        await timeProvider.TimerCreated.Task.DefaultTimeout();
+        timeProvider.Advance(AppHostRunner.s_gracefulShutdownBudget);
+        Assert.NotEqual(CliExitCodes.Success, await execution.DefaultTimeout());
+        await tornDown.Task.DefaultTimeout();
+        var final = JsonNode.Parse(File.ReadAllText(summaryPath!))!;
+        Assert.Equal("failed", final["status"]!.GetValue<string>());
+        Assert.Contains(RunCommandStrings.TestKeepAliveDisconnected, final["error"]!.GetValue<string>());
+        Assert.Single(interaction.DisplayedRawText);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public void AppHostInformationUsesAppendOnlyLinesAndPreservesLabels(bool missingDashboard, bool extension)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var stdout = new StringBuilder();
+        var stderr = new StringBuilder();
+        var interaction = CreateConsoleInteraction(workspace, stdout, stderr);
+        var logPath = Path.Combine(workspace.WorkspaceRoot.FullName, "cli [test].log");
+        var dashboard = missingDashboard ? null : "http://localhost:1234/login?t=test";
+        var codespaces = missingDashboard ? null : "https://example.app.github.dev/login?t=test";
+
+        TestCommand.RenderAppHostInformation(interaction, "AppHost [test].csproj", dashboard, codespaces, logPath, extension);
+
+        var expected = $"{RunCommandStrings.AppHost}: AppHost [test].csproj{Environment.NewLine}";
+        if (!extension)
+        {
+            expected += $"{RunCommandStrings.Dashboard}: {dashboard ?? "N/A"}{Environment.NewLine}";
+            if (codespaces is not null)
+            {
+                expected += $"{RunCommandStrings.Dashboard}: {codespaces}{Environment.NewLine}";
+            }
+        }
+        expected += $"{RunCommandStrings.Logs}: {logPath}{Environment.NewLine}";
+        Assert.Equal(expected, stdout.ToString());
+        Assert.Equal("", stderr.ToString());
+    }
+
+    [Fact]
+    public void AppHostInformationPreservesClickableDashboardAndLogLinks()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var stdout = new StringBuilder();
+        var stderr = new StringBuilder();
+        var interaction = CreateConsoleInteraction(workspace, stdout, stderr, AnsiSupport.Yes);
+        var logPath = Path.Combine(workspace.WorkspaceRoot.FullName, "cli [test].log");
+        const string dashboard = "http://localhost:1234/login?t=test";
+
+        TestCommand.RenderAppHostInformation(interaction, "AppHost.csproj", dashboard, null, logPath, false);
+
+        TerminalLinkAssert.ContainsLink(stdout.ToString(), new Uri(Path.GetFullPath(logPath)).AbsoluteUri, logPath);
+        TerminalLinkAssert.ContainsLink(stdout.ToString(), dashboard, dashboard);
+    }
+
+    [Theory]
+    [InlineData(0, false)]
+    [InlineData(42, false)]
+    [InlineData(0, true)]
+    [InlineData(42, true)]
+    public async Task AppHostStartupFailureNeverPasses(int exitCode, bool json)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = CreateAppHost(workspace);
@@ -289,10 +703,21 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
                 return Task.FromResult(exitCode);
             }
         };
-        using var provider = CreateServices(workspace, appHostFile, factory).BuildServiceProvider();
+        var stdout = new StringBuilder();
+        var stderr = new StringBuilder();
+        var services = CreateServices(workspace, appHostFile, factory);
+        services.AddSingleton<IInteractionService>(CreateConsoleInteraction(workspace, stdout, stderr));
+        using var provider = services.BuildServiceProvider();
 
-        Assert.NotEqual(CliExitCodes.Success, await provider.GetRequiredService<RootCommand>()
-            .Parse(["test", "--apphost", appHostFile.FullName]).InvokeAsync().DefaultTimeout());
+        var result = await provider.GetRequiredService<RootCommand>()
+            .Parse(["test", "--apphost", appHostFile.FullName, "--format", json ? "json" : "table"]).InvokeAsync().DefaultTimeout();
+        Assert.NotEqual(CliExitCodes.Success, result);
+        if (json)
+        {
+            var output = JsonNode.Parse(stdout.ToString())!;
+            Assert.Equal("failed", output["status"]!.GetValue<string>());
+            Assert.Equal(result, output["cliExitCode"]!.GetValue<int>());
+        }
     }
 
     [Fact]

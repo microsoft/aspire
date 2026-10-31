@@ -2,6 +2,7 @@
   "schemaVersion": 1,
   "runId": "run-id",
   "outputPath": "output-directory",
+  "summaryPath": "summary-file",
   "startedAt": "2026-10-31T06:00:00\u002B00:00",
   "completedAt": "2026-10-31T06:00:00\u002B00:00",
   "status": "failed",

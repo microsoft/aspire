@@ -502,6 +502,42 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Keep the CLI and AppHost running after tests complete for dashboard inspection.
+        /// </summary>
+        internal static string TestKeepAliveDescription {
+            get {
+                return ResourceManager.GetString("TestKeepAliveDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Output format for test resource results (JSON or table).
+        /// </summary>
+        internal static string TestFormatDescription {
+            get {
+                return ResourceManager.GetString("TestFormatDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Tests have completed. The CLI and AppHost are still running for inspection. Press Ctrl+C to stop.
+        /// </summary>
+        internal static string TestKeepAliveMessage {
+            get {
+                return ResourceManager.GetString("TestKeepAliveMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The AppHost disconnected while being kept alive for test inspection and did not finish shutting down.
+        /// </summary>
+        internal static string TestKeepAliveDisconnected {
+            get {
+                return ResourceManager.GetString("TestKeepAliveDisconnected", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Tests are running.
         /// </summary>
         internal static string TestRunningHeader {

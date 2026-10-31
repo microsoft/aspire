@@ -704,6 +704,7 @@ public class Program
         builder.Services.AddTransient<NewCommand>();
         builder.Services.AddTransient<InitCommand>();
         builder.Services.AddTransient<RunCommand>();
+        builder.Services.AddTransient<AppHostRunner>();
         builder.Services.AddTransient<TestCommand>();
         builder.Services.AddTransient<StopCommand>();
         builder.Services.AddTransient<StartCommand>();

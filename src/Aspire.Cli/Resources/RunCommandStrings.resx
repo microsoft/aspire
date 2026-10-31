@@ -271,7 +271,7 @@
     <value>Run an AppHost until all resources marked with WithTestRun() finish</value>
   </data>
   <data name="TestIncompatibleOptions" xml:space="preserve">
-    <value>aspire test does not support detached execution, JSON output, profile capture, or extension-managed debug sessions.</value>
+    <value>aspire test does not support detached execution, profile capture, or extension-managed debug sessions.</value>
   </data>
   <data name="TestAppHostIncompatible" xml:space="preserve">
     <value>This AppHost does not support aspire test. Update its Aspire.Hosting package to a version that supports test resource lifetimes.</value>
@@ -317,5 +317,17 @@
   </data>
   <data name="TestArtifactFailure" xml:space="preserve">
     <value>Failed to create or write test run artifacts: {0}</value>
+  </data>
+  <data name="TestKeepAliveDescription" xml:space="preserve">
+    <value>Keep the CLI and AppHost running after tests complete for dashboard inspection</value>
+  </data>
+  <data name="TestFormatDescription" xml:space="preserve">
+    <value>Output format for test resource results (JSON or table)</value>
+  </data>
+  <data name="TestKeepAliveMessage" xml:space="preserve">
+    <value>Tests have completed. The CLI and AppHost are still running for inspection. Press Ctrl+C to stop.</value>
+  </data>
+  <data name="TestKeepAliveDisconnected" xml:space="preserve">
+    <value>The AppHost disconnected while being kept alive for test inspection and did not finish shutting down.</value>
   </data>
 </root>

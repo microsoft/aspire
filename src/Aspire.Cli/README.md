@@ -53,8 +53,8 @@ builder.AddExecutable("tests", "test-runner", ".")
 aspire test --apphost ./AppHost/AppHost.csproj
 ```
 
-The command uses the same build, launch, and application shutdown behavior as
-`aspire run`, but disables hot reload and waits for every annotated resource
+The independent command shares AppHost build, launch, and shutdown infrastructure
+with `aspire run`, but disables hot reload and waits for every annotated resource
 (including replicas), even after another test fails. Unannotated services remain
 available until the tests finish. The annotation does not change `aspire run`.
 
@@ -69,7 +69,7 @@ The command returns `0` when all tests pass, `23` when any test fails, and `130`
 when cancelled. Missing test annotations, an incompatible AppHost, startup
 failure, premature AppHost exit, or shutdown failure also return a nonzero code
 with diagnostics. A test that never reaches a terminal state continues running
-until cancelled. Detached execution, JSON output, profile capture, and
+until cancelled. Detached execution, profile capture, and
 extension-managed debug sessions are not supported. Framework-specific test
 result parsing and collection are not provided.
 
@@ -91,18 +91,35 @@ provides the absolute host output path and a setup cancellation token. Container
 resources must explicitly bind-mount that path and configure their in-container
 destination; their process identity must have access to the mounted directory.
 
-Interactive runs show a **Tests are running** header, stream the annotated
+Interactive runs show a **Tests are running** header, print AppHost, dashboard,
+and log locations as append-only labeled lines, stream the annotated
 resources' state changes and replicas, and finish with a resource outcome table.
 The CLI prints the output directory and a clickable `summary.json` path, falling
 back to a plain path when terminal hyperlinks are unavailable.
 
 `summary.json` is updated during execution and finalized after shutdown. Its
 versioned JSON includes the run ID, output path, start/completion timestamps,
-overall status, CLI exit code, diagnostic, and each observed resource's name,
+summary-file path, overall status, CLI exit code, diagnostic, and each observed resource's name,
 instance ID, state, exit code, expected replica count, and outcome. It describes
 resource completion, not individual framework test counts. Cancelled and failed
 runs retain observed outcomes and mark unfinished resources `incomplete`; an
 artifact write failure is reported and cannot turn a failed run into success.
+
+Use `aspire test --keep-alive` to inspect the dashboard after tests finish,
+whether they passed or failed. The summary is written and shown once at resource
+completion; both the CLI and AppHost remain in the foreground, with supporting
+services available until stopped. Tests are not rerun. Ctrl+C performs normal
+teardown and returns `130`, preserving resource outcomes in the final file.
+AppHost/RPC failures still terminate the session with diagnostics.
+
+Use `aspire test --format json` for a single summary object on stdout, matching
+the persisted `summary.json` after shutdown. Diagnostics go to stderr; stdout
+contains no interactive header, status lines, tables, or hyperlinks. Unsupported
+options produce a failure object with null run/output paths before creating
+artifacts. With `--keep-alive --format json`, stdout is emitted once when tests
+complete, with `cliExitCode: null` because the CLI is still running. The persisted
+file is updated with the final CLI exit code and any inspection/shutdown errors
+when the session ends; no second JSON object is emitted.
 
 On Unix, the dedicated test-run directories are created with mode `0700` and
 CLI-owned files with mode `0600`. On Windows, directories use protected

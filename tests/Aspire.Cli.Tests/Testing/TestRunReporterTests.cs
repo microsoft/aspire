@@ -147,6 +147,7 @@ public class TestRunReporterTests(ITestOutputHelper outputHelper)
         var summary = JsonNode.Parse(File.ReadAllText(reporter.SummaryPath))!;
         summary["runId"] = "run-id";
         summary["outputPath"] = "output-directory";
+        summary["summaryPath"] = "summary-file";
         await Verify(summary.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }), "json")
             .UseDirectory("Snapshots").UseParameters(supportsLinks);
     }
@@ -323,7 +324,7 @@ public class TestRunReporterTests(ITestOutputHelper outputHelper)
 
     private static TestRunReporter CreateReporter(CliExecutionContext context, TestInteractionService? interaction = null, bool interactive = false) =>
         TestRunReporter.Create(context, interaction ?? new TestInteractionService(), interactive,
-            new FakeTimeProvider(new DateTimeOffset(2026, 10, 31, 6, 0, 0, TimeSpan.Zero)), NullLogger.Instance);
+            OutputFormat.Table, new FakeTimeProvider(new DateTimeOffset(2026, 10, 31, 6, 0, 0, TimeSpan.Zero)), NullLogger.Instance);
 
     private static void AssertPrivateDirectory(string path)
     {

@@ -21,22 +21,28 @@ internal sealed class TestRunReporter
     private readonly CliExecutionContext _executionContext;
     private readonly IInteractionService _interaction;
     private readonly bool _interactive;
+    private readonly OutputFormat _format;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger _logger;
     private readonly Dictionary<string, TestResourceState> _resources = new(StringComparers.ResourceName);
     private readonly DateTimeOffset _startedAt;
     private readonly object _gate = new();
     private bool _completed;
+    private bool _summaryDisplayed;
+    private DateTimeOffset? _completedAt;
+    private TestRunSummary? _lastSummary;
+    public bool JsonDisplayed { get; private set; }
 
     public string OutputPath { get; }
     public string SummaryPath => Path.Combine(OutputPath, "summary.json");
 
     private TestRunReporter(CliExecutionContext executionContext, IInteractionService interaction,
-        bool interactive, TimeProvider timeProvider, ILogger logger, string outputPath)
+        bool interactive, OutputFormat format, TimeProvider timeProvider, ILogger logger, string outputPath)
     {
         _executionContext = executionContext;
         _interaction = interaction;
-        _interactive = interactive;
+        _interactive = interactive && format != OutputFormat.Json;
+        _format = format;
         _timeProvider = timeProvider;
         _logger = logger;
         _startedAt = timeProvider.GetUtcNow();
@@ -44,7 +50,7 @@ internal sealed class TestRunReporter
     }
 
     public static TestRunReporter Create(CliExecutionContext executionContext, IInteractionService interaction,
-        bool interactive, TimeProvider timeProvider, ILogger logger)
+        bool interactive, OutputFormat format, TimeProvider timeProvider, ILogger logger)
     {
         var parent = Path.Combine(executionContext.AspireHomeDirectory.FullName, "testruns");
         ValidateAncestors(parent, executionContext);
@@ -70,11 +76,14 @@ internal sealed class TestRunReporter
             File.Delete(reservation);
         }
 
-        var reporter = new TestRunReporter(executionContext, interaction, interactive, timeProvider, logger, outputPath);
+        var reporter = new TestRunReporter(executionContext, interaction, interactive, format, timeProvider, logger, outputPath);
         reporter.Persist("running", exitCode: null, error: null);
-        interaction.DisplayMessage(KnownEmojis.Microscope, RunCommandStrings.TestRunningHeader);
-        interaction.DisplaySubtleMessage(string.Format(CultureInfo.CurrentCulture,
-            RunCommandStrings.TestOutputDirectory, MarkupHelpers.SafeFileLink(interaction, outputPath)), allowMarkup: true);
+        if (format != OutputFormat.Json)
+        {
+            interaction.DisplayMessage(KnownEmojis.Microscope, RunCommandStrings.TestRunningHeader);
+            interaction.DisplaySubtleMessage(string.Format(CultureInfo.CurrentCulture,
+                RunCommandStrings.TestOutputDirectory, MarkupHelpers.SafeFileLink(interaction, outputPath)), allowMarkup: true);
+        }
 
         return reporter;
     }
@@ -185,6 +194,7 @@ internal sealed class TestRunReporter
         lock (_gate)
         {
             _completed = true;
+            _completedAt ??= _timeProvider.GetUtcNow();
             CompleteCore(result);
         }
     }
@@ -205,7 +215,33 @@ internal sealed class TestRunReporter
             }
         }
         Persist(status, result.ExitCode, result.ErrorMessage);
+        DisplaySummary(status);
+    }
 
+    public void ReportCompletedResources(bool passed)
+    {
+        lock (_gate)
+        {
+            _completed = true;
+            _completedAt ??= _timeProvider.GetUtcNow();
+            // The resource run is complete, but a keep-alive CLI has not exited yet.
+            Persist(passed ? "passed" : "failed", exitCode: null, error: null);
+            DisplaySummary(passed ? "passed" : "failed");
+        }
+    }
+
+    private void DisplaySummary(string status)
+    {
+        if (_summaryDisplayed)
+        {
+            return;
+        }
+        if (_format == OutputFormat.Json)
+        {
+            WriteJson(_lastSummary ?? throw new InvalidOperationException("The test summary has not been persisted."));
+            _summaryDisplayed = true;
+            return;
+        }
         if (_interactive)
         {
             _interaction.DisplayMessage(KnownEmojis.Microscope, string.Format(CultureInfo.CurrentCulture,
@@ -226,6 +262,7 @@ internal sealed class TestRunReporter
 
         _interaction.DisplaySubtleMessage(string.Format(CultureInfo.CurrentCulture,
             RunCommandStrings.TestSummaryFile, MarkupHelpers.SafeFileLink(_interaction, SummaryPath)), allowMarkup: true);
+        _summaryDisplayed = true;
     }
 
     private void Persist(string status, int? exitCode, string? error)
@@ -237,17 +274,7 @@ internal sealed class TestRunReporter
             throw new IOException($"The test summary '{SummaryPath}' must not be a symbolic link.");
         }
 
-        var summary = new TestRunSummary
-        {
-            RunId = Path.GetFileName(OutputPath),
-            OutputPath = OutputPath,
-            StartedAt = _startedAt,
-            CompletedAt = exitCode is null ? null : _timeProvider.GetUtcNow(),
-            Status = status,
-            CliExitCode = exitCode,
-            Error = error,
-            Resources = OrderedResources()
-        };
+        var summary = CreateSummary(status, exitCode, error);
         var temporaryPath = Path.Combine(OutputPath, $".summary-{Guid.NewGuid():N}.tmp");
         try
         {
@@ -259,6 +286,7 @@ internal sealed class TestRunReporter
             // Replace the directory entry, never truncate an existing file or follow its link.
             // Readers see either the previous complete summary or this complete summary.
             File.Move(temporaryPath, SummaryPath, overwrite: true);
+            _lastSummary = summary;
         }
         finally
         {
@@ -272,6 +300,39 @@ internal sealed class TestRunReporter
             }
         }
     }
+
+    public void WriteJsonResult(CommandResult result)
+    {
+        lock (_gate)
+        {
+            _completedAt ??= _timeProvider.GetUtcNow();
+            WriteJson(CreateSummary(result.ExitCode == CliExitCodes.Cancelled ? "cancelled" : "failed",
+                result.ExitCode, result.ErrorMessage));
+        }
+    }
+
+    private void WriteJson(TestRunSummary summary)
+    {
+        if (JsonDisplayed)
+        {
+            return;
+        }
+        _interaction.DisplayRawText(JsonSerializer.Serialize(summary, TestRunJsonContext.Default.TestRunSummary), ConsoleOutput.Standard);
+        JsonDisplayed = true;
+    }
+
+    private TestRunSummary CreateSummary(string status, int? exitCode, string? error) => new()
+    {
+        RunId = Path.GetFileName(OutputPath),
+        OutputPath = OutputPath,
+        SummaryPath = SummaryPath,
+        StartedAt = _startedAt,
+        CompletedAt = _completedAt,
+        Status = status,
+        CliExitCode = exitCode,
+        Error = error,
+        Resources = OrderedResources()
+    };
 
     private TestResourceState[] OrderedResources() => _resources.Values
         .OrderBy(r => r.ResourceName, StringComparers.ResourceName)
@@ -350,8 +411,9 @@ internal sealed class TestRunReporter
 internal sealed class TestRunSummary
 {
     public int SchemaVersion { get; init; } = 1;
-    public required string RunId { get; init; }
-    public required string OutputPath { get; init; }
+    public string? RunId { get; init; }
+    public string? OutputPath { get; init; }
+    public string? SummaryPath { get; init; }
     public DateTimeOffset StartedAt { get; init; }
     public DateTimeOffset? CompletedAt { get; init; }
     public required string Status { get; init; }

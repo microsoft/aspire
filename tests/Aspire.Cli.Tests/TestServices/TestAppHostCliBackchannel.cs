@@ -26,6 +26,7 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
     public TaskCompletionSource? ConnectAsyncCalled { get; set; }
     public Func<string, CancellationToken, Task>? ConnectAsyncCallback { get; set; }
     public TaskCompletionSource DisconnectCompletionSource { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    public TaskCompletionSource? WaitForDisconnectAsyncCalled { get; set; }
 
     public TaskCompletionSource? GetPublishingActivitiesAsyncCalled { get; set; }
     public Func<CancellationToken, IAsyncEnumerable<PublishingActivity>>? GetPublishingActivitiesAsyncCallback { get; set; }
@@ -150,6 +151,7 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
 
     public async Task WaitForDisconnectAsync(CancellationToken cancellationToken)
     {
+        WaitForDisconnectAsyncCalled?.TrySetResult();
         await DisconnectCompletionSource.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
     }
 
