@@ -242,43 +242,50 @@ internal sealed class AtsCallbackProxyFactory : IDisposable
             Expression.Constant(ctParamIndex));
     }
 
+    private Task<JsonNode?> InvokeCallbackAsync(string callbackId, JsonObject? args, CancellationToken cancellationToken)
+    {
+        // The guest callback may call back into the remote host before it completes.
+        CapabilityInvocationGate.ReleaseForCallback();
+        return _invoker.InvokeAsync<JsonNode?>(callbackId, args, cancellationToken);
+    }
+
     private void InvokeSyncVoid(string callbackId, JsonObject? args, CancellationToken cancellationToken, int ctParamIndex)
     {
         AddCancellationTokenToArgs(ref args, cancellationToken, ctParamIndex);
-        _invoker.InvokeAsync<JsonNode?>(callbackId, args, cancellationToken).GetAwaiter().GetResult();
+        InvokeCallbackAsync(callbackId, args, cancellationToken).GetAwaiter().GetResult();
     }
 
     private void InvokeSyncVoidWithDtoWriteback(string callbackId, JsonObject? args, object?[] originalArgs, Type[] argTypes, CancellationToken cancellationToken, int ctParamIndex)
     {
         AddCancellationTokenToArgs(ref args, cancellationToken, ctParamIndex);
-        var result = _invoker.InvokeAsync<JsonNode?>(callbackId, args, cancellationToken).GetAwaiter().GetResult();
+        var result = InvokeCallbackAsync(callbackId, args, cancellationToken).GetAwaiter().GetResult();
         ApplyDtoWriteback(result, originalArgs, argTypes);
     }
 
     private T? InvokeSyncResult<T>(string callbackId, JsonObject? args, CancellationToken cancellationToken, int ctParamIndex)
     {
         AddCancellationTokenToArgs(ref args, cancellationToken, ctParamIndex);
-        var result = _invoker.InvokeAsync<JsonNode?>(callbackId, args, cancellationToken).GetAwaiter().GetResult();
+        var result = InvokeCallbackAsync(callbackId, args, cancellationToken).GetAwaiter().GetResult();
         return UnmarshalResult<T>(result, callbackId);
     }
 
     private async Task InvokeAsyncVoid(string callbackId, JsonObject? args, CancellationToken cancellationToken, int ctParamIndex)
     {
         AddCancellationTokenToArgs(ref args, cancellationToken, ctParamIndex);
-        await _invoker.InvokeAsync<JsonNode?>(callbackId, args, cancellationToken).ConfigureAwait(false);
+        await InvokeCallbackAsync(callbackId, args, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task InvokeAsyncVoidWithDtoWriteback(string callbackId, JsonObject? args, object?[] originalArgs, Type[] argTypes, CancellationToken cancellationToken, int ctParamIndex)
     {
         AddCancellationTokenToArgs(ref args, cancellationToken, ctParamIndex);
-        var result = await _invoker.InvokeAsync<JsonNode?>(callbackId, args, cancellationToken).ConfigureAwait(false);
+        var result = await InvokeCallbackAsync(callbackId, args, cancellationToken).ConfigureAwait(false);
         ApplyDtoWriteback(result, originalArgs, argTypes);
     }
 
     private async Task<T?> InvokeAsyncResult<T>(string callbackId, JsonObject? args, CancellationToken cancellationToken, int ctParamIndex)
     {
         AddCancellationTokenToArgs(ref args, cancellationToken, ctParamIndex);
-        var result = await _invoker.InvokeAsync<JsonNode?>(callbackId, args, cancellationToken).ConfigureAwait(false);
+        var result = await InvokeCallbackAsync(callbackId, args, cancellationToken).ConfigureAwait(false);
         return UnmarshalResult<T>(result, callbackId);
     }
 

@@ -1056,6 +1056,52 @@ public class CapabilityDispatcherTests
     }
 
     [Fact]
+    public async Task InvokeAsync_ConcurrentCapabilityInvocations_DoNotOverlap()
+    {
+        // Guest SDKs can issue un-awaited capability calls that the JSON-RPC server dispatches
+        // concurrently. Their synchronous invocations mutate shared builder state, so they must not overlap.
+        TestCapabilitiesWithInvocationGate.Reset();
+        var dispatcher = CreateDispatcher(typeof(TestCapabilitiesWithInvocationGate).Assembly);
+        const string capabilityId = "Aspire.Hosting.RemoteHost.Tests/gateProbe";
+
+        var first = Task.Run(() => dispatcher.InvokeAsync(capabilityId, new JsonObject { ["name"] = "first" }));
+        Assert.True(TestCapabilitiesWithInvocationGate.FirstEntered.Wait(TimeSpan.FromSeconds(30)));
+
+        var second = dispatcher.InvokeAsync(capabilityId, new JsonObject { ["name"] = "second" });
+        var secondCompletedWhileFirstRunning = second.IsCompleted;
+        var maxActiveWhileFirstRunning = TestCapabilitiesWithInvocationGate.MaxActiveInvocations;
+
+        TestCapabilitiesWithInvocationGate.ReleaseFirst.Set();
+        await Task.WhenAll(first, second).WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.False(secondCompletedWhileFirstRunning);
+        Assert.Equal(1, maxActiveWhileFirstRunning);
+        Assert.Equal(1, TestCapabilitiesWithInvocationGate.MaxActiveInvocations);
+        Assert.Equal(["first", "second"], TestCapabilitiesWithInvocationGate.EnteredOrder);
+    }
+
+    [Fact]
+    public async Task InvokeAsync_CallbackFromSynchronousInvocation_CanReenterDispatcher()
+    {
+        TestCapabilitiesWithInvocationGate.Reset();
+        var handles = new HandleRegistry();
+        CapabilityDispatcher? dispatcher = null;
+        var invoker = new ReentrantCallbackInvoker(() => Task.Run(() => dispatcher!.InvokeAsync(
+            "Aspire.Hosting.RemoteHost.Tests/gateProbe",
+            new JsonObject { ["name"] = "nested" })));
+        var (marshaller, callbackFactory) = CreateTestMarshallerWithCallbacks(handles, invoker);
+        using var _ = callbackFactory;
+        dispatcher = new CapabilityDispatcher(handles, marshaller, [typeof(TestCapabilitiesWithInvocationGate).Assembly]);
+
+        await Task.Run(() => dispatcher.InvokeAsync(
+            "Aspire.Hosting.RemoteHost.Tests/invokeCallbackFromGatedInvocation",
+            new JsonObject { ["callback"] = "reentrant-callback" })).WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Equal(1, invoker.InvocationCount);
+        Assert.Equal(["nested"], TestCapabilitiesWithInvocationGate.EnteredOrder);
+    }
+
+    [Fact]
     public void Invoke_MethodWithoutCallbackFactory_ThrowsForCallbackParameter()
     {
         var handles = new HandleRegistry();
@@ -2323,6 +2369,27 @@ public class CapabilityDispatcherTests
 }
 
 /// <summary>
+/// Simulates a guest callback that calls back into the remote host before completing.
+/// </summary>
+internal sealed class ReentrantCallbackInvoker(Func<Task> onInvoke) : ICallbackInvoker
+{
+    private int _invocationCount;
+
+    public int InvocationCount => Volatile.Read(ref _invocationCount);
+    public bool IsConnected => true;
+
+    public async Task<TResult> InvokeAsync<TResult>(string callbackId, JsonNode? args, CancellationToken cancellationToken = default)
+    {
+        Interlocked.Increment(ref _invocationCount);
+        await onInvoke().ConfigureAwait(false);
+        return default!;
+    }
+
+    public Task InvokeAsync(string callbackId, JsonNode? args, CancellationToken cancellationToken = default)
+        => InvokeAsync<JsonNode?>(callbackId, args, cancellationToken);
+}
+
+/// <summary>
 /// Captures the synchronization context observed by callback invocation.
 /// </summary>
 internal sealed class TestSynchronizationContextCallbackInvoker : ICallbackInvoker
@@ -2655,6 +2722,89 @@ internal static class TestCapabilitiesWithBackgroundThreadDispatch
         callback().GetAwaiter().GetResult();
 
         return Task.CompletedTask;
+    }
+}
+
+internal static class TestCapabilitiesWithInvocationGate
+{
+    private static readonly object s_lock = new();
+    private static readonly List<string> s_enteredOrder = [];
+    private static int s_activeInvocations;
+    private static int s_maxActiveInvocations;
+
+    public static ManualResetEventSlim FirstEntered { get; private set; } = new();
+    public static ManualResetEventSlim ReleaseFirst { get; private set; } = new();
+
+    public static int MaxActiveInvocations
+    {
+        get
+        {
+            lock (s_lock)
+            {
+                return s_maxActiveInvocations;
+            }
+        }
+    }
+
+    public static string[] EnteredOrder
+    {
+        get
+        {
+            lock (s_lock)
+            {
+                return [.. s_enteredOrder];
+            }
+        }
+    }
+
+    public static void Reset()
+    {
+        lock (s_lock)
+        {
+            s_activeInvocations = 0;
+            s_maxActiveInvocations = 0;
+            s_enteredOrder.Clear();
+            FirstEntered = new();
+            ReleaseFirst = new();
+        }
+    }
+
+    /// <ats-summary>Records overlapping synchronous capability invocations</ats-summary>
+    [AspireExport]
+    public static void GateProbe(string name)
+    {
+        lock (s_lock)
+        {
+            s_activeInvocations++;
+            s_maxActiveInvocations = Math.Max(s_maxActiveInvocations, s_activeInvocations);
+            s_enteredOrder.Add(name);
+        }
+
+        try
+        {
+            if (name == "first")
+            {
+                FirstEntered.Set();
+                if (!ReleaseFirst.Wait(TimeSpan.FromSeconds(30)))
+                {
+                    throw new TimeoutException("The first gate probe invocation was not released.");
+                }
+            }
+        }
+        finally
+        {
+            lock (s_lock)
+            {
+                s_activeInvocations--;
+            }
+        }
+    }
+
+    /// <ats-summary>Synchronously waits for a guest callback from a gated invocation</ats-summary>
+    [AspireExport]
+    public static void InvokeCallbackFromGatedInvocation(Func<Task> callback)
+    {
+        callback().GetAwaiter().GetResult();
     }
 }
 
