@@ -587,7 +587,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
 
         var result = await RunDotNetWithArgumentsAsync(
             project.ProjectDirectory,
-            ["msbuild", "-nologo", "-restore", "-t:ComputeRunArguments", "-getProperty:_AspireResolvedCliInvocationMode", "-getProperty:RunCommand", project.ProjectFile],
+            ["msbuild", "-nologo", "-restore", "-t:ComputeRunArguments", "-getProperty:_AspireResolvedCliInvocationMode,RunCommand,RunArguments", project.ProjectFile],
             new Dictionary<string, string>
             {
                 ["AspireCliPath"] = aspireCliPath,
@@ -599,10 +599,15 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         Assert.Contains($"AspireCliInvocationMode={invocationMode} is ignored because AspireCliPath is set to '{aspireCliPath}'", result.Output);
 
         // AspireCliPath remains authoritative; the warning only makes the override visible.
-        using var document = JsonDocument.Parse(result.StandardOutput[result.StandardOutput.IndexOf('{')..]);
-        var properties = document.RootElement.GetProperty("Properties");
-        Assert.Equal("Aspire", properties.GetProperty("_AspireResolvedCliInvocationMode").GetString());
-        Assert.Equal(aspireCliPath, properties.GetProperty("RunCommand").GetString());
+        var jsonStart = result.StandardOutput.IndexOf('{');
+        var jsonEnd = result.StandardOutput.LastIndexOf('}');
+        Assert.True(jsonStart >= 0 && jsonEnd > jsonStart, result.Output);
+        using var document = JsonDocument.Parse(result.StandardOutput[jsonStart..(jsonEnd + 1)]);
+        var properties = document.RootElement.GetProperty("Properties")
+            .EnumerateObject()
+            .ToDictionary(property => property.Name, property => property.Value.GetString() ?? string.Empty);
+        Assert.Equal("Aspire", properties["_AspireResolvedCliInvocationMode"]);
+        AssertUsesExplicitAspireCli(properties, project, aspireCliPath);
     }
 
     [Theory]
