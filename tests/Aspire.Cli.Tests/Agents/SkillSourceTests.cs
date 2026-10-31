@@ -356,20 +356,22 @@ public class SkillSourceTests(ITestOutputHelper output)
     }
 
     [Theory]
-    [InlineData("copilot", "https://github.com/Microsoft/Aspire-Skills", "https://github.com/microsoft/aspire-skills.git", true)]
-    [InlineData("claude", "https://github.com/Microsoft/Aspire-Skills", "https://github.com/microsoft/aspire-skills.git", true)]
-    [InlineData("copilot", "https://GITHUB.COM/Microsoft/Aspire-Skills.git/", "https://github.com/microsoft/aspire-skills.git", true)]
-    [InlineData("claude", "https://GITHUB.COM/Microsoft/Aspire-Skills.git/", "https://github.com/microsoft/aspire-skills.git", true)]
-    [InlineData("copilot", "https://git.example.com/team/skills", "https://git.example.com/team/skills.git", true)]
-    [InlineData("claude", "https://git.example.com/team/skills", "https://git.example.com/team/skills.git", true)]
-    [InlineData("copilot", "https://git.example.com/Team/Skills", "https://git.example.com/team/skills.git", false)]
-    [InlineData("claude", "https://git.example.com/Team/Skills", "https://git.example.com/team/skills.git", false)]
-    public async Task Configure_MatchesExistingGitSourcesUsingHostCaseRules(string clientId, string repository, string existingRepository, bool matches)
+    [InlineData("https://github.com/Microsoft/Aspire-Skills", "https://github.com/microsoft/aspire-skills.git", true)]
+    [InlineData("https://GITHUB.COM/Microsoft/Aspire-Skills.git/", "https://github.com/microsoft/aspire-skills.git", true)]
+    [InlineData("https://git.example.com/team/skills", "https://git.example.com/team/skills.git", true)]
+    [InlineData("HTTPS://GIT.EXAMPLE.COM/team/skills", "https://git.example.com/team/skills.git", true)]
+    [InlineData("https://git.example.com/team/skills", "HTTPS://GIT.EXAMPLE.COM/team/skills.git", true)]
+    [InlineData("SSH://git@GIT.EXAMPLE.COM/team/skills", "ssh://git@git.example.com/team/skills.git", true)]
+    [InlineData("https://GIT.EXAMPLE.COM/Team/Skills", "https://git.example.com/team/skills.git", false)]
+    [InlineData("ssh://Git@git.example.com/team/skills", "ssh://git@git.example.com/team/skills.git", false)]
+    [InlineData("https://git.example.com:8443/team/skills", "https://git.example.com/team/skills.git", false)]
+    [InlineData("https://git.example.com/Team/Skills", "https://git.example.com/team/skills.git", false)]
+    public async Task Configure_MatchesExistingGitSourcesUsingHostCaseRules(string repository, string existingRepository, bool matches)
     {
         using var context = new AgentConfigurationTestContext(output);
         context.Configuration["skillSources:default:repository"] = repository;
         context.Configuration["skillSources:default:ref"] = "main";
-        var client = context.Clients.Single(client => client.Id == clientId);
+        var client = context.Copilot;
         var path = client.GetIntegrationConfigPath(AgentConfigurationScope.Project, context.Project);
         var original = $$"""
             {

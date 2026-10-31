@@ -298,7 +298,7 @@ internal sealed class AgentInitCommand : BaseCommand
         if (appHost is null)
         {
             var candidates = await _projectLocator.FindAppHostProjectFilesAsync(
-                ExecutionContext.WorkingDirectory, AppHostDiscoveryScope.DefaultFiltered, cancellationToken);
+                ExecutionContext.WorkingDirectory, AppHostDiscoveryScope.DefaultFiltered, cancellationToken, skipValidation: true);
             appHost = candidates.Count switch
             {
                 0 => null,
