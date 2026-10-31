@@ -386,7 +386,7 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
             }
         });
 
-        using var cts = CreateWatchCancellationTokenSource();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
         var receivedSpans = new List<OtlpSpan>();
         var firstSpanReceived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -505,7 +505,7 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
             }
         });
 
-        using var cts = CreateWatchCancellationTokenSource();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
         var receivedLogs = new List<OtlpLogEntry>();
         var firstLogReceived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -972,7 +972,7 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
             }
         });
 
-        using var cts = CreateWatchCancellationTokenSource();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
         var receivedLogs = new List<OtlpLogEntry>();
         var firstLogReceived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -1064,7 +1064,7 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
             }
         });
 
-        using var cts = CreateWatchCancellationTokenSource();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
         var receivedLogs = new List<OtlpLogEntry>();
         var firstLogReceived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -1148,7 +1148,7 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
             }
         });
 
-        using var cts = CreateWatchCancellationTokenSource();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
         var receivedLogs = new List<OtlpLogEntry>();
         var firstLogReceived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -1252,7 +1252,7 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
             }
         });
 
-        using var cts = CreateWatchCancellationTokenSource();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
         var receivedLogs = new List<OtlpLogEntry>();
         var firstLogReceived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -1350,7 +1350,7 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
             }
         });
 
-        using var cts = CreateWatchCancellationTokenSource();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
         var receivedSpans = new List<OtlpSpan>();
         var firstSpanReceived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -1468,7 +1468,7 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
     {
         // Arrange
         using var repositoryContext = await CreateRepositoryAsync();
-        using var cts = CreateWatchCancellationTokenSource();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
         var failSnapshotRead = new AsyncLocal<bool>();
         using var listener = new ActivityListener
         {
@@ -1506,8 +1506,6 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
 
     // Watches outlive each bounded wait, so a slow initial snapshot on a loaded CI runner can't cancel the watch
     // before the test observes it. StopWatchOnDispose stops the watch when a test fails early.
-    private static CancellationTokenSource CreateWatchCancellationTokenSource() => new(TestConstants.LongTimeoutTimeSpan);
-
     private static WatchCleanup StopWatchOnDispose(CancellationTokenSource cts, Task watchTask) => new(cts, watchTask);
 
     private sealed class WatchCleanup(CancellationTokenSource cts, Task watchTask) : IAsyncDisposable
