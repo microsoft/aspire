@@ -231,6 +231,67 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PublishAsync_HorizontalPodAutoscalerMetricOnlyContainsConfiguredSource()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        builder.AddContainer("myapp", "nginx:alpine")
+            .PublishAsKubernetesService(serviceResource =>
+            {
+                var scaler = new HorizontalPodAutoscalerV2
+                {
+                    Metadata = { Name = "myapp-hpa" },
+                    Spec =
+                    {
+                        ScaleTargetRef = { Kind = serviceResource.Workload!.Kind!, Name = serviceResource.Workload.Metadata.Name },
+                        MinReplicas = 1,
+                        MaxReplicas = 3
+                    }
+                };
+
+                scaler.Spec.Metrics.Add(new MetricSpecV2
+                {
+                    Type = "Resource",
+                    Resource = new()
+                    {
+                        Name = "cpu",
+                        Target = { Type = "Utilization", AverageUtilization = 80 }
+                    }
+                });
+
+                serviceResource.AdditionalResources.Add(scaler);
+            });
+
+        using var app = builder.Build();
+        app.Run();
+
+        var hpaFile = Assert.Single(
+            Directory.GetFiles(Path.Combine(workspace.Path, "templates", "myapp"), "*.yaml"),
+            f => File.ReadAllText(f).Contains("kind: \"HorizontalPodAutoscaler\"", StringComparison.Ordinal));
+
+        var yaml = new YamlStream();
+        yaml.Load(new StringReader(await File.ReadAllTextAsync(hpaFile)));
+
+        var root = (YamlMappingNode)yaml.Documents[0].RootNode;
+        var spec = (YamlMappingNode)root.Children[new YamlScalarNode("spec")];
+        var metric = (YamlMappingNode)Assert.Single(((YamlSequenceNode)spec.Children[new YamlScalarNode("metrics")]).Children);
+
+        // Kubernetes rejects a metric that populates any source other than the one named by 'type'.
+        Assert.Equal(
+            ["resource", "type"],
+            metric.Children.Keys.Select(k => ((YamlScalarNode)k).Value!).Order(StringComparer.Ordinal));
+
+        var resource = (YamlMappingNode)metric.Children[new YamlScalarNode("resource")];
+        Assert.Equal("cpu", ((YamlScalarNode)resource.Children[new YamlScalarNode("name")]).Value);
+        var target = (YamlMappingNode)resource.Children[new YamlScalarNode("target")];
+        Assert.Equal("Utilization", ((YamlScalarNode)target.Children[new YamlScalarNode("type")]).Value);
+        Assert.Equal("80", ((YamlScalarNode)target.Children[new YamlScalarNode("averageUtilization")]).Value);
+    }
+
+    [Fact]
     public async Task PublishAsync_CustomManifestResource()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
