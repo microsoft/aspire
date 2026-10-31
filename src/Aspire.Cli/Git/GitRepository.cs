@@ -14,7 +14,8 @@ namespace Aspire.Cli.Git;
 /// <param name="environment">The environment abstraction for OS detection.</param>
 /// <param name="logger">The logger for diagnostic output.</param>
 /// <param name="profilingTelemetry">The profiling telemetry service.</param>
-internal sealed class GitRepository(CliExecutionContext executionContext, IEnvironment environment, ILogger<GitRepository> logger, ProfilingTelemetry profilingTelemetry) : IGitRepository
+/// <param name="gitExecutable">The git executable to run. Tests override this to simulate misbehaving git processes.</param>
+internal sealed class GitRepository(CliExecutionContext executionContext, IEnvironment environment, ILogger<GitRepository> logger, ProfilingTelemetry profilingTelemetry, string gitExecutable = "git") : IGitRepository
 {
     /// <inheritdoc />
     public async Task<DirectoryInfo?> GetRootAsync(CancellationToken cancellationToken)
@@ -136,8 +137,8 @@ internal sealed class GitRepository(CliExecutionContext executionContext, IEnvir
         }
     }
 
-    private static ProcessStartInfo CreateGitStartInfo(DirectoryInfo workingDirectory, string[] arguments) =>
-        new("git", arguments)
+    private ProcessStartInfo CreateGitStartInfo(DirectoryInfo workingDirectory, string[] arguments) =>
+        new(gitExecutable, arguments)
         {
             WorkingDirectory = workingDirectory.FullName,
             RedirectStandardOutput = true,

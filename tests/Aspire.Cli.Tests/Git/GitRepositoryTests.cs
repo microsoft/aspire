@@ -189,25 +189,73 @@ public class GitRepositoryTests(ITestOutputHelper outputHelper)
         }
         finally
         {
-            if (File.Exists(pidFile))
+            KillProcessesFromPidFile(pidFile);
+            hooksDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    [SkipOnPlatform(TestPlatforms.Windows, "Uses a POSIX shell script as a fake git executable.")]
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    public async Task GetIncludedFilesAsync_DescendantHoldsStdoutAfterGitExits_ReturnsNull()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        // A fake git that writes part of its output, then exits while a background process
+        // still holds its stdout pipe. stdout never reaches EOF, so the output can't be trusted
+        // to be complete and GetIncludedFilesAsync must return null (fall back to the
+        // filesystem walker) instead of hanging or returning a partial file list.
+        var fakeGitDir = Directory.CreateTempSubdirectory("aspire-fake-git-");
+        var pidFile = Path.Combine(fakeGitDir.FullName, "pids");
+        var fakeGitPath = Path.Combine(fakeGitDir.FullName, "git");
+        await File.WriteAllTextAsync(fakeGitPath, $"""
+            #!/bin/sh
+            printf 'AppHost.csproj\0'
+            sleep 300 2>/dev/null &
+            echo $! >> '{pidFile}'
+            exit 0
+
+            """);
+        File.SetUnixFileMode(fakeGitPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+
+        try
+        {
+            using var profilingTelemetry = CreateProfilingTelemetry();
+            using var loggerFactory = CreateLoggerFactory();
+            var repo = new GitRepository(workspace.CreateExecutionContext(), new TestEnvironment(), loggerFactory.CreateLogger<GitRepository>(), profilingTelemetry, fakeGitPath);
+
+            var result = await repo.GetIncludedFilesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
+
+            Assert.True(File.Exists(pidFile), "The fake git did not start a background process.");
+            Assert.Null(result);
+        }
+        finally
+        {
+            KillProcessesFromPidFile(pidFile);
+            fakeGitDir.Delete(recursive: true);
+        }
+    }
+
+    private static void KillProcessesFromPidFile(string pidFile)
+    {
+        if (!File.Exists(pidFile))
+        {
+            return;
+        }
+
+        foreach (var line in File.ReadAllLines(pidFile))
+        {
+            if (int.TryParse(line, out var pid))
             {
-                foreach (var line in File.ReadAllLines(pidFile))
+                try
                 {
-                    if (int.TryParse(line, out var pid))
-                    {
-                        try
-                        {
-                            using var orphan = Process.GetProcessById(pid);
-                            orphan.Kill();
-                        }
-                        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception)
-                        {
-                        }
-                    }
+                    using var orphan = Process.GetProcessById(pid);
+                    orphan.Kill();
+                }
+                catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception)
+                {
                 }
             }
-
-            hooksDir.Delete(recursive: true);
         }
     }
 
