@@ -4732,13 +4732,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
     {
         var fakeBinDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "fake-bin")).FullName;
         var fakeGhPath = Path.Combine(fakeBinDirectory, "gh");
-        await File.WriteAllTextAsync(fakeGhPath, fakeGh);
-        if (!OperatingSystem.IsWindows())
-        {
-            File.SetUnixFileMode(
-                fakeGhPath,
-                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-        }
+        await WriteExecutableAsync(fakeGhPath, fakeGh);
 
         return await RunBashScriptAsync(
             Path.Combine(RepoRoot.Path, HistoryScriptRelativePath),
@@ -4755,13 +4749,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
     {
         var fakeBinDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "fake-bin")).FullName;
         var fakeGhPath = Path.Combine(fakeBinDirectory, "gh");
-        await File.WriteAllTextAsync(fakeGhPath, fakeGh);
-        if (!OperatingSystem.IsWindows())
-        {
-            File.SetUnixFileMode(
-                fakeGhPath,
-                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-        }
+        await WriteExecutableAsync(fakeGhPath, fakeGh);
 
         return await RunBashScriptAsync(
             Path.Combine(RepoRoot.Path, CandidatesScriptRelativePath),
@@ -4782,16 +4770,8 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         return fakeGhPath;
     }
 
-    private static async Task WriteExecutableAsync(string path, string script)
-    {
-        await File.WriteAllTextAsync(path, script);
-        if (!OperatingSystem.IsWindows())
-        {
-            File.SetUnixFileMode(
-                path,
-                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-        }
-    }
+    private static Task WriteExecutableAsync(string path, string script)
+        => ExecutableFile.WriteAsync(path, script);
 
     private static async Task WriteZipEntryAsync(ZipArchive archive, string name, string contents)
     {
