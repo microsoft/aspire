@@ -3,6 +3,7 @@
 
 using Aspire.TestUtilities;
 using Docker.DotNet.Models;
+using DotNet.Testcontainers.Configurations;
 using Testcontainers.MsSql;
 
 namespace Aspire.Hosting.Azure.Tests;
@@ -17,6 +18,11 @@ public sealed class SqlServerContainerFixture : IAsyncLifetime
 
     public MsSqlContainer? Container { get; private set; }
 
+    /// <summary>
+    /// Whether the SQL Server port is published on the daemon's loopback address rather than on every address.
+    /// </summary>
+    internal bool PublishesPortOnLoopback { get; private set; }
+
     public string GetConnectionString() => Container?.GetConnectionString() ??
         throw new InvalidOperationException("The test container was not initialized.");
 
@@ -24,9 +30,15 @@ public sealed class SqlServerContainerFixture : IAsyncLifetime
     {
         if (RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Testcontainers))
         {
-            Container = new MsSqlBuilder($"{SqlServerContainerImageTags.Registry}/{SqlServerContainerImageTags.Image}:{SqlServerContainerImageTags.Tag}")
-                .WithCreateParameterModifier(BindPublishedPortsToLoopback)
-                .Build();
+            var builder = new MsSqlBuilder($"{SqlServerContainerImageTags.Registry}/{SqlServerContainerImageTags.Image}:{SqlServerContainerImageTags.Tag}");
+
+            PublishesPortOnLoopback = CanReachDaemonLoopback();
+            if (PublishesPortOnLoopback)
+            {
+                builder = builder.WithCreateParameterModifier(BindPublishedPortsToLoopback);
+            }
+
+            Container = builder.Build();
 
             await Container.StartAsync();
         }
@@ -45,7 +57,8 @@ public sealed class SqlServerContainerFixture : IAsyncLifetime
     // per host IP, so a wildcard (0.0.0.0) request can be handed ports that loopback publications already
     // hold; once ten consecutive candidates collide the daemon gives up with "failed to bind host port for
     // 0.0.0.0::<ip>:1433/tcp: address already in use". Sharing the loopback address keeps both kinds of
-    // publication in one allocation pool, and the tests only ever connect through 127.0.0.1.
+    // publication in one allocation pool. This only applies when the daemon's loopback is also the test
+    // process's loopback; see CanReachDaemonLoopback.
     internal static void BindPublishedPortsToLoopback(CreateContainerParameters parameters)
     {
         foreach (var bindings in parameters.HostConfig?.PortBindings?.Values ?? [])
@@ -55,5 +68,23 @@ public sealed class SqlServerContainerFixture : IAsyncLifetime
                 binding.HostIP = LoopbackHostIP;
             }
         }
+    }
+
+    // Mirrors how Testcontainers resolves the container hostname: a local socket or pipe means the daemon
+    // shares this process's loopback unless the tests themselves run inside a container (where Testcontainers
+    // connects through the bridge gateway), and a TCP endpoint is only local when it targets loopback.
+    private static bool CanReachDaemonLoopback()
+    {
+        if (!string.IsNullOrEmpty(TestcontainersSettings.DockerHostOverride))
+        {
+            return false;
+        }
+
+        var endpoint = TestcontainersSettings.OS.DockerEndpointAuthConfig.Endpoint;
+        return endpoint.Scheme switch
+        {
+            "unix" or "npipe" => !File.Exists(Path.Combine(Path.GetPathRoot(Directory.GetCurrentDirectory()) ?? "/", ".dockerenv")),
+            _ => endpoint.IsLoopback
+        };
     }
 }

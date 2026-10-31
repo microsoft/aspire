@@ -29,7 +29,7 @@ public class AzureSqlPrincipalReconciliationTests(SqlServerContainerFixture fixt
 
     [Fact]
     [RequiresFeature(TestFeature.Testcontainers)]
-    public async Task SqlServerContainerPublishesItsPortOnLoopbackOnly()
+    public async Task SqlServerContainerPublishesItsPortOnLoopbackWhenReachable()
     {
         // Regression test for https://github.com/microsoft/aspire/issues/19014: a wildcard random host
         // port competes with the loopback ports DCP publishes for other tests' containers, and Docker
@@ -43,7 +43,7 @@ public class AzureSqlPrincipalReconciliationTests(SqlServerContainerFixture fixt
         Assert.NotNull(portBindings);
         var bindings = Assert.Contains($"{MsSqlBuilder.MsSqlPort}/tcp", portBindings);
         var binding = Assert.Single(bindings);
-        Assert.Equal(SqlServerContainerFixture.LoopbackHostIP, binding.HostIP);
+        Assert.Equal(fixture.PublishesPortOnLoopback ? SqlServerContainerFixture.LoopbackHostIP : string.Empty, binding.HostIP);
     }
 
     [Fact]
