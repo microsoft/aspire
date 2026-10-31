@@ -792,6 +792,21 @@ public sealed class TestTriggerMapTests
     }
 
     [Theory]
+    [InlineData("src/Aspire.Hosting.Go/Aspire.Hosting.Go.csproj", "Aspire.Hosting.Go")]
+    [InlineData("src/Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.csproj", "Aspire.Hosting.JavaScript")]
+    [InlineData("src/Aspire.Hosting.Python/Aspire.Hosting.Python.csproj", "Aspire.Hosting.Python")]
+    public void DefaultHostingPackageProjectsSelectCliStablePackageGuard(string path, string affectedProject)
+    {
+        var result = SelectWithRealMap(path, affectedProject);
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Contains("Aspire.Cli.Tests", result.TestProjects);
+        Assert.Contains(result.TestCauses["Aspire.Cli.Tests"],
+            cause => cause.Kind == CauseKind.PathRule && cause.Trigger == path);
+    }
+
+    [Theory]
     [InlineData("src/Aspire.ProjectTemplates/templates/aspire-ts-cs-starter/frontend/package.json")]
     [InlineData("src/Aspire.ProjectTemplates/templates/aspire-ts-cs-starter/frontend/package-lock.json")]
     public void ProjectTemplateFrontendDependencyInputsRunCliSecurityGuards(string path)
