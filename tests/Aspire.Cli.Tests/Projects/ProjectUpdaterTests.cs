@@ -1907,7 +1907,8 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var unrelatedProjectFile = new FileInfo(Path.Combine(workspace.CreateDirectory("Unrelated").FullName, "Unrelated.csproj"));
         await File.WriteAllTextAsync(unrelatedProjectFile.FullName, UnrelatedProjectContent);
 
-        var solutionFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Repro.slnx"));
+        // Upper-case extension: solution discovery must not depend on the file system's case sensitivity.
+        var solutionFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Repro.SLNX"));
         await File.WriteAllTextAsync(solutionFile.FullName, "<Solution />");
         var unrelatedSolutionFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Unrelated.sln"));
         await File.WriteAllTextAsync(unrelatedSolutionFile.FullName, string.Empty);
@@ -1929,7 +1930,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 },
                 GetSolutionProjectsAsyncCallback = (solution, _, _) => solution.Name switch
                 {
-                    "Repro.slnx" => (0, [appHostProjectFile, testsProjectFile, secondAppHostProjectFile]),
+                    "Repro.SLNX" => (0, [appHostProjectFile, testsProjectFile, secondAppHostProjectFile]),
                     "Unrelated.sln" => (0, [unrelatedProjectFile]),
                     _ => throw new InvalidOperationException($"Unexpected solution: {solution.FullName}"),
                 }

@@ -855,8 +855,9 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
             FileInfo[] solutionFiles;
             try
             {
-                // "*.sln" alone also matches ".slnx" on Windows, so filter on the exact extension.
-                solutionFiles = directory.GetFiles("*.sln*")
+                // Solution file names are matched case-insensitively on every OS. "*.sln*" also matches
+                // other extensions, so filter on the exact extension.
+                solutionFiles = directory.GetFiles("*.sln*", new EnumerationOptions { MatchCasing = MatchCasing.CaseInsensitive })
                     .Where(file => string.Equals(file.Extension, ".sln", StringComparison.OrdinalIgnoreCase)
                         || string.Equals(file.Extension, ".slnx", StringComparison.OrdinalIgnoreCase))
                     .ToArray();
