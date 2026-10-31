@@ -116,6 +116,37 @@ public class AuxiliaryBackchannelMonitorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task Dispose_ClosesMonitorOwnedConnections()
+    {
+        var homeDirectory = CreateSocketSafeHomeDirectory();
+        try
+        {
+            using var profiling = new ProfilingTelemetry(new ConfigurationBuilder().Build());
+            var monitor = new AuxiliaryBackchannelMonitor(
+                new CapturingLogger<AuxiliaryBackchannelMonitor>(), CreateExecutionContext(homeDirectory), new FakeTimeProvider(), profiling);
+            using var server = new TestAuxiliaryBackchannelServer(
+                CreateLiveOwnerSocketPath(homeDirectory), Path.Combine(homeDirectory.FullName, "MyApp.AppHost.csproj"));
+            var accepted = server.AcceptAsync(TestContext.Current.CancellationToken);
+
+            await monitor.ScanAsync(TestContext.Current.CancellationToken).DefaultTimeout();
+            await accepted.DefaultTimeout();
+            Assert.Single(monitor.Connections);
+            Assert.False(server.WaitForClientDisconnectAsync().IsCompleted);
+
+            // The CLI host disposes the monitor before exit. One-shot commands such as `aspire ps`
+            // borrow its connections, so leaving them open would reset the AppHost's side at exit.
+            monitor.Dispose();
+
+            await server.WaitForClientDisconnectAsync().DefaultTimeout();
+            Assert.Empty(monitor.Connections);
+        }
+        finally
+        {
+            homeDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public void FindConnectionByAppHostPath_WithCaseVariant_FollowsCurrentVolumeBehavior()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

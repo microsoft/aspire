@@ -56,7 +56,7 @@ internal sealed class McpCallCommand : BaseCommand
         var inputJson = parseResult.GetValue(s_inputOption);
         var passedAppHostProjectFile = parseResult.GetValue(s_appHostOption);
 
-        var result = await _connectionResolver.ResolveConnectionAsync(
+        using var result = await _connectionResolver.ResolveConnectionAsync(
             passedAppHostProjectFile,
             SharedCommandStrings.ScanningForRunningAppHosts,
             string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.SelectAppHost, "call MCP tool on"),

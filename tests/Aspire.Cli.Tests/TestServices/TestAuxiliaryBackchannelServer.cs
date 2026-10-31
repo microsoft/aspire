@@ -12,6 +12,7 @@ internal sealed class TestAuxiliaryBackchannelServer : IDisposable
     private readonly Socket _listener = new(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
     private readonly string _socketPath;
     private readonly RpcTarget _target;
+    private readonly TaskCompletionSource _clientDisconnected = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private JsonRpc? _rpc;
 
     public TestAuxiliaryBackchannelServer(string socketPath, string appHostPath)
@@ -29,8 +30,11 @@ internal sealed class TestAuxiliaryBackchannelServer : IDisposable
         var stream = new NetworkStream(socket, ownsSocket: true);
         var handler = new HeaderDelimitedMessageHandler(stream, stream, BackchannelJsonSerializerContext.CreateRpcMessageFormatter());
         _rpc = new JsonRpc(handler, _target);
+        _rpc.Disconnected += (_, _) => _clientDisconnected.TrySetResult();
         _rpc.StartListening();
     }
+
+    public Task WaitForClientDisconnectAsync() => _clientDisconnected.Task;
 
     public void RemoveSocketFile() => File.Delete(_socketPath);
 

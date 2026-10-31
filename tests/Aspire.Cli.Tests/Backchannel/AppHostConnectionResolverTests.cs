@@ -2,8 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
-using System.Net;
-using System.Net.Sockets;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Projects;
@@ -13,9 +11,9 @@ using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Utils;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
-using StreamJsonRpc;
 
 namespace Aspire.Cli.Tests.Backchannel;
 
@@ -169,6 +167,77 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
         await otherServer.WaitForClientDisconnectAsync().WaitAsync(TimeSpan.FromSeconds(5));
         var appHostInfo = await connection.GetAppHostInfoV2Async(TestContext.Current.CancellationToken);
         Assert.Equal("2222", appHostInfo?.Pid);
+    }
+
+    [Fact]
+    public async Task ResolveConnectionAsync_WithExplicitProjectFile_DisposingResultClosesConnection()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectFile = CreateProjectFile(workspace.WorkspaceRoot, "TestAppHost", "TestAppHost.csproj");
+        using var server = TestResolverBackchannelServer.Start(projectFile.FullName, processId: 1111);
+        using var sources = TestConfigSourceServices.Create(executionContext);
+        var resolver = new AppHostConnectionResolver(
+            new TestAuxiliaryBackchannelMonitor(),
+            new TestInteractionService(),
+            new TestProjectLocator(),
+            executionContext,
+            TestHelpers.CreateInteractiveHostEnvironment(),
+            NullLogger<AppHostConnectionResolver>.Instance,
+            new ProfilingTelemetry(new ConfigurationBuilder().Build()),
+            sources,
+            (_, _, _, _) => [server.AppHostSocket]);
+
+        var result = await resolver.ResolveConnectionAsync(
+            projectFile,
+            "Scanning",
+            "Select",
+            SharedCommandStrings.AppHostNotRunning,
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.Success);
+        Assert.True(result.OwnsConnection);
+        Assert.False(server.WaitForClientDisconnectAsync().IsCompleted);
+
+        result.Dispose();
+
+        await server.WaitForClientDisconnectAsync().DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task ResolveConnectionAsync_WithMonitorConnection_DisposingResultLeavesConnectionOpen()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var connection = new TestAppHostAuxiliaryBackchannel { IsInScope = true };
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        monitor.AddConnection("/tmp/test.sock", connection);
+        using var sources = TestConfigSourceServices.Create(executionContext);
+        var resolver = new AppHostConnectionResolver(
+            monitor,
+            new TestInteractionService(),
+            new TestProjectLocator(),
+            executionContext,
+            TestHelpers.CreateInteractiveHostEnvironment(),
+            NullLogger<AppHostConnectionResolver>.Instance,
+            new ProfilingTelemetry(new ConfigurationBuilder().Build()),
+            sources);
+
+        var result = await resolver.ResolveConnectionAsync(
+            projectFile: null,
+            "Scanning",
+            "Select",
+            SharedCommandStrings.AppHostNotRunning,
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.Success);
+        Assert.Same(connection, result.Connection);
+        Assert.False(result.OwnsConnection);
+
+        result.Dispose();
+
+        // The monitor owns this connection and may hand it to later callers.
+        Assert.Equal(0, connection.DisposeCallCount);
     }
 
     [Fact]
@@ -672,96 +741,5 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
             $"{appHostId}a1b2C3d4.{pid.ToString(CultureInfo.InvariantCulture)}");
         File.WriteAllText(socketPath, "");
         return socketPath;
-    }
-
-    private sealed class TestResolverBackchannelServer : IDisposable
-    {
-        private readonly TcpListener _listener = new(IPAddress.Loopback, 0);
-        private readonly TestResolverRpcTarget _target;
-        private readonly TaskCompletionSource _clientDisconnected = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        private JsonRpc? _rpc;
-
-        private TestResolverBackchannelServer(string appHostPath, int processId)
-        {
-            _target = new TestResolverRpcTarget(appHostPath, processId);
-            _listener.Start();
-            AppHostSocket = new TestAppHostSocket($"test-socket-{processId}")
-            {
-                ConnectAsyncCallback = ConnectAsync
-            };
-        }
-
-        public TestAppHostSocket AppHostSocket { get; }
-
-        public static TestResolverBackchannelServer Start(string appHostPath, int processId)
-            => new(appHostPath, processId);
-
-        public Task WaitForClientDisconnectAsync() => _clientDisconnected.Task;
-
-        public void Dispose()
-        {
-            _rpc?.Dispose();
-            _listener.Stop();
-        }
-
-        private async ValueTask<Socket> ConnectAsync(CancellationToken cancellationToken)
-        {
-            var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-            try
-            {
-                await socket.ConnectAsync((IPEndPoint)_listener.LocalEndpoint, cancellationToken);
-                var serverSocket = await _listener.AcceptSocketAsync(cancellationToken);
-                var stream = new NetworkStream(serverSocket, ownsSocket: true);
-                var messageHandler = new HeaderDelimitedMessageHandler(
-                    stream,
-                    stream,
-                    BackchannelJsonSerializerContext.CreateRpcMessageFormatter());
-                _rpc = new JsonRpc(messageHandler, _target);
-                _rpc.Disconnected += (_, _) => _clientDisconnected.TrySetResult();
-                _rpc.StartListening();
-                return socket;
-            }
-            catch
-            {
-                socket.Dispose();
-                throw;
-            }
-        }
-    }
-
-    private sealed class TestResolverRpcTarget(string appHostPath, int processId)
-    {
-        private readonly string[] _capabilities =
-        [
-            AuxiliaryBackchannelCapabilities.V1,
-            AuxiliaryBackchannelCapabilities.V2
-        ];
-
-        public Task<AppHostInformation> GetAppHostInformationAsync()
-            => Task.FromResult(new AppHostInformation
-            {
-                AppHostPath = appHostPath,
-                ProcessId = processId
-            });
-
-        public Task<GetCapabilitiesResponse> GetCapabilitiesAsync(GetCapabilitiesRequest? request = null)
-        {
-            _ = request;
-            return Task.FromResult(new GetCapabilitiesResponse
-            {
-                Capabilities = _capabilities
-            });
-        }
-
-        public Task<GetAppHostInfoResponse> GetAppHostInfoAsync(GetAppHostInfoRequest? request = null)
-        {
-            _ = request;
-            return Task.FromResult(new GetAppHostInfoResponse
-            {
-                Pid = processId.ToString(CultureInfo.InvariantCulture),
-                AppHostPath = appHostPath,
-                AspireHostVersion = "test"
-            });
-        }
     }
 }

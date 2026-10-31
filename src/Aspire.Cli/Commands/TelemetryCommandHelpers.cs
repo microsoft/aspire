@@ -265,7 +265,7 @@ internal static class TelemetryCommandHelpers
             return new DashboardApiResult(true, null, dashboardUrl, token, displayDashboardUrl, 0);
         }
 
-        var result = await connectionResolver.ResolveConnectionAsync(
+        using var result = await connectionResolver.ResolveConnectionAsync(
             projectFile,
             SharedCommandStrings.ScanningForRunningAppHosts,
             string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.SelectAppHost, TelemetryCommandStrings.SelectAppHostAction),

@@ -377,6 +377,26 @@ internal sealed class AuxiliaryBackchannelMonitor(
         return fileProviders;
     }
 
+    /// <summary>
+    /// Stops monitoring and closes the connections this monitor owns.
+    /// </summary>
+    /// <remarks>
+    /// One-shot commands such as <c>aspire ps</c> borrow these connections. Closing them here, when the
+    /// CLI host is disposed, lets each AppHost observe a clean disconnect instead of a reset at process exit.
+    /// </remarks>
+    public override void Dispose()
+    {
+        base.Dispose();
+
+        foreach (var socketPath in _connectionsBySocketPath.Keys)
+        {
+            if (_connectionsBySocketPath.TryRemove(socketPath, out var connection))
+            {
+                connection.Dispose();
+            }
+        }
+    }
+
     private static void DisposeFileProviders(List<PhysicalFileProvider>? fileProviders)
     {
         if (fileProviders is null)
