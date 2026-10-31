@@ -7,6 +7,7 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Lifecycle;
 using Aspire.Hosting.Maui.Annotations;
+using Aspire.Hosting.Maui.Utilities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -56,6 +57,21 @@ internal class MauiBuildQueueEventSubscriber(
     /// Provides time for the launch handoff timeout.
     /// </summary>
     internal TimeProvider LaunchHandoffTimeProvider { get; set; } = TimeProvider.System;
+
+    /// <summary>
+    /// How often to check for the Android launch signal while the launch is still building and deploying.
+    /// </summary>
+    internal TimeSpan LaunchSignalPollInterval { get; set; } = TimeSpan.FromMilliseconds(250);
+
+    /// <summary>
+    /// Maximum time to wait for adb to stop the Android app after the resource stops.
+    /// </summary>
+    internal TimeSpan AndroidAppStopTimeout { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// Maximum time to wait for the Android SDK to list devices before a launch.
+    /// </summary>
+    internal TimeSpan AndroidDeviceQueryTimeout { get; set; } = TimeSpan.FromMinutes(1);
 
     /// <inheritdoc/>
     public Task SubscribeAsync(IDistributedApplicationEventing eventing, DistributedApplicationExecutionContext executionContext, CancellationToken cancellationToken)
@@ -129,10 +145,21 @@ internal class MauiBuildQueueEventSubscriber(
 
             await RunBuildAsync(resource, logger, resourceCts.Token).ConfigureAwait(false);
 
+            if (resource.TryGetLastAnnotation<MauiAndroidDeviceSelectionAnnotation>(out var deviceSelection))
+            {
+                deviceSelection.SelectedDevice = await SelectAndroidDeviceAsync(resource, deviceSelection.AdbTarget, logger, resourceCts.Token).ConfigureAwait(false);
+            }
+
+            // A signal left by the previous launch must not release the lock for this one.
+            if (resource.TryGetLastAnnotation<MauiAndroidLaunchSignalAnnotation>(out var launchSignal))
+            {
+                File.Delete(launchSignal.FilePath);
+            }
+
             // Build succeeded. Keep the semaphore held until DCP starts the launch process.
             // Non-Android platforms launch without rebuilding and can release when DCP reports Running.
-            // Android Run still performs fast-deploy/runtime upload work, so it must retain the lock
-            // until the short-lived Run process reaches a terminal state.
+            // Android's 'dotnet run' still builds and deploys, so it retains the lock until the launch
+            // signals that its MSBuild work is done or the launch process reaches a terminal state.
             var releaseBuildLockOnResourceRunning = !resource.TryGetLastAnnotation<MauiBuildInfoAnnotation>(out var buildInfo)
                 || buildInfo.ReleaseBuildLockOnResourceRunning;
             releaseInFinally = false;
@@ -256,6 +283,113 @@ internal class MauiBuildQueueEventSubscriber(
         logger.LogInformation("Build succeeded for resource '{ResourceName}'.", resource.Name);
     }
 
+    /// <summary>
+    /// Resolves the device an Android launch targets so <c>dotnet run</c> does not have to choose one.
+    /// A <c>-s</c> serial is used as is; <c>-e</c> and <c>-d</c> pick the only online emulator or USB device,
+    /// matching adb's behavior for those switches. Returns <see langword="null"/> when no single device matches.
+    /// </summary>
+    internal async Task<string?> SelectAndroidDeviceAsync(IResource resource, string adbTarget, ILogger logger, CancellationToken cancellationToken)
+    {
+        if (MauiAndroidDeviceSelection.GetSerial(adbTarget) is { } serial)
+        {
+            return serial;
+        }
+
+        if (MauiAndroidDeviceSelection.GetDeviceType(adbTarget) is not { } deviceType ||
+            !resource.TryGetLastAnnotation<MauiBuildInfoAnnotation>(out var buildInfo) ||
+            await GetAvailableAndroidDevicesAsync(buildInfo, logger, cancellationToken).ConfigureAwait(false) is not { } devicesJson)
+        {
+            return null;
+        }
+
+        var devices = MauiAndroidDeviceSelection.GetOnlineDevices(devicesJson, deviceType);
+        if (devices.Count == 1)
+        {
+            logger.LogInformation("Selected Android {DeviceType} '{Device}'.", deviceType.ToLowerInvariant(), devices[0]);
+            return devices[0];
+        }
+
+        if (devices.Count > 1)
+        {
+            logger.LogWarning(
+                "More than one Android {DeviceType} is online ({Devices}). Pass the serial of the one to use when adding the resource.",
+                deviceType.ToLowerInvariant(),
+                string.Join(", ", devices));
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Lists the devices the Android SDK reports to <c>dotnet run</c>, as <c>dotnet msbuild -getItem:Devices</c> JSON.
+    /// Returns <see langword="null"/> when the SDK cannot list devices, for example when it predates device selection.
+    /// </summary>
+    internal virtual async Task<string?> GetAvailableAndroidDevicesAsync(MauiBuildInfoAnnotation buildInfo, ILogger logger, CancellationToken cancellationToken)
+    {
+        var psi = new ProcessStartInfo("dotnet")
+        {
+            WorkingDirectory = buildInfo.WorkingDirectory,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+
+        psi.ArgumentList.Add("msbuild");
+        psi.ArgumentList.Add(buildInfo.ProjectPath);
+        psi.ArgumentList.Add("-nologo");
+        psi.ArgumentList.Add("-t:ComputeAvailableDevices");
+        psi.ArgumentList.Add("-getItem:Devices");
+        if (!string.IsNullOrEmpty(buildInfo.TargetFramework))
+        {
+            psi.ArgumentList.Add($"-p:TargetFramework={buildInfo.TargetFramework}");
+        }
+
+        if (!string.IsNullOrEmpty(buildInfo.Configuration))
+        {
+            psi.ArgumentList.Add($"-p:Configuration={buildInfo.Configuration}");
+        }
+
+        foreach (var arg in buildInfo.AdditionalBuildArguments)
+        {
+            psi.ArgumentList.Add(arg);
+        }
+
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(AndroidDeviceQueryTimeout);
+
+        using var process = Process.Start(psi)
+            ?? throw new InvalidOperationException("Failed to start 'dotnet msbuild'.");
+
+        var stdoutTask = process.StandardOutput.ReadToEndAsync(timeoutCts.Token);
+        var stderrTask = process.StandardError.ReadToEndAsync(timeoutCts.Token);
+        try
+        {
+            await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            TryKillProcess(process, logger);
+            logger.LogWarning("Listing Android devices timed out after {Timeout}.", AndroidDeviceQueryTimeout);
+            return null;
+        }
+        catch (OperationCanceledException)
+        {
+            TryKillProcess(process, logger);
+            throw;
+        }
+
+        var output = await stdoutTask.ConfigureAwait(false);
+        var error = await stderrTask.ConfigureAwait(false);
+        if (process.ExitCode != 0)
+        {
+            logger.LogDebug("Listing Android devices failed with exit code {ExitCode}. {Output}{Error}", process.ExitCode, output, error);
+            return null;
+        }
+
+        return output;
+    }
+
     private static async Task PipeOutputAsync(System.IO.StreamReader reader, ILogger logger, LogLevel level, CancellationToken cancellationToken)
     {
         try
@@ -311,8 +445,10 @@ internal class MauiBuildQueueEventSubscriber(
     /// is <see langword="true"/>: the pre-build step already compiled the project for the same
     /// configuration that DCP will pass to the launch command. Waiting for a terminal state on
     /// those platforms would hold the semaphore for the entire app lifetime. Android does not
-    /// release on Running because its Run target performs required deploy/runtime upload work
-    /// after Build.
+    /// release on Running because its launch still builds and deploys after DCP starts it. Its
+    /// launch process lives as long as the app, so the release instead follows the launch signal
+    /// written after <c>ComputeRunArguments</c>, or a terminal state when the launch fails or an
+    /// older Android SDK starts the app without waiting for it.
     /// </para>
     /// </remarks>
     internal virtual async Task ReleaseSemaphoreAfterLaunchAsync(
@@ -329,10 +465,25 @@ internal class MauiBuildQueueEventSubscriber(
         {
             using var timeoutCts = new CancellationTokenSource(LaunchHandoffTimeout, LaunchHandoffTimeProvider);
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
-            await notificationService.WaitForResourceAsync(
+            using var waitCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token);
+            var launchStateTask = notificationService.WaitForResourceAsync(
                 resource.Name,
                 e => ShouldReleaseBuildLockForLaunchState(e.Snapshot.State?.Text, stateAtCallTime, releaseOnRunning),
-                cts.Token).ConfigureAwait(false);
+                waitCts.Token);
+
+            if (!releaseOnRunning && resource.TryGetLastAnnotation<MauiAndroidLaunchSignalAnnotation>(out var launchSignal))
+            {
+                var completedTask = await Task.WhenAny(
+                    launchStateTask,
+                    WaitForLaunchSignalAsync(launchSignal.FilePath, waitCts.Token)).ConfigureAwait(false);
+
+                await waitCts.CancelAsync().ConfigureAwait(false);
+                await completedTask.ConfigureAwait(false);
+            }
+            else
+            {
+                await launchStateTask.ConfigureAwait(false);
+            }
         }
         catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
         {
@@ -602,7 +753,19 @@ internal class MauiBuildQueueEventSubscriber(
                 }
 
                 // Resource is past the queue (Running) — delegate to original stop.
-                return await originalStop.ExecuteCommand(context).ConfigureAwait(false);
+                // Only a launch that is still running owns the app; once it has ended, the same package may
+                // already belong to another launch on the device.
+                var wasRunning = notificationService.TryGetCurrentState(context.ResourceName, out var resourceEvent)
+                    && string.Equals(resourceEvent.Snapshot.State?.Text, KnownResourceStates.Running, StringComparisons.ResourceState);
+
+                var result = await originalStop.ExecuteCommand(context).ConfigureAwait(false);
+                if (result.Success && wasRunning)
+                {
+                    // Stopping 'dotnet run' ends Microsoft.Android.Run without stopping the app it launched.
+                    await StopAndroidAppAsync(resource, context.CancellationToken).ConfigureAwait(false);
+                }
+
+                return result;
             },
             displayDescription: null,
             parameter: null,
@@ -612,6 +775,78 @@ internal class MauiBuildQueueEventSubscriber(
             isHighlighted: true));
 
         resource.Annotations.Add(new MauiStopCommandReplacedAnnotation());
+    }
+
+    /// <summary>
+    /// Stops the app that the resource's last Android launch started, using the device and package
+    /// recorded in its launch signal. Does nothing for non-Android resources or launches that never deployed.
+    /// </summary>
+    private async Task StopAndroidAppAsync(IResource resource, CancellationToken cancellationToken)
+    {
+        if (!resource.TryGetLastAnnotation<MauiAndroidLaunchSignalAnnotation>(out var launchSignalAnnotation) ||
+            MauiAndroidLaunchSignal.TryRead(launchSignalAnnotation.FilePath) is not { } launchSignal)
+        {
+            return;
+        }
+
+        var logger = loggerService.GetLogger(resource);
+        var psi = new ProcessStartInfo(launchSignal.AdbPath)
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+
+        foreach (var arg in launchSignal.GetForceStopArguments())
+        {
+            psi.ArgumentList.Add(arg);
+        }
+
+        try
+        {
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(AndroidAppStopTimeout);
+
+            using var process = Process.Start(psi)
+                ?? throw new InvalidOperationException($"Failed to start '{launchSignal.AdbPath}'.");
+
+            var stdoutTask = process.StandardOutput.ReadToEndAsync(timeoutCts.Token);
+            var stderrTask = process.StandardError.ReadToEndAsync(timeoutCts.Token);
+            try
+            {
+                await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                TryKillProcess(process, logger);
+                throw;
+            }
+
+            await stdoutTask.ConfigureAwait(false);
+            var error = (await stderrTask.ConfigureAwait(false)).Trim();
+
+            if (process.ExitCode == 0)
+            {
+                logger.LogInformation("Stopped Android app '{PackageName}'.", launchSignal.PackageName);
+            }
+            else
+            {
+                logger.LogWarning("Failed to stop Android app '{PackageName}': adb exited with code {ExitCode}. {Error}", launchSignal.PackageName, process.ExitCode, error);
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            logger.LogWarning(ex, "Failed to stop Android app '{PackageName}'.", launchSignal.PackageName);
+        }
+    }
+
+    private async Task WaitForLaunchSignalAsync(string filePath, CancellationToken cancellationToken)
+    {
+        while (!File.Exists(filePath))
+        {
+            await Task.Delay(LaunchSignalPollInterval, cancellationToken).ConfigureAwait(false);
+        }
     }
 
     /// <summary>
