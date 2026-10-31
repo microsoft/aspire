@@ -15,6 +15,7 @@ using Aspire.Tests.Shared.DashboardModel;
 using Bunit;
 using Google.Protobuf.WellKnownTypes;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.FluentUI.AspNetCore.Components;
 using OpenTelemetry.Proto.Logs.V1;
@@ -165,12 +166,11 @@ public class ResourcesLayoutTests : DashboardTestContext
         await cut.InvokeAsync(() => search.Instance.ValueChanged.InvokeAsync(string.Empty));
         cut.WaitForAssertion(() => Assert.Equal(expectedKeys.Append(newGroupKey), GetKeys()));
 
-        cut.Find("#resourcePaneGroupingButton").Click();
-        var menu = cut.FindComponents<AspireMenuButton>().Single(button => button.Instance.MenuButtonId == "resourcePaneGroupingButton");
+        var menu = await OpenGroupingMenuAsync(cut);
         var otherMode = otherModes.Keys.First();
         await cut.InvokeAsync(menu.Instance.Items.Single(item => item.Id == $"resource-grouping-{otherMode}").OnClick!);
         Assert.False(await cut.InvokeAsync(() => cut.Instance.ReorderGroupAsync(grouping, movedKey, targetKey, after: false)));
-        cut.Find("#resourcePaneGroupingButton").Click();
+        await cut.Find("#resourcePaneGroupingButton").ClickAsync(new MouseEventArgs());
         await cut.InvokeAsync(menu.Instance.Items.Single(item => item.Id == $"resource-grouping-{grouping}").OnClick!);
         Assert.Equal(expectedKeys.Append(newGroupKey), GetKeys());
 
@@ -649,6 +649,14 @@ public class ResourcesLayoutTests : DashboardTestContext
 
     // The filters are a popover that stays open while values change. Expands only the given group, so the checkboxes
     // found are that group's: the first is "(All)", the rest are its values in order.
+    private static async Task<IRenderedComponent<AspireMenuButton>> OpenGroupingMenuAsync(IRenderedComponent<ResourcesLayout> cut)
+    {
+        // Click() only queues the event while the renderer is busy, e.g. applying a resource update from the
+        // subscription, so await the click before reading the items the menu populates when it opens.
+        await cut.Find("#resourcePaneGroupingButton").ClickAsync(new MouseEventArgs());
+        return cut.FindComponents<AspireMenuButton>().Single(button => button.Instance.MenuButtonId == "resourcePaneGroupingButton");
+    }
+
     private static IRenderedComponent<ResourcePaneFilter> OpenFilter(IRenderedComponent<ResourcesLayout> cut)
     {
         cut.Find("#resourcePaneFilterButton").Click();
@@ -1038,8 +1046,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         }
         else
         {
-            cut.Find("#resourcePaneGroupingButton").Click();
-            var menu = cut.FindComponents<AspireMenuButton>().Single(button => button.Instance.MenuButtonId == "resourcePaneGroupingButton");
+            var menu = await OpenGroupingMenuAsync(cut);
             await cut.InvokeAsync(menu.Instance.Items.Single(item => item.Id == $"resource-grouping-{mode}").OnClick!);
             reset = menu.Instance.Items.Single(item => item.Id == "resource-grouping-None").OnClick!;
         }
@@ -1119,8 +1126,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
         Assert.Empty(cut.FindAll(".resource-tag-group"));
 
-        cut.Find("#resourcePaneGroupingButton").Click();
-        var menu = cut.FindComponents<AspireMenuButton>().Single(button => button.Instance.MenuButtonId == "resourcePaneGroupingButton");
+        var menu = await OpenGroupingMenuAsync(cut);
         Assert.Equal(["None", "Tags", "Resource type", "State"], menu.Instance.Items.Where(item => !item.IsHeader).Select(item => item.Text));
         Assert.All(menu.Instance.Items.Where(item => !item.IsHeader), item => Assert.Equal(MenuItemRole.Radio, item.Role));
         await cut.InvokeAsync(menu.Instance.Items.Single(item => item.Id == $"resource-grouping-{grouping}").OnClick!);
@@ -1181,8 +1187,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         cut.Render();
         Assert.Single(cut.FindAll(".resource-tag-group"));
 
-        cut.Find("#resourcePaneGroupingButton").Click();
-        var menu = cut.FindComponents<AspireMenuButton>().Single(button => button.Instance.MenuButtonId == "resourcePaneGroupingButton");
+        var menu = await OpenGroupingMenuAsync(cut);
         Assert.Equal($"resource-grouping-{grouping}", Assert.Single(menu.Instance.Items, item => item.Checked).Id);
         await cut.InvokeAsync(menu.Instance.Items.Single(item => item.Id == "resource-grouping-None").OnClick!);
         Assert.Equal("None", storedGrouping);
