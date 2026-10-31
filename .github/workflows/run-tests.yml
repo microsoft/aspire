@@ -96,6 +96,7 @@ jobs:
           Write-Output "NUGET_PACKAGES=${{ github.workspace }}/.nuget/packages" >> $env:GITHUB_ENV
           echo "TEST_RUN_PATH=${{ github.workspace }}\run-tests" >> $env:GITHUB_ENV
           echo ${{ github.workspace }}\.dotnet >> $env:GITHUB_PATH
+          echo "WSL_UTF8=1" >> $env:GITHUB_ENV
 
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -137,9 +138,30 @@ jobs:
           WSL_INTEROP: ""
 
       - name: Verify Docker is running
-        # nested docker containers not supported on windows
         if: runner.os == 'Linux'
         run: docker info
+
+      # Every Windows shard has its own runner and needs a working runtime before test discovery.
+      - name: Set up WSLC (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          # The runner's Windows Docker engine can win auto-detection but cannot create
+          # the Linux bridge networks these tests need. Leave WSLC as the running runtime.
+          $dockerService = Get-Service -Name docker -ErrorAction SilentlyContinue
+          if ($null -ne $dockerService) {
+            Set-Service -Name docker -StartupType Disabled -ErrorAction Stop
+            Stop-Service -Name docker -Force -ErrorAction Stop
+            if ((Get-Service -Name docker).Status -ne 'Stopped') {
+              throw "Docker service is still running."
+            }
+          }
+          wsl --update --web-download --pre-release
+          if ($LASTEXITCODE -ne 0) { throw "WSL update failed: $LASTEXITCODE" }
+          wslc version
+          if ($LASTEXITCODE -ne 0) { throw "WSLC version check failed: $LASTEXITCODE" }
+          wslc info
+          if ($LASTEXITCODE -ne 0) { throw "WSLC runtime check failed: $LASTEXITCODE" }
 
       - name: Download prebuilt CLI E2E Docker image
         if: ${{ fromJson(inputs.properties).requiresCliArchive == true && runner.os == 'Linux' }}

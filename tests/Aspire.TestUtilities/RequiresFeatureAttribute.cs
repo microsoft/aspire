@@ -90,8 +90,8 @@ public class RequiresFeatureAttribute(TestFeature feature) : Attribute, ITraitAt
     // would let those tests skip silently, which is not desirable.
     //
     // scenarios:
-    // - Windows: assume installed only for *local* runs as containers aren't supported on CI yet
-    //                - https://github.com/microsoft/aspire/issues/4291
+    // - Windows GitHub Actions: WSLC is installed and verified by run-tests.yml.
+    // - Other Windows CI: containers are not available.
     // - Linux - Local, or CI: always assume that a container runtime is installed
     //
     // Locally there is no such expectation, so probe PATH instead: a developer machine may have Podman
@@ -102,7 +102,8 @@ public class RequiresFeatureAttribute(TestFeature feature) : Attribute, ITraitAt
     {
         if (PlatformDetection.IsRunningOnCI)
         {
-            return OperatingSystem.IsLinux(); // non-linux on CI does not support containers
+            return OperatingSystem.IsLinux()
+                || (OperatingSystem.IsWindows() && PlatformDetection.IsRunningOnGithubActions);
         }
 
         return IsOnPath(KnownContainerRuntimes.Docker) || IsOnPath(KnownContainerRuntimes.Podman);
@@ -127,6 +128,13 @@ public class RequiresFeatureAttribute(TestFeature feature) : Attribute, ITraitAt
     // would run them straight into DockerUnavailableException instead of skipping them.
     private static bool IsTestcontainersSupported()
     {
+        // Windows WSLC runners do not provide a Docker API endpoint. Do not initialize
+        // Testcontainers configuration just because DCP can run containers there.
+        if (PlatformDetection.IsRunningOnCI && !IsDockerSupported())
+        {
+            return false;
+        }
+
         if (!IsContainerRuntimeSupported())
         {
             return false;
@@ -138,7 +146,7 @@ public class RequiresFeatureAttribute(TestFeature feature) : Attribute, ITraitAt
 
         if (PlatformDetection.IsRunningOnCI)
         {
-            return true; // CI always has Docker where it has a container runtime at all.
+            return true;
         }
 
         // A Docker install always exposes the socket or named pipe Testcontainers probes by default, so
