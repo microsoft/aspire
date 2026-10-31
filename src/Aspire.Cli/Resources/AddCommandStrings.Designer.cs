@@ -250,6 +250,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to An integration name is required in non-interactive mode. Specify the package id or friendly name, for example &apos;aspire add redis&apos;..
+        /// </summary>
+        internal static string NonInteractiveRequiresIntegrationName {
+            get {
+                return ResourceManager.GetString("NonInteractiveRequiresIntegrationName", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to No packages found..
         /// </summary>
         internal static string NoPackagesFound {
