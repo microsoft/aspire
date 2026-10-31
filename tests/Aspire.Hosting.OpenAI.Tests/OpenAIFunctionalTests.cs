@@ -29,9 +29,18 @@ public class OpenAIFunctionalTests
             return healthCheckTcs.Task;
         });
 
-        var resource = builder.AddOpenAI("resource")
-                      .AddModel("chat", "gpt-4o-mini")
-                      .WithHealthCheck("blocking_check");
+        var parent = builder.AddOpenAI("resource");
+
+        // The model inherits the parent's health checks, including the default check that calls the
+        // live status.openai.com page. Remove it so the test only depends on the blocking check.
+        var statusPageHealthCheck = Enumerable.Single(parent.Resource.Annotations, x => x is HealthCheckAnnotation hca && hca.Key == "resource_check");
+        parent.Resource.Annotations.Remove(statusPageHealthCheck);
+
+        var resource = parent.AddModel("chat", "gpt-4o-mini")
+                             .WithHealthCheck("blocking_check");
+
+        Assert.True(resource.Resource.TryGetAnnotationsIncludingAncestorsOfType<HealthCheckAnnotation>(out var effectiveHealthChecks));
+        Assert.Equal(["blocking_check"], effectiveHealthChecks.Select(a => a.Key));
 
         var dependentResource = builder.AddContainer("nginx", "mcr.microsoft.com/cbl-mariner/base/nginx", "1.22")
                                        .WaitFor(resource);
