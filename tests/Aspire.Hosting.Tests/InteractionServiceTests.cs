@@ -188,6 +188,61 @@ public class InteractionServiceTests
     }
 
     [Fact]
+    public async Task IsAvailable_BeforeStartScope_ReturnsFalseAndPromptsThrow()
+    {
+        var interactionService = CreateInteractionService();
+
+        var scope = interactionService.StartBeforeStartScope();
+
+        Assert.False(interactionService.IsAvailable);
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => interactionService.PromptMessageBoxAsync("Title", "Message")).DefaultTimeout();
+        Assert.Contains(nameof(BeforeStartEvent), ex.Message);
+        Assert.Empty(interactionService.GetCurrentInteractions());
+
+        scope.Dispose();
+        Assert.True(interactionService.IsAvailable);
+
+        // Disposing twice must not affect availability.
+        scope.Dispose();
+        Assert.True(interactionService.IsAvailable);
+    }
+
+    [Fact]
+    public async Task BeforeStartEvent_PromptIsGuardedByIsAvailable_DoesNotDeadlock()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(options => options.DisableDashboard = false);
+
+        bool? isAvailableDuringBeforeStart = null;
+        Exception? promptException = null;
+        builder.Eventing.Subscribe<BeforeStartEvent>(async (e, ct) =>
+        {
+            var interactionService = e.Services.GetRequiredService<IInteractionService>();
+            isAvailableDuringBeforeStart = interactionService.IsAvailable;
+
+            try
+            {
+                // Nothing can answer this prompt before the host starts, so it must not be awaited forever.
+                await interactionService.PromptMessageBoxAsync("Title", "Message", cancellationToken: ct);
+            }
+            catch (Exception ex)
+            {
+                promptException = ex;
+            }
+        });
+
+        using var app = builder.Build();
+        var interactionService = app.Services.GetRequiredService<IInteractionService>();
+        Assert.True(interactionService.IsAvailable);
+
+        await app.ExecuteBeforeStartHooksAsync(default).DefaultTimeout();
+
+        Assert.False(isAvailableDuringBeforeStart);
+        Assert.IsType<InvalidOperationException>(promptException);
+        Assert.True(interactionService.IsAvailable);
+    }
+
+    [Fact]
     public void IsAvailable_DashboardDisabled_ReturnsFalse()
     {
         // Arrange & Act

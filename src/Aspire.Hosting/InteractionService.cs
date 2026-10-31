@@ -24,6 +24,11 @@ internal class InteractionService : IInteractionService
     // When set, IsAvailable returns false so command callbacks know not to prompt the user.
     private static readonly AsyncLocal<bool> s_nonInteractiveScope = new();
 
+    // Interactions are answered by the dashboard and the CLI backchannel, which are hosted services
+    // that only start after before-start hooks (e.g. BeforeStartEvent) complete. While those hooks run,
+    // nothing can respond to an interaction, so awaiting a prompt would never complete.
+    private int _beforeStartScopeCount;
+
     private Action<Interaction>? OnInteractionUpdated { get; set; }
     private readonly object _onInteractionUpdatedLock = new();
     private readonly InteractionCollection _interactionCollection = new();
@@ -52,6 +57,11 @@ internal class InteractionService : IInteractionService
             }
 
             if (_distributedApplicationOptions.DisableDashboard)
+            {
+                return false;
+            }
+
+            if (Volatile.Read(ref _beforeStartScopeCount) > 0)
             {
                 return false;
             }
@@ -88,6 +98,31 @@ internal class InteractionService : IInteractionService
         public void Dispose()
         {
             s_nonInteractiveScope.Value = _previousValue;
+        }
+    }
+
+    /// <summary>
+    /// Creates a scope, used while the app host runs its before-start hooks, in which
+    /// <see cref="IsAvailable"/> returns <c>false</c> because nothing can respond to interactions yet.
+    /// </summary>
+    internal BeforeStartScope StartBeforeStartScope() => new(this);
+
+    internal sealed class BeforeStartScope : IDisposable
+    {
+        private InteractionService? _owner;
+
+        public BeforeStartScope(InteractionService owner)
+        {
+            _owner = owner;
+            Interlocked.Increment(ref owner._beforeStartScopeCount);
+        }
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _owner, null) is { } owner)
+            {
+                Interlocked.Decrement(ref owner._beforeStartScopeCount);
+            }
         }
     }
 
@@ -729,7 +764,7 @@ internal class InteractionService : IInteractionService
     {
         if (!IsAvailable)
         {
-            throw new InvalidOperationException($"{nameof(InteractionService)} is not available because the dashboard is not enabled or because this command is running in non-interactive CLI mode.");
+            throw new InvalidOperationException($"{nameof(InteractionService)} is not available because the dashboard is not enabled, because the app host has not started yet (for example, during {nameof(BeforeStartEvent)}), or because this command is running in non-interactive CLI mode.");
         }
     }
 }

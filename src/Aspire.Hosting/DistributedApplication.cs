@@ -610,6 +610,10 @@ public class DistributedApplication : IHost, IAsyncDisposable
         var configuration = _host.Services.GetRequiredService<IConfiguration>();
         using var beforeStartActivity = ProfilingTelemetry.StartAppHostBeforeStart(configuration);
 
+        // Interactions can't be answered until the host has started the dashboard and CLI backchannel,
+        // so report the interaction service as unavailable while before-start hooks run.
+        using var interactionBeforeStartScope = (_host.Services.GetService<IInteractionService>() as InteractionService)?.StartBeforeStartScope();
+
         try
         {
             var eventSubscribers = _host.Services.GetServices<IDistributedApplicationEventingSubscriber>().ToArray();
