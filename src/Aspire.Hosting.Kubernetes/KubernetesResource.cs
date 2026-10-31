@@ -216,14 +216,57 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
 
     internal async Task ProcessResourceAsync(KubernetesEnvironmentContext context, DistributedApplicationExecutionContext executionContext, CancellationToken cancellationToken)
     {
+        // Collect independent errors so users can fix every unsupported setting in one pass.
+        var errors = new List<Exception>();
+
         ProcessEndpoints();
-        ProcessVolumes();
+
+        try
+        {
+            ProcessVolumes();
+        }
+        catch (InvalidOperationException ex)
+        {
+            errors.Add(ex);
+        }
+
         ProcessProbes();
 
-        await ProcessEnvironmentAsync(context, executionContext, cancellationToken).ConfigureAwait(false);
-        await ProcessArgumentsAsync(context, executionContext, cancellationToken).ConfigureAwait(false);
+        // Callbacks can throw before any value is processed; keep their exceptions alongside earlier errors.
+        try
+        {
+            await ProcessEnvironmentAsync(context, executionContext, errors, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            errors.Add(ex);
+        }
+
+        try
+        {
+            await ProcessArgumentsAsync(context, executionContext, errors, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            errors.Add(ex);
+        }
+
+        ThrowIfErrors(errors, $"The Kubernetes publisher could not process resource '{resource.Name}'.");
 
         BuildKubernetesResources();
+    }
+
+    internal static void ThrowIfErrors(List<Exception> errors, string message)
+    {
+        if (errors.Count == 1)
+        {
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(errors[0]);
+        }
+
+        if (errors.Count > 1)
+        {
+            throw new AggregateException(message, errors);
+        }
     }
 
     private void ProcessEndpoints()
@@ -296,16 +339,19 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
             return;
         }
 
+        var bindMounts = mounts.Where(m => m.Type == ContainerMountType.BindMount).ToList();
+        if (bindMounts.Count > 0)
+        {
+            var descriptions = string.Join(", ", bindMounts.Select(m => $"'{m.Source}' -> '{m.Target}'"));
+            throw new InvalidOperationException(
+                $"Bind mounts are not supported by the Kubernetes publisher. Resource '{resource.Name}' has bind mounts: {descriptions}. Use a volume instead.");
+        }
+
         foreach (var volume in mounts)
         {
             if (volume.Source is null || volume.Target is null)
             {
-                throw new InvalidOperationException("Volume source and target must be set");
-            }
-
-            if (volume.Type == ContainerMountType.BindMount)
-            {
-                throw new InvalidOperationException("Bind mounts are not supported by the Kubernetes publisher");
+                throw new InvalidOperationException($"Volume source and target must be set on resource '{resource.Name}'.");
             }
 
             var newVolume = new VolumeMountV1
@@ -356,7 +402,7 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
         }
     }
 
-    private async Task ProcessArgumentsAsync(KubernetesEnvironmentContext environmentContext, DistributedApplicationExecutionContext executionContext, CancellationToken cancellationToken)
+    private async Task ProcessArgumentsAsync(KubernetesEnvironmentContext environmentContext, DistributedApplicationExecutionContext executionContext, List<Exception> errors, CancellationToken cancellationToken)
     {
         if (resource.TryGetAnnotationsOfType<CommandLineArgsCallbackAnnotation>(out var commandLineArgsCallbackAnnotations))
         {
@@ -370,13 +416,25 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
                 await c.Callback(context).ConfigureAwait(false);
             }
 
-            foreach (var arg in context.Args)
+            for (var i = 0; i < context.Args.Count; i++)
             {
-                var value = await ProcessValueAsync(environmentContext, executionContext, arg).ConfigureAwait(false);
+                object value;
+                try
+                {
+                    value = await ProcessValueAsync(environmentContext, executionContext, context.Args[i]).ConfigureAwait(false);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    errors.Add(new InvalidOperationException(
+                        $"Failed to process command line argument {i} on resource '{resource.Name}': {ex.Message}", ex));
+                    continue;
+                }
 
                 if (value is not string str)
                 {
-                    throw new NotSupportedException("Command line args must be strings");
+                    errors.Add(new NotSupportedException(
+                        $"Command line argument {i} on resource '{resource.Name}' must be a string, but was '{value.GetType().Name}'."));
+                    continue;
                 }
 
                 Commands.Add(new(str));
@@ -384,7 +442,7 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
         }
     }
 
-    private async Task ProcessEnvironmentAsync(KubernetesEnvironmentContext environmentContext, DistributedApplicationExecutionContext executionContext, CancellationToken cancellationToken)
+    private async Task ProcessEnvironmentAsync(KubernetesEnvironmentContext environmentContext, DistributedApplicationExecutionContext executionContext, List<Exception> errors, CancellationToken cancellationToken)
     {
         if (resource.TryGetAnnotationsOfType<EnvironmentCallbackAnnotation>(out var environmentCallbacks))
         {
@@ -417,7 +475,17 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
                     continue;
                 }
 
-                var value = await ProcessValueAsync(environmentContext, executionContext, environmentVariable.Value).ConfigureAwait(false);
+                object value;
+                try
+                {
+                    value = await ProcessValueAsync(environmentContext, executionContext, environmentVariable.Value).ConfigureAwait(false);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    errors.Add(new InvalidOperationException(
+                        $"Failed to process environment variable '{key}' on resource '{resource.Name}': {ex.Message}", ex));
+                    continue;
+                }
 
                 switch (value)
                 {

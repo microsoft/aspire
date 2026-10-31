@@ -286,6 +286,78 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void PublishAsync_BindMountErrorIdentifiesResourceAndMount()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.AddKubernetesEnvironment("env");
+
+        builder.AddContainer("cache", "redis")
+            .WithBindMount("./cache-data", "/data");
+
+        using var app = builder.Build();
+        var ex = Assert.ThrowsAny<Exception>(app.Run);
+
+        var message = ex.ToString();
+        Assert.Contains("Resource 'cache' has bind mounts", message);
+        Assert.Contains("cache-data", message);
+        Assert.Contains("'/data'", message);
+    }
+
+    [Fact]
+    public void PublishAsync_ReportsEveryUnsupportedSettingTogether()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.AddKubernetesEnvironment("env");
+
+        builder.AddContainer("cache", "redis")
+            .WithBindMount("./cache-data", "/data")
+            .WithBindMount("./cache-conf", "/usr/local/etc/redis");
+
+        builder.AddContainer("web", "nginx")
+            .WithEnvironment(context => context.EnvironmentVariables["ALLOWED_HOSTS"] = new[] { "contoso.com", "fabrikam.com" })
+            .WithArgs(context => context.Args.Add(new[] { "--verbose" }));
+
+        using var app = builder.Build();
+        var ex = Assert.ThrowsAny<Exception>(app.Run);
+
+        var message = ex.ToString();
+        Assert.Contains("Resource 'cache' has bind mounts", message);
+        Assert.Contains("cache-data", message);
+        Assert.Contains("cache-conf", message);
+        Assert.Contains("Failed to process environment variable 'ALLOWED_HOSTS' on resource 'web': Unsupported value type: String[]", message);
+        Assert.Contains("Failed to process command line argument 0 on resource 'web': Unsupported value type: String[]", message);
+    }
+
+    [Fact]
+    public void PublishAsync_KeepsCollectedErrorsWhenCallbackThrows()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.AddKubernetesEnvironment("env");
+
+        builder.AddContainer("web", "nginx")
+            .WithBindMount("./web-data", "/data")
+            .WithEnvironment(context =>
+            {
+                if (context.Resource is not null)
+                {
+                    throw new InvalidOperationException("environment callback failed");
+                }
+            })
+            .WithArgs(context => context.Args.Add(new[] { "--verbose" }));
+
+        using var app = builder.Build();
+        var ex = Assert.ThrowsAny<Exception>(app.Run);
+
+        var message = ex.ToString();
+        Assert.Contains("Resource 'web' has bind mounts", message);
+        Assert.Contains("environment callback failed", message);
+        Assert.Contains("Failed to process command line argument 0 on resource 'web': Unsupported value type: String[]", message);
+    }
+
+    [Fact]
     public void KubernetesManifestResourceWithFieldThrowsWhenIntermediatePathIsScalar()
     {
         var manifest = new KubernetesManifestResource("example.com/v1", "Example", "example");
