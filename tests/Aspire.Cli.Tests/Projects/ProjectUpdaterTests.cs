@@ -1856,6 +1856,105 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         Assert.Equal(ProjectContent, unchangedContent);
     }
 
+    [Theory]
+    [InlineData("9.4.1")]
+    [InlineData("9.5.0")]
+    public async Task UpdateProjectFileAsync_UpdatesAppHostSdkInOtherProjectsOfTheSolution(string appHostSdkVersion)
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/11458: every project built with the
+        // AppHost must declare the same Aspire.AppHost.Sdk version, otherwise MSBuild reports MSB4240. The
+        // 9.5.0 case covers re-running `aspire update` after an earlier run only updated the AppHost.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var appHostProjectFile = new FileInfo(Path.Combine(workspace.CreateDirectory("Repro.AppHost").FullName, "Repro.AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostProjectFile.FullName, $"""
+            <Project Sdk="Aspire.AppHost.Sdk/{appHostSdkVersion}">
+              <PropertyGroup>
+                <OutputType>Exe</OutputType>
+                <TargetFramework>net9.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
+            """);
+
+        var testsProjectFile = new FileInfo(Path.Combine(workspace.CreateDirectory("Repro.AppHost.Tests").FullName, "Repro.AppHost.Tests.csproj"));
+        await File.WriteAllTextAsync(testsProjectFile.FullName, """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <Sdk Name="Aspire.AppHost.Sdk" Version="9.4.1" />
+              <PropertyGroup>
+                <TargetFramework>net9.0</TargetFramework>
+              </PropertyGroup>
+              <ItemGroup>
+                <ProjectReference Include="..\Repro.AppHost\Repro.AppHost.csproj" />
+              </ItemGroup>
+            </Project>
+            """);
+
+        var secondAppHostProjectFile = new FileInfo(Path.Combine(workspace.CreateDirectory("Other.AppHost").FullName, "Other.AppHost.csproj"));
+        await File.WriteAllTextAsync(secondAppHostProjectFile.FullName, """
+            <Project Sdk="Aspire.AppHost.Sdk/9.4.1">
+              <PropertyGroup>
+                <OutputType>Exe</OutputType>
+                <TargetFramework>net9.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
+            """);
+
+        // A solution that does not contain the AppHost is not built with it and must be left alone.
+        const string UnrelatedProjectContent = """
+            <Project Sdk="Aspire.AppHost.Sdk/9.4.1">
+            </Project>
+            """;
+        var unrelatedProjectFile = new FileInfo(Path.Combine(workspace.CreateDirectory("Unrelated").FullName, "Unrelated.csproj"));
+        await File.WriteAllTextAsync(unrelatedProjectFile.FullName, UnrelatedProjectContent);
+
+        var solutionFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Repro.slnx"));
+        await File.WriteAllTextAsync(solutionFile.FullName, "<Solution />");
+        var unrelatedSolutionFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Unrelated.sln"));
+        await File.WriteAllTextAsync(unrelatedSolutionFile.FullName, string.Empty);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, config =>
+        {
+            config.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
+            {
+                SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _, _) => query switch
+                {
+                    "Aspire.AppHost.Sdk" => (0, [new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = PackageSources.NuGetOrg }]),
+                    _ => throw new InvalidOperationException($"Unexpected package query: {query}"),
+                },
+                GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) =>
+                {
+                    var itemsAndProperties = new JsonObject();
+                    itemsAndProperties.WithSdkVersion(appHostSdkVersion);
+                    return (0, JsonDocument.Parse(itemsAndProperties.ToJsonString()));
+                },
+                GetSolutionProjectsAsyncCallback = (solution, _, _) => solution.Name switch
+                {
+                    "Repro.slnx" => (0, [appHostProjectFile, testsProjectFile, secondAppHostProjectFile]),
+                    "Unrelated.sln" => (0, [unrelatedProjectFile]),
+                    _ => throw new InvalidOperationException($"Unexpected solution: {solution.FullName}"),
+                }
+            };
+            config.InteractionServiceFactory = _ => new TestInteractionService { ConfirmCallback = (_, _) => true };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var channels = await provider.GetRequiredService<IPackagingService>().GetChannelsAsync().DefaultTimeout();
+        var projectUpdater = provider.GetRequiredService<IProjectUpdater>();
+        var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, channels.Single(c => c.Name == "default"))).DefaultTimeout();
+
+        Assert.True(updateResult.UpdatedApplied);
+        Assert.Contains("""<Project Sdk="Aspire.AppHost.Sdk/9.5.0">""", await File.ReadAllTextAsync(appHostProjectFile.FullName));
+
+        // The test project keeps Microsoft.NET.Sdk; only the Aspire.AppHost.Sdk version is bumped.
+        var testsContent = await File.ReadAllTextAsync(testsProjectFile.FullName);
+        Assert.Contains("""<Project Sdk="Microsoft.NET.Sdk">""", testsContent);
+        Assert.Contains("""<Sdk Name="Aspire.AppHost.Sdk" Version="9.5.0" />""", testsContent);
+        Assert.DoesNotContain("9.4.1", testsContent);
+
+        Assert.Contains("""<Project Sdk="Aspire.AppHost.Sdk/9.5.0">""", await File.ReadAllTextAsync(secondAppHostProjectFile.FullName));
+        Assert.Equal(UnrelatedProjectContent, await File.ReadAllTextAsync(unrelatedProjectFile.FullName));
+    }
+
     [Fact]
     public async Task UpdateProjectFileAsync_LegacyAppHostReferencesWithMixedCasing_StillRemoved()
     {

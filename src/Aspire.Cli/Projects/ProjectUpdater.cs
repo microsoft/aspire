@@ -759,6 +759,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
             // `aspire update` can recover from a partial migration.
             // See https://github.com/microsoft/aspire/issues/15476.
             EnqueueLegacyAppHostCleanupStepIfNeeded(context);
+            await EnqueueSolutionProjectSdkUpdateStepsAsync(context, latestSdkPackage!, cancellationToken);
             return;
         }
 
@@ -790,6 +791,148 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                 : [.. GetSdkUpdateFiles(context.AppHostProjectFile), importedSdkFile]
         };
         context.UpdateSteps.Enqueue(sdkUpdateStep);
+
+        if (latestSdkPackage is not null)
+        {
+            await EnqueueSolutionProjectSdkUpdateStepsAsync(context, latestSdkPackage, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Projects that are built together with the AppHost (for example an AppHost test project, or another
+    /// AppHost in the same solution) must declare the same Aspire.AppHost.Sdk version. Otherwise MSBuild
+    /// reports MSB4240 and silently keeps whichever version it resolved first.
+    /// See https://github.com/microsoft/aspire/issues/11458.
+    /// </summary>
+    private async Task EnqueueSolutionProjectSdkUpdateStepsAsync(UpdateContext context, NuGetPackageCli latestSdkPackage, CancellationToken cancellationToken)
+    {
+        foreach (var projectFile in await GetOtherSolutionProjectsAsync(context.AppHostProjectFile, cancellationToken))
+        {
+            if (!ProjectFileExtensions.Supported.Contains(projectFile.Extension) || !projectFile.Exists)
+            {
+                continue;
+            }
+
+            XDocument document;
+            try
+            {
+                document = XDocument.Load(projectFile.FullName);
+            }
+            catch (XmlException ex)
+            {
+                logger.LogDebug(ex, "Skipping Aspire.AppHost.Sdk check for unparseable project {ProjectFile}.", projectFile.FullName);
+                continue;
+            }
+
+            var declaredVersion = GetDeclaredSdkVersion(document);
+            if (declaredVersion is null || string.Equals(declaredVersion, latestSdkPackage.Version, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            await CaptureFileAsync(context, projectFile, cancellationToken);
+
+            // Only bump the version in place. Migrating the declaration (as done for the AppHost) would
+            // replace Microsoft.NET.Sdk and turn a test project into an AppHost.
+            context.UpdateSteps.Enqueue(new PackageUpdateStep(
+                string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.UpdatePackageFormat, AspireAppHostSdkName, declaredVersion, latestSdkPackage.Version),
+                () => UpdateImportedSdkVersionAsync(projectFile, latestSdkPackage.Version),
+                AspireAppHostSdkName,
+                declaredVersion,
+                latestSdkPackage.Version,
+                projectFile)
+            {
+                Files = [projectFile]
+            });
+        }
+    }
+
+    private async Task<IReadOnlyList<FileInfo>> GetOtherSolutionProjectsAsync(FileInfo appHostFile, CancellationToken cancellationToken)
+    {
+        var projects = new Dictionary<string, FileInfo>(StringComparers.FileSystemPath);
+        for (var directory = appHostFile.Directory; directory is not null; directory = directory.Parent)
+        {
+            FileInfo[] solutionFiles;
+            try
+            {
+                // "*.sln" alone also matches ".slnx" on Windows, so filter on the exact extension.
+                solutionFiles = directory.GetFiles("*.sln*")
+                    .Where(file => file.Extension is ".sln" or ".slnx")
+                    .ToArray();
+            }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+            {
+                break;
+            }
+
+            foreach (var solutionFile in solutionFiles)
+            {
+                var (exitCode, solutionProjects) = await runner.GetSolutionProjectsAsync(solutionFile, new ProcessInvocationOptions(), cancellationToken);
+                if (exitCode != 0)
+                {
+                    logger.LogDebug("Could not list the projects in {SolutionFile}; exit code {ExitCode}.", solutionFile.FullName, exitCode);
+                    continue;
+                }
+
+                var normalizedProjects = solutionProjects
+                    .Select(project => new FileInfo(project.FullName.Replace('\\', Path.DirectorySeparatorChar)))
+                    .ToArray();
+                if (!normalizedProjects.Any(project => IsAppHostProject(project, appHostFile)))
+                {
+                    continue;
+                }
+
+                foreach (var project in normalizedProjects.Where(project => !IsAppHostProject(project, appHostFile)))
+                {
+                    projects.TryAdd(project.FullName, project);
+                }
+            }
+
+            // Solutions outside the repository are not built with this AppHost.
+            if (Directory.Exists(Path.Combine(directory.FullName, ".git")) || File.Exists(Path.Combine(directory.FullName, ".git")))
+            {
+                break;
+            }
+        }
+
+        return [.. projects.Values];
+    }
+
+    private static string? GetDeclaredSdkVersion(XDocument document)
+    {
+        foreach (var element in GetUnconditionalSdkDeclarations(document))
+        {
+            if (element.Name.LocalName == "Sdk")
+            {
+                if (element.Attribute("Version")?.Value is { Length: > 0 } version)
+                {
+                    return version.Trim();
+                }
+
+                continue;
+            }
+
+            if (element.Name.LocalName == "Import")
+            {
+                if (element.Attribute("Version")?.Value is { Length: > 0 } importVersion)
+                {
+                    return importVersion.Trim();
+                }
+
+                continue;
+            }
+
+            foreach (var sdk in (element.Attribute("Sdk")?.Value ?? string.Empty).Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                if (sdk.StartsWith(AspireAppHostSdkName + "/", StringComparison.OrdinalIgnoreCase))
+                {
+                    return sdk[(AspireAppHostSdkName.Length + 1)..].Trim();
+                }
+            }
+        }
+
+        // An unversioned declaration is resolved from global.json, so it already follows the AppHost.
+        return null;
     }
 
     private static FileInfo? FindImportedSdkDeclaration(FileInfo projectFile, JsonElement properties, bool required)
