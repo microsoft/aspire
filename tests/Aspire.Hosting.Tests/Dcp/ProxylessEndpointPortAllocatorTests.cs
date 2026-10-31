@@ -193,29 +193,102 @@ public class ProxylessEndpointPortAllocatorTests
     }
 
     [Fact]
-    public void ExcludedPortsOnlyApplyToTheExcludingAllocator()
+    public void ExcludedPortsAreSharedAndOverlappingExclusionsSurviveOneAllocatorsDisposal()
     {
         var reservations = new ProxylessEndpointPortReservations();
-        using var first = new ProxylessEndpointPortAllocator(
-            rangeStart: 10000,
-            rangeEnd: 10001,
-            randomWalkOffset: 0,
-            randomWalkStep: 1,
-            tryProbe: static (_, _) => true,
-            reservations);
-        using var second = new ProxylessEndpointPortAllocator(
-            rangeStart: 10000,
-            rangeEnd: 10001,
-            randomWalkOffset: 0,
-            randomWalkStep: 1,
-            tryProbe: static (_, _) => true,
-            reservations);
+        var first = CreateAllocator(reservations);
+        var second = CreateAllocator(reservations);
+        using var third = CreateAllocator(reservations);
 
         first.ExcludePort(10000);
+        second.ExcludePort(10000);
 
-        Assert.Equal(10001, first.AllocatePort(CreateEndpoint("a")));
-        Assert.Equal(10000, second.AllocatePort(CreateEndpoint("a")));
-        Assert.Throws<InvalidOperationException>(() => first.AllocatePort(CreateEndpoint("b")));
+        // An exclusion recorded by one allocator applies to every allocator sharing the reservations.
+        Assert.Equal(10001, third.AllocatePort(CreateEndpoint("a")));
+        Assert.Equal(2, reservations.GetReferenceCount(10000));
+
+        // Disposing one excluding allocator keeps the exclusion the other allocator still requires.
+        first.Dispose();
+        Assert.Equal(1, reservations.GetReferenceCount(10000));
+        Assert.Throws<InvalidOperationException>(() => third.AllocatePort(CreateEndpoint("b")));
+
+        second.Dispose();
+        Assert.Equal(0, reservations.GetReferenceCount(10000));
+        Assert.Equal(10000, third.AllocatePort(CreateEndpoint("b")));
+    }
+
+    [Fact]
+    public void ExcludePortDeduplicatesRepeatedExclusionsAndPortsAlreadyOwned()
+    {
+        var reservations = new ProxylessEndpointPortReservations();
+        var allocator = CreateAllocator(reservations);
+
+        allocator.ExcludePort(10000);
+        allocator.ExcludePort(10000);
+        Assert.Equal(1, reservations.GetReferenceCount(10000));
+
+        Assert.Equal(10001, allocator.AllocatePort(CreateEndpoint("a")));
+        allocator.ExcludePort(10001);
+        Assert.Equal(1, reservations.GetReferenceCount(10001));
+
+        allocator.Dispose();
+        Assert.Equal(0, reservations.GetReferenceCount(10000));
+        Assert.Equal(0, reservations.GetReferenceCount(10001));
+        Assert.True(reservations.IsAvailable(10000));
+        Assert.True(reservations.IsAvailable(10001));
+    }
+
+    [Fact]
+    public void ExcludingAPermanentlyExcludedPortKeepsItPermanent()
+    {
+        var reservations = new ProxylessEndpointPortReservations();
+        var prober = CreateAllocator(reservations, tryProbe: static (port, _) => port != 10000);
+        Assert.Equal(10001, prober.AllocatePort(CreateEndpoint("a")));
+        Assert.True(reservations.IsPermanentlyExcluded(10000));
+
+        var excluder = CreateAllocator(reservations);
+        excluder.ExcludePort(10000);
+        excluder.Dispose();
+        prober.Dispose();
+
+        Assert.True(reservations.IsPermanentlyExcluded(10000));
+        Assert.False(reservations.IsAvailable(10000));
+    }
+
+    [Fact]
+    public void ProbeExceptionReleasesTheClaimAndPropagates()
+    {
+        var reservations = new ProxylessEndpointPortReservations();
+        using var allocator = CreateAllocator(reservations, tryProbe: static (_, _) => throw new InvalidTimeZoneException());
+
+        Assert.Throws<InvalidTimeZoneException>(() => allocator.AllocatePort(CreateEndpoint("a")));
+        Assert.True(reservations.IsAvailable(10000));
+        Assert.False(reservations.IsPermanentlyExcluded(10000));
+    }
+
+    [Fact]
+    public void ReservationReferencesThrowInsteadOfOverflowing()
+    {
+        var reservations = new ProxylessEndpointPortReservations();
+        for (var i = 0; i < 254; i++)
+        {
+            Assert.True(reservations.TryAddReference(10000));
+        }
+
+        Assert.Throws<InvalidOperationException>(() => reservations.TryAddReference(10000));
+        Assert.Equal(254, reservations.GetReferenceCount(10000));
+        Assert.False(reservations.TryReserve(10000));
+    }
+
+    private static ProxylessEndpointPortAllocator CreateAllocator(ProxylessEndpointPortReservations reservations, Func<int, ProtocolType, bool>? tryProbe = null)
+    {
+        return new ProxylessEndpointPortAllocator(
+            rangeStart: 10000,
+            rangeEnd: 10001,
+            randomWalkOffset: 0,
+            randomWalkStep: 1,
+            tryProbe: tryProbe ?? (static (_, _) => true),
+            reservations);
     }
 
     private static int GetUnusedPortOutsideDefaultRange()

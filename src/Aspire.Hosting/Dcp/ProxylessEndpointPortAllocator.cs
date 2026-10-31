@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using Aspire.Hosting.ApplicationModel;
@@ -30,9 +31,9 @@ namespace Aspire.Hosting.Dcp;
 /// The probe releases the port before the workload binds it, so allocators for different applications
 /// in the same process (for example, tests that run AppHosts in parallel) could otherwise hand out the
 /// same port. Port availability is therefore tracked in a process-wide
-/// <see cref="ProxylessEndpointPortReservations"/>: allocated ports stay reserved until the allocator is
-/// disposed, and ports whose probe failed are remembered as unavailable so no allocator in the process
-/// probes them again. Ports excluded by the application model only apply to this allocator.
+/// <see cref="ProxylessEndpointPortReservations"/>, the single availability authority for every allocator.
+/// Allocated and explicitly excluded ports hold a reservation reference until the allocator is disposed, and
+/// ports whose probe failed are permanently excluded so no allocator in the process probes them again.
 /// </remarks>
 internal sealed class ProxylessEndpointPortAllocator : IDisposable
 {
@@ -40,11 +41,11 @@ internal sealed class ProxylessEndpointPortAllocator : IDisposable
     private readonly int _rangeStart;
     private readonly int _rangeEnd;
     private readonly int _rangeSize;
-    private readonly HashSet<int> _excludedPorts = [];
     private readonly Dictionary<EndpointAnnotation, int> _reservedPorts = new(ReferenceEqualityComparer.Instance);
     private readonly Func<int, ProtocolType, bool> _tryProbe;
     private readonly ProxylessEndpointPortReservations _processReservations;
-    private readonly List<int> _processReservedPorts = [];
+    // Ports this allocator holds a reservation reference for, released on disposal.
+    private readonly HashSet<int> _ownedPorts = [];
     private int _randomWalkCursor;
     private readonly int _randomWalkStep;
     private int? _nextCandidate;
@@ -122,9 +123,16 @@ internal sealed class ProxylessEndpointPortAllocator : IDisposable
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
 
-            if (port >= _rangeStart && port <= _rangeEnd)
+            if (port is < IPEndPoint.MinPort or > IPEndPoint.MaxPort || _ownedPorts.Contains(port))
             {
-                _excludedPorts.Add(port);
+                return;
+            }
+
+            // Exclusions are shared process-wide. Each one holds a reference so this allocator's disposal does
+            // not clear an exclusion another allocator still requires. A permanently excluded port stays permanent.
+            if (_processReservations.TryAddReference(port))
+            {
+                _ownedPorts.Add(port);
             }
         }
     }
@@ -140,12 +148,12 @@ internal sealed class ProxylessEndpointPortAllocator : IDisposable
 
             _disposed = true;
 
-            foreach (var port in _processReservedPorts)
+            foreach (var port in _ownedPorts)
             {
                 _processReservations.Release(port);
             }
 
-            _processReservedPorts.Clear();
+            _ownedPorts.Clear();
         }
     }
 
@@ -160,7 +168,7 @@ internal sealed class ProxylessEndpointPortAllocator : IDisposable
             // Reserve the port process-wide before probing so another application's allocator in this
             // process cannot claim it between the probe releasing it and the workload binding it. A cached
             // incremental candidate can have been excluded or claimed since it was selected, so check again.
-            if (!_excludedPorts.Contains(port) && _processReservations.TryReserve(port))
+            if (_processReservations.TryReserve(port))
             {
                 bool probeSucceeded;
                 try
@@ -178,7 +186,7 @@ internal sealed class ProxylessEndpointPortAllocator : IDisposable
 
                 if (probeSucceeded)
                 {
-                    _processReservedPorts.Add(port);
+                    _ownedPorts.Add(port);
                     _nextCandidate = GetNextIncrementalCandidate(candidate);
                     return port;
                 }
@@ -196,8 +204,7 @@ internal sealed class ProxylessEndpointPortAllocator : IDisposable
 
     private bool IsCandidateAvailable(int index)
     {
-        var port = _rangeStart + index;
-        return !_excludedPorts.Contains(port) && _processReservations.IsAvailable(port);
+        return _processReservations.IsAvailable(_rangeStart + index);
     }
 
     private int? GetNextIncrementalCandidate(int afterIndex)
@@ -356,12 +363,16 @@ internal sealed class ProxylessEndpointPortAllocator : IDisposable
 /// </summary>
 /// <remarks>
 /// The port space is small and dense, so state is a directly indexed array (64 KB) rather than a hashed set.
+/// Each entry is <c>0</c> when the port is available for dynamic allocation, <c>1</c>-<c>254</c> for the number
+/// of live reservation references, or <c>255</c> when the port is permanently excluded after a failed probe.
+/// The counts track exclusion lifetimes only; they do not grant permission to share a resource or listener.
+/// Callers track which references they hold, because the shared count cannot identify owners.
 /// </remarks>
 internal sealed class ProxylessEndpointPortReservations
 {
     private const byte Available = 0;
-    private const byte Reserved = 1;
-    private const byte Unavailable = 2;
+    private const byte MaxReferences = 254;
+    private const byte PermanentlyExcluded = 255;
 
     private readonly object _lock = new();
     private readonly byte[] _states = new byte[IPEndPoint.MaxPort + 1];
@@ -377,7 +388,8 @@ internal sealed class ProxylessEndpointPortReservations
     }
 
     /// <summary>
-    /// Reserves an available port for a live allocator. The allocator must <see cref="Release"/> it on disposal.
+    /// Atomically claims an available port for dynamic allocation by taking its first reservation reference.
+    /// The caller must <see cref="Release"/> the reference when it no longer needs the port.
     /// </summary>
     public bool TryReserve(int port)
     {
@@ -388,18 +400,53 @@ internal sealed class ProxylessEndpointPortReservations
                 return false;
             }
 
-            _states[port] = Reserved;
+            _states[port] = 1;
             return true;
         }
     }
 
+    /// <summary>
+    /// Adds a reservation reference for an explicitly excluded port, whether or not it is already reserved.
+    /// Returns <see langword="false"/> without adding a reference when the port is permanently excluded.
+    /// The caller must <see cref="Release"/> each reference it adds.
+    /// </summary>
+    public bool TryAddReference(int port)
+    {
+        lock (_lock)
+        {
+            var state = _states[port];
+            if (state == PermanentlyExcluded)
+            {
+                return false;
+            }
+
+            if (state == MaxReferences)
+            {
+                throw new InvalidOperationException($"Port {port} has too many live reservation references.");
+            }
+
+            _states[port] = (byte)(state + 1);
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Releases one reservation reference. Permanently excluded ports are never released.
+    /// </summary>
     public void Release(int port)
     {
         lock (_lock)
         {
-            if (_states[port] == Reserved)
+            var state = _states[port];
+            if (state == PermanentlyExcluded)
             {
-                _states[port] = Available;
+                return;
+            }
+
+            Debug.Assert(state != Available, $"Port {port} was released without a reservation reference.");
+            if (state != Available)
+            {
+                _states[port] = (byte)(state - 1);
             }
         }
     }
@@ -411,7 +458,24 @@ internal sealed class ProxylessEndpointPortReservations
     {
         lock (_lock)
         {
-            _states[port] = Unavailable;
+            _states[port] = PermanentlyExcluded;
+        }
+    }
+
+    internal int GetReferenceCount(int port)
+    {
+        lock (_lock)
+        {
+            var state = _states[port];
+            return state == PermanentlyExcluded ? 0 : state;
+        }
+    }
+
+    internal bool IsPermanentlyExcluded(int port)
+    {
+        lock (_lock)
+        {
+            return _states[port] == PermanentlyExcluded;
         }
     }
 }
