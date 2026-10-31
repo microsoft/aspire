@@ -245,6 +245,7 @@ public class DistributedApplication : IHost, IAsyncDisposable
             EnableResourceLogging = options.EnableResourceLogging,
             ContainerRegistryOverride = options.ContainerRegistryOverride,
             DashboardApplicationName = options.DashboardApplicationName,
+            IsGuestAppHost = true,
             // These values came from the managed server's appsettings.json before polyglot AppHosts
             // used their own content root. Keep them as fallbacks so every user configuration source
             // can override them while existing AppHosts retain the same logging behavior.
@@ -276,8 +277,9 @@ public class DistributedApplication : IHost, IAsyncDisposable
     {
         return argsOrOptions switch
         {
-            null => CreateBuilder(),
-            string[] args => CreateBuilder(args),
+            // Every dispatcher form is a guest AppHost, so route all of them through CreateBuilderOptions.
+            null => CreateBuilder(new CreateBuilderOptions()),
+            string[] args => CreateBuilder(new CreateBuilderOptions { Args = args }),
             CreateBuilderOptions options => CreateBuilder(options),
             _ => throw new ArgumentException("Options must be omitted, a string array, or a CreateBuilderOptions instance.", nameof(argsOrOptions))
         };

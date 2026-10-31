@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Reflection;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dotnet;
 using Aspire.Hosting.Utils;
@@ -354,7 +353,7 @@ public static class DotnetProjectHostingExtensions
 
         // The app host's own build configuration (Debug/Release) is propagated to every child launch
         // so process and IDE launchers resolve the output produced by the coordinated build.
-        var configuration = builder.AppHostAssembly?.GetCustomAttribute<AssemblyConfigurationAttribute>()?.Configuration;
+        var configuration = builder.Configuration["AppHost:BuildConfiguration"];
         var projectMetadata = new DotnetProjectMetadata(path, configuration, name);
         var buildCoordinator = DotnetProjectBuildCoordinator.Prepare(builder, projectMetadata);
 
