@@ -136,6 +136,11 @@ public class EntraIdApplicationResource : AzureProvisioningResource, IResourceWi
 
     internal void EnsureCanBeExistingApplication()
     {
+        if (AppRoleAssignments.Count > 0)
+        {
+            throw new InvalidOperationException("A registration using PublishWithAppRoleAssignment cannot be converted to an existing application. Existing registrations remain caller-managed.");
+        }
+
         if (ClientCredentials.OfType<EntraIdLocalDeveloperCertificateCredential>().Any())
         {
             throw new InvalidOperationException("A registration using RunWithLocalDeveloperCertificateCredential cannot be converted to an existing application. Existing registrations remain caller-managed.");
@@ -364,6 +369,8 @@ public class EntraIdApplicationResource : AzureProvisioningResource, IResourceWi
     // for resources that need one, but only environments that support managed identities do.
     internal void ValidateManagedIdentities()
     {
+        _ = GetManagedIdentityRoleAssignments(requireIdentity: true);
+
         foreach (var credential in ClientCredentials.OfType<EntraIdFederatedIdentityCredential>().Where(c => c.IsResourceBacked))
         {
             IEnumerable<IResource> targets = credential.ComputeTarget is { } target ? [target] : Consumers;
@@ -378,6 +385,65 @@ public class EntraIdApplicationResource : AzureProvisioningResource, IResourceWi
                 credential.ValidateConsumer(this, resource);
             }
         }
+    }
+
+    internal List<EntraIdAppRoleAssignment> AppRoleAssignments { get; } = [];
+
+    internal Dictionary<string, BicepOutputReference> AppRoleAssignmentParameters { get; } = [];
+
+    internal EntraIdAppRole GetAssignableAppRole(string value)
+    {
+        var role = AppRoles.SingleOrDefault(role => string.Equals(role.Value, value, StringComparison.Ordinal))
+            ?? throw new ArgumentException($"Application role '{value}' is not declared on '{Name}'. Declare it with WithAppRole before assigning it.", nameof(value));
+
+        if (!role.IsEnabled || !role.AllowedMemberTypes.Contains("Application", StringComparer.Ordinal))
+        {
+            throw new ArgumentException($"Application role '{value}' on '{Name}' must be enabled and allow Application members to be assigned to a managed identity.", nameof(value));
+        }
+
+        return role;
+    }
+
+    internal IReadOnlyList<(AzureUserAssignedIdentityResource Identity, EntraIdAppRole Role)> GetManagedIdentityRoleAssignments(bool requireIdentity)
+    {
+        var assignments = new List<(AzureUserAssignedIdentityResource Identity, EntraIdAppRole Role)>();
+        var assigned = new HashSet<(AzureUserAssignedIdentityResource Identity, Guid RoleId)>();
+        foreach (var assignment in AppRoleAssignments)
+        {
+            var roles = assignment.RoleValues.Select(GetAssignableAppRole).ToArray();
+            if (assignment.Target.IsExcludedFromPublish())
+            {
+                continue;
+            }
+
+            var identity = assignment.Target as AzureUserAssignedIdentityResource
+                ?? (assignment.Target.TryGetLastAnnotation<AppIdentityAnnotation>(out var annotation)
+                    ? annotation.IdentityResource as AzureUserAssignedIdentityResource
+                    : null);
+            if (identity is null)
+            {
+                // Templates are inspected before preparation discovers compute identities. The pipeline requires
+                // an identity after preparation, so an unsupported deployment target cannot silently lose a grant.
+                if (requireIdentity)
+                {
+                    throw new InvalidOperationException(
+                        $"Resource '{assignment.Target.Name}' has an application role assignment for '{Name}', but has no user-assigned managed identity. " +
+                        "Use a compute environment that supports managed identities, such as AddAzureContainerAppEnvironment, or call WithAzureUserAssignedIdentity.");
+                }
+
+                continue;
+            }
+
+            foreach (var role in roles)
+            {
+                if (assigned.Add((identity, role.GetStableId(Name))))
+                {
+                    assignments.Add((identity, role));
+                }
+            }
+        }
+
+        return assignments;
     }
 
     /// <summary>
@@ -566,6 +632,7 @@ public class EntraIdApplicationResource : AzureProvisioningResource, IResourceWi
         infrastructure.Add(servicePrincipal);
 
         EntraIdApiProvisioning.ConfigureGrants(resource, infrastructure, symbolNames, servicePrincipal);
+        EntraIdApiProvisioning.ConfigureManagedIdentityRoleAssignments(resource, infrastructure, symbolNames, servicePrincipal);
 
         // A symbol name must not collide with another symbol in the template, such as a user-supplied redirect URI
         // parameter named "web-identity-principalId" and an identity named "web-identity". Parameters and resources share

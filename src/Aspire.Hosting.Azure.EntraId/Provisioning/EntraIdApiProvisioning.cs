@@ -176,6 +176,41 @@ internal static class EntraIdApiProvisioning
         }
     }
 
+    internal static void ConfigureManagedIdentityRoleAssignments(
+        EntraIdApplicationResource resource,
+        AzureResourceInfrastructure infrastructure,
+        EntraIdSymbolNames symbolNames,
+        MicrosoftGraphServicePrincipal servicePrincipal)
+    {
+        // AsProvisioningParameter writes into resource.Parameters, which survives template regeneration even though
+        // each generation builds fresh infrastructure. If a caller changes identity or is excluded, stale bindings
+        // would still be emitted as parameters and retain dependencies on the old identity. Remove the previous
+        // generation's bindings, then clear and rebuild their ownership tracking alongside the new template.
+        // Reference equality leaves bindings that the AppHost has since replaced untouched.
+        foreach (var (name, output) in resource.AppRoleAssignmentParameters)
+        {
+            if (resource.Parameters.TryGetValue(name, out var value) && ReferenceEquals(value, output))
+            {
+                resource.Parameters.Remove(name);
+            }
+        }
+        resource.AppRoleAssignmentParameters.Clear();
+
+        foreach (var (identity, role) in resource.GetManagedIdentityRoleAssignments(requireIdentity: false))
+        {
+            var roleId = role.GetStableId(resource.Name);
+            var principalId = identity.PrincipalId;
+            var parameterName = symbolNames.ManagedIdentityPrincipalId(identity);
+            infrastructure.Add(new MicrosoftGraphAppRoleAssignedTo(symbolNames.ManagedIdentityRoleAssignment(identity, role, roleId))
+            {
+                AppRoleId = roleId.ToString("D"),
+                PrincipalId = principalId.AsProvisioningParameter(infrastructure, parameterName),
+                ResourceId = servicePrincipal.Id
+            });
+            resource.AppRoleAssignmentParameters[parameterName] = principalId;
+        }
+    }
+
     private static BicepValue<string> GetApiApplicationId(EntraIdApiAccess access, AzureResourceInfrastructure infrastructure, EntraIdSymbolNames symbolNames) => access switch
     {
         { Api: { } api } => api.ApplicationId,
