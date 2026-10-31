@@ -46,6 +46,13 @@ public sealed class JavaScriptPackageManagerAnnotation(string executableName, st
     public Action<DockerfileStage>? InitializeDockerBuildStage { get; init; }
 
     /// <summary>
+    /// Gets or sets a callback to finalize the Docker build stage after source files are copied.
+    /// This is useful for package managers like Yarn PnP that generate resolution files (e.g. .pnp.cjs)
+    /// which get overwritten by the source copy and need to be regenerated.
+    /// </summary>
+    public Action<DockerfileStage>? FinalizeDockerBuildStage { get; init; }
+
+    /// <summary>
     /// Gets or sets a callback to initialize the Docker runtime stage before configuring the entrypoint.
     /// </summary>
     internal Action<DockerfileStage>? InitializeDockerRuntimeStage { get; init; }
