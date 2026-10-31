@@ -176,5 +176,14 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SelectAppHostAction", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Please enter a valid number..
+        /// </summary>
+        internal static string InvalidNumberInput {
+            get {
+                return ResourceManager.GetString("InvalidNumberInput", resourceCulture);
+            }
+        }
     }
 }

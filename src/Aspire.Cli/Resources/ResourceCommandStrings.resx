@@ -73,6 +73,9 @@
   <data name="ArgumentRequired" xml:space="preserve">
     <value>The '{0}' argument is required.</value>
   </data>
+  <data name="InvalidNumberInput" xml:space="preserve">
+    <value>Please enter a valid number.</value>
+  </data>
   <data name="AvailableResourceCommands" xml:space="preserve">
     <value>Available resource commands:</value>
   </data>
