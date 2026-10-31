@@ -1,9 +1,12 @@
 # Aspire Tray
 
-An experimental **C# NativeAOT** companion for the Aspire CLI, bundled on macOS and Windows.
+An experimental **C# NativeAOT** companion for the Aspire CLI, bundled on macOS, Windows, and glibc Linux.
 It uses a native AppKit status item on macOS and a Win32 notification icon on Windows
-through small platform interop layers. Activating the icon opens a flyout panel, the
-tray's only UI, drawn the same way on both platforms. It does not require a Swift build
+through small platform interop layers. Activating the icon opens a shared flyout panel
+on macOS, Windows, and compatible Linux desktops. Linux uses GTK 3, Cairo and
+Pango to render the same panel, with native StatusNotifierItem activation.
+GNOME instead uses the system Ayatana AppIndicator (or compatible AppIndicator)
+library to export native D-Bus menus. It does not require a Swift build
 step, a WebView, a macOS .NET workload, Windows Forms, or an installed .NET runtime
 on the machine running the published app.
 
@@ -13,6 +16,7 @@ on the machine running the published app.
   flyout panel's layout, glyphs, palettes, and interaction (`TrayPanel*.cs`).
 - `src/Aspire.Tray/Mac/`: native AppKit frontend and macOS app packaging.
 - `src/Aspire.Tray/Windows/`: native Win32 frontend and Windows publishing.
+- `src/Aspire.Tray/Linux/`: native GTK/StatusNotifierItem frontend, with AppIndicator menus on GNOME.
 - `tests/Aspire.Tray.Tests/`: protocol, controller, lifecycle, and panel layout tests in the normal
   test matrix, and an SVG renderer of the panel for previews.
 
@@ -21,10 +25,17 @@ repository build, analyzer, versioning, and test infrastructure. Shared code is
 source-linked into each executable; no separate UI framework or shared runtime
 assembly is deployed.
 
+An AppHost with a successfully loaded resource snapshot containing no visible
+resources shows **No resources**, rather than unknown health. Unknown health
+remains reserved for unavailable health data or resources without applicable
+aggregate health. An empty `appHosts` discovery snapshot means no AppHosts were
+discovered, not that a running AppHost has no resources.
+
 ## Try the bundled companion
 
-The native CLI bundle includes `tray/Aspire Tray.app` on macOS or
-`tray/aspire-tray.exe` and `tray/Aspire.ico` on Windows. No separate tray installer
+The native CLI bundle includes `tray/Aspire Tray.app` on macOS,
+`tray/aspire-tray.exe` and `tray/Aspire.ico` on Windows, or
+`tray/aspire-tray` and `tray/Aspire.png` on glibc Linux. No separate tray installer
 or private CLI installation is required:
 
 ```sh
@@ -36,7 +47,7 @@ aspire tray stop   # Quit the companion, not the AppHosts.
 Use a native CLI built from this branch. To try a PR build after its native
 archive job finishes, use [PR dogfooding](../../docs/dogfooding-pull-requests.md)
 in archive mode and invoke that PR's CLI explicitly, rather than an older
-`aspire` on PATH. Linux remains unsupported.
+`aspire` on PATH. Linux musl and headless sessions are unsupported.
 Managed development CLIs cannot start the bundled companion.
 
 Start extracts the payload into the CLI installation's versioned bundle layout.
@@ -75,7 +86,142 @@ Quit the tray using its original CLI or the panel's **Quit** (**Exit** on Window
 earlier preview. The state directory has been renamed; a still-running older
 preview uses a separate control endpoint and must be stopped before starting this build.
 
-## Flyout panel
+## Linux desktop support
+
+The Linux frontend exports `org.kde.StatusNotifierItem`. KDE and compatible
+non-GNOME desktops activate the exact shared Aspire panel, not a separate QML
+layout or embedded web page. GNOME retains the desktop-rendered native menu
+through `com.canonical.dbusmenu`, because its AppIndicator extension handles
+primary activation as a menu rather than an application-owned popup.
+No custom GNOME extension, Plasma
+widget, bar configuration, or additional application runtime is installed.
+
+| Desktop | Requirement |
+| --- | --- |
+| KDE Plasma on X11 | StatusNotifierItem system tray and an X11 compositing manager |
+| KDE Plasma on Wayland | StatusNotifierItem system tray, `gtk-layer-shell`, and compositor layer-shell support |
+| Other non-GNOME X11 desktops | StatusNotifierItem host and an X11 compositing manager |
+| Waybar / compatible Wayland compositors | An enabled tray module, `gtk-layer-shell`, and compositor layer-shell support |
+| GNOME | An enabled AppIndicator/KStatusNotifierItem extension; stock GNOME does not provide a tray watcher |
+
+The graphical session must provide a session D-Bus and GTK 3.
+Wayland panel hosting additionally requires `libgtk-layer-shell.so.0`;
+capability is checked against the running compositor, not a desktop/version name.
+Unsupported compositors and noncomposited X11 sessions report setup errors.
+GNOME additionally requires `libayatana-appindicator3.so.1` or
+`libappindicator3.so.1`. For example, Debian
+and Ubuntu provide `libayatana-appindicator3-1`; Fedora provides
+`libayatana-appindicator-gtk3`. These are **host dependencies**, not bundled
+copies. The tray never installs packages or changes desktop/bar configuration.
+Linux musl and headless sessions are not supported.
+
+The shared panel uses native icon activation coordinates and the output workarea
+for positioning. Transparent popup surfaces cover the outputs while open, so
+clicking outside (including another output) dismisses it; Escape and repeated
+icon activation also close it. Wayland uses layer-shell rather than arbitrary
+global window movement. GTK/ATK controls expose the shared reading order, names,
+button actions, and switch state to screen readers. The shared keyboard navigation,
+inline confirmations and Settings view are retained, including Ctrl+, for Settings.
+External applications open outside the popup, and shutdown releases popup input.
+
+Panel geometry, text, and accessible click targets follow GTK's desktop/font
+resolution, including fractional X11/XWayland scaling and `GDK_DPI_SCALE`.
+GTK and the Wayland compositor handle output/buffer scaling separately, without
+applying it twice. Font-resolution changes resize an open panel; output geometry
+or buffer-scale changes dismiss it, and the next activation uses the new settings.
+On Plasma Wayland, tray activation coordinates are translated using KWin's current
+per-output geometry and scale, including when the tray itself runs under XWayland.
+Changing the primary monitor does not reuse an old output's coordinate mapping.
+
+The GNOME native menu follows the shared flyout's information hierarchy: an Aspire header
+with the same overall status summary, **RUNNING** and **PINNED** sections when nonempty,
+a counted **Recently opened** submenu when history is available, and Settings,
+Documentation, and Quit actions. AppHost submenus keep dashboard and start/stop actions
+first, followed by Open in, file-manager reveal, copy path, and pinning.
+Quitting closes only the tray; AppHosts keep running.
+
+Menus expose health as colored dots (a gray square for stopped projects) and text
+(including unknown, waiting/degraded, and unhealthy). Documentation and Settings
+use desktop theme icons. Icons are exported through D-Bus menus, while text
+remains available on panel hosts that omit menu artwork. Menus include
+dashboard launch, exact-instance stop, explicit start for offline
+projects, pinning, recent history (including removing individual entries), file-manager
+reveal, clipboard actions, and an **Open in** submenu for supported editors and terminals.
+Opening a submenu never starts a project. The dashboard opens
+in the default browser, not inside the popup. GTK confirmations default to Cancel.
+AppHost location labels show only the containing folder and its parent, with a middle
+ellipsis for long locations. Running entries also show the PID. Actions retain the full path.
+Stopping the tray cancels open dialogs without accepting their actions or saving settings.
+Settings include version information and opt-in login startup. Stop acts immediately,
+matching the dashboard and the macOS/Windows flyout panels.
+Some GNOME AppIndicator extension versions omit icons on submenu headers, so
+AppHost health remains text-only there even though the icon is exported.
+The tray icon uses the shared status rules: a plain logo while idle, a green badge
+while AppHosts run or start, an amber badge when they need attention, and a dimmed
+logo when discovery is connecting or unavailable. The icon description also exposes
+that status as text. Native menu layout, keyboard navigation, and accessibility
+remain desktop-controlled on GNOME; its native menu does not use the panel's Settings shortcut.
+
+At startup, **Open in** discovers executable launchers in absolute directories on
+`PATH`: Visual Studio Code (`code`), Code Insiders (`code-insiders`), VSCodium (`codium`),
+Rider (`rider`), Sublime Text (`subl`), GNOME Terminal (`gnome-terminal`), GNOME Console
+(`kgx`), Ptyxis (`ptyxis`), Konsole (`konsole`), Xfce Terminal (`xfce4-terminal`),
+Kitty (`kitty`), Alacritty (`alacritty`), Foot (`foot`), WezTerm (`wezterm`), and
+Ghostty (`ghostty`). Editors open the project folder; terminals open a shell in that
+folder. Applications installed without one of these launchers on `PATH` are not listed.
+Paths are passed as arguments, never shell commands.
+
+**Show in file manager** selects the AppHost source file through
+[`org.freedesktop.FileManager1.ShowItems`](https://www.freedesktop.org/wiki/Specifications/file-manager-interface/),
+as supported by Files/Nautilus and Dolphin. If the desktop does not provide this
+interface, the action reports an error instead of silently opening a different location.
+**Copy path** continues to copy the containing folder, and **Remove from recent**
+only removes that history entry; it does not delete source files or stop an AppHost.
+
+Login startup writes only the owned
+`$XDG_CONFIG_HOME/autostart/dev.aspire.tray.desktop` file (default
+`~/.config/autostart`). It invokes the verified stable native CLI's `tray start`,
+not the extracted executable. Foreign or modified registrations are preserved.
+Quit does not disable login startup, and startup never starts an AppHost.
+
+The per-user control socket, persistent singleton lock, and private diagnostic
+log are under `~/.aspire/tray/runtime/`, independent of the invoking installation.
+Startup is acknowledged only after the GTK loop processes successful
+StatusNotifierWatcher registration, a registered StatusNotifierHost, and the GUI's
+bundle lease. Host registration changes also gate repeated start requests. Missing
+tray hosts fail with setup guidance rather than reporting an invisible tray as
+ready. Both frontends re-register after a watcher restart. Repeated
+start restores the existing item; stop shuts down only the tray and its discovery
+child. Missing offline pins are pruned once per second while discovery is live,
+even when discovery has not published a new snapshot. Settings/history use the
+shared Aspire configuration rules.
+
+### Build and run on Linux
+
+Frontend selection is automatic from the active desktop and GTK display backend.
+GNOME uses native menus; other supported desktops use the shared panel.
+No preview environment variable or legacy XEmbed icon is used.
+
+After bootstrapping the repository SDK, publish on a matching Linux architecture:
+
+```bash
+dotnet publish src/Aspire.Tray/Linux/Aspire.Tray.Linux.csproj -c Release -r linux-x64
+```
+
+Use `linux-arm64` on ARM64. The native toolchain is required at build time, but
+GTK development headers and .NET desktop workloads are not. For a foreground
+development run, pass an absolute compatible Aspire CLI executable:
+
+```bash
+artifacts/bin/Aspire.Tray.Linux/Release/net10.0/linux-x64/publish/aspire-tray \
+    --cli /absolute/path/to/aspire
+```
+
+CI builds and verifies the Linux native payload and runs the shared unit tests.
+Native desktop interactions, including dialog focus/scaling and live
+GNOME/KDE/Waybar behavior, require manual validation.
+
+## macOS and Windows flyout panel
 
 Every activation of the tray icon opens a flyout panel, similar to OneDrive's: a left or
 right click, a Control-click on macOS, Enter or Space on the focused icon on Windows, and
@@ -185,7 +331,7 @@ ASPIRE_TRAY_PANEL_PREVIEW_DIR="$PWD/artifacts/tray-panel" \
 
 ## Tray icon status
 
-Both platforms follow the same rules (`Common/TrayIconStatus.cs`):
+All platforms follow the same rules (`Common/TrayIconStatus.cs`):
 
 | State | Icon |
 | --- | --- |
@@ -257,7 +403,7 @@ converted at startup to a one-color AppKit template image, as Apple recommends f
 menu bar extras. Darker parts of the logo (its outline) become opaque and lighter facets
 partly transparent, so the logo keeps its inner structure in the menu bar's own color.
 See [Tray icon status](#tray-icon-status) for the status dot. Any click on it opens the
-[flyout panel](#flyout-panel), which hangs below the item, or from the top-right corner of
+[flyout panel](#macos-and-windows-flyout-panel), which hangs below the item, or from the top-right corner of
 the screen when the item is hidden behind the camera housing or off a crowded menu bar.
 
 **Stop** stops an AppHost without a confirmation, as in the dashboard; the exact process
@@ -416,7 +562,7 @@ Windows uses the original colored `src/Shared/Aspire.ico` (the same logo as macO
 artwork, with the status dot described in [Tray icon status](#tray-icon-status).
 The dot's green and amber are picked for the taskbar's light or dark theme. A left or right
 click, the context menu key, or Enter or Space on the focused icon opens the
-[flyout panel](#flyout-panel); keyboard selection also shows the panel's keyboard focus.
+[flyout panel](#macos-and-windows-flyout-panel); keyboard selection also shows the panel's keyboard focus.
 Ctrl+comma opens Settings while the panel has focus. The panel uses the same shared
 health, history, pinning, explicit Start, and exact-instance Stop behavior described above.
 Displayed and copied paths retain their original casing; Windows identity matching remains
@@ -560,7 +706,7 @@ consumers. See [CLI output formats](../../docs/specs/cli-output-formats.md).
 Restarting AppHosts, resource details, search, and automatic tray
 upgrade handoff are outside this POC. The companion's own projects remain
 workload-free and isolated from the product's managed build configuration, but
-the macOS and Windows native bundles build and ship them.
+the supported desktop native bundles build and ship them.
 
 The undocumented icon-placement recovery is not a supported macOS positioning
 API, and very long home-directory paths can exceed macOS's Unix socket path

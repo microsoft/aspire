@@ -1,0 +1,49 @@
+﻿Aspire · 3 running · 1 starting · 2 need attention [disabled]
+Unable to save AppHost history. The saved file was left unchanged. [disabled]
+---
+RUNNING [disabled]
+eShop · Unhealthy
+  Open dashboard
+  Stop
+  ---
+  Show in file manager
+  Copy path
+  Pin
+  ---
+  Unhealthy [disabled]
+  src/eShop.AppHost · PID 48213 [disabled]
+eShop · Healthy
+  Open dashboard
+  Stop
+  ---
+  Show in file manager
+  Copy path
+  Pin
+  ---
+  Stop timed out. The shutdown may still complete. [disabled]
+  src/eShop.AppHost · PID 48977 [disabled]
+orders · Stopping
+  Open dashboard [disabled]
+  Stopping... [disabled]
+  ---
+  Show in file manager
+  Copy path
+  Pin
+  ---
+  Stopping [disabled]
+  orders/AppHost · PID 51877 [disabled]
+---
+PINNED [disabled]
+Weather · Starting
+  Starting... [disabled]
+  ---
+  Show in file manager
+  Copy path
+  Unpin
+  ---
+  Starting [disabled]
+  weather/Weather.AppHost [disabled]
+---
+Settings...
+Documentation
+Quit

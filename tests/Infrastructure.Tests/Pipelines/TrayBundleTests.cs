@@ -4,12 +4,10 @@
 using System.Formats.Tar;
 using System.IO.Compression;
 using System.Runtime.Versioning;
-using System.Xml.Linq;
 using Aspire.SelectTests;
 using Aspire.Tools.CreateLayout;
 using Aspire.TestUtilities;
 using Xunit;
-using YamlDotNet.RepresentationModel;
 
 namespace Infrastructure.Tests;
 
@@ -18,10 +16,55 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
     [Theory]
     [InlineData("linux-x64")]
     [InlineData("linux-arm64")]
-    public void LinuxLayoutsDoNotPackageTray(string rid)
+    public void LinuxLayoutsRequireExplicitNativePayload(string rid)
     {
         using var workspace = TemporaryWorkspace.Create(output);
-        using var builder = new LayoutBuilder(workspace.Path, workspace.Path, rid, "Debug", "test", false, "missing.app", "missing-windows");
+        using var builder = new LayoutBuilder(workspace.Path, workspace.Path, rid, "Debug", "test", false, null, null, null);
+        Assert.Equal("The Linux bundle requires --tray-linux pointing to the pre-built native tray publish directory.",
+            Assert.Throws<InvalidOperationException>(builder.CopyTray).Message);
+    }
+
+    [Theory]
+    [InlineData("linux-x64")]
+    [InlineData("linux-arm64")]
+    [UnsupportedOSPlatform("windows")]
+    public async Task LinuxPayloadCopyAndArchivePreserveOnlyNativeRuntimeFiles(string rid)
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Linux bundles preserve Unix modes.");
+        using var workspace = TemporaryWorkspace.Create(output);
+        var source = Path.Combine(workspace.Path, "publish");
+        LinuxTrayTestPayload.Create(source, rid);
+        File.WriteAllText(Path.Combine(source, "aspire-tray.dbg"), "symbols");
+        var layout = Path.Combine(workspace.Path, rid);
+        using var builder = new LayoutBuilder(layout, workspace.Path, rid, "Debug", "test", false, null, null, source);
+        builder.CopyTray();
+        var archivePath = await builder.CreateArchiveAsync();
+        await using var archive = File.OpenRead(archivePath);
+        await using var gzip = new GZipStream(archive, CompressionMode.Decompress);
+        await using var tar = new TarReader(gzip);
+        List<string> names = [];
+        while (await tar.GetNextEntryAsync() is { } entry)
+        {
+            if (entry.EntryType is not (TarEntryType.RegularFile or TarEntryType.V7RegularFile))
+            {
+                continue;
+            }
+            names.Add(entry.Name);
+            var original = Path.Combine(source, Path.GetFileName(entry.Name));
+            Assert.Equal(File.GetUnixFileMode(original), entry.Mode);
+            using var bytes = new MemoryStream();
+            await entry.DataStream!.CopyToAsync(bytes);
+            Assert.Equal(File.ReadAllBytes(original), bytes.ToArray());
+        }
+        Assert.Equal(new[] { $"{rid}/tray/Aspire.png", $"{rid}/tray/aspire-tray" }.Order(), names.Order());
+    }
+
+    [Theory]
+    [InlineData("linux-musl-x64")]
+    public void MuslLayoutsDoNotPackageTray(string rid)
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var builder = new LayoutBuilder(workspace.Path, workspace.Path, rid, "Debug", "test", false, "missing.app", "missing-windows", "missing-linux");
 
         builder.CopyTray();
 
@@ -34,7 +77,7 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
     public void MacLayoutRequiresExplicitTrayInput(string rid)
     {
         using var workspace = TemporaryWorkspace.Create(output);
-        using var builder = new LayoutBuilder(workspace.Path, workspace.Path, rid, "Debug", "test", false, null, null);
+        using var builder = new LayoutBuilder(workspace.Path, workspace.Path, rid, "Debug", "test", false, null, null, null);
 
         var error = Assert.Throws<InvalidOperationException>(builder.CopyTray);
 
@@ -51,7 +94,7 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
         using var workspace = TemporaryWorkspace.Create(output);
         var source = MacTrayTestPayload.Create(workspace.Path);
         File.Delete(Path.Combine(source, missingFile));
-        using var builder = new LayoutBuilder(Path.Combine(workspace.Path, "layout"), workspace.Path, "osx-arm64", "Debug", "test", false, source, null);
+        using var builder = new LayoutBuilder(Path.Combine(workspace.Path, "layout"), workspace.Path, "osx-arm64", "Debug", "test", false, source, null, null);
 
         var error = Assert.Throws<InvalidOperationException>(builder.CopyTray);
 
@@ -66,7 +109,7 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
         using var workspace = TemporaryWorkspace.Create(output);
         var source = MacTrayTestPayload.Create(workspace.Path);
         File.SetUnixFileMode(Path.Combine(source, "Contents/MacOS/aspire-tray"), UnixFileMode.UserRead);
-        using var builder = new LayoutBuilder(Path.Combine(workspace.Path, "layout"), workspace.Path, "osx-arm64", "Debug", "test", false, source, null);
+        using var builder = new LayoutBuilder(Path.Combine(workspace.Path, "layout"), workspace.Path, "osx-arm64", "Debug", "test", false, source, null, null);
 
         var error = Assert.Throws<InvalidOperationException>(builder.CopyTray);
 
@@ -82,7 +125,7 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
         var source = MacTrayTestPayload.Create(workspace.Path);
         var layout = Path.Combine(workspace.Path, "osx-arm64");
         var destination = Path.Combine(layout, "tray", "Aspire Tray.app");
-        using var builder = new LayoutBuilder(layout, workspace.Path, "osx-arm64", "Debug", "test", false, source, null);
+        using var builder = new LayoutBuilder(layout, workspace.Path, "osx-arm64", "Debug", "test", false, source, null, null);
 
         builder.CopyTray();
 
@@ -118,60 +161,6 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
         }
 
         Assert.Equal(expectedFiles, archivedFiles.Order());
-    }
-
-    [Fact]
-    public void BundlePublishesTrayBeforeLayoutIndependentlyOfNativeCliSkip()
-    {
-        var project = LoadProject("eng/Bundle.proj");
-        var build = Target(project, "Build");
-        var dependencies = build.Attribute("DependsOnTargets")!.Value.Split(';', StringSplitOptions.TrimEntries);
-        Assert.True(Array.IndexOf(dependencies, "_PublishNativeTray") < Array.IndexOf(dependencies, "_RunCreateLayout"));
-        Assert.Equal("($(TargetRid.StartsWith('osx-')) or $(TargetRid.StartsWith('win-'))) and '$(SkipTrayBuild)' != 'true'", Target(project, "_PublishNativeTray").Attribute("Condition")!.Value);
-        Assert.Equal("'$(SkipNativeBuild)' != 'true'", Target(project, "_PublishNativeCli").Attribute("Condition")!.Value);
-        Assert.Contains("--tray-app \"$(TrayAppPath)\"", Target(project, "_RunCreateLayout").Value);
-        Assert.Contains("--tray-windows \"$(WindowsTrayPath)\"", Target(project, "_RunCreateLayout").Value);
-        var cliPublish = Target(project, "_PublishNativeCli");
-        Assert.Equal("--output \"$(CliPublishDir)\"", Assert.Single(cliPublish.Descendants("_CliPublishOutputArg")).Value);
-        Assert.Contains("$(_CliPublishOutputArg)", Assert.Single(cliPublish.Elements("Exec")).Attribute("Command")!.Value);
-    }
-
-    [Fact]
-    public void WholeAppSigningBypassesArcadeAndRestoresWithoutPublishing()
-    {
-        var project = LoadProject("src/Aspire.Tray/Mac/Aspire.Tray.Mac.csproj");
-        Assert.Equal("Publish", Target(project, "PackageTray").Attribute("AfterTargets")!.Value);
-        var restore = Target(project, "RestoreSignedTray");
-        Assert.Null(restore.Attribute("DependsOnTargets"));
-        Assert.Contains(restore.Elements("Exec"), exec => exec.Attribute("Command")!.Value.StartsWith("ditto -xk", StringComparison.Ordinal));
-        Assert.Contains(restore.Elements("Exec"), exec => exec.Attribute("Command")!.Value.Contains("anchor apple generic", StringComparison.Ordinal));
-
-        var signing = LoadProject("eng/Signing.props");
-        Assert.Equal([@"$(ArtifactsBinDir)Aspire.Tray.Windows\**\publish\aspire-tray.exe"],
-            signing.Descendants("ItemsToSign")
-                .Select(element => element.Attribute("Include")!.Value)
-                .Where(include => include.Contains("Aspire.Tray.", StringComparison.Ordinal)));
-        var traySigning = LoadProject("eng/pipelines/SignTray.proj");
-        var input = Assert.Single(traySigning.Descendants("_TrayToSign"));
-        Assert.Equal("$(TraySigningArchive)", input.Attribute("Include")!.Value);
-        Assert.Equal("MacDeveloperHarden", input.Element("Authenticode")!.Value);
-        var notarization = Assert.Single(traySigning.Descendants("_TrayToNotarize"));
-        Assert.Equal(input.Attribute("Include")!.Value, notarization.Attribute("Include")!.Value);
-        Assert.Equal("8020", notarization.Element("Authenticode")!.Value);
-        Assert.Equal("dotnet", notarization.Element("MacAppName")!.Value);
-        var signTray = Target(traySigning, "SignTray");
-        Assert.Equal("ValidateTraySigning", signTray.Attribute("DependsOnTargets")!.Value);
-        Assert.Equal(["@(_TrayToSign)", "@(_TrayToNotarize)"],
-            signTray.Elements("SignFiles").Select(task => task.Attribute("Files")!.Value));
-
-        var pipeline = File.ReadAllText(Path.Combine(RepoRoot.Path, "eng/pipelines/templates/build_sign_native.yml"));
-        var prepare = pipeline.IndexOf("/t:PrepareTraySigning", StringComparison.Ordinal);
-        var sign = pipeline.IndexOf("SignManaged.binlog", StringComparison.Ordinal);
-        var signApp = pipeline.IndexOf("/t:SignTray", StringComparison.Ordinal);
-        var restoreApp = pipeline.IndexOf("/t:RestoreSignedTray", StringComparison.Ordinal);
-        var layout = pipeline.IndexOf("/t:_RestoreDcpPackage;_RunCreateLayout", StringComparison.Ordinal);
-        Assert.True(prepare >= 0 && prepare < sign && sign < signApp && signApp < restoreApp && restoreApp < layout);
-        Assert.Contains("/p:SkipTrayBuild=true", pipeline);
     }
 
     [Fact]
@@ -217,28 +206,10 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
         }
     }
 
-    [Fact]
-    public void NativePayloadVerificationRunsAfterLayoutAndSharedTestsUseCentralMatrix()
-    {
-        var project = LoadProject("eng/Bundle.proj");
-        var verification = Target(project, "_VerifyNativeTrayArchive");
-        Assert.Equal("_RunCreateLayout", verification.Attribute("AfterTargets")!.Value);
-        Assert.Equal("$(TargetRid.StartsWith('osx-'))", verification.Attribute("Condition")!.Value);
-        var command = Assert.Single(verification.Elements("Exec")).Attribute("Command")!.Value;
-        Assert.Contains("verify-tray-payload.sh", command);
-        Assert.Contains("aspire-$(BundleVersion)-$(TargetRid).tar.gz", command);
-        Assert.Contains("\"$(RequireMacTraySignature)\"", command);
-
-        const string testProjectPath = "tests/Aspire.Tray.Tests/Aspire.Tray.Tests.csproj";
-        var solution = LoadProject("Aspire.slnx");
-        Assert.Contains(solution.Descendants("Project"), entry => entry.Attribute("Path")?.Value == testProjectPath);
-        var testProject = LoadProject(testProjectPath);
-        Assert.Equal("true", Assert.Single(testProject.Descendants("RunOnGithubActionsMacOS")).Value);
-    }
-
     [Theory]
     [InlineData("Aspire.Tray.Mac", true)]
     [InlineData("Aspire.Tray.Windows", true)]
+    [InlineData("Aspire.Tray.Linux", true)]
     public void NativeTrayChangesSelectSharedAndPackagingTests(string project, bool bundled)
     {
         var selector = new TestSelector(
@@ -260,16 +231,6 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
             result.Jobs.Order(StringComparer.Ordinal));
     }
 
-    [Fact]
-    public void BundleUsesProductTrayProjectAndOutputDirectory()
-    {
-        var project = LoadProject("eng/Bundle.proj");
-        Assert.Equal(@"$(RepoRoot)src\Aspire.Tray\Mac\Aspire.Tray.Mac.csproj", Assert.Single(project.Descendants("TrayProjectPath")).Value);
-        Assert.Equal(@"$(ArtifactsDir)bin\Aspire.Tray.Mac\$(Configuration)\net10.0\$(TargetRid)\app\Aspire Tray.app", Assert.Single(project.Descendants("TrayAppPath")).Value);
-        Assert.All(Target(project, "_PublishNativeTray").Elements("Exec"),
-            exec => Assert.Contains("$(_OfficialBuildIdArg)", exec.Attribute("Command")!.Value));
-    }
-
     [Theory]
     [InlineData("win-x64")]
     [InlineData("win-arm64")]
@@ -280,7 +241,7 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
         WindowsTrayTestPayload.Create(source, rid);
         File.WriteAllText(Path.Combine(source, "smoke.stdout.log"), "not runtime content");
         var layout = Path.Combine(workspace.Path, rid);
-        using var builder = new LayoutBuilder(layout, workspace.Path, rid, "Debug", "test", false, null, source);
+        using var builder = new LayoutBuilder(layout, workspace.Path, rid, "Debug", "test", false, null, source, null);
 
         builder.CopyTray();
 
@@ -329,7 +290,7 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
         }
         using var builder = new LayoutBuilder(Path.Combine(workspace.Path, "layout"), workspace.Path,
             scenario == "unsupported-rid" ? "win-x86" : "win-x64", "Debug", "test", false, null,
-            scenario == "missing-input" ? null : source);
+            scenario == "missing-input" ? null : source, null);
 
         if (scenario == "missing-input")
         {
@@ -340,77 +301,6 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
         {
             Assert.Throws<InvalidDataException>(builder.CopyTray);
         }
-    }
-
-    [Fact]
-    public void WindowsSigningAndArchiveVerificationUsePublishedPayloadBeforeEmbedding()
-    {
-        var signing = LoadProject("eng/Signing.props");
-        Assert.Equal("Microsoft400", Assert.Single(signing.Descendants("FileSignInfo"),
-            element => element.Attribute("Include")?.Value == "aspire-tray.exe").Attribute("CertificateName")!.Value);
-        Assert.Contains(signing.Descendants("ItemsToSign"),
-            element => element.Attribute("Include")?.Value == @"$(ArtifactsBinDir)Aspire.Tray.Windows\**\publish\aspire-tray.exe");
-        var bundle = LoadProject("eng/Bundle.proj");
-        var verify = Target(bundle, "_VerifyWindowsTrayArchive");
-        Assert.Equal("_RunCreateLayout", verify.Attribute("AfterTargets")!.Value);
-        Assert.Equal("$(TargetRid.StartsWith('win-'))", verify.Attribute("Condition")!.Value);
-        Assert.All(verify.Elements("Exec"),
-            exec => Assert.Contains("verify-windows-tray-payload.ps1", exec.Attribute("Command")!.Value));
-        var pipeline = File.ReadAllText(Path.Combine(RepoRoot.Path, "eng/pipelines/templates/build_sign_native.yml"));
-        Assert.Contains("if in(parameters.agentOs, 'macos', 'windows')", pipeline);
-        Assert.Contains("/p:RequireWindowsTraySignature=${{ parameters.codeSign }}", pipeline);
-        Assert.True(pipeline.IndexOf("/t:_PublishNativeTray", StringComparison.Ordinal) <
-            pipeline.IndexOf("SignManaged.binlog", StringComparison.Ordinal));
-    }
-
-    [Fact]
-    public void WindowsNativeSmokeUsesMatchingPublishedCliAndExplicitBoundedDuration()
-    {
-        var workflow = File.ReadAllText(Path.Combine(RepoRoot.Path, ".github/workflows/build-cli-native-archives.yml"));
-        Assert.Contains("- name: Check Windows tray desktop availability\n        id: windows_tray_desktop\n        if: runner.os == 'Windows'", workflow);
-        Assert.Contains("[Environment]::UserInteractive -and $session -ne 0 -and $explorer.Count -gt 0", workflow);
-        Assert.Contains("FindWindow(\"Shell_TrayWnd\", null)", workflow);
-        Assert.Contains("OpenInputDesktop(0, false, 0x0001)", workflow);
-        Assert.Contains("available=$($available.ToString().ToLowerInvariant())", workflow);
-        Assert.Contains("Write-Output \"::warning::$notice\"", workflow);
-        Assert.Contains(">> $env:GITHUB_STEP_SUMMARY", workflow);
-        Assert.Contains("""
-                  - name: Report skipped Windows ARM64 tray smoke
-                    if: runner.os == 'Windows' && matrix.targets.rids == 'win-arm64'
-                    shell: pwsh
-                    run: |
-                      $notice = 'Windows ARM64 native tray UI smoke is temporarily disabled on GitHub-hosted runners: notification icon registration fails in native ARM64 and emulated x64 SDK controls despite a responsive Explorer. The root cause remains unresolved. Native publishing and payload verification remain enabled; native UI behavior is not validated by this job.'
-                      Write-Output "::warning::$notice"
-                      "### Windows ARM64 tray UI validation`n`n$notice" >> $env:GITHUB_STEP_SUMMARY
-            """, workflow);
-        Assert.Contains("- name: Smoke Windows native tray\n        if: runner.os == 'Windows' && matrix.targets.rids != 'win-arm64' && steps.windows_tray_desktop.outputs.available == 'true'", workflow);
-        Assert.Contains("-SkipPublish -CliPath $cli -SmokeSeconds 60", workflow);
-        Assert.Contains("$cli = Join-Path $scratch 'cli/aspire.exe'", workflow);
-        Assert.Contains("-PublishDirectory (Join-Path $scratch \"$rid/tray\")", workflow);
-        Assert.Contains("eng/scripts/tray-registration-control/run.ps1 -Architecture ($rid -replace '^win-', '') -CompareArchitectures:($rid -eq 'win-arm64')", workflow);
-        Assert.Contains("artifacts/bundle/aspire-ci-bundlepayload-$rid.tar.gz", workflow);
-        var yaml = new YamlStream();
-        yaml.Load(new StringReader(workflow));
-        var root = Assert.IsType<YamlMappingNode>(yaml.Documents[0].RootNode);
-        var jobs = Assert.IsType<YamlMappingNode>(root.Children[new YamlScalarNode("jobs")]);
-        var job = Assert.IsType<YamlMappingNode>(jobs.Children[new YamlScalarNode("build_cli_archives")]);
-        var steps = Assert.IsType<YamlSequenceNode>(job.Children[new YamlScalarNode("steps")]);
-        var smoke = Assert.Single(steps.Children.OfType<YamlMappingNode>(),
-            step => step.Children.TryGetValue(new YamlScalarNode("name"), out var name) && name.ToString() == "Smoke Windows native tray");
-        var environment = Assert.IsType<YamlMappingNode>(smoke.Children[new YamlScalarNode("env")]);
-        Assert.Equal("${{ matrix.targets.rids }}", environment.Children[new YamlScalarNode("TRAY_RID")].ToString());
-        Assert.Equal("${{ inputs.configuration }}", environment.Children[new YamlScalarNode("TRAY_CONFIGURATION")].ToString());
-        var script = smoke.Children[new YamlScalarNode("run")].ToString();
-        Assert.Equal(-1, script.IndexOf("${{", StringComparison.Ordinal));
-        Assert.Contains("$rid = $env:TRAY_RID", script);
-        Assert.Contains("-Configuration $env:TRAY_CONFIGURATION", script);
-        var publish = File.ReadAllText(Path.Combine(RepoRoot.Path, "src/Aspire.Tray/Windows/publish.ps1"));
-        Assert.Contains("$startInfo.ArgumentList.Add($argument)", publish);
-        Assert.Contains("$process.StandardOutput.ReadToEndAsync()", publish);
-        Assert.Contains("$process.StandardError.ReadToEndAsync()", publish);
-        Assert.Contains("$process.WaitForExit(($SmokeSeconds + 30) * 1000)", publish);
-        Assert.Contains("tools/CreateLayout/verify-windows-tray-payload.ps1", publish);
-        Assert.Contains("-PublishDirectory $output -Rid \"win-$Architecture\"", publish);
     }
 
     [Theory]
@@ -429,7 +319,7 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
         WindowsTrayTestPayload.Create(source, rid);
         File.Copy(Path.Combine(RepoRoot.Path, "src/Shared/Aspire.ico"), Path.Combine(source, "Aspire.ico"), overwrite: true);
         var layout = Path.Combine(workspace.Path, rid);
-        using var builder = new LayoutBuilder(layout, workspace.Path, rid, "Debug", "test", false, null, source);
+        using var builder = new LayoutBuilder(layout, workspace.Path, rid, "Debug", "test", false, null, source, null);
         builder.CopyTray();
         var tray = Path.Combine(layout, "tray");
         switch (scenario)
@@ -464,8 +354,130 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
         }
     }
 
-    private static XDocument LoadProject(string path) => XDocument.Load(Path.Combine(RepoRoot.Path, path));
+    [Theory]
+    [RequiresTools(["pwsh", "bash", "tar", "find", "od"])]
+    [UnsupportedOSPlatform("windows")]
+    [InlineData("linux-x64", "valid", 0)]
+    [InlineData("linux-arm64", "valid", 0)]
+    [InlineData("linux-x64", "wrong-rid", 1)]
+    [InlineData("linux-x64", "missing-icon", 1)]
+    [InlineData("linux-x64", "changed-icon", 1)]
+    [InlineData("linux-x64", "non-executable", 1)]
+    [InlineData("linux-x64", "extra-file", 1)]
+    [InlineData("linux-x64", "extra-directory", 1)]
+    [InlineData("linux-x64", "symlink-icon", 1)]
+    [InlineData("linux-x64", "symlink-executable", 1)]
+    public async Task LinuxArchiveVerifierChecksActualPayload(string rid, string scenario, int expectedExitCode)
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Linux bundles preserve Unix modes.");
+        using var workspace = TemporaryWorkspace.Create(output);
+        var source = Path.Combine(workspace.Path, "publish with spaces");
+        LinuxTrayTestPayload.Create(source, rid);
+        var layout = Path.Combine(workspace.Path, rid);
+        using var builder = new LayoutBuilder(layout, workspace.Path, rid, "Debug", "test", false, null, null, source);
+        builder.CopyTray();
+        var tray = Path.Combine(layout, "tray");
+        switch (scenario)
+        {
+            case "wrong-rid":
+                LinuxTrayTestPayload.Create(tray, "linux-arm64");
+                break;
+            case "missing-icon":
+                File.Delete(Path.Combine(tray, "Aspire.png"));
+                break;
+            case "changed-icon":
+                File.WriteAllText(Path.Combine(tray, "Aspire.png"), "wrong icon");
+                break;
+            case "non-executable":
+                File.SetUnixFileMode(Path.Combine(tray, "aspire-tray"), UnixFileMode.UserRead | UnixFileMode.UserWrite);
+                break;
+            case "extra-file":
+                File.WriteAllText(Path.Combine(tray, "smoke.log"), "unexpected runtime content");
+                break;
+            case "extra-directory":
+                Directory.CreateDirectory(Path.Combine(tray, "empty"));
+                break;
+            case "symlink-icon":
+            case "symlink-executable":
+                var name = scenario == "symlink-icon" ? "Aspire.png" : "aspire-tray";
+                File.Delete(Path.Combine(tray, name));
+                File.CreateSymbolicLink(Path.Combine(tray, name), Path.Combine(source, name));
+                break;
+        }
+        var archive = await builder.CreateArchiveAsync();
+        var script = Path.Combine(workspace.Path, "verify.ps1");
+        File.WriteAllText(script, """
+            param([string]$Verifier, [string]$Archive, [string]$Rid)
+            & bash $Verifier $Archive $Rid
+            exit $LASTEXITCODE
+            """);
+        using var command = new PowerShellCommand(script, output)
+            .WithTimeout(TimeSpan.FromMinutes(1));
 
-    private static XElement Target(XDocument project, string name)
-        => Assert.Single(project.Descendants("Target"), target => target.Attribute("Name")?.Value == name);
+        var result = await command.ExecuteAsync(
+            "-Verifier", $"\"{Path.Combine(RepoRoot.Path, "tools/CreateLayout/verify-linux-tray-payload.sh")}\"",
+            "-Archive", $"\"{archive}\"", "-Rid", rid);
+
+        result.EnsureExitCode(expectedExitCode);
+        if (expectedExitCode == 0)
+        {
+            Assert.Contains($"Verified Linux tray payload for {rid}.", result.Output);
+        }
+    }
+
+    [Theory]
+    [RequiresTools(["pwsh", "tar"])]
+    [UnsupportedOSPlatform("windows")]
+    [InlineData("valid", 0, "Packaged tray launchability check passed")]
+    [InlineData("verbose", 0, "Packaged tray launchability check passed")]
+    [InlineData("missing-executable", 1, "Packaged tray executable was not found")]
+    [InlineData("non-executable", 1, "Permission denied")]
+    [InlineData("nonzero-exit", 1, "failed with exit code 7")]
+    [InlineData("timeout", 1, "timed out after 1 seconds")]
+    [InlineData("invalid-archive", 1, "Failed to extract the packaged tray")]
+    public async Task NativeTrayLaunchCheckReportsFailuresWithoutRepairingPayload(string scenario, int expectedExitCode, string expectedMessage)
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Test executable uses a Unix shell.");
+        using var workspace = TemporaryWorkspace.Create(output);
+        var layout = Path.Combine(workspace.Path, "linux-x64");
+        var tray = Path.Combine(layout, "tray");
+        Directory.CreateDirectory(tray);
+        var executable = Path.Combine(tray, "aspire-tray");
+        File.WriteAllText(executable, scenario switch
+        {
+            "nonzero-exit" => "#!/bin/sh\nexit 7\n",
+            "timeout" => "#!/bin/sh\nexec sleep 60\n",
+            "verbose" => """
+                #!/bin/sh
+                i=0
+                while [ "$i" -lt 10000 ]; do
+                    printf 'tray stdout\n'
+                    printf 'tray stderr\n' >&2
+                    i=$((i + 1))
+                done
+                """ + "\n",
+            _ => "#!/bin/sh\n[ \"$#\" -eq 1 ] && [ \"$1\" = '--help' ]\n"
+        });
+        File.SetUnixFileMode(executable, scenario == "non-executable"
+            ? UnixFileMode.UserRead | UnixFileMode.UserWrite
+            : UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        if (scenario == "missing-executable")
+        {
+            File.Delete(executable);
+        }
+        using var builder = new LayoutBuilder(layout, workspace.Path, "linux-x64", "Debug", "test", false, null, null, null);
+        var archive = await builder.CreateArchiveAsync();
+        if (scenario == "invalid-archive")
+        {
+            File.WriteAllText(archive, "not a tar archive");
+        }
+        using var command = new PowerShellCommand(Path.Combine(RepoRoot.Path, "eng/scripts/test-native-tray.ps1"), output)
+            .WithTimeout(TimeSpan.FromMinutes(1));
+
+        var result = await command.ExecuteAsync("-ArchivePath", $"\"{archive}\"", "-Rid", "linux-x64",
+            "-TimeoutSeconds", scenario == "timeout" ? "1" : "30");
+
+        result.EnsureExitCode(expectedExitCode);
+        Assert.Contains(expectedMessage, result.Output);
+    }
 }

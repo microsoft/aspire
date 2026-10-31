@@ -3,13 +3,13 @@
   <file datatype="xml" source-language="en" target-language="cs" original="../TrayCommandStrings.resx">
     <body>
       <trans-unit id="BundleRequired">
-        <source>The experimental Aspire tray requires a leased, versioned CLI bundle. No usable bundle was found. Install a Windows or macOS Aspire bundle that includes the tray companion.</source>
-        <target state="translated">Experimentální aplikace Aspire v oznamovací oblasti vyžaduje verzovaný balíček CLI s aktivním zapůjčením. Nenašel se žádný použitelný balíček. Nainstalujte balíček Aspire pro Windows nebo macOS, který obsahuje doprovodnou aplikaci pro oznamovací oblast.</target>
+        <source>The experimental Aspire tray requires a leased, versioned CLI bundle. No usable bundle was found. Install an Aspire bundle that includes the tray companion for your desktop.</source>
+        <target state="needs-review-translation">Experimentální aplikace Aspire v oznamovací oblasti vyžaduje verzovaný balíček CLI s aktivním zapůjčením. Nenašel se žádný použitelný balíček. Nainstalujte balíček Aspire pro Windows nebo macOS, který obsahuje doprovodnou aplikaci pro oznamovací oblast.</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Manage the Windows or macOS tray companion (Experimental)</source>
-        <target state="translated">Spravovat doprovodnou aplikaci pro oznamovací oblast ve Windows nebo macOS (experimentální)</target>
+        <source>Manage the desktop tray companion (Experimental)</source>
+        <target state="needs-review-translation">Spravovat doprovodnou aplikaci pro oznamovací oblast ve Windows nebo macOS (experimentální)</target>
         <note />
       </trans-unit>
       <trans-unit id="HelperFailed">
@@ -33,8 +33,8 @@
         <note>{0} is the start or stop subcommand name. {1} is the underlying error message.</note>
       </trans-unit>
       <trans-unit id="PayloadMissing">
-        <source>The CLI bundle does not contain the tray companion for this platform (Windows: tray/aspire-tray.exe and tray/Aspire.ico; macOS: tray/Aspire Tray.app). Install a matching native Aspire bundle, or run 'aspire setup --force' to repair an incomplete extraction.</source>
-        <target state="translated">Balíček CLI neobsahuje doprovodnou aplikaci pro oznamovací oblast pro tuto platformu (Windows: tray/aspire-tray.exe a tray/Aspire.ico; macOS: tray/Aspire Tray.app). Nainstalujte odpovídající nativní balíček Aspire nebo opravte neúplné rozbalení spuštěním příkazu aspire setup --force.</target>
+        <source>The CLI bundle does not contain the tray companion for this platform (Windows: tray/aspire-tray.exe and tray/Aspire.ico; macOS: tray/Aspire Tray.app; Linux: tray/aspire-tray and tray/Aspire.png). Install a matching native Aspire bundle, or run 'aspire setup --force' to repair an incomplete extraction.</source>
+        <target state="needs-review-translation">Balíček CLI neobsahuje doprovodnou aplikaci pro oznamovací oblast pro tuto platformu (Windows: tray/aspire-tray.exe a tray/Aspire.ico; macOS: tray/Aspire Tray.app). Nainstalujte odpovídající nativní balíček Aspire nebo opravte neúplné rozbalení spuštěním příkazu aspire setup --force.</target>
         <note />
       </trans-unit>
       <trans-unit id="StartDescription">
@@ -58,8 +58,8 @@
         <note />
       </trans-unit>
       <trans-unit id="UnsupportedPlatform">
-        <source>The experimental Aspire tray supports Windows and macOS x64/ARM64 installations. Linux is not supported.</source>
-        <target state="translated">Experimentální aplikace Aspire v oznamovací oblasti podporuje instalace Windows a macOS na platformách x64/ARM64. Linux není podporovaný.</target>
+        <source>The experimental Aspire tray supports Windows, macOS, and glibc Linux x64/ARM64 installations. Linux requires a graphical desktop with StatusNotifierItem support, GTK 3, and an AppIndicator library.</source>
+        <target state="needs-review-translation">Experimentální aplikace Aspire v oznamovací oblasti podporuje instalace Windows a macOS na platformách x64/ARM64. Linux není podporovaný.</target>
         <note />
       </trans-unit>
     </body>

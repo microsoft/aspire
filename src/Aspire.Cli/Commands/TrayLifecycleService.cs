@@ -28,7 +28,8 @@ internal sealed class TrayLifecycleService(
 
     public async Task<CommandResult> ExecuteAsync(bool start, CancellationToken cancellationToken)
     {
-        if ((!environment.IsMacOS() && !environment.IsWindows()) ||
+        if ((!environment.IsMacOS() && !environment.IsWindows() && !environment.IsLinux()) ||
+            (environment.IsLinux() && environment.RuntimeIdentifier.StartsWith("linux-musl-", StringComparison.Ordinal)) ||
             RuntimeInformation.ProcessArchitecture is not (Architecture.X64 or Architecture.Arm64))
         {
             return CommandResult.Failure(CliExitCodes.InvalidCommand, TrayCommandStrings.UnsupportedPlatform);
@@ -81,6 +82,15 @@ internal sealed class TrayLifecycleService(
                 }
                 WindowsTrayPayload.Validate(Path.GetDirectoryName(trayPath)!,
                     RuntimeInformation.ProcessArchitecture == Architecture.Arm64 ? "win-arm64" : "win-x64");
+            }
+            else if (environment.IsLinux())
+            {
+                if (!string.Equals(trayPath, Path.Combine(bundleRoot, LinuxTrayPayload.ExecutablePath), StringComparison.Ordinal))
+                {
+                    return CommandResult.Failure(CliExitCodes.InvalidCommand, TrayCommandStrings.PayloadMissing);
+                }
+                LinuxTrayPayload.Validate(Path.GetDirectoryName(trayPath)!,
+                    RuntimeInformation.ProcessArchitecture == Architecture.Arm64 ? "linux-arm64" : "linux-x64");
             }
 
             string[] arguments = start

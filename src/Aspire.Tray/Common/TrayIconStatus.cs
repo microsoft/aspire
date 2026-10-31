@@ -4,7 +4,7 @@
 namespace Aspire.Tray;
 
 /// <summary>
-/// What the tray icon shows. Both platforms use the same rules: a plain logo when nothing
+/// What the tray icon shows. All platforms use the same rules: a plain logo when nothing
 /// runs, a green dot while AppHosts run, an amber dot when something needs attention, and a
 /// dimmed logo without a dot while discovery is connecting or unavailable.
 /// </summary>
