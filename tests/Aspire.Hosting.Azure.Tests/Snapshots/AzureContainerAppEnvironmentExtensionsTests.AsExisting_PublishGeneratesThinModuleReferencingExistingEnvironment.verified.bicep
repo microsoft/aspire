@@ -11,7 +11,7 @@ param sharedRg string
 
 param env_acr_outputs_name string
 
-resource env 'Microsoft.App/managedEnvironments@2025-07-01' existing = {
+resource env 'Microsoft.App/managedEnvironments@2026-07-01' existing = {
   name: environmentName
   scope: resourceGroup(sharedRg)
 }
