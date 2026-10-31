@@ -844,6 +844,64 @@ public class TerminalServiceTests
     }
 
     [Fact]
+    public async Task AppHostStop_WithNoTerminals_SucceedsAfterEarlierServiceExhaustsShutdownBudget()
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/20954: best-effort DCP shutdown can consume
+        // the whole host shutdown budget and swallow the cancellation. TerminalServiceHost stops after it (hosted
+        // services stop in reverse registration order) and must not turn that already-cancelled budget into a host
+        // stop failure when there is nothing to tear down.
+        using var builder = TestDistributedApplicationBuilder.Create(options =>
+        {
+            options.DisableDashboard = true;
+            options.TrustDeveloperCertificate = false;
+        });
+        foreach (var registration in builder.Services.Where(descriptor =>
+            descriptor.ServiceType == typeof(IHostedService) &&
+            descriptor.ImplementationType != typeof(TerminalServiceHost)).ToArray())
+        {
+            builder.Services.Remove(registration);
+        }
+        var budgetConsumer = new ShutdownBudgetConsumingService();
+        builder.Services.AddSingleton<IHostedService>(budgetConsumer);
+
+        await using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        using var stopCts = new CancellationTokenSource();
+        var stop = app.StopAsync(stopCts.Token);
+        await budgetConsumer.StopStarted.DefaultTimeout();
+        await stopCts.CancelAsync();
+
+        await stop.DefaultTimeout();
+        Assert.True(budgetConsumer.ObservedCancellation);
+    }
+
+    private sealed class ShutdownBudgetConsumingService : IHostedService
+    {
+        private readonly TaskCompletionSource _stopStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task StopStarted => _stopStarted.Task;
+
+        public bool ObservedCancellation { get; private set; }
+
+        public Task StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public async Task StopAsync(CancellationToken cancellationToken)
+        {
+            _stopStarted.TrySetResult();
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                // Mirrors DcpExecutor.StopAsync, which treats orchestrator shutdown as best effort.
+                ObservedCancellation = true;
+            }
+        }
+    }
+
+    [Fact]
     public async Task CreateTerminal_AfterDispose_Throws()
     {
         var service = TestTerminalService.Create();
