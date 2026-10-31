@@ -8,10 +8,15 @@ namespace Aspire.Cli.Tests.TestServices;
 internal sealed class RecordingGracefulSignaler : IProcessTreeGracefulShutdownSignaler
 {
     private readonly object _lock = new();
-    private readonly Func<int, Task<bool>>? _onSignal;
+    private readonly Func<int, CancellationToken, Task<bool>>? _onSignal;
     private readonly List<int> _pids = new();
 
     public RecordingGracefulSignaler(Func<int, Task<bool>>? onSignal = null)
+    {
+        _onSignal = onSignal is null ? null : (pid, _) => onSignal(pid);
+    }
+
+    public RecordingGracefulSignaler(Func<int, CancellationToken, Task<bool>> onSignal)
     {
         _onSignal = onSignal;
     }
@@ -38,6 +43,6 @@ internal sealed class RecordingGracefulSignaler : IProcessTreeGracefulShutdownSi
             _pids.Add(pid);
         }
 
-        return _onSignal?.Invoke(pid) ?? Task.FromResult(true);
+        return _onSignal?.Invoke(pid, cancellationToken) ?? Task.FromResult(true);
     }
 }
