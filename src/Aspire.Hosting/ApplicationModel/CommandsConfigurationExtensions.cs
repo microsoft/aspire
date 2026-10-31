@@ -385,10 +385,13 @@ internal static class CommandsConfigurationExtensions
         }
     }
 
-    // A replica that was Starting (e.g. restarted by a previous rebuild moments ago) was stopped for this
+    // A replica that was starting (e.g. restarted by a previous rebuild moments ago) was stopped for this
     // rebuild just like a Running one, so it must be started again rather than restored to a stale state.
+    // A freshly re-created DCP resource has no state text until DCP reports one, which also means it is starting.
     internal static bool ShouldRestartAfterRebuild(string? preRebuildState) =>
-        preRebuildState == KnownResourceStates.Running || preRebuildState == KnownResourceStates.Starting;
+        preRebuildState == KnownResourceStates.Running
+        || preRebuildState == KnownResourceStates.Starting
+        || string.IsNullOrEmpty(preRebuildState);
 
     internal static bool IsRebuildComplete(ResourceEvent resourceEvent, string rebuilderInstanceName)
     {

@@ -241,7 +241,9 @@ public class ResourceCommandAnnotationTests
     [InlineData("Finished", false)]
     [InlineData("Exited", false)]
     [InlineData("FailedToStart", false)]
-    [InlineData(null, false)]
+    [InlineData("", true)]
+    [InlineData(null, true)]
+    [InlineData("Stopping", false)]
     public void ShouldRestartAfterRebuild_RestartsReplicasThatWereRunningOrStarting(string? preRebuildState, bool expected)
     {
         Assert.Equal(expected, CommandsConfigurationExtensions.ShouldRestartAfterRebuild(preRebuildState));

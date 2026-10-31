@@ -1779,7 +1779,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(2, File.ReadAllLines(buildCountPath).Length);
 
         // The second rebuild runs right after the first one restarted the project, so the project can still be
-        // Starting when it is stopped. It must be launched again rather than left in a stale Starting state.
+        // starting (Starting, or no state yet from the re-created DCP executable) when it is stopped. It must be launched again rather than left in a stale Starting state.
         // The test program exits immediately, so it ends up Finished once it has run.
         await resourceNotificationService.WaitForResourceAsync(project.Resource.Name, KnownResourceStates.Finished, cts.Token).DefaultTimeout(TimeSpan.FromMinutes(2));
     }
