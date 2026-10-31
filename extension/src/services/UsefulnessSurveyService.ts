@@ -9,13 +9,12 @@ export interface UsefulnessSurveyCampaign {
     readonly expiresAt: number;
 }
 
-// Enable only after classification, production ingestion, and reporting have been verified.
-// A zero expiry also fails closed until a finite campaign end date is deliberately selected.
+// The campaign expires at the end of January 4, 2027 (UTC).
 export const usefulnessSurveyCampaign: UsefulnessSurveyCampaign = {
-    enabled: false,
+    enabled: true,
     id: 'usefulness-pilot-v1',
     questionId: 'aspire-usefulness-v1',
-    expiresAt: 0,
+    expiresAt: Date.parse('2027-01-04T23:59:59.000Z'),
 };
 
 export interface UsefulnessSurveyEnvironment {
