@@ -150,6 +150,12 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        internal static string InvalidSecretsFile {
+            get {
+                return ResourceManager.GetString("InvalidSecretsFile", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to The secret key (e.g., Azure:Location or Parameters:postgres-password).
         /// </summary>

@@ -31,13 +31,13 @@ internal sealed class SecretPathCommand : BaseCommand
         var projectFile = parseResult.GetValue(SecretCommand.s_appHostOption);
         var environment = parseResult.GetValue(SecretCommand.s_environmentOption);
 
-        var result = await _secretsStoreResolver.ResolveAsync(projectFile, environment, cancellationToken);
-        if (result is null)
+        var path = await _secretsStoreResolver.ResolvePathAsync(projectFile, environment, cancellationToken);
+        if (path is null)
         {
             return CommandResult.Failure(CliExitCodes.FailedToFindProject, SecretCommandStrings.CouldNotFindAppHost);
         }
 
-        InteractionService.DisplayRawText(result.AspireSecretsFilePath, consoleOverride: ConsoleOutput.Standard);
+        InteractionService.DisplayRawText(path, consoleOverride: ConsoleOutput.Standard);
         return CommandResult.Success();
     }
 }

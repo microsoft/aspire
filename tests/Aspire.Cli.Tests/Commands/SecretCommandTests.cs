@@ -15,6 +15,218 @@ namespace Aspire.Cli.Tests.Commands;
 
 public class SecretCommandTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData("get ConnectionStrings:db", "Development")]
+    [InlineData("set Parameters:other synthetic", "Development")]
+    [InlineData("list --format json", "Development")]
+    [InlineData("list --all --format json", "Development")]
+    [InlineData("delete ConnectionStrings:db", "Development")]
+    [InlineData("get ConnectionStrings:db", "Production")]
+    [InlineData("set Parameters:other synthetic", "Production")]
+    [InlineData("list --format json", "Production")]
+    [InlineData("list --all --format json", "Production")]
+    [InlineData("delete ConnectionStrings:db", "Production")]
+    [InlineData("get ConnectionStrings:db", "legacy")]
+    [InlineData("set Parameters:other synthetic", "legacy")]
+    [InlineData("list --format json", "legacy")]
+    [InlineData("list --all --format json", "legacy")]
+    [InlineData("delete ConnectionStrings:db", "legacy")]
+    [InlineData("get ConnectionStrings:db", "synthetic")]
+    [InlineData("set Parameters:other synthetic", "synthetic")]
+    [InlineData("list --format json", "synthetic")]
+    [InlineData("list --all --format json", "synthetic")]
+    [InlineData("delete ConnectionStrings:db", "synthetic")]
+    public async Task SecretCommands_InvalidJsonReportsFileAndPreservesContent(string arguments, string location)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var errorWriter = new StringWriter();
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        var userSecretsId = Guid.NewGuid().ToString("N");
+        var environment = location is "Production" ? "Production" : "Development";
+        var aspirePath = AspireSecretsStoreResolver.GetSecretsFilePath(workspace.WorkspaceRoot, userSecretsId, environment);
+        var path = location switch
+        {
+            "legacy" => UserSecretsPathHelper.GetSecretsPathFromSecretsId(userSecretsId),
+            "synthetic" => AspireSecretsStoreResolver.GetSecretsFilePath(
+                workspace.WorkspaceRoot, AspireSecretsPathHelper.ComputeSyntheticAppHostId(appHostFile.FullName), environment),
+            _ => aspirePath
+        };
+        const string malformedJson = """{"ConnectionStrings:db":"Data Source=0.0.0.0\sql;Database=Synthetic"}""";
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        await File.WriteAllTextAsync(path, malformedJson);
+
+        try
+        {
+            using var provider = CreateSecretTestServices(workspace, outputWriter, appHostFile, new TestAppHostProject(userSecretsId), errorWriter);
+            var command = provider.GetRequiredService<RootCommand>();
+
+            var environmentOption = arguments.Contains("--all", StringComparison.Ordinal) ? "" : $"-e {environment}";
+            var exitCode = await command.Parse($"secret {arguments} {environmentOption} --apphost \"{appHostFile.FullName}\"")
+                .InvokeAsync().DefaultTimeout();
+
+            Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+            var error = errorWriter.ToString();
+            Assert.Contains(path, error);
+            Assert.Contains("invalid JSON (line 1, byte position 46)", error);
+            Assert.Contains("Fix the JSON", error);
+            Assert.Contains(@"server\\sql", error);
+            Assert.Empty(outputWriter.Logs);
+            Assert.Equal(malformedJson, await File.ReadAllTextAsync(path));
+            Assert.Equal(location is "Development" or "Production", File.Exists(aspirePath));
+        }
+        finally
+        {
+            if (location is "legacy")
+            {
+                File.Delete(path);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task SecretDeleteCommand_MalformedLegacyWithCanonicalStorePreservesBothFiles()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var errorWriter = new StringWriter();
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        var userSecretsId = Guid.NewGuid().ToString("N");
+        var aspirePath = AspireSecretsStoreResolver.GetSecretsFilePath(workspace.WorkspaceRoot, userSecretsId, "Development");
+        var legacyPath = UserSecretsPathHelper.GetSecretsPathFromSecretsId(userSecretsId);
+        const string canonicalJson = """{"ConnectionStrings:db":"Data Source=0.0.0.0\\sql;Database=Synthetic"}""";
+        const string malformedJson = """{"ConnectionStrings:db":"Data Source=0.0.0.0\sql;Database=Synthetic"}""";
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+        Directory.CreateDirectory(Path.GetDirectoryName(aspirePath)!);
+        Directory.CreateDirectory(Path.GetDirectoryName(legacyPath)!);
+        await File.WriteAllTextAsync(aspirePath, canonicalJson);
+        await File.WriteAllTextAsync(legacyPath, malformedJson);
+
+        try
+        {
+            using var provider = CreateSecretTestServices(workspace, outputWriter, appHostFile, new TestAppHostProject(userSecretsId), errorWriter);
+            var command = provider.GetRequiredService<RootCommand>();
+
+            var exitCode = await command.Parse($"secret delete ConnectionStrings:db --apphost \"{appHostFile.FullName}\"")
+                .InvokeAsync().DefaultTimeout();
+
+            Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+            var error = errorWriter.ToString();
+            Assert.Contains(legacyPath, error);
+            Assert.Contains("invalid JSON (line 1, byte position 46)", error);
+            Assert.Contains("Fix the JSON", error);
+            Assert.Empty(outputWriter.Logs);
+            Assert.Equal(canonicalJson, await File.ReadAllTextAsync(aspirePath));
+            Assert.Equal(malformedJson, await File.ReadAllTextAsync(legacyPath));
+        }
+        finally
+        {
+            File.Delete(legacyPath);
+        }
+    }
+
+    [Theory]
+    [InlineData("Development")]
+    [InlineData("Production")]
+    public async Task SecretPathCommand_DoesNotLoadImportOrMigrateSecrets(string environment)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        var userSecretsId = Guid.NewGuid().ToString("N");
+        var expectedPath = AspireSecretsStoreResolver.GetSecretsFilePath(workspace.WorkspaceRoot, userSecretsId, environment);
+        var legacyPath = UserSecretsPathHelper.GetSecretsPathFromSecretsId(userSecretsId);
+        var syntheticPath = AspireSecretsStoreResolver.GetSecretsFilePath(
+            workspace.WorkspaceRoot, AspireSecretsPathHelper.ComputeSyntheticAppHostId(appHostFile.FullName), environment);
+        const string malformedJson = """{"ConnectionStrings:db":"Data Source=0.0.0.0\sql"}""";
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+        foreach (var path in new[] { legacyPath, syntheticPath })
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            await File.WriteAllTextAsync(path, malformedJson);
+        }
+
+        try
+        {
+            using var provider = CreateSecretTestServices(workspace, outputWriter, appHostFile, userSecretsId);
+            var command = provider.GetRequiredService<RootCommand>();
+            var arguments = $"secret path -e {environment} --apphost \"{appHostFile.FullName}\"";
+
+            Assert.Equal(CliExitCodes.Success, await command.Parse(arguments).InvokeAsync().DefaultTimeout());
+            Assert.Contains(expectedPath, outputWriter.Logs);
+            Assert.False(File.Exists(expectedPath));
+
+            Directory.CreateDirectory(Path.GetDirectoryName(expectedPath)!);
+            await File.WriteAllTextAsync(expectedPath, malformedJson);
+            outputWriter.Logs.Clear();
+
+            Assert.Equal(CliExitCodes.Success, await command.Parse(arguments).InvokeAsync().DefaultTimeout());
+            Assert.Contains(expectedPath, outputWriter.Logs);
+            foreach (var path in new[] { legacyPath, syntheticPath, expectedPath })
+            {
+                Assert.Equal(malformedJson, await File.ReadAllTextAsync(path));
+            }
+        }
+        finally
+        {
+            File.Delete(legacyPath);
+        }
+    }
+
+    [Fact]
+    public async Task SecretPathCommand_DoesNotInitializeUserSecrets()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+        var project = new TestAppHostProject(Guid.NewGuid().ToString("N"), initializeOnDemand: true);
+        var expectedPath = AspireSecretsStoreResolver.GetSecretsFilePath(
+            workspace.WorkspaceRoot, AspireSecretsPathHelper.ComputeSyntheticAppHostId(appHostFile.FullName), "Development");
+        using var provider = CreateSecretTestServices(workspace, outputWriter, appHostFile, project, errorWriter: null);
+        var command = provider.GetRequiredService<RootCommand>();
+
+        Assert.Equal(CliExitCodes.Success, await command.Parse($"secret path --apphost \"{appHostFile.FullName}\"").InvokeAsync().DefaultTimeout());
+        Assert.Contains(expectedPath, outputWriter.Logs);
+        Assert.False(project.IsInitialized);
+        Assert.False(Directory.Exists(Path.GetDirectoryName(expectedPath)));
+    }
+
+    [Theory]
+    [InlineData("Development")]
+    [InlineData("Production")]
+    public async Task SecretCommands_RoundTripEscapedBackslashes(string environment)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        var userSecretsId = Guid.NewGuid().ToString("N");
+        var path = AspireSecretsStoreResolver.GetSecretsFilePath(workspace.WorkspaceRoot, userSecretsId, environment);
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        await File.WriteAllTextAsync(path, """{"ConnectionStrings:db":"Data Source=0.0.0.0\\sql;Database=Synthetic"}""");
+        using var provider = CreateSecretTestServices(workspace, outputWriter, appHostFile, userSecretsId);
+        var command = provider.GetRequiredService<RootCommand>();
+        var options = $"-e {environment} --apphost \"{appHostFile.FullName}\"";
+        const string original = @"Data Source=0.0.0.0\sql;Database=Synthetic";
+        const string updated = @"Data Source=0.0.0.0\sql;Database=Updated";
+
+        Assert.Equal(CliExitCodes.Success, await command.Parse($"secret get ConnectionStrings:db {options}").InvokeAsync().DefaultTimeout());
+        Assert.Contains(original, outputWriter.Logs);
+        Assert.Equal(CliExitCodes.Success, await command.Parse($"secret set Parameters:other synthetic {options}").InvokeAsync().DefaultTimeout());
+        Assert.Equal(original, new SecretsStore(path).Get("ConnectionStrings:db"));
+        Assert.Equal(CliExitCodes.Success, await command.Parse(["secret", "set", "ConnectionStrings:db", updated, "-e", environment, "--apphost", appHostFile.FullName]).InvokeAsync().DefaultTimeout());
+        Assert.Equal(updated, new SecretsStore(path).Get("ConnectionStrings:db"));
+        outputWriter.Logs.Clear();
+        Assert.Equal(CliExitCodes.Success, await command.Parse($"secret list --format json {options}").InvokeAsync().DefaultTimeout());
+        var listed = JsonNode.Parse(string.Join(Environment.NewLine, outputWriter.Logs))!;
+        Assert.Equal(updated, listed["ConnectionStrings:db"]!.GetValue<string>());
+        Assert.Equal("synthetic", listed["Parameters:other"]!.GetValue<string>());
+        Assert.Equal(CliExitCodes.Success, await command.Parse($"secret delete ConnectionStrings:db {options}").InvokeAsync().DefaultTimeout());
+        Assert.Equal([KeyValuePair.Create("Parameters:other", "synthetic")], new SecretsStore(path).ToList());
+    }
+
     [Fact]
     public async Task SecretPathCommand_PrintsSecretsPath_ForDotNetAppHost()
     {
@@ -133,7 +345,7 @@ public class SecretCommandTests(ITestOutputHelper outputHelper)
         var userSecretsId = Guid.NewGuid().ToString("N");
         var project = new TestAppHostProject(userSecretsId, initializeOnDemand: true);
         await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
-        using var provider = CreateSecretTestServices(workspace, outputWriter, appHostFile, project);
+        using var provider = CreateSecretTestServices(workspace, outputWriter, appHostFile, project, errorWriter: null);
         var command = provider.GetRequiredService<RootCommand>();
         var projectOption = $"--apphost \"{appHostFile.FullName}\"";
         var syntheticPath = AspireSecretsStoreResolver.GetSecretsFilePath(
@@ -392,19 +604,21 @@ public class SecretCommandTests(ITestOutputHelper outputHelper)
         TestOutputTextWriter outputWriter,
         FileInfo appHostFile,
         string userSecretsId)
-        => CreateSecretTestServices(workspace, outputWriter, appHostFile, new TestAppHostProject(userSecretsId));
+        => CreateSecretTestServices(workspace, outputWriter, appHostFile, new TestAppHostProject(userSecretsId), errorWriter: null);
 
     private ServiceProvider CreateSecretTestServices(
         TemporaryWorkspace workspace,
         TestOutputTextWriter outputWriter,
         FileInfo appHostFile,
-        IAppHostProject project)
+        IAppHostProject project,
+        StringWriter? errorWriter)
     {
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.CliExecutionContextFactory = _ => TestExecutionContextHelper.CreateExecutionContext(
                 workspace.WorkspaceRoot, homeDirectory: workspace.WorkspaceRoot);
             options.OutputTextWriter = outputWriter;
+            options.ErrorTextWriter = errorWriter;
             options.DisableAnsi = true;
             options.ProjectLocatorFactory = _ => new TestProjectLocator(appHostFile);
         });

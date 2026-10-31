@@ -9,6 +9,7 @@ using Aspire.Cli.Configuration;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Secrets;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
@@ -182,6 +183,10 @@ internal abstract class BaseCommand : Command
                     tasksToAwait.Remove(stoppingMessageTcs.Task);
                 }
             }
+        }
+        catch (InvalidSecretsFileException ex)
+        {
+            result = CommandResult.Failure(CliExitCodes.InvalidCommand, ex.Message);
         }
         catch (ConfigSourceException ex)
         {

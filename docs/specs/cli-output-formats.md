@@ -641,7 +641,7 @@ The JSON form includes secret values. Do not redirect it to logs or files unless
 
 `aspire secret list --all --format json` groups the same secret objects by environment name. `--all` cannot be combined with `--environment`.
 
-`aspire secret get <key>` emits the secret value as raw text on stdout. `aspire secret path` emits the Aspire environment secrets file path as raw text on stdout.
+`aspire secret get <key>` emits the secret value as raw text on stdout. `aspire secret path` emits the Aspire environment secrets file path as raw text on stdout, without loading, importing, or migrating secrets. It can therefore locate the environment store even when its JSON is malformed. If a data operation encounters malformed JSON in an environment store, legacy user-secrets file, or migration source, it fails with the affected file path and one-based line and byte position so the file can be repaired. Invalid JSON is not automatically escaped or overwritten; a connection string containing `server\sql` must be stored in JSON as `"server\\sql"`.
 
 ### `aspire doctor`
 
