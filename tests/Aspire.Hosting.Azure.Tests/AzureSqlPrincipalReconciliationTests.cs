@@ -3,7 +3,9 @@
 
 using System.Text.RegularExpressions;
 using Aspire.TestUtilities;
+using DotNet.Testcontainers.Configurations;
 using Microsoft.Data.SqlClient;
+using Testcontainers.MsSql;
 
 namespace Aspire.Hosting.Azure.Tests;
 
@@ -27,7 +29,25 @@ public class AzureSqlPrincipalReconciliationTests(SqlServerContainerFixture fixt
 
     [Fact]
     [RequiresFeature(TestFeature.Testcontainers)]
-    [ActiveIssue("https://github.com/microsoft/aspire/issues/19014")]
+    public async Task SqlServerContainerPublishesItsPortOnLoopbackOnly()
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/19014: a wildcard random host
+        // port competes with the loopback ports DCP publishes for other tests' containers, and Docker
+        // Engine before 28.5 fails the start with "address already in use" when they collide.
+        var container = Assert.IsType<MsSqlContainer>(fixture.Container);
+        using var client = TestcontainersSettings.OS.DockerEndpointAuthConfig.GetDockerClientBuilder(Guid.NewGuid()).Build();
+
+        var inspect = await client.Containers.InspectContainerAsync(container.Id, TestContext.Current.CancellationToken);
+
+        var portBindings = inspect.HostConfig?.PortBindings;
+        Assert.NotNull(portBindings);
+        var bindings = Assert.Contains($"{MsSqlBuilder.MsSqlPort}/tcp", portBindings);
+        var binding = Assert.Single(bindings);
+        Assert.Equal(SqlServerContainerFixture.LoopbackHostIP, binding.HostIP);
+    }
+
+    [Fact]
+    [RequiresFeature(TestFeature.Testcontainers)]
     public async Task ReconciliationCreatesThePrincipalWithTheIdentityObjectIdAsItsSid()
     {
         var principalName = NewPrincipalName();
@@ -44,7 +64,6 @@ public class AzureSqlPrincipalReconciliationTests(SqlServerContainerFixture fixt
 
     [Fact]
     [RequiresFeature(TestFeature.Testcontainers)]
-    [ActiveIssue("https://github.com/microsoft/aspire/issues/19014")]
     public async Task ReconciliationHandlesPrincipalNamesRequiringEscaping()
     {
         // A user principal is a UPN and can contain an apostrophe, which has to survive the T-SQL
@@ -64,7 +83,6 @@ public class AzureSqlPrincipalReconciliationTests(SqlServerContainerFixture fixt
 
     [Fact]
     [RequiresFeature(TestFeature.Testcontainers)]
-    [ActiveIssue("https://github.com/microsoft/aspire/issues/19014")]
     public async Task ReconciliationIsANoOpWhenTheScriptRunsAgain()
     {
         // Changing the script content changes the deploymentScripts resource definition, so ARM
@@ -85,7 +103,6 @@ public class AzureSqlPrincipalReconciliationTests(SqlServerContainerFixture fixt
 
     [Fact]
     [RequiresFeature(TestFeature.Testcontainers)]
-    [ActiveIssue("https://github.com/microsoft/aspire/issues/19014")]
     public async Task ReconciliationReplacesThePrincipalWhenTheIdentityObjectIdChanges()
     {
         var principalName = NewPrincipalName();
@@ -110,7 +127,6 @@ public class AzureSqlPrincipalReconciliationTests(SqlServerContainerFixture fixt
 
     [Fact]
     [RequiresFeature(TestFeature.Testcontainers)]
-    [ActiveIssue("https://github.com/microsoft/aspire/issues/19014")]
     public async Task ReconciliationLeavesPrincipalsItDidNotCreateIntact()
     {
         var principalName = NewPrincipalName();
@@ -140,7 +156,6 @@ public class AzureSqlPrincipalReconciliationTests(SqlServerContainerFixture fixt
 
     [Fact]
     [RequiresFeature(TestFeature.Testcontainers)]
-    [ActiveIssue("https://github.com/microsoft/aspire/issues/19014")]
     public async Task ReconciliationRollsBackWhenTheUserCannotBeRecreated()
     {
         var principalName = NewPrincipalName();
@@ -164,7 +179,6 @@ public class AzureSqlPrincipalReconciliationTests(SqlServerContainerFixture fixt
 
     [Fact]
     [RequiresFeature(TestFeature.Testcontainers)]
-    [ActiveIssue("https://github.com/microsoft/aspire/issues/19014")]
     public async Task ReconciliationFailsWithoutDamageWhenThePrincipalOwnsASchema()
     {
         var principalName = NewPrincipalName();
