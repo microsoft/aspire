@@ -246,14 +246,14 @@ internal sealed class ResourceCommand : BaseCommand
 
     private static List<ResourceSnapshotCommandArgument> OrderByDependencies(ResourceSnapshotCommandArgument[] argumentInputs)
     {
-        var inputsByName = new Dictionary<string, ResourceSnapshotCommandArgument>(StringComparer.Ordinal);
+        var inputsByName = new Dictionary<string, ResourceSnapshotCommandArgument>(StringComparers.InteractionInputName);
         foreach (var input in argumentInputs)
         {
             inputsByName.TryAdd(input.Name, input);
         }
 
         var ordered = new List<ResourceSnapshotCommandArgument>(argumentInputs.Length);
-        var visited = new HashSet<string>(StringComparer.Ordinal);
+        var visited = new HashSet<string>(StringComparers.InteractionInputName);
 
         void Visit(ResourceSnapshotCommandArgument input)
         {
@@ -306,7 +306,7 @@ internal sealed class ResourceCommand : BaseCommand
             },
             cancellationToken).ConfigureAwait(false);
 
-        return response.ArgumentInputs?.FirstOrDefault(loaded => string.Equals(loaded.Name, input.Name, StringComparison.Ordinal)) ?? input;
+        return response.ArgumentInputs?.FirstOrDefault(loaded => string.Equals(loaded.Name, input.Name, StringComparisons.InteractionInputName)) ?? input;
     }
 
     private async Task<string?> PromptForCommandArgumentAsync(ResourceSnapshotCommandArgument input, CancellationToken cancellationToken)
