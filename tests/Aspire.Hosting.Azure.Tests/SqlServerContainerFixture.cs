@@ -72,7 +72,8 @@ public sealed class SqlServerContainerFixture : IAsyncLifetime
 
     // Mirrors how Testcontainers resolves the container hostname: a local socket or pipe means the daemon
     // shares this process's loopback unless the tests themselves run inside a container (where Testcontainers
-    // connects through the bridge gateway), and a TCP endpoint is only local when it targets loopback.
+    // connects through the bridge gateway). For a TCP endpoint Testcontainers connects to the endpoint's host
+    // verbatim, so it must be exactly the address the port is published on; [::1] or 127.0.0.2 would not reach it.
     private static bool CanReachDaemonLoopback()
     {
         if (!string.IsNullOrEmpty(TestcontainersSettings.DockerHostOverride))
@@ -84,7 +85,7 @@ public sealed class SqlServerContainerFixture : IAsyncLifetime
         return endpoint.Scheme switch
         {
             "unix" or "npipe" => !File.Exists(Path.Combine(Path.GetPathRoot(Directory.GetCurrentDirectory()) ?? "/", ".dockerenv")),
-            _ => endpoint.IsLoopback
+            _ => endpoint.HostNameType == UriHostNameType.IPv4 && endpoint.Host == LoopbackHostIP
         };
     }
 }
