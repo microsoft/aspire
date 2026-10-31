@@ -8,6 +8,7 @@
     <!-- The first stable release is 17.0.0; older repository baselines have no stable Dotnet package.
          Keep package validation enabled and resume baseline comparisons once that release is the baseline. -->
     <DisablePackageBaselineValidation Condition="'$(PackageValidationBaselineVersion)' != '' and $([MSBuild]::VersionLessThan('$(PackageValidationBaselineVersion)', '17.0.0'))">true</DisablePackageBaselineValidation>
+    <EnableAspireIntegrationAnalyzers>true</EnableAspireIntegrationAnalyzers>
   </PropertyGroup>
 
   <ItemGroup>
