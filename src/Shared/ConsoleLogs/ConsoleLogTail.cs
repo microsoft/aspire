@@ -23,15 +23,16 @@ namespace Aspire.Shared.ConsoleLogs;
 internal sealed class ConsoleLogTailBuffer<T>
 {
     // [sys] lines older than every kept application line can never be returned again, because the earliest
-    // kept application line only moves forward. Prune them once there are this many so a long-running
-    // resource with many restarts doesn't keep every [sys] line in memory.
-    private const int SystemLinePruneThreshold = 1024;
+    // kept application line only moves forward. They're pruned when that boundary advances, once the list has
+    // grown past a threshold that doubles with the lines that survive, so pruning is amortized O(1) per line.
+    private const int MinimumSystemLinePruneThreshold = 1024;
 
     private readonly int _tail;
     private readonly Func<T, bool> _isSystemLog;
     private readonly Func<T, DateTimeOffset?>? _getTimestamp;
     private readonly PriorityQueue<Entry, Entry> _applicationLines;
     private readonly List<Entry> _systemLines = [];
+    private int _systemLinePruneThreshold = MinimumSystemLinePruneThreshold;
     private DateTimeOffset _lastTimestamp = DateTimeOffset.MinValue;
     private long _sequence;
 
@@ -43,7 +44,8 @@ internal sealed class ConsoleLogTailBuffer<T>
         _tail = tail;
         _isSystemLog = isSystemLog;
         _getTimestamp = getTimestamp;
-        _applicationLines = new PriorityQueue<Entry, Entry>(tail + 1, EntryComparer.Instance);
+        // Don't size the queue from the tail: it can be as large as int.MaxValue while the log history is small.
+        _applicationLines = new PriorityQueue<Entry, Entry>(EntryComparer.Instance);
     }
 
     public IEnumerable<T> Items
@@ -82,11 +84,10 @@ internal sealed class ConsoleLogTailBuffer<T>
 
         if (_isSystemLog(item))
         {
-            _systemLines.Add(entry);
-            if (_systemLines.Count > SystemLinePruneThreshold && _applicationLines.Count == _tail)
+            // A full window never moves back, so a [sys] line older than it can be discarded right away.
+            if (_applicationLines.Count < _tail || EntryComparer.Instance.Compare(entry, _applicationLines.Peek()) > 0)
             {
-                var earliestKept = _applicationLines.Peek();
-                _systemLines.RemoveAll(e => EntryComparer.Instance.Compare(e, earliestKept) < 0);
+                _systemLines.Add(entry);
             }
 
             return;
@@ -96,8 +97,23 @@ internal sealed class ConsoleLogTailBuffer<T>
         if (_applicationLines.Count > _tail)
         {
             _applicationLines.Dequeue();
+            PruneSystemLines();
         }
     }
+
+    private void PruneSystemLines()
+    {
+        if (_systemLines.Count <= _systemLinePruneThreshold)
+        {
+            return;
+        }
+
+        var earliestKept = _applicationLines.Peek();
+        _systemLines.RemoveAll(e => EntryComparer.Instance.Compare(e, earliestKept) < 0);
+        _systemLinePruneThreshold = Math.Max(MinimumSystemLinePruneThreshold, _systemLines.Count * 2);
+    }
+
+    internal int RetainedSystemLineCount => _systemLines.Count;
 
     private readonly record struct Entry(T Item, DateTimeOffset Timestamp, long Sequence);
 

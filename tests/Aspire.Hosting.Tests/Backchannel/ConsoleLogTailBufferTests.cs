@@ -104,6 +104,56 @@ public class ConsoleLogTailBufferTests
             buffer.Items);
     }
 
+    [Fact]
+    public void Add_AcceptsMaximumTailWithoutPreallocating()
+    {
+        var buffer = CreateServerBuffer(tail: int.MaxValue);
+        buffer.Add("2026-01-01T00:00:01.0000000Z [sys] Starting process...");
+        buffer.Add("2026-01-01T00:00:02.0000000Z app line 1");
+
+        Assert.Equal(
+            [
+                "2026-01-01T00:00:01.0000000Z [sys] Starting process...",
+                "2026-01-01T00:00:02.0000000Z app line 1"
+            ],
+            buffer.Items);
+    }
+
+    [Fact]
+    public void Add_DiscardsSystemLinesOlderThanAFullWindow()
+    {
+        var buffer = CreateServerBuffer(tail: 1);
+        buffer.Add("2026-01-01T00:00:05.0000000Z app line");
+        buffer.Add("2026-01-01T00:00:01.0000000Z [sys] Starting process...");
+
+        Assert.Equal(0, buffer.RetainedSystemLineCount);
+        Assert.Equal(["2026-01-01T00:00:05.0000000Z app line"], buffer.Items);
+    }
+
+    [Fact]
+    public void Add_PrunesSystemLinesWhenTheWindowAdvances()
+    {
+        var buffer = CreateServerBuffer(tail: 1);
+        var start = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        buffer.Add($"{start:o} app line 0");
+
+        // Many restarts after the last application line are all inside the window and must be kept.
+        const int restarts = 50_000;
+        for (var i = 1; i <= restarts; i++)
+        {
+            buffer.Add($"{start.AddMilliseconds(i):o} [sys] restart {i}");
+        }
+
+        Assert.Equal(restarts, buffer.RetainedSystemLineCount);
+        Assert.Equal(restarts + 1, buffer.Items.Count());
+
+        // A newer application line moves the window past every restart, so they're pruned.
+        buffer.Add($"{start.AddMilliseconds(restarts + 1):o} app line 1");
+
+        Assert.Equal(0, buffer.RetainedSystemLineCount);
+        Assert.Equal([$"{start.AddMilliseconds(restarts + 1):o} app line 1"], buffer.Items);
+    }
+
     private static ConsoleLogTailBuffer<string> CreateServerBuffer(int tail) =>
         new(tail, ConsoleLogTail.IsSystemLogWithOptionalTimestamp, ConsoleLogTail.GetTimestamp);
 }
