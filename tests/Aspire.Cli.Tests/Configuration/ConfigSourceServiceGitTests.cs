@@ -293,7 +293,7 @@ public class ConfigSourceServiceGitTests(ITestOutputHelper outputHelper) : IDisp
         Assert.True(startInfo.CreateNoWindow);
         Assert.True(startInfo.RedirectStandardOutput);
         Assert.True(startInfo.RedirectStandardError);
-        Assert.False(startInfo.RedirectStandardInput);
+        Assert.True(startInfo.RedirectStandardInput);
     }
 
     [Theory]
@@ -315,7 +315,7 @@ public class ConfigSourceServiceGitTests(ITestOutputHelper outputHelper) : IDisp
 
         Assert.Equal(expectedInteractive ? "1" : "0", startInfo.Environment["GIT_TERMINAL_PROMPT"]);
         Assert.Equal(!expectedInteractive, startInfo.CreateNoWindow);
-        Assert.False(startInfo.RedirectStandardInput);
+        Assert.Equal(!expectedInteractive, startInfo.RedirectStandardInput);
         Assert.Equal(!expectedInteractive, startInfo.RedirectStandardOutput);
         Assert.Equal(!expectedInteractive, startInfo.RedirectStandardError);
         Assert.Equal(!expectedInteractive, startInfo.StandardOutputEncoding is not null);
@@ -338,7 +338,7 @@ public class ConfigSourceServiceGitTests(ITestOutputHelper outputHelper) : IDisp
 
         var startInfo = runner.CreateStartInfo(workspace.Path, ["ls-remote", "--", "repository", "HEAD"], GitCommandMode.Interactive);
 
-        Assert.False(startInfo.RedirectStandardInput);
+        Assert.Equal(!interactive, startInfo.RedirectStandardInput);
         Assert.True(startInfo.RedirectStandardOutput);
         Assert.Equal(!interactive, startInfo.RedirectStandardError);
         Assert.Equal(!interactive, startInfo.StandardErrorEncoding is not null);

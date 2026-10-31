@@ -11,7 +11,7 @@ using Microsoft.Extensions.Logging.Testing;
 
 namespace Aspire.Cli.Tests.Git;
 
-public class GitCommandRunnerTests(ITestOutputHelper outputHelper) : IDisposable
+public partial class GitCommandRunnerTests(ITestOutputHelper outputHelper) : IDisposable
 {
     private readonly ILoggerFactory _loggerFactory = LoggerFactory.Create(builder => builder.SetMinimumLevel(LogLevel.Trace).AddXunit(outputHelper));
 

@@ -726,6 +726,7 @@ internal sealed class ConfigSourceService(
         {
             GitFailure.Unavailable => ConfigSourceStrings.GitNotFound,
             GitFailure.AuthenticationFailed => ConfigSourceStrings.AuthenticationFailed,
+            GitFailure.UnattendedSshUnsupported => exception.Message,
             _ => ConfigSourceStrings.RepositoryUnavailable
         });
 
