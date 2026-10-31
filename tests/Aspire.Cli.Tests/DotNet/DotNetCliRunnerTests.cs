@@ -1950,15 +1950,16 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
                 invocationOptions.StandardOutputCallback?.Invoke("----------");
                 invocationOptions.StandardOutputCallback?.Invoke($"Project1{Path.DirectorySeparatorChar}Project1.csproj");
                 invocationOptions.StandardOutputCallback?.Invoke($"Project2{Path.DirectorySeparatorChar}Project2.csproj");
+                invocationOptions.StandardOutputCallback?.Invoke($"Project3{Path.DirectorySeparatorChar}Project3.fsproj");
+                invocationOptions.StandardOutputCallback?.Invoke($"Project4{Path.DirectorySeparatorChar}Project4.VBPROJ");
+                invocationOptions.StandardOutputCallback?.Invoke($"Project5{Path.DirectorySeparatorChar}Project5.esproj");
             },
             0);
 
         var (exitCode, projects) = await runner.GetSolutionProjectsAsync(solutionFile, options, CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(0, exitCode);
-        Assert.Equal(2, projects.Count);
-        Assert.Contains(projects, p => p.Name == "Project1.csproj");
-        Assert.Contains(projects, p => p.Name == "Project2.csproj");
+        Assert.Equal(["Project1.csproj", "Project2.csproj", "Project3.fsproj", "Project4.VBPROJ"], projects.Select(p => p.Name));
     }
 
     [Fact]

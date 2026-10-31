@@ -857,7 +857,8 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
             {
                 // "*.sln" alone also matches ".slnx" on Windows, so filter on the exact extension.
                 solutionFiles = directory.GetFiles("*.sln*")
-                    .Where(file => file.Extension is ".sln" or ".slnx")
+                    .Where(file => string.Equals(file.Extension, ".sln", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(file.Extension, ".slnx", StringComparison.OrdinalIgnoreCase))
                     .ToArray();
             }
             catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
