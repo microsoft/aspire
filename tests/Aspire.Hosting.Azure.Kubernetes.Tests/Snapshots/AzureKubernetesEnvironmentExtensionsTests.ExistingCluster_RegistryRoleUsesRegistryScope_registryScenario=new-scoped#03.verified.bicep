@@ -1,0 +1,19 @@
+﻿@description('The location for the resource(s) to be deployed.')
+param location string = resourceGroup().location
+
+resource registry 'Microsoft.ContainerRegistry/registries@2025-04-01' = {
+  name: take('registry${uniqueString(resourceGroup().id)}', 50)
+  location: location
+  sku: {
+    name: 'Basic'
+  }
+  tags: {
+    'aspire-resource-name': 'registry'
+  }
+}
+
+output name string = registry.name
+
+output loginServer string = registry.properties.loginServer
+
+output id string = registry.id

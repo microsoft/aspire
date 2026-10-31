@@ -39,6 +39,11 @@ public class AzureProvisioningResource(string name, Action<AzureResourceInfrastr
     public Action<AzureResourceInfrastructure> ConfigureInfrastructure { get; internal set; } = configureInfrastructure ?? throw new ArgumentNullException(nameof(configureInfrastructure));
 
     /// <summary>
+    /// Gets whether the resource handles its existing-reference scope inside its own Bicep template.
+    /// </summary>
+    internal bool HandlesExistingResourceScopeInTemplate { get; private set; }
+
+    /// <summary>
     /// Gets or sets the <see cref="global::Azure.Provisioning.ProvisioningBuildOptions"/> which contains common settings and
     /// functionality for building Azure resources.
     /// </summary>
@@ -225,12 +230,21 @@ public class AzureProvisioningResource(string name, Action<AzureResourceInfrastr
         ((IBicepValue)existingResourceName).Self = new BicepValueReference(provisionableResource, "Name", ["name"]);
         provisionableResource.ProvisionableProperties["name"] = existingResourceName;
 
-        var resourceScope = (aspireResource as AzureBicepResource)?.Scope ??
-            AzureBicepResourceScope.FromExistingResourceAnnotation(existingAnnotation);
+        var annotationScope = AzureBicepResourceScope.FromExistingResourceAnnotation(existingAnnotation);
+        var moduleScope = (aspireResource as AzureBicepResource)?.Scope;
+        // Compute environments can deploy supporting infrastructure separately from the existing compute.
+        var resourceScope = aspireResource is IAzureComputeEnvironmentResource
+            ? annotationScope ?? moduleScope
+            : moduleScope ?? annotationScope;
         if (resourceScope is { } scope &&
             !ScopeEquals(scope, infra.AspireResource.Scope))
         {
             SetScopeProperty(provisionableResource, CreateScopeExpression(scope, infra));
+        }
+
+        if (ReferenceEquals(aspireResource, infra.AspireResource))
+        {
+            infra.AspireResource.HandlesExistingResourceScopeInTemplate = true;
         }
 
         return true;
