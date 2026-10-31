@@ -7,6 +7,7 @@ using System.Xml;
 using System.Xml.Linq;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
+using Aspire.Shared;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -17,6 +18,9 @@ namespace Aspire.Hosting.Dotnet;
 /// </summary>
 internal sealed class DotnetProjectBuildResource : ExecutableResource, IDisposable
 {
+    private const string BuildLogFileName = "build.log";
+    private static readonly TimeSpan s_runningBuildWaitTimeout = TimeSpan.FromMinutes(5);
+
     private readonly object _lock = new();
     private readonly List<string> _projectPaths = [];
     private readonly Dictionary<string, string> _projectPathsByIdentity = new(StringComparer.Ordinal);
@@ -209,6 +213,63 @@ internal sealed class DotnetProjectBuildResource : ExecutableResource, IDisposab
 
     internal bool IsBuildProjectLeaseActive(string hash) =>
         _artifactManager.IsLeaseActive(hash);
+
+    /// <summary>
+    /// Gets the file that the coordinated build writes its MSBuild file log to, or <see langword="null"/> when
+    /// MSBuild cannot address the build directory in logger parameters.
+    /// </summary>
+    /// <remarks>
+    /// MSBuild's file logger keeps this file open with write access for the lifetime of the build process, so an
+    /// open handle also marks a coordinated build that is still running in this directory. That build can outlive
+    /// the AppHost that launched it: <c>aspire stop</c> returns once the AppHost exits, DCP cleans up afterwards,
+    /// and <c>dotnet build</c> keeps running after SIGTERM.
+    /// </remarks>
+    internal string? BuildLogPath =>
+        // MSBuild splits logger parameters on ';' and does not honor quoting in LogFile.
+        BuildDirectory.Contains(';') ? null : Path.Combine(BuildDirectory, BuildLogFileName);
+
+    /// <summary>
+    /// Waits until no other coordinated build process is writing <see cref="BuildLogPath"/>.
+    /// </summary>
+    /// <remarks>
+    /// Two builds of the same projects write the same intermediate outputs, so a build started while a previous
+    /// AppHost's build is still running can fail with sharing violations (for example in static web asset
+    /// compression). Waiting for the previous build is enough: once it finishes, this build is incremental.
+    /// </remarks>
+    internal async Task WaitForRunningBuildAsync(ILogger logger, CancellationToken cancellationToken)
+    {
+        if (BuildLogPath is not { } buildLogPath)
+        {
+            return;
+        }
+
+        using (var buildLog = FileLock.TryAcquire(buildLogPath))
+        {
+            if (buildLog is not null)
+            {
+                return;
+            }
+        }
+
+        logger.LogInformation(
+            "Waiting for a coordinated build that is still running in '{BuildDirectory}' to finish before building.",
+            BuildDirectory);
+        try
+        {
+            using var buildLog = await FileLock.AcquireAsync(
+                buildLogPath,
+                cancellationToken,
+                s_runningBuildWaitTimeout).ConfigureAwait(false);
+        }
+        catch (TimeoutException ex)
+        {
+            logger.LogWarning(
+                ex,
+                "A coordinated build in '{BuildDirectory}' is still running after {Timeout}. Building anyway.",
+                BuildDirectory,
+                s_runningBuildWaitTimeout);
+        }
+    }
 
     /// <inheritdoc/>
     public void Dispose()
