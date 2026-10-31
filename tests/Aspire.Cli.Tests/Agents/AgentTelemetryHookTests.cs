@@ -3,18 +3,50 @@
 
 using System.Text.RegularExpressions;
 using Aspire.Cli.Agents.Hooks;
+using Aspire.Cli.Mcp;
 using Aspire.Cli.Tests.Utils;
 
 namespace Aspire.Cli.Tests.Agents;
 
 public class AgentTelemetryHookTests
 {
+    public static IEnumerable<object[]> CanonicalMcpToolNames =>
+        KnownMcpTools.All.SelectMany(tool => new[] { "aspire-", "mcp__aspire__", "mcp_aspire_" }
+            .Select(prefix => new object[] { prefix + tool }));
+
+    [Theory]
+    [MemberData(nameof(CanonicalMcpToolNames))]
+    public void CanonicalMcpToolsAreClassifiedOffline(string toolName)
+    {
+        var args = AgentTelemetryHook.Classify($$"""{"toolName":"{{toolName}}"}""", new TestEnvironment(), AgentTelemetryHook.DefaultMaxPayloadCharacters);
+        Assert.NotNull(args);
+        Assert.Equal("tool_invocation", args[Array.IndexOf(args, "--event-type") + 1]);
+        Assert.Equal(toolName, args[Array.IndexOf(args, "--tool-name") + 1]);
+    }
+
+    [Theory]
+    [InlineData("SKILL.md", "skill_invocation", "--skill-name", "aspire-terminals")]
+    [InlineData("references/apphost-terminals.md", "reference_file_read", "--file-reference", "aspire-terminals/references/apphost-terminals.md")]
+    [InlineData("references/automation-and-cli.md", "reference_file_read", "--file-reference", "aspire-terminals/references/automation-and-cli.md")]
+    [InlineData("references/resource-terminals.md", "reference_file_read", "--file-reference", "aspire-terminals/references/resource-terminals.md")]
+    [InlineData("references/tapes.md", "reference_file_read", "--file-reference", "aspire-terminals/references/tapes.md")]
+    public void TerminalSkillReadsAreClassified(string path, string eventType, string dimension, string value)
+    {
+        var args = AgentTelemetryHook.Classify(
+            $$"""{"tool_name":"Read","tool_input":{"file_path":"/workspace/skills/aspire-terminals/{{path}}"}}""",
+            new TestEnvironment(), AgentTelemetryHook.DefaultMaxPayloadCharacters);
+        Assert.NotNull(args);
+        Assert.Equal(eventType, args[Array.IndexOf(args, "--event-type") + 1]);
+        Assert.Equal(value, args[Array.IndexOf(args, dimension) + 1]);
+    }
+
     [Theory]
     [InlineData("{}")]
     [InlineData("null")]
     [InlineData("{ malformed")]
     [InlineData("""{"toolName":"bash","toolArgs":{"command":"aspire run"}}""")]
     [InlineData("""{"toolName":"Read","tool_input":{"file_path":"/skills/third-party/SKILL.md"}}""")]
+    [InlineData("""{"toolName":"Read","tool_input":{"file_path":"/skills/aspire-terminals/references/private-notes.md"}}""")]
     public void UnrelatedOrMalformedEventsDoNotInitializeCli(string payload)
     {
         Assert.Null(AgentTelemetryHook.Classify(payload, new TestEnvironment(), AgentTelemetryHook.DefaultMaxPayloadCharacters));
@@ -29,6 +61,18 @@ public class AgentTelemetryHookTests
         Assert.NotNull(args);
         Assert.Equal("aspire", args[Array.IndexOf(args, "--skill-name") + 1]);
         Assert.Equal("skill_invocation", args[Array.IndexOf(args, "--event-type") + 1]);
+    }
+
+    [Theory]
+    [InlineData("aspire-terminals")]
+    [InlineData("aspire:aspire-terminals")]
+    public void TerminalSkillInvocationsAreClassified(string skill)
+    {
+        var args = AgentTelemetryHook.Classify($$"""{"toolName":"skill","toolArgs":{"skill":"{{skill}}"}}""",
+            new TestEnvironment(), AgentTelemetryHook.DefaultMaxPayloadCharacters);
+        Assert.NotNull(args);
+        Assert.Equal("skill_invocation", args[Array.IndexOf(args, "--event-type") + 1]);
+        Assert.Equal("aspire-terminals", args[Array.IndexOf(args, "--skill-name") + 1]);
     }
 
     [Theory]

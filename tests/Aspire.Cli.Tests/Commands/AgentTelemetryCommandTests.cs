@@ -48,6 +48,10 @@ public class AgentTelemetryCommandTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData("""{"toolName":"skill","toolArgs":{"skill":"aspire"}}""", "skill_invocation", TelemetryConstants.Tags.AgentSkillName, "aspire")]
     [InlineData("""{"toolName":"aspire-list_resources"}""", "tool_invocation", TelemetryConstants.Tags.AgentToolName, "aspire-list_resources")]
+    [InlineData("""{"toolName":"aspire-wait_for_resources"}""", "tool_invocation", TelemetryConstants.Tags.AgentToolName, "aspire-wait_for_resources")]
+    [InlineData("""{"toolName":"skill","toolArgs":{"skill":"aspire-terminals"}}""", "skill_invocation", TelemetryConstants.Tags.AgentSkillName, "aspire-terminals")]
+    [InlineData("""{"toolName":"view","toolArgs":{"path":"/skills/aspire-terminals/references/tapes.md"}}""",
+        "reference_file_read", TelemetryConstants.Tags.AgentFileReference, "aspire-terminals/references/tapes.md")]
     [InlineData("""{"toolName":"view","toolArgs":{"path":"/skills/aspire-deployment/references/azure.md"}}""",
         "reference_file_read", TelemetryConstants.Tags.AgentFileReference, "aspire-deployment/references/azure.md")]
     public async Task NativeHook_InitializesOnDemandAndPreservesEvents(string payload, string eventType, string dimension, string value)

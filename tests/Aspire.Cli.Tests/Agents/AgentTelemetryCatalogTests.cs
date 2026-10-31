@@ -7,11 +7,27 @@ using System.Text;
 using System.Text.Json;
 using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Agents.Hooks;
+using Aspire.Cli.Mcp;
 
 namespace Aspire.Cli.Tests.Agents;
 
 public class AgentTelemetryCatalogTests
 {
+    [Fact]
+    public void BundledCatalogIncludesCanonicalMcpToolsAndTerminalRegistrations()
+    {
+        var catalog = AgentTelemetryCatalog.Bundled;
+        foreach (var tool in KnownMcpTools.All)
+        {
+            Assert.Contains(tool, catalog.Tools);
+        }
+        Assert.Contains("aspire-terminals", catalog.Skills);
+        foreach (var reference in new[] { "apphost-terminals.md", "automation-and-cli.md", "resource-terminals.md", "tapes.md" })
+        {
+            Assert.Contains($"aspire-terminals/references/{reference}", catalog.References);
+        }
+    }
+
     private const string Script = """ASPIRE_MCP_TOOLS="new_tool" """;
     private const string Manifest = """
         {

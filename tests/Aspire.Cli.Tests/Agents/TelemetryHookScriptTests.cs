@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using Aspire.Cli.Agents.Hooks;
+using Aspire.Cli.Mcp;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
@@ -26,9 +27,12 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
     private const string CaptureFileEnvName = "ASPIRE_HOOK_TEST_CAPTURE_FILE";
     private const string ContinueResponse = """{"continue":true}""";
 
+    public static IEnumerable<object[]> CanonicalMcpToolNames => KnownMcpTools.All.Select(tool => new object[] { tool });
+
     [Theory]
     [InlineData("aspire")]
     [InlineData("aspire-project-v2-migration")]
+    [InlineData("aspire-terminals")]
     [RequiresTools(["bash"])]
     [SkipOnPlatform(TestPlatforms.Windows, "The shell hook targets POSIX shells; the PowerShell hook covers Windows.")]
     public async Task Bash_SkillInvocation_Copilot_ForwardsSkillName(string skillName)
@@ -86,25 +90,30 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
         AssertArg(args, "--skill-name", "aspire");
     }
 
-    [Fact]
+    [Theory]
+    [MemberData(nameof(CanonicalMcpToolNames))]
     [RequiresTools(["bash"])]
     [SkipOnPlatform(TestPlatforms.Windows, "The shell hook targets POSIX shells; the PowerShell hook covers Windows.")]
-    public async Task Bash_McpTool_Claude_ForwardsToolName()
+    public async Task Bash_McpTool_Claude_ForwardsToolName(string tool)
     {
         var run = await RunBashHookAsync(
-            """{"hook_event_name":"PostToolUse","tool_name":"mcp__aspire__list_resources"}""");
+            $$"""{"hook_event_name":"PostToolUse","tool_name":"mcp__aspire__{{tool}}"}""");
 
         AssertContinue(run);
         var args = AssertInvoked(run);
         AssertArg(args, "--event-type", "tool_invocation");
         AssertArg(args, "--client-name", "claude-code");
-        AssertArg(args, "--tool-name", "mcp__aspire__list_resources");
+        AssertArg(args, "--tool-name", $"mcp__aspire__{tool}");
     }
 
     [Theory]
     [InlineData("aspire-deployment/references/azure.md")]
     [InlineData("aspire-project-v2-migration/references/compatibility-and-validation.md")]
     [InlineData("aspire-project-v2-migration/references/migration-patterns.md")]
+    [InlineData("aspire-terminals/references/apphost-terminals.md")]
+    [InlineData("aspire-terminals/references/automation-and-cli.md")]
+    [InlineData("aspire-terminals/references/resource-terminals.md")]
+    [InlineData("aspire-terminals/references/tapes.md")]
     [RequiresTools(["bash"])]
     [SkipOnPlatform(TestPlatforms.Windows, "The shell hook targets POSIX shells; the PowerShell hook covers Windows.")]
     public async Task Bash_ReferenceFileRead_ForwardsRelativePath(string referencePath)
@@ -123,6 +132,7 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData("""{"toolName":"aspire-unlisted_tool"}""")]
     [InlineData("""{"toolName":"view","toolArgs":{"path":".agents/skills/aspire/references/private-notes.md"}}""")]
+    [InlineData("""{"toolName":"view","toolArgs":{"path":".agents/skills/aspire-terminals/references/private-notes.md"}}""")]
     [RequiresTools(["bash"])]
     [SkipOnPlatform(TestPlatforms.Windows, "The shell hook targets POSIX shells; the PowerShell hook covers Windows.")]
     public async Task Bash_UnlistedToolOrReference_DoesNotInvokeCli(string payload)
@@ -285,6 +295,7 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData("aspire")]
     [InlineData("aspire-project-v2-migration")]
+    [InlineData("aspire-terminals")]
     [RequiresTools(["pwsh"])]
     public async Task Pwsh_SkillInvocation_Copilot_ForwardsSkillName(string skillName)
     {
@@ -339,18 +350,19 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
         AssertArg(args, "--skill-name", "aspire");
     }
 
-    [Fact]
+    [Theory]
+    [MemberData(nameof(CanonicalMcpToolNames))]
     [RequiresTools(["pwsh"])]
-    public async Task Pwsh_McpTool_Claude_ForwardsToolName()
+    public async Task Pwsh_McpTool_Claude_ForwardsToolName(string tool)
     {
         var run = await RunPwshHookAsync(
-            """{"hook_event_name":"PostToolUse","tool_name":"mcp__aspire__list_resources"}""");
+            $$"""{"hook_event_name":"PostToolUse","tool_name":"mcp__aspire__{{tool}}"}""");
 
         AssertContinue(run);
         var args = AssertInvoked(run);
         AssertArg(args, "--event-type", "tool_invocation");
         AssertArg(args, "--client-name", "claude-code");
-        AssertArg(args, "--tool-name", "mcp__aspire__list_resources");
+        AssertArg(args, "--tool-name", $"mcp__aspire__{tool}");
     }
 
     [Fact]
@@ -390,6 +402,10 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
     [InlineData("aspire-deployment/references/azure.md")]
     [InlineData("aspire-project-v2-migration/references/compatibility-and-validation.md")]
     [InlineData("aspire-project-v2-migration/references/migration-patterns.md")]
+    [InlineData("aspire-terminals/references/apphost-terminals.md")]
+    [InlineData("aspire-terminals/references/automation-and-cli.md")]
+    [InlineData("aspire-terminals/references/resource-terminals.md")]
+    [InlineData("aspire-terminals/references/tapes.md")]
     [RequiresTools(["pwsh"])]
     public async Task Pwsh_ReferenceFileRead_ForwardsRelativePath(string referencePath)
     {
@@ -407,6 +423,7 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData("""{"toolName":"aspire-unlisted_tool"}""")]
     [InlineData("""{"toolName":"view","toolArgs":{"path":".agents/skills/aspire/references/private-notes.md"}}""")]
+    [InlineData("""{"toolName":"view","toolArgs":{"path":".agents/skills/aspire-terminals/references/private-notes.md"}}""")]
     [RequiresTools(["pwsh"])]
     public async Task Pwsh_UnlistedToolOrReference_DoesNotInvokeCli(string payload)
     {

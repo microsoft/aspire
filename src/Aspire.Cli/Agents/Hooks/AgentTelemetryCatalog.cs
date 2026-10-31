@@ -99,7 +99,20 @@ internal sealed partial class AgentTelemetryCatalog
         using var stream = typeof(AgentTelemetryCatalog).Assembly.GetManifestResourceStream(TelemetryHookInstaller.ShellResourceName)
             ?? throw new InvalidDataException("The bundled telemetry hook is missing.");
         using var reader = new StreamReader(stream);
-        return Parse(manifest, reader.ReadToEnd());
+        var catalog = Parse(manifest, reader.ReadToEnd());
+
+        // Telemetry can recognize newly published skills before the bundled manifest advances.
+        // Keep these explicit registrations additive so later manifest entries are preserved.
+        var skills = new HashSet<string>(catalog.Skills, StringComparer.OrdinalIgnoreCase) { "aspire-terminals" };
+        var references = new HashSet<string>(catalog.References, StringComparer.OrdinalIgnoreCase)
+        {
+            "aspire-terminals/references/apphost-terminals.md",
+            "aspire-terminals/references/automation-and-cli.md",
+            "aspire-terminals/references/resource-terminals.md",
+            "aspire-terminals/references/tapes.md"
+        };
+
+        return new(skills, new HashSet<string>(catalog.Tools, StringComparer.OrdinalIgnoreCase), references);
     }
 
     internal static SkillBundleManifest ReadManifest(Stream archive)
