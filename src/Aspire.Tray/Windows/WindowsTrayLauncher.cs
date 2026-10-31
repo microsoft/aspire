@@ -23,7 +23,7 @@ internal static partial class WindowsTrayLauncher
             throw new ArgumentException("Starting the packaged tray requires --bundle-root and does not support smoke mode.");
         }
 
-        using var lease = BundleVersionLease.Acquire(options.BundleRoot, "tray-launcher", "tray start");
+        using var lease = BundleVersionLease.TryAcquireFromEnvironment("tray-launcher", "tray start");
         if (IsRunning())
         {
             await TrayActivation.ShowExistingAsync(WindowsSingleInstance.ActivationPipeName, CancellationToken.None).ConfigureAwait(false);
@@ -38,7 +38,7 @@ internal static partial class WindowsTrayLauncher
             TrayLaunchCommand.BuildWindowsCommandLine(startInfo), startInfo.WorkingDirectory);
         try
         {
-            // The GUI acquires its lease before creating this endpoint. Readiness must be
+            // The GUI acquires any handed-off lease before creating this endpoint. Readiness must be
             // acknowledged by a working native UI loop, not merely by a connected pipe.
             await CompleteStartupAsync(child,
                 () => TrayActivation.WaitUntilReadyAsync(WindowsSingleInstance.ActivationPipeName, CancellationToken.None)).ConfigureAwait(false);

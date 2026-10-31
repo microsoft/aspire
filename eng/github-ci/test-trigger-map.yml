@@ -50,6 +50,7 @@ groups:
     - test:Aspire.Templates.Tests
     - job:polyglot
     - job:cli-starter-validation
+    - job:nix-package
     - job:extension-e2e
     - job:winget-installer
     - job:homebrew-installer
@@ -63,6 +64,7 @@ groups:
     - job:polyglot
     - job:cli-starter-validation
     - job:native-dashboard-validation
+    - job:nix-package
     - job:extension-e2e
     - job:winget-installer
     - job:homebrew-installer
@@ -406,8 +408,8 @@ path_rules:
   - paths:
       - eng/clipack/Common.projitems
       - eng/clipack/Aspire.Cli.linux-x64.csproj
-    targets: [test:Aspire.Cli.EndToEnd.Tests]
-    reason: CLI e2e consumes the Linux x64 CLI archive
+    targets: [test:Aspire.Cli.EndToEnd.Tests, job:nix-package]
+    reason: CLI E2E and the Nix smoke consume the Linux x64 CLI archive
   - paths:
       - eng/clipack/Common.projitems
       - eng/clipack/Aspire.Cli.linux-x64.csproj
@@ -491,6 +493,11 @@ path_rules:
     targets: [job:cli-starter-validation]
     reason: package construction and template content consumed by the C# starter validation scenario
   - paths:
+      - src/Aspire.ProjectTemplates/Aspire.ProjectTemplates.csproj
+      - src/Aspire.ProjectTemplates/templates/aspire-empty/**
+    targets: [job:nix-package]
+    reason: generates the C# application used by the Nix runtime smoke
+  - paths:
       - src/Aspire.Hosting.Dotnet/**
     targets: [test:Aspire.Cli.EndToEnd.Tests, test:Aspire.Templates.Tests, job:cli-starter-validation]
     reason: runtime-only Dotnet dependency in generated C# AppHosts, including when project-graph analysis is unavailable
@@ -512,6 +519,11 @@ path_rules:
       - src/Aspire.Tray/Windows/publish.ps1
     targets: [CLI_BUNDLE, test:Infrastructure.Tests]
     reason: native CLI bundle assembly and publishing inputs
+  - paths:
+      - eng/Bundle.proj
+      - tools/CreateLayout/**
+    targets: [job:nix-package]
+    reason: assembles the native CLI bundle consumed by the Nix smoke
 
   # --- Infrastructure.Tests-only inputs ----------------------------------------------------
   # Keep inputs grouped by their current coverage so test ownership and obsolete checks are visible.
@@ -586,6 +598,18 @@ path_rules:
 # triggers.
 # Project Name == the .csproj base name (what Layer 1 emits).
 affected_project_rules:
+  - projects:
+      - Aspire.Cli
+      - Aspire.Managed
+      - Aspire.Dashboard
+      - Aspire.TerminalHost
+      - CreateLayout
+      - Aspire.Hosting.Native.Server
+      - Aspire.Hosting.AppHost
+      - Aspire.Hosting.Dotnet
+      - Aspire.ProjectTemplates
+    targets: [job:nix-package]
+    reason: native bundle, template, and hosting packages used by the Nix runtime smoke
   - projects: [Aspire.Tray.Mac, Aspire.Tray.Windows]
     targets: [test:Aspire.Tray.Tests, test:Infrastructure.Tests]
     reason: native platform changes must retain shared tray contracts and the packaging/signing invariants; tests source-link common code rather than referencing the platform executables

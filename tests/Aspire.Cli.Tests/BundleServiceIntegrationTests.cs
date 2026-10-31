@@ -518,6 +518,56 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
         }
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task EnsureExtractedAndAcquireLayoutAsync_NixInstall_UsesPatchedLayoutWithoutWrites(bool useSymlink)
+    {
+        Assert.SkipWhen(useSymlink && OperatingSystem.IsWindows(), "Unprivileged symlink creation requires Linux/macOS.");
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var binaryDir = workspace.CreateDirectory(Path.Combine("package", "lib", "aspire-cli")).FullName;
+        var processPath = CreateFakeCliBinary(binaryDir, BundleDiscovery.GetExecutableFileName("aspire"), "patched-cli");
+        File.WriteAllText(Path.Combine(binaryDir, ".aspire-install.json"), "{\"source\":\"nix\"}");
+        if (useSymlink)
+        {
+            var symlinkPath = Path.Combine(workspace.CreateDirectory("bin").FullName, "aspire");
+            File.CreateSymbolicLink(symlinkPath, processPath);
+            processPath = symlinkPath;
+        }
+
+        var bundleDir = Path.Combine(binaryDir, BundleDiscovery.BundleDirectoryName);
+        using var payload = new MemoryStream(CreateFakeBundlePayload("patched"));
+        await BundleService.ExtractPayloadAsync(
+            payload,
+            bundleDir,
+            new TestEnvironment(),
+            CancellationToken.None);
+
+        var layoutDiscovery = new LayoutDiscovery(NullLogger<LayoutDiscovery>.Instance, new TestEnvironment())
+        {
+            ProcessPathOverride = processPath
+        };
+        // An invalid embedded payload makes any attempt to re-extract fail.
+        var service = CreateService(new TestBundlePayloadProvider([1]), layoutDiscovery, processPath);
+        var filesBefore = Directory.GetFileSystemEntries(binaryDir, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal).ToArray();
+
+        await service.EnsureExtractedAsync();
+        using var layoutLease = await service.EnsureExtractedAndAcquireLayoutAsync("test", "nix");
+
+        Assert.NotNull(layoutLease);
+        Assert.False(layoutLease.HasLease);
+        Assert.Equal(binaryDir, layoutLease.Layout.LayoutPath);
+        var managedPath = Path.Combine(bundleDir, BundleDiscovery.ManagedDirectoryName,
+            BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName));
+        Assert.Equal(managedPath, layoutLease.Layout.GetManagedPath());
+        Assert.Equal("#!/bin/sh\necho patched\n", File.ReadAllText(managedPath));
+        Assert.Equal(filesBefore, Directory.GetFileSystemEntries(binaryDir, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal));
+        var childEnvironment = new Dictionary<string, string>();
+        layoutLease.AddEnvironment(childEnvironment);
+        Assert.Empty(childEnvironment);
+    }
+
     [Fact]
     public async Task EnsureExtractedAndAcquireLayoutAsync_SidecarlessInstall_ExtractsToAspireHomeAndAcquiresLayout()
     {
