@@ -1221,12 +1221,25 @@ public sealed class EntraIdFederatedIdentityCredential : EntraIdClientCredential
 public sealed class EntraIdKeyVaultCertificateCredential : EntraIdClientCredential
 {
     /// <inheritdoc />
-    public override string SourceType => "KeyVault";
+    /// <exception cref="InvalidOperationException">Thrown when neither or both of <see cref="KeyVault"/> and <see cref="KeyVaultUrl"/> are set.</exception>
+    public override string SourceType => (KeyVault, KeyVaultUrl) switch
+    {
+        (not null, null) or (null, not null) => "KeyVault",
+        _ => throw new InvalidOperationException(
+            $"Exactly one of {nameof(KeyVault)} or {nameof(KeyVaultUrl)} must be set on {nameof(EntraIdKeyVaultCertificateCredential)}.")
+    };
 
     /// <summary>
     /// Gets the URL of the Azure Key Vault (e.g., <c>"https://myvault.vault.azure.net"</c>).
     /// </summary>
-    public required string KeyVaultUrl { get; init; }
+    /// <remarks>Set either this property or <see cref="KeyVault"/>, but not both.</remarks>
+    public string? KeyVaultUrl { get; init; }
+
+    /// <summary>
+    /// Gets the Key Vault resource containing the certificate.
+    /// </summary>
+    /// <remarks>Set either this property or <see cref="KeyVaultUrl"/>, but not both. The vault URI is resolved for the consuming resource.</remarks>
+    public AzureKeyVaultResource? KeyVault { get; init; }
 
     /// <summary>
     /// Gets the name of the certificate in Azure Key Vault.
@@ -1237,7 +1250,7 @@ public sealed class EntraIdKeyVaultCertificateCredential : EntraIdClientCredenti
     internal override bool EmitEnvironmentVariables(IDictionary<string, object> envVars, string prefix, string separator, EntraIdApplicationResource application, IResource consumer, DistributedApplicationExecutionContext executionContext)
     {
         base.EmitEnvironmentVariables(envVars, prefix, separator, application, consumer, executionContext);
-        envVars[$"{prefix}{separator}KeyVaultUrl"] = KeyVaultUrl;
+        envVars[$"{prefix}{separator}KeyVaultUrl"] = KeyVault is { } vault ? vault.UriExpression : KeyVaultUrl!;
         envVars[$"{prefix}{separator}KeyVaultCertificateName"] = CertificateNameInKeyVault;
 
         return true;

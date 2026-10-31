@@ -15,6 +15,7 @@ using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Aspire.Tests.Utils;
 using Azure.Provisioning;
+using Azure.Provisioning.KeyVault;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -25,6 +26,59 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
 {
     private const string TenantId = "aaaabbbb-0000-cccc-1111-dddd2222eeee";
     private const string ClientId = "00001111-aaaa-2222-bbbb-3333cccc4444";
+
+    [Fact]
+    public async Task KeyVaultCertificate_RunAssignsDeveloperCertificateAccess()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var vault = builder.AddAzureKeyVault("vault");
+        var entra = builder.AddExistingEntraApplication("entra", TenantId, ClientId)
+            .WithCertificateFromKeyVault(vault, "web-certificate");
+        builder.AddContainer("web", "image").WithReference(entra);
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var assignment = Assert.Single(model.Resources.OfType<AzureRoleAssignmentResource>(),
+            r => r.TargetAzureResource == vault.Resource);
+        await Verify(assignment.GetBicepTemplateString(), "bicep");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task KeyVaultCertificate_PublishAssignsConsumerIdentityAndCertificateAccess(bool configureCredentialAfterReference)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddAzureContainerAppEnvironment("env");
+        var vault = builder.AddAzureKeyVault("vault").PublishAsExisting("existing-vault", resourceGroup: null);
+        var entra = builder.AddExistingEntraApplication("entra", TenantId, ClientId);
+        var web = builder.AddContainer("web", "image");
+        if (configureCredentialAfterReference)
+        {
+            web.WithReference(entra);
+            entra.WithCertificateFromKeyVault(vault, "web-certificate");
+        }
+        else
+        {
+            entra.WithCertificateFromKeyVault(vault, "web-certificate");
+            web.WithReference(entra);
+        }
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var identity = Assert.Single(model.Resources.OfType<AzureUserAssignedIdentityResource>());
+        Assert.Equal("web-identity", identity.Name);
+        var roles = web.Resource.Annotations.OfType<RoleAssignmentAnnotation>()
+            .Where(a => a.Target == vault.Resource).SelectMany(a => a.Roles);
+        Assert.Contains(roles, role => role.Id == KeyVaultBuiltInRole.KeyVaultCertificateUser.ToString());
+        var assignment = Assert.Single(model.Resources.OfType<AzureRoleAssignmentResource>(),
+            r => r.TargetAzureResource == vault.Resource);
+        await Verify(assignment.GetBicepTemplateString(), "bicep").UseParameters(configureCredentialAfterReference);
+    }
 
     [Fact]
     public async Task WithOwners_GeneratesOwnerRelationships()

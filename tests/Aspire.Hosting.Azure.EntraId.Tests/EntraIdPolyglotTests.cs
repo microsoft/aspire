@@ -169,6 +169,39 @@ public class EntraIdPolyglotTests
         Assert.Empty(entra.Resource.ClientCredentials);
     }
 
+    [Fact]
+    public async Task KeyVaultCertificate_ExportAcceptsUrlAndResource()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var vault = builder.AddAzureKeyVault("vault");
+        var entra = builder.AddExistingEntraApplicationForExport("entra", TenantId, ClientId);
+        var method = ScanExports().Methods["Aspire.Hosting.Azure.EntraId/withCertificateFromKeyVault"];
+
+        Assert.Same(entra, method.Invoke(null, [entra, "https://vault.vault.azure.net", "literal-certificate"]));
+        Assert.Same(entra, method.Invoke(null, [entra, vault, "resource-certificate"]));
+        var consumer = builder.AddContainer("consumer", "image");
+        DispatchReference(consumer, entra);
+
+        Assert.Equal(new Dictionary<string, string>
+        {
+            ["ENTRA_INSTANCE"] = "https://login.microsoftonline.com/",
+            ["ENTRA_TENANT_ID"] = TenantId,
+            ["ENTRA_CLIENT_ID"] = ClientId,
+            ["ENTRA_CLIENT_CREDENTIALS_0_SOURCE_TYPE"] = "KeyVault",
+            ["ENTRA_CLIENT_CREDENTIALS_0_KEY_VAULT_URL"] = "https://vault.vault.azure.net",
+            ["ENTRA_CLIENT_CREDENTIALS_0_KEY_VAULT_CERTIFICATE_NAME"] = "literal-certificate",
+            ["ENTRA_CLIENT_CREDENTIALS_1_SOURCE_TYPE"] = "KeyVault",
+            ["ENTRA_CLIENT_CREDENTIALS_1_KEY_VAULT_URL"] = "{vault.outputs.vaultUri}",
+            ["ENTRA_CLIENT_CREDENTIALS_1_KEY_VAULT_CERTIFICATE_NAME"] = "resource-certificate"
+        }, await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            consumer.Resource, DistributedApplicationOperation.Publish, TestServiceProvider.Instance));
+
+        Assert.Throws<ArgumentException>(() => entra.WithCertificateFromKeyVaultForExport(42, "certificate"));
+        Assert.Throws<ArgumentNullException>(() => entra.WithCertificateFromKeyVaultForExport(null!, "certificate"));
+        Assert.Throws<ArgumentException>(() => entra.WithCertificateFromKeyVaultForExport(vault, ""));
+        Assert.Equal(2, entra.Resource.ClientCredentials.Count);
+    }
+
     [Theory]
     [InlineData(DistributedApplicationOperation.Run)]
     [InlineData(DistributedApplicationOperation.Publish)]

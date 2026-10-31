@@ -6,6 +6,7 @@
 using System.Collections.Immutable;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
+using Azure.Provisioning.KeyVault;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
@@ -1046,7 +1047,7 @@ public static class EntraIdResourceExtensions
     /// <param name="keyVaultUrl">The URL of the Key Vault (e.g., <c>"https://myvault.vault.azure.net"</c>).</param>
     /// <param name="certificateName">The name of the certificate in Key Vault.</param>
     /// <returns>The resource builder for chaining.</returns>
-    [AspireExport]
+    [AspireExportIgnore(Reason = "The withCertificateFromKeyVault export accepts a URL or a Key Vault resource using a union.")]
     public static IResourceBuilder<EntraIdApplicationResource> WithCertificateFromKeyVault(
         this IResourceBuilder<EntraIdApplicationResource> builder,
         string keyVaultUrl,
@@ -1063,6 +1064,71 @@ public static class EntraIdResourceExtensions
         });
 
         return builder;
+    }
+
+    /// <summary>
+    /// Adds a certificate credential from an Azure Key Vault resource to this Entra ID application.
+    /// </summary>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="keyVault">The Key Vault containing the certificate.</param>
+    /// <param name="certificateName">The name of the certificate in Key Vault.</param>
+    /// <returns>The resource builder for chaining.</returns>
+    /// <remarks>
+    /// The vault URI remains a resource reference during run and publish. The Key Vault Certificate User role is added to the
+    /// vault's default roles when running, and assigned to each resource referencing this application when publishing, which
+    /// requires an environment that supports role assignments. The certificate must already exist, and its public key must
+    /// be registered with the Entra application. Microsoft.Identity.Web loads the latest certificate version.
+    /// </remarks>
+    /// <example>
+    /// <code lang="csharp">
+    /// var vault = builder.AddAzureKeyVault("vault");
+    /// var entra = builder.AddExistingEntraApplication("entra", tenantId, clientId)
+    ///     .WithCertificateFromKeyVault(vault, "web-certificate");
+    /// builder.AddProject&lt;Projects.Web&gt;("web").WithReference(entra);
+    /// </code>
+    /// </example>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="keyVault"/> is null.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="certificateName"/> is null or empty.</exception>
+    [AspireExportIgnore(Reason = "The withCertificateFromKeyVault export accepts a URL or a Key Vault resource using a union.")]
+    public static IResourceBuilder<EntraIdApplicationResource> WithCertificateFromKeyVault(
+        this IResourceBuilder<EntraIdApplicationResource> builder,
+        IResourceBuilder<AzureKeyVaultResource> keyVault,
+        string certificateName)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(keyVault);
+        ArgumentException.ThrowIfNullOrEmpty(certificateName);
+
+        return builder.WithCredential(new EntraIdKeyVaultCertificateCredential
+        {
+            KeyVault = keyVault.Resource,
+            CertificateNameInKeyVault = certificateName
+        });
+    }
+
+    /// <summary>
+    /// Adds a certificate credential using a vault URL or Key Vault resource.
+    /// </summary>
+    /// <param name="builder">The registration builder.</param>
+    /// <param name="keyVaultUrl">The vault URL or Key Vault resource containing the certificate.</param>
+    /// <param name="certificateName">The name of the certificate in Key Vault.</param>
+    /// <returns>The registration builder.</returns>
+    /// <remarks>The latest certificate version is used. Resource-backed vaults grant consumers the Key Vault Certificate User role by default.</remarks>
+    [AspireExport("withCertificateFromKeyVault")]
+    internal static IResourceBuilder<EntraIdApplicationResource> WithCertificateFromKeyVaultForExport(
+        this IResourceBuilder<EntraIdApplicationResource> builder,
+        [AspireUnion(typeof(string), typeof(IResourceBuilder<AzureKeyVaultResource>))] object keyVaultUrl,
+        string certificateName)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(keyVaultUrl);
+
+        return keyVaultUrl switch
+        {
+            string url => builder.WithCertificateFromKeyVault(url, certificateName),
+            IResourceBuilder<AzureKeyVaultResource> vault => builder.WithCertificateFromKeyVault(vault, certificateName),
+            _ => throw new ArgumentException("Expected a vault URL or a Key Vault resource.", nameof(keyVaultUrl))
+        };
     }
 
     /// <summary>
@@ -1174,8 +1240,53 @@ public static class EntraIdResourceExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(credential);
 
+        if (credential is EntraIdKeyVaultCertificateCredential { KeyVault: { } keyVault })
+        {
+            GrantKeyVaultCertificateAccess(builder, keyVault);
+        }
+
         builder.Resource.ClientCredentials.Add(credential);
         return builder;
+    }
+
+    private static readonly RoleDefinition s_keyVaultCertificateUserRole =
+        new(KeyVaultBuiltInRole.KeyVaultCertificateUser.ToString(), nameof(KeyVaultBuiltInRole.KeyVaultCertificateUser));
+
+    private static void GrantKeyVaultCertificateAccess(IResourceBuilder<EntraIdApplicationResource> builder, AzureKeyVaultResource keyVault)
+    {
+        // Microsoft.Identity.Web reads the certificate with its private key, which the vault's default
+        // Secrets User role does not allow, so the certificate role has to be in place before the Azure
+        // resource preparer decides role assignments.
+        if (builder.ApplicationBuilder.ExecutionContext.IsRunMode)
+        {
+            // Run-mode roles are global to the vault and granted to the developer, and the preparer ignores consumers that
+            // are not compute resources (executables, resources excluded from the manifest), so extend the vault's defaults.
+            // Without a default annotation the defaults were cleared, which means the roles are managed explicitly.
+            if (keyVault.TryGetLastAnnotation<DefaultRoleAssignmentsAnnotation>(out var defaults) &&
+                !defaults.Roles.Contains(s_keyVaultCertificateUserRole))
+            {
+                keyVault.Annotations.Remove(defaults);
+                keyVault.Annotations.Add(new DefaultRoleAssignmentsAnnotation(
+                    new HashSet<RoleDefinition>(defaults.Roles) { s_keyVaultCertificateUserRole }));
+            }
+
+            return;
+        }
+
+        // Publish-mode roles are assigned per consumer. A consumer that is added later is handled when it references this application.
+        foreach (var consumer in builder.Resource.Consumers)
+        {
+            AddKeyVaultCertificateAccess(consumer, keyVault);
+        }
+    }
+
+    private static void AddKeyVaultCertificateAccess(IResource consumer, AzureKeyVaultResource keyVault)
+    {
+        // Explicit roles on the consumer replace the default, including an empty set that opts out.
+        if (!consumer.Annotations.OfType<RoleAssignmentAnnotation>().Any(a => a.Target == keyVault))
+        {
+            consumer.Annotations.Add(new RoleAssignmentAnnotation(keyVault, new HashSet<RoleDefinition> { s_keyVaultCertificateUserRole }));
+        }
     }
 
     /// <summary>
@@ -2771,6 +2882,17 @@ public static class EntraIdResourceExtensions
         // Create a reference relationship so the dashboard shows the connection
         builder.WithReferenceRelationship(entra);
         entra.Consumers.Add(builder.Resource);
+
+        if (builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
+        {
+            foreach (var credential in entra.ClientCredentials.OfType<EntraIdKeyVaultCertificateCredential>())
+            {
+                if (credential.KeyVault is { } keyVault)
+                {
+                    AddKeyVaultCertificateAccess(builder.Resource, keyVault);
+                }
+            }
+        }
 
         // That section is a sibling of AzureAd, not part of it, so a .NET program's entries ignore the connection name.
         var environmentVariablePrefix = isDotnetProgram ? $"{downstreamApisPrefix}__" : $"{keyPrefix}{downstreamApisPrefix}_";

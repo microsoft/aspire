@@ -565,9 +565,50 @@ Federation authenticates as the app registration using a managed identity assert
 
 ### Certificate from Azure Key Vault
 
+Reference a Key Vault modeled in the AppHost instead of hard-coding its URL:
+
+**C#**
+
 ```csharp
+var vault = builder.AddAzureKeyVault("vault");
 var entraWeb = builder.AddExistingEntraApplication("entra-web", tenantId: tenantId, clientId: webClientId)
-                      .WithCertificateFromKeyVault("https://myvault.vault.azure.net", "MyCert");
+                      .WithCertificateFromKeyVault(vault, "MyCert");
+
+builder.AddProject<Projects.Web>("web").WithReference(entraWeb);
+```
+
+**TypeScript**
+
+```typescript
+const vault = await builder.addAzureKeyVault("vault");
+const entraWeb = await builder.addExistingEntraApplication("entra-web", tenantId, webClientId)
+    .withCertificateFromKeyVault(vault, "MyCert");
+
+await builder.addContainer("web", "my-web-image").withReference(entraWeb);
+```
+
+The vault URI remains a deferred resource reference: local runs resolve the vault output (or its emulator
+endpoint), while published configuration retains the vault output reference. Workloads need the
+**Key Vault Certificate User** role to read the certificate with its private key. When running locally, the
+vault's default roles are extended with it for the developer identity. When publishing, each workload that
+references the Entra application receives it, so the publish target must support role assignments (for example
+`AddAzureContainerAppEnvironment`); otherwise publishing fails.
+Use `WithRoleAssignments` on a workload before referencing the Entra application to replace its assignment, including an
+empty role list to manage access yourself. When running locally, roles come from the vault's defaults instead of
+the workload, so call `ClearDefaultRoleAssignments` on the vault before `WithCertificateFromKeyVault` to stop Aspire
+from granting any roles to your developer identity, and assign them yourself. An existing vault can be modeled with `RunAsExisting` or
+`PublishAsExisting`, and its access policies or RBAC configuration must allow certificate retrieval.
+
+The certificate must already exist in the vault, have an exportable private key, and have its public key
+registered on the Entra application. This helper neither creates the certificate nor uploads it to the
+registration. Microsoft.Identity.Web always retrieves the latest certificate version; it has no setting to select
+a specific one. See the [Microsoft.Identity.Web Key Vault loader](https://github.com/AzureAD/microsoft-identity-web/blob/master/src/Microsoft.Identity.Web.Certificate/KeyVaultCertificateLoader.cs).
+
+When the vault is managed outside the AppHost, pass its URL instead. In that case, configure access and
+identity yourself:
+
+```csharp
+entraWeb.WithCertificateFromKeyVault("https://myvault.vault.azure.net", "MyCert");
 ```
 
 ### Certificate from the certificate store
