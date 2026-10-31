@@ -149,14 +149,15 @@ internal static class ProcessCaptureRunner
             // post-kill path: the peer has already exited normally, so losing recently
             // emitted stdout/stderr would make diagnostics flaky under CI load.
             await ((Task)captureTask).WaitAsync(s_postExitCaptureWaitBound, CancellationToken.None).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
-            if (!captureTask.IsCompleted)
+            var drainTimedOut = !captureTask.IsCompleted;
+            if (drainTimedOut)
             {
                 // The drain bound expired before EOF (pipes inherited by descendants, or
-                // reader continuations delayed under load). Output written before exit is
-                // already buffered by the capture, so signal the reads to stop rather than
-                // abandoning the task: captures that return partial output on cancellation
-                // keep it, instead of the caller seeing an empty capture for a process that
-                // exited successfully after writing its result.
+                // reader continuations delayed under load). Signal the reads to stop rather
+                // than abandoning the task, so captures that return partial output on
+                // cancellation keep what the process wrote before it exited. The result is
+                // flagged with OutputDrainTimedOut so callers that need complete output can
+                // still reject it.
                 logger.LogDebug(
                     "Process output capture did not complete within {Bound}s after exit; cancelling reads.",
                     s_postExitCaptureWaitBound.TotalSeconds);
@@ -174,8 +175,8 @@ internal static class ProcessCaptureRunner
             return new ProcessCaptureResult<TCapture>(
                 ExitCode: exitCode,
                 Capture: capture,
-                FailureKind: null,
-                FailureMessage: null,
+                FailureKind: drainTimedOut ? ProcessCaptureFailureKind.OutputDrainTimedOut : null,
+                FailureMessage: drainTimedOut ? $"Process output did not complete within {s_postExitCaptureWaitBound.TotalSeconds:F1}s after exit." : null,
                 Cancelled: false);
         }
         finally
@@ -284,4 +285,10 @@ internal enum ProcessCaptureFailureKind
     StartFailed,
     CaptureFailed,
     TimedOut,
+
+    // The process exited, but its output streams did not reach EOF within the post-exit
+    // drain bound (e.g. a descendant holds an inherited pipe). ExitCode is the real exit
+    // code and Capture holds whatever the capture returned once its reads were cancelled,
+    // which may be incomplete.
+    OutputDrainTimedOut,
 }
