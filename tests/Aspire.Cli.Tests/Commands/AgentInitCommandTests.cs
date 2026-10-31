@@ -9,6 +9,7 @@ using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.DotNet;
 using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Npm;
@@ -99,9 +100,10 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         var locator = new TestProjectLocator
         {
             GetAppHostFromSettingsAsyncCallback = _ => Task.FromResult<FileInfo?>(configured ? selectedProject : null),
-            FindAppHostProjectFilesAsyncCallback = (directory, scope, _) =>
+            FindAppHostProjectFilesAsyncCallback = (directory, scope, _, skipValidation) =>
             {
                 Assert.False(configured);
+                Assert.True(skipValidation);
                 Assert.Equal(context.Project.FullName, directory.FullName);
                 Assert.Equal(AppHostDiscoveryScope.DefaultFiltered, scope);
                 return Task.FromResult<List<FileInfo>>([firstProject, selectedProject]);
@@ -130,13 +132,71 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             options.ProjectLocatorFactory = _ => new TestProjectLocator
             {
                 GetAppHostFromSettingsAsyncCallback = _ => throw new InvalidOperationException("AppHost lookup is unnecessary without Aspire skills."),
-                FindAppHostProjectFilesAsyncCallback = (_, _, _) => throw new InvalidOperationException("AppHost discovery is unnecessary without Aspire skills.")
+                FindAppHostProjectFilesAsyncCallback = (_, _, _, _) => throw new InvalidOperationException("AppHost discovery is unnecessary without Aspire skills.")
             };
         }).BuildServiceProvider();
         var result = provider.GetRequiredService<RootCommand>().Parse(
             "agent init --agents copilot --skills none --mcp=false --non-interactive");
 
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("9.0.302")]
+    public async Task AgentInit_UsesAppHostSettingsWithoutUsableSdk(string? highestDetectedVersion)
+    {
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        var appHostDirectory = context.Project.CreateSubdirectory("app");
+        await AgentConfigurationTestContext.WriteAsync(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <IsAspireHost>true</IsAspireHost>
+              </PropertyGroup>
+            </Project>
+            """);
+        await AgentConfigurationTestContext.WriteAsync(Path.Combine(context.Project.FullName, "web", "Web.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk.Web" />
+            """);
+        await AgentConfigurationTestContext.WriteAsync(Path.Combine(appHostDirectory.FullName, AspireConfigFile.FileName), """
+            {"skillSources":{"default":{"enabled":false},"team":{"repository":"example/selected","plugins":["deployment"]}}}
+            """);
+        var sdkChecks = 0;
+        using var provider = context.CreateServiceCollection(outputHelper, options =>
+        {
+            options.DotNetSdkInstallerFactory = _ => new TestDotNetSdkInstaller
+            {
+                CheckAsyncCallback = _ =>
+                {
+                    sdkChecks++;
+                    return (false, highestDetectedVersion, DotNetSdkInstaller.MinimumSdkVersion);
+                }
+            };
+        }).BuildServiceProvider();
+        var locator = Assert.IsType<ProjectLocator>(provider.GetRequiredService<IProjectLocator>());
+        Assert.IsType<DotNetAppHostProject>(provider.GetRequiredService<IAppHostProjectFactory>().GetProject(
+            new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"))));
+        Assert.Empty(await locator.FindAppHostProjectFilesAsync(
+            context.Project, AppHostDiscoveryScope.DefaultFiltered, CancellationToken.None).DefaultTimeout());
+        Assert.Equal(1, sdkChecks);
+        Assert.Empty(await locator.FindAppHostProjectFilesAsync(
+            context.Project, AppHostDiscoveryScope.DefaultFiltered, maxDepth: 0,
+            CancellationToken.None, skipValidation: true).DefaultTimeout());
+        var candidates = await locator.FindAppHostProjectFilesAsync(
+            context.Project, AppHostDiscoveryScope.DefaultFiltered, maxDepth: 1,
+            CancellationToken.None, skipValidation: true).DefaultTimeout();
+        Assert.Equal([Path.Combine(appHostDirectory.FullName, "AppHost.csproj")],
+            candidates.Select(candidate => candidate.FullName));
+        Assert.Equal(1, sdkChecks);
+
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            "agent init --agents copilot --scope project --skills aspire --aspire-source remote --non-interactive");
+
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+        Assert.Equal(1, sdkChecks);
+        await Verify(await File.ReadAllTextAsync(
+            context.Copilot.GetIntegrationConfigPath(AgentConfigurationScope.Project, context.Project)), "json")
+            .UseParameters(highestDetectedVersion);
     }
 
     [Theory]

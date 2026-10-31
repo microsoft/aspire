@@ -328,6 +328,14 @@ internal static class AspireSkillsRemoteConfiguration
 
     private static string NormalizeRepositoryUrl(string url)
     {
+        if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme is "https" or "ssh")
+        {
+            // AbsoluteUri normalizes HTTPS://GIT.EXAMPLE.COM/team/skills to lowercase scheme/host,
+            // preserving case-sensitive repository paths and SSH usernames.
+            // https://www.rfc-editor.org/rfc/rfc3986#section-6.2.2.1
+            url = uri.AbsoluteUri;
+        }
+
         url = url.TrimEnd('/');
         return url.EndsWith(".git", StringComparison.OrdinalIgnoreCase) ? url[..^4] : url;
     }
