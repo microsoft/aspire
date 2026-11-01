@@ -48,6 +48,7 @@ public class IntegrationHostDiscoveryThreadPoolTests
         var releaseSlots = new ManualResetEventSlim();
         var slotsOccupied = new CountdownEvent(slots);
         var occupiedSlots = new Task[slots];
+        var discovery = Task.CompletedTask;
         try
         {
             for (var i = 0; i < slots; i++)
@@ -63,7 +64,8 @@ public class IntegrationHostDiscoveryThreadPoolTests
             // worker; any slots still queued then sit ahead of the discovery continuations.
             var occupied = slotsOccupied.Wait(TimeSpan.FromSeconds(5));
 
-            return (occupied, RunDiscovery().Wait(TimeSpan.FromSeconds(10)));
+            discovery = RunDiscovery();
+            return (occupied, discovery.Wait(TimeSpan.FromSeconds(10)));
         }
         finally
         {
@@ -75,6 +77,8 @@ public class IntegrationHostDiscoveryThreadPoolTests
                 releaseSlots.Dispose();
                 slotsOccupied.Dispose();
             }
+            // A timed-out wait does not stop discovery; drain it before other tests can run.
+            discovery.GetAwaiter().GetResult();
         }
     }
 
