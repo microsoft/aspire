@@ -30,7 +30,7 @@ public class RequiresFeatureTests
             Assert.Equal(OperatingSystem.IsLinux(), RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Docker));
             Assert.Equal(OperatingSystem.IsLinux(), RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Testcontainers));
             Assert.Equal(OperatingSystem.IsLinux(), RequiresFeatureAttribute.IsFeatureSupported(TestFeature.ContainerCompose));
-            Assert.Equal(expectedContainerRuntime && ciVariable != "BUILD_BUILDID",
+            Assert.Equal(expectedContainerRuntime && ciVariable == "GITHUB_JOB",
                 RequiresFeatureAttribute.IsFeatureSupported(TestFeature.ContainerRuntime | TestFeature.ContainerImageBuild));
             Assert.Equal(expectedContainerRuntime, RequiresFeatureAttribute.IsFeatureSupported(TestFeature.SSLCertificate));
             Assert.Equal(OperatingSystem.IsLinux(), TestcontainersPodmanConfiguration.IsConfigurationInitialized);
