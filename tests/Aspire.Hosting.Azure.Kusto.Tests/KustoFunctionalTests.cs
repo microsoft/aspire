@@ -190,7 +190,7 @@ public class KustoFunctionalTests
 
         // Assert the duplicate database definition did not surface as a database creation failure.
         var snapshot = app.Services.GetRequiredService<FakeLogCollector>().GetSnapshot();
-        var logs = snapshot.Where(IsDatabaseCreationFailureLog);
+        var logs = snapshot.Where(record => IsDatabaseCreationFailureLog(record, builder.Environment.ApplicationName));
         Assert.Empty(logs);
     }
 
@@ -222,7 +222,7 @@ public class KustoFunctionalTests
 
         // Assert an error was logged about the invalid database.
         var snapshot = app.Services.GetRequiredService<FakeLogCollector>().GetSnapshot();
-        var log = Assert.Single(snapshot, IsDatabaseCreationFailureLog);
+        var log = Assert.Single(snapshot, record => IsDatabaseCreationFailureLog(record, builder.Environment.ApplicationName));
         Assert.Equal(LogLevel.Error, log.Level);
         Assert.Contains("Failed to create database '__invalid'", log.Message, StringComparison.Ordinal);
     }
@@ -272,14 +272,9 @@ public class KustoFunctionalTests
         }
     }
 
-    private static bool IsResourceLog(FakeLogRecord record)
+    private static bool IsDatabaseCreationFailureLog(FakeLogRecord record, string applicationName)
     {
-        return (record.Category ?? string.Empty).StartsWith("Aspire.Hosting.Tests.Resources", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool IsDatabaseCreationFailureLog(FakeLogRecord record)
-    {
-        return IsResourceLog(record)
+        return (record.Category ?? string.Empty).StartsWith($"{applicationName}.Resources.", StringComparison.OrdinalIgnoreCase)
             && record.Level >= LogLevel.Error
             // Matches the error logged by CreateDatabaseAsync in
             // src/Aspire.Hosting.Azure.Kusto/AzureKustoBuilderExtensions.cs.
