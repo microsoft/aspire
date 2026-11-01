@@ -555,6 +555,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # Diagnostics only: samples CPU, memory, commit charge, page file, and disk pressure
+      # into the diagnostics artifact so slow or hung Windows shards can be correlated with
+      # machine load. https://github.com/microsoft/aspire/issues/21570
+      - name: Start resource monitor (Windows)
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        shell: pwsh
+        run: ./eng/scripts/ci-resource-monitor.ps1 -Mode Start -OutputDirectory "${{ github.workspace }}/extension/.test-results/resource-monitor"
+
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -1139,6 +1148,12 @@ jobs:
           } else {
             node scripts/run-e2e.js
           }
+
+      - name: Stop resource monitor (Windows)
+        if: ${{ always() && runner.os == 'Windows' }}
+        continue-on-error: true
+        shell: pwsh
+        run: ./eng/scripts/ci-resource-monitor.ps1 -Mode Stop -OutputDirectory "${{ github.workspace }}/extension/.test-results/resource-monitor"
 
       - name: Upload E2E diagnostics
         id: upload_e2e_diagnostics
