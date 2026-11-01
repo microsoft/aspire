@@ -1348,6 +1348,14 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
                     new("Host", "localhost"),
                     new("DatabaseName", "catalogdb")
                 }),
+                new ResourcePropertySnapshot("structured", Google.Protobuf.WellKnownTypes.Value.ForStruct(new Google.Protobuf.WellKnownTypes.Struct
+                {
+                    Fields =
+                    {
+                        ["outcome"] = Google.Protobuf.WellKnownTypes.Value.ForString("passed"),
+                        ["results"] = Google.Protobuf.WellKnownTypes.Value.ForList(Google.Protobuf.WellKnownTypes.Value.ForString("fixture"))
+                    }
+                })),
                 new ResourcePropertySnapshot("ConnectionString", "secret-value") { IsSensitive = true }
             ]
         }).DefaultTimeout();
@@ -1374,6 +1382,9 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         var nameValueObject = Assert.IsAssignableFrom<JsonObject>(snapshot.Properties["object"]);
         Assert.Equal("localhost", nameValueObject["Host"]?.GetValue<string>());
         Assert.Equal("catalogdb", nameValueObject["DatabaseName"]?.GetValue<string>());
+        var structured = Assert.IsType<JsonObject>(snapshot.Properties["structured"]);
+        Assert.Equal("passed", structured["outcome"]!.GetValue<string>());
+        Assert.Equal("fixture", Assert.Single(Assert.IsType<JsonArray>(structured["results"]))!.GetValue<string>());
         Assert.Null(snapshot.Properties["ConnectionString"]);
 
         await app.StopAsync().DefaultTimeout(TestConstants.LongTimeoutTimeSpan);

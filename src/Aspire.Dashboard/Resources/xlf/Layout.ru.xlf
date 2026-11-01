@@ -582,6 +582,91 @@
         <target state="new">Open and switch between the terminals of your resources from one place.</target>
         <note />
       </trans-unit>
+      <trans-unit id="TestingCancelled">
+        <source>Cancelled</source>
+        <target state="new">Cancelled</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TestingDuration">
+        <source>Duration</source>
+        <target state="new">Duration</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TestingFailed">
+        <source>Failed</source>
+        <target state="new">Failed</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TestingFailureSummary">
+        <source>Test results, resource execution or collection failed. Passing individual tests do not override this outcome.</source>
+        <target state="new">Test results, resource execution or collection failed. Passing individual tests do not override this outcome.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TestingInvalidData">
+        <source>The resource published invalid testing data. Its outcome cannot be determined from these results.</source>
+        <target state="new">The resource published invalid testing data. Its outcome cannot be determined from these results.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TestingMessage">
+        <source>Message</source>
+        <target state="new">Message</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TestingMilliseconds">
+        <source>{0:N0} ms</source>
+        <target state="new">{0:N0} ms</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TestingName">
+        <source>Test</source>
+        <target state="new">Test</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TestingNoResources">
+        <source>No testing resources in this selection.</source>
+        <target state="new">No testing resources in this selection.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TestingPassed">
+        <source>Passed</source>
+        <target state="new">Passed</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TestingPending">
+        <source>Pending</source>
+        <target state="new">Pending</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TestingResourceOutcome">
+        <source>Resource outcome</source>
+        <target state="new">Resource outcome</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TestingRunning">
+        <source>Running</source>
+        <target state="new">Running</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TestingSkipped">
+        <source>Skipped</source>
+        <target state="new">Skipped</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TestingStatus">
+        <source>Status</source>
+        <target state="new">Status</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TestingSubscriptionFailed">
+        <source>Unable to load testing resources. Results may be incomplete.</source>
+        <target state="new">Unable to load testing resources. Results may be incomplete.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TestingUnknown">
+        <source>Unknown</source>
+        <target state="new">Unknown</target>
+        <note />
+      </trans-unit>
     </body>
   </file>
 </xliff>

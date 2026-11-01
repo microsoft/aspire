@@ -117,8 +117,23 @@ dashboard's resource properties and through `aspire describe`.
 
 For this playground, the beaker category contains `foundation-tests`,
 `mstest-tests`, `pytest-tests`, `go-tests` and `rust-tests`; `service` and
-`pytest-tests-installer` remain ordinary resources. This initial dashboard layer
-does not introduce a results view or change test execution.
+`pytest-tests-installer` remain ordinary resources.
+
+Select **Testing**, alongside **Metrics**, to view published test outcomes grouped
+by resource. Foundation, MSTest, pytest and Go publish individual results; Cargo
+publishes no individual outcomes and is represented by one resource-outcome row.
+Passing individual results do not hide execution or collector failures, and a
+pending or unknown resource is not reported as passed. The page updates during
+collection and replays finalized results on a late connection or reload while
+`aspire test --keep-alive` is running. The previous dashboard has a Testing
+navigation entry with the same table.
+
+During ordinary `aspire run`, collectors are not activated; annotated resources
+still appear with one resource-outcome row based on their actual execution state.
+The dashboard does not start tests or change execution behavior. To exercise a
+failure in the resource-only fallback, prefix the testing command with
+`RUST_PLAYGROUND_FAIL=true`. `MSTEST_PLAYGROUND_FAIL`, `PYTEST_PLAYGROUND_FAIL` and
+`GO_PLAYGROUND_FAIL` exercise individual-result failures independently.
 
 ## Shared scenario and extension points
 

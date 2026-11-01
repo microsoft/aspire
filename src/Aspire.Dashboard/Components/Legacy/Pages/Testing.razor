@@ -1,0 +1,16 @@
+@page "/legacy/testing"
+@page "/legacy/testing/resource/{ResourceName}"
+@layout Aspire.Dashboard.Components.Legacy.Layout.LegacyMainLayout
+@using Aspire.Dashboard.Components.Controls
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Aspire.Dashboard.Resources.Layout> Loc
+
+<PageTitle>@Loc[nameof(Aspire.Dashboard.Resources.Layout.ResourcePaneTesting)]</PageTitle>
+<TestingResults ResourceName="@ResourceName" ResourceNames="@SelectedResources" />
+
+@code {
+    [Parameter]
+    public string? ResourceName { get; set; }
+
+    [SupplyParameterFromQuery(Name = DashboardUrls.ResourceSelectionQueryName)]
+    public string[]? SelectedResources { get; set; }
+}

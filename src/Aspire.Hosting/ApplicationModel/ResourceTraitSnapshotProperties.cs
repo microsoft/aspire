@@ -12,7 +12,8 @@ internal static class ResourceTraitSnapshotProperties
     {
         var traits = resource.Annotations.OfType<TraitAnnotation>().ToList();
 #pragma warning disable ASPIRETESTING001 // Project testing participation through the existing dashboard property contract.
-        var isTesting = resource.TryGetLastAnnotation<TestingAnnotation>(out _);
+        var isTesting = resource.TryGetLastAnnotation<TestingAnnotation>(out var testing);
+        var testingResults = testing?.DashboardResults;
 #pragma warning restore ASPIRETESTING001
         if (isTesting && !traits.Any(t => t.Name == KnownResourceTraits.DashboardTag && string.Equals(t.Value, "Testing", StringComparison.OrdinalIgnoreCase)))
         {
@@ -42,8 +43,14 @@ internal static class ResourceTraitSnapshotProperties
         {
             // Stamp every initial/update/replica snapshot, even during ordinary runs. A tag alone
             // is not participation: users can also tag a non-test resource "Testing".
-            result = result.Where(p => p.Name != KnownProperties.Resource.Testing).ToImmutableArray()
-                .Add(new ResourcePropertySnapshot(KnownProperties.Resource.Testing, "true"));
+            result = result.Where(p => p.Name != KnownProperties.Resource.Testing && p.Name != KnownProperties.Resource.TestingExpectedReplicas).ToImmutableArray()
+                .Add(new ResourcePropertySnapshot(KnownProperties.Resource.Testing, "true"))
+                .Add(new ResourcePropertySnapshot(KnownProperties.Resource.TestingExpectedReplicas, resource.GetReplicaCount()));
+            if (testingResults is not null)
+            {
+                result = result.Where(p => p.Name != KnownProperties.Resource.TestingResults).ToImmutableArray()
+                    .Add(new ResourcePropertySnapshot(KnownProperties.Resource.TestingResults, testingResults));
+            }
         }
 
         return result;

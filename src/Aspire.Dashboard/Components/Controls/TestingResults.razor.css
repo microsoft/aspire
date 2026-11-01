@@ -1,0 +1,23 @@
+.testing-content {
+    overflow: auto;
+    padding: var(--spacingVerticalL) var(--spacingHorizontalL);
+}
+
+.testing-group {
+    margin-bottom: var(--spacingVerticalXXL);
+}
+
+.testing-group h2 {
+    font-size: var(--fontSizeBase400);
+}
+
+.testing-name {
+    overflow-wrap: anywhere;
+}
+
+.testing-group-outcome,
+.testing-fallback {
+    color: var(--colorNeutralForeground3);
+    font-size: var(--fontSizeBase200);
+    margin-left: var(--spacingHorizontalS);
+}

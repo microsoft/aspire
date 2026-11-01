@@ -451,6 +451,10 @@ public class TestingCollectorTests(ITestOutputHelper outputHelper)
         await ReadAsync(coordinator, replay).DefaultTimeout();
         Assert.Equal(events.ToArray(), replay.ToArray());
         Assert.Equal(1, calls);
+        Assert.False(notifications.TryGetCurrentState(resource.Resource.Name, out _));
+        var dashboardResults = resource.Resource.Annotations.OfType<TestingAnnotation>().Single().DashboardResults!.Clone();
+        dashboardResults.StructValue.Fields.Remove("revision");
+        await Verify(dashboardResults.ToString(), "json");
     }
 
     [Fact]
@@ -549,6 +553,9 @@ public class TestingCollectorTests(ITestOutputHelper outputHelper)
         var failure = Assert.Single(events, e => e.Collection is { Status: "failed" }).Collection!;
         Assert.Equal("first", failure.ResourceName);
         Assert.Contains("fixture collector failure", failure.Error);
+        var dashboardResults = first.Resource.Annotations.OfType<TestingAnnotation>().Single().DashboardResults!.Clone();
+        dashboardResults.StructValue.Fields.Remove("revision");
+        await Verify(dashboardResults.ToString(), "json");
     }
 
     [Fact]

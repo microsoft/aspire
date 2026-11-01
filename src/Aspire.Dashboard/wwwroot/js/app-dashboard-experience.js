@@ -29,7 +29,7 @@
     // Pages that both experiences have, with the same route and query string below the experience's root, keep
     // their URL so links to them work in either experience. Other pages go to the experience's root.
     // Keep in sync with DashboardExperienceRedirectMiddleware.
-    const sharedPageSegments = ['consolelogs', 'structuredlogs', 'traces', 'metrics', 'terminals'];
+    const sharedPageSegments = ['consolelogs', 'structuredlogs', 'traces', 'metrics', 'terminals', 'testing'];
     const isSharedPage = pagePath => sharedPageSegments.includes(pagePath.split('/')[1]?.toLowerCase());
     const query = window.location.search;
 

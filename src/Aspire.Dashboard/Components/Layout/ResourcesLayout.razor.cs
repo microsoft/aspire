@@ -688,6 +688,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             DashboardUrls.StructuredLogsBasePath => ResourceTab.StructuredLogs,
             DashboardUrls.TracesBasePath => ResourceTab.Traces,
             DashboardUrls.MetricsBasePath => ResourceTab.Metrics,
+            DashboardUrls.TestingBasePath => ResourceTab.Testing,
             _ => ResourceTab.Overview
         };
 
@@ -1690,6 +1691,11 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     private bool IsTabAvailable(ResourceTab tab, IReadOnlyList<SelectedResourceItem> selection)
     {
+        if (tab == ResourceTab.Testing)
+        {
+            return DashboardClient.IsEnabled && !IsTelemetryPane &&
+                (selection.Count == 0 ? _resourceByName.Values.Any(r => r.IsTesting) : selection.Any(i => i.Resource is { IsTesting: true }));
+        }
         if (tab == ResourceTab.Terminal)
         {
             return !IsTelemetryPane && selection is [{ Resource: { } resource }] && CanViewResourceTerminal(resource);
@@ -1759,6 +1765,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                 ResourceTab.StructuredLogs => DashboardUrls.StructuredLogsUrl(),
                 ResourceTab.Traces => DashboardUrls.TracesUrl(),
                 ResourceTab.Metrics => DashboardUrls.MetricsUrl(activeResourceName is not null && resourceNames.Contains(activeResourceName, StringComparers.ResourceName) ? activeResourceName : null),
+                ResourceTab.Testing => DashboardUrls.TestingUrl(),
                 _ => throw new InvalidOperationException($"Unexpected tab: {tab}")
             };
 
@@ -1778,6 +1785,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             ResourceTab.StructuredLogs => DashboardUrls.StructuredLogsUrl(resourceName),
             ResourceTab.Traces => DashboardUrls.TracesUrl(resourceName),
             ResourceTab.Metrics => DashboardUrls.MetricsUrl(resourceName),
+            ResourceTab.Testing => DashboardUrls.TestingUrl(resourceName),
             _ => throw new InvalidOperationException($"Unexpected tab: {tab}")
         };
     }
@@ -1803,10 +1811,10 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         {
             tab = CurrentTab;
         }
-        else if (CurrentTab == ResourceTab.Metrics && selection is not [{ Resource: { IsParameter: true } }])
+        else if (CurrentTab is ResourceTab.Metrics or ResourceTab.Testing && selection is not [{ Resource: { IsParameter: true } }])
         {
-            // Changing the selection on the metrics page never leaves it. The page reports resources without metrics.
-            tab = ResourceTab.Metrics;
+            // These pages explain an empty selection instead of navigating away from it.
+            tab = CurrentTab;
         }
         else if (selection is [{ Resource: { IsParameter: true } }])
         {
@@ -2093,6 +2101,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             isVisible: true);
         yield return CreateTab(ResourceTab.Metrics, Loc[nameof(Resources.Layout.NavMenuMetricsTab)], new Icons.Regular.Size24.ChartMultiple(),
             isVisible: true);
+        yield return CreateTab(ResourceTab.Testing, Loc[nameof(Resources.Layout.ResourcePaneTesting)], new Icons.Regular.Size24.Beaker(),
+            isVisible: DashboardClient.IsEnabled);
 
         TabItem CreateTab(ResourceTab tab, string text, Icon icon, bool isVisible, int errorCount = 0)
         {
@@ -2193,6 +2203,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 internal enum ResourceTab
 {
     Overview,
+    Testing,
     Parameters,
     Console,
     Terminal,

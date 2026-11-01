@@ -141,6 +141,12 @@ public partial class LegacyMobileNavMenu : ComponentBase, IAsyncDisposable
         if (DashboardClient.IsEnabled)
         {
             yield return new MobileNavMenuEntry(
+                Loc[nameof(Resources.Layout.ResourcePaneTesting)],
+                () => NavigateToAsync(LegacyNavUrls.ToLegacyUrl(DashboardUrls.TestingUrl())),
+                new Icons.Regular.Size24.Beaker(),
+                ActiveIcon: new Icons.Filled.Size24.Beaker(),
+                LinkMatchRegex: GetNonIndexPageRegex(LegacyNavUrls.ToLegacyUrl(DashboardUrls.TestingUrl())));
+            yield return new MobileNavMenuEntry(
                 Loc[nameof(Resources.Layout.NavMenuResourcesTab)],
                 () => NavigateToAsync(LegacyNavUrls.ToLegacyUrl(DashboardUrls.ResourcesUrl())),
                 LegacyDesktopNavMenu.ResourcesIcon(),

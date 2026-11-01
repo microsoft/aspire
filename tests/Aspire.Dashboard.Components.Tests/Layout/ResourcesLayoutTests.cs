@@ -586,13 +586,13 @@ public class ResourcesLayoutTests : DashboardTestContext
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
 
         cut.WaitForAssertion(() => Assert.Equal(
-            ["tab-Overview", "tab-Console", "tab-StructuredLogs", "tab-Traces", "tab-Metrics"],
+            ["tab-Overview", "tab-Console", "tab-StructuredLogs", "tab-Traces", "tab-Metrics", "tab-Testing"],
             cut.FindComponents<FluentTab>().Where(t => t.Instance.Visible).Select(t => t.Instance.Id)));
         Assert.Equal("tab-Console", cut.FindComponent<FluentTabs>().Instance.ActiveTabId);
         // The resources send no telemetry, so their telemetry tabs are flagged unavailable but stay enabled.
         Assert.DoesNotContain(cut.FindComponents<FluentTab>(), t => t.Instance.Disabled);
         Assert.Equal(
-            ["tab-StructuredLogs", "tab-Traces", "tab-Metrics"],
+            ["tab-StructuredLogs", "tab-Traces", "tab-Metrics", "tab-Testing"],
             cut.FindComponents<FluentTab>().Where(t => t.Markup.Contains(Resources.Layout.ResourceTabUnavailable)).Select(t => t.Instance.Id));
 
         // Selecting an unavailable tab still navigates.
@@ -604,6 +604,35 @@ public class ResourcesLayoutTests : DashboardTestContext
         cut.InvokeAsync(() => cut.FindComponent<FluentTabs>().Instance.ActiveTabChanged.InvokeAsync(
             cut.FindComponents<FluentTab>().Single(t => t.Instance.Id == "tab-Overview").Instance));
         Assert.Equal("http://localhost/resources?resource=api&resource=worker", navigation.Uri);
+    }
+
+    [Fact]
+    public async Task TestingPageRetainsResourceSelectionAndBeakerTab()
+    {
+        var viewport = new ViewportInformation(IsDesktop: false, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: new[] { "tests", "cargo" }.Select(name => ModelTestHelpers.CreateResource(name, properties: new()
+            {
+                [KnownProperties.Resource.Testing] = new(KnownProperties.Resource.Testing, Value.ForString("true"), false, null, 0, null, false)
+            })).Append(ModelTestHelpers.CreateResource("service")).ToList(),
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo(DashboardUrls.TestingUrl("tests"));
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.Equal("tests", cut.Instance.SelectedResourceName));
+        Assert.Equal("tab-Testing", cut.FindComponent<FluentTabs>().Instance.ActiveTabId);
+        var tab = Assert.Single(cut.FindComponents<FluentTab>(), t => t.Instance.Id == "tab-Testing");
+        Assert.True(tab.Instance.Visible);
+        Assert.True(cut.Instance.IsTabAvailable(ResourceTab.Testing));
+        await cut.InvokeAsync(() => cut.FindAll(".resource-row-link").Single(link => link.GetAttribute("href") == DashboardUrls.TestingUrl("cargo")).Click());
+        cut.Render();
+        cut.WaitForAssertion(() => Assert.Equal("cargo", cut.Instance.SelectedResourceName));
+        Assert.Equal("http://localhost/testing/resource/cargo", navigation.Uri);
+        await cut.InvokeAsync(() => cut.FindAll(".resource-row-link").Single(link => link.GetAttribute("href") == DashboardUrls.TestingUrl("service")).Click());
+        cut.Render();
+        cut.WaitForAssertion(() => Assert.Equal("service", cut.Instance.SelectedResourceName));
+        Assert.Equal("tab-Testing", cut.FindComponent<FluentTabs>().Instance.ActiveTabId);
+        Assert.False(cut.Instance.IsTabAvailable(ResourceTab.Testing));
     }
 
     [Fact]

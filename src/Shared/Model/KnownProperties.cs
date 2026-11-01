@@ -35,6 +35,8 @@ internal static class KnownProperties
         public const string WaitingFor = "resource.waitingFor";
         public const string TraitPrefix = "resource.trait.";
         public const string Testing = "resource.testing";
+        public const string TestingResults = "resource.testing.results";
+        public const string TestingExpectedReplicas = "resource.testing.expectedReplicas";
     }
 
     public static class Container

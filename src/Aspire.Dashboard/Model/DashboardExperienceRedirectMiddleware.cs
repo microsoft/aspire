@@ -62,7 +62,7 @@ internal sealed class DashboardExperienceRedirectMiddleware(
     // shared trace link, keep working in either experience. Other pages, such as the resources pages, differ between
     // the experiences, so they go to the experience's root.
     // Keep in sync with wwwroot/js/app-dashboard-experience.js.
-    private static readonly string[] s_sharedPageSegments = ["consolelogs", "structuredlogs", "traces", "metrics", "terminals"];
+    private static readonly string[] s_sharedPageSegments = ["consolelogs", "structuredlogs", "traces", "metrics", "terminals", "testing"];
 
     internal static string GetLegacyUrl(string path, string? query)
     {

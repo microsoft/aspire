@@ -182,6 +182,7 @@ public partial class DesktopNavMenu : ComponentBase, IDisposable
             DashboardUrls.StructuredLogsBasePath or
             DashboardUrls.TracesBasePath or
             DashboardUrls.MetricsBasePath => NavSection.Resources,
+            DashboardUrls.TestingBasePath => NavSection.Resources,
             DashboardUrls.ParametersBasePath => NavSection.Parameters,
             DashboardUrls.GraphBasePath => NavSection.Graph,
             DashboardUrls.TerminalsBasePath => path.StartsWith($"{DashboardUrls.TerminalsBasePath}/resource/", StringComparisons.UrlPath)

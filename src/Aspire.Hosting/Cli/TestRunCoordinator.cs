@@ -30,6 +30,7 @@ internal sealed class TestRunCoordinator(
     private Task<bool>? _run;
     private bool _ended;
     private Exception? _failure;
+    private readonly TestResourceSnapshotPublisher _dashboardSnapshots = new(model, notifications);
 
     public void Start(CancellationToken cancellationToken)
     {
@@ -40,6 +41,7 @@ internal sealed class TestRunCoordinator(
                 return;
             }
             _runCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            _dashboardSnapshots.Start();
             _run = RunAsync(_runCancellation.Token);
             ObserveFaults(_run);
         }
@@ -111,6 +113,7 @@ internal sealed class TestRunCoordinator(
                 throw new InvalidOperationException("The test run has already completed.");
             }
             _events.Add(item);
+            _dashboardSnapshots.Publish(item);
             foreach (var channel in _subscribers)
             {
                 channel.Writer.TryWrite(item);
@@ -191,6 +194,15 @@ internal sealed class TestRunCoordinator(
         if (failure is null)
         {
             Publish(new TestRunEvent { Passed = passed });
+        }
+        try
+        {
+            await _dashboardSnapshots.CompleteAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Publishing testing resource snapshots failed.");
+            failure ??= ex;
         }
         lock (_gate)
         {
