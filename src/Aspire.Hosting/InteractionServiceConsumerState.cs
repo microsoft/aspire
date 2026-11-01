@@ -9,7 +9,7 @@ namespace Aspire.Hosting;
 internal sealed class InteractionServiceConsumerState
 {
     // The dashboard and CLI backchannel start after before-start hooks complete.
-    // DistributedApplication clears readiness when created and restores it after those hooks.
+    // The original application build clears readiness, and DistributedApplication restores it after those hooks.
     private volatile bool _ready = true;
 
     /// <summary>

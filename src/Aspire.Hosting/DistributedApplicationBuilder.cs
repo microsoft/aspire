@@ -903,7 +903,12 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             ValidateResourceName(resource);
         }
 
-        var application = new DistributedApplication(_innerBuilder.Build());
+        var host = _innerBuilder.Build();
+
+        // Initialize readiness only for the original application. Testing wrappers share its services
+        // and may be constructed after the before-start hooks have already completed.
+        host.Services.GetRequiredService<InteractionServiceConsumerState>().Ready = false;
+        var application = new DistributedApplication(host);
 
         _executionContextOptions.Services = application.Services.GetRequiredService<IServiceProvider>();
 

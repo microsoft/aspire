@@ -268,6 +268,27 @@ public class InteractionServiceTests
     }
 
     [Fact]
+    public async Task DistributedApplicationWrapper_PreservesConsumerReadiness()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(options => options.DisableDashboard = false);
+        using var app = builder.Build();
+        var consumerState = app.Services.GetRequiredService<InteractionServiceConsumerState>();
+        var interactionService = app.Services.GetRequiredService<IInteractionService>();
+        Assert.False(consumerState.Ready);
+
+        await app.ExecuteBeforeStartHooksAsync(default).DefaultTimeout();
+        Assert.True(consumerState.Ready);
+        Assert.True(interactionService.IsAvailable);
+
+        // Testing wrappers share the original application's services and may be created after its hooks finish.
+        using var wrapper = new DistributedApplication(app);
+
+        Assert.Same(app.Services, wrapper.Services);
+        Assert.True(consumerState.Ready);
+        Assert.True(wrapper.Services.GetRequiredService<IInteractionService>().IsAvailable);
+    }
+
+    [Fact]
     public void IsAvailable_DashboardDisabled_ReturnsFalse()
     {
         // Arrange & Act
