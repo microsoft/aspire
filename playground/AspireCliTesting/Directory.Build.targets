@@ -7,6 +7,7 @@
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Dotnet" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Python" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Go" />
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.Rust" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(IsAspireHost)' == 'true'">
