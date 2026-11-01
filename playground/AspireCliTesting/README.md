@@ -2,7 +2,7 @@
 
 This file-based AppHost is the shared, in-repository exerciser for `aspire test`.
 It uses repository hosting projects, not released packages or a private package
-hive. The foundation, MSTest, pytest and Go scenarios share the same HTTP service
+hive. The foundation, MSTest, pytest, Go and Rust scenarios share the same HTTP service
 and require no containers. The MSTest fixture registers the executable
 Microsoft.Testing.Platform runner and TRX extension explicitly.
 The pytest fixture uses Python 3.10 or later and `uv` on PATH. `WithUv()` installs
@@ -10,6 +10,12 @@ its declared pytest dependency into a local virtual environment before execution
 no global pytest installation is needed.
 The Go fixture requires Go 1.24 or later on PATH and uses only the standard library;
 no additional Go test runner or dependencies are needed.
+The Rust fixture uses only the standard library and requires Rust/Cargo plus
+**stable cargo-nextest 0.9.143 or later on PATH**, including the AppHost's child
+process environment. See [nextest installation](https://nexte.st/docs/installation/).
+No tools are installed globally and no user configuration is rewritten by this
+playground. A separately downloaded nextest binary can be placed on the invoking
+shell's PATH; the AppHost does not embed a machine-specific tool path.
 
 ## Run from the repository root
 
@@ -29,7 +35,7 @@ features__testCommandEnabled=true \
 The CLI builds the AppHost from the current sources. The `Aspire.Hosting.AppHost@*`
 directive makes the file discoverable; `Directory.Build.targets` removes that
 package reference and uses `AspireProjectOrPackageReference` to resolve the local
-AppHost, .NET, Python and Go hosting projects. It does not restore the wildcard package.
+AppHost, .NET, Python, Go and Rust hosting projects. It does not restore the wildcard package.
 
 Like the other playgrounds, this AppHost adds the repository dashboard with
 `AddDotnetProject` using the reserved `aspire-dashboard` resource name. Hosting
@@ -160,8 +166,25 @@ through EOF before reading the Go JSON events; it does not parse dashboard logs.
 Its collector is runtime-only and writes directly into `<run>/go-tests`; it does
 not need a temporary framework-report directory.
 
-The default combined summary contains **10 passed, 0 failed, 3 skipped**:
-one foundation result plus three passed and one skipped result from each framework.
+`rust-tests/Cargo.toml` defines a dependency-free Rust crate.
+`AddExecutable("rust-tests", "cargo", "rust-tests", "nextest", "run")` with
+`WithNextestTesting()` waits for the same service and receives `serviceEndpoint`
+through `RUST_SERVICE_URL`. Tests check `/`, `/health`, an independent opt-in
+failure, and an ignored example. This uses the finite nextest executable, not
+`AddRustApp` and its `cargo run` entrypoint.
+
+During testing, the helper writes an explicit private `nextest.toml` with the
+assigned JUnit destination, reported ignored tests, zero retries and no fail-fast.
+It replaces repository nextest settings for this invocation without modifying
+them; setup scripts, test groups and per-test overrides are not loaded.
+Cargo configuration remains caller-owned. **Nextest excludes doctests**; this
+sample neither executes nor claims to collect them. No unstable test JSON is used.
+Only one native invocation is supported, without terminals, replicas, restarts,
+retries or stress loops.
+
+The default combined summary contains **13 passed, 0 failed, 4 skipped**:
+one foundation result plus three passed and one skipped result from each of the
+four ecosystems.
 Each collection has its own output directory. The foundation writes `probe.txt`;
 MSTest and pytest write into fresh temporary runner directories configured before
 launch. Their runtime `WithTesting` callbacks wait for completion and stage
@@ -174,6 +197,10 @@ reach EOF and the files close. Those Aspire-owned capture files have mode `0600`
 on Unix in the CLI-owned `0700` resource directory. Windows uses inherited access
 controls. Test-binary stderr is embedded in Go JSON, while `stderr.log` holds
 the Go command's separate stderr.
+Rust writes `junit.xml` and `nextest.toml`, plus `stdout.log`, `stderr.log` and
+`output.complete` through the same durable raw-output capture. Its final JUnit
+report supplies names, outcomes, skips, durations and failure messages; raw output
+is retained for tool/build diagnostics, not substituted for test result metadata.
 JSON exposes `outputPath`, `summaryPath`, and each `collections[].outputPath`.
 Reports and `summary.json` remain after teardown.
 Framework-staged reports use the copy writer's permissions; unlike Aspire-owned
@@ -188,9 +215,9 @@ dotnet run --project src/Aspire.Cli/Aspire.Cli.csproj --no-launch-profile -- \
   --timeout-seconds 120 --format json --non-interactive
 ```
 
-This returns CLI exit code `23` with **9 passed, 1 failed, 3 skipped**. The MSTest
+This returns CLI exit code `23` with **12 passed, 1 failed, 4 skipped**. The MSTest
 process exits nonzero, but its collector still harvests the finalized TRX report
-and publishes all results. Foundation, pytest and Go results remain passing.
+and publishes all results. Foundation, pytest, Go and Rust results remain passing.
 
 Exercise the independent pytest failure without changing MSTest:
 
@@ -201,7 +228,7 @@ dotnet run --project src/Aspire.Cli/Aspire.Cli.csproj --no-launch-profile -- \
   --timeout-seconds 120 --format json --non-interactive
 ```
 
-This also returns exit code `23` with **9 passed, 1 failed, 3 skipped**. The pytest
+This also returns exit code `23` with **12 passed, 1 failed, 4 skipped**. The pytest
 collector harvests finalized JUnit even after its process exits nonzero.
 
 Exercise the independent Go failure without changing foundation, MSTest or pytest:
@@ -213,11 +240,39 @@ dotnet run --project src/Aspire.Cli/Aspire.Cli.csproj --no-launch-profile -- \
   --timeout-seconds 120 --format json --non-interactive
 ```
 
-This returns exit code `23` with **9 passed, 1 failed, 3 skipped**. The Go process
+This returns exit code `23` with **12 passed, 1 failed, 4 skipped**. The Go process
 exits nonzero, but raw capture still drains through EOF and its collector harvests
-all four named outcomes. The other ecosystems remain passing. Failure flags are
-independent and case-insensitive; unset flags default to `false`. More than one
-flag can be enabled to demonstrate multiple failing resources.
+all four named outcomes. The other ecosystems remain passing.
+
+Exercise the independent Rust failure:
+
+```bash
+RUST_PLAYGROUND_FAIL=true \
+dotnet run --project src/Aspire.Cli/Aspire.Cli.csproj --no-launch-profile -- \
+  test --apphost playground/AspireCliTesting/apphost.cs --isolated \
+  --timeout-seconds 120 --format json --non-interactive
+```
+
+This returns exit code `23` with **12 passed, 1 failed, 4 skipped**. Nextest exits
+nonzero, but its finalized JUnit still contributes all four named outcomes.
+Missing nextest, build/discovery failure, no tests, cancellation, or a missing or
+malformed final report fail execution/collection rather than fabricating results.
+Inspect the Rust collection's `stdout.log` and `stderr.log` for the underlying
+cause when no JUnit is produced.
+
+Failure flags are independent and case-insensitive; unset flags default to
+`false`. To demonstrate all four failures together:
+
+```bash
+MSTEST_PLAYGROUND_FAIL=true PYTEST_PLAYGROUND_FAIL=true \
+GO_PLAYGROUND_FAIL=true RUST_PLAYGROUND_FAIL=true \
+dotnet run --project src/Aspire.Cli/Aspire.Cli.csproj --no-launch-profile -- \
+  test --apphost playground/AspireCliTesting/apphost.cs --isolated \
+  --timeout-seconds 120 --format json --non-interactive
+```
+
+This returns exit code `23` with **9 passed, 4 failed, 4 skipped**; the foundation
+probe still passes.
 
 There is no `--output` option; use the paths assigned
 by the CLI rather than passing reporting flags to the runner.
