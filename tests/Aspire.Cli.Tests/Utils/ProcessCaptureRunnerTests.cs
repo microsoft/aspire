@@ -187,7 +187,11 @@ public class ProcessCaptureRunnerTests(ITestOutputHelper outputHelper)
         {
             _stopped = true;
             _trigger.Set();
-            _thread.Join();
+            // Cancel() can run the runner, and the test awaiting it, inline on this thread.
+            if (Thread.CurrentThread != _thread)
+            {
+                _thread.Join();
+            }
         }
     }
 
