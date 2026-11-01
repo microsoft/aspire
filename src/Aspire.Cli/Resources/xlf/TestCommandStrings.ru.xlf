@@ -32,6 +32,11 @@
         <target state="new">cancelled</target>
         <note />
       </trans-unit>
+      <trans-unit id="CommandTimedOut">
+        <source>The test command exceeded its {0}-second --timeout-seconds deadline.</source>
+        <target state="new">The test command exceeded its {0}-second --timeout-seconds deadline.</target>
+        <note>Do not localize --timeout-seconds. It is a command-line option.</note>
+      </trans-unit>
       <trans-unit id="ConnectingToAppHost">
         <source>Connecting to AppHost...</source>
         <target state="new">Connecting to AppHost...</target>
@@ -81,6 +86,11 @@
         <source>{0} must be a positive integer number of seconds for test AppHost startup.</source>
         <target state="new">{0} must be a positive integer number of seconds for test AppHost startup.</target>
         <note />
+      </trans-unit>
+      <trans-unit id="InvalidTimeoutSeconds">
+        <source>--timeout-seconds must be an integer between 1 and {0}.</source>
+        <target state="new">--timeout-seconds must be an integer between 1 and {0}.</target>
+        <note>Do not localize --timeout-seconds. It is a command-line option.</note>
       </trans-unit>
       <trans-unit id="IsolatedModeRunningInstanceWarning">
         <source>A running instance of this AppHost was found and will be stopped. To run multiple isolated instances simultaneously, run from different directories such as git worktree directories.</source>
@@ -195,6 +205,16 @@
       <trans-unit id="SummaryHeader">
         <source>Test run {0}</source>
         <target state="new">Test run {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TimedOut">
+        <source>timed out</source>
+        <target state="new">timed out</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TimeoutSecondsDescription">
+        <source>Limit the entire test command, including build, startup, collection and keep-alive inspection, to this many seconds (no limit by default)</source>
+        <target state="new">Limit the entire test command, including build, startup, collection and keep-alive inspection, to this many seconds (no limit by default)</target>
         <note />
       </trans-unit>
       <trans-unit id="TimeoutWaitingForAppHost">

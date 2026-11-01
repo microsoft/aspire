@@ -33,6 +33,7 @@ internal sealed class TestRunReporter
     private bool _summaryDisplayed;
     private DateTimeOffset? _completedAt;
     private TestRunSummary? _lastSummary;
+    private bool? _completedOutcome;
     public bool JsonDisplayed { get; private set; }
 
     public string OutputPath { get; }
@@ -269,12 +270,7 @@ internal sealed class TestRunReporter
 
     private void CompleteCore(CommandResult result)
     {
-        var status = result.ExitCode switch
-        {
-            CliExitCodes.Success => "passed",
-            CliExitCodes.Cancelled => "cancelled",
-            _ => "failed"
-        };
+        var status = StatusFor(result);
         foreach (var (key, resource) in _resources.ToArray())
         {
             if (resource.Outcome == "pending")
@@ -298,6 +294,7 @@ internal sealed class TestRunReporter
         lock (_gate)
         {
             _completed = true;
+            _completedOutcome = passed;
             _completedAt ??= _timeProvider.GetUtcNow();
             // Resources and collectors are complete, but a keep-alive CLI has not exited yet.
             Persist(passed ? "passed" : "failed", exitCode: null, error: null);
@@ -387,10 +384,19 @@ internal sealed class TestRunReporter
         lock (_gate)
         {
             _completedAt ??= _timeProvider.GetUtcNow();
-            WriteJson(CreateSummary(result.ExitCode == CliExitCodes.Cancelled ? "cancelled" : "failed",
-                result.ExitCode, result.ErrorMessage));
+            WriteJson(CreateSummary(StatusFor(result), result.ExitCode, result.ErrorMessage));
         }
     }
+
+    private string StatusFor(CommandResult result) => result.ExitCode switch
+    {
+        CliExitCodes.Success => "passed",
+        CliExitCodes.Cancelled => "cancelled",
+        // Inspection expiry does not undo completed resource/result collection.
+        CliExitCodes.WaitTimeout when _completedOutcome is { } passed => passed ? "passed" : "failed",
+        CliExitCodes.WaitTimeout => "timedOut",
+        _ => "failed"
+    };
 
     private void WriteJson(TestRunSummary summary)
     {
@@ -437,6 +443,7 @@ internal sealed class TestRunReporter
         "passed" => TestCommandStrings.Passed,
         "failed" => TestCommandStrings.Failed,
         "cancelled" => TestCommandStrings.Cancelled,
+        "timedOut" => TestCommandStrings.TimedOut,
         "incomplete" => TestCommandStrings.Incomplete,
         "skipped" => TestCommandStrings.Skipped,
         _ => TestCommandStrings.Pending

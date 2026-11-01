@@ -31,6 +31,23 @@ dotnet run --project src/Aspire.Cli/Aspire.Cli.csproj --no-launch-profile -- \
   test --apphost playground/AspireCliTesting/apphost.cs --isolated --keep-alive
 ```
 
+CI can bound the entire command, including build, startup and collectors:
+
+```bash
+dotnet run --project src/Aspire.Cli/Aspire.Cli.csproj --no-launch-profile -- \
+  test --apphost playground/AspireCliTesting/apphost.cs --isolated \
+  --timeout-seconds 120 --format json --non-interactive
+```
+
+The deadline returns exit code `17` and retains a partial summary if testing is
+unfinished. There is no whole-command limit unless the switch is supplied.
+Timeout starts when the test command executes, not during compilation of the CLI
+by the outer `dotnet run`. An additional bounded five-second cleanup window
+allows the AppHost and its child processes to shut down.
+With `--keep-alive`, the same deadline also ends inspection. Already completed
+results remain completed; `summary.json` records the timeout exit code and
+diagnostic. JSON stdout is still emitted only once, at testing completion.
+
 To exercise ordinary development lifetime instead:
 
 ```bash

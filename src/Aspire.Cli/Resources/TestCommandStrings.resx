@@ -241,4 +241,18 @@
   <data name="ShutdownTimeout" xml:space="preserve">
     <value>The test AppHost did not shut down within {0} seconds.</value>
   </data>
+  <data name="TimeoutSecondsDescription" xml:space="preserve">
+    <value>Limit the entire test command, including build, startup, collection and keep-alive inspection, to this many seconds (no limit by default)</value>
+  </data>
+  <data name="InvalidTimeoutSeconds" xml:space="preserve">
+    <value>--timeout-seconds must be an integer between 1 and {0}.</value>
+    <comment>Do not localize --timeout-seconds. It is a command-line option.</comment>
+  </data>
+  <data name="CommandTimedOut" xml:space="preserve">
+    <value>The test command exceeded its {0}-second --timeout-seconds deadline.</value>
+    <comment>Do not localize --timeout-seconds. It is a command-line option.</comment>
+  </data>
+  <data name="TimedOut" xml:space="preserve">
+    <value>timed out</value>
+  </data>
 </root>

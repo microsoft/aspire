@@ -1114,6 +1114,335 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
         Assert.False(Directory.Exists(Path.Combine(workspace.CreateExecutionContext().AspireHomeDirectory.FullName, "testruns")));
     }
 
+    [Theory]
+    [InlineData("0")]
+    [InlineData("-1")]
+    [InlineData("1.5")]
+    [InlineData("invalid")]
+    [InlineData("4294968")]
+    [InlineData("2147483648")]
+    public async Task InvalidCommandDeadlineDoesNotCreateArtifactsOrLaunch(string timeout)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = CreateAppHost(workspace);
+        var factory = new TestAppHostProjectFactory { RunAsyncCallback = (_, _) => throw new InvalidOperationException("Must not launch.") };
+        var interaction = new TestInteractionService();
+        var services = CreateServices(workspace, appHostFile, factory);
+        services.AddSingleton<IInteractionService>(interaction);
+        using var provider = services.BuildServiceProvider();
+
+        var result = await provider.GetRequiredService<RootCommand>()
+            .Parse(["test", "--timeout-seconds", timeout, "--format", "json"])
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, result);
+        var summary = JsonNode.Parse(Assert.Single(interaction.DisplayedRawText).Text)!;
+        Assert.Equal(string.Format(TestCommandStrings.InvalidTimeoutSeconds, TestCommand.MaximumTimeoutSeconds),
+            summary["error"]!.GetValue<string>());
+        Assert.Null(summary["summaryPath"]);
+        Assert.False(Directory.Exists(Path.Combine(workspace.CreateExecutionContext().AspireHomeDirectory.FullName, "testruns")));
+    }
+
+    [Theory]
+    [InlineData("build")]
+    [InlineData("startup")]
+    [InlineData("resources")]
+    [InlineData("collector")]
+    [InlineData("inspection-passed")]
+    [InlineData("inspection-failed")]
+    public async Task WholeCommandDeadlineBoundsEveryPhaseAndPreservesObservedResults(string phase)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = CreateAppHost(workspace);
+        var timeProvider = new SignalingFakeTimeProvider(TimeSpan.FromSeconds(10));
+        var reachedPhase = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var tornDown = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseCollector = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var watchClosed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var keepAlive = phase.StartsWith("inspection", StringComparison.Ordinal);
+        var resourcePassed = phase != "inspection-failed";
+        string? summaryPath = null;
+        async IAsyncEnumerable<TestRunEvent> Watch([EnumeratorCancellation] CancellationToken ct)
+        {
+            try
+            {
+                yield return new TestRunEvent { Resource = new TestResourceState { ResourceName = "tests" } };
+                yield return new TestRunEvent
+                {
+                    Collection = new TestCollectionState { ResourceName = "tests", CollectorCount = 1, Status = "running" }
+                };
+                yield return new TestRunEvent
+                {
+                    Result = new PublishedTestResult { ResourceName = "tests", Name = "earlier-result", Outcome = "passed" }
+                };
+                yield return new TestRunEvent
+                {
+                    Resource = new TestResourceState
+                    {
+                        ResourceName = "tests", ResourceId = "tests",
+                        State = phase == "resources" ? "Running" : "Finished",
+                        ExitCode = phase == "resources" ? null : resourcePassed ? 0 : 1,
+                        Outcome = phase == "resources" ? "pending" : resourcePassed ? "passed" : "failed"
+                    }
+                };
+                if (phase is "resources" or "collector")
+                {
+                    reachedPhase.TrySetResult();
+                    if (phase == "collector")
+                    {
+                        // Simulate a collector/RPC peer that does not honor cancellation.
+                        await releaseCollector.Task;
+                    }
+                    else
+                    {
+                        await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+                    }
+                }
+                yield return new TestRunEvent
+                {
+                    Collection = new TestCollectionState { ResourceName = "tests", CollectorCount = 1, Status = "completed" }
+                };
+                yield return new TestRunEvent { Passed = resourcePassed };
+            }
+            finally
+            {
+                watchClosed.TrySetResult();
+            }
+        }
+        var backchannel = new TestAppHostBackchannel
+        {
+            WatchTestRunAsyncCallback = Watch,
+            WaitForDisconnectAsyncCalled = reachedPhase
+        };
+        var factory = new TestAppHostProjectFactory
+        {
+            RunAsyncCallback = async (context, ct) =>
+            {
+                summaryPath = Path.Combine(context.EnvironmentVariables[KnownConfigNames.TestOutputPath], "summary.json");
+                if (phase != "build")
+                {
+                    context.BuildCompletionSource!.TrySetResult(true);
+                }
+                if (phase is not ("build" or "startup"))
+                {
+                    context.BackchannelCompletionSource!.TrySetResult(backchannel);
+                }
+                else
+                {
+                    reachedPhase.TrySetResult();
+                }
+                try
+                {
+                    await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+                    return 0;
+                }
+                finally
+                {
+                    tornDown.TrySetResult();
+                }
+            }
+        };
+        var stdout = new StringBuilder();
+        var stderr = new StringBuilder();
+        var services = CreateServices(workspace, appHostFile, factory);
+        services.AddSingleton<IInteractionService>(CreateConsoleInteraction(workspace, stdout, stderr));
+        services.AddSingleton<TimeProvider>(timeProvider);
+        using var provider = services.BuildServiceProvider();
+        var arguments = new List<string> { "test", "--timeout-seconds", "10", "--format", "json" };
+        if (keepAlive)
+        {
+            arguments.Add("--keep-alive");
+        }
+        var execution = provider.GetRequiredService<RootCommand>().Parse(arguments.ToArray())
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
+        await reachedPhase.Task.DefaultTimeout();
+        Assert.False(execution.IsCompleted);
+        var beforeTimeout = keepAlive ? stdout.ToString() : null;
+        timeProvider.Advance(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(CliExitCodes.WaitTimeout, await execution.DefaultTimeout());
+        await tornDown.Task.DefaultTimeout();
+        var persisted = JsonNode.Parse(File.ReadAllText(summaryPath!))!;
+        Assert.Equal(keepAlive ? resourcePassed ? "passed" : "failed" : "timedOut", persisted["status"]!.GetValue<string>());
+        Assert.Equal(CliExitCodes.WaitTimeout, persisted["cliExitCode"]!.GetValue<int>());
+        Assert.Equal(string.Format(TestCommandStrings.CommandTimedOut, 10), persisted["error"]!.GetValue<string>());
+        if (phase is "build" or "startup")
+        {
+            Assert.Empty(persisted["resources"]!.AsArray());
+        }
+        else
+        {
+            Assert.Equal("earlier-result", persisted["testResults"]![0]!["name"]!.GetValue<string>());
+            Assert.Equal(phase == "resources" ? "incomplete" : resourcePassed ? "passed" : "failed",
+                persisted["resources"]![0]!["outcome"]!.GetValue<string>());
+            Assert.Equal(keepAlive ? "completed" : "incomplete", persisted["collections"]![0]!["status"]!.GetValue<string>());
+        }
+        if (keepAlive)
+        {
+            Assert.Equal(beforeTimeout, stdout.ToString());
+            var completed = JsonNode.Parse(stdout.ToString())!;
+            Assert.Null(completed["cliExitCode"]);
+            Assert.Equal(completed["completedAt"]!.GetValue<string>(), persisted["completedAt"]!.GetValue<string>());
+        }
+        else
+        {
+            Assert.Equal(File.ReadAllText(summaryPath!), stdout.ToString().TrimEnd());
+        }
+        Assert.Contains("--timeout-seconds", stderr.ToString());
+        if (phase == "collector")
+        {
+            var finalText = File.ReadAllText(summaryPath!);
+            releaseCollector.TrySetResult();
+            await watchClosed.Task.DefaultTimeout();
+            Assert.Equal(finalText, File.ReadAllText(summaryPath!));
+        }
+    }
+
+    [Theory]
+    [InlineData(2, CliExitCodes.Success)]
+    [InlineData(3, CliExitCodes.WaitTimeout)]
+    public async Task CommandDeadlineIsNotResetAfterBuildOrStartup(int collectionSeconds, int expectedExitCode)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = CreateAppHost(workspace);
+        var timeProvider = new Microsoft.Extensions.Time.Testing.FakeTimeProvider();
+        var stopped = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var backchannel = new TestAppHostBackchannel
+        {
+            GetDashboardUrlsAsyncCallback = _ =>
+            {
+                timeProvider.Advance(TimeSpan.FromSeconds(3));
+                return Task.FromResult(new DashboardUrlsState());
+            },
+            WaitForTestCompletionAsyncCallback = _ =>
+            {
+                timeProvider.Advance(TimeSpan.FromSeconds(collectionSeconds));
+                return Task.FromResult(true);
+            },
+            RequestStopAsyncCallback = () => { stopped.TrySetResult(0); return Task.CompletedTask; }
+        };
+        var factory = new TestAppHostProjectFactory
+        {
+            RunAsyncCallback = async (context, ct) =>
+            {
+                timeProvider.Advance(TimeSpan.FromSeconds(4));
+                context.BuildCompletionSource!.TrySetResult(true);
+                context.BackchannelCompletionSource!.TrySetResult(backchannel);
+                return await stopped.Task.WaitAsync(ct);
+            }
+        };
+        var services = CreateServices(workspace, appHostFile, factory);
+        services.AddSingleton<TimeProvider>(timeProvider);
+        using var provider = services.BuildServiceProvider();
+
+        var result = await provider.GetRequiredService<RootCommand>().Parse("test --timeout-seconds 10")
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.Equal(expectedExitCode, result);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task UserCancellationTakesPrecedenceOverCommandTimeout(bool cancelDuringTimeoutCleanup)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = CreateAppHost(workspace);
+        using var cancellation = new CancellationTokenSource();
+        var timeProvider = new SignalingFakeTimeProvider(TimeSpan.FromSeconds(1));
+        var launched = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var draining = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseDrain = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var factory = new TestAppHostProjectFactory
+        {
+            RunAsyncCallback = async (_, ct) =>
+            {
+                launched.TrySetResult();
+                try
+                {
+                    await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+                    return 0;
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    draining.TrySetResult();
+                    await releaseDrain.Task;
+                    return 0;
+                }
+            }
+        };
+        var interaction = new TestInteractionService();
+        var services = CreateServices(workspace, appHostFile, factory);
+        services.AddSingleton<IInteractionService>(interaction);
+        services.AddSingleton<TimeProvider>(timeProvider);
+        using var provider = services.BuildServiceProvider();
+        var execution = provider.GetRequiredService<RootCommand>().Parse("test --timeout-seconds 1 --format json")
+            .InvokeAsync(cancellationToken: cancellation.Token);
+        await launched.Task.DefaultTimeout();
+        if (cancelDuringTimeoutCleanup)
+        {
+            timeProvider.Advance(TimeSpan.FromSeconds(1));
+            await draining.Task.DefaultTimeout();
+        }
+        cancellation.Cancel();
+        releaseDrain.TrySetResult();
+
+        Assert.Equal(CliExitCodes.Cancelled, await execution.DefaultTimeout());
+        var summary = JsonNode.Parse(Assert.Single(interaction.DisplayedRawText).Text)!;
+        Assert.Equal("cancelled", summary["status"]!.GetValue<string>());
+        Assert.Equal(CliExitCodes.Cancelled, summary["cliExitCode"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task CommandDeadlineBoundsUncooperativeShutdownAndExpiresChildLadders()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = CreateAppHost(workspace);
+        var timeProvider = new SignalingFakeTimeProvider(TestCommand.s_gracefulShutdownBudget);
+        var stopping = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var cleanupStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var timerCount = 0;
+        timeProvider.TimerCreatedCallback = () =>
+        {
+            if (Interlocked.Increment(ref timerCount) == 2)
+            {
+                cleanupStarted.TrySetResult();
+            }
+        };
+        var backchannel = new TestAppHostBackchannel
+        {
+            WaitForTestCompletionAsyncCallback = _ => Task.FromResult(true),
+            RequestStopAsyncCallback = () => { stopping.TrySetResult(); return release.Task; }
+        };
+        var factory = new TestAppHostProjectFactory
+        {
+            RunAsyncCallback = (context, _) =>
+            {
+                context.BuildCompletionSource!.TrySetResult(true);
+                context.BackchannelCompletionSource!.TrySetResult(backchannel);
+                return release.Task;
+            }
+        };
+        var services = CreateServices(workspace, appHostFile, factory);
+        services.AddSingleton<TimeProvider>(timeProvider);
+        using var provider = services.BuildServiceProvider();
+        var execution = provider.GetRequiredService<RootCommand>().Parse("test --timeout-seconds 1")
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
+        await stopping.Task.DefaultTimeout();
+        await timeProvider.TimerCreated.Task.DefaultTimeout();
+        timeProvider.Advance(TimeSpan.FromSeconds(1));
+        // The first five-second timer belongs to RequestStop; wait for the cleanup
+        // timer as well before advancing, rather than racing its registration.
+        await cleanupStarted.Task.DefaultTimeout();
+        Assert.False(execution.IsCompleted);
+        timeProvider.Advance(TestCommand.s_gracefulShutdownBudget);
+
+        Assert.Equal(CliExitCodes.WaitTimeout, await execution.DefaultTimeout());
+        Assert.True(provider.GetRequiredService<ConsoleCancellationManager>().GracefulShutdownToken.IsCancellationRequested);
+        release.TrySetResult(0);
+    }
+
     private IServiceCollection CreateServices(TemporaryWorkspace workspace, FileInfo appHostFile, TestAppHostProjectFactory factory)
     {
         Directory.CreateDirectory(workspace.CreateExecutionContext().HomeDirectory.FullName);

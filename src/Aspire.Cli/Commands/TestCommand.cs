@@ -27,10 +27,13 @@ internal sealed class TestCommand : BaseCommand
     private static readonly TimeSpan s_structuredLogSupportProbeTimeout = TimeSpan.FromSeconds(2);
     private const int MaxRememberedAppHostLogSequenceNumbers = 1000;
     private const int MaxDisplayedAppHostStartupOutputLines = 80;
+    // CancellationTokenSource's timer accepts at most uint.MaxValue - 1 milliseconds.
+    internal const int MaximumTimeoutSeconds = (int)((uint.MaxValue - 1) / 1000);
     private static readonly Option<bool> s_noBuildOption = new("--no-build") { Description = TestCommandStrings.NoBuildArgumentDescription };
     private static readonly Option<bool> s_detachOption = new("--detach") { Hidden = true };
     internal static readonly Option<OutputFormat> s_formatOption = new("--format") { Description = TestCommandStrings.FormatDescription };
     internal static readonly Option<bool> s_keepAliveOption = new("--keep-alive") { Description = TestCommandStrings.KeepAliveDescription };
+    private static readonly Option<string?> s_timeoutSecondsOption = new("--timeout-seconds") { Description = TestCommandStrings.TimeoutSecondsDescription };
     private readonly IProjectLocator _projectLocator;
     private readonly IAppHostProjectFactory _projectFactory;
     private readonly AspireSecretsStoreResolver _secretsResolver;
@@ -60,6 +63,7 @@ internal sealed class TestCommand : BaseCommand
         Options.Add(s_detachOption);
         Options.Add(s_formatOption);
         Options.Add(s_keepAliveOption);
+        Options.Add(s_timeoutSecondsOption);
         Options.Add(AppHostLauncher.s_appHostOption);
         Options.Add(AppHostLauncher.s_isolatedOption);
         Options.Add(AppHostLauncher.s_launchProfileOption);
@@ -78,6 +82,19 @@ internal sealed class TestCommand : BaseCommand
             WriteFailureJson(format, invalid);
             return invalid;
         }
+        int? commandTimeoutSeconds = null;
+        if (parseResult.GetValue(s_timeoutSecondsOption) is { } suppliedTimeout)
+        {
+            if (!int.TryParse(suppliedTimeout, NumberStyles.None, CultureInfo.InvariantCulture, out var seconds) ||
+                seconds is <= 0 or > MaximumTimeoutSeconds)
+            {
+                var invalid = CommandResult.Failure(CliExitCodes.InvalidCommand,
+                    string.Format(CultureInfo.CurrentCulture, TestCommandStrings.InvalidTimeoutSeconds, MaximumTimeoutSeconds));
+                WriteFailureJson(format, invalid);
+                return invalid;
+            }
+            commandTimeoutSeconds = seconds;
+        }
         var timeoutSeconds = WaitCommand.DefaultTimeoutSeconds;
         var configuredTimeout = _configuration[CliConfigNames.AppHostStartupTimeout];
         if (!string.IsNullOrWhiteSpace(configuredTimeout) &&
@@ -89,6 +106,12 @@ internal sealed class TestCommand : BaseCommand
             return invalid;
         }
 
+        // This timer is monotonic, never reset between build, startup, collection and inspection.
+        // Keep its token separate from user cancellation so CI deadlines cannot become exit 130.
+        using var deadline = commandTimeoutSeconds is { } limit
+            ? new CancellationTokenSource(TimeSpan.FromSeconds(limit), _timeProvider)
+            : new CancellationTokenSource();
+        using var executionCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
         TestRunReporter? reporter = null;
         CommandResult result;
         try
@@ -96,9 +119,10 @@ internal sealed class TestCommand : BaseCommand
             reporter = TestRunReporter.Create(ExecutionContext, InteractionService,
                 _services.HostEnvironment.SupportsInteractiveOutput, format, _timeProvider,
                 _services.LoggerFactory.CreateLogger<TestRunReporter>());
-            result = await RunTestAppHostAsync(parseResult, reporter, timeoutSeconds, cancellationToken).ConfigureAwait(false);
+            result = await RunTestAppHostAsync(parseResult, reporter, timeoutSeconds, executionCancellation.Token,
+                commandTimeoutSeconds is null ? CancellationToken.None : deadline.Token).ConfigureAwait(false);
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (executionCancellation.IsCancellationRequested)
         {
             result = CommandResult.Cancelled();
         }
@@ -139,6 +163,11 @@ internal sealed class TestCommand : BaseCommand
         {
             result = CommandResult.Cancelled();
         }
+        else if (deadline.IsCancellationRequested)
+        {
+            result = CommandResult.Failure(CliExitCodes.WaitTimeout,
+                string.Format(CultureInfo.CurrentCulture, TestCommandStrings.CommandTimedOut, commandTimeoutSeconds));
+        }
         try
         {
             if (reporter is not null)
@@ -175,14 +204,15 @@ internal sealed class TestCommand : BaseCommand
     }
 
     private async Task<CommandResult> RunTestAppHostAsync(ParseResult parseResult, TestRunReporter reporter,
-        int timeoutSeconds, CancellationToken cancellationToken)
+        int timeoutSeconds, CancellationToken cancellationToken, CancellationToken commandDeadline)
     {
         // Finite tests must not inherit run's watch, detached launch, or extension-managed
         // lifetime. Projects still own process creation; testing owns this orchestration.
         var behavior = _services.HostEnvironment.SupportsInteractiveInput
             ? MultipleAppHostProjectsFoundBehavior.Prompt : MultipleAppHostProjectsFoundBehavior.Throw;
         var search = await _projectLocator.UseOrFindAppHostProjectFileAsync(
-            parseResult.GetValue(AppHostLauncher.s_appHostOption), behavior, createSettingsFile: true, cancellationToken).ConfigureAwait(false);
+            parseResult.GetValue(AppHostLauncher.s_appHostOption), behavior, createSettingsFile: true, cancellationToken)
+            .WaitAsync(cancellationToken).ConfigureAwait(false);
         if (search.SelectedProjectFile is not { } appHostFile)
         {
             return CommandResult.Failure(CliExitCodes.FailedToFindProject);
@@ -198,7 +228,7 @@ internal sealed class TestCommand : BaseCommand
         }
         var isolated = AppHostLauncher.ResolveIsolated(parseResult);
         var runningInstance = await project.FindAndStopRunningInstanceAsync(
-            appHostFile, ExecutionContext.HomeDirectory, cancellationToken).ConfigureAwait(false);
+            appHostFile, ExecutionContext.HomeDirectory, cancellationToken).WaitAsync(cancellationToken).ConfigureAwait(false);
         if (isolated && runningInstance == RunningInstanceResult.InstanceStopped)
         {
             InteractionService.DisplayMessage(KnownEmojis.Warning, TestCommandStrings.IsolatedModeRunningInstanceWarning);
@@ -225,7 +255,7 @@ internal sealed class TestCommand : BaseCommand
         };
         context.EnvironmentVariables[KnownConfigNames.TestOutputPath] = reporter.OutputPath;
         context.EnvironmentVariables[KnownConfigNames.AspireUserSecretsId] =
-            await _secretsResolver.ResolveAppHostIdAsync(appHostFile, project, cancellationToken).ConfigureAwait(false);
+            await _secretsResolver.ResolveAppHostIdAsync(appHostFile, project, cancellationToken).WaitAsync(cancellationToken).ConfigureAwait(false);
         ProfilingTelemetry.AddCurrentContextToEnvironment(context.EnvironmentVariables);
 
         using var runCancellation = new CancellationTokenSource();
@@ -246,7 +276,7 @@ internal sealed class TestCommand : BaseCommand
             }
             if (!await built.Task.WaitAsync(cancellationToken).ConfigureAwait(false))
             {
-                var exitCode = await run.ConfigureAwait(false);
+                var exitCode = await run.WaitAsync(cancellationToken).ConfigureAwait(false);
                 cancellationToken.ThrowIfCancellationRequested();
                 if (context.OutputCollector is { } output)
                 {
@@ -315,13 +345,14 @@ internal sealed class TestCommand : BaseCommand
         {
             // Fence cancellation forwarding before the final unconditional teardown. Test
             // failures and RPC errors still own a live AppHost; none may leave it behind.
+            var cleanupStart = _timeProvider.GetTimestamp();
             await forwarding.DisposeAsync().ConfigureAwait(false);
             if (run is { IsCompleted: false })
             {
                 runCancellation.Cancel();
                 try
                 {
-                    var drainTimeout = _services.CancellationManager.IsCancellationRequested
+                    var drainTimeout = _services.CancellationManager.IsCancellationRequested && !commandDeadline.IsCancellationRequested
                         ? Timeout.InfiniteTimeSpan : GracefulShutdownBudget;
                     await run.WaitAsync(drainTimeout, _timeProvider, CancellationToken.None).ConfigureAwait(false);
                 }
@@ -330,6 +361,12 @@ internal sealed class TestCommand : BaseCommand
                 }
                 catch (Exception ex)
                 {
+                    if (commandDeadline.IsCancellationRequested)
+                    {
+                        // A deadline is not a user signal, but it must still expire the same
+                        // child-process shutdown ladders if cooperative teardown exhausts its budget.
+                        _services.CancellationManager.Expire();
+                    }
                     _logger.LogWarning(ex, "Test AppHost teardown did not finish normally.");
                     ObserveFaults(run);
                 }
@@ -337,12 +374,26 @@ internal sealed class TestCommand : BaseCommand
             logCancellation.Cancel();
             try
             {
-                await logs.ConfigureAwait(false);
+                if (commandDeadline.IsCancellationRequested)
+                {
+                    var remaining = GracefulShutdownBudget - _timeProvider.GetElapsedTime(cleanupStart);
+                    await logs.WaitAsync(remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero,
+                        _timeProvider, CancellationToken.None).ConfigureAwait(false);
+                }
+                else if (commandDeadline.CanBeCanceled)
+                {
+                    await logs.WaitAsync(cancellationToken).ConfigureAwait(false);
+                }
+                else
+                {
+                    await logs.ConfigureAwait(false);
+                }
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Failed to capture logs from the test AppHost.");
                 InteractionService.DisplayMessage(KnownEmojis.Warning, TestCommandStrings.LogCaptureFailed);
+                ObserveFaults(logs);
             }
         }
     }
@@ -380,7 +431,12 @@ internal sealed class TestCommand : BaseCommand
         var now = _timeProvider.GetUtcNow();
         var summary = new TestRunSummary
         {
-            Status = result.ExitCode == CliExitCodes.Cancelled ? "cancelled" : "failed",
+            Status = result.ExitCode switch
+            {
+                CliExitCodes.Cancelled => "cancelled",
+                CliExitCodes.WaitTimeout => "timedOut",
+                _ => "failed"
+            },
             StartedAt = now,
             CompletedAt = now,
             CliExitCode = result.ExitCode,
@@ -407,7 +463,7 @@ internal sealed class TestCommand : BaseCommand
             extension.NotifyAppHostStartupCompleted();
         }
 
-        var capabilities = await session.Backchannel.GetCapabilitiesAsync(cancellationToken).ConfigureAwait(false);
+        var capabilities = await session.Backchannel.GetCapabilitiesAsync(cancellationToken).WaitAsync(cancellationToken).ConfigureAwait(false);
         if (!capabilities.Contains("test-reporting.v1", StringComparer.Ordinal))
         {
             return CommandResult.Failure(CliExitCodes.AppHostIncompatible, TestCommandStrings.AppHostIncompatible);

@@ -76,7 +76,7 @@ The command returns `0` when all tests pass, `23` when any test fails, and `130`
 when cancelled. Missing test annotations, an incompatible AppHost, startup
 failure, premature AppHost exit, or shutdown failure also return a nonzero code
 with diagnostics. A test that never reaches a terminal state continues running
-until cancelled. Detached execution, profile capture, and
+until cancelled or an explicitly supplied command deadline expires. Detached execution, profile capture, and
 extension-managed debug sessions are not supported. Framework-specific result parsers and resource helpers are not provided.
 
 Each invocation creates a unique directory under `~/.aspire/testruns` (or the
@@ -150,6 +150,20 @@ and collector completion; both the CLI and AppHost remain in the foreground, wit
 services available until stopped. Tests are not rerun. Ctrl+C performs normal
 teardown and returns `130`, preserving resource outcomes in the final file.
 AppHost/RPC failures still terminate the session with diagnostics.
+
+Use `aspire test --timeout-seconds 120` to bound the whole command in CI. The
+monotonic deadline starts before AppHost discovery/build, includes startup,
+resource execution and collectors, and also limits `--keep-alive` inspection.
+It does not replace the separate AppHost startup timeout and has no default.
+Acceptable values are integers from `1` through `4294967` seconds (the timer's
+supported range); invalid values are rejected before creating artifacts.
+On expiry, the CLI cancels execution, allows up to five additional seconds for
+bounded teardown, and returns `17`. Unfinished runs have JSON status `timedOut`
+and an explicit deadline diagnostic, retaining published results and marking
+unfinished resources/collections `incomplete`. If inspection expires after
+collection completed, the completed `passed`/`failed` status and completion time
+are preserved while the final file records exit `17` and the timeout diagnostic.
+Explicit user cancellation takes precedence and still returns `130`.
 
 Use `aspire test --format json` for a single summary object on stdout, matching
 the persisted `summary.json` after shutdown. Diagnostics go to stderr; stdout

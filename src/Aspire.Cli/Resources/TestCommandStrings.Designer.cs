@@ -96,6 +96,30 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        internal static string TimeoutSecondsDescription {
+            get {
+                return ResourceManager.GetString("TimeoutSecondsDescription", resourceCulture);
+            }
+        }
+
+        internal static string InvalidTimeoutSeconds {
+            get {
+                return ResourceManager.GetString("InvalidTimeoutSeconds", resourceCulture);
+            }
+        }
+
+        internal static string CommandTimedOut {
+            get {
+                return ResourceManager.GetString("CommandTimedOut", resourceCulture);
+            }
+        }
+
+        internal static string TimedOut {
+            get {
+                return ResourceManager.GetString("TimedOut", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized resource label.
         /// </summary>
