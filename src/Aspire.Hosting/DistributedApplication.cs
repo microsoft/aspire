@@ -90,7 +90,10 @@ public class DistributedApplication : IHost, IAsyncDisposable
 
         // Interactions can't be answered until the host has run its before-start hooks and started the
         // dashboard and CLI backchannel, so the interaction service is unavailable until then.
-        host.Services.GetService<IInteractionService>()?.MarkConsumersReady(false);
+        if (host.Services.GetService<InteractionServiceConsumerState>() is { } consumerState)
+        {
+            consumerState.Ready = false;
+        }
     }
 
     /// <summary>
@@ -734,7 +737,10 @@ public class DistributedApplication : IHost, IAsyncDisposable
         }
         finally
         {
-            _host.Services.GetService<IInteractionService>()?.MarkConsumersReady(true);
+            if (_host.Services.GetService<InteractionServiceConsumerState>() is { } consumerState)
+            {
+                consumerState.Ready = true;
+            }
         }
     }
 

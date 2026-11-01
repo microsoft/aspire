@@ -28,15 +28,6 @@ public interface IInteractionService
     bool IsAvailable { get; }
 
     /// <summary>
-    /// Sets whether the consumers that respond to interactions, such as the dashboard and CLI, are ready.
-    /// While consumers aren't ready, <see cref="IsAvailable"/> returns <c>false</c>.
-    /// </summary>
-    /// <param name="ready"><c>true</c> if consumers are ready to respond to interactions; otherwise, <c>false</c>.</param>
-    internal void MarkConsumersReady(bool ready)
-    {
-    }
-
-    /// <summary>
     /// Prompts the user for confirmation with a dialog.
     /// </summary>
     /// <param name="title">The title of the dialog.</param>

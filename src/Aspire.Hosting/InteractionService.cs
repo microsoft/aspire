@@ -24,12 +24,6 @@ internal class InteractionService : IInteractionService
     // When set, IsAvailable returns false so command callbacks know not to prompt the user.
     private static readonly AsyncLocal<bool> s_nonInteractiveScope = new();
 
-    // Interactions are answered by consumers such as the dashboard and the CLI backchannel, which are hosted
-    // services that only start after before-start hooks (e.g. BeforeStartEvent) complete. Until then nothing can
-    // respond to an interaction, so awaiting a prompt would never complete. DistributedApplication marks consumers
-    // as not ready when it's created and marks them ready once the hooks finish.
-    private volatile bool _consumersReady = true;
-
     private Action<Interaction>? OnInteractionUpdated { get; set; }
     private readonly object _onInteractionUpdatedLock = new();
     private readonly InteractionCollection _interactionCollection = new();
@@ -38,14 +32,16 @@ internal class InteractionService : IInteractionService
     private readonly IServiceProvider _serviceProvider;
     private readonly IConfiguration _configuration;
     private readonly IInteractionFileUploadStore _fileUploadStore;
+    private readonly InteractionServiceConsumerState _consumerState;
 
-    public InteractionService(ILogger<InteractionService> logger, DistributedApplicationOptions distributedApplicationOptions, IServiceProvider serviceProvider, IConfiguration configuration, IInteractionFileUploadStore fileUploadStore)
+    public InteractionService(ILogger<InteractionService> logger, DistributedApplicationOptions distributedApplicationOptions, IServiceProvider serviceProvider, IConfiguration configuration, IInteractionFileUploadStore fileUploadStore, InteractionServiceConsumerState consumerState)
     {
         _logger = logger;
         _distributedApplicationOptions = distributedApplicationOptions;
         _serviceProvider = serviceProvider;
         _configuration = configuration;
         _fileUploadStore = fileUploadStore;
+        _consumerState = consumerState;
     }
 
     public bool IsAvailable
@@ -62,7 +58,7 @@ internal class InteractionService : IInteractionService
                 return false;
             }
 
-            if (!_consumersReady)
+            if (!_consumerState.Ready)
             {
                 return false;
             }
@@ -101,9 +97,6 @@ internal class InteractionService : IInteractionService
             s_nonInteractiveScope.Value = _previousValue;
         }
     }
-
-    /// <inheritdoc />
-    void IInteractionService.MarkConsumersReady(bool ready) => _consumersReady = ready;
 
     public async Task<InteractionResult<bool>> PromptConfirmationAsync(string title, string message, MessageBoxInteractionOptions? options = null, CancellationToken cancellationToken = default)
     {

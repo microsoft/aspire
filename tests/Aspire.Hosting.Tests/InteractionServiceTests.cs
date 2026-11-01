@@ -190,9 +190,12 @@ public class InteractionServiceTests
     [Fact]
     public async Task IsAvailable_ConsumersNotReady_ReturnsFalseAndPromptsThrow()
     {
-        var interactionService = CreateInteractionService();
+        var consumerState = new InteractionServiceConsumerState();
+        var interactionService = CreateInteractionService(consumerState: consumerState);
 
-        ((IInteractionService)interactionService).MarkConsumersReady(false);
+        Assert.True(consumerState.Ready);
+        Assert.True(interactionService.IsAvailable);
+        consumerState.Ready = false;
 
         Assert.False(interactionService.IsAvailable);
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
@@ -200,7 +203,7 @@ public class InteractionServiceTests
         Assert.Contains(nameof(BeforeStartEvent), ex.Message);
         Assert.Empty(interactionService.GetCurrentInteractions());
 
-        ((IInteractionService)interactionService).MarkConsumersReady(true);
+        consumerState.Ready = true;
         Assert.True(interactionService.IsAvailable);
     }
 
@@ -229,8 +232,10 @@ public class InteractionServiceTests
 
         using var app = builder.Build();
         var interactionService = app.Services.GetRequiredService<IInteractionService>();
+        var consumerState = app.Services.GetRequiredService<InteractionServiceConsumerState>();
 
         // Code that runs after Build() but before the before-start hooks also can't get an answer.
+        Assert.False(consumerState.Ready);
         Assert.False(interactionService.IsAvailable);
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => interactionService.PromptMessageBoxAsync("Title", "Message")).DefaultTimeout();
@@ -239,6 +244,26 @@ public class InteractionServiceTests
 
         Assert.False(isAvailableDuringBeforeStart);
         Assert.IsType<InvalidOperationException>(promptException);
+        Assert.True(consumerState.Ready);
+        Assert.True(interactionService.IsAvailable);
+    }
+
+    [Fact]
+    public async Task BeforeStartEvent_Failure_RestoresConsumerReadiness()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(options => options.DisableDashboard = false);
+        builder.Eventing.Subscribe<BeforeStartEvent>((e, ct) => throw new InvalidOperationException("Before-start failed."));
+
+        using var app = builder.Build();
+        var consumerState = app.Services.GetRequiredService<InteractionServiceConsumerState>();
+        var interactionService = app.Services.GetRequiredService<IInteractionService>();
+        Assert.False(consumerState.Ready);
+        Assert.False(interactionService.IsAvailable);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => app.ExecuteBeforeStartHooksAsync(default)).DefaultTimeout();
+
+        Assert.True(consumerState.Ready);
         Assert.True(interactionService.IsAvailable);
     }
 
@@ -275,7 +300,8 @@ public class InteractionServiceTests
             new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
             configuration,
-            new TestInteractionFileUploadStore());
+            new TestInteractionFileUploadStore(),
+            new InteractionServiceConsumerState());
 
         // Assert
         Assert.Equal(expected, interactionService.IsAvailable);
@@ -303,7 +329,8 @@ public class InteractionServiceTests
             new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
             configuration,
-            new TestInteractionFileUploadStore());
+            new TestInteractionFileUploadStore(),
+            new InteractionServiceConsumerState());
 
         // Assert - Invalid values should be ignored, defaulting to true (since dashboard is enabled)
         Assert.True(interactionService.IsAvailable);
@@ -326,7 +353,8 @@ public class InteractionServiceTests
             new DistributedApplicationOptions { DisableDashboard = true },
             new ServiceCollection().BuildServiceProvider(),
             configuration,
-            new TestInteractionFileUploadStore());
+            new TestInteractionFileUploadStore(),
+            new InteractionServiceConsumerState());
 
         // Assert - Both conditions should result in false
         Assert.False(interactionService.IsAvailable);
@@ -1387,7 +1415,7 @@ public class InteractionServiceTests
             CancellationToken.None);
     }
 
-    private static InteractionService CreateInteractionService(DistributedApplicationOptions? options = null, IInteractionFileUploadStore? fileUploadStore = null)
+    private static InteractionService CreateInteractionService(DistributedApplicationOptions? options = null, IInteractionFileUploadStore? fileUploadStore = null, InteractionServiceConsumerState? consumerState = null)
     {
         var configuration = new ConfigurationBuilder().Build();
         return new InteractionService(
@@ -1395,7 +1423,8 @@ public class InteractionServiceTests
             options ?? new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
             configuration,
-            fileUploadStore ?? new TestInteractionFileUploadStore());
+            fileUploadStore ?? new TestInteractionFileUploadStore(),
+            consumerState ?? new InteractionServiceConsumerState());
     }
 
     [Fact]

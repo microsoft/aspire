@@ -418,6 +418,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _innerBuilder.Services.AddSingleton<ResourceCommandService>(s => new ResourceCommandService(s.GetRequiredService<ResourceNotificationService>(), s.GetRequiredService<ResourceLoggerService>(), s));
         _innerBuilder.Services.TryAddSingleton<IProcessRunner, DefaultProcessRunner>();
         _innerBuilder.Services.TryAddSingleton<IDotnetSdkVersionProvider, DotnetSdkVersionProvider>();
+        _innerBuilder.Services.AddSingleton<InteractionServiceConsumerState>();
         _innerBuilder.Services.AddSingleton<InteractionService>();
         _innerBuilder.Services.AddSingleton<IInteractionService>(sp => sp.GetRequiredService<InteractionService>());
         _innerBuilder.Services.AddSingleton<ParameterProcessor>(static sp =>
