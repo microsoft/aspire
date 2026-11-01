@@ -97,7 +97,7 @@ public class RequiresFeatureAttribute(TestFeature feature) : Attribute, ITraitAt
     // - Linux - Local, or CI: always assume that a container runtime is installed
     //
     // Locally there is no such expectation, so probe PATH instead: a developer machine may have Podman
-    // only, Docker only, or neither, and tests should skip rather than fail against a runtime that is
+    // only, Docker only, WSLC only, or none, and tests should skip rather than fail against a runtime that is
     // not installed. Only PATH is inspected (no process is spawned) because trait attributes are
     // evaluated during discovery, once per test.
     internal static bool IsContainerRuntimeSupported()
@@ -108,7 +108,8 @@ public class RequiresFeatureAttribute(TestFeature feature) : Attribute, ITraitAt
                 || (OperatingSystem.IsWindows() && PlatformDetection.IsRunningOnGithubActions);
         }
 
-        return IsOnPath(KnownContainerRuntimes.Docker) || IsOnPath(KnownContainerRuntimes.Podman);
+        return IsOnPath(KnownContainerRuntimes.Docker) || IsOnPath(KnownContainerRuntimes.Podman)
+            || (OperatingSystem.IsWindows() && IsOnPath(KnownContainerRuntimes.Wslc));
     }
 
     // Same CI expectation as IsContainerRuntimeSupported, but locally requires Docker itself. Used by
@@ -129,16 +130,7 @@ public class RequiresFeatureAttribute(TestFeature feature) : Attribute, ITraitAt
         // Docker/Podman expectation elsewhere without gating unrelated image-build tests.
         return PlatformDetection.IsRunningOnCI
             ? OperatingSystem.IsLinux()
-            : IsContainerRuntimeSupported();
-    }
-
-    private static bool IsContainerImagePublishingSupported()
-    {
-        // DCP can build and run WSLC images, but IContainerRuntimeResolver only provides
-        // Docker/Podman publishing implementations. Windows CI has neither engine.
-        return IsContainerImageBuildSupported() && (PlatformDetection.IsRunningOnCI
-            ? OperatingSystem.IsLinux()
-            : IsContainerRuntimeSupported());
+            : IsOnPath(KnownContainerRuntimes.Docker) || IsOnPath(KnownContainerRuntimes.Podman);
     }
 
     // Testcontainers needs a Docker-compatible API *endpoint*, not just a CLI on PATH: it speaks HTTP to
@@ -189,8 +181,8 @@ public class RequiresFeatureAttribute(TestFeature feature) : Attribute, ITraitAt
             return !PlatformDetection.IsRunningFromAzdo;
         }
 
-        // buildx ships with modern Docker installations, so presence of either CLI is enough locally.
-        return IsOnPath(KnownContainerRuntimes.Docker) || IsOnPath(KnownContainerRuntimes.Podman);
+        // buildx ships with modern Docker installations; Podman and WSLC build natively.
+        return IsContainerRuntimeSupported();
     }
 
     private static bool IsOnPath(string executable)
@@ -234,10 +226,6 @@ public class RequiresFeatureAttribute(TestFeature feature) : Attribute, ITraitAt
             return false;
         }
         if ((feature & TestFeature.ContainerCompose) == TestFeature.ContainerCompose && !IsContainerComposeSupported())
-        {
-            return false;
-        }
-        if ((feature & TestFeature.ContainerImagePublishing) == TestFeature.ContainerImagePublishing && !IsContainerImagePublishingSupported())
         {
             return false;
         }

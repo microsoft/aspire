@@ -20,7 +20,6 @@ using Aspire.Hosting.Resources;
 using Aspire.Hosting.Tests.Publishing;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
-using Aspire.Shared;
 using Aspire.TestUtilities;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
@@ -281,7 +280,7 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    [RequiresFeature(TestFeature.ContainerImagePublishing)]
+    [RequiresFeature(TestFeature.ContainerRuntime | TestFeature.ContainerImageBuild)]
     public async Task FileBasedAppWithContainerFilesPreservesLocalImageAndBuildsArchive(bool legacyProject)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -345,8 +344,7 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
             null,
             cancellation.Token);
         var processRunner = app.Services.GetRequiredService<IProcessRunner>();
-        var originalImageId = await RunContainerRuntimeAsync(
-            processRunner, runtime, ["image", "inspect", "--format", "{{.Id}}", imageReference], cancellation.Token);
+        var originalImageId = await GetContainerImageIdAsync(processRunner, runtime, imageReference, cancellation.Token);
         Assert.NotEmpty(originalImageId);
 
         // Keep an owned alias so loading the archive cannot leave the sentinel image untagged.
@@ -356,17 +354,18 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
 
         await imageBuilder.BuildImageAsync(resource.Resource, cancellation.Token);
 
-        var preservedImageId = await RunContainerRuntimeAsync(
-            processRunner, runtime, ["image", "inspect", "--format", "{{.Id}}", imageReference], cancellation.Token);
+        var preservedImageId = await GetContainerImageIdAsync(processRunner, runtime, imageReference, cancellation.Token);
         Assert.Equal(originalImageId, preservedImageId);
         Assert.Equal([imageReference], TestContainerImageArchive.ReadDockerImageReferences(archivePath));
 
         await RunContainerRuntimeAsync(processRunner, runtime, ["image", "load", "--input", archivePath], cancellation.Token);
-        var loadedImageId = await RunContainerRuntimeAsync(
-            processRunner, runtime, ["image", "inspect", "--format", "{{.Id}}", imageReference], cancellation.Token);
+        var loadedImageId = await GetContainerImageIdAsync(processRunner, runtime, imageReference, cancellation.Token);
         Assert.NotEqual(originalImageId, loadedImageId);
+        var runArguments = runtime.Name == "WSLc"
+            ? new[] { "run", "--rm", imageReference }
+            : ["run", "--rm", "--platform", "linux/amd64", imageReference];
         var containerOutput = await RunContainerRuntimeAsync(
-            processRunner, runtime, ["run", "--rm", "--platform", "linux/amd64", imageReference], cancellation.Token);
+            processRunner, runtime, runArguments, cancellation.Token);
         Assert.Equal(marker, containerOutput);
     }
 
@@ -1150,41 +1149,39 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
 
         if (runContainer)
         {
+            var runtime = await app.Services.GetRequiredService<IContainerRuntimeResolver>().ResolveAsync(cancellation.Token);
             var processRunner = app.Services.GetRequiredService<IProcessRunner>();
             var logger = app.Services.GetRequiredService<ILogger<DotnetProjectResourceTests>>();
-            // The SDK already produced the archive. Loading/running it is a runtime operation,
-            // not a publishing operation: the publishing resolver only supports Docker/Podman.
-            var runtime = await ContainerRuntimeDetector.FindAvailableRuntimeAsync(
-                Environment.GetEnvironmentVariable("ASPIRE_CONTAINER_RUNTIME"), logger, cancellation.Token);
-            Assert.NotNull(runtime);
-            Assert.True(runtime.IsHealthy, runtime.Error);
-            try
-            {
-                await RunContainerRuntimeAsync(processRunner, runtime.Executable, ["image", "load", "--input", archivePath], cancellation.Token);
-                // WSLC runs the platform encoded in the archive and has no run --platform option.
-                var arguments = runtime.Key == KnownContainerRuntimes.Wslc
-                    ? new[] { "run", "--rm", imageReference }
-                    : ["run", "--rm", "--platform", "linux/amd64", imageReference];
-                var containerOutput = await RunContainerRuntimeAsync(
-                    processRunner, runtime.Executable, arguments, cancellation.Token);
-                Assert.Equal("project", containerOutput);
-            }
-            finally
-            {
-                using var cleanupCancellation = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-                try
-                {
-                    await RunContainerRuntimeAsync(processRunner, runtime.Executable, ["image", "remove", imageReference], cleanupCancellation.Token);
-                }
-                catch (Exception ex)
-                {
-                    logger.LogWarning(ex, "Failed to remove temporary container image {ImageName}", imageReference);
-                }
-            }
+            await using var imageCleanup = new TemporaryContainerImage(runtime, imageReference, logger);
+            await RunContainerRuntimeAsync(processRunner, runtime, ["image", "load", "--input", archivePath], cancellation.Token);
+            // WSLC runs the platform encoded in the archive and has no run --platform option.
+            var arguments = runtime.Name == "WSLc"
+                ? new[] { "run", "--rm", imageReference }
+                : ["run", "--rm", "--platform", "linux/amd64", imageReference];
+            var containerOutput = await RunContainerRuntimeAsync(
+                processRunner, runtime, arguments, cancellation.Token);
+            Assert.Equal("project", containerOutput);
         }
     }
 
-    private static Task<string> RunContainerRuntimeAsync(
+    private static async Task<string> GetContainerImageIdAsync(
+        IProcessRunner processRunner,
+        IContainerRuntime runtime,
+        string imageReference,
+        CancellationToken cancellationToken)
+    {
+        // All three runtimes return [{"Id":"sha256:...", ...}]. WSLC does not
+        // support Docker/Podman's Go-template --format "{{.Id}}" projection.
+        var output = await RunContainerRuntimeAsync(
+            processRunner, runtime, ["image", "inspect", imageReference], cancellationToken);
+        using var document = JsonDocument.Parse(output);
+        var imageId = Assert.Single(document.RootElement.EnumerateArray()).GetProperty("Id").GetString();
+        Assert.NotNull(imageId);
+
+        return imageId;
+    }
+
+    private static async Task<string> RunContainerRuntimeAsync(
         IProcessRunner processRunner,
         IContainerRuntime runtime,
         string[] arguments,
@@ -1194,18 +1191,9 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
         {
             "Docker" => "docker",
             "Podman" => "podman",
+            "WSLc" => "wslc",
             _ => throw new InvalidOperationException($"Unexpected container runtime '{runtime.Name}'.")
         };
-
-        return RunContainerRuntimeAsync(processRunner, executable, arguments, cancellationToken);
-    }
-
-    private static async Task<string> RunContainerRuntimeAsync(
-        IProcessRunner processRunner,
-        string executable,
-        string[] arguments,
-        CancellationToken cancellationToken)
-    {
         var (pendingResult, process) = processRunner.Run(new ProcessSpec(executable)
         {
             ArgumentList = arguments,

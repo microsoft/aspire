@@ -11,15 +11,16 @@ public enum TestFeature
     DevCert = 1 << 2,
 
     /// <summary>
-    /// A container runtime is available. Satisfied by Docker, Podman, or WSLC on Windows GitHub Actions, so use this for tests
+    /// A container runtime is available. Satisfied by Docker, Podman, or WSLC on Windows, so use this for tests
     /// that just need to run containers. Prefer it over <see cref="Docker"/>.
     /// </summary>
     ContainerRuntime = 1 << 3,
 
     /// <summary>
     /// The available container runtime can build images from a Dockerfile. Docker needs the buildx
-    /// plugin for this; Podman and WSLC build natively through DCP. This does not imply support
-    /// for Aspire's publishing pipeline; use <see cref="ContainerImagePublishing"/> alone for that.
+    /// plugin for this; Podman and WSLC build natively through DCP. Combine with
+    /// <see cref="ContainerRuntime"/> for tests that build images using a live runtime,
+    /// including Aspire's publishing pipeline.
     /// </summary>
     ContainerImageBuild = 1 << 4,
 
@@ -44,13 +45,5 @@ public enum TestFeature
     /// The container runtime supports Compose deployment. Docker and Podman can provide Compose;
     /// WSLC does not. Use this for tests that execute Compose, not tests that only generate its files.
     /// </summary>
-    ContainerCompose = 1 << 7,
-
-    /// <summary>
-    /// A Docker or Podman runtime is available for Aspire's container image publishing pipeline,
-    /// including Dockerfile builds and local image-store operations. This implies
-    /// <see cref="ContainerImageBuild"/>. WSLC can build images through
-    /// DCP, but has no publishing implementation. SDK-only archive generation does not require this.
-    /// </summary>
-    ContainerImagePublishing = 1 << 8
+    ContainerCompose = 1 << 7
 }
