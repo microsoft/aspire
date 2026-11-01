@@ -507,6 +507,21 @@
         <target state="new">Telemetry sources</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourcePaneTesting">
+        <source>Testing</source>
+        <target state="new">Testing</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneTestingCountPlural">
+        <source>{0} testing resources</source>
+        <target state="new">{0} testing resources</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneTestingCountSingular">
+        <source>{0} testing resource</source>
+        <target state="new">{0} testing resource</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResourcePaneUntaggedGroup">
         <source>Untagged</source>
         <target state="new">Untagged</target>

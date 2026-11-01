@@ -387,6 +387,15 @@
   <data name="ResourcePaneKindsLandmark" xml:space="preserve">
     <value>Types to show</value>
   </data>
+  <data name="ResourcePaneTesting" xml:space="preserve">
+    <value>Testing</value>
+  </data>
+  <data name="ResourcePaneTestingCountSingular" xml:space="preserve">
+    <value>{0} testing resource</value>
+  </data>
+  <data name="ResourcePaneTestingCountPlural" xml:space="preserve">
+    <value>{0} testing resources</value>
+  </data>
   <data name="ResourceTabsMore" xml:space="preserve">
     <value>More views</value>
   </data>

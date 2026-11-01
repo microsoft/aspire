@@ -9,6 +9,48 @@ namespace Aspire.Hosting.Tests;
 [Trait("Partition", "2")]
 public class ResourceTraitBuilderTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void TestingSnapshotAddsMetadataAndDeduplicatedTagWithoutChangingExistingValues(bool existingTestingTag)
+    {
+#pragma warning disable ASPIRETESTING001 // Tests the experimental testing annotation.
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var resource = builder.AddContainer("tests", "image").WithTags("Backend").WithTrait("Owner", "Platform");
+        if (existingTestingTag)
+        {
+            resource.WithTags("testing");
+        }
+        resource.WithTesting().WithTesting();
+#pragma warning restore ASPIRETESTING001
+
+        var source = new ResourcePropertySnapshot("existing", "value");
+        var properties = ResourceTraitSnapshotProperties.AddTraitProperties(resource.Resource, [source]);
+        var replay = ResourceTraitSnapshotProperties.AddTraitProperties(resource.Resource, properties);
+        foreach (var snapshot in new[] { properties, replay })
+        {
+            Assert.Same(source, snapshot[0]);
+            Assert.Equal(existingTestingTag ? ["Backend", "testing"] : ["Backend", "Testing"],
+                Assert.IsType<string[]>(Assert.Single(snapshot, p => p.Name == KnownProperties.Resource.TraitPrefix + KnownResourceTraits.DashboardTag).Value));
+            Assert.Equal(["Platform"], Assert.IsType<string[]>(Assert.Single(snapshot, p => p.Name == KnownProperties.Resource.TraitPrefix + "Owner").Value));
+            Assert.Equal("true", Assert.IsType<string>(Assert.Single(snapshot, p => p.Name == KnownProperties.Resource.Testing).Value));
+        }
+        Assert.Equal(["Backend", .. existingTestingTag ? new[] { "testing" } : Array.Empty<string>()],
+            resource.Resource.Annotations.OfType<TraitAnnotation>().Where(t => t.Name == KnownResourceTraits.DashboardTag).Select(t => t.Value));
+    }
+
+    [Fact]
+    public void TestingTagAloneDoesNotAddTestingParticipation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var resource = builder.AddContainer("service", "image").WithTags("Testing");
+        var properties = ResourceTraitSnapshotProperties.AddTraitProperties(resource.Resource, []);
+
+        var property = Assert.Single(properties);
+        Assert.Equal(KnownProperties.Resource.TraitPrefix + KnownResourceTraits.DashboardTag, property.Name);
+        Assert.Equal(["Testing"], Assert.IsType<string[]>(property.Value));
+    }
+
     [Fact]
     public void RepeatedTraitsAndTagsPreserveAllValues()
     {

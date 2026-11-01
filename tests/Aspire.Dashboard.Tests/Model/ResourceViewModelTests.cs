@@ -14,6 +14,29 @@ namespace Aspire.Dashboard.Tests.Model;
 
 public sealed class ResourceViewModelTests
 {
+    [Theory]
+    [InlineData("true", true)]
+    [InlineData("false", false)]
+    [InlineData("invalid", false)]
+    [InlineData(null, false)]
+    public void TestingPropertyPreservesUnderlyingResourceType(string? value, bool expected)
+    {
+        var resource = new Resource
+        {
+            Name = "tests",
+            ResourceType = KnownResourceTypes.Executable,
+            CreatedAt = Timestamp.FromDateTime(s_dateTime)
+        };
+        if (value is not null)
+        {
+            resource.Properties.Add(new ResourceProperty { Name = KnownProperties.Resource.Testing, Value = Value.ForString(value) });
+        }
+        var vm = ToViewModel(resource);
+
+        Assert.Equal(expected, vm.IsTesting);
+        Assert.Equal(KnownResourceTypes.Executable, vm.ResourceType);
+    }
+
     private static readonly DateTime s_dateTime = new(2000, 12, 30, 23, 59, 59, DateTimeKind.Utc);
 
     [Theory]

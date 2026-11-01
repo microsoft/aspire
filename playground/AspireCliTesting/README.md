@@ -98,6 +98,28 @@ dotnet run --project src/Aspire.Cli/Aspire.Cli.csproj --no-launch-profile -- \
 The service remains running after the probe finishes under `aspire run`. Testing
 output directories and collectors are only activated by `aspire test`.
 
+## Dashboard testing indicators
+
+The modern resource pane includes a beaker toggle labeled **Testing**. The five
+testing resources are shown by default, alongside ordinary resources. Turn off
+**Resources** and **Parameters** to list just testing resources; turn off
+**Testing** to hide them instead. These preferences also scope the overview and
+telemetry pages, and persist across reloads. Grouping by tags, type or state
+continues to work. Testing resources retain their actual Project or Executable
+types and their existing resource icons.
+
+`WithTesting(...)` automatically adds an immutable **Testing** tag alongside any
+AppHost-defined or user tags, including during ordinary `aspire run` invocation.
+The framework-specific adapters inherit this behavior. A user-applied Testing
+tag alone does not make a resource participate in testing or in the beaker
+category. The shared snapshot metadata also exposes the tag in the previous
+dashboard's resource properties and through `aspire describe`.
+
+For this playground, the beaker category contains `foundation-tests`,
+`mstest-tests`, `pytest-tests`, `go-tests` and `rust-tests`; `service` and
+`pytest-tests-installer` remain ordinary resources. This initial dashboard layer
+does not introduce a results view or change test execution.
+
 ## Shared scenario and extension points
 
 `apphost.cs` defines `service`, a small HTTP service with `/health` and a `/`

@@ -970,6 +970,33 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Testing.
+        /// </summary>
+        public static string ResourcePaneTesting {
+            get {
+                return ResourceManager.GetString("ResourcePaneTesting", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0} testing resource.
+        /// </summary>
+        public static string ResourcePaneTestingCountSingular {
+            get {
+                return ResourceManager.GetString("ResourcePaneTestingCountSingular", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0} testing resources.
+        /// </summary>
+        public static string ResourcePaneTestingCountPlural {
+            get {
+                return ResourceManager.GetString("ResourcePaneTestingCountPlural", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to More views.
         /// </summary>
         public static string ResourceTabsMore {

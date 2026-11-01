@@ -32,6 +32,8 @@ public static class TestResourceBuilderExtensions
     /// A terminal state with exit code zero passes; startup failure, a nonzero exit code, or an unknown
     /// terminal exit code fails. Resources must publish completion through <see cref="ResourceNotificationService"/>.
     /// The annotation does not change the lifetime of <c>aspire run</c>.
+    /// The dashboard includes annotated resources in its Testing category and adds an immutable
+    /// <c>Testing</c> tag alongside existing tags, including during ordinary runs.
     /// Published failures or collector exceptions fail testing without discarding other results.
     /// Outside testing, the callback does not run and no testing output paths are allocated.
     /// Framework helpers must configure their runner's report destination independently, then stage

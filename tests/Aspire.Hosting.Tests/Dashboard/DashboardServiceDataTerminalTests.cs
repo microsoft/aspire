@@ -27,6 +27,33 @@ namespace Aspire.Hosting.Tests.Dashboard;
 public class DashboardServiceDataTerminalTests
 {
     [Fact]
+    public async Task TestingMetadataAndTagsSurviveReplicaUpdatesAndReplay()
+    {
+        var (data, notifications, resource) = CreateHarness(addTerminal: false);
+        using var _ = data;
+#pragma warning disable ASPIRETESTING001 // Tests projection of the experimental annotation during ordinary runs.
+        resource.Annotations.Add(new TestingAnnotation());
+#pragma warning restore ASPIRETESTING001
+        resource.Annotations.Add(new TraitAnnotation("Aspire_Dashboard_Tag", "Backend"));
+
+        foreach (var resourceId in new[] { "myapp-aaa", "myapp-bbb" })
+        {
+            foreach (var state in new[] { "Running", "Finished" })
+            {
+                await notifications.PublishUpdateAsync(resource, resourceId, s => s with { State = new ResourceStateSnapshot(state, null) }).DefaultTimeout();
+                var snapshot = await data.WaitForResourceAsync(resourceId, r => r.State == state).DefaultTimeout();
+                Assert.Equal("true", Assert.Single(snapshot.Properties, p => p.Name == "resource.testing").Value.StringValue);
+                Assert.Equal(["Backend", "Testing"],
+                    Assert.Single(snapshot.Properties, p => p.Name == "resource.trait.Aspire_Dashboard_Tag").Value.ListValue.Values.Select(v => v.StringValue));
+                Assert.Equal(nameof(TestResource), snapshot.ResourceType);
+            }
+        }
+        // A new subscriber receives the current snapshot rather than relying on a one-time event.
+        var replay = await data.WaitForResourceAsync("myapp-aaa", r => r.State == "Finished").DefaultTimeout();
+        Assert.Equal("true", Assert.Single(replay.Properties, p => p.Name == "resource.testing").Value.StringValue);
+    }
+
+    [Fact]
     public async Task Snapshot_WithRepeatedTraits_PreservesAllValuesAlongsideTerminalMetadata()
     {
         var (data, notifications, resource) = CreateHarness(addTerminal: true);

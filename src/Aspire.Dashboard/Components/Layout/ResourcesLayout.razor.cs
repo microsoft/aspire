@@ -66,6 +66,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     // _showTelemetryOnlyResources, which replaced the filter menu's telemetry-only option.
     private bool _showResources = true;
     private bool _showParameters = true;
+    private bool _showTesting = true;
     private bool _pendingLandingRedirect;
     private bool _hasLocation;
     private string? _lastLocation;
@@ -272,6 +273,11 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             _showResources = kinds.Contains(nameof(ResourcePaneKind.Resources), StringComparer.Ordinal);
             _showParameters = kinds.Contains(nameof(ResourcePaneKind.Parameters), StringComparer.Ordinal);
             _showTelemetryOnlyResources = kinds.Contains(nameof(ResourcePaneKind.TelemetrySources), StringComparer.Ordinal);
+            // Older preferences put testing resources in Resources. Preserve that visibility
+            // on migration; v2 distinguishes an explicitly disabled Testing category.
+            _showTesting = kinds.Contains("v2", StringComparer.Ordinal)
+                ? kinds.Contains(nameof(ResourcePaneKind.Testing), StringComparer.Ordinal)
+                : _showResources;
         }
         await ApplyPaneModeFromLocationAsync(_lastLocation);
         if (cancellationToken.IsCancellationRequested)
@@ -892,14 +898,14 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     internal IEnumerable<ResourceGridViewModel> GetPaneRows()
     {
-        if (!_showResources)
+        if (!_showResources && !_showTesting)
         {
             return [];
         }
 
         var positions = OrderStore.GetPositions();
         var filteredResources = _resourceByName.Values
-            .Where(r => !r.IsParameter && _filter.FilterAllResourceKinds(r, _filter.TextFilter))
+            .Where(r => !r.IsParameter && IsResourceKindShown(r) && _filter.FilterAllResourceKinds(r, _filter.TextFilter))
             .Select(r => new ResourceGridViewModel { Resource = r })
             .OrderBy(r => positions.GetValueOrDefault(r.Resource.PersistentKey, long.MaxValue))
             .ThenBy(r => r.Resource, ResourceViewModelNameComparer.Instance)
@@ -911,8 +917,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     }
 
     private List<ResourceViewModel> GetParameterPaneRows() =>
-        !_showParameters ? [] : _resourceByName.Values
-            .Where(r => r.IsParameter && _filter.FilterAllResourceKinds(r, _filter.TextFilter))
+        !_showParameters && !_showTesting ? [] : _resourceByName.Values
+            .Where(r => r.IsParameter && IsResourceKindShown(r) && _filter.FilterAllResourceKinds(r, _filter.TextFilter))
             .OrderBy(r => r.HasMissingParameterValueState() ? 0 : 1)
             .ThenBy(r => r, ResourceViewModelNameComparer.Instance)
             .ToList();
@@ -923,13 +929,13 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private List<ResourceGroup> GetResourceGroups()
     {
         // Tag groups include parameters (see GetTagGroups), so they can have content when only parameters are shown.
-        if (_grouping == ResourcePaneGrouping.Tags ? !_showResources && !_showParameters : !_showResources)
+        if (_grouping == ResourcePaneGrouping.Tags ? !_showResources && !_showParameters && !_showTesting : !_showResources && !_showTesting)
         {
             return [];
         }
 
         var groups = _grouping == ResourcePaneGrouping.Tags ? GetTagGroups() : _resourceByName.Values
-            .Where(r => !r.IsParameter && _filter.FilterAllResourceKinds(r, textFilter: string.Empty))
+            .Where(r => !r.IsParameter && IsResourceKindShown(r) && _filter.FilterAllResourceKinds(r, textFilter: string.Empty))
             .GroupBy(r => _grouping == ResourcePaneGrouping.ResourceType ? r.ResourceType
                 : string.IsNullOrEmpty(r.State) ? nameof(KnownResourceState.Unknown) : r.State, StringComparer.OrdinalIgnoreCase)
             .Select(group => new ResourceGroup(group.Key,
@@ -1020,7 +1026,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     {
         var textFilter = _filter.TextFilter;
         var resources = _resourceByName.Values
-            .Where(r => (r.IsParameter ? _showParameters : _showResources) && _filter.FilterAllResourceKinds(r, textFilter: string.Empty))
+            .Where(r => IsResourceKindShown(r) && _filter.FilterAllResourceKinds(r, textFilter: string.Empty))
             .OrderBy(r => r.IsParameter)
             .ThenBy(r => r.ResourceType)
             .ThenBy(r => r, ResourceViewModelNameComparer.Instance)
@@ -1495,9 +1501,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         }
 
         // "All resources" covers the kinds the pane lists. Parameters don't send telemetry.
-        IEnumerable<ResourceKey> keys = _showResources
-            ? _resourceByName.Values.Where(r => !r.IsParameter).Select(GetTelemetryResource).OfType<OtlpResource>().Select(r => r.ResourceKey)
-            : [];
+        IEnumerable<ResourceKey> keys = _resourceByName.Values.Where(r => !r.IsParameter && IsResourceKindShown(r))
+            .Select(GetTelemetryResource).OfType<OtlpResource>().Select(r => r.ResourceKey);
         if (_showTelemetryOnlyResources)
         {
             keys = keys.Concat(_telemetryOnlyResources.Select(r => r.Resource.ResourceKey));
@@ -1510,22 +1515,29 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     {
         ResourcePaneKind.Resources => _showResources,
         ResourcePaneKind.Parameters => _showParameters,
+        ResourcePaneKind.Testing => _showTesting,
         _ => _showTelemetryOnlyResources
     };
 
+    private bool IsResourceKindShown(ResourceViewModel resource) => IsKindShown(GetKind(resource));
+
+    private static ResourcePaneKind GetKind(ResourceViewModel resource) => resource.IsTesting
+        ? ResourcePaneKind.Testing
+        : resource.IsParameter ? ResourcePaneKind.Parameters : ResourcePaneKind.Resources;
+
     /// <summary>
     /// Gets the names of the app model resources that "all resources" covers, or null when it covers every one of
-    /// them, which is the case with both resources and parameters shown.
+    /// them, which is the case with resources, parameters and testing resources shown.
     /// </summary>
     internal IReadOnlyList<string>? GetScopeResourceNames()
     {
-        if (_showResources && _showParameters)
+        if (_showResources && _showParameters && _showTesting)
         {
             return null;
         }
 
         return [.. _resourceByName.Values
-            .Where(r => r.IsParameter ? _showParameters : _showResources)
+            .Where(IsResourceKindShown)
             .Where(r => !r.IsResourceHidden(_filter.ShowHiddenResources))
             .Select(GetResourceName)];
     }
@@ -1540,7 +1552,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             return Loc[nameof(Resources.Layout.TelemetryHeaderAllSources)];
         }
 
-        if (_showResources && _showParameters)
+        if (_showResources && _showParameters && (_showTesting || !_resourceByName.Values.Any(r => r.IsTesting)))
         {
             return Loc[nameof(Resources.Layout.ResourceHeaderAllResources)];
         }
@@ -1554,6 +1566,10 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         {
             kinds.Add(Loc[nameof(Resources.Layout.NavMenuParametersTab)]);
         }
+        if (_showTesting && (_resourceByName.Values.Any(r => r.IsTesting) || !_showResources && !_showParameters))
+        {
+            kinds.Add(Loc[nameof(Resources.Layout.ResourcePaneTesting)]);
+        }
         if (_showTelemetryOnlyResources)
         {
             kinds.Add(Loc[nameof(Resources.Layout.NavMenuTelemetrySourcesTab)]);
@@ -1564,7 +1580,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     private ResourcePaneKind GetKind(string name) =>
         ResourceViewModel.TryGetResourceByName(name, _resourceByName, out var resource)
-            ? (resource.IsParameter ? ResourcePaneKind.Parameters : ResourcePaneKind.Resources)
+            ? GetKind(resource)
             : ResourcePaneKind.TelemetrySources;
 
     private async Task ToggleKindAsync(ResourcePaneKind kind)
@@ -1577,6 +1593,9 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             case ResourcePaneKind.Parameters:
                 _showParameters = !_showParameters;
                 break;
+            case ResourcePaneKind.Testing:
+                _showTesting = !_showTesting;
+                break;
             default:
                 _showTelemetryOnlyResources = !_showTelemetryOnlyResources;
                 break;
@@ -1585,7 +1604,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         // Showing resources again adds row actions that may not fit the current width.
         _fitPaneAfterInitialRender = true;
 
-        var shown = new List<string>();
+        var shown = new List<string> { "v2" };
         if (_showResources)
         {
             shown.Add(nameof(ResourcePaneKind.Resources));
@@ -1597,6 +1616,10 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         if (_showTelemetryOnlyResources)
         {
             shown.Add(nameof(ResourcePaneKind.TelemetrySources));
+        }
+        if (_showTesting)
+        {
+            shown.Add(nameof(ResourcePaneKind.Testing));
         }
         await LocalStorage.SetUnprotectedAsync(BrowserStorageKeys.ResourcePaneKinds, string.Join(',', shown));
 
@@ -2182,6 +2205,7 @@ internal enum ResourcePaneKind
 {
     Resources,
     Parameters,
+    Testing,
     TelemetrySources
 }
 
