@@ -1422,6 +1422,64 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task CoordinatedBuildKeepsOutputSubscribedUntilBuildSettles()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
+        builder.AddDotnetProject("worker", projectPath, options => options.ExcludeLaunchProfile = true);
+        await using var app = builder.Build();
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        var buildLogName = Assert.Single(buildResource.GetResolvedResourceNames());
+        var loggerService = app.Services.GetRequiredService<ResourceLoggerService>();
+        Assert.False(loggerService.HasActiveSubscribers(buildLogName));
+
+        // DCP only drains a terminated build's output before publishing the terminal state while a log subscriber
+        // is active, so the subscription must exist as soon as the build attempt starts.
+        await builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(buildResource, app.Services),
+            TestContext.Current.CancellationToken);
+        Assert.True(loggerService.HasActiveSubscribers(buildLogName));
+
+        using var watchCancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var subscriberChanges = loggerService.WatchAnySubscribersAsync(watchCancellation.Token).GetAsyncEnumerator(watchCancellation.Token);
+        var unsubscribed = WaitForUnsubscribedAsync();
+
+        await app.ResourceNotifications.PublishUpdateAsync(
+            buildResource,
+            snapshot => snapshot with { State = KnownResourceStates.Running });
+        Assert.True(loggerService.HasActiveSubscribers(buildLogName));
+
+        await app.ResourceNotifications.PublishUpdateAsync(
+            buildResource,
+            snapshot => snapshot with
+            {
+                State = KnownResourceStates.Finished,
+                ExitCode = 1,
+            });
+
+        await unsubscribed.WaitAsync(TestConstants.LongTimeoutTimeSpan, TestContext.Current.CancellationToken);
+        Assert.False(loggerService.HasActiveSubscribers(buildLogName));
+        watchCancellation.Cancel();
+        await subscriberChanges.DisposeAsync();
+
+        async Task WaitForUnsubscribedAsync()
+        {
+            while (await subscriberChanges.MoveNextAsync())
+            {
+                if (subscriberChanges.Current.Name == buildLogName && !subscriberChanges.Current.AnySubscribers)
+                {
+                    return;
+                }
+            }
+        }
+    }
+
+    [Fact]
     public async Task FailedCoordinatedBuildStillFailsDependentWhenBuildOutputIsUnavailable()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

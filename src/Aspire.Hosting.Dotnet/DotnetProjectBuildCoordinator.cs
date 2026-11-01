@@ -25,7 +25,7 @@ internal static partial class DotnetProjectBuildCoordinator
     private const int MaxReportedBuildOutputLines = 20;
     private const int MaxReportedBuildOutputLineLength = 1000;
     private static readonly TimeSpan s_buildOutputReadTimeout = TimeSpan.FromSeconds(10);
-    private static readonly ConditionalWeakTable<CustomResourceSnapshot, object> s_reportedBuildFailures = new();
+    private static readonly ConditionalWeakTable<CustomResourceSnapshot, Lazy<Task<string>>> s_buildFailureMessages = new();
 
     private static readonly ConditionalWeakTable<IDistributedApplicationBuilder, CoordinatorState> s_states = new();
 
@@ -123,6 +123,14 @@ internal static partial class DotnetProjectBuildCoordinator
             .ExcludeFromManifest()
             .WithHiddenOnCompletion(0);
 
+        builder.Eventing.Subscribe<BeforeResourceStartedEvent>(
+            buildResource,
+            (@event, _) =>
+            {
+                KeepBuildOutputSubscribedUntilSettled(@event.Services, buildResource);
+                return Task.CompletedTask;
+            });
+
         return buildResource;
     }
 
@@ -199,31 +207,107 @@ internal static partial class DotnetProjectBuildCoordinator
         if (buildEvent.Snapshot.State?.Text == KnownResourceStates.FailedToStart ||
             buildEvent.Snapshot.ExitCode is not 0)
         {
-            var exitCode = buildEvent.Snapshot.ExitCode?.ToString(CultureInfo.InvariantCulture) ?? "unavailable";
-            var message = $"The coordinated .NET build failed with exit code {exitCode}. See resource '{buildResource.Name}' for build output.";
-            var buildOutput = await GetBuildFailureOutputAsync(services, buildResource, cancellationToken).ConfigureAwait(false);
-            if (buildOutput.Count > 0)
-            {
-                message += Environment.NewLine + string.Join(Environment.NewLine, buildOutput);
-            }
-
-            // Every dependent of the build observes the same settled snapshot, so report the failure to the
-            // AppHost log once. Without this, the build output only exists in the hidden build resource's log.
-            if (s_reportedBuildFailures.TryAdd(buildEvent.Snapshot, new object()))
-            {
-                services.GetRequiredService<ILoggerFactory>()
-                    .CreateLogger(typeof(DotnetProjectBuildCoordinator))
-                    .LogError("{Message}", message);
-            }
+            // Every dependent of the build observes the same settled snapshot, so read the build output and
+            // report the failure to the AppHost log once per build attempt. Without this, the build output only
+            // exists in the hidden build resource's log.
+            var snapshot = buildEvent.Snapshot;
+            var message = await s_buildFailureMessages.GetValue(
+                snapshot,
+                _ => new Lazy<Task<string>>(() => ReportBuildFailureAsync(services, buildResource, snapshot)))
+                .Value
+                .WaitAsync(cancellationToken)
+                .ConfigureAwait(false);
 
             throw new DistributedApplicationException(message);
         }
     }
 
-    private static async Task<IReadOnlyList<string>> GetBuildFailureOutputAsync(
+    // DCP drains a terminated executable's output before publishing its terminal state only while the resource has an
+    // active log subscriber. Keeping one for each build attempt makes the complete output, including compiler errors
+    // written just before exit, readable as soon as dependents observe the failed build.
+    private static void KeepBuildOutputSubscribedUntilSettled(IServiceProvider services, IResource buildResource)
+    {
+        var notificationService = services.GetService<ResourceNotificationService>();
+        var resourceLoggerService = services.GetService<ResourceLoggerService>();
+        if (notificationService is null || resourceLoggerService is null)
+        {
+            return;
+        }
+
+        var initialSnapshot = notificationService.TryGetCurrentState(buildResource.Name, out var resourceEvent)
+            ? resourceEvent.Snapshot
+            : null;
+        var applicationStopping = services.GetService<IHostApplicationLifetime>()?.ApplicationStopping ?? CancellationToken.None;
+        var subscription = CancellationTokenSource.CreateLinkedTokenSource(applicationStopping);
+
+        // Advancing the enumerator registers the subscriber synchronously, before DCP starts the build process.
+        var logs = resourceLoggerService.WatchAsync(buildResource).GetAsyncEnumerator(subscription.Token);
+        var firstBatch = logs.MoveNextAsync();
+        _ = DrainAsync();
+        _ = UnsubscribeWhenSettledAsync();
+
+        async Task DrainAsync()
+        {
+            try
+            {
+                if (await firstBatch.ConfigureAwait(false))
+                {
+                    while (await logs.MoveNextAsync().ConfigureAwait(false))
+                    {
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            finally
+            {
+                await logs.DisposeAsync().ConfigureAwait(false);
+            }
+        }
+
+        async Task UnsubscribeWhenSettledAsync()
+        {
+            try
+            {
+                await notificationService.WaitForResourceAsync(
+                    buildResource.Name,
+                    e => !ReferenceEquals(e.Snapshot, initialSnapshot) && IsSettledBuildSnapshot(e.Snapshot),
+                    subscription.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            finally
+            {
+                subscription.Cancel();
+                subscription.Dispose();
+            }
+        }
+    }
+
+    private static async Task<string> ReportBuildFailureAsync(
         IServiceProvider services,
         IResource buildResource,
-        CancellationToken cancellationToken)
+        CustomResourceSnapshot snapshot)
+    {
+        var exitCode = snapshot.ExitCode?.ToString(CultureInfo.InvariantCulture) ?? "unavailable";
+        var message = $"The coordinated .NET build failed with exit code {exitCode}. See resource '{buildResource.Name}' for build output.";
+        var buildOutput = await GetBuildFailureOutputAsync(services, buildResource).ConfigureAwait(false);
+        if (buildOutput.Count > 0)
+        {
+            message += Environment.NewLine + string.Join(Environment.NewLine, buildOutput);
+        }
+
+        services.GetService<ILoggerFactory>()?
+            .CreateLogger(typeof(DotnetProjectBuildCoordinator))
+            .LogError("{Message}", message);
+        return message;
+    }
+
+    private static async Task<IReadOnlyList<string>> GetBuildFailureOutputAsync(
+        IServiceProvider services,
+        IResource buildResource)
     {
         var resourceLoggerService = services.GetService<ResourceLoggerService>();
         if (resourceLoggerService is null)
@@ -233,7 +317,8 @@ internal static partial class DotnetProjectBuildCoordinator
 
         var errors = new List<string>();
         var tail = new Queue<string>();
-        using var readCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var applicationStopping = services.GetService<IHostApplicationLifetime>()?.ApplicationStopping ?? CancellationToken.None;
+        using var readCancellation = CancellationTokenSource.CreateLinkedTokenSource(applicationStopping);
         readCancellation.CancelAfter(s_buildOutputReadTimeout);
         try
         {
@@ -272,11 +357,11 @@ internal static partial class DotnetProjectBuildCoordinator
                 }
             }
         }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException)
         {
-            // The build output is best-effort diagnostics; report whatever was read before the timeout.
+            // The build output is best-effort diagnostics; report whatever was read before the timeout or shutdown.
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex)
         {
             // Reading the build output must never replace the build failure itself.
             services.GetService<ILoggerFactory>()?
