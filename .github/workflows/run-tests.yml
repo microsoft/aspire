@@ -141,6 +141,22 @@ jobs:
         if: runner.os == 'Linux'
         run: docker info
 
+      - name: Trust HTTPS development certificate (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $certificatePath = Join-Path $env:RUNNER_TEMP 'aspire-dev-cert.cer'
+          & $env:DOTNET_SCRIPT dev-certs https --export-path $certificatePath --format PEM
+          if ($LASTEXITCODE -ne 0) { throw "Development certificate generation failed: $LASTEXITCODE" }
+          # CurrentUser Root writes can display a native approval dialog even with -Confirm:$false.
+          # The hosted runner is elevated; LocalMachine Root avoids that dialog and is inherited
+          # by CurrentUser Root, including the dev-certs trust check.
+          # https://learn.microsoft.com/windows/win32/seccrypto/system-store-locations
+          Import-Certificate -FilePath $certificatePath -CertStoreLocation Cert:\LocalMachine\Root -Confirm:$false -ErrorAction Stop
+          Remove-Item $certificatePath -ErrorAction Stop
+          & $env:DOTNET_SCRIPT dev-certs https --check --trust
+          if ($LASTEXITCODE -ne 0) { throw "Development certificate trust check failed: $LASTEXITCODE" }
+
       # Every Windows shard has its own runner and needs a working runtime before test discovery.
       - name: Set up WSLC (Windows)
         if: runner.os == 'Windows'

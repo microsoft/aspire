@@ -37,5 +37,11 @@ public enum TestFeature
     /// daemonlessly unless <c>podman system service</c> is running — while DCP-driven container tests
     /// are perfectly happy on those hosts. Use this for tests backed by a Testcontainers fixture.
     /// </summary>
-    Testcontainers = 1 << 6
+    Testcontainers = 1 << 6,
+
+    /// <summary>
+    /// The container runtime supports Compose deployment. Docker and Podman can provide Compose;
+    /// WSLC does not. Use this for tests that execute Compose, not tests that only generate its files.
+    /// </summary>
+    ContainerCompose = 1 << 7
 }

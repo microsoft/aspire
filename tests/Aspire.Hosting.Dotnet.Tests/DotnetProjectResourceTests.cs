@@ -20,6 +20,7 @@ using Aspire.Hosting.Resources;
 using Aspire.Hosting.Tests.Publishing;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
+using Aspire.Shared;
 using Aspire.TestUtilities;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
@@ -1149,18 +1150,41 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
 
         if (runContainer)
         {
-            var runtime = await app.Services.GetRequiredService<IContainerRuntimeResolver>().ResolveAsync(cancellation.Token);
             var processRunner = app.Services.GetRequiredService<IProcessRunner>();
             var logger = app.Services.GetRequiredService<ILogger<DotnetProjectResourceTests>>();
-            await using var imageCleanup = new TemporaryContainerImage(runtime, imageReference, logger);
-            await RunContainerRuntimeAsync(processRunner, runtime, ["image", "load", "--input", archivePath], cancellation.Token);
-            var containerOutput = await RunContainerRuntimeAsync(
-                processRunner, runtime, ["run", "--rm", "--platform", "linux/amd64", imageReference], cancellation.Token);
-            Assert.Equal("project", containerOutput);
+            // The SDK already produced the archive. Loading/running it is a runtime operation,
+            // not a publishing operation: the publishing resolver only supports Docker/Podman.
+            var runtime = await ContainerRuntimeDetector.FindAvailableRuntimeAsync(
+                Environment.GetEnvironmentVariable("ASPIRE_CONTAINER_RUNTIME"), logger, cancellation.Token);
+            Assert.NotNull(runtime);
+            Assert.True(runtime.IsHealthy, runtime.Error);
+            try
+            {
+                await RunContainerRuntimeAsync(processRunner, runtime.Executable, ["image", "load", "--input", archivePath], cancellation.Token);
+                // WSLC runs the platform encoded in the archive and has no run --platform option.
+                var arguments = runtime.Key == KnownContainerRuntimes.Wslc
+                    ? new[] { "run", "--rm", imageReference }
+                    : ["run", "--rm", "--platform", "linux/amd64", imageReference];
+                var containerOutput = await RunContainerRuntimeAsync(
+                    processRunner, runtime.Executable, arguments, cancellation.Token);
+                Assert.Equal("project", containerOutput);
+            }
+            finally
+            {
+                using var cleanupCancellation = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                try
+                {
+                    await RunContainerRuntimeAsync(processRunner, runtime.Executable, ["image", "remove", imageReference], cleanupCancellation.Token);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Failed to remove temporary container image {ImageName}", imageReference);
+                }
+            }
         }
     }
 
-    private static async Task<string> RunContainerRuntimeAsync(
+    private static Task<string> RunContainerRuntimeAsync(
         IProcessRunner processRunner,
         IContainerRuntime runtime,
         string[] arguments,
@@ -1172,6 +1196,16 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
             "Podman" => "podman",
             _ => throw new InvalidOperationException($"Unexpected container runtime '{runtime.Name}'.")
         };
+
+        return RunContainerRuntimeAsync(processRunner, executable, arguments, cancellationToken);
+    }
+
+    private static async Task<string> RunContainerRuntimeAsync(
+        IProcessRunner processRunner,
+        string executable,
+        string[] arguments,
+        CancellationToken cancellationToken)
+    {
         var (pendingResult, process) = processRunner.Run(new ProcessSpec(executable)
         {
             ArgumentList = arguments,

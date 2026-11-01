@@ -28,10 +28,12 @@ public class RequiresFeatureAttribute(TestFeature feature) : Attribute, ITraitAt
     }
 
     // Logic from RequiresSSLCertificateAttribute
-    // Always supported on linux (local and CI), but only local otherwise
+    // GitHub Actions installs and trusts a development certificate on Linux and Windows.
     private static bool IsSslCertificateSupported()
     {
-        return OperatingSystem.IsLinux() || !PlatformDetection.IsRunningOnCI;
+        return OperatingSystem.IsLinux()
+            || (OperatingSystem.IsWindows() && PlatformDetection.IsRunningOnGithubActions)
+            || !PlatformDetection.IsRunningOnCI;
     }
 
     // Logic from RequiresPlaywrightAttribute
@@ -119,6 +121,15 @@ public class RequiresFeatureAttribute(TestFeature feature) : Attribute, ITraitAt
         }
 
         return IsOnPath(KnownContainerRuntimes.Docker);
+    }
+
+    private static bool IsContainerComposeSupported()
+    {
+        // Windows CI provides WSLC, which cannot execute Compose. Preserve the existing
+        // Docker/Podman expectation elsewhere without gating unrelated image-build tests.
+        return PlatformDetection.IsRunningOnCI
+            ? OperatingSystem.IsLinux()
+            : IsContainerRuntimeSupported();
     }
 
     // Testcontainers needs a Docker-compatible API *endpoint*, not just a CLI on PATH: it speaks HTTP to
@@ -210,6 +221,10 @@ public class RequiresFeatureAttribute(TestFeature feature) : Attribute, ITraitAt
             return false;
         }
         if ((feature & TestFeature.Testcontainers) == TestFeature.Testcontainers && !IsTestcontainersSupported())
+        {
+            return false;
+        }
+        if ((feature & TestFeature.ContainerCompose) == TestFeature.ContainerCompose && !IsContainerComposeSupported())
         {
             return false;
         }

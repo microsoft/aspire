@@ -308,7 +308,7 @@ public class DockerComposeTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.ContainerRuntime)]
+    [RequiresFeature(TestFeature.ContainerRuntime | TestFeature.ContainerCompose)]
     public async Task DockerComposeProjectNameIncludesAppHostShaInArguments()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -405,7 +405,7 @@ public class DockerComposeTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.ContainerRuntime)]
+    [RequiresFeature(TestFeature.ContainerRuntime | TestFeature.ContainerCompose)]
     [ActiveIssue("https://github.com/microsoft/aspire/issues/15078", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
     public async Task DeployWithDashboard_PrintsDashboardAndServiceEndpoints()
     {
