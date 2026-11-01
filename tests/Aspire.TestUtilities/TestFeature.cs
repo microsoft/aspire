@@ -11,14 +11,14 @@ public enum TestFeature
     DevCert = 1 << 2,
 
     /// <summary>
-    /// A container runtime is available. Satisfied by Docker, Podman, or WSLC on Windows, so use this for tests
+    /// A container runtime is available. Satisfied by Docker, Podman, or WSLc on Windows, so use this for tests
     /// that just need to run containers. Prefer it over <see cref="Docker"/>.
     /// </summary>
     ContainerRuntime = 1 << 3,
 
     /// <summary>
     /// The available container runtime can build images from a Dockerfile. Docker needs the buildx
-    /// plugin for this; Podman and WSLC build natively through DCP. Combine with
+    /// plugin for this; Podman and WSLc build natively through DCP. Combine with
     /// <see cref="ContainerRuntime"/> for tests that build images using a live runtime,
     /// including Aspire's publishing pipeline.
     /// </summary>
@@ -43,7 +43,7 @@ public enum TestFeature
 
     /// <summary>
     /// The container runtime supports Compose deployment. Docker and Podman can provide Compose;
-    /// WSLC does not. Use this for tests that execute Compose, not tests that only generate its files.
+    /// WSLc does not. Use this for tests that execute Compose, not tests that only generate its files.
     /// </summary>
     ContainerCompose = 1 << 7
 }

@@ -52,7 +52,7 @@ internal sealed class WslcContainerRuntime(ILogger<WslcContainerRuntime> logger,
             ? $"{options.ImageName}:{options.Tag}"
             : options?.ImageName ?? throw new ArgumentException("ImageName must be provided in options.", nameof(options));
 
-        // WSLC 3.0.4 builds for the native Linux architecture and does not accept --platform.
+        // WSLc 3.0.4 builds for the native Linux architecture and does not accept --platform.
         // Do not silently produce a native image when a different platform was requested.
         var nativePlatform = RuntimeInformation.OSArchitecture switch
         {
@@ -107,7 +107,7 @@ internal sealed class WslcContainerRuntime(ILogger<WslcContainerRuntime> logger,
 
         if (!string.IsNullOrEmpty(options.OutputPath))
         {
-            // WSLC's daemon-backed builder rejects Docker/OCI archive exporters:
+            // WSLc's daemon-backed builder rejects Docker/OCI archive exporters:
             // "ERROR: Docker exporter is not supported for the docker driver."
             // Build into the local store, then save an archive containing both OCI
             // layout (oci-layout/index.json) and Docker (manifest.json) metadata.
@@ -137,7 +137,7 @@ internal sealed class WslcContainerRuntime(ILogger<WslcContainerRuntime> logger,
             output = await ExecuteContainerCommandForOutputAsync(
                 ["image", "inspect", imageName, "--format", "json"],
                 "inspect image config", imageName, cancellationToken).ConfigureAwait(false);
-            // WSLC returns Docker-shaped metadata, but only accepts "json", not Go templates:
+            // WSLc returns Docker-shaped metadata, but only accepts "json", not Go templates:
             // [{"Config":{"Entrypoint":["dotnet"],"Cmd":["app.dll"],"WorkingDir":"/app"}, ...}]
             using var document = JsonDocument.Parse(output);
             if (document.RootElement.ValueKind == JsonValueKind.Array &&
@@ -160,7 +160,7 @@ internal sealed class WslcContainerRuntime(ILogger<WslcContainerRuntime> logger,
             $"WSLc returned invalid image configuration for '{imageName}'.", configAccessor: null);
     }
 
-    // WSLC has no remote manifest-inspection or Compose commands. Report the inspection
+    // WSLc has no remote manifest-inspection or Compose commands. Report the inspection
     // capability through its contract and fail Compose before attempting a nonexistent command.
     public override Task<ContainerImageManifestInspectionResult> InspectImageManifestAsync(string imageName, CancellationToken cancellationToken) =>
         Task.FromResult(ContainerImageManifestInspectionResult.Unsupported);

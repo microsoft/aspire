@@ -158,12 +158,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Development certificate trust check failed: $LASTEXITCODE" }
 
       # Every Windows shard has its own runner and needs a working runtime before test discovery.
-      - name: Set up WSLC (Windows)
+      - name: Set up WSLc (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           # The runner's Windows Docker engine can win auto-detection but cannot create
-          # the Linux bridge networks these tests need. Leave WSLC as the running runtime.
+          # the Linux bridge networks these tests need. Leave WSLc as the running runtime.
           $dockerService = Get-Service -Name docker -ErrorAction SilentlyContinue
           if ($null -ne $dockerService) {
             Set-Service -Name docker -StartupType Disabled -ErrorAction Stop
@@ -175,9 +175,9 @@ jobs:
           wsl --update --web-download --pre-release
           if ($LASTEXITCODE -ne 0) { throw "WSL update failed: $LASTEXITCODE" }
           wslc version
-          if ($LASTEXITCODE -ne 0) { throw "WSLC version check failed: $LASTEXITCODE" }
+          if ($LASTEXITCODE -ne 0) { throw "WSLc version check failed: $LASTEXITCODE" }
           wslc info
-          if ($LASTEXITCODE -ne 0) { throw "WSLC runtime check failed: $LASTEXITCODE" }
+          if ($LASTEXITCODE -ne 0) { throw "WSLc runtime check failed: $LASTEXITCODE" }
 
       - name: Download prebuilt CLI E2E Docker image
         if: ${{ fromJson(inputs.properties).requiresCliArchive == true && runner.os == 'Linux' }}

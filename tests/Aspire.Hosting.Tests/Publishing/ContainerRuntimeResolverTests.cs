@@ -55,7 +55,7 @@ public class ContainerRuntimeResolverTests
     [InlineData("PODMAN")]
     [InlineData("Docker")]
     [InlineData("wslc")]
-    [InlineData("WSLC")]
+    [InlineData("WSLc")]
     public async Task ResolveAsync_ConfiguredRuntime_ReturnsKeyedService(string configuredRuntime)
     {
         var resolver = CreateResolver(configuredRuntime);

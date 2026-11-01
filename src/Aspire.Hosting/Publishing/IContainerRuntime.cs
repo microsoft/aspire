@@ -7,7 +7,7 @@ using Aspire.Hosting.ApplicationModel;
 namespace Aspire.Hosting.Publishing;
 
 /// <summary>
-/// Represents a container runtime (e.g., Docker, Podman, WSLC) that can be used to build, tag, push, and manage container images.
+/// Represents a container runtime (e.g., Docker, Podman, WSLc) that can be used to build, tag, push, and manage container images.
 /// </summary>
 [Experimental("ASPIRECONTAINERRUNTIME001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public interface IContainerRuntime

@@ -218,7 +218,7 @@ public class WslcContainerRuntimeTests
         builder.Configuration["ASPIRE_CONTAINER_RUNTIME"] = "wslc";
         var runner = new TestProcessRunner();
         builder.Services.AddSingleton<IProcessRunner>(runner);
-#pragma warning disable CS0618 // Verify legacy ProjectResource publishing also selects the WSLC SDK image store.
+#pragma warning disable CS0618 // Verify legacy ProjectResource publishing also selects the WSLc SDK image store.
         var project = builder.AddProject<Projects.ServiceA>("app");
 #pragma warning restore CS0618
         using var app = builder.Build();

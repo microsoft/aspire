@@ -10,7 +10,7 @@ namespace Aspire.Hosting.Utils;
 /// </summary>
 /// <remarks>
 /// DCP streams the runtime's raw stdout/stderr into the resource log stream without normalizing it,
-/// so assertions over those logs have to account for Docker, Podman, and WSLC describing the same condition
+/// so assertions over those logs have to account for Docker, Podman, and WSLc describing the same condition
 /// differently. Docker is a CLI over a daemon REST API and uses BuildKit; Podman is daemonless and
 /// builds with Buildah.
 /// <para>
@@ -99,7 +99,7 @@ public static partial class ContainerRuntimeLogPatterns
         ArgumentNullException.ThrowIfNull(option);
 
         // Docker/Podman: "unknown flag: --illegal"
-        // WSLC: "Option name was not recognized for the current command: '--illegal'"
+        // WSLc: "Option name was not recognized for the current command: '--illegal'"
         // British English uses "recognised" instead.
         // Include the rejected option so an unrelated argument failure cannot satisfy the assertion.
         return line.EndsWith($"unknown flag: {option}", StringComparison.Ordinal)
@@ -113,14 +113,14 @@ public static partial class ContainerRuntimeLogPatterns
     [GeneratedRegex(@"\bSTEP \d+/\d+:")]
     private static partial Regex PodmanBuildStepRegex();
 
-    // WSLC surfaces registry errors directly, without Docker's daemon or Podman's copy wrapper:
+    // WSLc surfaces registry errors directly, without Docker's daemon or Podman's copy wrapper:
     // Get "https://does.not.exist.internal/v2/": dial tcp: lookup ...: no such host
     // Head "https://cgr.dev/v2/.../manifests/1.24.6": unauthorized: {"errors":[...]}
     // Require both a registry API request and its failure, not the generic "Error code: E_FAIL".
     [GeneratedRegex(@"(?:Get|Head) ""https?://[^""\s]+/v2/[^""]*"": (?:dial tcp:.*: no such host|unauthorized:)")]
     private static partial Regex WslcImagePullFailureRegex();
 
-    // WSLC's BuildKit renderer emits "[builder 1/4] FROM ..." rather than Docker's
+    // WSLc's BuildKit renderer emits "[builder 1/4] FROM ..." rather than Docker's
     // "[internal] load build definition ..." or Podman's "STEP 1/4: FROM ...".
     [GeneratedRegex(@"\[[^\]\s]+ \d+/\d+\] FROM ")]
     private static partial Regex WslcBuildStepRegex();

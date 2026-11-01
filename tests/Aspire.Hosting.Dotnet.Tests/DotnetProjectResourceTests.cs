@@ -1154,7 +1154,7 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
             var logger = app.Services.GetRequiredService<ILogger<DotnetProjectResourceTests>>();
             await using var imageCleanup = new TemporaryContainerImage(runtime, imageReference, logger);
             await RunContainerRuntimeAsync(processRunner, runtime, ["image", "load", "--input", archivePath], cancellation.Token);
-            // WSLC runs the platform encoded in the archive and has no run --platform option.
+            // WSLc runs the platform encoded in the archive and has no run --platform option.
             var arguments = runtime.Name == "WSLc"
                 ? new[] { "run", "--rm", imageReference }
                 : ["run", "--rm", "--platform", "linux/amd64", imageReference];
@@ -1170,8 +1170,6 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
         string imageReference,
         CancellationToken cancellationToken)
     {
-        // All three runtimes return [{"Id":"sha256:...", ...}]. WSLC does not
-        // support Docker/Podman's Go-template --format "{{.Id}}" projection.
         var output = await RunContainerRuntimeAsync(
             processRunner, runtime, ["image", "inspect", imageReference], cancellationToken);
         using var document = JsonDocument.Parse(output);

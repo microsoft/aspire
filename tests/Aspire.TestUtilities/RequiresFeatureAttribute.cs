@@ -92,12 +92,12 @@ public class RequiresFeatureAttribute(TestFeature feature) : Attribute, ITraitAt
     // would let those tests skip silently, which is not desirable.
     //
     // scenarios:
-    // - Windows GitHub Actions: WSLC is installed and verified by run-tests.yml.
+    // - Windows GitHub Actions: WSLc is installed and verified by run-tests.yml.
     // - Other Windows CI: containers are not available.
     // - Linux - Local, or CI: always assume that a container runtime is installed
     //
     // Locally there is no such expectation, so probe PATH instead: a developer machine may have Podman
-    // only, Docker only, WSLC only, or none, and tests should skip rather than fail against a runtime that is
+    // only, Docker only, WSLc only, or none, and tests should skip rather than fail against a runtime that is
     // not installed. Only PATH is inspected (no process is spawned) because trait attributes are
     // evaluated during discovery, once per test.
     internal static bool IsContainerRuntimeSupported()
@@ -126,7 +126,7 @@ public class RequiresFeatureAttribute(TestFeature feature) : Attribute, ITraitAt
 
     private static bool IsContainerComposeSupported()
     {
-        // Windows CI provides WSLC, which cannot execute Compose. Preserve the existing
+        // Windows CI provides WSLc, which cannot execute Compose. Preserve the existing
         // Docker/Podman expectation elsewhere without gating unrelated image-build tests.
         return PlatformDetection.IsRunningOnCI
             ? OperatingSystem.IsLinux()
@@ -140,7 +140,7 @@ public class RequiresFeatureAttribute(TestFeature feature) : Attribute, ITraitAt
     // would run them straight into DockerUnavailableException instead of skipping them.
     private static bool IsTestcontainersSupported()
     {
-        // Windows WSLC runners do not provide a Docker API endpoint. Do not initialize
+        // Windows WSLc runners do not provide a Docker API endpoint. Do not initialize
         // Testcontainers configuration just because DCP can run containers there.
         if (PlatformDetection.IsRunningOnCI && !IsDockerSupported())
         {
@@ -181,7 +181,7 @@ public class RequiresFeatureAttribute(TestFeature feature) : Attribute, ITraitAt
             return !PlatformDetection.IsRunningFromAzdo;
         }
 
-        // buildx ships with modern Docker installations; Podman and WSLC build natively.
+        // buildx ships with modern Docker installations; Podman and WSLc build natively.
         return IsContainerRuntimeSupported();
     }
 
