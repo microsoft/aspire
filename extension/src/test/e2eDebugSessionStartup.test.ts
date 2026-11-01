@@ -1,7 +1,8 @@
 import * as assert from 'assert';
-import * as fs from 'fs';
+import fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import * as sinon from 'sinon';
 import { waitForDebugSessionStartup } from '../test-e2e/helpers/assertions';
 import type { AspireDebugSessionState, AspireExtensionE2EStateFile } from '../types/extensionApi';
 
@@ -103,6 +104,36 @@ suite('E2E debug AppHost startup wait', () => {
         await assertTimesOut(pending);
     });
 
+    test('fails fast when the launching flag clears after the observed session ended', async () => {
+        snapshot.debugLaunches = [launch(1)];
+        writeState([startingSession()]);
+        // Serve one snapshot per poll so the waiter deterministically sees the session, then the session gone while
+        // the AppHost is still launching, then the launching flag cleared without a newer launch.
+        const snapshots = [
+            serialize([startingSession()], []),
+            serialize([], [appHostPath]),
+            serialize([], []),
+        ];
+        let reads = 0;
+        const readFileSync = fs.readFileSync;
+        const stub = sinon.stub(fs, 'readFileSync').callsFake(((file: fs.PathOrFileDescriptor, options?: unknown) =>
+            file === statePath
+                ? snapshots[Math.min(reads++, snapshots.length - 1)]
+                : readFileSync(file, options as BufferEncoding)) as typeof fs.readFileSync);
+
+        try {
+            await assert.rejects(waitForDebugSessionStartup(appHostPath, 600000), (error: Error) => {
+                assert.ok(error.message.includes(`The debug session for AppHost '${appHostPath}' ended before startup completed.`), error.message);
+                return true;
+            });
+        }
+        finally {
+            stub.restore();
+        }
+
+        assert.strictEqual(reads, snapshots.length);
+    });
+
     test('keeps waiting when a newer launch replaced the ended session', async () => {
         snapshot.debugLaunches = [launch(1)];
         writeState([startingSession()]);
@@ -136,6 +167,10 @@ suite('E2E debug AppHost startup wait', () => {
 
     function launch(sequence: number): AspireExtensionE2EStateFile['debugLaunches'][number] {
         return { sequence, appHostPath, command: 'run', noDebug: false, executionSuppressed: false };
+    }
+
+    function serialize(debugSessions: readonly AspireDebugSessionState[], launchingPaths: readonly string[]): string {
+        return JSON.stringify({ ...snapshot, state: { ...snapshot.state, debugSessions, launchingPaths } });
     }
 
     function writeState(debugSessions: readonly AspireDebugSessionState[]): void {

@@ -111,10 +111,18 @@ export async function waitForDebugSessionStartup(appHostPath = getPrimaryAppHost
                 return undefined;
             }
 
-            if (observedLaunchSequence === undefined
-                || latestLaunchSequence > observedLaunchSequence
-                || file.state.launchingPaths.some(launchingPath => isSamePath(launchingPath, appHostPath))) {
+            if (observedLaunchSequence === undefined) {
+                return undefined;
+            }
+
+            if (latestLaunchSequence > observedLaunchSequence) {
                 observedLaunchSequence = undefined;
+                return undefined;
+            }
+
+            // Keep the observation while the AppHost is launching: if the flag clears without a newer launch or
+            // session, the observed session still ended before startup completed.
+            if (file.state.launchingPaths.some(launchingPath => isSamePath(launchingPath, appHostPath))) {
                 return undefined;
             }
 
