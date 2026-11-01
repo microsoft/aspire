@@ -5,20 +5,8 @@ import { findResource, getCommandInvocationCount, isSamePath, waitForCommandOutc
 import { executeE2eControlCommand, restoreWorkspaceCliPath, runE2eTeardown, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
 import { invokeLanguageModelTool, prepareLanguageModelToolInvocation } from './helpers/languageModelTools';
 import { getPrimaryAppHostProjectPath, getWorkspaceRoot } from './helpers/paths';
+import { assertSafeResourceDebugResult, type ResourceDebugToolResult } from './helpers/resourceDebugResult';
 import { openAspireView } from './helpers/vscode';
-
-interface ResourceDebugToolResult {
-    tool: 'aspire_resource_debug';
-    success: boolean;
-    outcome: string;
-    appHost: string;
-    resourceName: string;
-    requestedStrategy: 'auto' | 'attach';
-    effectiveStrategy: 'attach' | 'none';
-    controller: 'editor' | 'none';
-    provider?: 'dotnet' | 'go';
-    debuggerExtensions?: Array<{ id: string; label: string }>;
-}
 
 interface AttachedResourceDebugProof {
     proof: 'aspire-resource-attach-breakpoint-detach';
@@ -78,13 +66,14 @@ suite('Aspire resource debug language model tool E2E', function () {
             confirmationMessage: 'Attach the debugger to the requested Aspire resource?',
         });
 
-        const cases: Array<{ input: Record<string, unknown>; outcome: string }> = [
+        const cases: Array<{ input: Record<string, unknown>; outcome: string; expectedResourceName: string }> = [
             {
                 input: {
                     appHostPath: relativeAppHostPath,
                     resourceName: ' ',
                 },
                 outcome: 'invalidInput',
+                expectedResourceName: '',
             },
             {
                 input: {
@@ -93,6 +82,7 @@ suite('Aspire resource debug language model tool E2E', function () {
                     unexpected: 'value',
                 },
                 outcome: 'invalidInput',
+                expectedResourceName: '',
             },
             {
                 input: {
@@ -100,6 +90,7 @@ suite('Aspire resource debug language model tool E2E', function () {
                     resourceName: 'e2e-worker',
                 },
                 outcome: 'unknownAppHost',
+                expectedResourceName: 'e2e-worker',
             },
         ];
 
@@ -115,7 +106,7 @@ suite('Aspire resource debug language model tool E2E', function () {
             });
             assert.strictEqual(invocation.results.length, 1);
             assert.strictEqual(invocation.results[0].outcome, testCase.outcome);
-            assertSafeResourceDebugResult(invocation.results[0]);
+            assertSafeResourceDebugResult(invocation.results[0], testCase.expectedResourceName);
         }
     });
 
@@ -169,7 +160,7 @@ suite('Aspire resource debug language model tool E2E', function () {
                 controller: 'none',
                 debuggerExtensions: [{ id: 'ms-dotnettools.csharp', label: 'C#' }],
             }]);
-            assertSafeResourceDebugResult(invocation.results[0]);
+            assertSafeResourceDebugResult(invocation.results[0], worker.name);
         }
 
         const missingResource = await invokeLanguageModelTool<ResourceDebugToolResult>(
@@ -189,7 +180,7 @@ suite('Aspire resource debug language model tool E2E', function () {
             effectiveStrategy: 'none',
             controller: 'none',
         }]);
-        assertSafeResourceDebugResult(missingResource.results[0]);
+        assertSafeResourceDebugResult(missingResource.results[0], 'missing-resource');
 
         const unsupportedResource = await invokeLanguageModelTool<ResourceDebugToolResult>(
             resourceDebugToolName,
@@ -208,7 +199,7 @@ suite('Aspire resource debug language model tool E2E', function () {
             effectiveStrategy: 'none',
             controller: 'none',
         }]);
-        assertSafeResourceDebugResult(unsupportedResource.results[0]);
+        assertSafeResourceDebugResult(unsupportedResource.results[0], 'e2e-no-commands');
     });
 
     negativePathTest('cancels through the VS Code invocation token and reports a stopped resource without invoking a debugger', async () => {
@@ -254,7 +245,7 @@ suite('Aspire resource debug language model tool E2E', function () {
             { expectedConfirmations: 1 });
         assert.strictEqual(stopped.results.length, 1);
         assert.strictEqual(stopped.results[0].outcome, 'resourceNotRunning');
-        assertSafeResourceDebugResult(stopped.results[0]);
+        assertSafeResourceDebugResult(stopped.results[0], worker.name);
     });
 
     test('attaches packaged .NET and Go debuggers, hits breakpoints, detaches, and tears down', async function () {
@@ -325,7 +316,7 @@ suite('Aspire resource debug language model tool E2E', function () {
             assert.strictEqual(proof.proof, 'aspire-resource-attach-breakpoint-detach');
             assert.strictEqual(proof.toolPayload.outcome, 'started');
             assert.strictEqual(proof.toolPayload.provider, scenario.debugType === 'coreclr' ? 'dotnet' : 'go');
-            assertSafeResourceDebugResult(proof.toolPayload);
+            assertSafeResourceDebugResult(proof.toolPayload, scenario.resourceName);
             assert.strictEqual(proof.resourceName, scenario.resourceName);
             assert.strictEqual(proof.debugType, scenario.debugType);
             assert.strictEqual(proof.breakpoint.matchingStackFrame.line, proof.breakpoint.line);
@@ -368,7 +359,7 @@ suite('Aspire resource debug language model tool E2E', function () {
         assert.strictEqual(invocation.results.length, 1);
         const result = invocation.results[0];
         assert.strictEqual(result.outcome, 'started');
-        assertSafeResourceDebugResult(result);
+        assertSafeResourceDebugResult(result, worker.name);
 
         await stopPrimaryAppHostIfRunning();
         await waitForNoDebugSessions(120000);
@@ -404,7 +395,7 @@ suite('Aspire resource debug language model tool E2E', function () {
             timeoutMs: 300000,
         }, { timeoutMs: 360000 })).result as AttachedResourceDebugProof;
 
-        assertSafeResourceDebugResult(proof.toolPayload);
+        assertSafeResourceDebugResult(proof.toolPayload, go.name);
         assert.deepStrictEqual(proof.debugAdapterResponses, []);
 
         await stopPrimaryAppHostIfRunning();
@@ -429,13 +420,6 @@ function toWorkspaceRelativePath(filePath: string): string {
     const relativePath = path.relative(getWorkspaceRoot(), filePath);
     assert.ok(relativePath.length > 0 && !relativePath.startsWith('..') && !path.isAbsolute(relativePath));
     return relativePath.split(path.sep).join('/');
-}
-
-function assertSafeResourceDebugResult(result: ResourceDebugToolResult): void {
-    const serialized = JSON.stringify(result);
-    assert.deepStrictEqual(JSON.parse(serialized), result);
-    assert.ok(!path.isAbsolute(result.appHost));
-    assert.doesNotMatch(serialized, /(?:pid|process|configuration|arguments?|args|environment|env|secret|token|executable)|https?:\/\/|\/(?:Users|private|var|tmp)\b/i);
 }
 
 function findBreakpointLine(sourcePath: string, marker: string): number {
