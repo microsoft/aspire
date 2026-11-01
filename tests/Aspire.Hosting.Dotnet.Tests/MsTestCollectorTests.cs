@@ -42,7 +42,7 @@ public class MsTestCollectorTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = CreateBuilder(workspace);
         var resource = AddResource(builder, workspace);
-        var path = GetReportPath(resource);
+        var path = Path.Combine(workspace.Path, "runner reports", "results.trx");
         using var notifications = ResourceNotificationServiceTestHelpers.Create();
         using var coordinator = CreateCoordinator(builder, notifications);
         var completion = coordinator.WaitForCompletionAsync(TestContext.Current.CancellationToken);
@@ -61,10 +61,14 @@ public class MsTestCollectorTests(ITestOutputHelper outputHelper)
             (result.ResourceName, result.Name, result.Outcome, result.DurationMilliseconds));
         Assert.Equal("completed", events.Last(e => e.Collection is not null).Collection!.Status);
         Assert.True(File.Exists(path));
+        Assert.Equal(Report, await File.ReadAllTextAsync(GetReportPath(resource), TestContext.Current.CancellationToken));
+        Assert.Equal(Report, await File.ReadAllTextAsync(Path.Combine(Path.GetDirectoryName(GetReportPath(resource))!,
+            "merged", "results.trx"), TestContext.Current.CancellationToken));
     }
 
     [Theory]
     [InlineData("missing")]
+    [InlineData("stale")]
     [InlineData("malformed")]
     [InlineData("run-failure")]
     public async Task ReportFailuresFailCollectionExplicitly(string failure)
@@ -72,9 +76,13 @@ public class MsTestCollectorTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = CreateBuilder(workspace);
         var resource = AddResource(builder, workspace);
-        if (failure != "missing")
+        if (failure == "stale")
         {
-            File.WriteAllText(GetReportPath(resource), failure == "malformed"
+            File.WriteAllText(GetReportPath(resource), Report);
+        }
+        else if (failure != "missing")
+        {
+            File.WriteAllText(Path.Combine(workspace.Path, "runner reports", "results.trx"), failure == "malformed"
                 ? "<TestRun>"
                 : Report.Replace("outcome=\"Completed\"", "outcome=\"Failed\"", StringComparison.Ordinal));
         }
@@ -90,6 +98,10 @@ public class MsTestCollectorTests(ITestOutputHelper outputHelper)
         Assert.Equal("failed", collection.Status);
         Assert.NotEmpty(collection.Error!);
         Assert.Equal(failure == "run-failure" ? 1 : 0, events.Count(e => e.Result is not null));
+        if (failure == "malformed")
+        {
+            Assert.Equal("<TestRun>", await File.ReadAllTextAsync(GetReportPath(resource), TestContext.Current.CancellationToken));
+        }
     }
 
     [Fact]
@@ -98,15 +110,55 @@ public class MsTestCollectorTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = CreateBuilder(workspace);
         var resource = AddResource(builder, workspace);
-        var options = resource.Resource.Annotations.OfType<TestingAnnotation>().Single().Options!;
+        var options = resource.Resource.Annotations.OfType<TestingAnnotation>().Single();
         var published = new List<TestResult>();
         using var cancellation = new CancellationTokenSource();
         var context = new ResourceTestingContext(options.RunContext!, "tests", options.OutputPath!,
             published.Add, new TaskCompletionSource<bool>().Task, cancellation.Token);
-        var collection = Assert.Single(options.Collectors)(context);
+        var collection = options.Collector!(context);
         cancellation.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => collection.DefaultTimeout());
         Assert.Empty(published);
+    }
+
+    [Theory]
+    [InlineData("source-directory")]
+    [InlineData("nested-source")]
+    [InlineData("nested-destination")]
+    public async Task LinkedArtifactTreesAreRejectedWithoutCopyingExternalFiles(string link)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return; // Creating symlinks can require privileges not available in CI.
+        }
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = CreateBuilder(workspace);
+        var resource = AddResource(builder, workspace);
+        var annotation = resource.Resource.Annotations.OfType<TestingAnnotation>().Single();
+        var source = Path.Combine(workspace.Path, "runner reports");
+        File.WriteAllText(Path.Combine(source, "results.trx"), Report);
+        var external = workspace.CreateDirectory("external").FullName;
+        File.WriteAllText(Path.Combine(external, "external.txt"), "not copied");
+        if (link == "source-directory")
+        {
+            Directory.Move(source, source + "-original");
+            File.WriteAllText(Path.Combine(external, "results.trx"), Report);
+            Directory.CreateSymbolicLink(source, external);
+        }
+        else
+        {
+            Directory.CreateSymbolicLink(Path.Combine(link == "nested-source" ? source : annotation.OutputPath!, "nested"), external);
+            if (link == "nested-destination")
+            {
+                Directory.CreateDirectory(Path.Combine(source, "nested"));
+                File.WriteAllText(Path.Combine(source, "nested", "artifact.txt"), "not copied");
+            }
+        }
+        var context = new ResourceTestingContext(annotation.RunContext!, "tests", annotation.OutputPath!,
+            _ => Assert.Fail("Linked artifacts must not publish results."), Task.FromResult(true), TestContext.Current.CancellationToken);
+        await Assert.ThrowsAsync<InvalidDataException>(() => annotation.Collector!(context));
+        string[] expected = link == "source-directory" ? ["external.txt", "results.trx"] : ["external.txt"];
+        Assert.Equal(expected, Directory.GetFiles(external).Select(Path.GetFileName).Order().ToArray());
     }
 
     [Theory]
@@ -123,7 +175,7 @@ public class MsTestCollectorTests(ITestOutputHelper outputHelper)
         var resource = AddResource(builder, workspace);
         var target = Path.Combine(workspace.Path, "outside.trx");
         File.WriteAllText(target, Report);
-        var options = resource.Resource.Annotations.OfType<TestingAnnotation>().Single().Options!;
+        var options = resource.Resource.Annotations.OfType<TestingAnnotation>().Single();
         if (linkDirectory)
         {
             var displaced = options.OutputPath! + "-original";
@@ -134,12 +186,12 @@ public class MsTestCollectorTests(ITestOutputHelper outputHelper)
         }
         else
         {
-            File.CreateSymbolicLink(GetReportPath(resource), target);
+            File.CreateSymbolicLink(Path.Combine(workspace.Path, "runner reports", "results.trx"), target);
         }
         var context = new ResourceTestingContext(options.RunContext!, "tests", options.OutputPath!,
             _ => Assert.Fail("A linked report must not publish results."), Task.FromResult(true), TestContext.Current.CancellationToken);
 
-        await Assert.ThrowsAsync<InvalidDataException>(() => Assert.Single(options.Collectors)(context));
+        await Assert.ThrowsAsync<InvalidDataException>(() => options.Collector!(context));
     }
 
     [Theory]
@@ -237,12 +289,15 @@ public class MsTestCollectorTests(ITestOutputHelper outputHelper)
         var path = Path.Combine(workspace.Path, "tests.csproj");
         File.WriteAllText(path, "<Project />");
 
-        return builder.AddMsTest("tests", path);
+        var reportDirectory = workspace.CreateDirectory("runner reports").FullName;
+
+        return builder.AddMsTest("tests", path)
+            .WithTesting(context => MsTestTrxReport.CollectAsync(context, reportDirectory));
     }
 
     private static string GetReportPath(IResourceBuilder<MsTestResource> resource)
     {
-        return Path.Combine(resource.Resource.Annotations.OfType<TestingAnnotation>().Single().Options!.OutputPath!, "results.trx");
+        return Path.Combine(resource.Resource.Annotations.OfType<TestingAnnotation>().Single().OutputPath!, "results.trx");
     }
 
     private static TestRunCoordinator CreateCoordinator(IDistributedApplicationTestingBuilder builder, ResourceNotificationService notifications)
