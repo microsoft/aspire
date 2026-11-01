@@ -2,12 +2,14 @@
 
 This file-based AppHost is the shared, in-repository exerciser for `aspire test`.
 It uses repository hosting projects, not released packages or a private package
-hive. The foundation, MSTest and pytest scenarios share the same HTTP service
+hive. The foundation, MSTest, pytest and Go scenarios share the same HTTP service
 and require no containers. The MSTest fixture registers the executable
 Microsoft.Testing.Platform runner and TRX extension explicitly.
 The pytest fixture uses Python 3.10 or later and `uv` on PATH. `WithUv()` installs
 its declared pytest dependency into a local virtual environment before execution;
 no global pytest installation is needed.
+The Go fixture requires Go 1.24 or later on PATH and uses only the standard library;
+no additional Go test runner or dependencies are needed.
 
 ## Run from the repository root
 
@@ -27,7 +29,7 @@ features__testCommandEnabled=true \
 The CLI builds the AppHost from the current sources. The `Aspire.Hosting.AppHost@*`
 directive makes the file discoverable; `Directory.Build.targets` removes that
 package reference and uses `AspireProjectOrPackageReference` to resolve the local
-AppHost, .NET and Python hosting projects. It does not restore the wildcard package.
+AppHost, .NET, Python and Go hosting projects. It does not restore the wildcard package.
 
 Like the other playgrounds, this AppHost adds the repository dashboard with
 `AddDotnetProject` using the reserved `aspire-dashboard` resource name. Hosting
@@ -149,7 +151,14 @@ waits for the same service, receives `serviceEndpoint` through `PYTEST_SERVICE_U
 and launches the virtual environment's pytest executable directly. Its tests
 check `/`, `/health`, an independent opt-in failure, and a skipped example.
 
-The default combined summary contains **7 passed, 0 failed, 2 skipped**:
+`go-tests/go.mod` defines a standard Go test module. `AddGoTest("go-tests", ...)`
+waits for the same service and receives `serviceEndpoint` through `GO_SERVICE_URL`.
+It executes `go test -json -count=1` during testing, checking `/`, `/health`, an
+independent opt-in failure, and a skipped example. The Go collector uses
+`CaptureOutputAsync()` to drain DCP's separate, durable raw stdout and stderr
+through EOF before reading the Go JSON events; it does not parse dashboard logs.
+
+The default combined summary contains **10 passed, 0 failed, 3 skipped**:
 one foundation result plus three passed and one skipped result from each framework.
 Each collection has its own output directory. The foundation writes `probe.txt`;
 MSTest and pytest write into fresh temporary runner directories configured before
@@ -157,6 +166,12 @@ launch. Their runtime `WithTesting` callbacks wait for completion and stage
 `results.trx` (and its report tree) into `<run>/mstest-tests`, and the built-in
 JUnit report `pytest.xml` into `<run>/pytest-tests`. The AppHost file-system
 service cleans up runner temporary files on disposal.
+Go capture creates `stdout.log` (the Go JSON events), `stderr.log`, and
+`output.complete`; the completion marker is written only after both streams
+reach EOF and the files close. Those Aspire-owned capture files have mode `0600`
+on Unix in the CLI-owned `0700` resource directory. Windows uses inherited access
+controls. Test-binary stderr is embedded in Go JSON, while `stderr.log` holds
+the Go command's separate stderr.
 JSON exposes `outputPath`, `summaryPath`, and each `collections[].outputPath`.
 Reports and `summary.json` remain after teardown.
 Staged files use the copy writer's permissions; no per-file `0600` guarantee is made.
@@ -170,9 +185,9 @@ dotnet run --project src/Aspire.Cli/Aspire.Cli.csproj --no-launch-profile -- \
   --timeout-seconds 120 --format json --non-interactive
 ```
 
-This returns CLI exit code `23` with **6 passed, 1 failed, 2 skipped**. The MSTest
+This returns CLI exit code `23` with **9 passed, 1 failed, 3 skipped**. The MSTest
 process exits nonzero, but its collector still harvests the finalized TRX report
-and publishes all results. Foundation and pytest results remain passing.
+and publishes all results. Foundation, pytest and Go results remain passing.
 
 Exercise the independent pytest failure without changing MSTest:
 
@@ -183,8 +198,24 @@ dotnet run --project src/Aspire.Cli/Aspire.Cli.csproj --no-launch-profile -- \
   --timeout-seconds 120 --format json --non-interactive
 ```
 
-This also returns exit code `23` with **6 passed, 1 failed, 2 skipped**. The pytest
+This also returns exit code `23` with **9 passed, 1 failed, 3 skipped**. The pytest
 collector harvests finalized JUnit even after its process exits nonzero.
+
+Exercise the independent Go failure without changing foundation, MSTest or pytest:
+
+```bash
+GO_PLAYGROUND_FAIL=true \
+dotnet run --project src/Aspire.Cli/Aspire.Cli.csproj --no-launch-profile -- \
+  test --apphost playground/AspireCliTesting/apphost.cs --isolated \
+  --timeout-seconds 120 --format json --non-interactive
+```
+
+This returns exit code `23` with **9 passed, 1 failed, 3 skipped**. The Go process
+exits nonzero, but raw capture still drains through EOF and its collector harvests
+all four named outcomes. The other ecosystems remain passing. Failure flags are
+independent and case-insensitive; unset flags default to `false`. More than one
+flag can be enabled to demonstrate multiple failing resources.
+
 There is no `--output` option; use the paths assigned
 by the CLI rather than passing reporting flags to the runner.
 

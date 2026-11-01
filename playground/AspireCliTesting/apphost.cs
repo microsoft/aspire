@@ -67,6 +67,12 @@ try
             Environment.GetEnvironmentVariable("PYTEST_PLAYGROUND_FAIL") ?? "false")
         .WaitFor(service);
 
+    builder.AddGoTest("go-tests", "go-tests")
+        .WithEnvironment("GO_SERVICE_URL", serviceEndpoint)
+        .WithEnvironment("GO_PLAYGROUND_FAIL",
+            Environment.GetEnvironmentVariable("GO_PLAYGROUND_FAIL") ?? "false")
+        .WaitFor(service);
+
     builder.Build().Run();
 }
 finally
