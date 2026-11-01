@@ -10,12 +10,9 @@ its declared pytest dependency into a local virtual environment before execution
 no global pytest installation is needed.
 The Go fixture requires Go 1.24 or later on PATH and uses only the standard library;
 no additional Go test runner or dependencies are needed.
-The Rust fixture uses only the standard library and requires Rust/Cargo plus
-**stable cargo-nextest 0.9.143 or later on PATH**, including the AppHost's child
-process environment. See [nextest installation](https://nexte.st/docs/installation/).
-No tools are installed globally and no user configuration is rewritten by this
-playground. A separately downloaded nextest binary can be placed on the invoking
-shell's PATH; the AppHost does not embed a machine-specific tool path.
+The Rust fixture uses only the standard library and the **built-in `cargo test`**
+runner. Only the Rust toolchain is needed on PATH; nextest is not required.
+No tools are installed globally and no Cargo configuration is rewritten.
 
 ## Run from the repository root
 
@@ -167,24 +164,24 @@ Its collector is runtime-only and writes directly into `<run>/go-tests`; it does
 not need a temporary framework-report directory.
 
 `rust-tests/Cargo.toml` defines a dependency-free Rust crate.
-`AddExecutable("rust-tests", "cargo", "rust-tests", "nextest", "run")` with
-`WithNextestTesting()` waits for the same service and receives `serviceEndpoint`
+`AddExecutable("rust-tests", "cargo", "rust-tests", "test")` with
+`WithCargoTesting()` waits for the same service and receives `serviceEndpoint`
 through `RUST_SERVICE_URL`. Tests check `/`, `/health`, an independent opt-in
-failure, and an ignored example. This uses the finite nextest executable, not
-`AddRustApp` and its `cargo run` entrypoint.
+failure, an ignored example, and a documentation test. This uses finite built-in
+Cargo testing, not `AddRustApp` and its `cargo run` entrypoint.
 
-During testing, the helper writes an explicit private `nextest.toml` with the
-assigned JUnit destination, reported ignored tests, zero retries and no fail-fast.
-It replaces repository nextest settings for this invocation without modifying
-them; setup scripts, test groups and per-test overrides are not loaded.
-Cargo configuration remains caller-owned. **Nextest excludes doctests**; this
-sample neither executes nor claims to collect them. No unstable test JSON is used.
-Only one native invocation is supported, without terminals, replicas, restarts,
-retries or stress loops.
+Cargo configuration, arguments, selected targets and standard failure behavior
+remain caller-owned. **Default Cargo testing includes doctests** as applicable;
+this fixture has a passing doctest. No additional runner, JUnit requirement or
+unstable test JSON is used. Cargo exit status is the authoritative Rust resource
+outcome, and no individual Rust outcomes or skipped counts are published.
+Zero published Rust results does not imply no Rust tests executed.
+Only one native invocation is supported, without terminals, replicas or restarts.
 
-The default combined summary contains **13 passed, 0 failed, 4 skipped**:
-one foundation result plus three passed and one skipped result from each of the
-four ecosystems.
+The default published-result summary contains **10 passed, 0 failed, 3 skipped**:
+one foundation result plus three passed and one skipped from each of MSTest,
+pytest and Go. Rust contributes a **passing resource outcome**, not per-test
+counts; all five testing resources pass.
 Each collection has its own output directory. The foundation writes `probe.txt`;
 MSTest and pytest write into fresh temporary runner directories configured before
 launch. Their runtime `WithTesting` callbacks wait for completion and stage
@@ -197,14 +194,13 @@ reach EOF and the files close. Those Aspire-owned capture files have mode `0600`
 on Unix in the CLI-owned `0700` resource directory. Windows uses inherited access
 controls. Test-binary stderr is embedded in Go JSON, while `stderr.log` holds
 the Go command's separate stderr.
-Rust writes `junit.xml` and `nextest.toml`, plus `stdout.log`, `stderr.log` and
-`output.complete` through the same durable raw-output capture. Its final JUnit
-report supplies names, outcomes, skips, durations and failure messages; raw output
-is retained for tool/build diagnostics, not substituted for test result metadata.
+Rust writes only `stdout.log`, `stderr.log` and `output.complete` through the same
+durable raw-output capture. These retain human Cargo/libtest diagnostics, including
+actual test execution, but are not parsed into fabricated testcase metadata.
 JSON exposes `outputPath`, `summaryPath`, and each `collections[].outputPath`.
 Reports and `summary.json` remain after teardown.
 Framework-staged reports use the copy writer's permissions; unlike Aspire-owned
-Go captures and the custom probe, no per-file `0600` guarantee is made for those reports.
+Go/Rust captures and the custom probe, no per-file `0600` guarantee is made for those reports.
 
 Exercise the controlled MSTest failure without changing the foundation scenario:
 
@@ -215,9 +211,9 @@ dotnet run --project src/Aspire.Cli/Aspire.Cli.csproj --no-launch-profile -- \
   --timeout-seconds 120 --format json --non-interactive
 ```
 
-This returns CLI exit code `23` with **12 passed, 1 failed, 4 skipped**. The MSTest
+This returns CLI exit code `23` with **9 passed, 1 failed, 3 skipped**. The MSTest
 process exits nonzero, but its collector still harvests the finalized TRX report
-and publishes all results. Foundation, pytest, Go and Rust results remain passing.
+and publishes all results. Foundation, pytest, Go and Rust resources remain passing.
 
 Exercise the independent pytest failure without changing MSTest:
 
@@ -228,7 +224,7 @@ dotnet run --project src/Aspire.Cli/Aspire.Cli.csproj --no-launch-profile -- \
   --timeout-seconds 120 --format json --non-interactive
 ```
 
-This also returns exit code `23` with **12 passed, 1 failed, 4 skipped**. The pytest
+This also returns exit code `23` with **9 passed, 1 failed, 3 skipped**. The pytest
 collector harvests finalized JUnit even after its process exits nonzero.
 
 Exercise the independent Go failure without changing foundation, MSTest or pytest:
@@ -240,7 +236,7 @@ dotnet run --project src/Aspire.Cli/Aspire.Cli.csproj --no-launch-profile -- \
   --timeout-seconds 120 --format json --non-interactive
 ```
 
-This returns exit code `23` with **12 passed, 1 failed, 4 skipped**. The Go process
+This returns exit code `23` with **9 passed, 1 failed, 3 skipped**. The Go process
 exits nonzero, but raw capture still drains through EOF and its collector harvests
 all four named outcomes. The other ecosystems remain passing.
 
@@ -253,12 +249,13 @@ dotnet run --project src/Aspire.Cli/Aspire.Cli.csproj --no-launch-profile -- \
   --timeout-seconds 120 --format json --non-interactive
 ```
 
-This returns exit code `23` with **12 passed, 1 failed, 4 skipped**. Nextest exits
-nonzero, but its finalized JUnit still contributes all four named outcomes.
-Missing nextest, build/discovery failure, no tests, cancellation, or a missing or
-malformed final report fail execution/collection rather than fabricating results.
-Inspect the Rust collection's `stdout.log` and `stderr.log` for the underlying
-cause when no JUnit is produced.
+This returns exit code `23` with a **failed Rust resource** and unchanged published
+counts of **10 passed, 0 failed, 3 skipped**. This is not a contradiction: the
+resource's nonzero exit makes the whole run fail without inventing a failed
+testcase. Diagnostic capture completes normally and no JUnit is expected.
+Inspect the Rust collection's `stdout.log` and `stderr.log` for Cargo build, test
+or doctest failures. Cargo can also succeed with no selected tests; Aspire does
+not override that behavior or infer test counts.
 
 Failure flags are independent and case-insensitive; unset flags default to
 `false`. To demonstrate all four failures together:
@@ -271,8 +268,8 @@ dotnet run --project src/Aspire.Cli/Aspire.Cli.csproj --no-launch-profile -- \
   --timeout-seconds 120 --format json --non-interactive
 ```
 
-This returns exit code `23` with **9 passed, 4 failed, 4 skipped**; the foundation
-probe still passes.
+This returns exit code `23` with **7 passed, 3 failed, 3 skipped** published
+results and **four failed resource outcomes**; the foundation probe still passes.
 
 There is no `--output` option; use the paths assigned
 by the CLI rather than passing reporting flags to the runner.
