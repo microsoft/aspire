@@ -157,6 +157,7 @@ internal static class ProcessCaptureRunner
             var (capture, drainInterrupted) = await DrainAfterExitAsync(captureTask, createEmptyCapture, logger, timeoutCts.Token).ConfigureAwait(false);
             if (drainInterrupted)
             {
+                logger.LogDebug("Output drain for process {Pid} was interrupted.", TryGetPid(process));
                 // The deadline or the caller's cancellation fired before the output finished draining.
                 // Readers may have returned partial output on cancellation, so report the
                 // interruption like the pre-exit path instead of a successful run.
@@ -307,6 +308,7 @@ internal static class ProcessCaptureRunner
 
             // The probe is queued behind any read continuations already waiting for a thread,
             // so it can only run before them if the reads are not queued at all.
+            logger.LogDebug("Process output capture did not finish within {Bound}s; checking the thread pool for a backlog.", s_postExitCaptureWaitBound.TotalSeconds);
             var probeTask = MeasureThreadPoolDelayAsync();
             try
             {

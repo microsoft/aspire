@@ -62,24 +62,29 @@ public class ProcessCaptureRunnerTests(ITestOutputHelper outputHelper)
         startInfo.UseShellExecute = false;
         startInfo.CreateNoWindow = true;
 
-        // The caller's cancellation or the deadline fires after the 2s drain bound, while the
-        // backlogged pool keeps the runner extending the drain.
+        // The caller cancels once the drain bound has expired and the runner is waiting for the
+        // backlogged pool, so the interruption must be observed by that wait. The deadline fires
+        // after the 2s drain bound.
         var interruptAfter = TimeSpan.FromSeconds(3);
-        using var callerCancel = cancelByCaller ? new CallerCancellation(callerCts, interruptAfter) : null;
+        using var callerCancel = cancelByCaller ? new CallerCancellation(callerCts) : null;
 
         // Start the backlog from the runner's own thread as it enters the post-exit drain. Starting it
         // from the capture could leave the runner's exit continuation queued behind the backlog, which
         // tests the pre-exit wait rather than the drain. Hold it through a caller's cancellation so
-        // the runner must report it without waiting for the pool to recover. The deadline is the
-        // runner's own timer, which a starved pool can delay, so release the backlog once it fires;
-        // both paths then observe the same linked token.
+        // the drain must observe it without waiting for the pool to recover; the runner's bounded
+        // cleanup afterwards is timer-driven, so the backlog is released once the drain reports the
+        // interruption. The deadline is the runner's own timer, which a starved pool can delay, so
+        // release the backlog once it fires; both paths then observe the same linked token.
         var captureToken = CancellationToken.None;
         var backlogStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var logger = new DrainStartLogger(() =>
-        {
-            backlog.Start(cancelByCaller ? CancellationToken.None : captureToken);
-            backlogStarted.TrySetResult();
-        });
+        var logger = new DrainLogger(
+            onDrainStart: () =>
+            {
+                backlog.Start(cancelByCaller ? CancellationToken.None : captureToken);
+                backlogStarted.TrySetResult();
+            },
+            onProbingBacklog: () => callerCancel?.Trigger(),
+            onDrainInterrupted: backlog.ObserveInterruption);
 
         var runTask = ProcessCaptureRunner.RunAsync(
             startInfo,
@@ -117,26 +122,20 @@ public class ProcessCaptureRunnerTests(ITestOutputHelper outputHelper)
             return "partial";
         }
 
-        // Record completion inline on the completing thread; observing it must not need a pool worker.
-        _ = runTask.ContinueWith(
-            static (_, state) => ((ThreadPoolBacklog)state!).ObserveCompletion(),
-            backlog,
-            CancellationToken.None,
-            TaskContinuationOptions.ExecuteSynchronously,
-            TaskScheduler.Default);
         var result = await runTask.WaitAsync(TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken);
 
-        outputHelper.WriteLine($"Runner completed after {backlog.CompletedAfter}; backlog released after {backlog.ReleasedAfter}.");
+        outputHelper.WriteLine($"Drain reported the interruption after {backlog.InterruptedAfter}; backlog released after {backlog.ReleasedAfter}.");
         if (cancelByCaller)
         {
-            Assert.True(backlog.CompletedWhileHeld, $"The runner completed after {backlog.CompletedAfter}, only once the backlog was released after {backlog.ReleasedAfter}.");
+            Assert.True(backlog.InterruptedWhileHeld, $"The drain reported the interruption after {backlog.InterruptedAfter}, only once the backlog was released after {backlog.ReleasedAfter}.");
         }
         Assert.Equal(cancelByCaller, result.Cancelled);
         Assert.Equal(cancelByCaller ? null : ProcessCaptureFailureKind.TimedOut, result.FailureKind);
         Assert.Equal(-1, result.ExitCode);
     }
 
-    private sealed class DrainStartLogger(Action onDrainStart) : ILogger
+    // Runs the callbacks inline on the runner's thread, so observing the drain needs no pool worker.
+    private sealed class DrainLogger(Action onDrainStart, Action onProbingBacklog, Action onDrainInterrupted) : ILogger
     {
         public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
 
@@ -144,25 +143,36 @@ public class ProcessCaptureRunnerTests(ITestOutputHelper outputHelper)
 
         public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
         {
-            if (formatter(state, exception).Contains("exited; draining its output", StringComparison.Ordinal))
+            var message = formatter(state, exception);
+            if (message.Contains("exited; draining its output", StringComparison.Ordinal))
             {
                 onDrainStart();
+            }
+            else if (message.Contains("checking the thread pool for a backlog", StringComparison.Ordinal))
+            {
+                onProbingBacklog();
+            }
+            else if (message.Contains("was interrupted", StringComparison.Ordinal))
+            {
+                onDrainInterrupted();
             }
         }
     }
 
-    // Cancels from a dedicated thread: timer callbacks can themselves queue behind a starved pool,
-    // which would delay the interruption rather than test how the runner handles it.
+    // Cancels from a dedicated thread once triggered, like a caller pressing Ctrl+C, without
+    // depending on timers or pool threads that the backlog starves.
     private sealed class CallerCancellation : IDisposable
     {
-        private readonly ManualResetEventSlim _stop = new();
+        private readonly ManualResetEventSlim _trigger = new();
+        private volatile bool _stopped;
         private readonly Thread _thread;
 
-        public CallerCancellation(CancellationTokenSource cts, TimeSpan after)
+        public CallerCancellation(CancellationTokenSource cts)
         {
             _thread = new Thread(() =>
             {
-                if (!_stop.Wait(after))
+                _trigger.Wait();
+                if (!_stopped)
                 {
                     cts.Cancel();
                 }
@@ -171,9 +181,12 @@ public class ProcessCaptureRunnerTests(ITestOutputHelper outputHelper)
             _thread.Start();
         }
 
+        public void Trigger() => _trigger.Set();
+
         public void Dispose()
         {
-            _stop.Set();
+            _stopped = true;
+            _trigger.Set();
             _thread.Join();
         }
     }
@@ -188,17 +201,17 @@ public class ProcessCaptureRunnerTests(ITestOutputHelper outputHelper)
 
         public TimeSpan? ReleasedAfter { get; private set; }
 
-        public TimeSpan? CompletedAfter { get; private set; }
+        public TimeSpan? InterruptedAfter { get; private set; }
 
-        public bool CompletedWhileHeld { get; private set; }
+        public bool InterruptedWhileHeld { get; private set; }
 
-        // Called inline by the completing thread: records whether the pool was still held, then lets it go.
-        public void ObserveCompletion()
+        // Called inline by the runner's thread: records whether the pool was still held, then lets it go.
+        public void ObserveInterruption()
         {
             lock (_lock)
             {
-                CompletedAfter = _stopwatch.Elapsed;
-                CompletedWhileHeld = _stopwatch.IsRunning && ReleasedAfter is null;
+                InterruptedAfter = _stopwatch.Elapsed;
+                InterruptedWhileHeld = _stopwatch.IsRunning && ReleasedAfter is null;
             }
             _done.Set();
         }
@@ -213,7 +226,7 @@ public class ProcessCaptureRunnerTests(ITestOutputHelper outputHelper)
                 ThreadPool.UnsafeQueueUserWorkItem(static release => release.Wait(), _release, preferLocal: false);
             }
 
-            // Release from a dedicated thread: when the runner abandons the capture or completes, or once the stall elapses.
+            // Release from a dedicated thread: when the runner abandons the capture or reports the interruption, or once the stall elapses.
             _releaser = new Thread(() =>
             {
                 WaitHandle.WaitAny([abandoned.WaitHandle, _done.WaitHandle], stall);
