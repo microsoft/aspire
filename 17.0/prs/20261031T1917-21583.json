@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only E2E fix",
+  "mergedAt": "2026-10-31T19:17:59Z",
+  "number": 21583,
+  "runDate": "2026-11-01T00:06:00Z",
+  "status": "excluded",
+  "title": "Fix StopNonInteractiveTests launch-port collision between generated AppHosts"
+}

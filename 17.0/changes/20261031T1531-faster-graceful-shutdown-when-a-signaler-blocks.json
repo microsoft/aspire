@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Child process shutdown no longer waits the full drain timeout when the target process has already exited but the graceful signaler is still blocked, avoiding a ~5 second stall on stop.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "⏱️",
+  "firstMergedAt": "2026-10-31T15:31:37Z",
+  "lastMergedAt": "2026-10-31T15:31:37Z",
+  "name": "Faster graceful shutdown when a signaler blocks",
+  "owner": "davidfowl",
+  "prs": [
+    21581
+  ]
+}

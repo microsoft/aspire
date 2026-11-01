@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Lower minimum Helm version to 4.0.0",
+  "mergedAt": "2026-10-31T19:26:43Z",
+  "number": 21590,
+  "runDate": "2026-11-01T00:06:00Z",
+  "status": "included",
+  "title": "Lower minimum Helm version to 4.0.0"
+}

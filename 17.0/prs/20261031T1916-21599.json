@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only fix for flaky CLI test",
+  "mergedAt": "2026-10-31T19:16:00Z",
+  "number": 21599,
+  "runDate": "2026-11-01T00:06:00Z",
+  "status": "excluded",
+  "title": "Fix flaky NuGetPackagePrefetcher cancellation logging test"
+}

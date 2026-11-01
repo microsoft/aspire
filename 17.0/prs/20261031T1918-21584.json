@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Styled markdown code blocks in interaction messages",
+  "mergedAt": "2026-10-31T19:18:20Z",
+  "number": 21584,
+  "runDate": "2026-11-01T00:06:00Z",
+  "status": "included",
+  "title": "Style markdown code blocks in interaction notifications and dialogs"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Faster graceful shutdown when a signaler blocks",
+  "mergedAt": "2026-10-31T15:31:37Z",
+  "number": 21581,
+  "runDate": "2026-11-01T00:06:00Z",
+  "status": "included",
+  "title": "Cancel blocked graceful signaler once the child process exits"
+}

@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The AppHost version, startup message and application host directory are now logged before BeforeStartEvent subscribers run, so the console is no longer blank when a subscriber is slow or hangs.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "📣",
+  "firstMergedAt": "2026-10-31T19:18:40Z",
+  "lastMergedAt": "2026-10-31T19:18:40Z",
+  "name": "AppHost startup information logged earlier",
+  "owner": "davidfowl",
+  "prs": [
+    21588
+  ]
+}

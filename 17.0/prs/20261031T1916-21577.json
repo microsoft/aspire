@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only change to extension E2E",
+  "mergedAt": "2026-10-31T19:16:46Z",
+  "number": 21577,
+  "runDate": "2026-11-01T00:06:00Z",
+  "status": "excluded",
+  "title": "Wait for resources to respond before attaching in resource debug E2E"
+}

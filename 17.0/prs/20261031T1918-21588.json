@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "AppHost startup information logged earlier",
+  "mergedAt": "2026-10-31T19:18:40Z",
+  "number": 21588,
+  "runDate": "2026-11-01T00:06:00Z",
+  "status": "included",
+  "title": "Log AppHost startup information before BeforeStartEvent"
+}

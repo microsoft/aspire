@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Code blocks in interaction notifications and dialogs now render with the dashboard code block styling, and long blocks such as stack traces scroll within a capped height instead of taking over the message bar.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🧱",
+  "firstMergedAt": "2026-10-31T19:18:20Z",
+  "lastMergedAt": "2026-10-31T19:18:20Z",
+  "name": "Styled markdown code blocks in interaction messages",
+  "owner": "davidfowl",
+  "prs": [
+    21584
+  ]
+}
