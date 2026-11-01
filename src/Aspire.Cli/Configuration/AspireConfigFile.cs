@@ -55,6 +55,7 @@ namespace Aspire.Cli.Configuration;
 internal sealed class AspireConfigFile
 {
     public const string FileName = "aspire.config.json";
+    public const string TemplateSourcesSectionName = "templateSources";
 
     /// <summary>
     /// The JSON Schema URL for this configuration file.
@@ -164,7 +165,7 @@ internal sealed class AspireConfigFile
     [Description("Package references for the AppHost. Value is either a string (NuGet, short form — empty = SDK version, otherwise explicit version) or an object with a required \"source\" discriminator (\"nuget\", \"project\", or \"npm\") and per-source fields (version for nuget, path for project/npm).")]
     public Dictionary<string, PackageEntry>? Packages { get; set; }
 
-    [JsonPropertyName("templateSources")]
+    [JsonPropertyName(TemplateSourcesSectionName)]
     [Description("Named global template sources. Each source specifies an absolute local path or a Git repository with optional ref and path.")]
     public Dictionary<string, AspireConfigTemplateSource?>? TemplateSources { get; set; }
 
