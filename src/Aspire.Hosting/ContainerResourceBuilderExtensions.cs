@@ -330,8 +330,9 @@ public static class ContainerResourceBuilderExtensions
         // Container runtimes reject two mounts with the same target, so an identical bind mount is a
         // no-op (e.g. when re-applied by layered extension methods or event handlers that run on every
         // restart) and a conflicting one fails fast instead of failing later when the container starts.
+        var normalizedTarget = NormalizeContainerMountTarget(target);
         var existing = builder.Resource.Annotations.OfType<ContainerMountAnnotation>()
-            .FirstOrDefault(m => string.Equals(m.Target, target, StringComparison.Ordinal));
+            .FirstOrDefault(m => string.Equals(NormalizeContainerMountTarget(m.Target), normalizedTarget, StringComparison.Ordinal));
         if (existing is not null)
         {
             if (existing.Type == ContainerMountType.BindMount &&
@@ -343,7 +344,7 @@ public static class ContainerResourceBuilderExtensions
 
             var existingKind = existing.Type == ContainerMountType.BindMount ? "bind mount" : "volume";
             throw new InvalidOperationException(
-                $"Resource '{builder.Resource.Name}' already has a {existingKind} '{existing.Source ?? "(anonymous)"}'{(existing.IsReadOnly ? " (read-only)" : "")} mounted at '{target}'. " +
+                $"Resource '{builder.Resource.Name}' already has a {existingKind} '{existing.Source ?? "(anonymous)"}'{(existing.IsReadOnly ? " (read-only)" : "")} mounted at '{existing.Target}'. " +
                 $"Cannot also bind mount '{sourcePath}'{(isReadOnly ? " (read-only)" : "")} to the same target.");
         }
 
@@ -1660,6 +1661,40 @@ public static class ContainerResourceBuilderExtensions
         var umask = umaskValue is { } value ? (UnixFileMode)value : (UnixFileMode?)null;
 
         return builder.WithContainerFiles(destinationPath, callback, defaultOwner, defaultGroup, umask);
+    }
+
+    // Container runtimes clean Linux mount destinations (Go's path.Clean) before detecting duplicates, so
+    // '/mnt/data', '/mnt/data/', '/mnt//data' and '/mnt/./data' all name the same target. Targets are container
+    // paths, so host Path APIs must not be used. Non-POSIX targets (e.g. Windows containers) are compared verbatim.
+    private static string NormalizeContainerMountTarget(string target)
+    {
+        if (!target.StartsWith('/'))
+        {
+            return target;
+        }
+
+        var segments = new List<string>();
+        foreach (var segment in target.Split('/', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (segment == ".")
+            {
+                continue;
+            }
+
+            if (segment == "..")
+            {
+                if (segments.Count > 0)
+                {
+                    segments.RemoveAt(segments.Count - 1);
+                }
+
+                continue;
+            }
+
+            segments.Add(segment);
+        }
+
+        return "/" + string.Join('/', segments);
     }
 
     private static bool IsSameBindMountSource(string? existingSource, string source)

@@ -80,6 +80,68 @@ public class WithBindMountTests
         Assert.Single(container.Resource.Annotations.OfType<ContainerMountAnnotation>());
     }
 
+    [Theory]
+    [InlineData("/mnt/data/")]
+    [InlineData("/mnt//data")]
+    [InlineData("/mnt/./data")]
+    [InlineData("/mnt/other/../data")]
+    public void IdenticalBindMountWithEquivalentTargetSpellingIsNoOp(string equivalentTarget)
+    {
+        // Docker cleans Linux mount destinations before detecting duplicates, so these spellings name the same target.
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var source = Path.GetFullPath("bind-source");
+
+        var container = builder.AddContainer("container", "image")
+            .WithBindMount(source, "/mnt/data")
+            .WithBindMount(source, equivalentTarget);
+
+        var mount = Assert.Single(container.Resource.Annotations.OfType<ContainerMountAnnotation>());
+        Assert.Equal("/mnt/data", mount.Target);
+    }
+
+    [Theory]
+    [InlineData("/mnt/data/")]
+    [InlineData("/mnt//data")]
+    [InlineData("/mnt/./data")]
+    [InlineData("/mnt/other/../data")]
+    public void ConflictingBindMountWithEquivalentTargetSpellingThrows(string equivalentTarget)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var container = builder.AddContainer("container", "image")
+            .WithBindMount(Path.GetFullPath("one"), "/mnt/data");
+
+        var ex = Assert.Throws<InvalidOperationException>(() => container.WithBindMount(Path.GetFullPath("two"), equivalentTarget));
+
+        Assert.Contains("'/mnt/data'", ex.Message);
+        Assert.Single(container.Resource.Annotations.OfType<ContainerMountAnnotation>());
+    }
+
+    [Fact]
+    public void BindMountOverExistingVolumeWithEquivalentTargetSpellingThrows()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var container = builder.AddContainer("container", "image")
+            .WithVolume("data", "/mnt/data/");
+
+        var ex = Assert.Throws<InvalidOperationException>(() => container.WithBindMount(Path.GetFullPath("bind-source"), "/mnt/data"));
+
+        Assert.Contains("volume", ex.Message);
+        Assert.Single(container.Resource.Annotations.OfType<ContainerMountAnnotation>());
+    }
+
+    [Fact]
+    public void LinuxTargetsDifferingOnlyByCaseAreBothAdded()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var source = Path.GetFullPath("bind-source");
+
+        var container = builder.AddContainer("container", "image")
+            .WithBindMount(source, "/mnt/data")
+            .WithBindMount(source, "/mnt/Data");
+
+        Assert.Equal(["/mnt/data", "/mnt/Data"], container.Resource.Annotations.OfType<ContainerMountAnnotation>().Select(m => m.Target));
+    }
+
     [Fact]
     public void SocketPathsDifferingOnlyByCaseConflict()
     {
