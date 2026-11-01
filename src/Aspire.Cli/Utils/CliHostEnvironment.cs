@@ -103,13 +103,30 @@ internal sealed class CliHostEnvironment : ICliHostEnvironment
     {
         if (!TryDetectAnsiSupportConfiguration(configuration, out var supportsAnsi))
         {
-            // If there is no explicit configuration to enable or disable ANSI support, attempt to detect it.
-            // This is required because some terminals don't support ANSI output, e.g. https://github.com/microsoft/aspire/issues/13737
-            var capabilities = AnsiCapabilities.Create(TextWriter.Null);
-            supportsAnsi = capabilities.Ansi;
+            if (OperatingSystem.IsWindows())
+            {
+                // Windows consoles must be probed (and upgraded) through the console mode APIs because
+                // some hosts don't support ANSI output, e.g. https://github.com/microsoft/aspire/issues/13737
+                var capabilities = AnsiCapabilities.Create(TextWriter.Null);
+                supportsAnsi = capabilities.Ansi;
+            }
+            else
+            {
+                supportsAnsi = TermSupportsAnsi(configuration["TERM"]);
+            }
         }
 
         return supportsAnsi;
+    }
+
+    // Spectre.Console only recognizes a fixed allow-list of TERM values (xterm, alacritty, ...), so terminals
+    // such as foot (TERM=foot) or WezTerm (TERM=wezterm) were treated as not supporting ANSI, which made every
+    // prompt fail. Follow the terminfo convention instead: any TERM other than "dumb" supports ANSI.
+    // See https://github.com/microsoft/aspire/issues/21368
+    internal static bool TermSupportsAnsi(string? term)
+    {
+        return !string.IsNullOrWhiteSpace(term) &&
+            !string.Equals(term.Trim(), "dumb", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool DetectInteractiveInput(IConfiguration configuration)

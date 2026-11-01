@@ -192,6 +192,65 @@ public class CliHostEnvironmentTests
         Assert.False(env.SupportsAnsi);
     }
 
+    // Regression test for https://github.com/microsoft/aspire/issues/21368: terminals whose TERM value is not
+    // on Spectre.Console's built-in allow-list (e.g. foot, WezTerm) must still be treated as ANSI capable,
+    // otherwise selection prompts throw "the current terminal does not support ANSI escape sequences".
+    [PlatformSpecific(TestPlatforms.AnyUnix)]
+    [Theory]
+    [InlineData("foot")]
+    [InlineData("foot-extra")]
+    [InlineData("wezterm")]
+    [InlineData("xterm-256color")]
+    public void SupportsAnsi_ReturnsTrue_ForAnsiCapableTerm(string term)
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["TERM"] = term
+            })
+            .Build();
+
+        var env = new CliHostEnvironment(configuration, nonInteractive: false, isOutputRedirected: false);
+
+        Assert.True(env.SupportsAnsi);
+    }
+
+    [PlatformSpecific(TestPlatforms.AnyUnix)]
+    [Theory]
+    [InlineData("dumb")]
+    [InlineData("")]
+    [InlineData(null)]
+    public void SupportsAnsi_ReturnsFalse_ForDumbOrMissingTerm(string? term)
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["TERM"] = term
+            })
+            .Build();
+
+        var env = new CliHostEnvironment(configuration, nonInteractive: false, isOutputRedirected: false);
+
+        Assert.False(env.SupportsAnsi);
+    }
+
+    [PlatformSpecific(TestPlatforms.AnyUnix)]
+    [Fact]
+    public void SupportsAnsi_ReturnsFalse_WhenNO_COLORSet_EvenWithAnsiCapableTerm()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["TERM"] = "foot",
+                ["NO_COLOR"] = "1"
+            })
+            .Build();
+
+        var env = new CliHostEnvironment(configuration, nonInteractive: false);
+
+        Assert.False(env.SupportsAnsi);
+    }
+
     [Fact]
     public void SupportsInteractiveInput_ReturnsFalse_WhenNonInteractiveTrue()
     {
