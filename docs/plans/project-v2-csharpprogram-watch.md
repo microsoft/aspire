@@ -268,9 +268,12 @@ required IDE launch configuration is reported, not silently retried as a DCP pro
 
 Coordinated V2 builds negotiate **`project-with-external-build.v1`**
 (`KnownLaunchConfigurationTypes.ProjectWithExternalBuild`). In an external debug session, the coordinator
-runs only when that capability is advertised. Older/capability-less launchers
-retain the legacy project-build path; unsupported project launch or persistent lifetime can retain normal
-process execution. Build configuration, build-only environment, build working directory, and build
+runs when that capability is advertised, or when the launcher advertises an explicit capability list
+without `project` (for example VS Code without the C# extension). Those resources run as DCP processes
+exactly as they do outside an IDE, so they need the coordinated build; otherwise resources that share a
+project race on its implicit `dotnet run` builds. Capability-less launchers (Visual Studio) and launchers
+that advertise `project` without the external-build capability retain the legacy project-build path;
+persistent lifetime can retain normal process execution. Build configuration, build-only environment, build working directory, and build
 suppression flow through project launch metadata.
 
 The VS Code debugger understands externally built projects and file apps, resolves SDK-selected
