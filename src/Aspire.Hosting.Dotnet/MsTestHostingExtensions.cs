@@ -4,6 +4,7 @@
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dotnet;
+using Microsoft.Extensions.DependencyInjection;
 
 #pragma warning disable ASPIRETESTING001 // Implements the experimental testing integration.
 
@@ -32,9 +33,10 @@ public static class MsTestHostingExtensions
     /// <para>
     /// Execution uses <c>dotnet run --project &lt;path&gt; --no-launch-profile --</c>, building independently
     /// of AddDotnetProject's coordinated builds. Select one framework for multi-targeted projects.
-    /// During testing, the runner writes <c>results.trx</c> into the resource's private output directory.
+    /// During testing, the runner writes <c>results.trx</c> into a fresh temporary directory.
     /// Collection waits for process completion, including failures, and missing or invalid reports fail the run.
-    /// Reports and attachments remain in that directory; their file permissions are controlled by the runner.
+    /// Reports and attachments are staged into the runtime collector's resource output directory.
+    /// Temporary runner files are cleaned up when the AppHost is disposed.
     /// Only one process invocation per resource is supported during testing, without replicas or restarts.
     /// </para>
     /// <para>
@@ -107,22 +109,30 @@ public static class MsTestHostingExtensions
                 }
             });
 
-        resource.WithTesting(testing =>
+        string? reportDirectory = null;
+        resource.WithTesting(async context =>
         {
-            if (testing.OutputPath is not { } outputPath)
-            {
-                return;
-            }
-            testing.CollectResults(MsTestTrxReport.CollectAsync);
+            // Collection can begin before BeforeStart. Resolve the launch-owned path only
+            // after execution is terminal, never use callback ordering to configure the runner.
+            await context.WaitForCompletionAsync().ConfigureAwait(false);
+            await MsTestTrxReport.CollectAsync(context, reportDirectory ??
+                throw new InvalidOperationException("The MSTest report directory was not initialized before execution.")).ConfigureAwait(false);
+        });
+        if (builder.ExecutionContext.IsRunMode && builder.Configuration["ASPIRE_TEST_OUTPUT_PATH"] is not null)
+        {
             // Append after model definition so WithArgs remains composable, but cannot redirect
             // the owned report. MTP report filenames can be absolute paths:
             // https://learn.microsoft.com/dotnet/core/testing/microsoft-testing-platform-test-reports
-            builder.OnBeforeStart((_, _) =>
+            builder.OnBeforeStart((beforeStartEvent, _) =>
             {
                 if (resource.Resource.TryGetLastAnnotation<ReplicaAnnotation>(out var replicas) && replicas.Replicas != 1)
                 {
                     throw new DistributedApplicationException("MSTest testing resources support exactly one replica.");
                 }
+                // Allocate outside the runtime collector: it races with process startup and may
+                // be replaced by WithTesting. The file-system service owns shutdown/failure cleanup.
+                reportDirectory ??= beforeStartEvent.Services.GetRequiredService<IFileSystemService>()
+                    .TempDirectory.CreateTempSubdirectory("aspire-mstest-").Path;
                 resource.WithArgs(context =>
                 {
                     if (!context.Args.Take(launchArgs.Count).SequenceEqual(launchArgs))
@@ -130,7 +140,7 @@ public static class MsTestHostingExtensions
                         throw new DistributedApplicationException("The MSTest dotnet launch arguments cannot be replaced during testing.");
                     }
                     ValidateRunnerArguments(context.Args.Skip(launchArgs.Count));
-                    foreach (var arg in new[] { "--report-trx", "--results-directory", outputPath,
+                    foreach (var arg in new[] { "--report-trx", "--results-directory", reportDirectory,
                         "--report-trx-filename", MsTestTrxReport.FileName })
                     {
                         context.Args.Add(arg);
@@ -147,7 +157,7 @@ public static class MsTestHostingExtensions
                 }
                 return Task.CompletedTask;
             });
-        });
+        }
 
         return resource;
     }

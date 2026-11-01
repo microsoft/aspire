@@ -18,7 +18,7 @@ internal static class MsTestTrxReport
     internal const string FileName = "results.trx";
     private static readonly XNamespace s_namespace = "http://microsoft.com/schemas/VisualStudio/TeamTest/2010";
 
-    internal static async Task CollectAsync(ResourceTestingContext context)
+    internal static async Task CollectAsync(ResourceTestingContext context, string reportDirectory)
     {
         // A nonzero exit can still produce a complete report containing useful failed results.
         await context.WaitForCompletionAsync().ConfigureAwait(false);
@@ -33,7 +33,7 @@ internal static class MsTestTrxReport
                 break;
             }
         }
-        var path = Path.Combine(context.OutputPath, FileName);
+        var path = Path.Combine(reportDirectory, FileName);
         if (!File.Exists(path))
         {
             throw new FileNotFoundException(
@@ -45,6 +45,10 @@ internal static class MsTestTrxReport
         {
             throw new InvalidDataException("The MSTest report must not be a symbolic link or reparse point.");
         }
+        // Stage only this invocation's files, never paths named by TRX attachments. Reject
+        // links before descending so artifacts cannot escape either private directory.
+        await StageArtifactsAsync(reportDirectory, context.OutputPath, context.CancellationToken).ConfigureAwait(false);
+        path = Path.Combine(context.OutputPath, FileName);
         var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read,
             bufferSize: 4096, FileOptions.Asynchronous | FileOptions.SequentialScan);
         await using var _ = stream.ConfigureAwait(false);
@@ -56,6 +60,43 @@ internal static class MsTestTrxReport
         if (report.Failed && report.Results.All(result => result.Outcome != TestOutcome.Failed))
         {
             throw new InvalidDataException("The TRX run failed without an individual failed test. Inspect the raw report and resource logs.");
+        }
+    }
+
+    private static async Task StageArtifactsAsync(string source, string destination, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if ((File.GetAttributes(source) & FileAttributes.ReparsePoint) != 0)
+        {
+            throw new InvalidDataException("The MSTest artifact directory must not be a symbolic link or reparse point.");
+        }
+        foreach (var entry in new DirectoryInfo(source).EnumerateFileSystemInfos())
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if ((entry.Attributes & FileAttributes.ReparsePoint) != 0)
+            {
+                throw new InvalidDataException("MSTest artifacts must not contain symbolic links or reparse points.");
+            }
+            var target = Path.Combine(destination, entry.Name);
+            if (entry is DirectoryInfo)
+            {
+                Directory.CreateDirectory(target);
+                if ((File.GetAttributes(target) & FileAttributes.ReparsePoint) != 0)
+                {
+                    throw new InvalidDataException("The MSTest artifact destination must not be a symbolic link or reparse point.");
+                }
+                await StageArtifactsAsync(entry.FullName, target, cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                var input = new FileStream(entry.FullName, FileMode.Open, FileAccess.Read, FileShare.Read,
+                    4096, FileOptions.Asynchronous | FileOptions.SequentialScan);
+                await using var inputScope = input.ConfigureAwait(false);
+                var output = new FileStream(target, FileMode.CreateNew, FileAccess.Write, FileShare.None,
+                    4096, FileOptions.Asynchronous);
+                await using var outputScope = output.ConfigureAwait(false);
+                await input.CopyToAsync(output, cancellationToken).ConfigureAwait(false);
+            }
         }
     }
 

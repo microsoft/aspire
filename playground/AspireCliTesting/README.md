@@ -141,9 +141,12 @@ opt-in failure, and a skipped example.
 The default combined summary contains **4 passed, 0 failed, 1 skipped**:
 one foundation result plus three passed and one skipped MSTest results. Each
 collection has its own output directory. The foundation writes `probe.txt`;
-MSTest writes `results.trx`. JSON exposes `outputPath`, `summaryPath`, and each
+MSTest writes into a fresh temporary runner directory configured before launch;
+its runtime `WithTesting` callback waits for completion and stages `results.trx`
+and the report tree into `<run>/mstest-tests`. The AppHost file-system service
+cleans up runner temporary files on disposal. JSON exposes `outputPath`, `summaryPath`, and each
 `collections[].outputPath`. Reports and `summary.json` remain after teardown.
-Runner-written TRX file permissions are controlled by MSTest, not Aspire.
+Staged files use the copy writer's permissions; no per-file `0600` guarantee is made.
 
 Exercise the controlled MSTest failure without changing the foundation scenario:
 
