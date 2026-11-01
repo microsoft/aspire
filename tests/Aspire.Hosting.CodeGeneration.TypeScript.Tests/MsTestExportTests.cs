@@ -20,9 +20,13 @@ public class MsTestExportTests
         var code = new AtsTypeScriptCodeGenerator().GenerateDistributedApplication(scan.ToAtsContext())["aspire.mts"];
         var method = Regex.Match(code, @"(?m)^    addMsTest\([^\r\n]*;").Value;
         var options = Regex.Match(code, @"(?ms)^export interface MsTestOptions \{.*?^\}").Value;
+        var collector = Regex.Match(code, @"(?m)^    withTesting\([^\r\n]*: MsTestResourcePromise;").Value;
+        var collectorOptions = Regex.Match(code, @"(?ms)^export interface WithTestingOptions \{.*?^\}").Value;
         Assert.NotEmpty(method);
         Assert.NotEmpty(options);
+        Assert.NotEmpty(collector);
+        Assert.NotEmpty(collectorOptions);
 
-        await Verify(new { Method = method, Options = options });
+        await Verify(new { Method = method, Options = options, Collector = collector, CollectorOptions = collectorOptions });
     }
 }

@@ -52,8 +52,8 @@ public class MsTestResourceTests(ITestOutputHelper outputHelper)
             new MsTestOptions { Configuration = "Release", TargetFramework = "net10.0", Args = ["--filter", "Name~a b"] })
             .WithEnvironment("CUSTOM_VALUE", "value")
             .WithArgs("--settings", "settings with spaces.runsettings");
-        var testing = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>()).Options!;
-        Assert.Equal(testMode, testing.IsTestRun);
+        var testing = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
+        Assert.NotNull(testing.Collector);
         Assert.Equal("dotnet", resource.Resource.Command);
         Assert.Equal(project, resource.Resource.WorkingDirectory);
         Assert.IsAssignableFrom<IResourceWithServiceDiscovery>(resource.Resource);
@@ -69,7 +69,11 @@ public class MsTestResourceTests(ITestOutputHelper outputHelper)
         if (testMode)
         {
             Assert.True(Directory.Exists(testing.OutputPath));
-            expected.AddRange(["--report-trx", "--results-directory", testing.OutputPath!, "--report-trx-filename", "results.trx"]);
+            var reportDirectory = arguments[arguments.IndexOf("--results-directory") + 1];
+            Assert.True(Directory.Exists(reportDirectory));
+            Assert.NotEqual(testing.OutputPath, reportDirectory);
+            Assert.Empty(Directory.GetFileSystemEntries(reportDirectory));
+            expected.AddRange(["--report-trx", "--results-directory", reportDirectory, "--report-trx-filename", "results.trx"]);
         }
         else
         {
@@ -129,6 +133,55 @@ public class MsTestResourceTests(ITestOutputHelper outputHelper)
             TestContext.Current.CancellationToken);
         await Assert.ThrowsAsync<DistributedApplicationException>(() => builder.Eventing.PublishAsync(
             new BeforeResourceStartedEvent(resource.Resource, app.Services), TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task ReplacingCollectorDoesNotRemoveFreshRunnerConfigurationAndDisposalCleansIt()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var path = Path.Combine(workspace.Path, "tests.csproj");
+        File.WriteAllText(path, "<Project />");
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+        builder.Configuration["ASPIRE_TEST_OUTPUT_PATH"] = Path.Combine(workspace.Path, "reports");
+        var first = builder.AddMsTest("first", path);
+        var original = Assert.Single(first.Resource.Annotations.OfType<TestingAnnotation>());
+        first.WithTesting();
+        var replacement = Assert.Single(first.Resource.Annotations.OfType<TestingAnnotation>());
+        Assert.Same(original.RunContext, replacement.RunContext);
+        Assert.Equal(original.OutputPath, replacement.OutputPath);
+        Assert.Null(replacement.Collector);
+        var second = builder.AddMsTest("second", path);
+        await using var app = builder.Build();
+        await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services,
+            app.Services.GetRequiredService<DistributedApplicationModel>()), TestContext.Current.CancellationToken);
+        var directories = new List<string>();
+        foreach (var resource in new[] { first, second })
+        {
+            var args = await ArgumentEvaluator.GetArgumentListAsync(resource.Resource, app.Services);
+            var directory = args[args.IndexOf("--results-directory") + 1];
+            Assert.Empty(Directory.GetFileSystemEntries(directory));
+            directories.Add(directory);
+        }
+        Assert.NotEqual(directories[0], directories[1]);
+        await app.DisposeAsync();
+        Assert.All(directories, directory => Assert.False(Directory.Exists(directory)));
+    }
+
+    [Fact]
+    public async Task PublishDoesNotConfigureRunnerReportsEvenWithTestConfiguration()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var path = Path.Combine(workspace.Path, "tests.csproj");
+        File.WriteAllText(path, "<Project />");
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.Configuration["ASPIRE_TEST_OUTPUT_PATH"] = Path.Combine(workspace.Path, "reports");
+        var resource = builder.AddMsTest("tests", path);
+        var annotation = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
+        Assert.Null(annotation.OutputPath);
+        Assert.Null(annotation.RunContext);
+        await using var app = builder.Build();
+        var args = await ArgumentEvaluator.GetArgumentListAsync(resource.Resource, app.Services);
+        Assert.Equal(["run", "--project", path, "--no-launch-profile", "--"], args);
     }
 
     [Fact]

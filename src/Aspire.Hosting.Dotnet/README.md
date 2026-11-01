@@ -243,15 +243,22 @@ await builder.addMsTest("api-tests", "../Api.Tests/Api.Tests.csproj")
 ```
 
 Run the application with `aspire test`. The CLI reports the run's output location under its
-`testruns` directory. Aspire supplies a unique
-private directory for each test resource under the run's output directory. The runner writes
-`results.trx` there, and Aspire waits for process completion before publishing individual test
-results to the common test run. Failed processes still have their reports collected.
+`testruns` directory. Each logical resource has a private directory named after it directly
+under the run directory (`<run>/api-tests`), shared by its replicas.
+Before launch, the integration allocates a fresh temporary report directory independently
+of the runtime collector and configures the runner to write `results.trx` there.
+The asynchronous `WithTesting(context => ...)` collector starts only during testing,
+waits for process completion, stages the report tree into `context.OutputPath`, and
+publishes individual test results to the common run. Failed processes still have their reports collected.
 Missing reports, malformed XML, unsupported outcomes, and inconsistent counters fail
 collection explicitly. Passing tests cannot override a failed process or failed collection.
-Raw reports and runner-generated attachments remain in the resource directory; attachment
-paths are not followed or copied by this integration. The private directory is managed by
-Aspire, but permissions on framework-written files are controlled by the runner.
+Raw reports and attachments within that fresh report tree remain in the resource directory.
+Paths referenced by the TRX are not followed; symbolic links/reparse points in either tree
+are rejected. Runner temporary files are cleaned up by the AppHost's file-system service
+on disposal (unless its debugging preservation option is enabled). Runner files and staged
+copies use their respective writer's permissions; no per-file `0600` guarantee is made.
+Calling `WithTesting` again replaces the built-in collector while retaining the runtime
+output context; a marker-only call clears collection, without removing runner setup.
 
 Execution uses `dotnet run --project <absolute.csproj> --no-launch-profile -- <runner args>`,
 with the project directory as its working directory. Builds and restores are independent
