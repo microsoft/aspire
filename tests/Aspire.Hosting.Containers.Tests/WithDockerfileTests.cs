@@ -79,7 +79,7 @@ public class WithDockerfileTests(ITestOutputHelper testOutputHelper)
         var collector = app.Services.GetFakeLogCollector();
         var logs = collector.GetSnapshot();
 
-        // Just looking for a build progress message, which Docker and Podman word differently.
+        // Just looking for a build progress message, which Docker, Podman, and WSLC word differently.
         Assert.Contains(logs, log => ContainerRuntimeLogPatterns.IsBuildProgress(log.Message));
 
         await app.StopAsync();
