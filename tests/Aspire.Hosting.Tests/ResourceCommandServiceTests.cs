@@ -1325,7 +1325,8 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
             new DistributedApplicationOptions(),
             services,
             builder.Configuration,
-            services.GetRequiredService<IInteractionFileUploadStore>()));
+            services.GetRequiredService<IInteractionFileUploadStore>(),
+            services.GetRequiredService<InteractionServiceConsumerState>()));
 
         var textDefinition = new InteractionInput
         {

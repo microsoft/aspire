@@ -87,6 +87,7 @@ public class DistributedApplication : IHost, IAsyncDisposable
         // > Evaluation of native methods in this context is not supported.
         _model = host.Services.GetRequiredService<DistributedApplicationModel>();
         ResourceNotifications = host.Services.GetRequiredService<ResourceNotificationService>();
+
     }
 
     /// <summary>
@@ -734,6 +735,13 @@ public class DistributedApplication : IHost, IAsyncDisposable
         {
             beforeStartActivity.SetError(ex);
             throw;
+        }
+        finally
+        {
+            if (_host.Services.GetService<InteractionServiceConsumerState>() is { } consumerState)
+            {
+                consumerState.Ready = true;
+            }
         }
     }
 

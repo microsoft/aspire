@@ -419,6 +419,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _innerBuilder.Services.AddSingleton<ResourceCommandService>(s => new ResourceCommandService(s.GetRequiredService<ResourceNotificationService>(), s.GetRequiredService<ResourceLoggerService>(), s));
         _innerBuilder.Services.TryAddSingleton<IProcessRunner, DefaultProcessRunner>();
         _innerBuilder.Services.TryAddSingleton<IDotnetSdkVersionProvider, DotnetSdkVersionProvider>();
+        _innerBuilder.Services.AddSingleton<InteractionServiceConsumerState>();
         _innerBuilder.Services.AddSingleton<InteractionService>();
         _innerBuilder.Services.AddSingleton<IInteractionService>(sp => sp.GetRequiredService<InteractionService>());
         _innerBuilder.Services.AddSingleton<ParameterProcessor>(static sp =>
@@ -903,7 +904,12 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             ValidateResourceName(resource);
         }
 
-        var application = new DistributedApplication(_innerBuilder.Build());
+        var host = _innerBuilder.Build();
+
+        // Initialize readiness only for the original application. Testing wrappers share its services
+        // and may be constructed after the before-start hooks have already completed.
+        host.Services.GetRequiredService<InteractionServiceConsumerState>().Ready = false;
+        var application = new DistributedApplication(host);
 
         _executionContextOptions.Services = application.Services.GetRequiredService<IServiceProvider>();
 
