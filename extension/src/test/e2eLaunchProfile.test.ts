@@ -703,7 +703,7 @@ suite('E2E launch profile', () => {
         const uploadStepIndex = workflow.indexOf('- name: Upload E2E diagnostics');
         const debuggerPrerequisiteStep = workflow.slice(debuggerPrerequisitesIndex, azureFunctionsPrerequisitesIndex);
         const azureFunctionsPrerequisiteStep = workflow.slice(azureFunctionsPrerequisitesIndex, workflow.indexOf('\n      - name:', azureFunctionsPrerequisitesIndex));
-        const runStep = workflow.slice(runStepIndex, uploadStepIndex);
+        const runStep = workflow.slice(runStepIndex, workflow.indexOf('\n      - name:', runStepIndex + 1));
         const uploadStep = workflow.slice(uploadStepIndex, workflow.indexOf('\n      - name:', uploadStepIndex + 1));
         const csharpVersion = /csharp\/([^/]+)\/vspackage\?targetPlatform=linux-x64/.exec(debuggerPrerequisiteStep)?.[1];
         const minimumCsharpVersion = '2.145.15-prerelease';
