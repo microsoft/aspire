@@ -67,6 +67,18 @@ internal enum AspireTemplate
     /// Prompts: template, language, project name, output path, URLs. No Redis or test project prompt.
     /// </summary>
     JavaEmptyAppHost,
+
+    /// <summary>
+    /// Starter App (Go API + Redis, Go AppHost) — visible only when experimental Go support is enabled.
+    /// Prompts: template, project name, output path, URLs. No Redis or test project prompt because the template always includes Redis.
+    /// </summary>
+    GoStarter,
+
+    /// <summary>
+    /// Empty (Go AppHost) — visible only in the language picker when experimental Go support is enabled.
+    /// Prompts: template, language, project name, output path, URLs. No Redis or test project prompt.
+    /// </summary>
+    GoEmptyAppHost,
 }
 
 /// <summary>
@@ -439,6 +451,26 @@ internal static class Hex1bTestHelpers
                     .Enter()
                     .WaitUntil(s => waitingForAppHostLanguagePrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
                     .Type("Java")
+                    .Enter();
+                break;
+
+            case AspireTemplate.GoStarter:
+                // The list omits the C# starters when the image has no .NET SDK, so search by text instead of counting Downs.
+                var goStarterSelected = new CellPatternSearcher()
+                    .Find("> Starter App (Go API + Redis, Go AppHost)");
+                builder.Type("Go API")
+                    .WaitUntil(s => goStarterSelected.Search(s).Count > 0, TimeSpan.FromSeconds(5))
+                    .Enter();
+                break;
+
+            case AspireTemplate.GoEmptyAppHost:
+                var goLanguageSelected = new CellPatternSearcher()
+                    .Find("> Go");
+                builder.Type("Empty AppHost")
+                    .Enter()
+                    .WaitUntil(s => waitingForAppHostLanguagePrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
+                    .Type("Go")
+                    .WaitUntil(s => goLanguageSelected.Search(s).Count > 0, TimeSpan.FromSeconds(5))
                     .Enter();
                 break;
         }

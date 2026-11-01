@@ -2,7 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
-using Azure.AI.Projects.Agents;
+using Azure.AI.Extensions.OpenAI;
 using OpenAI.Responses;
 
 namespace Aspire.Hosting.Foundry;

@@ -4,20 +4,24 @@
 functional for staged migration, including original `ProjectReference`-based C# resources.
 No removal date has been agreed. It historically did two things for a C# AppHost project:
 
-1. Made every `ProjectReference` item in the AppHost project become a C# resource automatically
-   (`IsAspireProjectResource=true` by default), orchestrated by the AppHost.
+1. Defaulted AppHost `ProjectReference` items to `IsAspireProjectResource=true`, generating
+   `Projects.*` metadata for `AddProject` declarations and linking service builds to the
+   AppHost's build graph. The reference alone did not register a running resource.
 2. Added implicit `PackageReference` items for the dashboard and DCP packages for the current RID.
 
 Both responsibilities have supported alternatives:
 
 * **Project Resource v2** (the [`AddDotnetProject`](../src/Aspire.Hosting.Dotnet/DotnetProjectHostingExtensions.cs)
-  API) replaces (1) with an explicit, discoverable call in `Program.cs`.
+  API) replaces (1) with path-based declarations and coordinated service builds, without
+  requiring generated `Projects.*` metadata.
 * The **Aspire CLI bundle** (`AspireUseCliBundle=true`) replaces (2) by resolving the dashboard and
   DCP from the Aspire CLI installation instead of adding RID-specific package references.
 
 This guide walks through migrating a C# AppHost project off `Aspire.AppHost.Sdk`.
-The SDK deprecation does not deprecate `AddProject`; original resource APIs remain
-available with the functional SDK for staged migration.
+All six legacy .NET-hosting `AddProject` overloads are also obsolete, independently of
+the SDK diagnostic. They remain functional for staged migration. See the
+[AddProject migration guide](migrate-from-addproject.md) for overload/profile translations,
+returned resources, generic definitions/calls, and supported legacy exceptions.
 
 Agent-assisted migration belongs to the existing
 [`aspire-project-v2-migration` plugin skill](https://github.com/microsoft/aspire-skills/blob/main/skills/aspire-project-v2-migration/SKILL.md),
@@ -85,13 +89,13 @@ The dashboard and DCP are resolved from your Aspire CLI installation
 (see [the CLI bundle spec](specs/bundle.md)) instead of being added as RID-specific
 `PackageReference` items. Make sure the [Aspire CLI](https://get.aspire.dev) is installed.
 
-## 4. Convert ProjectReference-based C# resources to AddDotnetProject
+## 4. Convert ProjectReference-based resources to AddDotnetProject
 
 `Aspire.AppHost.Sdk` defaulted every `ProjectReference` to `IsAspireProjectResource=true`, which
-generated a `Projects.<Name>` metadata class and an implicit `builder.AddProject<Projects.Name>(...)`
-style resource. With Project Resource v2, add each resource explicitly with `AddDotnetProject` and a
-path to the project file, and remove the `ProjectReference` item (it's no longer needed to get a
-resource - `AddDotnetProject` resolves the project directly):
+generated a `Projects.<Name>` metadata class used by `builder.AddProject<Projects.Name>(...)`
+resource declarations. With Project Resource v2, add each ordinary service explicitly with
+`AddDotnetProject` and its real project path. Remove a `ProjectReference` only when it is
+no longer needed for metadata, assembly references, or other build inputs:
 
 Before:
 
@@ -111,19 +115,35 @@ After:
 var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj");
 ```
 
+Paths are AppHost-relative, not relative to the current shell directory. Inspect the original
+reference or metadata; a normalized `Projects.*` class name cannot reliably be transformed into
+a filename. V2 supports SDK-style `.csproj`, `.fsproj`, and `.vbproj` files, directories containing
+exactly one total supported project, and file-based `.cs` apps requiring .NET 10 or later.
+It does not add script/old-project-system support or implement the new service/AppHost watcher.
+
 If a referenced project should remain a plain `ProjectReference` (for example, a shared library that
 isn't itself an orchestrated resource), keep the `ProjectReference` item and set
 `IsAspireProjectResource="false"` on it, or simply leave it as-is once the SDK's automatic
 defaulting is gone - under plain `Microsoft.NET.Sdk`, `ProjectReference` items are never
 auto-promoted to Aspire resources.
 
-Resource names, endpoint configuration, references, waits and other chained configuration should
-remain unchanged. Review overloads and metadata such as launch profiles and excluded endpoints
-individually rather than mechanically replacing every `AddProject` call.
+Preserve resource names and equivalent endpoint configuration, references, waits, and other chained
+configuration. Review overloads individually: C#'s explicit string `launchProfileName: null` disables
+profiles, while a null options property or legacy polyglot null selects defaults. Use
+`options => options.ExcludeLaunchProfile = true` for the C# string-null case.
+`AddDotnetProject` returns `IResourceBuilder<DotnetProjectResource>`, not a legacy project builder.
+The [canonical guide](migrate-from-addproject.md) covers typed helpers and fluent API selection.
+
+Keep metadata/build references still needed by `WithMigrationsProject<Projects.Data>()`,
+Blazor client metadata, test fixtures, custom integrations, or intentionally legacy resources.
+Functions, MAUI, custom subtype/metadata contracts, and external-build ownership may require
+staying on the legacy path; removing the SDK is not automatically equivalent for those cases.
 
 `AddDotnetProject` builds its resource project when running it. Removing the resource
 `ProjectReference` means `dotnet build` of the AppHost alone no longer builds that service;
 keep resource projects in the solution and in CI build/publish inputs.
+Also preserve required test payloads and selection edges: a runtime service path does not package
+its sources or outputs for a remote test runner.
 
 ## File-based AppHosts
 
@@ -164,5 +184,7 @@ If you need more time to migrate, you can suppress `ASPIRE012` while you plan th
 </PropertyGroup>
 ```
 
+This suppresses only `ASPIRE012`, not `AddProject`'s `CS0618`. For a genuinely retained legacy
+call, use a localized `CS0618` suppression with its compatibility rationale.
 Suppression does not migrate resources or remove the need for a working CLI bundle.
 The obsolete SDK remains functional for users who have not migrated.

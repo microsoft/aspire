@@ -331,6 +331,24 @@ namespace Aspire.Hosting.Azure.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Resource-group deletion completed. These resources were not deleted: {0}..
+        /// </summary>
+        internal static string DeleteAzureResourcesRemainingResourcesFormat {
+            get {
+                return ResourceManager.GetString("DeleteAzureResourcesRemainingResourcesFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The listed resources were not deleted because they exist outside the resource group. Delete them separately using their service&apos;s portal or API..
+        /// </summary>
+        internal static string DeleteAzureResourcesRemainingResourcesWarning {
+            get {
+                return ResourceManager.GetString("DeleteAzureResourcesRemainingResourcesWarning", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Canceled Azure resources: {0}.
         /// </summary>
         internal static string DeploymentOperationCanceledResourcesFormat {
@@ -1229,6 +1247,33 @@ namespace Aspire.Hosting.Azure.Resources {
         internal static string TenantPlaceholder {
             get {
                 return ResourceManager.GetString("TenantPlaceholder", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Optional. Appended to the names of tenant-wide resources created by this AppHost. Leave empty to use the names from AppHost code unchanged. Changing the suffix targets different resources; previous resources are not renamed or deleted..
+        /// </summary>
+        internal static string TenantResourceSuffixDescription {
+            get {
+                return ResourceManager.GetString("TenantResourceSuffixDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Tenant-scoped resource suffix.
+        /// </summary>
+        internal static string TenantResourceSuffixLabel {
+            get {
+                return ResourceManager.GetString("TenantResourceSuffixLabel", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Add a suffix to tenant-wide resources created by this AppHost (optional)..
+        /// </summary>
+        internal static string TenantResourceSuffixSelectionMessage {
+            get {
+                return ResourceManager.GetString("TenantResourceSuffixSelectionMessage", resourceCulture);
             }
         }
 

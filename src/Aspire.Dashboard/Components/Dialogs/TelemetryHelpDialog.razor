@@ -1,0 +1,22 @@
+@using Aspire.Dashboard.Resources
+
+<FluentDialogBody Class="telemetry-help-dialog-body">
+    <TitleTemplate>
+        <span class="telemetry-help-dialog-title">
+            <FluentIcon Value="@(new Icons.Regular.Size24.ChartMultiple())" Color="Color.Primary" />
+            <span>@Loc[nameof(Dialogs.TelemetryHelpDialogTitle)]</span>
+        </span>
+    </TitleTemplate>
+    <ChildContent>
+        <div class="telemetry-help-content">
+            <MarkdownRenderer Markdown="@GetHelpMarkdown()" MarkdownProcessor="@GetMarkdownProcessor()" SuppressParagraphOnNewLines="false" />
+            @if (CanImport)
+            {
+                <FluentButton Class="telemetry-import-button" OnClick="OpenImportAsync"
+                              IconStart="@(new Icons.Regular.Size16.Settings())">
+                    @Loc[nameof(Dialogs.ManageDataDialogTitle)]
+                </FluentButton>
+            }
+        </div>
+    </ChildContent>
+</FluentDialogBody>

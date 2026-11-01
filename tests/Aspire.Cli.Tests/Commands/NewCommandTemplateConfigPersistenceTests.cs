@@ -210,6 +210,34 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
         Assert.Equal(PackageChannelNames.Staging, persisted);
     }
 
+    /// <summary>
+    /// Every template that writes <c>aspire.config.json</c> must produce the OS line break and a single
+    /// final newline, whether the file comes from a copied embedded template or from the CLI saving the
+    /// config, so the scaffold matches the files the CLI serializes later regardless of the git checkout
+    /// settings of whoever built the CLI.
+    /// </summary>
+    [Theory]
+    [InlineData(KnownTemplateId.TypeScriptEmptyAppHost)]
+    [InlineData(KnownTemplateId.PythonEmptyAppHost)]
+    [InlineData(KnownTemplateId.GoEmptyAppHost)]
+    [InlineData(KnownTemplateId.JavaEmptyAppHost)]
+    [InlineData(KnownTemplateId.RustEmptyAppHost)]
+    [InlineData(KnownTemplateId.TypeScriptStarter)]
+    [InlineData(KnownTemplateId.PythonStarter)]
+    [InlineData(KnownTemplateId.GoStarter)]
+    [InlineData(KnownTemplateId.JavaStarter)]
+    public async Task Template_WritesAspireConfigWithOsLineBreaksAndSingleFinalNewline(string templateId)
+    {
+        var content = await ScaffoldAndReadAsync(
+            templateId,
+            identityChannel: PackageChannelNames.Daily,
+            registerIdentityChannel: false,
+            explicitChannelArg: null,
+            outputDirectory => File.ReadAllText(Path.Combine(outputDirectory, AspireConfigFile.FileName)));
+
+        LineEndingAssert.UsesOsLineBreaksAndSingleFinalNewline(content);
+    }
+
     [Fact]
     public void PrDogfoodNewTemplateContract_AccountsForEveryRegisteredNewTemplate()
     {
@@ -342,20 +370,39 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
     }
 
     /// <summary>
-    /// Drives <c>aspire new &lt;templateId&gt;</c> against the real <see cref="NewCommand"/>,
-    /// real <c>CliTemplateFactory</c>, and real <see cref="Aspire.Cli.Scaffolding.ScaffoldingService"/>
-    /// while replacing the process and RPC boundaries with successful in-memory fakes.
+    /// Drives <c>aspire new &lt;templateId&gt;</c> and reads the <c>channel</c> value persisted to
+    /// <c>aspire.config.json</c> in the scaffolded output directory.
     /// </summary>
     /// <returns>
-    /// The <c>channel</c> value persisted to <c>aspire.config.json</c> in the scaffolded
-    /// output directory, or <see langword="null"/> if no <c>aspire.config.json</c> was
+    /// The persisted <c>channel</c>, or <see langword="null"/> if no <c>aspire.config.json</c> was
     /// written or its <c>channel</c> property is absent.
     /// </returns>
-    private async Task<string?> ScaffoldAndReadPersistedChannelAsync(
+    private Task<string?> ScaffoldAndReadPersistedChannelAsync(
         string templateId,
         string identityChannel,
         bool registerIdentityChannel,
         string? explicitChannelArg)
+    {
+        return ScaffoldAndReadAsync(
+            templateId,
+            identityChannel,
+            registerIdentityChannel,
+            explicitChannelArg,
+            outputDirectory => AspireConfigFile.Load(outputDirectory)?.Channel);
+    }
+
+    /// <summary>
+    /// Drives <c>aspire new &lt;templateId&gt;</c> against the real <see cref="NewCommand"/>,
+    /// real <c>CliTemplateFactory</c>, and real <see cref="Aspire.Cli.Scaffolding.ScaffoldingService"/>
+    /// while replacing the process and RPC boundaries with successful in-memory fakes.
+    /// </summary>
+    /// <returns>The value <paramref name="readOutput"/> produces from the scaffolded output directory.</returns>
+    private async Task<T> ScaffoldAndReadAsync<T>(
+        string templateId,
+        string identityChannel,
+        bool registerIdentityChannel,
+        string? explicitChannelArg,
+        Func<string, T> readOutput)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
@@ -401,8 +448,7 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
 
         Assert.Equal((int)CliExitCodes.Success, exitCode);
         var outputDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, outputDirectoryName);
-        var config = AspireConfigFile.Load(outputDirectory);
-        return config?.Channel;
+        return readOutput(outputDirectory);
     }
 
     private static IPackagingService BuildPackagingService(string identityChannel, bool registerIdentityChannel)

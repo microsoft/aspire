@@ -165,73 +165,77 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
             throw new InvalidOperationException($"Project '{project.Name}' does not have a valid connection string.");
         }
         var def = await ToHostedAgentConfigurationAsync(context).ConfigureAwait(false);
-        var options = def.ToProjectsAgentVersionCreationOptions(Target.Name);
-
         var projectClient = new AIProjectClient(new Uri(projectEndpoint), credential);
-        var result = await projectClient.AgentAdministrationClient.CreateAgentVersionAsync(
-            Name,
-            options,
-            cancellationToken: context.CancellationToken
-        ).ConfigureAwait(false);
-
-        await UpdateAgentEndpointProtocolsAsync(projectClient.AgentAdministrationClient, def, context.CancellationToken).ConfigureAwait(false);
+        var version = await CreateAgentVersionAsync(projectClient.AgentAdministrationClient, def, context.CancellationToken).ConfigureAwait(false);
 
         // Foundry should do this automatically in the future.
-        await AssignFoundryRoleToAgentIdentityAsync(context, project, result.Value, provisioningContext).ConfigureAwait(false);
+        await AssignFoundryRoleToAgentIdentityAsync(context, project, version, provisioningContext).ConfigureAwait(false);
 
-        return result.Value;
+        return version;
     }
 
-    private async Task UpdateAgentEndpointProtocolsAsync(AgentAdministrationClient agentsClient, HostedAgentConfiguration configuration, CancellationToken cancellationToken)
+    internal async Task<ProjectsAgentVersion> CreateAgentVersionAsync(AgentAdministrationClient agentsClient, HostedAgentConfiguration configuration, CancellationToken cancellationToken)
     {
-        var endpointProtocols = GetAgentEndpointProtocols(configuration.ProtocolVersions);
-        if (endpointProtocols.Count == 0)
+        var options = configuration.ToProjectsAgentVersionCreationOptions(Target.Name);
+        // Validate endpoint protocols before persisting a version, so invalid local configuration
+        // cannot leave a remote version behind after the deployment reports failure.
+        var endpoint = new AgentEndpointConfiguration
         {
-            return;
-        }
+            ProtocolConfiguration = GetAgentEndpointProtocolConfiguration(configuration.ProtocolVersions)
+        };
 
-        var endpoint = new AgentEndpoint();
-        foreach (var protocol in endpointProtocols)
-        {
-            endpoint.Protocols.Add(protocol);
-        }
+        var result = await agentsClient.CreateAgentVersionAsync(
+            Name,
+            options,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
 
         // Creating a hosted-agent version does not update the endpoint's advertised protocols;
         // keep routing in sync so endpoint-scoped invocations can reach the selected version.
-        await agentsClient.PatchAgentObjectAsync(
+        await agentsClient.PatchAgentAsync(
             Name,
             new PatchAgentOptions
             {
                 AgentEndpoint = endpoint
             },
             cancellationToken).ConfigureAwait(false);
+
+        return result.Value;
     }
 
-    internal static IReadOnlyList<AgentEndpointProtocol> GetAgentEndpointProtocols(IEnumerable<ProtocolVersionRecord> protocolVersions)
+    internal static ProtocolConfiguration GetAgentEndpointProtocolConfiguration(IEnumerable<ProtocolVersionRecord> protocolVersions)
     {
-        var endpointProtocols = new List<AgentEndpointProtocol>();
+        // The 3.x SDK advertises protocols as configuration objects rather than a string list.
+        var configuration = new ProtocolConfiguration();
 
         foreach (var protocolVersion in protocolVersions)
         {
-            var endpointProtocol = ToAgentEndpointProtocol(protocolVersion.Protocol);
-            if (!endpointProtocols.Contains(endpointProtocol))
+            switch (protocolVersion.Protocol.ToString())
             {
-                endpointProtocols.Add(endpointProtocol);
+                case "activity_protocol":
+                case "activity":
+                    configuration.Activity ??= new();
+                    break;
+                case "invocations":
+                    configuration.Invocations ??= new();
+                    break;
+                case "responses":
+                    configuration.Responses ??= new();
+                    break;
+                case "a2a":
+                    configuration.A2a ??= new();
+                    break;
+                case "mcp":
+                    configuration.Mcp ??= new();
+                    break;
+                case "invocations_ws":
+                    configuration.InvocationsWs ??= new();
+                    break;
+                default:
+                    throw new NotSupportedException($"Foundry hosted agent endpoint protocol '{protocolVersion.Protocol}' is not supported.");
             }
         }
 
-        return endpointProtocols;
-    }
-
-    private static AgentEndpointProtocol ToAgentEndpointProtocol(ProjectsAgentProtocol protocol)
-    {
-        return protocol.ToString() switch
-        {
-            "activity_protocol" => AgentEndpointProtocol.Activity,
-            "invocations" => AgentEndpointProtocol.Invocations,
-            "responses" => AgentEndpointProtocol.Responses,
-            var value => new AgentEndpointProtocol(value)
-        };
+        return configuration;
     }
 
     private async Task AssignFoundryRoleToAgentIdentityAsync(

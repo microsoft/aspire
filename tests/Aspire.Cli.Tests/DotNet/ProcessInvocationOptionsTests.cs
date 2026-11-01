@@ -21,6 +21,9 @@ public sealed class ProcessInvocationOptionsTests
             StandardOutputCallback = _ => { },
             StandardErrorCallback = _ => { },
             NoLaunchProfile = true,
+            NoRestore = true,
+            ExcludeRestorePackageImports = true,
+            NuGetRestoreTargetsFile = new FileInfo(Path.Combine(Path.GetFullPath("."), "Candidate.targets")),
             LaunchProfile = "E2E",
             StartDebugSession = true,
             Debug = true,
@@ -36,6 +39,10 @@ public sealed class ProcessInvocationOptionsTests
             // Internal properties are included below, so they need non-default values too.
             AppHostArgumentStartIndex = 3,
             EnvironmentVariableFilter = _ => false,
+            EnvironmentVariables = new Dictionary<string, string>
+            {
+                ["ASPIRE_TEST_VALUE"] = "configured",
+            },
             GracefulShutdownSignaler = new RecordingGracefulSignaler(),
             ShutdownService = new TestGracefulShutdownWindow(),
             ExtensionAppHostLaunchCompletedAsync = () => Task.CompletedTask,

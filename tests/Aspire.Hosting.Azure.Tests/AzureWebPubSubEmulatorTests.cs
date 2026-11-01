@@ -8,6 +8,7 @@ using Aspire.Hosting.Utils;
 using Azure.Provisioning.WebPubSub;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Azure.Tests;
 
@@ -36,7 +37,7 @@ public class AzureWebPubSubEmulatorTests(ITestOutputHelper testOutputHelper)
         Assert.Equal($"http://localhost:{port}", await properties["Uri"].GetValueAsync(CancellationToken.None));
 
         var image = Assert.Single(webPubSub.Resource.Annotations.OfType<ContainerImageAnnotation>());
-        Assert.Equal("mcr.microsoft.com/webpubsub/emulator:1.0.0-beta.1", $"{image.Registry}/{image.Image}:{image.Tag}");
+        Assert.Equal("mcr.microsoft.com/webpubsub/emulator:1.0.0-beta.2", $"{image.Registry}/{image.Image}:{image.Tag}");
         Assert.Equal(8080, webPubSub.GetEndpoint("emulator").TargetPort);
     }
 
@@ -119,43 +120,46 @@ public class AzureWebPubSubEmulatorTests(ITestOutputHelper testOutputHelper)
     [Theory]
     [InlineData(HttpStatusCode.OK, HealthStatus.Healthy)]
     [InlineData(HttpStatusCode.ServiceUnavailable, HealthStatus.Unhealthy)]
-    public async Task RunAsEmulatorChecksHealthWithHead(HttpStatusCode statusCode, HealthStatus expectedStatus)
+    public async Task RunAsEmulatorChecksHealthWithGet(HttpStatusCode statusCode, HealthStatus expectedStatus)
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
-        builder.AddAzureWebPubSub("webpubsub").RunAsEmulator(emulator =>
+        var webPubSub = builder.AddAzureWebPubSub("webpubsub").RunAsEmulator(emulator =>
             emulator.WithEndpoint("emulator", endpoint => endpoint.AllocatedEndpoint = new AllocatedEndpoint(endpoint, "localhost", 18080)));
-        builder.Services.AddHttpClient("webpubsub_check").ConfigurePrimaryHttpMessageHandler(() => new EmulatorHealthHandler(statusCode));
+        var healthCheckKey = Assert.Single(webPubSub.Resource.Annotations.OfType<HealthCheckAnnotation>()).Key;
+        builder.Services.AddHttpClient(healthCheckKey).ConfigurePrimaryHttpMessageHandler(() => new EmulatorHealthHandler(statusCode));
         using var app = builder.Build();
 
         var health = await app.Services.GetRequiredService<HealthCheckService>().CheckHealthAsync();
 
-        Assert.Equal(expectedStatus, health.Entries["webpubsub_check"].Status);
+        Assert.Equal(expectedStatus, health.Entries[healthCheckKey].Status);
     }
 
     [Fact]
-    public async Task RunAsEmulatorHealthRecoversAfterEndpointAllocation()
+    public async Task RunAsEmulatorHealthWaitsForEndpointAllocation()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var webPubSub = builder.AddAzureWebPubSub("webpubsub").RunAsEmulator();
-        builder.Services.AddHttpClient("webpubsub_check").ConfigurePrimaryHttpMessageHandler(() => new EmulatorHealthHandler(HttpStatusCode.OK));
+        var healthCheckKey = Assert.Single(webPubSub.Resource.Annotations.OfType<HealthCheckAnnotation>()).Key;
+        builder.Services.AddHttpClient(healthCheckKey).ConfigurePrimaryHttpMessageHandler(() => new EmulatorHealthHandler(HttpStatusCode.OK));
         using var app = builder.Build();
-        var service = app.Services.GetRequiredService<HealthCheckService>();
-
-        var before = await service.CheckHealthAsync();
-        Assert.Equal(HealthStatus.Unhealthy, before.Entries["webpubsub_check"].Status);
+        var registration = Assert.Single(app.Services.GetRequiredService<IOptions<HealthCheckServiceOptions>>().Value.Registrations,
+            registration => registration.Name == healthCheckKey);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var healthTask = registration.Factory(app.Services).CheckHealthAsync(new HealthCheckContext { Registration = registration }, cts.Token);
+        Assert.False(healthTask.IsCompleted);
 
         var endpoint = webPubSub.GetEndpoint("emulator").EndpointAnnotation;
         endpoint.AllocatedEndpoint = new AllocatedEndpoint(endpoint, "localhost", 18080);
 
-        var after = await service.CheckHealthAsync();
-        Assert.Equal(HealthStatus.Healthy, after.Entries["webpubsub_check"].Status);
+        var health = await healthTask;
+        Assert.Equal(HealthStatus.Healthy, health.Status);
     }
 
     private sealed class EmulatorHealthHandler(HttpStatusCode statusCode) : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            var matches = request.Method == HttpMethod.Head && request.RequestUri == new Uri("http://localhost:18080/api/health");
+            var matches = request.Method == HttpMethod.Get && request.RequestUri == new Uri("http://localhost:18080/api/health");
             return Task.FromResult(new HttpResponseMessage(matches ? statusCode : HttpStatusCode.MethodNotAllowed));
         }
     }

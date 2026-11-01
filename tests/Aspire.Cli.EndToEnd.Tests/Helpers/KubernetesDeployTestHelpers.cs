@@ -32,22 +32,26 @@ internal static class KubernetesDeployTestHelpers
         this Hex1bTerminalAutomator auto,
         SequenceCounter counter)
     {
-        await auto.TypeAsync("mkdir -p ~/.local/bin");
+        await auto.TypeAsync("mkdir -p ~/.local/bin && " +
+            "case \"$(uname -m)\" in " +
+            "aarch64|arm64) K8S_TOOL_ARCH=arm64 ;; " +
+            "x86_64) K8S_TOOL_ARCH=amd64 ;; " +
+            "*) echo 'Unsupported Kubernetes tool architecture' >&2; false ;; esac");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Download KinD if not already installed — GitHub CDN can transiently return HTML instead of a binary.
-        await auto.TypeAsync($"command -v kind >/dev/null 2>&1 || {{ rm -f ~/.local/bin/kind; for i in 1 2 3; do curl -sSLo ~/.local/bin/kind \"https://github.com/kubernetes-sigs/kind/releases/download/{KindVersion}/kind-linux-amd64\" && chmod +x ~/.local/bin/kind && ~/.local/bin/kind version >/dev/null 2>&1 && break; echo \"Retry $i: KinD download failed, retrying in 5s...\"; rm -f ~/.local/bin/kind; sleep 5; done; test -x ~/.local/bin/kind && ~/.local/bin/kind version >/dev/null 2>&1; }}");
+        await auto.TypeAsync($"command -v kind >/dev/null 2>&1 || {{ rm -f ~/.local/bin/kind; for i in 1 2 3; do curl -sSLo ~/.local/bin/kind \"https://github.com/kubernetes-sigs/kind/releases/download/{KindVersion}/kind-linux-$K8S_TOOL_ARCH\" && chmod +x ~/.local/bin/kind && ~/.local/bin/kind version >/dev/null 2>&1 && break; echo \"Retry $i: KinD download failed, retrying in 5s...\"; rm -f ~/.local/bin/kind; sleep 5; done; test -x ~/.local/bin/kind && ~/.local/bin/kind version >/dev/null 2>&1; }}");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(90));
 
         // Download Helm if not already installed
-        await auto.TypeAsync($"command -v helm >/dev/null 2>&1 || {{ for i in 1 2 3; do curl -sSL https://get.helm.sh/helm-{HelmVersion}-linux-amd64.tar.gz | tar xz -C /tmp && test -f /tmp/linux-amd64/helm && break; echo \"Retry $i: Helm download failed, retrying in 5s...\"; sleep 5; done && mv /tmp/linux-amd64/helm ~/.local/bin/helm && rm -rf /tmp/linux-amd64; }}");
+        await auto.TypeAsync($"command -v helm >/dev/null 2>&1 || {{ for i in 1 2 3; do curl -sSL https://get.helm.sh/helm-{HelmVersion}-linux-$K8S_TOOL_ARCH.tar.gz | tar xz -C /tmp && test -f /tmp/linux-$K8S_TOOL_ARCH/helm && break; echo \"Retry $i: Helm download failed, retrying in 5s...\"; sleep 5; done && mv /tmp/linux-$K8S_TOOL_ARCH/helm ~/.local/bin/helm && rm -rf /tmp/linux-$K8S_TOOL_ARCH; }}");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(90));
 
         // Download kubectl if not already installed
-        await auto.TypeAsync($"command -v kubectl >/dev/null 2>&1 || {{ rm -f ~/.local/bin/kubectl; for i in 1 2 3; do curl -sSLo ~/.local/bin/kubectl \"https://dl.k8s.io/release/{KubectlVersion}/bin/linux/amd64/kubectl\" && chmod +x ~/.local/bin/kubectl && ~/.local/bin/kubectl version --client >/dev/null 2>&1 && break; echo \"Retry $i: kubectl download failed, retrying in 5s...\"; rm -f ~/.local/bin/kubectl; sleep 5; done; test -x ~/.local/bin/kubectl && ~/.local/bin/kubectl version --client >/dev/null 2>&1; }}");
+        await auto.TypeAsync($"command -v kubectl >/dev/null 2>&1 || {{ rm -f ~/.local/bin/kubectl; for i in 1 2 3; do curl -sSLo ~/.local/bin/kubectl \"https://dl.k8s.io/release/{KubectlVersion}/bin/linux/$K8S_TOOL_ARCH/kubectl\" && chmod +x ~/.local/bin/kubectl && ~/.local/bin/kubectl version --client >/dev/null 2>&1 && break; echo \"Retry $i: kubectl download failed, retrying in 5s...\"; rm -f ~/.local/bin/kubectl; sleep 5; done; test -x ~/.local/bin/kubectl && ~/.local/bin/kubectl version --client >/dev/null 2>&1; }}");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(90));
 

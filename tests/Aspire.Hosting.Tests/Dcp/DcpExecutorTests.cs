@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable CS0618 // Retain legacy project launch, watch, custom-debug, and subtype compatibility.
 #pragma warning disable ASPIREEXTENSION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIRECERTIFICATES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
@@ -11875,7 +11876,13 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var dcpDependencyCheckService = new TestDcpDependencyCheckService();
 
         var appResources = new DcpAppResourceStore();
-        proxylessEndpointPortAllocator ??= new ProxylessEndpointPortAllocator(Options.Create(dcpOptions));
+        // These executors are never disposed, so keep their reservations out of the process-wide registry.
+        proxylessEndpointPortAllocator ??= new ProxylessEndpointPortAllocator(
+            dcpOptions.ProxylessEndpointPortRangeStart,
+            dcpOptions.ProxylessEndpointPortRangeEnd,
+            Random.Shared,
+            ProxylessEndpointPortAllocator.TryProbePort,
+            new ProxylessEndpointPortReservations());
         var persistentPortAllocationStore = CreatePersistentPortAllocationStore(configuration);
         var persistentPortAllocator = new PersistentPortAllocator(
             distributedAppModel,
@@ -12233,3 +12240,4 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
 }
+#pragma warning restore CS0618

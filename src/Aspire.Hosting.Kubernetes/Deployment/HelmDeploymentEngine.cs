@@ -326,9 +326,8 @@ internal static partial class HelmDeploymentEngine
         }
 
         // Phase 3: Resolve container image references with registry-prefixed names.
-        // During publish, images are written as "server:latest". At deploy time, we resolve
-        // the full image name including the container registry (e.g., "myregistry.azurecr.io/server:latest")
-        // using the same ContainerImageReference pattern as Docker Compose.
+        // Registry values can be deferred during publish. Resolve images again after provisioning
+        // so the override file uses the current registry, repository, and image push options.
         foreach (var imageRef in environment.CapturedHelmImageReferences)
         {
             IValueProvider cir = new ContainerImageReference(imageRef.Resource);

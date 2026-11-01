@@ -220,9 +220,17 @@ internal sealed class FakeAspireSkillsInstaller : IAspireSkillsInstaller
 /// </summary>
 internal sealed class FakePlaywrightCliRunner : IPlaywrightCliRunner
 {
+    internal static string SkillBaseDirectory { get; } = Path.Combine(".claude", "skills");
+
     public Task<SemVersion?> GetVersionAsync(CancellationToken cancellationToken)
         => Task.FromResult<SemVersion?>(null);
 
     public Task<bool> InstallSkillsAsync(string workingDirectory, CancellationToken cancellationToken)
-        => Task.FromResult(true);
+    {
+        var skillDirectory = Path.Combine(workingDirectory, SkillBaseDirectory, PlaywrightCliInstaller.PlaywrightCliSkillName);
+        Directory.CreateDirectory(skillDirectory);
+        File.WriteAllText(Path.Combine(skillDirectory, "SKILL.md"), "# Playwright CLI Skill");
+
+        return Task.FromResult(true);
+    }
 }

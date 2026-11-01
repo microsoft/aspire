@@ -1,0 +1,22 @@
+{
+  "createNuGetConfig": true,
+  "symbolInfo": {
+    "Framework": { "isHidden": true },
+    "UseRedisCache": { "displayName": "Use Redis for caching" },
+    "TestFx": { "displayName": "Test framework" },
+    "XUnitVersion": { "displayName": "xUnit.net version" },
+    "appHostHttpPort": { "isHidden": true },
+    "appHostHttpsPort": { "isHidden": true },
+    "appHostOtlpHttpPort": { "isHidden": true },
+    "appHostOtlpHttpsPort": { "isHidden": true },
+    "appHostResourceHttpPort": { "isHidden": true },
+    "appHostResourceHttpsPort": { "isHidden": true },
+    "webHttpPort": { "isHidden": true },
+    "webHttpsPort": { "isHidden": true },
+    "apiServiceHttpPort": { "isHidden": true },
+    "apiServiceHttpsPort": { "isHidden": true },
+    "skipRestore": { "isHidden": true },
+    "NoHttps": { "isHidden": true },
+    "LocalhostTld": { "displayName": "Use .dev.localhost URLs" }
+  }
+}

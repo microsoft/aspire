@@ -12,7 +12,7 @@ def configure_environment(infrastructure: AzureResourceInfrastructure) -> None:
 
 def configure_container_app(infrastructure: AzureResourceInfrastructure, app: ContainerApp):
     app.configure_custom_domain(custom_domain, certificate_name)
-    app.configure_scale({"MinReplicas": 1})
+    app.configure_scale({"minReplicas": 1})
     provisioned_app = infrastructure.get_container_app_by_identifier("web")
     provisioned_app.workload_profile_name = "consumption"
     _workload_profile = provisioned_app.workload_profile_name

@@ -4,6 +4,7 @@
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.Resources;
 using Aspire.Hosting.Azure.Utils;
 using Aspire.Hosting.Pipelines;
@@ -25,7 +26,8 @@ internal sealed class RunModeProvisioningContextProvider(
     IAzurePrincipalProvider azurePrincipalProvider,
     ITokenCredentialProvider tokenCredentialProvider,
     IDeploymentStateManager deploymentStateManager,
-    DistributedApplicationExecutionContext distributedApplicationExecutionContext) : BaseProvisioningContextProvider(
+    DistributedApplicationExecutionContext distributedApplicationExecutionContext,
+    DistributedApplicationModel applicationModel) : BaseProvisioningContextProvider(
         interactionService,
         options,
         environment,
@@ -171,6 +173,10 @@ internal sealed class RunModeProvisioningContextProvider(
             }
 
             _options.TenantId = string.IsNullOrWhiteSpace(options.TenantId) ? null : options.TenantId;
+            if (options.TenantResourceSuffix is not null)
+            {
+                _options.TenantResourceSuffix = options.TenantResourceSuffix;
+            }
 
             _options.AllowResourceGroupCreation = true;
 
@@ -185,7 +191,8 @@ internal sealed class RunModeProvisioningContextProvider(
                 _options.SubscriptionId,
                 _options.ResourceGroup,
                 _options.Location,
-                _options.TenantId);
+                _options.TenantId,
+                _options.TenantResourceSuffix);
         }
         finally
         {
@@ -203,7 +210,8 @@ internal sealed class RunModeProvisioningContextProvider(
                 _options.SubscriptionId,
                 _options.ResourceGroup,
                 _options.Location,
-                _options.TenantId);
+                _options.TenantId,
+                _options.TenantResourceSuffix);
         }
         finally
         {
@@ -230,8 +238,13 @@ internal sealed class RunModeProvisioningContextProvider(
         _options.SubscriptionId = _configuredOptions.SubscriptionId;
         _options.ResourceGroup = _configuredOptions.ResourceGroup;
         _options.TenantId = _configuredOptions.TenantId;
+        _options.TenantResourceSuffix = _configuredOptions.TenantResourceSuffix;
 
         var data = azureSection.Data;
+        if (data["TenantResourceSuffix"]?.GetValue<string>() is { } tenantResourceSuffix)
+        {
+            _options.TenantResourceSuffix = tenantResourceSuffix;
+        }
         if (data["Location"]?.GetValue<string>() is { Length: > 0 } location)
         {
             _options.Location = location;
@@ -471,6 +484,18 @@ internal sealed class RunModeProvisioningContextProvider(
             }
         });
 
+        if (AzureResourcePreparer.RequiresTenantResourceSuffix(applicationModel))
+        {
+            inputs.Add(new InteractionInput
+            {
+                Name = TenantResourceSuffixName,
+                InputType = InputType.Text,
+                Label = AzureProvisioningStrings.TenantResourceSuffixLabel,
+                Description = AzureProvisioningStrings.TenantResourceSuffixDescription,
+                Value = _options.TenantResourceSuffix
+            });
+        }
+
         return inputs;
     }
 
@@ -484,6 +509,10 @@ internal sealed class RunModeProvisioningContextProvider(
         _options.Location = inputs[LocationName].Value;
         _options.SubscriptionId = inputs[SubscriptionIdName].Value;
         _options.ResourceGroup = inputs[ResourceGroupName].Value;
+        if (inputs.TryGetByName(TenantResourceSuffixName, out var suffixInput))
+        {
+            _options.TenantResourceSuffix = suffixInput.Value ?? string.Empty;
+        }
         _options.AllowResourceGroupCreation = true;
     }
 }

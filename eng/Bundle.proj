@@ -5,7 +5,7 @@
     Usage: dotnet msbuild eng/Bundle.proj /p:TargetRid=linux-x64 /p:Configuration=Release
 
     This project:
-    1. Publishes Aspire.Managed as self-contained and Dashboard/TerminalHost with Native AOT
+    1. Publishes Aspire.Managed as self-contained and Dashboard, TerminalHost and AppHost Server v2 with Native AOT
     2. Publishes the native Windows/macOS tray (even with SkipNativeBuild=true)
     3. Restores DCP package
     4. Runs CreateLayout to assemble the bundle
@@ -14,6 +14,7 @@
     Options:
     - SkipNativeBuild=true: Skip building native CLI (use pre-built from artifacts)
     - SkipManagedBuild=true: Skip building managed projects (use pre-built)
+    - SkipAppHostServerBuild=true: Use the pre-built AppHost Server v2 payload (required after official signing)
     - SkipTrayBuild=true: Use a pre-built native tray (required after official signing)
     - TrayAppPath: Override the pre-built macOS app directory
     - WindowsTrayPath: Override the pre-built Windows tray publish directory
@@ -43,6 +44,7 @@
     <!-- Project paths -->
     <CliProjectPath>$(RepoRoot)src\Aspire.Cli\Aspire.Cli.csproj</CliProjectPath>
     <ManagedProjectPath>$(RepoRoot)src\Aspire.Managed\Aspire.Managed.csproj</ManagedProjectPath>
+    <AppHostServerProjectPath>$(RepoRoot)src\Aspire.Hosting.Native.Server\Aspire.Hosting.Native.Server.csproj</AppHostServerProjectPath>
     <DashboardProjectPath>$(RepoRoot)src\Aspire.Dashboard\Aspire.Dashboard.csproj</DashboardProjectPath>
     <TerminalHostProjectPath>$(RepoRoot)src\Aspire.TerminalHost\Aspire.TerminalHost.csproj</TerminalHostProjectPath>
     <AppHostProjectPath>$(RepoRoot)src\Aspire.Hosting.AppHost\Aspire.Hosting.AppHost.csproj</AppHostProjectPath>
@@ -72,6 +74,7 @@
     _ShowBanner;
     _CleanCaches;
     _PublishManagedProjects;
+    _PublishAppHostServer;
     _PublishNativeTray;
     _RestoreDcpPackage;
     _RunCreateLayout;
@@ -126,6 +129,14 @@
     <Exec Command="dotnet publish &quot;$(DashboardProjectPath)&quot; -c $(Configuration) -r $(TargetRid) /p:PlatformName=$(TargetRid) /p:GenerateDocumentationFile=false /p:EnforceCodeStyleInBuild=false $(_VersionSuffixArg) $(_DashboardBinlog)" />
     <Message Importance="high" Text="Publishing Aspire TerminalHost (Native AOT)..." />
     <Exec Command="dotnet publish &quot;$(TerminalHostProjectPath)&quot; -c $(Configuration) -r $(TargetRid) /p:GenerateDocumentationFile=false /p:EnforceCodeStyleInBuild=false $(_VersionSuffixArg) $(_TerminalHostBinlog)" />
+  </Target>
+
+  <!-- Official builds reuse the signed publish output instead of republishing it. -->
+  <Target Name="_PublishAppHostServer" Condition="'$(SkipAppHostServerBuild)' != 'true'">
+    <PropertyGroup>
+      <_AppHostServerBinlog Condition="'$(ContinuousIntegrationBuild)' == 'true'">-bl:&quot;$(ArtifactsLogDir)PublishAppHostServer.binlog&quot;</_AppHostServerBinlog>
+    </PropertyGroup>
+    <Exec Command="dotnet publish &quot;$(AppHostServerProjectPath)&quot; -c $(Configuration) -r $(TargetRid) /p:UseLdClassicXCodeLinker=false $(_VersionSuffixArg) $(_OfficialBuildIdArg) $(_AppHostServerBinlog)" />
   </Target>
 
   <!-- SkipNativeBuild skips the outer CLI publish, not native payload components.

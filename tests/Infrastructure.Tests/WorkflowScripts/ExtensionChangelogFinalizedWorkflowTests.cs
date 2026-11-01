@@ -2,10 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
-using System.Text.RegularExpressions;
 using Aspire.TestUtilities;
 using Xunit;
-using YamlDotNet.RepresentationModel;
 
 namespace Infrastructure.Tests;
 
@@ -15,67 +13,11 @@ namespace Infrastructure.Tests;
 /// </summary>
 public sealed class ExtensionChangelogFinalizedWorkflowTests(ITestOutputHelper output) : IDisposable
 {
-    private const string WorkflowRelativePath = ".github/workflows/extension-changelog-finalized.yml";
     private const string ScriptRelativePath = ".github/workflows/check-extension-changelog-finalized.sh";
 
     private readonly TemporaryWorkspace _workspace = TemporaryWorkspace.Create(output);
 
     public void Dispose() => _workspace.Dispose();
-
-    [Fact]
-    public void WorkflowRunsOnEveryPullRequestWithLeastPrivilegeAndStableCheckName()
-    {
-        var workflowText = ReadWorkflowText();
-        var trigger = GetTopLevelSection(workflowText, "on");
-
-        Assert.Equal(
-            "  pull_request:\n",
-            trigger.ReplaceLineEndings("\n"));
-
-        var workflow = LoadWorkflow();
-        var root = (YamlMappingNode)workflow.Documents[0].RootNode;
-        var permissions = (YamlMappingNode)root.Children[new YamlScalarNode("permissions")];
-
-        Assert.Collection(
-            permissions.Children,
-            entry =>
-            {
-                Assert.Equal("contents", ((YamlScalarNode)entry.Key).Value);
-                Assert.Equal("read", ((YamlScalarNode)entry.Value).Value);
-            });
-
-        var jobs = (YamlMappingNode)root.Children[new YamlScalarNode("jobs")];
-        var gateJob = Assert.IsType<YamlMappingNode>(Assert.Single(jobs.Children).Value);
-
-        Assert.Equal("Extension changelog finalized", Scalar(gateJob, "name"));
-        Assert.Contains("strict/up-to-date semantics", workflowText, StringComparison.Ordinal);
-
-        var steps = ((YamlSequenceNode)gateJob.Children[new YamlScalarNode("steps")]).Cast<YamlMappingNode>();
-        var checkoutStep = Assert.Single(steps, step => Scalar(step, "uses")?.Contains("actions/checkout", StringComparison.Ordinal) == true);
-        var checkoutWith = Assert.IsType<YamlMappingNode>(checkoutStep.Children[new YamlScalarNode("with")]);
-        Assert.Equal("${{ github.event.pull_request.head.sha }}", Scalar(checkoutWith, "ref"));
-        Assert.Equal(
-            "${{ startsWith(github.head_ref, 'extension-release/') && github.base_ref == 'main' && '0' || '1' }}",
-            Scalar(checkoutWith, "fetch-depth"));
-        Assert.Equal("false", Scalar(checkoutWith, "persist-credentials"));
-
-        Assert.DoesNotContain(
-            steps,
-            step => Scalar(step, "name") == "Preload trusted base history for release-branch stale range checks");
-        Assert.DoesNotContain("git fetch", workflowText, StringComparison.Ordinal);
-
-        var verifyStep = Assert.Single(
-            steps,
-            step => Scalar(step, "run")?.Contains("bash .github/workflows/check-extension-changelog-finalized.sh", StringComparison.Ordinal) == true);
-        var verifyEnv = Assert.IsType<YamlMappingNode>(verifyStep.Children[new YamlScalarNode("env")]);
-        Assert.Equal("${{ github.head_ref }}", Scalar(verifyEnv, "PR_HEAD_REF"));
-        Assert.Equal("${{ github.base_ref }}", Scalar(verifyEnv, "PR_BASE_REF"));
-        Assert.Equal("${{ github.event.pull_request.base.sha }}", Scalar(verifyEnv, "PR_BASE_SHA"));
-
-        Assert.Contains(
-            steps,
-            step => Scalar(step, "run")?.Contains("bash .github/workflows/check-extension-changelog-finalized.sh", StringComparison.Ordinal) == true);
-    }
 
     [Theory]
     [InlineData("<!-- aspire-ext-changelog from=123 to=456 base=1.2.3 -->", "pending release-notes marker", 3)]
@@ -507,39 +449,6 @@ public sealed class ExtensionChangelogFinalizedWorkflowTests(ITestOutputHelper o
 
         return new CommandResult(process.ExitCode, outputText);
     }
-
-    private static YamlStream LoadWorkflow()
-    {
-        var yaml = new YamlStream();
-        using var reader = new StringReader(ReadWorkflowText());
-        yaml.Load(reader);
-
-        return yaml;
-    }
-
-    private static string ReadWorkflowText()
-    {
-        var workflowPath = Path.Combine(RepoRoot.Path, WorkflowRelativePath);
-        Assert.True(File.Exists(workflowPath), $"Expected workflow file at '{WorkflowRelativePath}'.");
-
-        return File.ReadAllText(workflowPath);
-    }
-
-    private static string GetTopLevelSection(string text, string key)
-    {
-        var match = Regex.Match(
-            text,
-            $"(?m)^{Regex.Escape(key)}:\\r?\\n(?<value>(?:^[ ].*\\r?\\n)*)",
-            RegexOptions.CultureInvariant);
-
-        Assert.True(match.Success, $"Could not find top-level workflow section '{key}'.");
-        return match.Groups["value"].Value;
-    }
-
-    private static string? Scalar(YamlMappingNode node, string key)
-        => node.Children.TryGetValue(new YamlScalarNode(key), out var value) && value is YamlScalarNode scalar
-            ? scalar.Value
-            : null;
 
     private sealed record ReleaseBranchRepository(
         string WorkingDirectory,

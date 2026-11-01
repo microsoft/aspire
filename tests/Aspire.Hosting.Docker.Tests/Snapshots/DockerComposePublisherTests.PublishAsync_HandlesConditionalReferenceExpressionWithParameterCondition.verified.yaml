@@ -1,6 +1,6 @@
 ﻿services:
   docker-compose-dashboard:
-    image: "mcr.microsoft.com/aspire/nightly/dashboard:13.6"
+    image: "mcr.microsoft.com/aspire/nightly/dashboard:17.0"
     environment:
       ASPIRE_DASHBOARD_TELEMETRY_OPTOUT: "true"
     ports:

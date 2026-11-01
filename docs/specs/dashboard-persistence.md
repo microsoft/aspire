@@ -59,6 +59,37 @@ Restart the container with the same volume, application name, data directory, an
 
 The AppHost console-log protocol does not identify the AppHost generation that produced a line. Resume prioritizes preserving logs from later AppHost generations, whose line numbers restart at 1. If the Dashboard restarts while the same AppHost remains running, console logs replayed by that AppHost can therefore be persisted again.
 
+### AppHost resource traits and dashboard customizations
+
+Resources can declare non-sensitive metadata as immutable name/value traits. Repeated
+names add multiple values:
+
+```csharp
+builder.AddProject<Projects.Api>("api")
+    .WithTags("Backend", "API")
+    .WithTrait("Owner", "Finance")
+    .WithTrait("Owner", "Platform")
+    .WithDashboardPosition(-10);
+```
+
+`WithTags` accepts a single tag or multiple tags using `params ReadOnlySpan<string>`,
+avoiding a temporary argument array in C#. Polyglot SDKs accept an array of tags.
+It uses the reserved trait `Aspire_Dashboard_Tag`. These tags participate in
+dashboard tag grouping but cannot be removed in the dashboard. User-added tags are
+stored separately in the application settings database, so restarting an AppHost
+does not lose customizations or copy declared tags from a different run.
+
+`WithDashboardPosition` uses `Aspire_Dashboard_Position`; repeated calls replace the
+previous value. Lower positions appear first; defaults can change between runs until
+the user reorders resources. Existing saved dashboard ordering takes precedence. Drag-and-drop ordering is saved
+per application, independently of the run database.
+
+Traits are transported as list-valued resource properties named `resource.trait.<name>`,
+including in recorded snapshots. Trait names are case-sensitive; dashboard tags are
+deduplicated case-insensitively. Tags must have at most 50 characters and use single
+spaces between words. Trait values are visible to dashboard and tooling consumers
+and must not contain secrets.
+
 ## Goals
 
 - Preserve resources, console logs, structured logs, traces, spans, and metrics after an application run ends.
@@ -241,6 +272,12 @@ Cumulative bucket layouts must remain stable within an aggregation. Charts combi
 
 Indexes support instrument lookup, dimension matching, time-window queries, retention, and exemplar lookup.
 
+Repeated metric values extend the latest point's end time without inserting a new point. The single time-window index is ordered by dimension, a persisted 60-second end-time bucket, interval start, and point ID. Repeats update the indexed bucket only when their exact end time crosses a bucket boundary, reducing index writes and the resulting WAL/checkpoint work. An expression index over the exact end time would still be maintained on every repeat, even when its computed bucket is unchanged.
+
+Time buckets only prefilter candidate points. Queries still compare exact interval bounds, and exemplar window queries explicitly use the time-window index before loading points and exemplars. Latest-time queries seek the highest bucket in each dimension and take the maximum exact end time within it; point insertion order does not determine the latest timestamp.
+
+Every export still commits its exact timestamps and counts before ingestion completes. Transaction boundaries, checkpoint policy, and retention are unchanged. Bucket crossings still re-key the index, and new points still maintain it. Coarser index ordering can trade some full-history read and append/retention performance for lower repeat-ingestion cost; it does not eliminate all SQLite write work or change timestamp precision.
+
 ## Repository behavior
 
 `DashboardDataSourcePool` owns the current writable database and pools selected historical databases across Blazor circuits. `DashboardDataSource` is scoped to a circuit and exposes the resource and telemetry repositories for that circuit's selected run.
@@ -306,6 +343,8 @@ The Dashboard applies these default ingestion limits:
 The oldest logs, traces, and metric points are removed when their limits are exceeded. Fixed limits of 10,000 also apply to resource views per resource, scopes per database, instruments per resource, and dimensions per instrument; additional identities are rejected.
 
 The `AddHistogramMetricsAtCapacity` benchmark in [TelemetryRepositoryMetricsBenchmarks](../../benchmarks/Aspire.Dashboard.Benchmarks/TelemetryRepositoryMetricsBenchmarks.cs) measures steady-state ingestion with one or five dimensions already at the default retention limit. Each invocation adds one cumulative histogram point per dimension with four replayed exemplars, exercising eviction and cascading exemplar deletes. Payload construction and history population are outside the measured operation.
+
+The `AddRepeatedMetrics` benchmark in [TelemetryRepositoryMetricRepeatsBenchmarks](../../benchmarks/Aspire.Dashboard.Benchmarks/TelemetryRepositoryMetricRepeatsBenchmarks.cs) measures unchanged numeric values across 1,000 dimensions, with 100 or 4,600 stored points per dimension. Each invocation extends the latest points by one second through ten exports of 100 dimensions, exercising time-index updates and commits without new points or retention deletes. History population and payload construction are outside the measured operation.
 
 Console logs are persisted only after their stream is viewed or exported. The frontend keeps up to `Dashboard:Frontend:MaxConsoleLogCount` entries in memory, which defaults to 100,000. The same limit applies across all console logs in the database, with the oldest entries removed when the limit is exceeded. Historical runs can therefore omit uncaptured logs.
 

@@ -36,18 +36,24 @@ internal static class TerminalSetupHelpers
         int replicaCount = 1,
         string? displayName = null,
         KnownResourceState state = KnownResourceState.Running,
-        bool hidden = false)
+        bool hidden = false,
+        bool? autoFit = null)
     {
         var properties = new Dictionary<string, string>
         {
             [KnownProperties.Terminal.Enabled] = "true",
             [KnownProperties.Terminal.ReplicaIndex] = replicaIndex.ToString(CultureInfo.InvariantCulture),
             [KnownProperties.Terminal.ReplicaCount] = replicaCount.ToString(CultureInfo.InvariantCulture)
-        }.ToDictionary(pair => pair.Key, pair => new ResourcePropertyViewModel(
+        };
+        if (autoFit is { } fit)
+        {
+            properties[KnownProperties.Terminal.AutoFit] = fit ? "true" : "false";
+        }
+        var resourceProperties = properties.ToDictionary(pair => pair.Key, pair => new ResourcePropertyViewModel(
             pair.Key, Value.ForString(pair.Value), isValueSensitive: false, knownProperty: null,
             sortOrder: 0, displayName: null, isHighlighted: false));
 
-        return ModelTestHelpers.CreateResource(resourceName, state, displayName, properties: properties, hidden: hidden);
+        return ModelTestHelpers.CreateResource(resourceName, state, displayName, properties: resourceProperties, hidden: hidden);
     }
 
     public static void SetupTerminalComponents(BunitContext context, TestDashboardClient client, string pathBase = "")
@@ -73,6 +79,7 @@ internal static class TerminalSetupHelpers
     {
         SetupTerminalTitle(context);
         context.Services.TryAddSingleton<TerminalViewSessionRegistry>();
+        context.Services.TryAddScoped<DashboardCommandExecutor>();
         context.JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Components.Select.Initialize", _ => true).SetVoidResult();
         var module = context.JSInterop.SetupModule(modulePath);
         module.Setup<int>("reconnectTerminal", _ => true).SetResult(2);

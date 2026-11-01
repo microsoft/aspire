@@ -4,7 +4,7 @@
     <body>
       <trans-unit id="Description">
         <source>Generate deployment artifacts for an AppHost</source>
-        <target state="needs-review-translation">Generuje artefakty nasazení pro hostitele aplikací Aspire.</target>
+        <target state="translated">Vygenerovat artefakty nasazení pro AppHost</target>
         <note />
       </trans-unit>
       <trans-unit id="GeneratingArtifacts">
@@ -19,7 +19,7 @@
       </trans-unit>
       <trans-unit id="NoBuildArgumentDescription">
         <source>Do not build or restore the project before running</source>
-        <target state="new">Do not build or restore the project before running</target>
+        <target state="translated">Před spuštěním nevytvářejte ani neobnovujte projekt.</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationCompletedPrefix">
@@ -34,12 +34,12 @@
       </trans-unit>
       <trans-unit id="OutputPathArgumentDescription">
         <source>The output path for the generated artifacts. Defaults to the AppHost directory's 'aspire-output' folder if not specified.</source>
-        <target state="needs-review-translation">Výstupní cesta pro vygenerované artefakty. Pokud není zadaná, použije se výchozí hodnota ./aspire-output.</target>
+        <target state="translated">Výstupní cesta pro vygenerované artefakty. Pokud cestu nezadáte, použije se složka aspire-output v adresáři AppHostu.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
         <source>The path to the Aspire AppHost project file or a directory to search</source>
-        <target state="needs-review-translation">Cesta k souboru projektu Aspire AppHost.</target>
+        <target state="translated">Cesta k souboru projektu Aspire AppHost nebo k adresáři, který se má prohledat</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAPublisher">

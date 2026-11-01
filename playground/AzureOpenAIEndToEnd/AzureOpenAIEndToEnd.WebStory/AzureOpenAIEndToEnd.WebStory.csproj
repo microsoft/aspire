@@ -7,7 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <AspireProjectOrPackageReference Include="Aspire.Azure.AI.OpenAI" />
+    <AspireProjectOrPackageReference Include="Aspire.Azure.AI.Extensions.OpenAI" />
     <ProjectReference Include="..\..\Playground.ServiceDefaults\Playground.ServiceDefaults.csproj" />
   </ItemGroup>
 

@@ -5,6 +5,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Reflection;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Shared.CodeGeneration;
 using Aspire.Shared.Json;
@@ -33,7 +34,7 @@ internal sealed class GoExportedValueTreeNode
 ///   - Variadic options merge via the deepUpdate helper in base.go.
 ///   - Union parameters use Go 1.18+ type-set generics — no AspireUnion wrapper.
 /// </summary>
-internal sealed class AtsGoCodeGenerator : ICodeGenerator
+internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
 {
     private static readonly HashSet<string> s_goKeywords = new(StringComparer.Ordinal)
     {
@@ -42,6 +43,14 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         "map", "package", "range", "return", "select", "struct", "switch", "type", "var",
         "any", "true", "false", "nil", "iota",
     };
+
+    // byte and rune are aliases of uint8 and int32; listing them too would be a duplicate case in a type switch.
+    private static readonly string[] s_goNumericTypes =
+    [
+        "int", "int8", "int16", "int32", "int64",
+        "uint", "uint8", "uint16", "uint32", "uint64",
+        "float32",
+    ];
 
     private TextWriter _writer = null!;
 
@@ -63,13 +72,31 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
     // capabilityId → resolved Options type name (qualified when simple name collides with a DTO or another capability's Options)
     private readonly Dictionary<string, string> _optionsTypeNames = new(StringComparer.Ordinal);
 
+    // typeId → documentation captured for the handle type
+    private readonly Dictionary<string, AtsDocumentationInfo> _handleDocumentation = new(StringComparer.Ordinal);
+
+    // Short C# type name used in documentation text → generated Go type name. A short name shared by two
+    // generated types maps to null so it is never turned into a doc link to the wrong type.
+    private readonly Dictionary<string, string?> _docTypeNames = new(StringComparer.Ordinal);
+
+    private GoDocComment _docs = null!;
+
+    // typeId → accepting interface name (e.g., "AnyKubernetesNodePoolResource"). Present only for
+    // concrete handle types that at least one other concrete handle type derives from.
+    private readonly Dictionary<string, string> _acceptingNames = new(StringComparer.Ordinal);
+
+    // typeId → marker method names (e.g., "isKubernetesNodePoolResource") that the concrete type
+    // declares and implements: one per accepting interface of the type itself or of a base type.
+    // The accepting interface of the type declares the same set.
+    private readonly Dictionary<string, List<string>> _acceptingMarkers = new(StringComparer.Ordinal);
+
     /// <inheritdoc />
     public string Language => "Go";
 
     /// <inheritdoc />
     public Dictionary<string, string> GenerateDistributedApplication(AtsContext context)
     {
-        return new Dictionary<string, string>(StringComparer.Ordinal)
+        var files = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["go.mod"] = """
                 module apphost/modules/aspire
@@ -80,6 +107,12 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             ["base.go"] = GetEmbeddedResource("base.go"),
             ["aspire.go"] = GenerateAspireSdk(context)
         };
+
+        // The files mix raw string literals, StringWriter output and embedded resources, which take the line endings
+        // of the machine that built or runs the generator (CRLF on Windows). gofmt rewrites CRLF, so write LF everywhere.
+        // Only CRLF is replaced: ReplaceLineEndings would also split lines at characters such as U+2028 or form feed,
+        // which Go allows inside comments and string literals.
+        return files.ToDictionary(file => file.Key, file => file.Value.Replace("\r\n", "\n"), StringComparer.Ordinal);
     }
 
     private static string GetEmbeddedResource(string name)
@@ -108,6 +141,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         GenerateDtoTypes(context.DtoTypes);
         GenerateExportedValues(context.ExportedValues, context.DtoTypes.ToDictionary(dto => dto.TypeId, StringComparer.Ordinal));
         GenerateMarkerInterfaces(capabilitiesByDirectTarget);
+        GenerateAcceptingInterfaces();
         GenerateConcreteHandleTypes(capabilitiesByConcreteImpl);
         GenerateOptionsStructs(context.Capabilities);
         GenerateRegisterWrappers();
@@ -126,6 +160,8 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         _isResourceBuilder.Clear();
         _dtoNames.Clear();
         _enumNames.Clear();
+        _acceptingNames.Clear();
+        _acceptingMarkers.Clear();
 
         foreach (var enumType in context.EnumTypes)
         {
@@ -304,7 +340,103 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
 
             _optionsTypeNames[capability.CapabilityId] = resolvedName;
         }
+
+        BuildAcceptingInterfaces(context);
+
+        // Every doc render dereferences _docs, and the renderer resolves type names through the maps
+        // built above. Building it here means any caller that builds the name maps also gets a usable
+        // renderer, instead of failing with a NullReferenceException the first time a doc is rendered.
+        BuildDocumentationMaps(context);
     }
+
+    // Go has no return-type covariance, so the interface of a derived handle type never satisfies the
+    // interface of its base type: each interface re-declares the fluent methods with its own return
+    // type. A parameter typed as a base (WithNodePool takes KubernetesNodePoolResource) would therefore
+    // reject the derived builder AddNodePool returns (AksNodePoolResource).
+    //
+    // Every concrete handle type that another concrete handle type derives from gets an accepting
+    // interface, Any<Type>, used only where a caller supplies a value. It embeds handleReference and
+    // declares unexported marker methods: the marker of the type itself and of each base type that has
+    // an accepting interface too. The type and each of its derived types implement all of them. That
+    // keeps the check at compile time (a builder outside the family lacks the marker) without changing
+    // the fluent interface of any type. The base-type markers are what let an Any<Type> value be
+    // passed where the Any<Base> of one of its base types is expected, because Go converts an
+    // interface value to another interface only when its method set has every method of the target.
+    //
+    // A type that nothing derives from gets no accepting interface: its own interface already accepts
+    // exactly the same values. The cost is that the set of accepting interfaces, and which parameters
+    // use them, follows the handle types of the integrations an AppHost includes. The generated
+    // header (see GenerateAcceptingInterfaces) tells users so.
+    private void BuildAcceptingInterfaces(AtsContext context)
+    {
+        var ancestorIdsByType = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        var baseTypeIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var handleType in context.HandleTypes)
+        {
+            if (!_implNames.ContainsKey(handleType.AtsTypeId))
+            {
+                continue;
+            }
+
+            // BaseTypeHierarchy lists every base class, including ones that are not emitted as handle
+            // types (for example the abstract Resource class); those have no Go type to accept.
+            var ancestorIds = handleType.BaseTypeHierarchy
+                .Select(baseType => baseType.TypeId)
+                .Where(_implNames.ContainsKey)
+                .ToList();
+            ancestorIdsByType[handleType.AtsTypeId] = ancestorIds;
+            baseTypeIds.UnionWith(ancestorIds);
+        }
+
+        if (baseTypeIds.Count == 0)
+        {
+            return;
+        }
+
+        // Options struct names are resolved above but not reserved, exported value roots are emitted
+        // verbatim as package-level vars (see GenerateExportedValues), and enum members are emitted as
+        // package-level consts named after their enum (see GenerateEnumTypes). Reserve all of them here
+        // to keep an accepting interface from colliding with any of them. This is the last step of
+        // BuildNameMaps, so it cannot change a name chosen earlier.
+        _reservedNames.UnionWith(_optionsTypeNames.Values);
+        _reservedNames.UnionWith(BuildExportedValueTree(context.ExportedValues).Children.Keys);
+        foreach (var enumType in context.EnumTypes)
+        {
+            if (enumType.ClrType is null)
+            {
+                continue;
+            }
+
+            foreach (var member in Enum.GetNames(enumType.ClrType))
+            {
+                _reservedNames.Add(GetEnumMemberConstantName(_enumNames[enumType.TypeId], member));
+            }
+        }
+
+        foreach (var typeId in baseTypeIds.OrderBy(id => _interfaceNames[id], StringComparer.Ordinal))
+        {
+            _acceptingNames[typeId] = ReserveName($"Any{_interfaceNames[typeId]}", takenLowercase: false);
+        }
+
+        // Every type with an implementation takes part, including a base type that capabilities
+        // reference but HandleTypes does not list. It has no known ancestors, yet it still has an
+        // accepting interface and must implement that interface's own marker.
+        foreach (var typeId in _implNames.Keys)
+        {
+            var markers = (ancestorIdsByType.GetValueOrDefault(typeId) ?? [])
+                .Append(typeId)
+                .Where(_acceptingNames.ContainsKey)
+                .Select(GetAcceptingMarkerName)
+                .Order(StringComparer.Ordinal)
+                .ToList();
+            if (markers.Count > 0)
+            {
+                _acceptingMarkers[typeId] = markers;
+            }
+        }
+    }
+
+    private string GetAcceptingMarkerName(string typeId) => $"is{_interfaceNames[typeId]}";
 
     private static void CollectHandleTypeIds(HashSet<string> set, AtsTypeRef? typeRef)
     {
@@ -481,6 +613,114 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         WriteLine();
     }
 
+    // ── Documentation ────────────────────────────────────────────────────────
+
+    private void BuildDocumentationMaps(AtsContext context)
+    {
+        _handleDocumentation.Clear();
+        _docTypeNames.Clear();
+
+        foreach (var handleType in context.HandleTypes)
+        {
+            if (handleType.Documentation is { } documentation)
+            {
+                _handleDocumentation[handleType.AtsTypeId] = documentation;
+            }
+        }
+
+        foreach (var (typeId, goName) in _interfaceNames)
+        {
+            AddDocTypeName(ExtractTypeName(typeId), goName);
+        }
+
+        foreach (var dto in context.DtoTypes)
+        {
+            if (_dtoNames.TryGetValue(dto.TypeId, out var dtoName))
+            {
+                AddDocTypeName(dto.Name, dtoName);
+            }
+        }
+
+        foreach (var enumType in context.EnumTypes)
+        {
+            if (_enumNames.TryGetValue(enumType.TypeId, out var enumName))
+            {
+                AddDocTypeName(enumType.Name, enumName);
+            }
+        }
+
+        _docs = new GoDocComment(name => _docTypeNames.GetValueOrDefault(name), ToPascalCase);
+    }
+
+    private void AddDocTypeName(string shortName, string goName)
+    {
+        if (!_docTypeNames.TryAdd(shortName, goName) && _docTypeNames[shortName] != goName)
+        {
+            _docTypeNames[shortName] = null;
+        }
+    }
+
+    private void WriteDocLines(IReadOnlyList<string> lines, string indent = "")
+    {
+        foreach (var line in lines)
+        {
+            WriteLine($"{indent}{line}");
+        }
+    }
+
+    private GoDocContent CreateCapabilityDoc(AtsCapabilityInfo capability)
+    {
+        var targetParamName = capability.TargetParameterName ?? "builder";
+        var (requiredParams, optionalParams) = SplitParameters(capability.Parameters
+            .Where(p => !string.Equals(p.Name, targetParamName, StringComparison.Ordinal))
+            .ToList());
+
+        // A setter's only parameter carries a copy of the property documentation ("Gets or sets the port."),
+        // which is already the summary and reads wrongly as a description of the argument.
+        var isSetter = capability.CapabilityKind == AtsCapabilityKind.PropertySetter;
+        var parameters = requiredParams
+            .Select(p => new GoDocParameter(p.Name, GetLocalIdentifier(p.Name), isSetter ? null : p.Documentation?.Summary))
+            .ToList();
+
+        if (optionalParams.Count > 0)
+        {
+            // A flattened options DTO is the argument itself, so its own documentation describes it best.
+            var optionsDescription = TryGetDirectOptionsParameter(optionalParams, out var directOptionsParam)
+                ? directOptionsParam.Documentation?.Summary ?? $"Optional parameters; see {RenderTypeLink(MapDtoType(directOptionsParam.Type!.TypeId))}."
+                : $"Optional parameters; see {RenderTypeLink(GetOptionsTypeName(capability))}.";
+            parameters.Add(new GoDocParameter("options", "options", optionsDescription));
+        }
+
+        var returnsValue = capability.ReturnType is not null && capability.ReturnType.TypeId != AtsConstants.Void;
+
+        return new GoDocContent
+        {
+            GoName = ToPascalCase(capability.MethodName),
+            Subject = capability.CapabilityKind switch
+            {
+                AtsCapabilityKind.PropertyGetter => GoDocSubject.Getter,
+                AtsCapabilityKind.PropertySetter => GoDocSubject.Setter,
+                _ => GoDocSubject.Method,
+            },
+            Summary = capability.Documentation?.Summary,
+            FallbackSummary = capability.Description,
+            Remarks = capability.Documentation?.Remarks,
+            Parameters = parameters,
+            Returns = returnsValue ? capability.Documentation?.Returns : null,
+            Notes = GetUnionNotes(capability),
+            IsExperimental = AtsTypeSystemCompatibility.IsExperimental(capability),
+            IsObsolete = capability.IsObsolete,
+            ObsoleteMessage = capability.ObsoleteMessage,
+        };
+    }
+
+    // A doc link only resolves to a declared package-level identifier; anything else (such as the
+    // map[string]any fallback for an unknown DTO) is written as plain text.
+    private static string RenderTypeLink(string goType)
+    {
+        return goType.All(c => char.IsLetterOrDigit(c) || c == '_') ? $"[{goType}]" : goType;
+    }
+
     // ── Enums ────────────────────────────────────────────────────────────────
 
     private void GenerateEnumTypes(IReadOnlyList<AtsEnumTypeInfo> enumTypes)
@@ -503,19 +743,40 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             }
 
             var enumName = _enumNames[enumType.TypeId];
-            WriteLine($"// {enumName} represents {enumType.Name}.");
+            WriteDocLines(_docs.Render(new GoDocContent
+            {
+                GoName = enumName,
+                Subject = GoDocSubject.Type,
+                Summary = enumType.Documentation?.Summary,
+                FallbackSummary = $"{enumName} represents {enumType.Name}.",
+                Remarks = enumType.Documentation?.Remarks,
+            }));
             WriteLine($"type {enumName} string");
             WriteLine();
             WriteLine("const (");
+            var valueDocumentation = enumType.ValueInfos.ToDictionary(value => value.Name, value => value.Documentation, StringComparer.Ordinal);
             foreach (var member in Enum.GetNames(enumType.ClrType))
             {
-                var memberName = $"{enumName}{ToPascalCase(member)}";
-                WriteLine($"\t{memberName} {enumName} = \"{member}\"");
+                var memberName = GetEnumMemberConstantName(enumName, member);
+                if (valueDocumentation.TryGetValue(member, out var memberDocumentation))
+                {
+                    WriteDocLines(_docs.Render(new GoDocContent
+                    {
+                        GoName = memberName,
+                        Subject = GoDocSubject.Field,
+                        Summary = memberDocumentation?.Summary,
+                        Remarks = memberDocumentation?.Remarks,
+                    }), "\t");
+                }
+
+                WriteLine($"\t{memberName} {enumName} = {GoStringLiteral(member)}");
             }
             WriteLine(")");
             WriteLine();
         }
     }
+
+    private static string GetEnumMemberConstantName(string enumName, string member) => $"{enumName}{ToPascalCase(member)}";
 
     // ── DTOs ─────────────────────────────────────────────────────────────────
 
@@ -539,7 +800,14 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             }
 
             var dtoName = _dtoNames[dto.TypeId];
-            WriteLine($"// {dtoName} represents {dto.Name}.");
+            WriteDocLines(_docs.Render(new GoDocContent
+            {
+                GoName = dtoName,
+                Subject = GoDocSubject.Type,
+                Summary = dto.Documentation?.Summary ?? dto.Description,
+                FallbackSummary = $"{dtoName} represents {dto.Name}.",
+                Remarks = dto.Documentation?.Remarks,
+            }));
             WriteLine($"type {dtoName} struct {{");
             if (dto.Properties.Count == 0)
             {
@@ -558,7 +826,14 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
                 var propertyType = property.IsCallback
                     ? RenderCallbackType(DtoPropertyToParameterInfo(property))
                     : MapDtoPropertyTypeToGo(property.Type, property.IsOptional);
-                var jsonTag = $"`json:\"{property.Name},omitempty\"`";
+                var jsonTag = $"`json:{GoStringLiteral(JsonNamingPolicy.CamelCase.ConvertName(property.Name) + ",omitempty")}`";
+                WriteDocLines(_docs.Render(new GoDocContent
+                {
+                    GoName = propertyName,
+                    Subject = GoDocSubject.Field,
+                    Summary = property.Documentation?.Summary ?? property.Description,
+                    Remarks = property.Documentation?.Remarks,
+                }), "\t");
                 WriteLine($"\t{propertyName} {propertyType} {jsonTag}");
             }
             WriteLine("}");
@@ -578,11 +853,11 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
                 var propertyType = MapDtoPropertyTypeToGo(property.Type, property.IsOptional);
                 if (IsNilableGoType(propertyType))
                 {
-                    WriteLine($"\tif d.{propertyName} != nil {{ m[\"{property.Name}\"] = serializeValue(d.{propertyName}) }}");
+                    WriteLine($"\tif d.{propertyName} != nil {{ m[{GoStringLiteral(JsonNamingPolicy.CamelCase.ConvertName(property.Name))}] = serializeValue(d.{propertyName}) }}");
                 }
                 else
                 {
-                    WriteLine($"\tm[\"{property.Name}\"] = serializeValue(d.{propertyName})");
+                    WriteLine($"\tm[{GoStringLiteral(JsonNamingPolicy.CamelCase.ConvertName(property.Name))}] = serializeValue(d.{propertyName})");
                 }
             }
             WriteLine("\treturn m");
@@ -609,12 +884,16 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
 
         foreach (var (name, node) in root.Children.OrderBy(pair => pair.Key, StringComparer.Ordinal))
         {
-            WriteLine($"var {name} = {RenderGoExportedValueType(node, indentLevel: 0)}{RenderGoExportedValueValue(node, dtoTypesById, indentLevel: 0)}");
+            WriteLine($"// {name} groups related exported values.");
+            WriteLine($"var {name} = {RenderGoExportedValueType(node, indentLevel: 0, includeDocs: true)}{RenderGoExportedValueValue(node, dtoTypesById, indentLevel: 0)}");
             WriteLine();
         }
     }
 
-    private string RenderGoExportedValueType(GoExportedValueTreeNode node, int indentLevel)
+    // The type literal is written twice for nested groups: once as the variable's type and once more in front
+    // of each nested value. Only the variable's type carries documentation, because that is the declaration
+    // go doc and gopls resolve a field to.
+    private string RenderGoExportedValueType(GoExportedValueTreeNode node, int indentLevel, bool includeDocs)
     {
         var indent = new string('\t', indentLevel);
         var nestedIndent = new string('\t', indentLevel + 1);
@@ -625,6 +904,21 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         {
             if (child.Value is { } valueInfo)
             {
+                if (includeDocs)
+                {
+                    foreach (var line in _docs.Render(new GoDocContent
+                    {
+                        GoName = name,
+                        Subject = GoDocSubject.Field,
+                        Summary = valueInfo.Documentation?.Summary ?? valueInfo.Description,
+                        Remarks = valueInfo.Documentation?.Remarks,
+                    }))
+                    {
+                        sb.Append(nestedIndent);
+                        sb.AppendLine(line);
+                    }
+                }
+
                 sb.Append(nestedIndent);
                 sb.Append(name);
                 sb.Append(' ');
@@ -635,7 +929,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
                 sb.Append(nestedIndent);
                 sb.Append(name);
                 sb.Append(' ');
-                sb.Append(RenderGoExportedValueType(child, indentLevel + 1));
+                sb.Append(RenderGoExportedValueType(child, indentLevel + 1, includeDocs));
                 sb.AppendLine();
             }
         }
@@ -666,7 +960,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             }
             else
             {
-                sb.Append(RenderGoExportedValueType(child, indentLevel + 1));
+                sb.Append(RenderGoExportedValueType(child, indentLevel + 1, includeDocs: false));
                 sb.Append(RenderGoExportedValueValue(child, dtoTypesById, indentLevel + 1));
             }
 
@@ -690,15 +984,15 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
 
         var renderedValue = typeRef.Category switch
         {
-            AtsTypeCategory.Primitive => value.ToRelaxedJsonString(),
-            AtsTypeCategory.Enum => $"{MapEnumType(typeRef.TypeId)}({value.ToRelaxedJsonString()})",
+            AtsTypeCategory.Primitive => RenderGoJsonValue(value),
+            AtsTypeCategory.Enum => $"{MapEnumType(typeRef.TypeId)}({RenderGoJsonValue(value)})",
             AtsTypeCategory.Dto when value is JsonObject obj && dtoTypesById.TryGetValue(typeRef.TypeId, out var dtoInfo)
                 => RenderGoDtoValue(obj, dtoInfo, dtoTypesById),
             AtsTypeCategory.Array or AtsTypeCategory.List when value is JsonArray arr
                 => $"[]{MapTypeRefToGo(typeRef.ElementType, isOptional: false)}{{{string.Join(", ", arr.Select(item => RenderGoExportedValue(item, typeRef.ElementType!, dtoTypesById)))}}}",
             AtsTypeCategory.Dict when value is JsonObject obj
-                => $"map[{MapTypeRefToGo(typeRef.KeyType, isOptional: false)}]{MapTypeRefToGo(typeRef.ValueType, isOptional: false)}{{{string.Join(", ", obj.Select(pair => $"{AtsJsonCodeWriter.ToRelaxedJsonString(pair.Key)}: {RenderGoExportedValue(pair.Value, typeRef.ValueType!, dtoTypesById)}"))}}}",
-            _ => value.ToRelaxedJsonString()
+                => $"map[{MapTypeRefToGo(typeRef.KeyType, isOptional: false)}]{MapTypeRefToGo(typeRef.ValueType, isOptional: false)}{{{string.Join(", ", obj.Select(pair => $"{GoStringLiteral(pair.Key)}: {RenderGoExportedValue(pair.Value, typeRef.ValueType!, dtoTypesById)}"))}}}",
+            _ => RenderGoJsonValue(value)
         };
 
         if (!ShouldApplyNullableType(typeRef))
@@ -711,6 +1005,14 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             : MapEnumType(typeRef.TypeId);
         return $"func(value {valueType}) *{valueType} {{ return &value }}({renderedValue})";
     }
+
+    // The relaxed JSON writer spells a character outside the Basic Multilingual Plane as a UTF-16 surrogate pair
+    // ("\uD83D\uDE00"), and Go rejects surrogate halves in a string literal. Strings are therefore quoted by
+    // GoStringLiteral; numbers and booleans are the same text in JSON and Go.
+    private static string RenderGoJsonValue(JsonNode value) =>
+        value is JsonValue jsonValue && jsonValue.TryGetValue<string>(out var text)
+            ? GoStringLiteral(text)
+            : value.ToRelaxedJsonString();
 
     private string RenderGoDtoValue(
         JsonObject value,
@@ -744,7 +1046,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         foreach (var exportedValue in exportedValues)
         {
             var current = root;
-            foreach (var segment in exportedValue.PathSegments)
+            foreach (var segment in exportedValue.PathSegments.Select(SanitizeIdentifier))
             {
                 if (!current.Children.TryGetValue(segment, out var child))
                 {
@@ -779,12 +1081,19 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
     // type fall back to the marker interface, which any concrete satisfies
     // trivially.
 
-    private void GenerateMarkerInterfaces(Dictionary<string, List<AtsCapabilityInfo>> capabilitiesByDirectTarget)
+    // The interface-metadata types that get only a marker interface because no concrete impl is
+    // generated for them, ordered by Go name.
+    private List<KeyValuePair<string, string>> GetMarkerInterfaces()
     {
-        var interfaceTypeIds = _interfaceNames
+        return _interfaceNames
             .Where(kv => _isInterfaceType.TryGetValue(kv.Key, out var isI) && isI && !_implNames.ContainsKey(kv.Key))
             .OrderBy(kv => kv.Value, StringComparer.Ordinal)
             .ToList();
+    }
+
+    private void GenerateMarkerInterfaces(Dictionary<string, List<AtsCapabilityInfo>> capabilitiesByDirectTarget)
+    {
+        var interfaceTypeIds = GetMarkerInterfaces();
 
         if (interfaceTypeIds.Count == 0)
         {
@@ -799,13 +1108,69 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         foreach (var (typeId, name) in interfaceTypeIds)
         {
             var hasMethods = capabilitiesByDirectTarget.ContainsKey(typeId);
-            var note = hasMethods
-                ? "Methods are emitted on concrete impls; this interface is a marker for type assertions."
-                : "Marker interface.";
-            WriteLine($"// {name} marks types implementing {ExtractTypeName(typeId)}.");
-            WriteLine($"// {note}");
+            var documentation = _handleDocumentation.GetValueOrDefault(typeId);
+            WriteDocLines(_docs.Render(new GoDocContent
+            {
+                GoName = name,
+                Subject = GoDocSubject.Type,
+                Summary = documentation?.Summary,
+                FallbackSummary = $"{name} marks types implementing {ExtractTypeName(typeId)}.",
+                Remarks = documentation?.Remarks,
+                Notes = hasMethods ? ["Methods are emitted on concrete impls; this interface is a marker for type assertions."] : [],
+            }));
             WriteLine($"type {name} interface {{");
             WriteLine("\thandleReference");
+            WriteLine("}");
+            WriteLine();
+        }
+    }
+
+    // ── Accepting interfaces (concrete handle types with derived types) ──────
+    //
+    // See BuildAcceptingInterfaces for why these exist. They are declared before the handle
+    // wrappers; the marker methods that satisfy them are declared on each handle's interface and
+    // implemented on its impl (see GenerateConcreteHandleTypes).
+
+    private void GenerateAcceptingInterfaces()
+    {
+        if (_acceptingNames.Count == 0)
+        {
+            return;
+        }
+
+        WriteLine("// ============================================================================");
+        WriteLine("// Accepting interfaces (handle types with derived types)");
+        WriteLine("// ============================================================================");
+        WriteLine("// Go has no return-type covariance, so the interface of a derived handle type does not");
+        WriteLine("// satisfy the interface of its base type. Each Any<Type> below accepts <Type> or a handle");
+        WriteLine("// of any type derived from it, and is used wherever a method, options struct, or DTO takes");
+        WriteLine("// a <Type> as input. The unexported marker methods restrict it to that family of types.");
+        WriteLine("//");
+        WriteLine("// The set of Any<Type> interfaces depends on the integrations of the AppHost this SDK is");
+        WriteLine("// generated for: an Any<Type> exists only while some handle type in the SDK derives from <Type>.");
+        WriteLine("// Adding or removing an integration can add or remove an Any<Type> and change a method parameter");
+        WriteLine("// from <Type> to Any<Type>, so code that names an Any<Type> or such a parameter's type depends");
+        WriteLine("// on the integrations the AppHost includes.");
+        WriteLine();
+
+        foreach (var (typeId, name) in _acceptingNames.OrderBy(kv => kv.Value, StringComparer.Ordinal))
+        {
+            var interfaceName = _interfaceNames[typeId];
+            WriteLine($"// {name} accepts {interfaceName} or a handle of any type derived from it.");
+            WriteLine($"type {name} interface {{");
+            WriteLine("\thandleReference");
+
+            // The markers of the base types are declared too: Go converts an interface value to another
+            // interface only when its method set has every method of the target, so without them an
+            // Any<Type> value could not be passed where the Any<Base> of a base type is expected. That
+            // admits nothing the base type rejects, since every handle of this family belongs to the
+            // family of each base type. BaseTypeHierarchy lists the whole base chain, so each derived
+            // type implements every marker declared here.
+            foreach (var marker in _acceptingMarkers[typeId])
+            {
+                WriteLine($"\t{marker}()");
+            }
+
             WriteLine("}");
             WriteLine();
         }
@@ -841,6 +1206,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             EmitConcreteInterface(typeId, interfaceName, capabilities, listDictGetters);
             EmitConcreteStruct(interfaceName, implName, listDictGetters);
             EmitConcreteConstructor(interfaceName, implName);
+            EmitAcceptingMarkerMethods(typeId, implName);
 
             foreach (var capability in capabilities)
             {
@@ -894,9 +1260,27 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         IReadOnlyList<AtsCapabilityInfo> capabilities,
         List<(string Field, string MethodName, AtsTypeRef ReturnType, string CapabilityId, string? Description)> listDictGetters)
     {
-        WriteLine($"// {interfaceName} is the public interface for handle type {interfaceName}.");
+        var documentation = _handleDocumentation.GetValueOrDefault(typeId);
+        WriteDocLines(_docs.Render(new GoDocContent
+        {
+            GoName = interfaceName,
+            Subject = GoDocSubject.Type,
+            Summary = documentation?.Summary,
+            FallbackSummary = $"{interfaceName} is the public interface for handle type {interfaceName}.",
+            Remarks = documentation?.Remarks,
+        }));
         WriteLine($"type {interfaceName} interface {{");
         WriteLine("\thandleReference");
+
+        // The interface itself must declare the markers: a value whose static type is this interface
+        // is assignable to an accepting interface only if its method set includes the marker.
+        if (_acceptingMarkers.TryGetValue(typeId, out var markers))
+        {
+            foreach (var marker in markers)
+            {
+                WriteLine($"\t{marker}()");
+            }
+        }
 
         // Capability methods (skip list/dict getters — they're rendered as
         // distinct accessor methods below).
@@ -907,13 +1291,15 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             {
                 continue;
             }
+            WriteInterfaceMemberDoc(_docs.Render(CreateCapabilityDoc(capability)));
             WriteLine($"\t{RenderMethodSignature(typeId, interfaceName, capability)}");
         }
 
         // List/Dict accessor methods.
-        foreach (var (_, methodName, returnType, _, _) in listDictGetters)
+        foreach (var (_, methodName, returnType, capabilityId, _) in listDictGetters)
         {
             var (wrapperType, typeArgs) = ListDictTypeArgs(returnType);
+            WriteInterfaceMemberDoc(_docs.Render(CreateCapabilityDoc(capabilities.First(c => c.CapabilityId == capabilityId))));
             WriteLine($"\t{methodName}() *{wrapperType}{typeArgs}");
         }
 
@@ -924,6 +1310,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             var appInterface = _interfaceNames.TryGetValue(AtsConstants.ApplicationTypeId, out var appName)
                 ? appName
                 : "DistributedApplication";
+            WriteInterfaceMemberDoc(RenderGoDoc("Build", BuildSummary));
             WriteLine($"\tBuild() ({appInterface}, error)");
         }
 
@@ -931,17 +1318,39 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         // ToArray capability so polyglot callers get the same ergonomics as the .NET indexer.
         if (string.Equals(typeId, InteractionInputCollectionTypeId, StringComparison.Ordinal))
         {
+            WriteInterfaceMemberDoc(RenderGoDoc("Get", InputGetSummary));
             WriteLine("\tGet(name string) (*InteractionInput, error)");
+            WriteInterfaceMemberDoc(RenderGoDoc("Required", InputRequiredSummary));
             WriteLine("\tRequired(name string) (*InteractionInput, error)");
+            WriteInterfaceMemberDoc(RenderGoDoc("Value", InputValueSummary));
             WriteLine("\tValue(name string) (string, error)");
+            WriteInterfaceMemberDoc(RenderGoDoc("RequiredValue", InputRequiredValueSummary));
             WriteLine("\tRequiredValue(name string) (string, error)");
         }
 
         // Lifecycle escape hatches.
+        WriteInterfaceMemberDoc(RenderGoDoc("Err", ErrSummary));
         WriteLine("\tErr() error");
 
         WriteLine("}");
         WriteLine();
+    }
+
+    // A blank line before each documented member keeps a multi-line comment visibly attached to the member below it.
+    private void WriteInterfaceMemberDoc(IReadOnlyList<string> lines)
+    {
+        if (lines.Count == 0)
+        {
+            return;
+        }
+
+        WriteLine();
+        WriteDocLines(lines, "\t");
+    }
+
+    private IReadOnlyList<string> RenderGoDoc(string goName, string summary)
+    {
+        return _docs.Render(new GoDocContent { GoName = goName, Summary = summary });
     }
 
     private void EmitConcreteStruct(
@@ -970,15 +1379,38 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         WriteLine();
     }
 
+    private void EmitAcceptingMarkerMethods(string typeId, string implName)
+    {
+        if (!_acceptingMarkers.TryGetValue(typeId, out var markers))
+        {
+            return;
+        }
+
+        WriteLine($"// {implName} implements the marker of each accepting interface for its own type and its base types.");
+        foreach (var marker in markers)
+        {
+            WriteLine($"func (*{implName}) {marker}() {{}}");
+        }
+        WriteLine();
+    }
+
     // Type ID of InteractionInputCollection. The by-name accessors below are hand-authored on top of the
     // generated ToArray capability so Go matches the .NET indexer and the TypeScript get/value helpers.
     private const string InteractionInputCollectionTypeId = "Aspire.Hosting/Aspire.Hosting.InteractionInputCollection";
+
+    // Hand-authored members are documented on both the public interface and the implementation.
+    private const string BuildSummary = "Build invokes the build capability and returns the running application.";
+    private const string ErrSummary = "Err returns the first error recorded on this wrapper, or nil if the wrapper resolved successfully and no chained operation has failed.";
+    private const string InputGetSummary = "Get returns the input with the specified name, or nil if no input matches.";
+    private const string InputRequiredSummary = "Required returns the input with the specified name, or an error if no input matches.";
+    private const string InputValueSummary = "Value returns the value of the input with the specified name, or an empty string if no input matches or it has no value.";
+    private const string InputRequiredValueSummary = "RequiredValue returns the value of the input with the specified name, or an error if no input matches.";
 
     private void EmitInteractionInputCollectionAccessors(string implName)
     {
         // These delegate to ToArray (a single RPC) and then match locally. Names are compared
         // case-insensitively via strings.EqualFold to mirror StringComparers.InteractionInputName in .NET.
-        WriteLine("// Get returns the input with the specified name, or nil if no input matches.");
+        WriteDocLines(RenderGoDoc("Get", InputGetSummary));
         WriteLine($"func (s *{implName}) Get(name string) (*InteractionInput, error) {{");
         WriteLine("\tif s.err != nil { return nil, s.err }");
         WriteLine("\tinputs, err := s.ToArray()");
@@ -990,7 +1422,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         WriteLine("}");
         WriteLine();
 
-        WriteLine("// Required returns the input with the specified name, or an error if no input matches.");
+        WriteDocLines(RenderGoDoc("Required", InputRequiredSummary));
         WriteLine($"func (s *{implName}) Required(name string) (*InteractionInput, error) {{");
         WriteLine("\tinput, err := s.Get(name)");
         WriteLine("\tif err != nil { return nil, err }");
@@ -999,7 +1431,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         WriteLine("}");
         WriteLine();
 
-        WriteLine("// Value returns the value of the input with the specified name, or an empty string if no input matches or it has no value.");
+        WriteDocLines(RenderGoDoc("Value", InputValueSummary));
         WriteLine($"func (s *{implName}) Value(name string) (string, error) {{");
         WriteLine("\tinput, err := s.Get(name)");
         WriteLine("\tif err != nil { return \"\", err }");
@@ -1008,7 +1440,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         WriteLine("}");
         WriteLine();
 
-        WriteLine("// RequiredValue returns the value of the input with the specified name, or an error if no input matches.");
+        WriteDocLines(RenderGoDoc("RequiredValue", InputRequiredValueSummary));
         WriteLine($"func (s *{implName}) RequiredValue(name string) (string, error) {{");
         WriteLine("\tinput, err := s.Required(name)");
         WriteLine("\tif err != nil { return \"\", err }");
@@ -1118,7 +1550,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         {
             return "*CancellationToken";
         }
-        return MapTypeRefToGo(p.Type, p.IsOptional);
+        return MapInputTypeRefToGo(p.Type, p.IsOptional);
     }
 
     /// <summary>
@@ -1219,7 +1651,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         var listDictMatch = listDictGetters.FirstOrDefault(g => g.CapabilityId == capability.CapabilityId);
         if (listDictMatch.CapabilityId is not null)
         {
-            EmitListDictGetter(implName, listDictMatch);
+            EmitListDictGetter(implName, listDictMatch, capability);
             return;
         }
 
@@ -1240,10 +1672,9 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         var paramSig = RenderParameterList(requiredParams, optionalParams, capability);
         var returnSig = RenderReturnSignature(typeId, interfaceName, capability);
 
-        if (!string.IsNullOrEmpty(capability.Description))
-        {
-            EmitDocComment(methodName, capability.Description);
-        }
+        // The full documentation lives on the public interface method; the unexported implementation only
+        // keeps the summary so the source stays readable.
+        WriteDocLines(_docs.RenderSummary(CreateCapabilityDoc(capability)));
         EmitUnionAllowedTypesDoc(capability);
 
         WriteLine($"func (s *{implName}) {methodName}({paramSig}){returnSig} {{");
@@ -1251,13 +1682,6 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
 
         WriteLine("}");
         WriteLine();
-    }
-
-    private void EmitDocComment(string methodName, string description)
-    {
-        var firstChar = char.ToLowerInvariant(description[0]);
-        var rest = description.Length > 1 ? description[1..] : string.Empty;
-        WriteLine($"// {methodName} {firstChar}{rest}");
     }
 
     /// <summary>
@@ -1283,7 +1707,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             EmitHandleParamErrorChecks("\t", capability, "s.setErr(err); return s");
             EmitUnionTypeChecks("\t", capability, methodName, new[] { "s.setErr(err); return s" });
             EmitArgsConstruction("\t", capability, requiredParams, optionalParams, targetParamName, "s.handle");
-                WriteLine($"\tif _, err := s.client.invokeCapability(ctx, \"{capability.CapabilityId}\", reqArgs); err != nil {{ s.setErr(err) }}");
+                WriteLine($"\tif _, err := s.client.invokeCapability(ctx, {GoStringLiteral(capability.CapabilityId)}, reqArgs); err != nil {{ s.setErr(err) }}");
             WriteLine("\treturn s");
             return;
         }
@@ -1303,11 +1727,11 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             EmitHandleParamErrorChecks("\t", capability, "s.setErr(err); return nil");
             EmitUnionTypeChecks("\t", capability, methodName, new[] { "s.setErr(err); return nil" });
             EmitArgsConstruction("\t", capability, requiredParams, optionalParams, targetParamName, "s.handle");
-                WriteLine($"\tresult, err := s.client.invokeCapability(ctx, \"{capability.CapabilityId}\", reqArgs)");
+                WriteLine($"\tresult, err := s.client.invokeCapability(ctx, {GoStringLiteral(capability.CapabilityId)}, reqArgs)");
             WriteLine("\tif err != nil { s.setErr(err); return nil }");
             WriteLine($"\ttyped, ok := result.({returnGoType})");
             WriteLine("\tif !ok {");
-            WriteLine($"\t\ts.setErr(fmt.Errorf(\"aspire: {capability.CapabilityId} returned unexpected type %T\", result))");
+            WriteLine($"\t\ts.setErr(fmt.Errorf({GoUnexpectedTypeFormat(capability.CapabilityId)}, result))");
             WriteLine("\t\treturn nil");
             WriteLine("\t}");
             WriteLine("\treturn typed");
@@ -1323,13 +1747,13 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             $"return &{childImplName}{{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}}",
         });
         EmitArgsConstruction("\t", capability, requiredParams, optionalParams, targetParamName, "s.handle");
-        WriteLine($"\tresult, err := s.client.invokeCapability(ctx, \"{capability.CapabilityId}\", reqArgs)");
+        WriteLine($"\tresult, err := s.client.invokeCapability(ctx, {GoStringLiteral(capability.CapabilityId)}, reqArgs)");
         WriteLine("\tif err != nil {");
         WriteLine($"\t\treturn &{childImplName}{{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}}");
         WriteLine("\t}");
         WriteLine("\thref, ok := result.(handleReference)");
         WriteLine("\tif !ok {");
-        WriteLine($"\t\terr := fmt.Errorf(\"aspire: {capability.CapabilityId} returned unexpected type %T\", result)");
+        WriteLine($"\t\terr := fmt.Errorf({GoUnexpectedTypeFormat(capability.CapabilityId)}, result)");
         WriteLine($"\t\treturn &{childImplName}{{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}}");
         WriteLine("\t}");
         WriteLine($"\treturn &{childImplName}{{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}}");
@@ -1353,7 +1777,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         EmitHandleParamErrorChecks("\t", capability, $"var zero {returnGoType}; return zero, err");
         EmitUnionTypeChecks("\t", capability, methodName, new[] { $"var zero {returnGoType}", "return zero, err" });
         EmitArgsConstruction("\t", capability, requiredParams, optionalParams, targetParamName, "s.handle");
-        WriteLine($"\tresult, err := s.client.invokeCapability(ctx, \"{capability.CapabilityId}\", reqArgs)");
+        WriteLine($"\tresult, err := s.client.invokeCapability(ctx, {GoStringLiteral(capability.CapabilityId)}, reqArgs)");
         WriteLine("\tif err != nil {");
         WriteLine($"\t\tvar zero {returnGoType}");
         WriteLine("\t\treturn zero, err");
@@ -1375,7 +1799,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         EmitHandleParamErrorChecks("\t", capability, "return err");
         EmitUnionTypeChecks("\t", capability, methodName, new[] { "return err" });
         EmitArgsConstruction("\t", capability, requiredParams, optionalParams, targetParamName, "s.handle");
-        WriteLine($"\t_, err := s.client.invokeCapability(ctx, \"{capability.CapabilityId}\", reqArgs)");
+        WriteLine($"\t_, err := s.client.invokeCapability(ctx, {GoStringLiteral(capability.CapabilityId)}, reqArgs)");
         WriteLine("\treturn err");
     }
 
@@ -1414,7 +1838,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         // local Go RPC respects the user's cancellation.
         WriteLine($"{indent}ctx := context.Background()");
         WriteLine($"{indent}reqArgs := map[string]any{{");
-        WriteLine($"{indent}\t\"{targetParamName}\": {targetHandleVar}.ToJSON(),");
+        WriteLine($"{indent}\t{GoStringLiteral(targetParamName)}: {targetHandleVar}.ToJSON(),");
         WriteLine($"{indent}}}");
 
         foreach (var p in requiredParams)
@@ -1435,7 +1859,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
                 // state on the server for ops the user didn't ask to cancel.
                 WriteLine($"{indent}if {paramName} != nil {{");
                 WriteLine($"{indent}\tif id := s.client.registerCancellation({paramName}); id != \"\" {{");
-                WriteLine($"{indent}\t\treqArgs[\"{p.Name}\"] = id");
+                WriteLine($"{indent}\t\treqArgs[{GoStringLiteral(p.Name)}] = id");
                 WriteLine($"{indent}\t}}");
                 WriteLine($"{indent}}}");
                 continue;
@@ -1448,11 +1872,11 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             if (IsNilableGoType(type) && (p.Type is null || !ShouldApplyNullableType(p.Type)))
             {
                 var nilGuard = type == "any" ? $"!isNil({paramName})" : $"{paramName} != nil";
-                WriteLine($"{indent}if {nilGuard} {{ reqArgs[\"{p.Name}\"] = serializeValue({paramName}) }}");
+                WriteLine($"{indent}if {nilGuard} {{ reqArgs[{GoStringLiteral(p.Name)}] = serializeValue({paramName}) }}");
             }
             else
             {
-                WriteLine($"{indent}reqArgs[\"{p.Name}\"] = serializeValue({paramName})");
+                WriteLine($"{indent}reqArgs[{GoStringLiteral(p.Name)}] = serializeValue({paramName})");
             }
         }
 
@@ -1470,7 +1894,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
                 WriteLine($"{indent}\tfor _, opt := range options {{");
                 WriteLine($"{indent}\t\tif opt != nil {{ merged = deepUpdate(merged, opt); applied = true }}");
                 WriteLine($"{indent}\t}}");
-                WriteLine($"{indent}\tif applied {{ reqArgs[\"{directOptionsParam.Name}\"] = serializeValue(merged) }}");
+                WriteLine($"{indent}\tif applied {{ reqArgs[{GoStringLiteral(directOptionsParam.Name)}] = serializeValue(merged) }}");
                 WriteLine($"{indent}}}");
                 return;
             }
@@ -1497,7 +1921,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
                 WriteLine($"{indent}\tif merged.{fieldName} != nil {{");
                 WriteLine($"{indent}\t\tctx = merged.{fieldName}.Context()");
                 WriteLine($"{indent}\t\tif id := s.client.registerCancellation(merged.{fieldName}); id != \"\" {{");
-                WriteLine($"{indent}\t\t\treqArgs[\"{p.Name}\"] = id");
+                WriteLine($"{indent}\t\t\treqArgs[{GoStringLiteral(p.Name)}] = id");
                 WriteLine($"{indent}\t\t}}");
                 WriteLine($"{indent}\t}}");
             }
@@ -1515,9 +1939,9 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         WriteLine($"{indent}if {callbackExpr} != nil {{");
         WriteLine($"{indent}\tcb := {callbackExpr}");
         WriteLine($"{indent}\tshim := func(args ...any) any {{");
-        EmitGoCallbackShimBody($"{indent}\t\t", p);
+        EmitGoCallbackShimBody($"{indent}\t\t", p, "s.client");
         WriteLine($"{indent}\t}}");
-        WriteLine($"{indent}\treqArgs[\"{p.Name}\"] = s.client.registerCallback(shim)");
+        WriteLine($"{indent}\treqArgs[{GoStringLiteral(p.Name)}] = s.client.registerCallback(shim)");
         WriteLine($"{indent}}}");
     }
 
@@ -1532,8 +1956,8 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         var p = DtoPropertyToParameterInfo(property);
         WriteLine($"\tif d.{propertyName} != nil {{");
         WriteLine($"\t\tcb := d.{propertyName}");
-        WriteLine($"\t\tm[\"{property.Name}\"] = func(args ...any) any {{");
-        EmitGoCallbackShimBody("\t\t\t", p);
+        WriteLine($"\t\tm[{GoStringLiteral(JsonNamingPolicy.CamelCase.ConvertName(property.Name))}] = func(args ...any) any {{");
+        EmitGoCallbackShimBody("\t\t\t", p, clientExpression: null);
         WriteLine($"\t\t}}");
         WriteLine($"\t}}");
     }
@@ -1551,7 +1975,9 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
 
     // Writes the body of a `func(args ...any) any` callback shim, assuming the user's typed
     // callback is in scope as `cb`. Shared by method-parameter and DTO-property callbacks.
-    private void EmitGoCallbackShimBody(string indent, AtsParameterInfo p)
+    // clientExpression is the Go expression for the *client when one is in scope; DTO-property
+    // shims run from ToMap, which has none, so they pass null.
+    private void EmitGoCallbackShimBody(string indent, AtsParameterInfo p, string? clientExpression)
     {
         var hasReturn = p.CallbackReturnType is not null
             && p.CallbackReturnType.TypeId != AtsConstants.Void;
@@ -1562,8 +1988,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             for (var i = 0; i < cps.Count; i++)
             {
                 if (i > 0) { callExpr.Append(", "); }
-                var goType = MapTypeRefToGo(cps[i].Type, false);
-                callExpr.Append(CultureInfo.InvariantCulture, $"callbackArg[{goType}](args, {i})");
+                callExpr.Append(GetCallbackArgExpression(cps[i].Type, i, clientExpression));
             }
         }
         else
@@ -1588,8 +2013,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             {
                 var argName = $"arg{i}";
                 argNames.Add(argName);
-                var goType = MapTypeRefToGo(callbackParameters[i].Type, false);
-                WriteLine($"{indent}{argName} := callbackArg[{goType}](args, {i})");
+                WriteLine($"{indent}{argName} := {GetCallbackArgExpression(callbackParameters[i].Type, i, clientExpression)}");
             }
 
             WriteLine($"{indent}cb({string.Join(", ", argNames)})");
@@ -1610,22 +2034,39 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         }
     }
 
+    // Returns the Go expression that reads callback argument `index` as the user's typed parameter.
+    // The host tags a handle argument with the callback's declared CLR parameter type. For
+    // IResourceBuilder<T> that is a closed generic type id that has no registered wrapper, so the
+    // transport delivers a raw *handle. Building the declared wrapper from it, as the TypeScript
+    // SDK does, keeps the user's callback from receiving nil. Marker interfaces have no generated
+    // constructor, but registerWrappers registers a wrapper for their type id, so they keep
+    // callbackArg, as do shims with no client in scope.
+    private string GetCallbackArgExpression(AtsTypeRef type, int index, string? clientExpression)
+    {
+        if (clientExpression is not null
+            && type.Category == AtsTypeCategory.Handle
+            && _implNames.ContainsKey(type.TypeId))
+        {
+            return $"callbackHandleArg({clientExpression}, args, {index}, new{_interfaceNames[type.TypeId]}FromHandle)";
+        }
+
+        return $"callbackArg[{MapTypeRefToGo(type, false)}](args, {index})";
+    }
+
     // ── List / Dict accessor methods ─────────────────────────────────────────
 
     private void EmitListDictGetter(
         string implName,
-        (string Field, string MethodName, AtsTypeRef ReturnType, string CapabilityId, string? Description) g)
+        (string Field, string MethodName, AtsTypeRef ReturnType, string CapabilityId, string? Description) g,
+        AtsCapabilityInfo capability)
     {
         var (wrapperType, typeArgs) = ListDictTypeArgs(g.ReturnType);
         var factory = wrapperType == "Dict" ? "newDictWithGetter" : "newListWithGetter";
 
-        if (!string.IsNullOrEmpty(g.Description))
-        {
-            EmitDocComment(g.MethodName, g.Description!);
-        }
+        WriteDocLines(_docs.RenderSummary(CreateCapabilityDoc(capability)));
         WriteLine($"func (s *{implName}) {g.MethodName}() *{wrapperType}{typeArgs} {{");
         WriteLine($"\tif s.{g.Field} == nil {{");
-        WriteLine($"\t\ts.{g.Field} = {factory}{typeArgs}(s.handleWrapperBase, \"{g.CapabilityId}\")");
+        WriteLine($"\t\ts.{g.Field} = {factory}{typeArgs}(s.handleWrapperBase, {GoStringLiteral(g.CapabilityId)})");
         WriteLine("\t}");
         WriteLine($"\treturn s.{g.Field}");
         WriteLine("}");
@@ -1698,7 +2139,13 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
                 // accidental Marshal calls.
                 var jsonTag = (p.IsCallback || IsCancellationToken(p))
                     ? "`json:\"-\"`"
-                    : $"`json:\"{p.Name},omitempty\"`";
+                    : $"`json:{GoStringLiteral(p.Name + ",omitempty")}`";
+                WriteDocLines(_docs.Render(new GoDocContent
+                {
+                    GoName = fieldName,
+                    Subject = GoDocSubject.Field,
+                    Summary = capability.CapabilityKind == AtsCapabilityKind.PropertySetter ? null : p.Documentation?.Summary,
+                }), "\t");
                 WriteLine($"\t{fieldName} {fieldType} {jsonTag}");
             }
             WriteLine("}");
@@ -1719,11 +2166,11 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
                 var fieldType = MapTypeRefToGo(p.Type, isOptional: true);
                 if (IsNilableGoType(fieldType))
                 {
-                    WriteLine($"\tif o.{fieldName} != nil {{ m[\"{p.Name}\"] = serializeValue(o.{fieldName}) }}");
+                    WriteLine($"\tif o.{fieldName} != nil {{ m[{GoStringLiteral(p.Name)}] = serializeValue(o.{fieldName}) }}");
                 }
                 else
                 {
-                    WriteLine($"\tm[\"{p.Name}\"] = serializeValue(o.{fieldName})");
+                    WriteLine($"\tm[{GoStringLiteral(p.Name)}] = serializeValue(o.{fieldName})");
                 }
             }
             WriteLine("\treturn m");
@@ -1735,7 +2182,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
     /// <summary>
     /// Field type for an Options struct member. Callbacks render as their
     /// typed Go function signature; CT renders as *CancellationToken; other
-    /// values use the standard MapTypeRefToGo with optional/nilable wrapping.
+    /// values use the input mapping with optional/nilable wrapping.
     /// </summary>
     private string RenderOptionsFieldType(AtsParameterInfo p)
     {
@@ -1747,7 +2194,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         {
             return "*CancellationToken";
         }
-        return MapTypeRefToGo(p.Type, isOptional: true);
+        return MapInputTypeRefToGo(p.Type, isOptional: true);
     }
 
     private string GetOptionsTypeName(AtsCapabilityInfo capability)
@@ -1762,7 +2209,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         var targetInterfaceName = capability.TargetTypeId is not null
             && _interfaceNames.TryGetValue(capability.TargetTypeId, out var ifName)
             ? ifName
-            : capability.TargetTypeId ?? "Unknown";
+            : SanitizeIdentifier(capability.TargetTypeId ?? "Unknown");
         return $"{targetInterfaceName}{simpleName}";
     }
 
@@ -1860,9 +2307,9 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             var paramName = GetLocalIdentifier(p.Name);
             var allowed = GetUnionAllowedTypes(p.Type!);
             WriteLine($"{indent}switch {paramName}.(type) {{");
-            WriteLine($"{indent}case {allowed}:");
+            WriteLine($"{indent}case {GetUnionTypeSwitchCases(p.Type!)}:");
             WriteLine($"{indent}default:");
-            WriteLine($"{indent}\terr := fmt.Errorf(\"aspire: {methodName}: parameter %q must be one of [{allowed}], got %T\", \"{p.Name}\", {paramName})");
+            WriteLine($"{indent}\terr := fmt.Errorf(\"aspire: {methodName}: parameter %q must be one of [{allowed}], got %T\", {GoStringLiteral(p.Name)}, {paramName})");
             foreach (var line in errorActionLines)
             {
                 WriteLine($"{indent}\t{line}");
@@ -1873,26 +2320,58 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
 
     private void EmitUnionAllowedTypesDoc(AtsCapabilityInfo capability)
     {
-        foreach (var p in GetUnionParameters(capability))
+        foreach (var note in GetUnionNotes(capability))
         {
-            var allowed = GetUnionAllowedTypes(p.Type!);
-            WriteLine($"// Allowed types for parameter {p.Name}: {allowed}.");
+            WriteLine($"// {note}");
         }
     }
 
-    private string GetUnionAllowedTypes(AtsTypeRef typeRef)
+    // The notes feed both the unexported implementation method's comment (EmitUnionAllowedTypesDoc)
+    // and the exported method's godoc (CreateCapabilityDoc), so the two always say the same thing.
+    private List<string> GetUnionNotes(AtsCapabilityInfo capability)
+    {
+        return GetUnionParameters(capability)
+            .Select(p =>
+            {
+                var allowed = GetUnionAllowedTypes(p.Type!);
+                var numericNote = AllowsGoNumericTypes(GetUnionMemberTypes(p.Type!)) ? " (float64 accepts any built-in Go numeric type)" : "";
+                return $"Allowed types for parameter {GetLocalIdentifier(p.Name)}: {allowed}{numericNote}.";
+            })
+            .ToList();
+    }
+
+    private string GetUnionAllowedTypes(AtsTypeRef typeRef) => string.Join(", ", GetUnionMemberTypes(typeRef));
+
+    // float64 is how an ATS number maps to Go. A union that contains it also accepts the other
+    // Go numeric types (see GetUnionTypeSwitchCases), and the generated godoc says so.
+    private static bool AllowsGoNumericTypes(string[] memberTypes) => memberTypes.Contains("float64", StringComparer.Ordinal);
+
+    // Go boxes an untyped constant such as 3 as int, so a union that allows an ATS number
+    // (float64) has to accept the other Go numeric types too. They all serialize as JSON numbers.
+    private string GetUnionTypeSwitchCases(AtsTypeRef typeRef)
+    {
+        var memberTypes = GetUnionMemberTypes(typeRef);
+        if (!AllowsGoNumericTypes(memberTypes))
+        {
+            return string.Join(", ", memberTypes);
+        }
+
+        return string.Join(", ", memberTypes.Concat(s_goNumericTypes).Distinct(StringComparer.Ordinal));
+    }
+
+    private string[] GetUnionMemberTypes(AtsTypeRef typeRef)
     {
         if (typeRef.UnionTypes is not { Count: > 0 } types)
         {
-            return "any";
+            return ["any"];
         }
 
         var allowedTypes = types
-            .Select(type => MapTypeRefToGo(type, isOptional: false))
+            .Select(type => MapInputTypeRefToGo(type, isOptional: false))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
 
-        return allowedTypes.Length > 0 ? string.Join(", ", allowedTypes) : "any";
+        return allowedTypes.Length > 0 ? allowedTypes : ["any"];
     }
 
     /// <summary>
@@ -1935,8 +2414,20 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         foreach (var (typeId, implName) in _implNames.OrderBy(kv => kv.Value, StringComparer.Ordinal))
         {
             var interfaceName = _interfaceNames[typeId];
-            WriteLine($"\tc.registerHandleWrapper(\"{typeId}\", func(h *handle, c *client) any {{");
+            WriteLine($"\tc.registerHandleWrapper({GoStringLiteral(typeId)}, func(h *handle, c *client) any {{");
             WriteLine($"\t\treturn new{interfaceName}FromHandle(h, c)");
+            WriteLine("\t})");
+        }
+
+        // The AppHost tags a handle with the type its capability declares, so a result such as
+        // IResource[] arrives with the IResource type id. A marker interface has no generated
+        // constructor, and without a registered wrapper wrapIfHandle leaves a raw *handle that no
+        // marker interface accepts. The bare wrapper satisfies every marker, as the TypeScript
+        // SDK's registration of its interface wrappers does.
+        foreach (var (typeId, _) in GetMarkerInterfaces())
+        {
+            WriteLine($"\tc.registerHandleWrapper(\"{typeId}\", func(h *handle, c *client) any {{");
+            WriteLine("\t\treturn newHandleWrapperBase(h, c)");
             WriteLine("\t})");
         }
         WriteLine("}");
@@ -2001,7 +2492,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         // Build() method on the concrete impl. Sequential model: any prior
         // chain error short-circuits; otherwise invoke the build capability
         // and return the wrapped result.
-        WriteLine($"// Build invokes the build capability and returns the running application.");
+        WriteDocLines(RenderGoDoc("Build", BuildSummary));
         WriteLine($"func (b *{builderImpl}) Build() ({appInterface}, error) {{");
         WriteLine("\tif b.err != nil { return nil, b.err }");
         WriteLine($"\tresult, err := b.client.invokeCapability(context.Background(), \"{AtsConstants.BuildCapability}\", map[string]any{{");
@@ -2045,21 +2536,21 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             WriteLine("\t\tfor k, v := range merged.ToMap() { resolved[k] = v }");
             WriteLine("\t}");
         }
-        WriteLine("\tif _, ok := resolved[\"Args\"]; !ok { resolved[\"Args\"] = os.Args[1:] }");
+        WriteLine("\tif _, ok := resolved[\"args\"]; !ok { resolved[\"args\"] = os.Args[1:] }");
         // ASPIRE_PROJECT_DIRECTORY is set by the CLI so the host reports the correct project
         // directory (not the cwd) when matching --apphost <directory> requests.
-        WriteLine("\tif projectDirectory, ok := resolved[\"ProjectDirectory\"].(string); !ok || projectDirectory == \"\" {");
+        WriteLine("\tif projectDirectory, ok := resolved[\"projectDirectory\"].(string); !ok || projectDirectory == \"\" {");
         WriteLine("\t\tif projectDirectory := os.Getenv(\"ASPIRE_PROJECT_DIRECTORY\"); projectDirectory != \"\" {");
-        WriteLine("\t\t\tresolved[\"ProjectDirectory\"] = projectDirectory");
+        WriteLine("\t\t\tresolved[\"projectDirectory\"] = projectDirectory");
         WriteLine("\t\t} else if pwd, err := os.Getwd(); err == nil {");
-        WriteLine("\t\t\tresolved[\"ProjectDirectory\"] = pwd");
+        WriteLine("\t\t\tresolved[\"projectDirectory\"] = pwd");
         WriteLine("\t\t}");
         WriteLine("\t}");
-        WriteLine("\tif appHostFilePath, ok := resolved[\"AppHostFilePath\"].(string); !ok || appHostFilePath == \"\" {");
-        WriteLine("\t\tif appHostFilePath := os.Getenv(\"ASPIRE_APPHOST_FILEPATH\"); appHostFilePath != \"\" { resolved[\"AppHostFilePath\"] = appHostFilePath }");
+        WriteLine("\tif appHostFilePath, ok := resolved[\"appHostFilePath\"].(string); !ok || appHostFilePath == \"\" {");
+        WriteLine("\t\tif appHostFilePath := os.Getenv(\"ASPIRE_APPHOST_FILEPATH\"); appHostFilePath != \"\" { resolved[\"appHostFilePath\"] = appHostFilePath }");
         WriteLine("\t}");
-        WriteLine("\tif dashboardApplicationName, ok := resolved[\"DashboardApplicationName\"].(string); ok && dashboardApplicationName == \"\" {");
-        WriteLine("\t\tdelete(resolved, \"DashboardApplicationName\")");
+        WriteLine("\tif dashboardApplicationName, ok := resolved[\"dashboardApplicationName\"].(string); ok && dashboardApplicationName == \"\" {");
+        WriteLine("\t\tdelete(resolved, \"dashboardApplicationName\")");
         WriteLine("\t}");
         WriteLine();
         WriteLine($"\tresult, err := c.invokeCapability(context.Background(), \"{AtsConstants.CreateBuilderCapability}\", map[string]any{{\"argsOrOptions\": resolved}})");
@@ -2088,7 +2579,19 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
 
     // ── Type mapping ─────────────────────────────────────────────────────────
 
-    private string MapTypeRefToGo(AtsTypeRef? typeRef, bool isOptional)
+    private string MapTypeRefToGo(AtsTypeRef? typeRef, bool isOptional) =>
+        MapTypeRefToGo(typeRef, isOptional, asInput: false);
+
+    /// <summary>
+    /// Maps a type in a position where the caller supplies the value (method parameter, options
+    /// field, DTO field, union member). A handle type with derived types maps to its accepting
+    /// interface there, so a derived builder can be passed; return types, callback signatures and
+    /// everything else use <see cref="MapTypeRefToGo(AtsTypeRef?, bool)"/>.
+    /// </summary>
+    private string MapInputTypeRefToGo(AtsTypeRef? typeRef, bool isOptional) =>
+        MapTypeRefToGo(typeRef, isOptional, asInput: true);
+
+    private string MapTypeRefToGo(AtsTypeRef? typeRef, bool isOptional, bool asInput)
     {
         if (typeRef is null)
         {
@@ -2100,19 +2603,22 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             return "*ReferenceExpression";
         }
 
+        // Mutable lists and dictionaries wrap a server-side collection and are generic over their
+        // element type, which Go treats as invariant: a *List[AnyX] is not a *List[X]. Their elements
+        // therefore stay concrete even for inputs.
         var baseType = typeRef.Category switch
         {
             AtsTypeCategory.Primitive => MapPrimitiveType(typeRef.TypeId),
             AtsTypeCategory.Enum => MapEnumType(typeRef.TypeId),
-            AtsTypeCategory.Handle => MapHandleType(typeRef.TypeId),
+            AtsTypeCategory.Handle => MapHandleType(typeRef.TypeId, asInput),
             AtsTypeCategory.Dto => "*" + MapDtoType(typeRef.TypeId),
             AtsTypeCategory.Callback => "func(...any) any",
-            AtsTypeCategory.Array => $"[]{MapTypeRefToGo(typeRef.ElementType, false)}",
+            AtsTypeCategory.Array => $"[]{MapTypeRefToGo(typeRef.ElementType, false, asInput)}",
             AtsTypeCategory.List => typeRef.IsReadOnly
-                ? $"[]{MapTypeRefToGo(typeRef.ElementType, false)}"
+                ? $"[]{MapTypeRefToGo(typeRef.ElementType, false, asInput)}"
                 : $"*List[{MapTypeRefToGo(typeRef.ElementType, false)}]",
             AtsTypeCategory.Dict => typeRef.IsReadOnly
-                ? $"map[{MapTypeRefToGo(typeRef.KeyType, false)}]{MapTypeRefToGo(typeRef.ValueType, false)}"
+                ? $"map[{MapTypeRefToGo(typeRef.KeyType, false, asInput)}]{MapTypeRefToGo(typeRef.ValueType, false, asInput)}"
                 : $"*Dict[{MapTypeRefToGo(typeRef.KeyType, false)}, {MapTypeRefToGo(typeRef.ValueType, false)}]",
             AtsTypeCategory.Union => "any",
             AtsTypeCategory.Unknown => "any",
@@ -2143,7 +2649,11 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             AtsTypeCategory.Array or AtsTypeCategory.List => $"[]{MapDtoPropertyTypeToGo(typeRef.ElementType, false)}",
             AtsTypeCategory.Dict => $"map[{MapDtoPropertyTypeToGo(typeRef.KeyType, false)}]{MapDtoPropertyTypeToGo(typeRef.ValueType, false)}",
             AtsTypeCategory.Union => "any",
-            _ => MapTypeRefToGo(typeRef, isOptional: false)
+            // DTO fields map like inputs, so a handle-typed field would become Any<Type>. That is only right for
+            // DTOs the caller builds: DTOs are also decoded from server results and passed to callbacks, where
+            // Any<Type> has no fluent methods and decodeStructFields cannot unmarshal into an interface-typed
+            // field. Revisit this mapping before a DTO with a handle-typed field can appear in a result.
+            _ => MapInputTypeRefToGo(typeRef, isOptional: false)
         };
 
         if (isOptional && !IsNilableGoType(baseType))
@@ -2166,11 +2676,16 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         && typeRef.TypeId is not (AtsConstants.Void or AtsConstants.Any or AtsConstants.CancellationToken);
 
     /// <summary>
-    /// Handle types map to their Go interface name. Interfaces in Go are
-    /// already reference types — no leading * required.
+    /// Handle types map to their Go interface name, or to their accepting interface when the value
+    /// is an input and the type has derived types. Interfaces in Go are already reference types —
+    /// no leading * required.
     /// </summary>
-    private string MapHandleType(string typeId)
+    private string MapHandleType(string typeId, bool asInput)
     {
+        if (asInput && _acceptingNames.TryGetValue(typeId, out var acceptingName))
+        {
+            return acceptingName;
+        }
         if (_interfaceNames.TryGetValue(typeId, out var name))
         {
             return name;
@@ -2251,17 +2766,58 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
 
     private static string GetLocalIdentifier(string name) => SanitizeIdentifier(ToCamelCase(name));
 
+    // Quotes ATS metadata (capability ids, parameter and property names, exported string values) as a Go
+    // interpreted string literal so a quote, backslash or line break in the metadata cannot end the literal or
+    // the line. Control characters, U+2028/U+2029 and the byte-order mark are written as \uXXXX escapes because
+    // Go rejects some of them in source files and editors treat the others as line breaks. The backtick is
+    // escaped as well so the same literal can sit inside a raw-string struct tag. Other characters, including
+    // surrogate pairs, are copied as they are: the file is UTF-8 and Go rejects a \uXXXX escape for a surrogate.
+    private static string GoStringLiteral(string value)
+    {
+        var builder = new StringBuilder(value.Length + 2).Append('"');
+        foreach (var ch in value)
+        {
+            var escaped = ch switch
+            {
+                '"' => "\\\"",
+                '\\' => "\\\\",
+                '\n' => "\\n",
+                '\r' => "\\r",
+                '\t' => "\\t",
+                _ => null,
+            };
+
+            if (escaped is not null)
+            {
+                builder.Append(escaped);
+            }
+            else if (char.IsControl(ch) || ch is '`' or '\u2028' or '\u2029' or '\uFEFF')
+            {
+                builder.Append("\\u").Append(((int)ch).ToString("x4", CultureInfo.InvariantCulture));
+            }
+            else
+            {
+                builder.Append(ch);
+            }
+        }
+
+        return builder.Append('"').ToString();
+    }
+
+    // The capability id is part of the fmt.Errorf format string. Doubling '%' keeps an id such as
+    // "Tests/with%dPercent" from being read as a verb; ids without '%' pass through unchanged.
+    private static string GoUnexpectedTypeFormat(string capabilityId) =>
+        GoStringLiteral($"aspire: {capabilityId.Replace("%", "%%", StringComparison.Ordinal)} returned unexpected type %T");
+
     private static string ToPascalCase(string name)
     {
         if (string.IsNullOrEmpty(name))
         {
             return name;
         }
-        if (char.IsUpper(name[0]))
-        {
-            return name;
-        }
-        return char.ToUpperInvariant(name[0]) + name[1..];
+
+        // Every caller emits the result as a Go identifier, so it is sanitized here for all of them.
+        return SanitizeIdentifier(char.IsUpper(name[0]) ? name : char.ToUpperInvariant(name[0]) + name[1..]);
     }
 
     private static string ToCamelCase(string name)

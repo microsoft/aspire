@@ -248,7 +248,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node-version: ${{ fromJson(github.event_name == 'pull_request' && '[24]' || '[22,24]') }}
+        node-version: [22, 24]
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

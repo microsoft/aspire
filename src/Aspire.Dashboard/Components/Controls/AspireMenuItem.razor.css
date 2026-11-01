@@ -5,6 +5,45 @@ span.aspire-menu-secondary-action-container {
     grid-column: 4;
     grid-row: 1;
     justify-content: center;
+    gap: 8px;
+    /* FluentUI centers the 16px checkmark in a 32px track (8px from the edge). The 20px action
+       button insets its 16px icon by 2px, so 6px here mirrors that 8px on the trailing edge. */
+    padding-inline-end: 6px;
+}
+
+/* Keep secondary text from touching the item text when the menu is at its maximum width. */
+/* Only stops clicks from reaching the item. It mustn't affect the layout. */
+span.aspire-menu-secondary-action-wrapper {
+    display: contents;
+}
+
+span.aspire-menu-secondary-action-container:has(.aspire-menu-item-description),
+span.aspire-menu-secondary-action-container:has(.aspire-menu-item-count) {
+    padding-inline-start: 16px;
+}
+
+.aspire-menu-item-description {
+    color: var(--colorNeutralForeground3);
+    font-size: var(--fontSizeBase200);
+    white-space: nowrap;
+}
+
+/* Matches the count pill of the resource list's group headers. */
+.aspire-menu-item-count {
+    min-width: 20px;
+    padding: 0 6px;
+    border-radius: 10px;
+    background: var(--colorNeutralBackground3);
+    color: var(--colorNeutralForeground2);
+    font-size: 11px;
+    line-height: 18px;
+    text-align: center;
+}
+
+.aspire-menu-item-label {
+    align-items: center;
+    display: inline-flex;
+    gap: 8px;
 }
 
 ::deep .aspire-menu-secondary-action {
@@ -30,8 +69,11 @@ fluent-menu-item:focus-within > span[slot="end"] ::deep .aspire-menu-secondary-a
     visibility: visible;
 }
 
+/* Only reveal for keyboard focus: focus is restored to the action after its item is reordered, and with
+   :focus-within a mouse-toggled action would stay visible on the moved item after the pointer left it. */
 fluent-menu-item:hover > span[slot="end"] ::deep .aspire-menu-secondary-action,
-::deep .aspire-menu-secondary-action:focus-within,
+::deep .aspire-menu-secondary-action:focus-visible,
+::deep .aspire-menu-secondary-action:has(:focus-visible),
 ::deep .aspire-menu-secondary-action.selected {
     opacity: 1;
     visibility: visible;
@@ -75,4 +117,30 @@ fluent-menu-item:hover > span[slot="end"] ::deep .aspire-menu-secondary-action,
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+/* Group headers label a run of related items, so they align with the item text column
+   (after FluentUI's 32px indicator track) and stay quieter than the menu-level header. */
+.aspire-menu-empty-group-text {
+    box-sizing: border-box;
+    padding: 4px 8px 6px 36px;
+    color: var(--colorNeutralForeground3);
+    font-family: var(--fontFamilyBase);
+    font-size: var(--fontSizeBase300);
+    font-style: italic;
+    line-height: var(--lineHeightBase300);
+    cursor: default;
+    user-select: none;
+}
+
+.aspire-menu-group-header {
+    box-sizing: border-box;
+    padding: 6px 8px 2px 36px;
+    color: var(--colorNeutralForeground3);
+    font-family: var(--fontFamilyBase);
+    font-size: var(--fontSizeBase200);
+    font-weight: var(--fontWeightSemibold);
+    line-height: var(--lineHeightBase200);
+    cursor: default;
+    user-select: none;
 }

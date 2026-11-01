@@ -122,7 +122,7 @@ public class AddBlazorGatewayTests(ITestOutputHelper testOutputHelper)
             "Blazor/Blazor.csproj",
             ".aspire/scripts/PrefixEndpoints.cs",
             "app",
-            "11.0.100-rc.1.26425.128",
+            "11.0.100-rc.2.26504.105",
             "net11.0");
 
         await Verify(dockerfile, extension: "Dockerfile")
@@ -135,7 +135,7 @@ public class AddBlazorGatewayTests(ITestOutputHelper testOutputHelper)
     [InlineData("8.0.408", "net8.0")]
     [InlineData("9.0.203", "net9.0")]
     [InlineData("10.0.201", "net10.0")]
-    [InlineData("11.0.100-rc.1.26425.128", "net11.0")]
+    [InlineData("11.0.100-rc.2.26504.105", "net11.0")]
     public void BlazorWasmPublishCompanion_InstallsClientSdkAlongsideGatewaySdk(string sdkVersion, string framework)
     {
         var dockerfile = BlazorGatewayExtensions.BuildBlazorWasmPublishDockerfile(
@@ -211,7 +211,9 @@ public class AddBlazorGatewayTests(ITestOutputHelper testOutputHelper)
         using var publishBuilder = TestDistributedApplicationBuilder.Create(
             options => options.ProjectDirectory = directory.Path, testOutputHelper, "AppHost:Operation=publish");
         var backendAlias = $"weatherapi-{Guid.NewGuid():N}";
+#pragma warning disable CS0618 // Retain synthetic-metadata legacy ProjectResource proxy, gateway, and fluent contracts.
         var backend = publishBuilder.AddProject<TestProjectMetadata>("weatherapi")
+#pragma warning restore CS0618
             .WithHttpEndpoint(targetPort: 80);
         var backendEndpoint = backend.Resource.Annotations.OfType<EndpointAnnotation>().Single();
         backendEndpoint.AllocatedEndpoint = new AllocatedEndpoint(backendEndpoint, backendAlias, 80);
@@ -485,7 +487,9 @@ public class AddBlazorGatewayTests(ITestOutputHelper testOutputHelper)
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
+#pragma warning disable CS0618 // Retain synthetic-metadata legacy ProjectResource proxy, gateway, and fluent contracts.
         var weatherApi = builder.AddProject<TestProjectMetadata>("weatherapi")
+#pragma warning restore CS0618
             .WithHttpEndpoint();
         var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj")
             .WithReference(weatherApi);

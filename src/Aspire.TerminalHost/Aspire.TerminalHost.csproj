@@ -11,6 +11,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RollForward>Major</RollForward>
     <PublishAot>true</PublishAot>
+    <PublishDocumentationFile>false</PublishDocumentationFile>
     <TrimmerSingleWarn>false</TrimmerSingleWarn>
     <!--
       CS1591: Missing XML comment for publicly visible type or member - this assembly is

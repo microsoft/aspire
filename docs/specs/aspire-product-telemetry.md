@@ -192,6 +192,8 @@ Dashboard shutdown retains its service-style policy, even when the host's cancel
 
 The classifier produces event type, client name, timestamp, and the applicable skill, tool, or skills-relative reference identifier. It includes a session ID only when the incoming value is a GUID. It does not export the raw hook payload, prompts, tool arguments, file contents, or absolute paths.
 
+Client attribution checks `AI_AGENT=github_copilot_app_agent` first and reports `copilot-app`, even when `COPILOT_CLI` is also set. Without that marker, the classifier preserves Copilot CLI, VS Code, and Claude Code detection from the environment and hook payload.
+
 ### Input bounds and recording
 
 `ASPIRE_AGENT_TELEMETRY_MAX_PAYLOAD_CHARACTERS` bounds input before JSON parsing. The default is 65,536 UTF-16 characters; valid values are 1 through 1,048,576. Oversized input is drained without being retained or reported. Invalid configuration is written to stderr without interrupting the agent.

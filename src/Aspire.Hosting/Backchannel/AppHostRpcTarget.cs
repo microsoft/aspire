@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Pipelines;
+using Aspire.Hosting.Resources;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,6 +22,7 @@ internal class AppHostRpcTarget(
     PipelineActivityReporter activityReporter,
     IHostApplicationLifetime lifetime,
     DistributedApplicationOptions options,
+    DistributedApplicationExecutionContext executionContext,
     AppHostStartupState startupState,
     IInteractionFileUploadStore fileUploadStore,
     IConfiguration configuration)
@@ -178,6 +180,13 @@ internal class AppHostRpcTarget(
     public async Task<DashboardUrlsState> GetDashboardUrlsAsync(CancellationToken cancellationToken)
     {
         using var activity = profilingTelemetry.StartJsonRpcServerCall(nameof(GetDashboardUrlsAsync), streaming: false);
+        // The run command requests dashboard readiness, but publish mode never starts the
+        // dashboard and relies on the publishing CLI to consume progress and stop the AppHost.
+        if (executionContext.IsPublishMode)
+        {
+            throw new DistributedApplicationException(MessageStrings.PublishModeNotSupportedByRunCommand);
+        }
+
         if (!options.DashboardEnabled)
         {
             logger.LogDebug("Dashboard URL requested but dashboard is disabled.");

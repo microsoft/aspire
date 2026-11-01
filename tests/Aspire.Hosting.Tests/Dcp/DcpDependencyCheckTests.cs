@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
 using Aspire.Hosting.Dcp;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Testing;
@@ -96,5 +97,19 @@ public sealed class DcpDependencyCheckTests
         var warning = Assert.Single(logger.Collector.GetSnapshot());
         Assert.Equal(LogLevel.Warning, warning.Level);
         Assert.Equal($"{message} For more information, visit: {linkUrl}", warning.Message);
+    }
+
+    [Theory]
+    // DCP reports an empty runtime and host name when the container runtime query times out.
+    [InlineData("""{"runtime":"","hostName":"","installed":false,"running":false,"error":"context deadline exceeded"}""", "host.docker.internal")]
+    [InlineData("""{"runtime":"podman","hostName":"","installed":true,"running":true}""", "host.containers.internal")]
+    [InlineData("""{"runtime":"docker","installed":true,"running":true}""", "host.docker.internal")]
+    [InlineData("""{"runtime":"docker","hostName":"custom.host","installed":true,"running":true}""", "custom.host")]
+    public void ContainerHostName_FallsBackWhenDcpReportsNoHostName(string containersJson, string expectedHostName)
+    {
+        var dcpInfo = JsonSerializer.Deserialize<DcpInfo>($$"""{"version":"dev","containers":{{containersJson}}}""");
+
+        Assert.NotNull(dcpInfo?.Containers);
+        Assert.Equal(expectedHostName, dcpInfo.Containers.ContainerHostName);
     }
 }

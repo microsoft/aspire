@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable CS0618 // GetProjectResources intentionally enumerates only legacy ProjectResource instances.
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -75,3 +76,4 @@ public class DistributedApplicationModelExtensionsTests
         public ResourceAnnotationCollection Annotations { get; } = [];
     }
 }
+#pragma warning restore CS0618

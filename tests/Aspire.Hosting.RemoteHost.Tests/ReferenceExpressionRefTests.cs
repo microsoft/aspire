@@ -208,6 +208,25 @@ public class ReferenceExpressionRefTests
         Assert.Equal("redis://myhost:6379", await expr.GetValueAsync(default));
     }
 
+    [Theory]
+    [InlineData("{0}/events/{{hub}}/{{event}}", "{api.url}/events/{hub}/{event}", "https://api/events/{hub}/{event}")]
+    [InlineData("{0}/events/{hub}/{event}", "{api.url}/events/{hub}/{event}", "https://api/events/{hub}/{event}")]
+    [InlineData("{{{0}}}", "{{api.url}}", "{https://api}")]
+    public async Task ToReferenceExpression_WithValueProviderAndLiteralBraces_KeepsBraces(string format, string expectedExpression, string expectedValue)
+    {
+        // Polyglot app hosts send escaped braces ({{hub}}) or, from template literals, single ones ({hub}).
+        // Both are literal text next to the {0} placeholder.
+        var handles = new HandleRegistry();
+        var endpoint = new TestValueProvider("https://api", "{api.url}");
+        var handle = handles.Register(endpoint, "aspire/EndpointReference");
+        var exprRef = new ReferenceExpressionRef_Accessor(format, [new JsonObject { ["$handle"] = handle }]);
+
+        var expr = exprRef.ToReferenceExpression(handles, "test/cap", "param");
+
+        Assert.Equal(expectedExpression, expr.ValueExpression);
+        Assert.Equal(expectedValue, await expr.GetValueAsync(default));
+    }
+
     [Fact]
     public void ToReferenceExpression_WithInvalidValueProvider_ThrowsCapabilityException()
     {

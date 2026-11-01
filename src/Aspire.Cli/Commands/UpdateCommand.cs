@@ -26,7 +26,9 @@ internal sealed class UpdateCommand : BaseCommand
 
     // CLI package metadata is required for this command's core update workflow, independently of
     // whether the generic update notification is enabled.
-    internal override bool RequiresCliPackageMetadata => true;
+    internal override bool RequiresCliPackageMetadata => !_isConfigSourceRefresh;
+    private bool _isConfigSourceRefresh;
+    internal bool IsConfigSourceRefresh => _isConfigSourceRefresh;
 
     private readonly IProjectLocator _projectLocator;
     private readonly IPackagingService _packagingService;
@@ -46,6 +48,10 @@ internal sealed class UpdateCommand : BaseCommand
     private static readonly Option<bool> s_selfOption = new("--self")
     {
         Description = UpdateCommandStrings.SelfOptionDescription
+    };
+    internal static readonly Option<bool> s_configSourceOption = new("--config-source")
+    {
+        Description = ConfigSourceStrings.RefreshOptionDescription
     };
     private static readonly Option<bool> s_yesOption = new("--yes")
     {
@@ -94,6 +100,7 @@ internal sealed class UpdateCommand : BaseCommand
 
         Options.Add(s_appHostOption);
         Options.Add(s_selfOption);
+        Options.Add(s_configSourceOption);
         Options.Add(s_yesOption);
         Options.Add(s_migrateOption);
         Options.Add(s_nugetConfigDirOption);
@@ -120,6 +127,23 @@ internal sealed class UpdateCommand : BaseCommand
             Hidden = true
         };
         Options.Add(_qualityOption);
+        // Config-source refresh bypasses package and CLI updates. Reject their options
+        // rather than silently ignoring them in the config-only execution path.
+        Validators.Add(result =>
+        {
+            if (result.GetValue(s_configSourceOption) &&
+                (result.GetValue(s_selfOption) || result.GetValue(s_migrateOption)
+                || result.GetResult(_channelOption) is not null || result.GetResult(_qualityOption) is not null
+                || result.GetResult(s_nugetConfigDirOption) is not null))
+            {
+                result.AddError(ConfigSourceStrings.IncompatibleOptions);
+            }
+        });
+    }
+
+    internal override void PrepareForExecution(ParseResult parseResult)
+    {
+        _isConfigSourceRefresh = parseResult.GetValue(s_configSourceOption);
     }
 
     private string? GetDotNetToolUpdateCommand()
@@ -152,8 +176,45 @@ internal sealed class UpdateCommand : BaseCommand
         return InstallSourceExtensions.ParseInstallSource(source) == InstallSource.Nix;
     }
 
+    private async Task<DirectoryInfo> ResolveConfigSourceDirectoryAsync(FileInfo? requestedFile, CancellationToken cancellationToken)
+    {
+        var directory = requestedFile is null ? ExecutionContext.WorkingDirectory
+            : Directory.Exists(requestedFile.FullName) ? new DirectoryInfo(requestedFile.FullName) : requestedFile.Directory!;
+        var configuredFile = requestedFile ?? await _projectLocator.GetAppHostFromSettingsAsync(cancellationToken);
+        if (configuredFile is not null && !Directory.Exists(configuredFile.FullName))
+        {
+            return configuredFile.Directory!;
+        }
+        // Explicit directory targets must discover their AppHost first. Config-only
+        // refresh can use the nearest local configuration and global configuration.
+        try
+        {
+            var selectedFile = await _projectLocator.UseOrFindAppHostProjectFileAsync(configuredFile, createSettingsFile: false, cancellationToken);
+            return selectedFile?.Directory ?? directory;
+        }
+        catch (ProjectLocatorException ex) when (ex.FailureReason is ProjectLocatorFailureReason.NoProjectFileFound or ProjectLocatorFailureReason.ProjectFileDoesntExist)
+        {
+            // Config refresh does not need a buildable AppHost. Let the source lookup
+            // report the missing binding rather than attempting package/SDK recovery.
+            return directory;
+        }
+    }
+
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
+        if (parseResult.GetValue(s_configSourceOption))
+        {
+            var requestedFile = parseResult.GetValue(s_appHostOption);
+            if (requestedFile is not null && !requestedFile.Exists && !Directory.Exists(requestedFile.FullName))
+            {
+                return CommandResult.Failure(CliExitCodes.FailedToFindProject, InteractionServiceStrings.ProjectOptionDoesntExist);
+            }
+
+            var directory = await ResolveConfigSourceDirectoryAsync(requestedFile, cancellationToken);
+            await ConfigSources.CheckProjectAsync(directory, force: true, cancellationToken);
+            return CommandResult.Success();
+        }
+
         var isSelfUpdate = parseResult.GetValue(s_selfOption);
 
         // If --self is specified, handle CLI self-update
@@ -229,6 +290,7 @@ internal sealed class UpdateCommand : BaseCommand
             }
 
             var updateDirectory = projectFile?.Directory ?? ExecutionContext.WorkingDirectory;
+            ConfigSources.CheckForConfigSourceUpdates(updateDirectory, cancellationToken);
             toolManifests ??= await _repositoryToolUpdater.FindManifestsAsync(updateDirectory, cancellationToken);
             if (projectFile is null && toolManifests.Count == 0)
             {
@@ -238,30 +300,19 @@ internal sealed class UpdateCommand : BaseCommand
             var project = projectFile is not null ? _projectFactory.GetProject(projectFile) : null;
             var isProjectReferenceMode = project is not null && projectFile is not null && project.IsUsingProjectReferences(projectFile);
 
-            // Resolve the channel using the documented precedence:
-            //   1. explicit --channel / hidden --quality
-            //   2. nearest local app config "channel" (relative to the resolved AppHost project, NOT cwd)
-            //   3. global config "channel"
-            //   4. interactive channel prompt when appropriate (PR hives present)
-            //   5. implicit/default channel as the documented fallback
-            // The directory-scoped lookup is critical: `aspire update --apphost <elsewhere>`
-            // must consult the selected project's config tree, not the user's launch cwd.
-            // The process-wide IConfiguration is rooted at the launch cwd at startup, so
-            // using it here would silently read the wrong app's local config (issue #16650).
-            //
-            // Step 3 (global config "channel") is intentionally a read-only path: no CLI
-            // code path seeds the global "channel" config (neither the acquisition scripts
-            // nor `aspire update --self` write it), and the running CLI's channel is
-            // already discoverable via the AspireCliChannel assembly metadata. The global
-            // read remains so users who explicitly ran `aspire config set -g channel <x>`
-            // continue to have their preference honored.
-            // TODO: revisit removing the step-3 fallback once telemetry confirms global
-            // channel usage is negligible.
+            // Non-C# updates retain explicit option, project-scoped configuration, CLI
+            // identity, hive prompt, and implicit fallback precedence. Scope configuration
+            // lookup to the selected AppHost, not the launch directory (issue #16650).
             var channelName = parseResult.GetValue(_channelOption) ?? parseResult.GetValue(_qualityOption);
+            var hasExplicitChannel = !string.IsNullOrWhiteSpace(channelName);
+            // Native NuGet policy owns unqualified C# updates. Neither project metadata nor
+            // replacing the CLI may silently change the feeds used by dotnet restore.
+            var preserveNuGetPolicy = project?.LanguageId == KnownLanguageId.CSharp && !hasExplicitChannel;
             var channelFromConfig = false;
-            if (string.IsNullOrWhiteSpace(channelName))
+            if (!hasExplicitChannel && !preserveNuGetPolicy)
             {
-                channelName = await _configurationService.GetConfigurationFromDirectoryAsync("channel", updateDirectory, cancellationToken: cancellationToken);
+                channelName = await _configurationService.GetConfigurationFromDirectoryAsync(
+                    "channel", updateDirectory, cancellationToken: cancellationToken);
                 channelFromConfig = !string.IsNullOrWhiteSpace(channelName);
             }
 
@@ -269,7 +320,9 @@ internal sealed class UpdateCommand : BaseCommand
 
             var allChannels = await InteractionService.ShowStatusAsync(
                 UpdateCommandStrings.CheckingForUpdates,
-                async () => await _packagingService.GetChannelsAsync(cancellationToken, channelName));
+                async () => preserveNuGetPolicy
+                    ? [_packagingService.GetImplicitChannel()]
+                    : await _packagingService.GetChannelsAsync(cancellationToken, channelName));
 
             if (!string.IsNullOrWhiteSpace(channelName))
             {
@@ -304,6 +357,10 @@ internal sealed class UpdateCommand : BaseCommand
                 {
                     _logger.LogDebug("Using channel '{ChannelName}' from configuration.", channel.Name);
                 }
+            }
+            else if (preserveNuGetPolicy)
+            {
+                channel = allChannels.First(c => c.Type is PackageChannelType.Implicit);
             }
             else if (isProjectReferenceMode)
             {
@@ -392,6 +449,7 @@ internal sealed class UpdateCommand : BaseCommand
             {
                 AppHostFile = projectFile,
                 Channel = channel,
+                HasExplicitChannel = hasExplicitChannel,
                 ConfirmBinding = confirmBinding,
                 NuGetConfigDirBinding = PromptBinding.Create(parseResult, s_nugetConfigDirOption),
                 AdditionalUpdateSteps = toolUpdateStep is null ? [] : [toolUpdateStep]

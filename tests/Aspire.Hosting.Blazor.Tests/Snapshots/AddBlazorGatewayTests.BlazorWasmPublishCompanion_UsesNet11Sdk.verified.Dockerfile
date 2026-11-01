@@ -1,6 +1,6 @@
 ﻿FROM mcr.microsoft.com/dotnet/sdk:11.0.100-rc.1 AS build
 RUN curl --fail --show-error --location https://dot.net/v1/dotnet-install.sh -o {TempPath}dotnet-install.sh && \
-    bash {TempPath}dotnet-install.sh --version 11.0.100-rc.1.26425.128 --install-dir /opt/client-dotnet --no-path && \
+    bash {TempPath}dotnet-install.sh --version 11.0.100-rc.2.26504.105 --install-dir /opt/client-dotnet --no-path && \
     rm {TempPath}dotnet-install.sh
 WORKDIR /src
 COPY . .

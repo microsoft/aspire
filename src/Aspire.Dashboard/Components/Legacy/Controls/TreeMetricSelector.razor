@@ -1,0 +1,44 @@
+@using Metrics = Aspire.Dashboard.Resources.Metrics
+
+@inject IStringLocalizer<Metrics> Loc
+
+@if (PageViewModel.Instruments is null)
+{
+    return;
+}
+
+@if (IncludeLabel)
+{
+    <label for="metric-selector">@Loc[nameof(Metrics.MetricsInsturementNameGridNameColumnHeader)]</label>
+}
+
+<FluentTreeView Id="metric-selector"
+                Class="metrics-tree"
+                aria-label="@Loc[nameof(Metrics.MetricsInsturementNameGridNameColumnHeader)]"
+                Size="TreeSize.Medium"
+                SelectedId="@GetSelectedTreeItemId()"
+                @bind-CurrentSelected="@PageViewModel.SelectedTreeItem"
+                @bind-CurrentSelected:after="HandleSelectedTreeItemChangedAsync">
+    <ChildContent>
+        @foreach (var meterGroup in PageViewModel.Instruments.GroupBy(i => i.Parent.Name).OrderBy(g => g.Key))
+        {
+            <FluentTreeItem @key="meterGroup.Key"
+                            Id="@GetMeterTreeItemId(meterGroup.Key)"
+                            Text="@meterGroup.Key"
+                            Data="@meterGroup.Key"
+                            title="@meterGroup.Key"
+                            Expanded="@IsMeterExpanded(meterGroup.Key)"
+                            ExpandedChanged="@(expanded => SetMeterExpanded(meterGroup.Key, expanded))">
+                @foreach (var instrument in meterGroup.OrderBy(i => i.Name))
+                {
+                    <FluentTreeItem @key="instrument"
+                                    Id="@GetInstrumentTreeItemId(instrument.Parent.Name, instrument.Name)"
+                                    Class="nested"
+                                    Text="@instrument.Name"
+                                    Data="@instrument"
+                                    title="@instrument.Name" />
+                }
+            </FluentTreeItem>
+        }
+    </ChildContent>
+</FluentTreeView>

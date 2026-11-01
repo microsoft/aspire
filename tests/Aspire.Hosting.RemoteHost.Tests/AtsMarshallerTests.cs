@@ -1072,6 +1072,35 @@ public class AtsMarshallerTests
         Assert.Equal(10, dto.Count); // Count unchanged since not in JSON
     }
 
+    [Theory]
+    [InlineData("0.0", 0)]
+    [InlineData("2.0", 2)]
+    [InlineData("-1.0", -1)]
+    [InlineData("2147483647.0", int.MaxValue)]
+    public void ApplyDtoProperties_ConvertsIntegralDecimalNumbers(string countJson, int expected)
+    {
+        var marshaller = CreateMarshaller();
+        var dto = new TestDto();
+        var source = new JsonObject { ["count"] = JsonNode.Parse(countJson) };
+
+        marshaller.ApplyDtoProperties(source, dto, typeof(TestDto));
+
+        Assert.Equal(expected, dto.Count);
+    }
+
+    [Theory]
+    [InlineData("1.5")]
+    [InlineData("2147483648.0")]
+    public void ApplyDtoProperties_RejectsInvalidIntegralNumbers(string countJson)
+    {
+        var marshaller = CreateMarshaller();
+        var dto = new TestDto { Count = 3 };
+        var source = new JsonObject { ["count"] = JsonNode.Parse(countJson) };
+
+        Assert.Throws<InvalidCastException>(() => marshaller.ApplyDtoProperties(source, dto, typeof(TestDto)));
+        Assert.Equal(3, dto.Count);
+    }
+
     [Fact]
     public void ApplyDtoProperties_SkipsNonDeserializableProperties()
     {

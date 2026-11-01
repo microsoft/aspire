@@ -20,7 +20,7 @@ internal static class DashboardImage
 
     /// <summary>
     /// Resolves the dashboard image tag from a build-time override, or the running Aspire product
-    /// version's <c>major.minor</c> (for example <c>13.5</c>).
+    /// version's <c>major.minor</c> (for example <c>17.0</c>).
     /// </summary>
     public static string ResolveTag()
         => ResolveTag(typeof(DashboardImage).Assembly);

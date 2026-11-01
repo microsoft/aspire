@@ -6,7 +6,7 @@
             <FluentButton Class="terminal-selection-copy"
                           Appearance="ButtonAppearance.Default"
                           IconOnly="true"
-                          Title="@ControlsLoc[nameof(Resources.ControlsStrings.GridValueCopyToClipboard)]"
+                          data-tooltip="@ControlsLoc[nameof(Resources.ControlsStrings.GridValueCopyToClipboard)]"
                           aria-label="@ControlsLoc[nameof(Resources.ControlsStrings.GridValueCopyToClipboard)]">
                 <FluentIcon Value="new Icons.Regular.Size16.Copy()" Width="12px" Color="Color.Default" />
             </FluentButton>
@@ -22,24 +22,44 @@
                     <TerminalWindowButton Class="terminal-open-window"
                                           Label="@Loc[nameof(Resources.TerminalStrings.TerminalToolbarOpenInWindow)]"
                                           TerminalKey="@($"resource:{WindowResourceName ?? ResourceName}")"
-                                          Url="@($"terminal-window/resource/{Uri.EscapeDataString(WindowResourceName ?? ResourceName)}")"
+                                          Url="@($"{TerminalWindowPathPrefix.Trim('/')}/resource/{Uri.EscapeDataString(WindowResourceName ?? ResourceName)}")"
                                           FontSize="@FontSize" />
                 }
             </div>
         }
-        <div class="terminal-body">
+        <div class="terminal-body @(_state.Disconnected ? "terminal-disconnected" : null)">
             <div class="terminal-container" @ref="_terminalElement"></div>
-            @if (_terminalError is not null)
+            @if (_state.Disconnected || _terminalError is not null)
             {
-                <div class="terminal-error">
-                    <span role="alert">@GetErrorMessage()</span>
-                    @if (_terminalError is "input-failed" or "sizing-failed" or "palette-failed")
+                <div class="terminal-overlays @(ShowDisconnectedRecovery && _bannerCollapsed && ConnectionError is not "renderer-failed" ? "terminal-overlays-collapsed" : null)">
+                    @if (ShowDisconnectedRecovery)
                     {
-                        <FluentButton OnClick="DismissErrorAsync">@Loc[nameof(Resources.TerminalStrings.TerminalDismissError)]</FluentButton>
+                        <TerminalDisconnectedBanner @key="ResourceName" ResourceName="@ResourceName" ReadOnly="@ReadOnly" OnClose="@OnClose"
+                                                    OutputUnavailable="@(ConnectionError is "renderer-failed")"
+                                                    OnRestarted="@ReconnectAfterRestartAsync"
+                                                    OnReconnect="@(_state.RetriesExhausted ? EventCallback.Factory.Create(this, RetryAsync) : default)"
+                                                    OnCollapsedChanged="@(collapsed => _bannerCollapsed = collapsed)" />
                     }
-                    else
+                    @if (ConnectionError is "mount-failed" && _terminalError is not "mount-failed")
                     {
-                        <FluentButton OnClick="RetryAsync">@Loc[nameof(Resources.TerminalStrings.TerminalRetry)]</FluentButton>
+                        <div class="terminal-error">
+                            <span role="alert">@GetErrorMessage(ConnectionError)</span>
+                            <FluentButton Appearance="ButtonAppearance.Default" OnClick="RetryAsync">@Loc[nameof(Resources.TerminalStrings.TerminalRetry)]</FluentButton>
+                        </div>
+                    }
+                    @if (_terminalError is not null && !(ShowDisconnectedRecovery && _terminalError is "disconnected" or "renderer-failed"))
+                    {
+                        <div class="terminal-error">
+                            <span role="alert">@GetErrorMessage(_terminalError)</span>
+                            @if (_terminalError is "input-failed" or "sizing-failed" or "palette-failed")
+                            {
+                                <FluentButton Appearance="ButtonAppearance.Default" OnClick="DismissErrorAsync">@Loc[nameof(Resources.TerminalStrings.TerminalDismissError)]</FluentButton>
+                            }
+                            else
+                            {
+                                <FluentButton Appearance="ButtonAppearance.Default" OnClick="RetryAsync">@Loc[nameof(Resources.TerminalStrings.TerminalRetry)]</FluentButton>
+                            }
+                        </div>
                     }
                 </div>
             }
@@ -47,43 +67,48 @@
         <div class="terminal-footer" tabindex="-1" @ref="_footerElement">
             <span class="terminal-focus-hint"><kbd>F6</kbd>: @Loc[nameof(Resources.TerminalStrings.TerminalFocusControlsDescription)]</span>
             <div class="terminal-controls">
-                <FluentButton Class="terminal-font-minus toolbar-button" Appearance="ButtonAppearance.Default" IconOnly="true" Disabled="@(!_state.CanDecreaseFontSize || ReadOnly)"
-                              Title="@Loc[nameof(Resources.TerminalStrings.TerminalToolbarDecreaseFontSize)]"
-                              aria-label="@Loc[nameof(Resources.TerminalStrings.TerminalToolbarDecreaseFontSize)]"
-                              OnClick="@(() => SetFontSizeAsync(_state.FontPx - 1))">
-                    <FluentIcon Icon="Icons.Regular.Size20.FontDecrease" Width="16px" Color="Color.Primary" />
-                </FluentButton>
-                <span class="terminal-font-size">@(_state.FontPx > 0 ? $"{_state.FontPx}px" : null)</span>
-                <FluentButton Class="terminal-font-plus toolbar-button" Appearance="ButtonAppearance.Default" IconOnly="true" Disabled="@(!_state.CanIncreaseFontSize || ReadOnly)"
-                              Title="@Loc[nameof(Resources.TerminalStrings.TerminalToolbarIncreaseFontSize)]"
-                              aria-label="@Loc[nameof(Resources.TerminalStrings.TerminalToolbarIncreaseFontSize)]"
-                              OnClick="@(() => SetFontSizeAsync(_state.FontPx + 1))">
-                    <FluentIcon Icon="Icons.Regular.Size20.FontIncrease" Width="16px" Color="Color.Primary" />
-                </FluentButton>
+                <div class="terminal-font-controls">
+                    <FluentButton Class="terminal-font-minus toolbar-button aspire-icon-button" Appearance="ButtonAppearance.Transparent" IconOnly="true" Disabled="@(!_state.CanDecreaseFontSize || ReadOnly)"
+                                  data-tooltip="@Loc[nameof(Resources.TerminalStrings.TerminalToolbarDecreaseFontSize)]"
+                                  aria-label="@Loc[nameof(Resources.TerminalStrings.TerminalToolbarDecreaseFontSize)]"
+                                  OnClick="@(() => SetFontSizeAsync(_state.FontPx - 1))">
+                        <FluentIcon Icon="Icons.Regular.Size16.Subtract" Color="Color.Primary" />
+                    </FluentButton>
+                    <span class="terminal-font-size">@(_state.FontPx > 0 ? $"{_state.FontPx}px" : null)</span>
+                    <FluentButton Class="terminal-font-plus toolbar-button aspire-icon-button" Appearance="ButtonAppearance.Transparent" IconOnly="true" Disabled="@(!_state.CanIncreaseFontSize || ReadOnly)"
+                                  data-tooltip="@Loc[nameof(Resources.TerminalStrings.TerminalToolbarIncreaseFontSize)]"
+                                  aria-label="@Loc[nameof(Resources.TerminalStrings.TerminalToolbarIncreaseFontSize)]"
+                                  OnClick="@(() => SetFontSizeAsync(_state.FontPx + 1))">
+                        <FluentIcon Icon="Icons.Regular.Size16.Add" Color="Color.Primary" />
+                    </FluentButton>
+                </div>
                 @if (ShowDimensionsPicker)
                 {
-                    <FluentButton Class="terminal-fit toolbar-button" Appearance="ButtonAppearance.Default" IconOnly="true" Disabled="@(!_state.FitEnabled || ReadOnly)"
-                                  Title="@Loc[nameof(Resources.TerminalStrings.TerminalToolbarGridSizeAuto)]"
-                                  aria-label="@Loc[nameof(Resources.TerminalStrings.TerminalToolbarGridSizeAuto)]"
-                                  OnClick="FitToContainerAsync">
-                        <FluentIcon Icon="Icons.Regular.Size20.ArrowExpand" Width="16px" Color="Color.Primary" />
-                    </FluentButton>
-                    <label class="terminal-select-label" for="@_sizeSelectId">@Loc[nameof(Resources.TerminalStrings.TerminalSizeLabel)]</label>
-                    <FluentSelect TOption="TerminalSizePreset" TValue="string" Id="@_sizeSelectId" Class="terminal-size-select aspire-input" Items="@DisplayedSizePresets"
-                                  Placeholder="@Loc[nameof(Resources.TerminalStrings.TerminalToolbarGridSize)]"
-                                  OptionValue="@(p => p.Value)"
-                                  OptionText="@(p => p.Label)"
-                                  Value="@_state.SizeKey" ValueChanged="@(value => SetSizeModeAsync(value ?? string.Empty))"
-                                  AriaLabel="@Loc[nameof(Resources.TerminalStrings.TerminalToolbarGridSize)]"
-                                  Disabled="@(!_state.SizeSelectEnabled || ReadOnly)" />
+                    <div class="terminal-size-controls">
+                        <FluentButton Class="terminal-fit toolbar-button aspire-icon-button" Appearance="ButtonAppearance.Transparent" IconOnly="true" Disabled="@(!_state.FitEnabled || ReadOnly)"
+                                      data-tooltip="@Loc[nameof(Resources.TerminalStrings.TerminalToolbarGridSizeAuto)]"
+                                      aria-label="@Loc[nameof(Resources.TerminalStrings.TerminalToolbarGridSizeAuto)]"
+                                      OnClick="FitToContainerAsync">
+                            <FluentIcon Icon="Icons.Regular.Size20.ArrowExpand" Width="16px" Color="Color.Primary" />
+                        </FluentButton>
+                        <label class="terminal-select-label" for="@_sizeSelectId">@Loc[nameof(Resources.TerminalStrings.TerminalSizeLabel)]</label>
+                        <FluentSelect TOption="TerminalSizePreset" TValue="string" Id="@_sizeSelectId" Class="terminal-size-select aspire-input" Items="@DisplayedSizePresets"
+                                      OptionValue="@(p => p.Value)"
+                                      OptionText="@(p => p.Label)"
+                                      Value="@_state.SizeKey" ValueChanged="@(value => SetSizeModeAsync(value ?? string.Empty))"
+                                      AriaLabel="@Loc[nameof(Resources.TerminalStrings.TerminalToolbarGridSize)]"
+                                      Disabled="@(!_state.SizeSelectEnabled || ReadOnly)" />
+                    </div>
                 }
-                <label class="terminal-select-label" for="@_paletteSelectId">@Loc[nameof(Resources.TerminalStrings.TerminalPaletteLabel)]</label>
-                <FluentSelect @key="_paletteResetVersion" TOption="string" TValue="string" Id="@_paletteSelectId" Class="terminal-palette-select aspire-input"
-                              Items="@s_paletteChoices" OptionText="@GetPaletteLabel"
-                              Value="@_state.Palette" ValueChanged="SetPaletteAsync"
-                              Disabled="@(_terminalId == 0)"
-                              Title="@Loc[nameof(Resources.TerminalStrings.TerminalPalette)]"
-                              AriaLabel="@Loc[nameof(Resources.TerminalStrings.TerminalPalette)]" />
+                <div class="terminal-palette-controls">
+                    <label class="terminal-select-label" for="@_paletteSelectId">@Loc[nameof(Resources.TerminalStrings.TerminalPaletteLabel)]</label>
+                    <FluentSelect @key="_paletteResetVersion" TOption="string" TValue="string" Id="@_paletteSelectId" Class="terminal-palette-select aspire-input"
+                                  Items="@s_paletteChoices" OptionText="@GetPaletteLabel"
+                                  Value="@_state.Palette" ValueChanged="SetPaletteAsync"
+                                  Disabled="@(_terminalId == 0)"
+                                  Title="@Loc[nameof(Resources.TerminalStrings.TerminalPalette)]"
+                                  AriaLabel="@Loc[nameof(Resources.TerminalStrings.TerminalPalette)]" />
+                </div>
             </div>
         </div>
     </div>

@@ -9,7 +9,7 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	rootPassword := builder.AddParameter("mysql-root-password",
@@ -37,7 +37,7 @@ func main() {
 	})
 	db.WithCreationScript("CREATE DATABASE IF NOT EXISTS appdb;")
 	if err = db.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	_ = mysql.PrimaryEndpoint()
@@ -49,14 +49,14 @@ func main() {
 	_, _ = mysql.Databases()
 
 	if err = mysql.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	if err := app.Run(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 }

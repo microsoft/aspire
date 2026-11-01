@@ -68,6 +68,9 @@ dotnet restore playground/TestShop/TestShop.AppHost/TestShop.AppHost.csproj
 dotnet run --project playground/TestShop/TestShop.AppHost/TestShop.AppHost.csproj
 ```
 
+`dotnet run` delegates to `aspire run` for local orchestration. To publish deployment
+artifacts, use `aspire publish` instead of passing `--operation publish` to `dotnet run`.
+
 Or, if you are using Visual Studio:
 
 1. Open `Aspire.slnx`
@@ -110,6 +113,12 @@ dotnet test --no-launch-profile -- \
 To test changes from a specific pull request locally, see [dogfooding-pull-requests.md](/docs/dogfooding-pull-requests.md) for instructions on installing Aspire CLI and NuGet packages built by that PR's CI run.
 
 To validate how the CLI resolves `Aspire.*` packages for **staging** and **stable** release-branch builds (including making an installed PR build behave like a staging build), see [cli-staging-validation.md](/docs/cli-staging-validation.md).
+
+### NuGet configuration in CLI unit tests
+
+Use `NuGetTestHelper.CreateClient()` or `CreateService()` for tests that compose real NuGet configuration, and `NuGetTestHelper.LoadSettings()` for native settings assertions. These helpers preserve directory-level configuration inheritance while replacing the runner's user-wide settings with a controlled baseline and excluding machine-wide settings by default. Supply `TestMachineWideSettings` explicitly when testing machine-wide policy.
+
+`TemporaryWorkspace.CreateForCli()` isolates Aspire settings, not NuGet settings. Do not change process-wide environment variables to isolate NuGet configuration in parallel tests.
 
 ## Coding Agents
 
@@ -217,6 +226,10 @@ cd playground/rust
 ```
 
 On Windows, use `..\..\run-aspire.cmd` instead. Use [`localhive`](#creating-a-local-aspire-build-with-localhive) when you need to validate the complete locally built product, including packages and the bundle payload.
+
+To debug the CLI in VS Code, install the Microsoft C# extension, open the repository root, and select **Debug Aspire CLI** in **Run and Debug**. Set a breakpoint and press <kbd>F5</kbd>. The launch configuration builds the CLI in Debug mode and runs the managed assembly in the integrated terminal so interactive prompts work.
+
+The configuration defaults to `--help`. Edit `args` in [`.vscode/launch.json`](../.vscode/launch.json) to pass a command and its options as separate array entries. For app-specific commands such as `run`, also set `cwd` to the directory containing your AppHost. Follow the [VS Code setup instructions](#using-vs-code) if the repository SDK is not available.
 
 ### Generating local NuGet packages
 

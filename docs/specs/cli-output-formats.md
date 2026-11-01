@@ -369,10 +369,24 @@ Progress and informational messages go to stderr, so redirection captures only M
 | `relationships` | Related resources as `{ "type": "...", "resourceName": "..." }`. |
 | `urls` | Endpoint objects with `name`, `displayName`, `url`, and `isInternal`. |
 | `volumes` | Volume objects with `source`, `target`, `mountType`, and `isReadOnly`. |
-| `properties` | Resource properties keyed by property name. |
+| `properties` | Resource properties keyed by property name. Common debug-related keys include `project.path`, `project.launchProfile`, `project.launchCommand`, `project.configuration`, `project.targetFramework`, `project.targetPath`, `project.useAppHost`, and `resource.launchConfigurationType`. For current AppHosts, `project.launchCommand` is `run`, `watch`, `ide`, `direct`, or `null` when a .NET project launch command cannot be classified. |
 | `environment` | Environment variables keyed by variable name. |
 | `healthReports` | Health report objects keyed by report name. |
 | `commands` | Resource command metadata keyed by command name. |
+
+For recognized IDE-managed .NET project launches, `project.launchCommand` is `ide`. In that mode,
+`executable.pid`, when present, identifies the application process rather than a `dotnet run` or
+`dotnet watch` launcher.
+
+For coordinated .NET projects launched directly through the SDK's `RunCommand`,
+`project.launchCommand` is `direct` and `resource.launchConfigurationType` is
+`project-with-external-build.v1`. The executable can be a native apphost or `dotnet exec`,
+and `executable.pid` identifies the application itself. `project.configuration`, when present,
+comes from the coordinated build rather than application arguments. `project.targetPath` is the
+authoritative MSBuild `TargetPath` produced with the coordinated build inputs, and
+`project.useAppHost` is `true` or `false` according to the corresponding MSBuild property.
+Debugger clients must verify that the reported process matches this authoritative project output
+before attaching.
 
 ## Logs
 
@@ -538,6 +552,8 @@ Progress and informational messages go to stderr, so redirection captures only M
 ```
 
 ### `aspire docs api`
+
+The `language` field in `aspire docs api` output is one of `csharp`, `typescript`, or `go`.
 
 `aspire docs api list <scope> --format json` emits an array of API items:
 
@@ -802,3 +818,5 @@ Each entry in `capabilities` includes an `isExperimental` boolean indicating whe
 `aspire sdk export --package Name@Version --language typescript` restores the exact integration package version and writes one canonical JSON document to standard output. `Aspire.Hosting` can only be exported at the CLI's SDK version. The selected language's code-generation package cannot be exported because it supplies the generator instead of an integration API surface. Omit `--package` to export `Aspire.Hosting` at the running CLI's SDK version. Diagnostics are written to standard error.
 
 The top-level fields are `schemaVersion`, `language`, `generator`, `package`, `modules`, and `declarations`. The language exporter owns the schema; the CLI passes it through without reshaping it.
+
+TypeScript (`--language typescript`) and Go (`--language go`) ship exporters. The Go exporter projects through the same code paths as the Go SDK generator, so every `declaration` is the Go the generator emits, including the surface that is written by hand rather than discovered from capabilities: `Build()` on the builder, the `Get`, `Required`, `Value`, and `RequiredValue` helpers on interaction input collections, `Err()` on every handle, `ToMap()` on options and DTO structs, and the runtime types. Go `modules[].items[]` have kind `function`, `interface`, `augmentation`, `dto`, `options`, `enum`, `variable`, or `type`; an `augmentation` lists the members a package adds to a type that another package declares. Capability-backed members carry `capabilityId`, and members that the generator writes itself are marked `synthesized`. The top-level `declarations` hold the Go fragments that signatures refer to. Go names are resolved over the exported package and the types it references, not over a whole app host. When an app host combines integrations whose names collide, the generated SDK can qualify a name that this reference gives bare, and an `options` struct that several packages could share is documented by each package under its own `typeId`. The `Any<Type>` interfaces, which accept a handle type or any type derived from it, follow the same rule: one exists only when the set holds a type derived from its base, so a signature here can name a handle interface where an app host that includes the derived type's integration accepts `Any<Type>`.

@@ -1,0 +1,95 @@
+.help-tabs-host ::deep .help-tabs {
+    width: 100%;
+}
+
+/* The tabs are a segmented row above the content, so the content needs space from it. */
+.help-tabs-host ::deep .help-tabs > .fluent-tab-panel {
+    margin-top: 16px;
+}
+
+.help-section + .help-section {
+    margin-top: 20px;
+}
+
+.help-section-heading {
+    margin: 0 0 10px;
+    color: var(--colorNeutralForeground2);
+    font-size: var(--fontSizeBase200);
+    font-weight: var(--fontWeightSemibold);
+    letter-spacing: .02em;
+    text-transform: uppercase;
+}
+
+.help-links {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.help-link {
+    display: flex;
+    height: 100%;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    border: 1px solid var(--colorNeutralStroke2);
+    border-radius: 8px;
+    background: var(--colorNeutralBackground2);
+    color: var(--colorNeutralForeground1);
+    text-decoration: none;
+}
+
+.help-link:hover {
+    background: var(--aspire-menu-item-hover-background);
+}
+
+.help-link:focus-visible {
+    outline: 2px solid var(--colorStrokeFocus2);
+    outline-offset: 2px;
+}
+
+.help-link-icon {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--colorBrandBackground) 14%, transparent);
+}
+
+.help-link-text {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.help-link-title {
+    font-weight: var(--fontWeightSemibold);
+}
+
+.help-link-description {
+    color: var(--colorNeutralForeground2);
+    font-size: var(--fontSizeBase200);
+    line-height: var(--lineHeightBase200);
+}
+
+.help-about {
+    margin: 24px 0 0;
+    padding-top: 12px;
+    border-top: 1px solid var(--colorNeutralStroke2);
+    color: var(--colorNeutralForeground3);
+    font-size: var(--fontSizeBase200);
+}
+
+@media (max-width: 600px) {
+    .help-links {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}

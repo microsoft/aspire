@@ -6,6 +6,7 @@
     <ResxCodeGenerator>PublicResXFileCodeGenerator</ResxCodeGenerator>
     <ApplicationIcon>$(MSBuildThisFileDirectory)..\Shared\Aspire.ico</ApplicationIcon>
     <PublishAot>true</PublishAot>
+    <PublishDocumentationFile>false</PublishDocumentationFile>
     <!-- .NET 11 persistent services serialize framework-owned state with the internal
          JsonSerializerOptionsProvider instead of CircuitOptions.JsonTypeInfoResolvers.
          Remove the reflection fallback when https://github.com/dotnet/aspnetcore/issues/69325 is fixed. -->
@@ -40,10 +41,22 @@
     <NoWarn>$(NoWarn);IL2101</NoWarn>
 
     <DefineConstants>$(DefineConstants);ASPIRE_DASHBOARD</DefineConstants>
+    <!-- Compile-time seam used to verify that the modern dashboard has no source dependency on
+         Components/Legacy. This is not a product configuration switch; runtime selection remains
+         controlled by Dashboard:UI:DisableModernDashboard and the experience cookie. -->
+    <IncludeLegacyDashboard Condition="'$(IncludeLegacyDashboard)' == ''">true</IncludeLegacyDashboard>
+    <DefineConstants Condition="'$(IncludeLegacyDashboard)' == 'true'">$(DefineConstants);ASPIRE_LEGACY_DASHBOARD</DefineConstants>
 
     <!-- Bundle optimization: disable web.config generation -->
     <IsTransformWebConfigDisabled>true</IsTransformWebConfigDisabled>
   </PropertyGroup>
+
+  <ItemGroup Condition="'$(IncludeLegacyDashboard)' != 'true'">
+    <Compile Remove="Components\Legacy\**\*.cs" />
+    <RazorComponent Remove="Components\Legacy\**\*.razor" />
+    <Content Remove="Components\Legacy\**\*" />
+    <None Remove="Components\Legacy\**\*" />
+  </ItemGroup>
 
   <PropertyGroup>
     <UsePublicApiAnalyzers>false</UsePublicApiAnalyzers>
@@ -90,9 +103,6 @@
   </Target>
 
   <ItemGroup>
-    <!-- Workaround for https://github.com/dotnet/aspnetcore/issues/69432. -->
-    <RdXmlFile Include="rd.xml" />
-
     <!-- Build service and client types. Integration tests use the client types to call OTLP services. -->
     <Protobuf Include="Otlp\**\*.proto">
       <ProtoRoot>Otlp</ProtoRoot>

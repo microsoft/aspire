@@ -1,10 +1,13 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json.Nodes;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Dashboard.Model;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
@@ -108,7 +111,7 @@ public class TerminalTapePlayCommandTests(ITestOutputHelper outputHelper)
     [InlineData("missing", CliExitCodes.InvalidCommand)]
     [InlineData("unavailable", CliExitCodes.InvalidCommand)]
     [InlineData("replicas", CliExitCodes.InvalidCommand)]
-    [InlineData("wrong-replica", CliExitCodes.InvalidCommand)]
+    [InlineData("unknown-instance", CliExitCodes.InvalidCommand)]
     public async Task InvalidResourceFailsBeforeConnecting(string scenario, int expectedExitCode)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -127,6 +130,11 @@ public class TerminalTapePlayCommandTests(ITestOutputHelper outputHelper)
                     backchannel.TerminalInfoResponse = new() { IsAvailable = false };
                     break;
                 case "replicas":
+                    backchannel.ResourceSnapshots =
+                    [
+                        new() { Name = "shell-abc123", DisplayName = "shell" },
+                        new() { Name = "shell-def456", DisplayName = "shell" }
+                    ];
                     backchannel.TerminalInfoResponse = new()
                     {
                         IsAvailable = true,
@@ -139,18 +147,52 @@ public class TerminalTapePlayCommandTests(ITestOutputHelper outputHelper)
                     break;
             }
         });
-        string[] replicaArguments = scenario == "wrong-replica" ? ["--replica", "7"] : [];
+        var resource = scenario == "unknown-instance" ? "shell-unknown" : "shell";
         var result = provider.GetRequiredService<RootCommand>().Parse(
-            ["terminal", "tape", "play", "shell", "--tape-file", "probe.tape", .. replicaArguments]);
+            ["terminal", "tape", "play", resource, "--tape-file", "probe.tape"]);
 
         Assert.Equal(expectedExitCode, await result.InvokeAsync().DefaultTimeout());
     }
 
     [Theory]
-    [InlineData(null)]
-    [InlineData(0)]
-    [InlineData(1)]
-    public async Task WaitsForProducerAndRefreshesSelectedReplicaBeforePlayback(int? exitCode)
+    [InlineData("")]
+    [InlineData(" --non-interactive")]
+    public async Task AmbiguousDisplayNameFailsWithoutPrompting(string options)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "probe.tape"), "");
+        var interaction = new TestInteractionService
+        {
+            PromptForSelectionCallback = (_, _, _, _) => throw new InvalidOperationException("Unexpected replica prompt.")
+        };
+        using var provider = CreateProvider(workspace, null, configure: backchannel =>
+        {
+            backchannel.ResourceSnapshots =
+            [
+                new() { Name = "shell-def456", DisplayName = "shell" },
+                new() { Name = "shell-abc123", DisplayName = "shell" }
+            ];
+            backchannel.GetTerminalInfoHandler = (_, _) => throw new InvalidOperationException("Unexpected terminal discovery.");
+        }, configureOptions: options => options.InteractionServiceFactory = _ => interaction);
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            "terminal tape play shell --tape-file probe.tape" + options);
+
+        Assert.Equal(CliExitCodes.InvalidCommand, await result.InvokeAsync().DefaultTimeout());
+        Assert.Equal(
+            [string.Format(TerminalCommandStrings.ResourceAmbiguous, "shell", "shell-abc123, shell-def456")],
+            interaction.DisplayedErrors);
+        Assert.Empty(interaction.DisplayedRawText);
+    }
+
+    [Theory]
+    [InlineData(null, "shell-def456")]
+    [InlineData(0, "shell-def456")]
+    [InlineData(1, "shell-def456")]
+    [InlineData(null, "shell --replica 1")]
+    [InlineData(null, "shell -r 1")]
+    [InlineData(null, "shell-def456 --replica 1")]
+    [InlineData(null, "shell-def456 -r 1")]
+    public async Task WaitsForProducerAndRefreshesSelectedReplicaBeforePlayback(int? exitCode, string resourceArguments)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await using var host = await TerminalTapeTestHost.StartAsync(101, 37);
@@ -160,6 +202,21 @@ public class TerminalTapePlayCommandTests(ITestOutputHelper outputHelper)
         var stdout = new TestOutputTextWriter(outputHelper);
         using var provider = CreateProvider(workspace, null, stdout, configure: backchannel =>
         {
+            backchannel.ResourceSnapshots =
+            [
+                new()
+                {
+                    Name = "shell-abc123",
+                    DisplayName = "shell",
+                    Properties = new() { [KnownProperties.Terminal.ReplicaIndex] = JsonValue.Create("0") }
+                },
+                new()
+                {
+                    Name = "shell-def456",
+                    DisplayName = "shell",
+                    Properties = new() { [KnownProperties.Terminal.ReplicaIndex] = JsonValue.Create("1") }
+                }
+            ];
             backchannel.GetTerminalInfoHandler = (resourceName, _) =>
             {
                 Assert.Equal("shell", resourceName);
@@ -185,7 +242,7 @@ public class TerminalTapePlayCommandTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "probe.tape"),
             "Set TypingSpeed 0\nType \"ready\"");
         var result = provider.GetRequiredService<RootCommand>().Parse(
-            "terminal tape play shell-0 --replica 1 --tape-file probe.tape");
+            $"terminal tape play {resourceArguments} --tape-file probe.tape");
 
         var play = result.InvokeAsync();
         await time.TimerCreated.Task.DefaultTimeout();
@@ -313,7 +370,7 @@ public class TerminalTapePlayCommandTests(ITestOutputHelper outputHelper)
         var directory = workspace.WorkspaceRoot.CreateSubdirectory("tape files");
         await File.WriteAllTextAsync(Path.Combine(directory.FullName, "probe.tape"), "# Inspect the current screen.");
         var result = provider.GetRequiredService<RootCommand>().Parse(
-            ["terminal", "tape", "play", "shell", "--tape-file", Path.Combine("tape files", "probe.tape"), "--replica", "0"]);
+            ["terminal", "tape", "play", "shell", "--tape-file", Path.Combine("tape files", "probe.tape")]);
 
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
         Assert.Equal(host.GetScreenText().TrimEnd(), string.Join('\n', stdout.Logs).TrimEnd());
@@ -411,7 +468,9 @@ public class TerminalTapePlayCommandTests(ITestOutputHelper outputHelper)
         await host.WriteAsync("Waiting for authentication");
         var stdout = new TestOutputTextWriter(outputHelper);
         using var errors = new StringWriter();
-        using var provider = CreateProvider(workspace, host.SocketPath, stdout, errors);
+        // Avoid wrapping long workspace paths in source-location assertions.
+        using var provider = CreateProvider(workspace, host.SocketPath, stdout, errors,
+            configureOptions: options => options.DisableAnsi = true);
         await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "wait.tape"),
             "# Deliberately impossible condition\nWait+Screen@100ms /never_appears/");
         var result = provider.GetRequiredService<RootCommand>().Parse("terminal tape play shell --tape-file wait.tape");

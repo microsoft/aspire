@@ -10,6 +10,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
 using Aspire.TestUtilities;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
@@ -57,7 +58,7 @@ public class ProcessSupervisorTests(ProcessTestFixture fixture)
 
         await process.StartAsync(TestContext.Current.CancellationToken);
 
-        Assert.Equal(0, await process.WaitForExitAsync(TestContext.Current.CancellationToken).WaitAsync(TimeSpan.FromSeconds(30)));
+        Assert.Equal(0, await process.WaitForExitAsync(TestContext.Current.CancellationToken).DefaultTimeout());
         Assert.Equal(arguments, JsonSerializer.Deserialize<string[]>(Assert.Single(stdout)));
     }
 
@@ -80,7 +81,8 @@ public class ProcessSupervisorTests(ProcessTestFixture fixture)
         await using var scope = new ProcessScope(guardian, NullLogger.Instance, "test completion");
         var identities = await readiness.ReadTreeAsync();
 
-        await scope.WaitForExitAsync(TestContext.Current.CancellationToken).WaitAsync(TimeSpan.FromSeconds(30));
+        // Worker cleanup can consume the supervisor's five-second termination timeout.
+        await scope.WaitForExitAsync(TestContext.Current.CancellationToken).DefaultTimeout(TestConstants.LongTimeoutDuration);
         await scope.DisposeAsync();
 
         Assert.Equal(exitCode.ToString(CultureInfo.InvariantCulture), await File.ReadAllTextAsync(completionPath));
@@ -169,7 +171,7 @@ public class ProcessSupervisorTests(ProcessTestFixture fixture)
             using var observedOwner = Process.GetProcessById(owner.ProcessId);
 
             observedOwner.Kill(entireProcessTree: false);
-            await owner.WaitForRootExitAsync(TestContext.Current.CancellationToken).WaitAsync(TimeSpan.FromSeconds(30));
+            await owner.WaitForRootExitAsync(TestContext.Current.CancellationToken).DefaultTimeout();
 
             await Task.WhenAll(identities.Append(guardianIdentity).Select(ProcessTestFixture.AssertExitedAsync));
         }

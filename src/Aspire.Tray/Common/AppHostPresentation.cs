@@ -28,15 +28,6 @@ internal static class AppHostPresentation
 
     public static string GetTitle(AppHostInfo host) => Compact(GetDisplayName(host), 44);
 
-    public static string GetPathLabel(string appHostPath) => Compact(appHostPath, 44);
-
-    public static string GetMenuDetailsText(string appHostPath, string subtitle)
-        => ToSingleLine($"{appHostPath} \u00b7 {subtitle}");
-
-    public static string GetMenuDetailsLabel(string details) => Compact(details, 45);
-
-    public static string GetCompactMenuLabel(AppHostMenuItem host) => Compact(host.DisplayName, 44);
-
     public static string GetSubtitle(AppHostInfo host) => $"{Compact(GetLocation(host), 44)} \u00b7 PID {host.AppHostPid}";
 
     public static string GetLabel(AppHostInfo host)
@@ -44,11 +35,14 @@ internal static class AppHostPresentation
 
     public static string GetDirectory(AppHostInfo host) => Path.GetDirectoryName(host.AppHostPath) ?? host.AppHostPath;
 
-    private static string GetLocation(AppHostInfo host)
+    private static string GetLocation(AppHostInfo host) => GetLocation(host.AppHostPath);
+
+    /// <summary>Returns the AppHost's directory and its parent, such as "src/Shop.AppHost".</summary>
+    public static string GetLocation(string appHostPath)
     {
-        var directory = GetDirectory(host);
+        var directory = Path.GetDirectoryName(appHostPath) ?? appHostPath;
         var parent = Path.GetDirectoryName(directory);
-        return parent is null ? directory : Path.Combine(Path.GetFileName(parent), Path.GetFileName(directory));
+        return ToSingleLine(parent is null ? directory : Path.Combine(Path.GetFileName(parent), Path.GetFileName(directory)));
     }
 
     private static string Compact(string value, int maximumTextElements)

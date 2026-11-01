@@ -146,6 +146,82 @@ internal sealed class ChartDataCalculator
         };
     }
 
+    /// <summary>
+    /// Gets whether the instrument is a counter: a sum that only increases. Its values are a running total,
+    /// so the change per interval is usually more telling than the total itself.
+    /// </summary>
+    internal static bool IsMonotonicCounter(OtlpInstrumentSummary instrument)
+        => instrument.Type == OtlpInstrumentType.Sum && instrument.IsMonotonic;
+
+    /// <summary>
+    /// Calculates a counter's increase in each interval of <see cref="CalculateChartValues"/>.
+    /// </summary>
+    public List<double?> CalculateCounterIncreaseValues(List<DimensionScope> dimensions, DateTimeOffset startTime, OtlpAggregationTemporality temporality)
+    {
+        if (temporality == OtlpAggregationTemporality.Delta)
+        {
+            return [.. CalculateChartValues(dimensions, startTime, static t => t, string.Empty).Traces[0].Values];
+        }
+
+        // A cumulative counter has a running total per dimension (attribute set). The increases are calculated per
+        // dimension and then added up, rather than calculated from the sum of the totals. A dimension can be missing
+        // from an interval, for example when it's exported less often, and a sum of A=10,000 and B=5,000 that drops
+        // to 10,000 without B would otherwise look like a counter reset followed by an increase of 10,000.
+        List<double?>? total = null;
+        foreach (var dimension in dimensions)
+        {
+            var values = CalculateChartValues([dimension], startTime, static t => t, string.Empty).Traces[0].Values;
+            var increases = CalculateCounterIncreases(values, temporality);
+            if (total is null)
+            {
+                total = increases;
+                continue;
+            }
+
+            for (var i = 0; i < total.Count; i++)
+            {
+                total[i] = (total[i], increases[i]) switch
+                {
+                    (null, null) => null,
+                    var (current, increase) => (current ?? 0) + (increase ?? 0)
+                };
+            }
+        }
+
+        return total ?? [.. Enumerable.Repeat<double?>(null, _pointCount + 2)];
+    }
+
+    internal static List<double?> CalculateCounterIncreases(IReadOnlyList<double?> values, OtlpAggregationTemporality temporality)
+    {
+        // Delta counters already report the change per export, so their values are the increases.
+        if (temporality == OtlpAggregationTemporality.Delta)
+        {
+            return [.. values];
+        }
+
+        // Cumulative counters report a running total, e.g. [10, 15, null, 22, 3] where 3 follows a
+        // process restart. The increase is the difference from the last known total, carried across
+        // empty intervals: an app exporting every 60s leaves most 10s intervals empty, and its
+        // growth should show up in the interval where it was observed, not be dropped.
+        // After a reset the total starts again from zero, so the new value itself is the increase.
+        var increases = new List<double?>(values.Count);
+        double? previous = null;
+        foreach (var value in values)
+        {
+            if (value is not { } current)
+            {
+                increases.Add(null);
+                continue;
+            }
+
+            // The first point has nothing to compare against.
+            increases.Add(previous is { } last ? (current >= last ? current - last : current) : null);
+            previous = current;
+        }
+
+        return increases;
+    }
+
     internal static bool TryCalculatePoint(List<DimensionScope> dimensions, DateTimeOffset start, DateTimeOffset end, out double pointValue)
     {
         var hasValue = false;

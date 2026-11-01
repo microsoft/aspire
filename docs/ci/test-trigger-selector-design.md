@@ -73,6 +73,15 @@ is not mis-attributed to the PR. (Diffing from the base *tip* instead surfaced
 exactly such a file and tripped the run-all fallback —
 [microsoft/aspire#18377](https://github.com/microsoft/aspire/pull/18377#issuecomment-4782187184).)
 The same rebound `from` feeds both layers, so they see an identical change set.
+
+In PR CI, both the top-level `check-changed-files` skip gate and the
+`select-tests` action resolve their comparison base with
+[`eng/github-ci/resolve-comparison-base.sh`](../../eng/github-ci/resolve-comparison-base.sh).
+The script verifies a comparison pinned to the run's checkout because the
+event's `pull_request.base.sha` can be stale and incorrectly attribute inherited
+base-branch changes to the PR. Sharing it keeps the skip gate and selector
+consistent.
+
 When `--to` is omitted (local working-tree run) `HEAD` is used only to resolve the
 merge-base; the diff itself then compares that merge-base against the **working
 tree**, so uncommitted changes are included. The
@@ -362,28 +371,23 @@ The kill switch is wired in the same step: the `run-full-ci` PR label passes
 `--force-all`. The label is read from the workflow event payload
 (`contains(github.event.pull_request.labels.*.name, 'run-full-ci')`), a snapshot —
 so adding the label takes effect on the next push (or reopen), not on a plain
-re-run of an existing run. Non-PR events (no base SHA at all,
-e.g. a push to `main`) also force the full set. A PR *with* a base SHA that
-cannot be fetched in the shallow checkout **fails the step** instead of forcing
-run-all: `base.sha` is always reachable on origin, so a fetch failure is a real
-problem, and masking it with run-all would teach the audit nothing.
+re-run of an existing run. Non-PR events with no base SHA (e.g. a push to `main`)
+also force the full set.
 
-Because the diff is taken from the merge-base, the shallow PR checkout must be
-deepened until that common ancestor is reachable. The step fetches the base
-commit, then re-fetches both base and head at a growing depth until
-`git merge-base` resolves. If it never resolves within the depth bound, the step
-**warns and falls back to `--force-all`** (run the full matrix) rather than
-failing the PR. An unresolved merge-base must not block PRs while the cause (a
-history-depth gap or a genuinely divergent base) is found and fixed; over-selecting
-is the fail-safe outcome, matching the unmapped-file run-all fallback. `SelectTests`
-applies the same fallback itself if its own `git merge-base` comes up empty. Both
-emit a `::warning::` and record the reason in the run summary, so a systemic
-regression surfaces instead of hiding behind a green-but-full-matrix run.
+If the comparison cannot be verified, the selector **warns and runs ALL tests**
+to avoid under-selection. The skip gate instead **fails**, because it cannot
+safely declare CI skippable without a verified diff. Missing comparison endpoints
+fail either action rather than hiding an infrastructure problem behind a full
+test run.
 
-Note the asymmetry with the base-fetch failure above: a base commit that can't be
-**fetched** still fails the step (`base.sha` is always reachable on origin, so that
-is a real infra problem), whereas a base/head that can't be **merge-based** after
-deepening degrades to run-all.
+Both callers require a full-history checkout (`fetch-depth: 0`), including when
+the selector reuses a caller's checkout. The shared resolver validates identity
+and ancestry without fetching or changing the checkout. In a shallow checkout, Git
+can find an older common ancestor through a short side branch while a newer one
+remains hidden, silently omitting PR changes. Rejecting shallow history prevents
+that unsafe selective result even if a caller omits the checkout prerequisite.
+It also rejects comparisons with multiple equally good common ancestors, because
+choosing just one can hide changes relative to another.
 
 ## Failure policy
 
@@ -400,8 +404,8 @@ The selector may still choose run-all intentionally for known-safe reasons:
   not `src/**`-only).
 
 Those are explicit selections of the full matrix. They are not fallbacks for a
-crashed selector or a failed graph computation. (A PR whose base SHA cannot be
-fetched is *not* one of them — that fails the step; see above.)
+crashed selector or a failed graph computation. Missing comparison endpoints
+are *not* one of them — that fails the step; see above.
 
 ## Debuggability and traceability
 
@@ -554,15 +558,15 @@ does not arise for them.
 
 ### Shallow checkout and the unresolved-merge-base fallback
 
-CI checkouts are shallow, so the merge-base may not be present locally. Our
-action deepens **both** endpoints until `git merge-base` resolves, and if it
-never does, warns and runs **all** tests rather than failing the PR. Both halves
-mirror established behavior:
+Selective CI requires full history at checkout, and rejects shallow history even
+when a merge-base is visible. An unverifiable comparison warns and runs **all**
+tests rather than risking under-selection. Related tools use different history
+preparation strategies but share the conservative fallback:
 
 - **dorny/paths-filter** doubles its `initial-fetch-depth` "until the merge-base
   is found, or there are no more commits in the history," and if there is no
   common ancestor "all files are considered as added" — i.e. everything matches.
-  That is the same deepen-then-degrade-to-all behavior, arrived at independently.
+  This shares the conservative run-all outcome when ancestry cannot be resolved.
 - **Turborepo** warns that "if the checkout is too shallow, then all packages
   will be considered changed," and recommends `--depth=0`.
 - **Nx** CI recipes use `fetch-depth: 0` for the same reason.

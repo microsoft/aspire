@@ -1,0 +1,18 @@
+﻿{
+  "configSource": {
+    "repository": "https://git.example/organization/config",
+    "path": "teams/platform.json",
+    "appliedVersion": "version-2"
+  },
+  "DOCS": {
+    "llmsTxtUrl": "https://remote.example/llms.txt",
+    "API": {
+      "custom": "preserved"
+    }
+  },
+  "docs": {
+    "api": {
+      "SITEMAPURL": null
+    }
+  }
+}

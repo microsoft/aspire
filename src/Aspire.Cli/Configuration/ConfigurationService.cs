@@ -6,6 +6,7 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Templating;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -22,6 +23,13 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
             settingsFilePath = EnsureAspireConfigFileForAppHostPathSettings(settingsFilePath);
         }
 
+        using var configLock = await ConfigurationHelper.TryAcquireWorkspaceConfigLockAsync(
+            executionContext, isGlobal ? ConfigurationHelper.GetCanonicalGlobalSettingsFile(globalSettingsFile) : new FileInfo(settingsFilePath), logger, cancellationToken)
+            ?? throw new IOException("Could not acquire the configuration lock.");
+        if (isGlobal)
+        {
+            settingsFilePath = GetSettingsFilePath(isGlobal: true);
+        }
         await SetConfigurationInFileAsync(settingsFilePath, key, value, cancellationToken);
     }
 
@@ -43,15 +51,27 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
             settings = new JsonObject();
         }
 
-        // Set the configuration value using dot notation support
-        SetNestedValue(settings, key, value);
+        ConfigurationHelper.NormalizeSettings(settings);
+        key = TemplateSourceConfiguration.ValidateEditKey(settings, key);
 
-        await ConfigurationHelper.WriteSettingsFileAsync(settingsFilePath, settings, cancellationToken);
+        // Validate the candidate under the config lock, before writing. A rejected edit must
+        // preserve the original file, including comments and unrelated settings.
+        SetNestedValue(settings, key, value);
+        TemplateSourceConfiguration.ValidateEditedSource(settings, key);
+
+        await ConfigurationHelper.WriteSettingsFileAtomicallyAsync(settingsFilePath, settings, cancellationToken, preserveOwnershipAndAcl: true);
     }
 
     public async Task<bool> DeleteConfigurationAsync(string key, bool isGlobal = false, CancellationToken cancellationToken = default)
     {
         var settingsFilePath = GetSettingsFilePath(isGlobal);
+        using var configLock = await ConfigurationHelper.TryAcquireWorkspaceConfigLockAsync(
+            executionContext, isGlobal ? ConfigurationHelper.GetCanonicalGlobalSettingsFile(globalSettingsFile) : new FileInfo(settingsFilePath), logger, cancellationToken)
+            ?? throw new IOException("Could not acquire the configuration lock.");
+        if (isGlobal)
+        {
+            settingsFilePath = GetSettingsFilePath(isGlobal: true);
+        }
 
         if (!File.Exists(settingsFilePath))
         {
@@ -75,12 +95,13 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
                 return false;
             }
 
+            ConfigurationHelper.NormalizeSettings(settings);
             // Delete using dot notation support and return whether deletion occurred
-            var deleted = DeleteNestedValue(settings, key);
+            var deleted = DeleteNestedValue(settings, TemplateSourceConfiguration.ResolveEditKey(settings, key));
 
             if (deleted)
             {
-                await ConfigurationHelper.WriteSettingsFileAsync(settingsFilePath, settings, cancellationToken);
+                await ConfigurationHelper.WriteSettingsFileAtomicallyAsync(settingsFilePath, settings, cancellationToken, preserveOwnershipAndAcl: true);
             }
 
             return deleted;
@@ -95,7 +116,8 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
     {
         if (isGlobal)
         {
-            return globalSettingsFile.FullName;
+            var preferredFile = ConfigurationHelper.GetCanonicalGlobalSettingsFile(globalSettingsFile);
+            return File.Exists(preferredFile.FullName) ? preferredFile.FullName : globalSettingsFile.FullName;
         }
         else
         {
@@ -162,7 +184,7 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
 
         var nearestSettingFilePath = FindNearestSettingsFile();
         await LoadConfigurationFromFileAsync(nearestSettingFilePath, allConfig, cancellationToken);
-        await LoadConfigurationFromFileAsync(globalSettingsFile.FullName, allConfig, cancellationToken);
+        await LoadConfigurationFromFileAsync(GetSettingsFilePath(isGlobal: true), allConfig, cancellationToken);
 
         return allConfig;
     }
@@ -178,7 +200,7 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
     public async Task<Dictionary<string, string>> GetGlobalConfigurationAsync(CancellationToken cancellationToken = default)
     {
         var globalConfig = new Dictionary<string, string>();
-        await LoadConfigurationFromFileAsync(globalSettingsFile.FullName, globalConfig, cancellationToken);
+        await LoadConfigurationFromFileAsync(GetSettingsFilePath(isGlobal: true), globalConfig, cancellationToken);
         return globalConfig;
     }
 
@@ -384,9 +406,12 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
             {
                 return Task.FromResult<string?>(configFileValue);
             }
-            else if (File.Exists(configFilePath) && !continueSearchWhenKeyMissing)
+            else if (File.Exists(configFilePath))
             {
-                break;
+                if (!continueSearchWhenKeyMissing)
+                {
+                    break;
+                }
             }
 
             var legacySettingsPath = ConfigurationHelper.BuildPathToSettingsJsonFile(searchDirectory.FullName);
@@ -408,9 +433,10 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
         // `aspire config set -g channel <x>` continues to get their preference honored by
         // `aspire update` until that workflow is removed in a follow-up. New per-project flows
         // (`aspire add`, `aspire init`) do not consult global config and must not start to.
-        if (File.Exists(globalSettingsFile.FullName))
+        var globalSettingsFilePath = GetSettingsFilePath(isGlobal: true);
+        if (File.Exists(globalSettingsFilePath))
         {
-            var globalConfig = LoadSettingsFileForReading(globalSettingsFile.FullName);
+            var globalConfig = LoadSettingsFileForReading(globalSettingsFilePath);
             var globalValue = globalConfig[configKey];
             if (!string.IsNullOrWhiteSpace(globalValue))
             {

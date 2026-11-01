@@ -1,0 +1,15 @@
+.persistent-container-badge {
+    position: absolute;
+    inset-inline-end: -4px;
+    bottom: -3px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 12px;
+    box-sizing: border-box;
+    border: 1px solid var(--colorNeutralStroke2);
+    border-radius: 4px;
+    background: var(--colorNeutralBackground1);
+    color: var(--colorNeutralForeground1);
+}
