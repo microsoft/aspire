@@ -384,6 +384,12 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
                     _ => throw new NotSupportedException("Command line args must be strings")
                 };
 
+                // Helm substitutes values without YAML escaping, so quote the complete argument after evaluation.
+                if (str.ContainsHelmExpression())
+                {
+                    str = str.ToQuotedHelmTemplateExpression();
+                }
+
                 Commands.Add(str);
             }
         }

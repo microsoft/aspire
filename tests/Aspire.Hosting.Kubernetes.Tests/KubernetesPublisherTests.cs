@@ -163,21 +163,27 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
         var app = builder.Build();
         app.Run();
 
-        var deployment = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "templates/myapp/deployment.yaml"));
-        var container = new DeserializerBuilder().Build().Deserialize<Dictionary<object, object>>(deployment);
-        var args = ((List<object>)((Dictionary<object, object>)((List<object>)((Dictionary<object, object>)((Dictionary<object, object>)((Dictionary<object, object>)container["spec"])["template"])["spec"])["containers"])[0])["args"])
-            .Cast<string>()
+        // Helm substitutes values without YAML escaping, so expression args are emitted as plain
+        // `tpl ... | quote` scalars that Helm quotes after evaluation (values may contain quotes or backslashes).
+        // The template is therefore not valid YAML until Helm renders it, so assert on the emitted lines.
+        var deployment = await File.ReadAllLinesAsync(Path.Combine(workspace.Path, "templates/myapp/deployment.yaml"));
+        var argsIndex = Array.FindIndex(deployment, l => l.Trim() == "args:");
+        Assert.True(argsIndex >= 0);
+        var args = deployment
+            .Skip(argsIndex + 1)
+            .TakeWhile(l => l.TrimStart().StartsWith("- ", StringComparison.Ordinal))
+            .Select(l => l.TrimStart()[2..])
             .ToArray();
 
         Assert.Equal(
             [
-                "--user",
-                "{{ .Values.config.myapp.user }}",
-                "--pass",
-                "{{ .Values.secrets.myapp.password }}",
-                "--log",
-                "{{ .Values.config.myapp.loglevel }}",
-                "literal-value",
+                "\"--user\"",
+                """{{ tpl "{{ .Values.config.myapp.user }}" . | quote }}""",
+                "\"--pass\"",
+                """{{ tpl "{{ .Values.secrets.myapp.password }}" . | quote }}""",
+                "\"--log\"",
+                """{{ tpl "{{ .Values.config.myapp.loglevel }}" . | quote }}""",
+                "\"literal-value\"",
             ],
             args);
 
