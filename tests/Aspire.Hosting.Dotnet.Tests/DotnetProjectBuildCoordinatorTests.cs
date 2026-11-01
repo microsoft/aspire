@@ -1076,7 +1076,8 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
 
         if (caseInsensitive)
         {
-            Assert.Equal([NormalizeProjectPath(firstPath)], buildResource.ProjectPaths);
+            // Both spellings are the same project, and the build only sees its on-disk spelling (#21621).
+            Assert.Equal([NormalizeProjectPath(projectPath)], buildResource.ProjectPaths);
         }
         else
         {
