@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Fixes relative dashboard data directory resolution",
+  "mergedAt": "2026-11-01T07:07:32Z",
+  "number": 21525,
+  "runDate": "2026-11-01T12:05:00Z",
+  "status": "included",
+  "title": "Resolve relative dashboard data directory against the AppHost directory"
+}

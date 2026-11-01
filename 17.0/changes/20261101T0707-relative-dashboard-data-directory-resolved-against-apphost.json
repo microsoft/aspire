@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "A relative dashboard data directory (`Dashboard:Data:Directory` / `ASPIRE_DASHBOARD_DATA_DIRECTORY`) is now resolved against the AppHost directory instead of the dashboard's install directory, avoiding writes under read-only dashboard binaries.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "📁",
+  "firstMergedAt": "2026-11-01T07:07:32Z",
+  "lastMergedAt": "2026-11-01T07:07:32Z",
+  "name": "Relative dashboard data directory resolved against AppHost",
+  "owner": "davidfowl",
+  "prs": [
+    21525
+  ]
+}
