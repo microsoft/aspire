@@ -56,6 +56,8 @@ $counterPaths = [ordered]@{
     DiskPercentTime     = '\PhysicalDisk(_Total)\% Disk Time'
 }
 
+$script:loggedCounterErrors = [System.Collections.Generic.HashSet[string]]::new()
+
 function Write-SamplerError([string]$message) {
     try { Add-Content -LiteralPath $errorFile -Value "[$([DateTime]::UtcNow.ToString('o'))] $message" } catch { }
 }
@@ -87,7 +89,14 @@ function Get-CounterValues {
     $values = @{}
     try {
         # Counters that do not exist on this machine are skipped rather than failing the sample.
-        $samples = (Get-Counter -Counter @($counterPaths.Values) -ErrorAction SilentlyContinue).CounterSamples
+        $counterErrors = $null
+        $samples = (Get-Counter -Counter @($counterPaths.Values) -ErrorAction SilentlyContinue -ErrorVariable counterErrors).CounterSamples
+        foreach ($counterError in @($counterErrors | Where-Object { $_ })) {
+            # Log each distinct failure once instead of on every sample.
+            if ($script:loggedCounterErrors.Add("$counterError")) {
+                Write-SamplerError "Get-Counter error: $counterError"
+            }
+        }
         foreach ($entry in $counterPaths.GetEnumerator()) {
             $leaf = $entry.Value.Split('\')[-1]
             $object = $entry.Value.Split('\')[1].Split('(')[0]
@@ -96,7 +105,9 @@ function Get-CounterValues {
         }
     }
     catch {
-        Write-SamplerError "Get-Counter failed: $_"
+        if ($script:loggedCounterErrors.Add("$_")) {
+            Write-SamplerError "Get-Counter failed: $_"
+        }
     }
     return $values
 }
