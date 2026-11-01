@@ -73,8 +73,8 @@ try
             Environment.GetEnvironmentVariable("GO_PLAYGROUND_FAIL") ?? "false")
         .WaitFor(service);
 
-    builder.AddExecutable("rust-tests", "cargo", "rust-tests", "nextest", "run")
-        .WithNextestTesting()
+    builder.AddExecutable("rust-tests", "cargo", "rust-tests", "test")
+        .WithCargoTesting()
         .WithEnvironment("RUST_SERVICE_URL", serviceEndpoint)
         .WithEnvironment("RUST_PLAYGROUND_FAIL",
             Environment.GetEnvironmentVariable("RUST_PLAYGROUND_FAIL") ?? "false")
