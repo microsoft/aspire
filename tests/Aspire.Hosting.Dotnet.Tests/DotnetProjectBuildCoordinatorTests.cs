@@ -6,6 +6,7 @@
 using System.IO.Compression;
 using System.Reflection;
 using System.Text.Json;
+using System.Threading.Channels;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp.Model;
 using Aspire.Hosting.Dcp.Process;
@@ -16,10 +17,12 @@ using Aspire.Hosting.Tests.Helpers;
 using Aspire.Hosting.Tests.Dcp;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
+using Aspire.Shared.ConsoleLogs;
 using Aspire.TestUtilities;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Dotnet.Tests;
@@ -1326,6 +1329,145 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
                 serviceProvider: app.Services));
         Assert.Contains("resource 'worker' changed after the coordinated build plan was materialized", exception.Message);
         Assert.Contains("do not add or remove them after materialization", exception.Message);
+    }
+
+    [Fact]
+    public async Task FailedCoordinatedBuildReportsBuildErrorsToDependentsAndAppHostLogOnce()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        builder.Services.AddLogging(logging => logging.AddFakeLogging());
+        var apiPath = CreateProject(workspace.Path, "Api", "Api.csproj");
+        var workerPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
+        var api = builder.AddDotnetProject("api", apiPath, options => options.ExcludeLaunchProfile = true);
+        var worker = builder.AddDotnetProject("worker", workerPath, options => options.ExcludeLaunchProfile = true);
+        await using var app = builder.Build();
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        const string compilerError = "/src/Api/Program.cs(3,1): error CS1002: ; expected [/src/Api/Api.csproj]";
+        const string fileInUseError = "C:\\sdk\\Microsoft.NET.Sdk.Razor.StaticWebAssets.targets(1,1): error MSB3026: Could not copy file. The process cannot access the file because it is being used by another process. [/src/Worker/Worker.csproj]";
+        UseBuildOutput(
+            app,
+            buildResource,
+            "Restore complete (0.5s)",
+            compilerError,
+            fileInUseError,
+            $"2026-01-01T00:00:00.0000000Z {compilerError}",
+            "Build failed with 2 error(s) and 0 warning(s)");
+        await app.ResourceNotifications.PublishUpdateAsync(
+            buildResource,
+            snapshot => snapshot with
+            {
+                State = KnownResourceStates.Finished,
+                ExitCode = 1,
+            });
+
+        foreach (var dependent in new IResource[] { api.Resource, worker.Resource })
+        {
+            var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
+                builder.Eventing.PublishAsync(
+                    new BeforeResourceStartedEvent(dependent, app.Services),
+                    TestContext.Current.CancellationToken));
+            Assert.Contains("The coordinated .NET build failed with exit code 1.", exception.Message);
+            Assert.Contains(compilerError, exception.Message);
+            Assert.Contains(fileInUseError, exception.Message);
+            Assert.DoesNotContain("Restore complete", exception.Message);
+            Assert.Single(exception.Message.Split(Environment.NewLine), line => line == compilerError);
+        }
+
+        var appHostError = Assert.Single(
+            app.Services.GetFakeLogCollector().GetSnapshot(),
+            record => record.Level == LogLevel.Error && record.Message.Contains("The coordinated .NET build failed", StringComparison.Ordinal));
+        Assert.Contains(compilerError, appHostError.Message);
+        Assert.Contains(fileInUseError, appHostError.Message);
+    }
+
+    [Fact]
+    public async Task FailedCoordinatedBuildWithoutErrorLinesReportsBuildOutputTail()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
+        var project = builder.AddDotnetProject("worker", projectPath, options => options.ExcludeLaunchProfile = true);
+        await using var app = builder.Build();
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        UseBuildOutput(
+            app,
+            buildResource,
+            [.. Enumerable.Range(0, 25).Select(i => $"build output line {i:D2}")]);
+
+        await app.ResourceNotifications.PublishUpdateAsync(
+            buildResource,
+            snapshot => snapshot with
+            {
+                State = KnownResourceStates.Finished,
+                ExitCode = -1073741510,
+            });
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
+            builder.Eventing.PublishAsync(
+                new BeforeResourceStartedEvent(project.Resource, app.Services),
+                TestContext.Current.CancellationToken));
+        Assert.Contains("exit code -1073741510", exception.Message);
+        Assert.DoesNotContain("build output line 04", exception.Message);
+        Assert.Contains("build output line 05", exception.Message);
+        Assert.Contains("build output line 24", exception.Message);
+    }
+
+    [Fact]
+    public async Task FailedCoordinatedBuildStillFailsDependentWhenBuildOutputIsUnavailable()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
+        var project = builder.AddDotnetProject("worker", projectPath, options => options.ExcludeLaunchProfile = true);
+        await using var app = builder.Build();
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        app.Services.GetRequiredService<ResourceLoggerService>().SetConsoleLogsService(
+            new TestConsoleLogsService(_ => throw new InvalidOperationException("Console logs are unavailable.")));
+        await app.ResourceNotifications.PublishUpdateAsync(
+            buildResource,
+            snapshot => snapshot with
+            {
+                State = KnownResourceStates.Finished,
+                ExitCode = 1,
+            });
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
+            builder.Eventing.PublishAsync(
+                new BeforeResourceStartedEvent(project.Resource, app.Services),
+                TestContext.Current.CancellationToken));
+        Assert.Equal(
+            $"The coordinated .NET build failed with exit code 1. See resource '{buildResource.Name}' for build output.",
+            exception.Message);
+    }
+
+    private static void UseBuildOutput(DistributedApplication app, DotnetProjectBuildResource buildResource, params string[] lines)
+    {
+        var buildResourceNames = buildResource.GetResolvedResourceNames();
+        app.Services.GetRequiredService<ResourceLoggerService>().SetConsoleLogsService(
+            new TestConsoleLogsService(resourceName =>
+            {
+                var channel = Channel.CreateUnbounded<IReadOnlyList<LogEntry>>();
+                if (buildResourceNames.Contains(resourceName))
+                {
+                    channel.Writer.TryWrite([.. lines.Select(line => LogEntry.Create(timestamp: null, line, isErrorMessage: false))]);
+                }
+
+                channel.Writer.Complete();
+                return channel;
+            }));
     }
 
     [Fact]

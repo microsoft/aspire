@@ -5,9 +5,11 @@
 
 using System.Globalization;
 using System.Runtime.CompilerServices;
+using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
+using Aspire.Shared.ConsoleLogs;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -18,8 +20,13 @@ namespace Aspire.Hosting.Dotnet;
 /// <summary>
 /// Configures coordinated initial builds for path-based .NET resources.
 /// </summary>
-internal static class DotnetProjectBuildCoordinator
+internal static partial class DotnetProjectBuildCoordinator
 {
+    private const int MaxReportedBuildOutputLines = 20;
+    private const int MaxReportedBuildOutputLineLength = 1000;
+    private static readonly TimeSpan s_buildOutputReadTimeout = TimeSpan.FromSeconds(10);
+    private static readonly ConditionalWeakTable<CustomResourceSnapshot, object> s_reportedBuildFailures = new();
+
     private static readonly ConditionalWeakTable<IDistributedApplicationBuilder, CoordinatorState> s_states = new();
 
     internal const string BuildResourceName = "__dotnet-project-build";
@@ -193,10 +200,96 @@ internal static class DotnetProjectBuildCoordinator
             buildEvent.Snapshot.ExitCode is not 0)
         {
             var exitCode = buildEvent.Snapshot.ExitCode?.ToString(CultureInfo.InvariantCulture) ?? "unavailable";
-            throw new DistributedApplicationException(
-                $"The coordinated .NET build failed with exit code {exitCode}. See resource '{buildResource.Name}' for build output.");
+            var message = $"The coordinated .NET build failed with exit code {exitCode}. See resource '{buildResource.Name}' for build output.";
+            var buildOutput = await GetBuildFailureOutputAsync(services, buildResource, cancellationToken).ConfigureAwait(false);
+            if (buildOutput.Count > 0)
+            {
+                message += Environment.NewLine + string.Join(Environment.NewLine, buildOutput);
+            }
+
+            // Every dependent of the build observes the same settled snapshot, so report the failure to the
+            // AppHost log once. Without this, the build output only exists in the hidden build resource's log.
+            if (s_reportedBuildFailures.TryAdd(buildEvent.Snapshot, new object()))
+            {
+                services.GetRequiredService<ILoggerFactory>()
+                    .CreateLogger(typeof(DotnetProjectBuildCoordinator))
+                    .LogError("{Message}", message);
+            }
+
+            throw new DistributedApplicationException(message);
         }
     }
+
+    private static async Task<IReadOnlyList<string>> GetBuildFailureOutputAsync(
+        IServiceProvider services,
+        IResource buildResource,
+        CancellationToken cancellationToken)
+    {
+        var resourceLoggerService = services.GetService<ResourceLoggerService>();
+        if (resourceLoggerService is null)
+        {
+            return [];
+        }
+
+        var errors = new List<string>();
+        var tail = new Queue<string>();
+        using var readCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        readCancellation.CancelAfter(s_buildOutputReadTimeout);
+        try
+        {
+            await foreach (var batch in resourceLoggerService.GetAllAsync(buildResource)
+                .WithCancellation(readCancellation.Token)
+                .ConfigureAwait(false))
+            {
+                foreach (var logLine in batch)
+                {
+                    var content = TimestampParser.TryParseConsoleTimestamp(logLine.Content, out var timestampResult)
+                        ? timestampResult.Value.ModifiedText
+                        : logLine.Content;
+                    content = content.TrimEnd();
+                    if (content.Length == 0)
+                    {
+                        continue;
+                    }
+
+                    if (content.Length > MaxReportedBuildOutputLineLength)
+                    {
+                        content = content[..MaxReportedBuildOutputLineLength];
+                    }
+
+                    if (errors.Count < MaxReportedBuildOutputLines &&
+                        MsBuildErrorRegex().IsMatch(content) &&
+                        !errors.Contains(content, StringComparer.Ordinal))
+                    {
+                        errors.Add(content);
+                    }
+
+                    tail.Enqueue(content);
+                    if (tail.Count > MaxReportedBuildOutputLines)
+                    {
+                        tail.Dequeue();
+                    }
+                }
+            }
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // The build output is best-effort diagnostics; report whatever was read before the timeout.
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Reading the build output must never replace the build failure itself.
+            services.GetService<ILoggerFactory>()?
+                .CreateLogger(typeof(DotnetProjectBuildCoordinator))
+                .LogDebug(ex, "Failed to read the output of .NET build resource '{ResourceName}'.", buildResource.Name);
+        }
+
+        return errors.Count > 0 ? errors : [.. tail];
+    }
+
+    // Matches MSBuild canonical error lines such as "File.cs(1,2): error CS1002: ..." or "MSBUILD : error MSB1009: ...".
+    [GeneratedRegex(@"(^|\s|:)error(\s+[A-Za-z]+\d+)?\s*:", RegexOptions.CultureInvariant)]
+    private static partial Regex MsBuildErrorRegex();
 
     internal static bool IsSettledBuildSnapshot(CustomResourceSnapshot snapshot) =>
         snapshot.State?.Text == KnownResourceStates.FailedToStart ||
