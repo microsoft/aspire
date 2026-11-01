@@ -372,14 +372,19 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
 
             foreach (var arg in context.Args)
             {
-                var value = await ProcessValueAsync(environmentContext, executionContext, arg).ConfigureAwait(false);
+                // Args are rendered inline in the pod spec, so resolve them as embedded values. Parameters
+                // become Helm values expressions (and are allocated into values.yaml) instead of HelmValue objects.
+                var value = await ProcessValueAsync(environmentContext, executionContext, arg, embedded: true).ConfigureAwait(false);
 
-                if (value is not string str)
+                var str = value switch
                 {
-                    throw new NotSupportedException("Command line args must be strings");
-                }
+                    string s => s,
+                    HelmValue { ParameterSource: not null, Expression: { } expression } => expression,
+                    HelmValue { Expression: null, ValueString: { } literal } => literal,
+                    _ => throw new NotSupportedException("Command line args must be strings")
+                };
 
-                Commands.Add(new(str));
+                Commands.Add(str);
             }
         }
     }

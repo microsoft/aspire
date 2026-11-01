@@ -134,6 +134,69 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PublishAsync_ParameterArgsAreRenderedAsHelmValueExpressions()
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/15789: NATS passes its
+        // user name (a single-value ReferenceExpression) and password (a secret ParameterResource)
+        // as top-level container args, which previously failed with "Command line args must be strings".
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        var user = builder.AddParameter("user", "nats", publishValueAsDefault: true);
+        var password = builder.AddParameter("password", secret: true);
+        var logLevel = builder.AddParameter("loglevel");
+
+        builder.AddContainer("myapp", "nats", "2.11")
+            .WithArgs(context =>
+            {
+                context.Args.Add("--user");
+                context.Args.Add(ReferenceExpression.Create($"{user.Resource}"));
+                context.Args.Add("--pass");
+                context.Args.Add(password.Resource);
+                context.Args.Add("--log");
+                context.Args.Add(logLevel.Resource);
+                context.Args.Add(ReferenceExpression.Create($"literal-{"value"}"));
+            });
+
+        var app = builder.Build();
+        app.Run();
+
+        var deployment = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "templates/myapp/deployment.yaml"));
+        var container = new DeserializerBuilder().Build().Deserialize<Dictionary<object, object>>(deployment);
+        var args = ((List<object>)((Dictionary<object, object>)((List<object>)((Dictionary<object, object>)((Dictionary<object, object>)((Dictionary<object, object>)container["spec"])["template"])["spec"])["containers"])[0])["args"])
+            .Cast<string>()
+            .ToArray();
+
+        Assert.Equal(
+            [
+                "--user",
+                "{{ .Values.config.myapp.user }}",
+                "--pass",
+                "{{ .Values.secrets.myapp.password }}",
+                "--log",
+                "{{ .Values.config.myapp.loglevel }}",
+                "literal-value",
+            ],
+            args);
+
+        // The parameters referenced by args must have entries in values.yaml so the templates render.
+        var values = new DeserializerBuilder().Build().Deserialize<Dictionary<object, object>>(
+            await File.ReadAllTextAsync(Path.Combine(workspace.Path, "values.yaml")));
+        var config = (Dictionary<object, object>)((Dictionary<object, object>)values["config"])["myapp"];
+        var secrets = (Dictionary<object, object>)((Dictionary<object, object>)values["secrets"])["myapp"];
+
+        Assert.Equal("nats", config["user"]);
+        Assert.True(config.ContainsKey("loglevel"));
+        Assert.True(secrets.ContainsKey("password"));
+
+        // Args-only parameters must not leak into the generated ConfigMap or Secret as environment variables.
+        Assert.False(File.Exists(Path.Combine(workspace.Path, "templates/myapp/config.yaml")));
+        Assert.False(File.Exists(Path.Combine(workspace.Path, "templates/myapp/secrets.yaml")));
+    }
+
+    [Fact]
     public async Task PublishAppliesServiceCustomizations()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
