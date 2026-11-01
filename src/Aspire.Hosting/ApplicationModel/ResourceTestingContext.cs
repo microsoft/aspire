@@ -9,13 +9,13 @@ namespace Aspire.Hosting.ApplicationModel;
 /// Publishes collected test results for one logical resource into the containing test run.
 /// </summary>
 /// <remarks>
-/// The resource output path is established before startup and is shared with
-/// <see cref="TestingOptions.OutputPath"/>. Results are accepted only while the collector is active.
+/// The resource output path is established internally before startup and made available to the
+/// runtime collector. Results are accepted only while the collector is active.
 /// Framework integrations are responsible for reading and translating their own result formats.
 /// </remarks>
 /// <example>
 /// <code lang="C#">
-/// options.CollectResults(context =>
+/// tests.WithTesting(context =>
 /// {
 ///     context.PublishResult(new TestResult { Name = "example", Outcome = TestOutcome.Passed });
 ///     return Task.CompletedTask;
@@ -57,6 +57,11 @@ public sealed class ResourceTestingContext
     /// <summary>
     /// Gets the absolute host path to this resource's private output directory.
     /// </summary>
+    /// <remarks>
+    /// Named after the logical resource directly beneath the run directory and shared by its replicas.
+    /// Configure runner report paths independently and stage artifacts here during collection.
+    /// Repeated <c>WithTesting</c> calls preserve this destination.
+    /// </remarks>
     [AspireExport]
     public string OutputPath { get; }
 
@@ -69,18 +74,38 @@ public sealed class ResourceTestingContext
     /// <summary>
     /// Waits until every replica of this resource has reached an authoritative terminal outcome.
     /// </summary>
+    /// <param name="cancellationToken">An optional token that cancels only this wait, in addition to test-run cancellation.</param>
     /// <returns>True if resource execution passed; otherwise false. Published test results do not affect this value.</returns>
     /// <remarks>
     /// Collection starts alongside execution. Use this helper before harvesting files written at
     /// process completion. It shares the run's completion tracking, handles resources that already
     /// finished, and waits for late exit-code notifications. Collector completion itself is not awaited.
+    /// The default token still observes <see cref="CancellationToken"/>, including command deadlines
+    /// and interruption. A supplied token cannot disable run cancellation, and cancelling this wait
+    /// does not cancel the shared resource-completion task or other waiters.
     /// </remarks>
     /// <exception cref="OperationCanceledException">Collection has been cancelled.</exception>
     [AspireExport]
-    public Task<bool> WaitForCompletionAsync()
+    public Task<bool> WaitForCompletionAsync(CancellationToken cancellationToken = default)
     {
         CancellationToken.ThrowIfCancellationRequested();
-        return _resourceCompletion.WaitAsync(CancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!cancellationToken.CanBeCanceled || cancellationToken == CancellationToken)
+        {
+            return _resourceCompletion.WaitAsync(CancellationToken);
+        }
+        if (!CancellationToken.CanBeCanceled)
+        {
+            return _resourceCompletion.WaitAsync(cancellationToken);
+        }
+
+        return WaitWithLinkedCancellationAsync(cancellationToken);
+    }
+
+    private async Task<bool> WaitWithLinkedCancellationAsync(CancellationToken cancellationToken)
+    {
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(CancellationToken, cancellationToken);
+        return await _resourceCompletion.WaitAsync(linked.Token).ConfigureAwait(false);
     }
 
     /// <summary>

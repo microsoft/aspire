@@ -55,17 +55,17 @@ public sealed class TestResult
 public enum TestOutcome
 {
     /// <summary>
-    /// The test passed.
-    /// </summary>
-    Passed = 1,
-
-    /// <summary>
     /// The test failed.
     /// </summary>
-    Failed = 2,
+    Failed,
+
+    /// <summary>
+    /// The test passed.
+    /// </summary>
+    Passed,
 
     /// <summary>
     /// The test was skipped.
     /// </summary>
-    Skipped = 3
+    Skipped
 }

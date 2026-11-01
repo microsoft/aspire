@@ -15,16 +15,16 @@ namespace Aspire.Hosting;
 public static class TestResourceBuilderExtensions
 {
     /// <summary>
-    /// Configures a resource's participation and result collection in an <c>aspire test</c> run.
+    /// Marks a resource for an <c>aspire test</c> run, with an optional asynchronous runtime result collector.
     /// </summary>
-    /// <ats-summary>Configures a resource's testing participation and result collectors.</ats-summary>
+    /// <ats-summary>Marks a resource for testing with an optional runtime result collector.</ats-summary>
     /// <typeparam name="T">The resource type.</typeparam>
     /// <param name="builder">The resource builder.</param>
-    /// <param name="callback">An optional synchronous callback that immediately configures testing options.</param>
+    /// <param name="callback">An optional asynchronous result collector that runs alongside resource execution during testing.</param>
     /// <returns>The resource builder.</returns>
     /// <remarks>
     /// <para>
-    /// Configuration runs immediately. Async collectors start alongside resource execution and may
+    /// The callback does not run during model definition. It starts alongside resource execution and may
     /// use <see cref="ResourceTestingContext.WaitForCompletionAsync"/> before harvesting final artifacts.
     /// The command waits for all marked resources, including their replicas, and all collectors.
     /// It then shuts down the application unless <c>--keep-alive</c> was requested.
@@ -32,12 +32,13 @@ public static class TestResourceBuilderExtensions
     /// terminal exit code fails. Resources must publish completion through <see cref="ResourceNotificationService"/>.
     /// The annotation does not change the lifetime of <c>aspire run</c>.
     /// Published failures or collector exceptions fail testing without discarding other results.
-    /// Outside testing, configuration still runs but output paths are null and collectors do not run.
+    /// Outside testing, the callback does not run and no testing output paths are allocated.
+    /// Framework helpers must configure their runner's report destination independently, then stage
+    /// collected artifacts into <see cref="ResourceTestingContext.OutputPath"/> at runtime.
     /// </para>
     /// <para>
-    /// Calling this method again replaces the collectors, including removing them for a marker-only call,
-    /// while preserving the resource's existing run context and output directory. Launch arguments and
-    /// environment variables configured by an earlier call therefore remain aligned with collection.
+    /// Calling this method again replaces the collector, including removing it for a marker-only call,
+    /// while preserving the resource's existing run context and output directory.
     /// Each logical resource uses a directory named after the resource directly beneath the run directory.
     /// Replicas share that directory; this API does not allocate separate per-replica output paths.
     /// </para>
@@ -56,40 +57,41 @@ public static class TestResourceBuilderExtensions
     /// The application shuts down unless keep-alive was requested.
     /// Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
     /// This does not change the lifetime of aspire run.
-    /// Configuration runs immediately. Collectors start alongside resource execution during testing.
-    /// The CLI supplies private resource output destinations; those paths are absent during ordinary runs.
-    /// Repeated calls replace collectors while preserving the existing run context and output directory.
+    /// The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
+    /// The context supplies a private resource output destination. Configure runner report paths independently
+    /// and stage collected artifacts into this destination at runtime.
+    /// Repeated calls replace the collector while preserving the existing run context and output directory.
     /// </ats-remarks>
     /// <ats-returns>The resource builder.</ats-returns>
     /// <exception cref="ArgumentNullException">The builder is null.</exception>
     /// <exception cref="ArgumentException">The resource name cannot be used as a portable testing output directory.</exception>
     /// <exception cref="IOException">A new resource's testing output path already exists or cannot be created securely.</exception>
-    [AspireExport(RunSyncOnBackgroundThread = true)]
+    [AspireExport]
     [Experimental(TestingDiagnostics.DiagnosticId, UrlFormat = TestingDiagnostics.UrlFormat)]
-    public static IResourceBuilder<T> WithTesting<T>(this IResourceBuilder<T> builder, Action<TestingOptions>? callback = null) where T : IResource
+    public static IResourceBuilder<T> WithTesting<T>(this IResourceBuilder<T> builder, Func<ResourceTestingContext, Task>? callback = null) where T : IResource
     {
         ArgumentNullException.ThrowIfNull(builder);
 
         builder.Resource.TryGetLastAnnotation<TestingAnnotation>(out var annotation);
-        var existingOptions = annotation?.Options;
-        var runContext = existingOptions?.RunContext;
-        var resourceOutputPath = existingOptions?.OutputPath;
-        if (existingOptions is null &&
+        var runContext = annotation?.RunContext;
+        var resourceOutputPath = annotation?.OutputPath;
+        if (runContext is null &&
             builder.ApplicationBuilder.ExecutionContext.IsRunMode &&
             builder.ApplicationBuilder.Configuration[KnownConfigNames.TestOutputPath] is { } outputPath)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(outputPath);
             runContext = new TestRunContext(Path.GetFullPath(outputPath));
             // The CLI creates the run directory before model construction. Allocate only within
-            // that private boundary so immediate configuration can safely use a real destination.
+            // that private boundary before execution, without invoking the runtime collector.
             SocketPermissionHelper.CreateDirectory(runContext.OutputPath, repairExisting: false);
             resourceOutputPath = CreateResourceOutputDirectory(runContext.OutputPath, builder.Resource.Name);
         }
-        var options = new TestingOptions(runContext, builder.Resource.Name, resourceOutputPath);
-        callback?.Invoke(options);
-        options.CompleteConfiguration();
-
-        return builder.WithAnnotation(new TestingAnnotation(options), ResourceAnnotationMutationBehavior.Replace);
+        return builder.WithAnnotation(new TestingAnnotation
+        {
+            Collector = callback,
+            RunContext = runContext,
+            OutputPath = resourceOutputPath
+        }, ResourceAnnotationMutationBehavior.Replace);
     }
 
     private static string CreateResourceOutputDirectory(string runOutputPath, string resourceName)

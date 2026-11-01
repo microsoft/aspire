@@ -9,19 +9,17 @@ namespace Aspire.Hosting.ApplicationModel;
 /// Provides the output destination for the current <c>aspire test</c> invocation.
 /// </summary>
 /// <remarks>
-/// The CLI creates the directory before launching the AppHost, so testing configuration can run
-/// immediately during model definition. Resource collectors use their own isolated output paths
+/// The CLI creates the directory before launching the AppHost. Runtime collectors use their own isolated output paths
 /// beneath this run directory. This is a host filesystem path, not an in-container path.
 /// </remarks>
 /// <example>
 /// <code lang="C#">
 /// var tests = builder.AddExecutable("tests", "test-runner", ".");
-/// tests.WithTesting(options =>
+/// tests.WithTesting(async context =>
 /// {
-///     if (options.OutputPath is { } path)
-///     {
-///         tests.WithEnvironment("TEST_OUTPUT_DIRECTORY", path);
-///     }
+///     await context.WaitForCompletionAsync();
+///     await File.WriteAllTextAsync(Path.Combine(context.OutputPath, "collected.txt"),
+///         "Collected test artifacts", context.CancellationToken);
 /// });
 /// </code>
 /// </example>

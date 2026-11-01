@@ -26,25 +26,23 @@ var service = builder.AddDotnetProject("service", "service/service.cs")
     .WithHttpHealthCheck("/health");
 var serviceEndpoint = service.GetEndpoint("http");
 
-var foundationTests = builder.AddDotnetProject("foundation-tests", "foundation-tests/tests.cs")
-    .WithEnvironment("SERVICE_URL", serviceEndpoint)
-    .WaitFor(service);
-
-foundationTests.WithTesting(options =>
+var probeReports = Directory.CreateTempSubdirectory("aspire-cli-testing-probe-");
+try
 {
-    if (options.OutputPath is { } outputPath)
-    {
-        foundationTests.WithEnvironment("TEST_OUTPUT_PATH", outputPath);
-    }
+    var foundationTests = builder.AddDotnetProject("foundation-tests", "foundation-tests/tests.cs")
+        .WithEnvironment("SERVICE_URL", serviceEndpoint)
+        .WithEnvironment("TEST_OUTPUT_PATH", probeReports.FullName)
+        .WaitFor(service);
 
-    options.CollectResults(async context =>
+    foundationTests.WithTesting(async context =>
     {
         var passed = await context.WaitForCompletionAsync();
         if (passed)
         {
-            var artifact = await File.ReadAllTextAsync(
-                Path.Combine(context.OutputPath, "probe.txt"), context.CancellationToken);
+            var reportPath = Path.Combine(probeReports.FullName, "probe.txt");
+            var artifact = await File.ReadAllTextAsync(reportPath, context.CancellationToken);
             passed = artifact == "Aspire CLI testing";
+            File.Copy(reportPath, Path.Combine(context.OutputPath, "probe.txt"));
         }
 
         context.PublishResult(new TestResult
@@ -54,6 +52,10 @@ foundationTests.WithTesting(options =>
             Message = passed ? null : "The shared service probe or its output artifact failed."
         });
     });
-});
 
-builder.Build().Run();
+    builder.Build().Run();
+}
+finally
+{
+    probeReports.Delete(recursive: true);
+}

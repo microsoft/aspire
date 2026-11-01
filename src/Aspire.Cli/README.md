@@ -80,42 +80,45 @@ until cancelled or an explicitly supplied command deadline expires. Detached exe
 extension-managed debug sessions are not supported. Framework-specific result parsers and resource helpers are not provided.
 
 Each invocation creates a unique directory under `~/.aspire/testruns` (or the
-configured Aspire home) before the AppHost starts. `WithTesting(Action<TestingOptions>)`
-configures options **immediately**, during model definition, and registers async
-collectors with `CollectResults(Func<ResourceTestingContext, Task>)`:
+configured Aspire home) before the AppHost starts.
+`WithTesting(Func<ResourceTestingContext, Task>)` registers one asynchronous
+runtime collector. `WithTesting()` marks a resource without result collection:
 
 ```csharp
 #pragma warning disable ASPIRETESTING001
 var tests = builder.AddExecutable("tests", "test-runner", ".");
-tests.WithTesting(options =>
+tests.WithTesting(async context =>
 {
-    if (options.OutputPath is { } path)
-    {
-        tests.WithEnvironment("TEST_OUTPUT_DIRECTORY", path);
-    }
-    options.CollectResults(async context =>
-    {
-        await context.WaitForCompletionAsync();
-        // Read your framework's artifacts from context.OutputPath, then publish
-        // each observed result with context.PublishResult(new TestResult { ... }).
-    });
+    await context.WaitForCompletionAsync();
+    // Read your framework's reports from its independently configured location,
+    // stage artifacts into context.OutputPath, then publish observed results.
+    context.PublishResult(new TestResult { Name = "example", Outcome = TestOutcome.Passed });
 });
 ```
 
-During testing, `TestingOptions.OutputPath` is an existing private directory
-unique to that logical resource; `RunContext.OutputPath` identifies the containing
-run. In ordinary run/publish scenarios the configuration action still executes,
-but `IsTestRun` is false and `OutputPath`/`RunContext` are null. No test directory is
-invented and collectors do not run.
+The callback does not run during model definition or ordinary run/publish.
+It is not a prelaunch configuration hook: framework helpers must coordinate their
+runner's arguments/environment and report location independently, without
+depending on callback execution before its first await.
+During testing, `ResourceTestingContext.OutputPath` is an existing private
+`<run-id>/<logical-resource-name>` directory shared by that resource's replicas;
+`RunContext.OutputPath` identifies the containing run. Repeated `WithTesting`
+calls replace the collector while retaining the same run context and output
+destination. A marker-only call clears the collector. No testing directory is
+invented outside testing.
 
 Collectors start alongside resource execution, before the CLI connects.
 `ResourceTestingContext` provides the logical resource name, isolated output
 path, containing run context, and collection cancellation token. Its
 `WaitForCompletionAsync()` helper shares authoritative resource/replica tracking,
 including already-finished resources and late exit codes. It returns resource
-execution success, not collection success. Collectors may publish results live
-without waiting, or await completion before harvesting artifacts. Multiple
-collectors run concurrently and are all awaited before final output and teardown;
+execution success, not collection success. Its optional cancellation token adds
+caller-local cancellation; the default still observes run cancellation, including
+`--timeout-seconds` and Ctrl+C. A supplied token cannot disable that bound, and
+cancelling one wait does not cancel shared completion tracking or other waiters.
+Collectors may publish results live
+without waiting, or await completion before harvesting artifacts. Each resource's
+collector runs concurrently with the others and is awaited before final output and teardown;
 an early-returning collector does not end resource execution.
 
 Use `PublishResult(TestResult)` to report an observed name, passed/failed/skipped
@@ -129,7 +132,8 @@ destination; their process identity must have access to the mount.
 
 Interactive runs show a **Tests are running** header, print AppHost, dashboard,
 and log locations as append-only labeled lines, stream the annotated
-resources' state changes and replicas, and finish with a resource outcome table.
+resources' state changes and individual results, and show per-resource result totals
+after collection followed by an overall verdict without a duplicate resource table.
 The CLI prints the output directory and a clickable `summary.json` path, falling
 back to a plain path when terminal hyperlinks are unavailable.
 

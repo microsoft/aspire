@@ -251,34 +251,32 @@ internal sealed class TestRunCoordinator(
     private async Task<bool> CollectAsync(IResource resource, Task<bool> resourceCompletion, CancellationToken cancellationToken)
     {
         resource.TryGetLastAnnotation<TestingAnnotation>(out var annotation);
-        var options = annotation?.Options;
-        var collectors = options is { IsTestRun: true } ? options.Collectors : [];
+        var configured = annotation is { RunContext: not null, OutputPath: not null, Collector: not null };
         var state = new TestCollectionState
         {
             ResourceName = resource.Name,
-            OutputPath = options?.OutputPath,
-            CollectorCount = collectors.Length,
-            Status = collectors.Length == 0 ? "notConfigured" : "running"
+            OutputPath = annotation?.OutputPath,
+            CollectorCount = configured ? 1 : 0,
+            Status = configured ? "running" : "notConfigured"
         };
         Publish(new TestRunEvent { Collection = state });
-        if (collectors.Length == 0)
+        if (annotation is not { RunContext: { } runContext, OutputPath: { } outputPath, Collector: { } collector })
         {
             return true;
         }
         try
         {
-            var outcomes = await Task.WhenAll(collectors.Select(collector =>
-                RunCollectorAsync(resource.Name, options!, resourceCompletion, collector, cancellationToken))).ConfigureAwait(false);
-            var errors = outcomes.Where(o => o.Error is not null).Select(o => o.Error).ToArray();
+            var outcome = await RunCollectorAsync(resource.Name, runContext, outputPath,
+                resourceCompletion, collector, cancellationToken).ConfigureAwait(false);
             Publish(new TestRunEvent
             {
                 Collection = state with
                 {
-                    Status = errors.Length == 0 ? "completed" : "failed",
-                    Error = errors.Length == 0 ? null : string.Join(Environment.NewLine, errors)
+                    Status = outcome.Error is null ? "completed" : "failed",
+                    Error = outcome.Error
                 }
             });
-            return outcomes.All(o => o.Passed);
+            return outcome.Passed;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -287,11 +285,11 @@ internal sealed class TestRunCoordinator(
         }
     }
 
-    private async Task<(bool Passed, string? Error)> RunCollectorAsync(string resourceName, TestingOptions options,
+    private async Task<(bool Passed, string? Error)> RunCollectorAsync(string resourceName, TestRunContext runContext, string outputPath,
         Task<bool> resourceCompletion, Func<ResourceTestingContext, Task> collector, CancellationToken cancellationToken)
     {
         var hasFailedResult = false;
-        var context = new ResourceTestingContext(options.RunContext!, resourceName, options.OutputPath!, result =>
+        var context = new ResourceTestingContext(runContext, resourceName, outputPath, result =>
         {
             hasFailedResult |= result.Outcome == TestOutcome.Failed;
             Publish(new TestRunEvent

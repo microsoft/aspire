@@ -1829,6 +1829,29 @@ public class AtsTypeScriptCodeGeneratorTests
         new(@"invokeCapability<(\w+)>\([^;]*?\);\s*return new (\w+)\(", RegexOptions.Compiled);
 
     [Fact]
+    public void Scanner_WithTesting_ExportsSingleOptionalRuntimeCollector()
+    {
+#pragma warning disable ASPIRETESTING001 // Validates the experimental runtime testing callback contract.
+        var scanResult = AtsCapabilityScanner.ScanAssemblies([typeof(DistributedApplication).Assembly]);
+        var capability = Assert.Single(scanResult.Capabilities, capability => capability.CapabilityId == "Aspire.Hosting/withTesting");
+        Assert.False(capability.RunSyncOnBackgroundThread);
+        Assert.True(capability.IsExperimental);
+        var callback = Assert.Single(capability.Parameters);
+        Assert.True(callback.IsOptional);
+        Assert.True(callback.IsCallback);
+        Assert.Equal(AtsConstants.Void, callback.CallbackReturnType?.TypeId);
+        AssertCallbackParameterTypes(capability, "callback", typeof(ResourceTestingContext));
+        Assert.Equal(typeof(Func<ResourceTestingContext, Task>),
+            typeof(TestResourceBuilderExtensions).GetMethod(nameof(TestResourceBuilderExtensions.WithTesting))!.GetParameters()[1].ParameterType);
+        var wait = Assert.Single(scanResult.Capabilities, capability =>
+            capability.CapabilityId == "Aspire.Hosting.ApplicationModel/waitForCompletionAsync");
+        var cancellation = Assert.Single(wait.Parameters, parameter => parameter.Name == "cancellationToken");
+        Assert.True(cancellation.IsOptional);
+        Assert.Equal(AtsConstants.CancellationToken, cancellation.Type?.TypeId);
+#pragma warning restore ASPIRETESTING001
+    }
+
+    [Fact]
     public async Task TwoPassScanning_GeneratesWithEnvironmentOnTestRedisBuilder()
     {
         // End-to-end test: verify that withEnvironment appears on TestRedisResourceBuilder

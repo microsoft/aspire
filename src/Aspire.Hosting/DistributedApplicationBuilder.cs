@@ -473,8 +473,8 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         {
             if (ExecutionContext.IsRunMode && e.Services.GetRequiredService<IConfiguration>()[KnownConfigNames.TestOutputPath] is { } outputPath)
             {
-                // Start live collectors before resource execution, not when the CLI eventually
-                // connects. Configuration has already run synchronously during model definition.
+                // Start runtime collectors alongside resource execution, not when the CLI
+                // eventually connects. These callbacks are not model-configuration hooks.
                 cancellationToken.ThrowIfCancellationRequested();
                 e.Services.GetRequiredService<TestRunCoordinator>().Start(
                     e.Services.GetRequiredService<IHostApplicationLifetime>().ApplicationStopping);

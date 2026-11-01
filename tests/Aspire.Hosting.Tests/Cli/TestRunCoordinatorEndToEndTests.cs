@@ -38,31 +38,29 @@ public class TestRunCoordinatorEndToEndTests(ITestOutputHelper outputHelper)
             ready.TrySetResult(e);
             return Task.CompletedTask;
         });
+        var runnerOutput = workspace.CreateDirectory("runner-output");
         var process = exitCode is null
             ? builder.AddExecutable("tests", "aspire-test-command-that-does-not-exist", ".")
             : OperatingSystem.IsWindows()
                 ? builder.AddExecutable("tests", "cmd.exe", ".", "/c", $"if not exist \"%TEST_OUTPUT_DIRECTORY%\\.\" exit /b 99 & exit /b {exitCode}")
                 : builder.AddExecutable("tests", "/bin/sh", ".", "-c", $"test -d \"$TEST_OUTPUT_DIRECTORY\" || exit 99; exit {exitCode}");
-        var configured = false;
-        process.WithTesting(context =>
+        process.WithEnvironment("TEST_OUTPUT_DIRECTORY", runnerOutput.FullName);
+        var collectorStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        process.WithTesting(async context =>
         {
-            Assert.Equal(outputDirectory.FullName, context.RunContext!.OutputPath);
+            Assert.Equal(outputDirectory.FullName, context.RunContext.OutputPath);
             Assert.True(Directory.Exists(context.OutputPath));
-            process.WithEnvironment("TEST_OUTPUT_DIRECTORY", context.OutputPath);
-            configured = true;
-            context.CollectResults(async collection =>
-            {
-                await collection.WaitForCompletionAsync();
-                collection.PublishResult(new TestResult { Name = "fixture result", Outcome = TestOutcome.Passed });
-            });
+            collectorStarted.TrySetResult();
+            await context.WaitForCompletionAsync();
+            context.PublishResult(new TestResult { Name = "fixture result", Outcome = TestOutcome.Passed });
         });
-        Assert.True(configured);
+        Assert.False(collectorStarted.Task.IsCompleted);
         var remaining = builder.AddParameter("remaining", "value").WithTesting();
         await using var app = builder.Build();
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
 
         await app.StartAsync(timeout.Token);
-        Assert.True(configured);
+        await collectorStarted.Task.WaitAsync(timeout.Token);
         var backchannel = await ready.Task.WaitAsync(timeout.Token);
         using var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
         await socket.ConnectAsync(new UnixDomainSocketEndPoint(backchannel.SocketPath), timeout.Token);
@@ -92,6 +90,67 @@ public class TestRunCoordinatorEndToEndTests(ITestOutputHelper outputHelper)
         await rpc.InvokeWithCancellationAsync("RequestStopAsync", [], timeout.Token);
         await app.StopAsync(timeout.Token);
         Assert.True(lifetime.ApplicationStopped.IsCancellationRequested);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ClosingBackchannelWatchCancelsCollectorWaitEvenWithExplicitToken(bool supplyCallerToken)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputDirectory = workspace.CreateDirectory("test-output");
+        SocketPermissionHelper.CreateDirectory(outputDirectory.FullName, repairExisting: true);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.DisableDashboard = true, outputHelper);
+        builder.Configuration[KnownConfigNames.UnixSocketPath] = UnixSocketHelper.GetBackchannelSocketPath();
+        builder.Configuration[KnownConfigNames.TestOutputPath] = outputDirectory.FullName;
+        var ready = new TaskCompletionSource<BackchannelReadyEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
+        builder.Eventing.Subscribe<BackchannelReadyEvent>((e, _) =>
+        {
+            ready.TrySetResult(e);
+            return Task.CompletedTask;
+        });
+        using var caller = new CancellationTokenSource();
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var cancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        builder.AddParameter("tests", "value").WithTesting(async context =>
+        {
+            started.TrySetResult();
+            try
+            {
+                await context.WaitForCompletionAsync(supplyCallerToken ? caller.Token : default);
+            }
+            catch (OperationCanceledException) when (context.CancellationToken.IsCancellationRequested)
+            {
+                cancelled.TrySetResult();
+                throw;
+            }
+        });
+        await using var app = builder.Build();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+        await app.StartAsync(timeout.Token);
+        await started.Task.WaitAsync(timeout.Token);
+        var backchannel = await ready.Task.WaitAsync(timeout.Token);
+        using var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+        await socket.ConnectAsync(new UnixDomainSocketEndPoint(backchannel.SocketPath), timeout.Token);
+        using var network = new NetworkStream(socket, ownsSocket: false);
+        using var rpc = JsonRpc.Attach(network);
+        var events = await rpc.InvokeWithCancellationAsync<IAsyncEnumerable<TestRunEvent>>("WatchTestRunAsync", [], timeout.Token);
+        var enumerator = events.GetAsyncEnumerator(timeout.Token);
+        try
+        {
+            Assert.True(await enumerator.MoveNextAsync());
+        }
+        finally
+        {
+            // CLI deadline/interruption closes this stream before its bounded AppHost teardown.
+            await enumerator.DisposeAsync();
+        }
+
+        await cancelled.Task.WaitAsync(timeout.Token);
+        Assert.False(caller.IsCancellationRequested);
+        Assert.False(app.Services.GetRequiredService<IHostApplicationLifetime>().ApplicationStopping.IsCancellationRequested);
+        await app.StopAsync(timeout.Token);
     }
 
     private static async Task<bool> ReadTestStreamAsync(JsonRpc rpc, ConcurrentQueue<TestRunEvent> events, CancellationToken cancellationToken)

@@ -11,23 +11,20 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <remarks>
 /// The annotation has no effect on normal application runs. Test resources must publish a terminal
 /// resource state and an exit code; zero indicates success. Failure to start also indicates failure.
-/// Collectors configured through <see cref="TestingOptions"/> publish individual results alongside
+/// A collector configured through <c>WithTesting</c> publishes individual results alongside
 /// resource execution. Both execution and collection contribute to the test run's completion.
 /// </remarks>
 [Experimental(TestingDiagnostics.DiagnosticId, UrlFormat = TestingDiagnostics.UrlFormat)]
 public sealed class TestingAnnotation : IResourceAnnotation
 {
     /// <summary>
-    /// Creates an annotation marking a test resource with optional collector configuration.
+    /// Creates an annotation marking a test resource for resource-based completion.
     /// </summary>
-    /// <param name="options">Configured testing options, or null for resource-based completion without collectors.</param>
-    public TestingAnnotation(TestingOptions? options = null)
+    public TestingAnnotation()
     {
-        Options = options;
     }
 
-    /// <summary>
-    /// Gets the resource's configured testing options.
-    /// </summary>
-    public TestingOptions? Options { get; }
+    internal Func<ResourceTestingContext, Task>? Collector { get; init; }
+    internal TestRunContext? RunContext { get; init; }
+    internal string? OutputPath { get; init; }
 }

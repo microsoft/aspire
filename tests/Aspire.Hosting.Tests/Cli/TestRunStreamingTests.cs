@@ -113,7 +113,7 @@ public class TestRunStreamingTests(ITestOutputHelper outputHelper)
     [InlineData(DistributedApplicationOperation.Run, false, false)]
     [InlineData(DistributedApplicationOperation.Run, true, true)]
     [InlineData(DistributedApplicationOperation.Publish, true, false)]
-    public void ConfigurationIsImmediateAndOutputPathsExistOnlyForTesting(
+    public void RuntimeCallbackIsDeferredAndOutputPathsExistOnlyForTesting(
         DistributedApplicationOperation operation, bool supplyPath, bool expectedOutput)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -124,28 +124,34 @@ public class TestRunStreamingTests(ITestOutputHelper outputHelper)
             SocketPermissionHelper.CreateDirectory(path, repairExisting: false);
             builder.Configuration[KnownConfigNames.TestOutputPath] = path;
         }
-        TestingOptions? captured = null;
-        var configurations = 0;
+        var callbacks = 0;
         var resource = builder.AddParameter("tests", "value");
-        resource.WithTesting(_ => configurations++);
-        resource.WithTesting(context =>
+        resource.WithTesting(_ =>
         {
-            configurations++;
-            captured = context;
+            callbacks++;
+            return Task.CompletedTask;
         });
-        Assert.Equal(2, configurations);
-        Assert.NotNull(captured);
-        Assert.Equal(expectedOutput, captured.IsTestRun);
+        var first = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
+        resource.WithTesting(_ =>
+        {
+            callbacks++;
+            return Task.CompletedTask;
+        });
+        var annotation = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
+        Assert.Equal(0, callbacks);
+        Assert.NotSame(first, annotation);
+        Assert.Same(first.RunContext, annotation.RunContext);
+        Assert.Equal(first.OutputPath, annotation.OutputPath);
         if (expectedOutput)
         {
-            Assert.Equal(path, captured.RunContext!.OutputPath);
-            Assert.Equal(Path.Combine(path, "tests"), captured.OutputPath);
-            Assert.True(Directory.Exists(captured.OutputPath));
+            Assert.Equal(path, annotation.RunContext!.OutputPath);
+            Assert.Equal(Path.Combine(path, "tests"), annotation.OutputPath);
+            Assert.True(Directory.Exists(annotation.OutputPath));
         }
         else
         {
-            Assert.Null(captured.OutputPath);
-            Assert.Null(captured.RunContext);
+            Assert.Null(annotation.OutputPath);
+            Assert.Null(annotation.RunContext);
         }
         Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
     }

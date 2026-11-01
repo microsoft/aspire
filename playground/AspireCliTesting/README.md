@@ -87,18 +87,24 @@ output directories and collectors are only activated by `aspire test`.
 response of `Aspire CLI testing`. `serviceEndpoint` is its dynamically allocated
 HTTP endpoint; no scenario should hard-code a port.
 
-`foundation-tests/tests.cs` probes the service and writes `probe.txt` into its
-resource-specific testing output directory. Its `WithTesting` collector starts
+`foundation-tests/tests.cs` probes the service and writes `probe.txt` into a
+private temporary runner-report directory unique to the AppHost invocation.
+Its `WithTesting(async context => { ... })` collector starts
 alongside execution, awaits resource completion, checks the artifact, and
-publishes the `shared-service-probe` result. Text output distinguishes `Resource`
+stages it into `context.OutputPath` before publishing the `shared-service-probe`
+result. The runner report directory is removed at AppHost shutdown.
+The callback runs at runtime, never during model construction; configure runner
+arguments/environment independently rather than depending on its synchronous prefix.
+Ordinary runs still execute the probe but do not invoke the collector.
+Text output distinguishes `Resource`
 state transitions from `Test` results, shows exit codes only for terminal states,
 and reports each resource's passed/failed/other counts after its collectors finish.
 `Other` counts published skipped results. Interrupted collectors instead show
 the results published so far. Resource-only scenarios do not invent test counts.
 The final output retains the run verdict, published totals and artifact link
 without repeating a resource table. JSON retains both resource completion and
-actual published results. On Unix the probe
-creates its artifact with mode `0600` inside the run's private resource directory.
+actual published results. On Unix the probe creates its artifact with mode `0600`;
+collection preserves that mode when staging it into the run's private resource directory.
 
 Artifacts are laid out directly as
 `~/.aspire/testruns/<run-id>/foundation-tests/probe.txt`, alongside
@@ -111,8 +117,8 @@ explicitly rather than being sanitized or reused.
 
 The test-run ID is currently independent of the dashboard's timestamp run ID
 under `~/.aspire/dashboard/runs`. The dashboard generates its ID after AppHost
-model construction, whereas testing output paths must already exist during
-immediate `WithTesting` configuration. Shared run-ID plumbing is deferred.
+model construction, whereas the CLI creates the test-run directory before
+launching the AppHost. Shared run-ID plumbing is deferred.
 
 Subsequent framework layers should append their resource declarations to the
 same `apphost.cs`, before `builder.Build().Run()`, and put their fixtures in

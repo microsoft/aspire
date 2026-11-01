@@ -353,8 +353,8 @@ type ResourceStoppedEventHandle = Handle<'Aspire.Hosting/Aspire.Hosting.Applicat
 /**
  * Publishes collected test results for one logical resource into the containing test run.
  *
- * The resource output path is established before startup and is shared with
- * `OutputPath`. Results are accepted only while the collector is active.
+ * The resource output path is established internally before startup and made available to the
+ * runtime collector. Results are accepted only while the collector is active.
  * Framework integrations are responsible for reading and translating their own result formats.
  */
 type ResourceTestingContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceTestingContext'>;
@@ -366,19 +366,9 @@ type ResourceUrlsCallbackContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.A
 type ResourceUrlsEditorHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsEditor'>;
 
 /**
- * Configures a resource's output destination and framework-neutral test result collectors.
- *
- * Configuration runs immediately when `WithTesting` is called, including ordinary runs.
- * Collectors run only during `aspire test`. Register collectors here; do not execute them.
- * The output destination is a host filesystem path. Containers must explicitly mount it.
- */
-type TestingOptionsHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.TestingOptions'>;
-
-/**
  * Provides the output destination for the current `aspire test` invocation.
  *
- * The CLI creates the directory before launching the AppHost, so testing configuration can run
- * immediately during model definition. Resource collectors use their own isolated output paths
+ * The CLI creates the directory before launching the AppHost. Runtime collectors use their own isolated output paths
  * beneath this run directory. This is a host filesystem path, not an in-container path.
  */
 type TestRunContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.TestRunContext'>;
@@ -768,10 +758,10 @@ export enum ResourceCommandVisibility {
 
 /** Defines the outcomes that a resource test collector can publish. */
 export enum TestOutcome {
-    /** The test passed. */
-    Passed = "Passed",
     /** The test failed. */
     Failed = "Failed",
+    /** The test passed. */
+    Passed = "Passed",
     /** The test was skipped. */
     Skipped = "Skipped",
 }
@@ -1778,6 +1768,11 @@ export interface UpdateTaskOptions {
     cancellationToken?: AbortSignal | CancellationToken;
 }
 
+export interface WaitForCompletionAsyncOptions {
+    /** An optional token that cancels only this wait, in addition to test-run cancellation. */
+    cancellationToken?: AbortSignal | CancellationToken;
+}
+
 export interface WaitForCompletionOptions {
     /** The exit code which is interpreted as successful. */
     exitCode?: number;
@@ -2036,8 +2031,8 @@ export interface WithTerminalOptions {
 }
 
 export interface WithTestingOptions {
-    /** An optional synchronous callback that immediately configures testing options. */
-    callback?: (obj: TestingOptions) => Promise<void>;
+    /** An optional asynchronous result collector that runs alongside resource execution during testing. */
+    callback?: (arg: ResourceTestingContext) => Promise<void>;
 }
 
 export interface WithUrlOptions {
@@ -8596,8 +8591,8 @@ const ResourceStoppedEventPromiseImpl = $aspireCreateFluentPromiseClass<Resource
 /**
  * Publishes collected test results for one logical resource into the containing test run.
  *
- * The resource output path is established before startup and is shared with
- * `OutputPath`. Results are accepted only while the collector is active.
+ * The resource output path is established internally before startup and made available to the
+ * runtime collector. Results are accepted only while the collector is active.
  * Framework integrations are responsible for reading and translating their own result formats.
  */
 export interface ResourceTestingContext {
@@ -8614,6 +8609,10 @@ export interface ResourceTestingContext {
     resourceName(): Promise<string>;
     /**
      * Gets the absolute host path to this resource's private output directory.
+     *
+     * Named after the logical resource directly beneath the run directory and shared by its replicas.
+     * Configure runner report paths independently and stage artifacts here during collection.
+     * Repeated `WithTesting` calls preserve this destination.
      * @experimental
      */
     outputPath(): Promise<string>;
@@ -8628,10 +8627,14 @@ export interface ResourceTestingContext {
      * Collection starts alongside execution. Use this helper before harvesting files written at
      * process completion. It shares the run's completion tracking, handles resources that already
      * finished, and waits for late exit-code notifications. Collector completion itself is not awaited.
+     * The default token still observes `CancellationToken`, including command deadlines
+     * and interruption. A supplied token cannot disable run cancellation, and cancelling this wait
+     * does not cancel the shared resource-completion task or other waiters.
+     * @param options Additional options.
      * @returns True if resource execution passed; otherwise false. Published test results do not affect this value.
      * @experimental
      */
-    waitForCompletionAsync(): Promise<boolean>;
+    waitForCompletionAsync(options?: WaitForCompletionAsyncOptions): Promise<boolean>;
     /**
      * Publishes an observed test result for this resource.
      *
@@ -8656,6 +8659,10 @@ export interface ResourceTestingContextPromise extends PromiseLike<ResourceTesti
     resourceName(): Promise<string>;
     /**
      * Gets the absolute host path to this resource's private output directory.
+     *
+     * Named after the logical resource directly beneath the run directory and shared by its replicas.
+     * Configure runner report paths independently and stage artifacts here during collection.
+     * Repeated `WithTesting` calls preserve this destination.
      * @experimental
      */
     outputPath(): Promise<string>;
@@ -8670,10 +8677,14 @@ export interface ResourceTestingContextPromise extends PromiseLike<ResourceTesti
      * Collection starts alongside execution. Use this helper before harvesting files written at
      * process completion. It shares the run's completion tracking, handles resources that already
      * finished, and waits for late exit-code notifications. Collector completion itself is not awaited.
+     * The default token still observes `CancellationToken`, including command deadlines
+     * and interruption. A supplied token cannot disable run cancellation, and cancelling this wait
+     * does not cancel the shared resource-completion task or other waiters.
+     * @param options Additional options.
      * @returns True if resource execution passed; otherwise false. Published test results do not affect this value.
      * @experimental
      */
-    waitForCompletionAsync(): Promise<boolean>;
+    waitForCompletionAsync(options?: WaitForCompletionAsyncOptions): Promise<boolean>;
     /**
      * Publishes an observed test result for this resource.
      *
@@ -8692,8 +8703,8 @@ export interface ResourceTestingContextPromise extends PromiseLike<ResourceTesti
 /**
  * Publishes collected test results for one logical resource into the containing test run.
  *
- * The resource output path is established before startup and is shared with
- * `OutputPath`. Results are accepted only while the collector is active.
+ * The resource output path is established internally before startup and made available to the
+ * runtime collector. Results are accepted only while the collector is active.
  * Framework integrations are responsible for reading and translating their own result formats.
  */
 class ResourceTestingContextImpl implements ResourceTestingContext {
@@ -8741,11 +8752,17 @@ class ResourceTestingContextImpl implements ResourceTestingContext {
      * Collection starts alongside execution. Use this helper before harvesting files written at
      * process completion. It shares the run's completion tracking, handles resources that already
      * finished, and waits for late exit-code notifications. Collector completion itself is not awaited.
+     * The default token still observes `CancellationToken`, including command deadlines
+     * and interruption. A supplied token cannot disable run cancellation, and cancelling this wait
+     * does not cancel the shared resource-completion task or other waiters.
+     * @param options Additional options.
      * @returns True if resource execution passed; otherwise false. Published test results do not affect this value.
      * @experimental
      */
-    async waitForCompletionAsync(): Promise<boolean> {
+    async waitForCompletionAsync(options?: WaitForCompletionAsyncOptions): Promise<boolean> {
+        const cancellationToken = options?.cancellationToken;
         const rpcArgs: Record<string, unknown> = { context: this._handle };
+        if (cancellationToken !== undefined) rpcArgs.cancellationToken = CancellationToken.fromValue(cancellationToken);
         return await this._client.invokeCapability<boolean>(
             'Aspire.Hosting.ApplicationModel/waitForCompletionAsync',
             rpcArgs
@@ -9256,175 +9273,6 @@ class TestEnvironmentContextImpl implements TestEnvironmentContext {
 }
 
 // ============================================================================
-// TestingOptions
-// ============================================================================
-
-/**
- * Configures a resource's output destination and framework-neutral test result collectors.
- *
- * Configuration runs immediately when `WithTesting` is called, including ordinary runs.
- * Collectors run only during `aspire test`. Register collectors here; do not execute them.
- * The output destination is a host filesystem path. Containers must explicitly mount it.
- */
-export interface TestingOptions {
-    toJSON(): MarshalledHandle;
-    /**
-     * Gets the containing test run context, or null outside an `aspire test` invocation.
-     * @experimental
-     */
-    runContext(): TestRunContextPromise;
-    /**
-     * Gets whether the CLI supplied a test run output destination for this AppHost.
-     * @experimental
-     */
-    isTestRun(): Promise<boolean>;
-    /**
-     * Gets the logical resource name whose testing behavior is being configured.
-     * @experimental
-     */
-    resourceName(): Promise<string>;
-    /**
-     * Gets the absolute host path to this resource's private output directory, or null outside testing.
-     * @experimental
-     */
-    outputPath(): Promise<string | null>;
-    /**
-     * Registers a callback that publishes framework-neutral results for this resource.
-     *
-     * Callbacks receive a resource-specific context separate from these configuration options.
-     * Collectors start alongside resource execution and may use
-     * `WaitForCompletionAsync` before reading final artifacts.
-     * Multiple collectors run concurrently. Registration is only allowed during immediate configuration.
-     * @param collector The asynchronous result collector.
-     * @experimental
-     */
-    collectResults(collector: (arg: ResourceTestingContext) => Promise<void>): TestingOptionsPromise;
-}
-
-export interface TestingOptionsPromise extends PromiseLike<TestingOptions> {
-    /**
-     * Gets the containing test run context, or null outside an `aspire test` invocation.
-     * @experimental
-     */
-    runContext(): TestRunContextPromise;
-    /**
-     * Gets whether the CLI supplied a test run output destination for this AppHost.
-     * @experimental
-     */
-    isTestRun(): Promise<boolean>;
-    /**
-     * Gets the logical resource name whose testing behavior is being configured.
-     * @experimental
-     */
-    resourceName(): Promise<string>;
-    /**
-     * Gets the absolute host path to this resource's private output directory, or null outside testing.
-     * @experimental
-     */
-    outputPath(): Promise<string | null>;
-    /**
-     * Registers a callback that publishes framework-neutral results for this resource.
-     *
-     * Callbacks receive a resource-specific context separate from these configuration options.
-     * Collectors start alongside resource execution and may use
-     * `WaitForCompletionAsync` before reading final artifacts.
-     * Multiple collectors run concurrently. Registration is only allowed during immediate configuration.
-     * @param collector The asynchronous result collector.
-     * @experimental
-     */
-    collectResults(collector: (arg: ResourceTestingContext) => Promise<void>): TestingOptionsPromise;
-}
-
-// ============================================================================
-// TestingOptionsImpl
-// ============================================================================
-
-/**
- * Configures a resource's output destination and framework-neutral test result collectors.
- *
- * Configuration runs immediately when `WithTesting` is called, including ordinary runs.
- * Collectors run only during `aspire test`. Register collectors here; do not execute them.
- * The output destination is a host filesystem path. Containers must explicitly mount it.
- */
-class TestingOptionsImpl implements TestingOptions {
-    constructor(private _handle: TestingOptionsHandle, private _client: AspireClientRpc) {}
-
-    /** Serialize for JSON-RPC transport */
-    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
-
-    runContext(): TestRunContextPromise {
-        const promise = (async () => {
-            const handle = await this._client.invokeCapability<TestRunContextHandle>(
-                'Aspire.Hosting.ApplicationModel/TestingOptions.runContext',
-                { context: this._handle }
-            );
-            return new TestRunContextImpl(handle, this._client);
-        })();
-        return new TestRunContextPromiseImpl(promise, this._client, false);
-    }
-
-    async isTestRun(): Promise<boolean> {
-        return await this._client.invokeCapability<boolean>(
-            'Aspire.Hosting.ApplicationModel/TestingOptions.isTestRun',
-            { context: this._handle }
-        );
-    }
-
-    async resourceName(): Promise<string> {
-        return await this._client.invokeCapability<string>(
-            'Aspire.Hosting.ApplicationModel/TestingOptions.resourceName',
-            { context: this._handle }
-        );
-    }
-
-    async outputPath(): Promise<string | null> {
-        return await this._client.invokeCapability<string | null>(
-            'Aspire.Hosting.ApplicationModel/TestingOptions.outputPath',
-            { context: this._handle }
-        );
-    }
-
-    /** @internal */
-    async _collectResultsInternal(collector: (arg: ResourceTestingContext) => Promise<void>): Promise<TestingOptions> {
-        const collectorId = registerCallback(async (argData: unknown) => {
-            const argHandle = wrapIfHandle(argData) as ResourceTestingContextHandle;
-            const arg = new ResourceTestingContextImpl(argHandle, this._client);
-            await collector(arg);
-        });
-        const rpcArgs: Record<string, unknown> = { context: this._handle, collector: collectorId };
-        await this._client.invokeCapability<void>(
-            'Aspire.Hosting.ApplicationModel/collectResults',
-            rpcArgs
-        );
-        return this;
-    }
-
-    /**
-     * Registers a callback that publishes framework-neutral results for this resource.
-     *
-     * Callbacks receive a resource-specific context separate from these configuration options.
-     * Collectors start alongside resource execution and may use
-     * `WaitForCompletionAsync` before reading final artifacts.
-     * Multiple collectors run concurrently. Registration is only allowed during immediate configuration.
-     * @param collector The asynchronous result collector.
-     * @experimental
-     */
-    collectResults(collector: (arg: ResourceTestingContext) => Promise<void>): TestingOptionsPromise {
-        return new TestingOptionsPromiseImpl(this._collectResultsInternal(collector), this._client);
-    }
-
-}
-
-/** @internal */
-const TestingOptionsPromiseImpl = $aspireCreateFluentPromiseClass<TestingOptions, TestingOptionsPromise>((): $aspireFluentPromiseTransitions => ({
-    ["runContext"]: [() => TestRunContextPromiseImpl, false] as const,
-    ["isTestRun"]: null,
-    ["resourceName"]: null,
-    ["outputPath"]: null,
-    ["collectResults"]: () => TestingOptionsPromiseImpl,
-}));
-
-// ============================================================================
 // TestMutableCollectionContext
 // ============================================================================
 
@@ -9795,8 +9643,7 @@ const TestReturnValueContextPromiseImpl = $aspireCreateFluentPromiseClass<TestRe
 /**
  * Provides the output destination for the current `aspire test` invocation.
  *
- * The CLI creates the directory before launching the AppHost, so testing configuration can run
- * immediately during model definition. Resource collectors use their own isolated output paths
+ * The CLI creates the directory before launching the AppHost. Runtime collectors use their own isolated output paths
  * beneath this run directory. This is a host filesystem path, not an in-container path.
  */
 export interface TestRunContext {
@@ -9823,8 +9670,7 @@ export interface TestRunContextPromise extends PromiseLike<TestRunContext> {
 /**
  * Provides the output destination for the current `aspire test` invocation.
  *
- * The CLI creates the directory before launching the AppHost, so testing configuration can run
- * immediately during model definition. Resource collectors use their own isolated output paths
+ * The CLI creates the directory before launching the AppHost. Runtime collectors use their own isolated output paths
  * beneath this run directory. This is a host filesystem path, not an in-container path.
  */
 class TestRunContextImpl implements TestRunContext {
@@ -13728,14 +13574,16 @@ export interface ContainerRegistryResource {
      */
     withTerminal(options?: WithTerminalOptions): ContainerRegistryResourcePromise;
     /**
-     * Configures a resource's testing participation and result collectors.
+     * Marks a resource for testing with an optional runtime result collector.
      *
      * Waits for every marked resource, including replicas, and all collectors before completion.
      * The application shuts down unless keep-alive was requested.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
-     * Configuration runs immediately. Collectors start alongside resource execution during testing.
-     * The CLI supplies private resource output destinations; those paths are absent during ordinary runs.
+     * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
+     * The context supplies a private resource output destination. Configure runner report paths independently
+     * and stage collected artifacts into this destination at runtime.
+     * Repeated calls replace the collector while preserving the existing run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -14104,14 +13952,16 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      */
     withTerminal(options?: WithTerminalOptions): ContainerRegistryResourcePromise;
     /**
-     * Configures a resource's testing participation and result collectors.
+     * Marks a resource for testing with an optional runtime result collector.
      *
      * Waits for every marked resource, including replicas, and all collectors before completion.
      * The application shuts down unless keep-alive was requested.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
-     * Configuration runs immediately. Collectors start alongside resource execution during testing.
-     * The CLI supplies private resource output destinations; those paths are absent during ordinary runs.
+     * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
+     * The context supplies a private resource output destination. Configure runner report paths independently
+     * and stage collected artifacts into this destination at runtime.
+     * Repeated calls replace the collector while preserving the existing run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -15036,11 +14886,11 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
     }
 
     /** @internal */
-    private async _withTestingInternal(callback?: (obj: TestingOptions) => Promise<void>): Promise<ContainerRegistryResource> {
-        const callbackId = callback ? registerCallback(async (objData: unknown) => {
-            const objHandle = wrapIfHandle(objData) as TestingOptionsHandle;
-            const obj = new TestingOptionsImpl(objHandle, this._client);
-            await callback(obj);
+    private async _withTestingInternal(callback?: (arg: ResourceTestingContext) => Promise<void>): Promise<ContainerRegistryResource> {
+        const callbackId = callback ? registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as ResourceTestingContextHandle;
+            const arg = new ResourceTestingContextImpl(argHandle, this._client);
+            await callback(arg);
         }) : undefined;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (callback !== undefined) rpcArgs.callback = callbackId;
@@ -15052,14 +14902,16 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
     }
 
     /**
-     * Configures a resource's testing participation and result collectors.
+     * Marks a resource for testing with an optional runtime result collector.
      *
      * Waits for every marked resource, including replicas, and all collectors before completion.
      * The application shuts down unless keep-alive was requested.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
-     * Configuration runs immediately. Collectors start alongside resource execution during testing.
-     * The CLI supplies private resource output destinations; those paths are absent during ordinary runs.
+     * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
+     * The context supplies a private resource output destination. Configure runner report paths independently
+     * and stage collected artifacts into this destination at runtime.
+     * Repeated calls replace the collector while preserving the existing run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -16447,14 +16299,16 @@ export interface ContainerResource {
      */
     withTerminal(options?: WithTerminalOptions): ContainerResourcePromise;
     /**
-     * Configures a resource's testing participation and result collectors.
+     * Marks a resource for testing with an optional runtime result collector.
      *
      * Waits for every marked resource, including replicas, and all collectors before completion.
      * The application shuts down unless keep-alive was requested.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
-     * Configuration runs immediately. Collectors start alongside resource execution during testing.
-     * The CLI supplies private resource output destinations; those paths are absent during ordinary runs.
+     * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
+     * The context supplies a private resource output destination. Configure runner report paths independently
+     * and stage collected artifacts into this destination at runtime.
+     * Repeated calls replace the collector while preserving the existing run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -17319,14 +17173,16 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      */
     withTerminal(options?: WithTerminalOptions): ContainerResourcePromise;
     /**
-     * Configures a resource's testing participation and result collectors.
+     * Marks a resource for testing with an optional runtime result collector.
      *
      * Waits for every marked resource, including replicas, and all collectors before completion.
      * The application shuts down unless keep-alive was requested.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
-     * Configuration runs immediately. Collectors start alongside resource execution during testing.
-     * The CLI supplies private resource output destinations; those paths are absent during ordinary runs.
+     * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
+     * The context supplies a private resource output destination. Configure runner report paths independently
+     * and stage collected artifacts into this destination at runtime.
+     * Repeated calls replace the collector while preserving the existing run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -19680,11 +19536,11 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
-    private async _withTestingInternal(callback?: (obj: TestingOptions) => Promise<void>): Promise<ContainerResource> {
-        const callbackId = callback ? registerCallback(async (objData: unknown) => {
-            const objHandle = wrapIfHandle(objData) as TestingOptionsHandle;
-            const obj = new TestingOptionsImpl(objHandle, this._client);
-            await callback(obj);
+    private async _withTestingInternal(callback?: (arg: ResourceTestingContext) => Promise<void>): Promise<ContainerResource> {
+        const callbackId = callback ? registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as ResourceTestingContextHandle;
+            const arg = new ResourceTestingContextImpl(argHandle, this._client);
+            await callback(arg);
         }) : undefined;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (callback !== undefined) rpcArgs.callback = callbackId;
@@ -19696,14 +19552,16 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /**
-     * Configures a resource's testing participation and result collectors.
+     * Marks a resource for testing with an optional runtime result collector.
      *
      * Waits for every marked resource, including replicas, and all collectors before completion.
      * The application shuts down unless keep-alive was requested.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
-     * Configuration runs immediately. Collectors start alongside resource execution during testing.
-     * The CLI supplies private resource output destinations; those paths are absent during ordinary runs.
+     * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
+     * The context supplies a private resource output destination. Configure runner report paths independently
+     * and stage collected artifacts into this destination at runtime.
+     * Repeated calls replace the collector while preserving the existing run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -21079,14 +20937,16 @@ export interface CSharpAppResource {
      */
     withTerminal(options?: WithTerminalOptions): CSharpAppResourcePromise;
     /**
-     * Configures a resource's testing participation and result collectors.
+     * Marks a resource for testing with an optional runtime result collector.
      *
      * Waits for every marked resource, including replicas, and all collectors before completion.
      * The application shuts down unless keep-alive was requested.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
-     * Configuration runs immediately. Collectors start alongside resource execution during testing.
-     * The CLI supplies private resource output destinations; those paths are absent during ordinary runs.
+     * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
+     * The context supplies a private resource output destination. Configure runner report paths independently
+     * and stage collected artifacts into this destination at runtime.
+     * Repeated calls replace the collector while preserving the existing run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -21791,14 +21651,16 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      */
     withTerminal(options?: WithTerminalOptions): CSharpAppResourcePromise;
     /**
-     * Configures a resource's testing participation and result collectors.
+     * Marks a resource for testing with an optional runtime result collector.
      *
      * Waits for every marked resource, including replicas, and all collectors before completion.
      * The application shuts down unless keep-alive was requested.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
-     * Configuration runs immediately. Collectors start alongside resource execution during testing.
-     * The CLI supplies private resource output destinations; those paths are absent during ordinary runs.
+     * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
+     * The context supplies a private resource output destination. Configure runner report paths independently
+     * and stage collected artifacts into this destination at runtime.
+     * Repeated calls replace the collector while preserving the existing run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -23740,11 +23602,11 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
-    private async _withTestingInternal(callback?: (obj: TestingOptions) => Promise<void>): Promise<CSharpAppResource> {
-        const callbackId = callback ? registerCallback(async (objData: unknown) => {
-            const objHandle = wrapIfHandle(objData) as TestingOptionsHandle;
-            const obj = new TestingOptionsImpl(objHandle, this._client);
-            await callback(obj);
+    private async _withTestingInternal(callback?: (arg: ResourceTestingContext) => Promise<void>): Promise<CSharpAppResource> {
+        const callbackId = callback ? registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as ResourceTestingContextHandle;
+            const arg = new ResourceTestingContextImpl(argHandle, this._client);
+            await callback(arg);
         }) : undefined;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (callback !== undefined) rpcArgs.callback = callbackId;
@@ -23756,14 +23618,16 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /**
-     * Configures a resource's testing participation and result collectors.
+     * Marks a resource for testing with an optional runtime result collector.
      *
      * Waits for every marked resource, including replicas, and all collectors before completion.
      * The application shuts down unless keep-alive was requested.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
-     * Configuration runs immediately. Collectors start alongside resource execution during testing.
-     * The CLI supplies private resource output destinations; those paths are absent during ordinary runs.
+     * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
+     * The context supplies a private resource output destination. Configure runner report paths independently
+     * and stage collected artifacts into this destination at runtime.
+     * Repeated calls replace the collector while preserving the existing run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -25177,14 +25041,16 @@ export interface DotnetToolResource {
      */
     withTerminal(options?: WithTerminalOptions): DotnetToolResourcePromise;
     /**
-     * Configures a resource's testing participation and result collectors.
+     * Marks a resource for testing with an optional runtime result collector.
      *
      * Waits for every marked resource, including replicas, and all collectors before completion.
      * The application shuts down unless keep-alive was requested.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
-     * Configuration runs immediately. Collectors start alongside resource execution during testing.
-     * The CLI supplies private resource output destinations; those paths are absent during ordinary runs.
+     * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
+     * The context supplies a private resource output destination. Configure runner report paths independently
+     * and stage collected artifacts into this destination at runtime.
+     * Repeated calls replace the collector while preserving the existing run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -25925,14 +25791,16 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      */
     withTerminal(options?: WithTerminalOptions): DotnetToolResourcePromise;
     /**
-     * Configures a resource's testing participation and result collectors.
+     * Marks a resource for testing with an optional runtime result collector.
      *
      * Waits for every marked resource, including replicas, and all collectors before completion.
      * The application shuts down unless keep-alive was requested.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
-     * Configuration runs immediately. Collectors start alongside resource execution during testing.
-     * The CLI supplies private resource output destinations; those paths are absent during ordinary runs.
+     * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
+     * The context supplies a private resource output destination. Configure runner report paths independently
+     * and stage collected artifacts into this destination at runtime.
+     * Repeated calls replace the collector while preserving the existing run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -27989,11 +27857,11 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
-    private async _withTestingInternal(callback?: (obj: TestingOptions) => Promise<void>): Promise<DotnetToolResource> {
-        const callbackId = callback ? registerCallback(async (objData: unknown) => {
-            const objHandle = wrapIfHandle(objData) as TestingOptionsHandle;
-            const obj = new TestingOptionsImpl(objHandle, this._client);
-            await callback(obj);
+    private async _withTestingInternal(callback?: (arg: ResourceTestingContext) => Promise<void>): Promise<DotnetToolResource> {
+        const callbackId = callback ? registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as ResourceTestingContextHandle;
+            const arg = new ResourceTestingContextImpl(argHandle, this._client);
+            await callback(arg);
         }) : undefined;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (callback !== undefined) rpcArgs.callback = callbackId;
@@ -28005,14 +27873,16 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /**
-     * Configures a resource's testing participation and result collectors.
+     * Marks a resource for testing with an optional runtime result collector.
      *
      * Waits for every marked resource, including replicas, and all collectors before completion.
      * The application shuts down unless keep-alive was requested.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
-     * Configuration runs immediately. Collectors start alongside resource execution during testing.
-     * The CLI supplies private resource output destinations; those paths are absent during ordinary runs.
+     * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
+     * The context supplies a private resource output destination. Configure runner report paths independently
+     * and stage collected artifacts into this destination at runtime.
+     * Repeated calls replace the collector while preserving the existing run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -29380,14 +29250,16 @@ export interface ExecutableResource {
      */
     withTerminal(options?: WithTerminalOptions): ExecutableResourcePromise;
     /**
-     * Configures a resource's testing participation and result collectors.
+     * Marks a resource for testing with an optional runtime result collector.
      *
      * Waits for every marked resource, including replicas, and all collectors before completion.
      * The application shuts down unless keep-alive was requested.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
-     * Configuration runs immediately. Collectors start alongside resource execution during testing.
-     * The CLI supplies private resource output destinations; those paths are absent during ordinary runs.
+     * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
+     * The context supplies a private resource output destination. Configure runner report paths independently
+     * and stage collected artifacts into this destination at runtime.
+     * Repeated calls replace the collector while preserving the existing run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -30089,14 +29961,16 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      */
     withTerminal(options?: WithTerminalOptions): ExecutableResourcePromise;
     /**
-     * Configures a resource's testing participation and result collectors.
+     * Marks a resource for testing with an optional runtime result collector.
      *
      * Waits for every marked resource, including replicas, and all collectors before completion.
      * The application shuts down unless keep-alive was requested.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
-     * Configuration runs immediately. Collectors start alongside resource execution during testing.
-     * The CLI supplies private resource output destinations; those paths are absent during ordinary runs.
+     * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
+     * The context supplies a private resource output destination. Configure runner report paths independently
+     * and stage collected artifacts into this destination at runtime.
+     * Repeated calls replace the collector while preserving the existing run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -32043,11 +31917,11 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
-    private async _withTestingInternal(callback?: (obj: TestingOptions) => Promise<void>): Promise<ExecutableResource> {
-        const callbackId = callback ? registerCallback(async (objData: unknown) => {
-            const objHandle = wrapIfHandle(objData) as TestingOptionsHandle;
-            const obj = new TestingOptionsImpl(objHandle, this._client);
-            await callback(obj);
+    private async _withTestingInternal(callback?: (arg: ResourceTestingContext) => Promise<void>): Promise<ExecutableResource> {
+        const callbackId = callback ? registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as ResourceTestingContextHandle;
+            const arg = new ResourceTestingContextImpl(argHandle, this._client);
+            await callback(arg);
         }) : undefined;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (callback !== undefined) rpcArgs.callback = callbackId;
@@ -32059,14 +31933,16 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /**
-     * Configures a resource's testing participation and result collectors.
+     * Marks a resource for testing with an optional runtime result collector.
      *
      * Waits for every marked resource, including replicas, and all collectors before completion.
      * The application shuts down unless keep-alive was requested.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
-     * Configuration runs immediately. Collectors start alongside resource execution during testing.
-     * The CLI supplies private resource output destinations; those paths are absent during ordinary runs.
+     * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
+     * The context supplies a private resource output destination. Configure runner report paths independently
+     * and stage collected artifacts into this destination at runtime.
+     * Repeated calls replace the collector while preserving the existing run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -33112,14 +32988,16 @@ export interface ExternalServiceResource {
      */
     withTerminal(options?: WithTerminalOptions): ExternalServiceResourcePromise;
     /**
-     * Configures a resource's testing participation and result collectors.
+     * Marks a resource for testing with an optional runtime result collector.
      *
      * Waits for every marked resource, including replicas, and all collectors before completion.
      * The application shuts down unless keep-alive was requested.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
-     * Configuration runs immediately. Collectors start alongside resource execution during testing.
-     * The CLI supplies private resource output destinations; those paths are absent during ordinary runs.
+     * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
+     * The context supplies a private resource output destination. Configure runner report paths independently
+     * and stage collected artifacts into this destination at runtime.
+     * Repeated calls replace the collector while preserving the existing run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -33493,14 +33371,16 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      */
     withTerminal(options?: WithTerminalOptions): ExternalServiceResourcePromise;
     /**
-     * Configures a resource's testing participation and result collectors.
+     * Marks a resource for testing with an optional runtime result collector.
      *
      * Waits for every marked resource, including replicas, and all collectors before completion.
      * The application shuts down unless keep-alive was requested.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
-     * Configuration runs immediately. Collectors start alongside resource execution during testing.
-     * The CLI supplies private resource output destinations; those paths are absent during ordinary runs.
+     * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
+     * The context supplies a private resource output destination. Configure runner report paths independently
+     * and stage collected artifacts into this destination at runtime.
+     * Repeated calls replace the collector while preserving the existing run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -34449,11 +34329,11 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
     }
 
     /** @internal */
-    private async _withTestingInternal(callback?: (obj: TestingOptions) => Promise<void>): Promise<ExternalServiceResource> {
-        const callbackId = callback ? registerCallback(async (objData: unknown) => {
-            const objHandle = wrapIfHandle(objData) as TestingOptionsHandle;
-            const obj = new TestingOptionsImpl(objHandle, this._client);
-            await callback(obj);
+    private async _withTestingInternal(callback?: (arg: ResourceTestingContext) => Promise<void>): Promise<ExternalServiceResource> {
+        const callbackId = callback ? registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as ResourceTestingContextHandle;
+            const arg = new ResourceTestingContextImpl(argHandle, this._client);
+            await callback(arg);
         }) : undefined;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (callback !== undefined) rpcArgs.callback = callbackId;
@@ -34465,14 +34345,16 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
     }
 
     /**
-     * Configures a resource's testing participation and result collectors.
+     * Marks a resource for testing with an optional runtime result collector.
      *
      * Waits for every marked resource, including replicas, and all collectors before completion.
      * The application shuts down unless keep-alive was requested.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
-     * Configuration runs immediately. Collectors start alongside resource execution during testing.
-     * The CLI supplies private resource output destinations; those paths are absent during ordinary runs.
+     * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
+     * The context supplies a private resource output destination. Configure runner report paths independently
+     * and stage collected artifacts into this destination at runtime.
+     * Repeated calls replace the collector while preserving the existing run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -35417,14 +35299,16 @@ export interface ParameterResource {
      */
     withTerminal(options?: WithTerminalOptions): ParameterResourcePromise;
     /**
-     * Configures a resource's testing participation and result collectors.
+     * Marks a resource for testing with an optional runtime result collector.
      *
      * Waits for every marked resource, including replicas, and all collectors before completion.
      * The application shuts down unless keep-alive was requested.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
-     * Configuration runs immediately. Collectors start alongside resource execution during testing.
-     * The CLI supplies private resource output destinations; those paths are absent during ordinary runs.
+     * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
+     * The context supplies a private resource output destination. Configure runner report paths independently
+     * and stage collected artifacts into this destination at runtime.
+     * Repeated calls replace the collector while preserving the existing run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -35840,14 +35724,16 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      */
     withTerminal(options?: WithTerminalOptions): ParameterResourcePromise;
     /**
-     * Configures a resource's testing participation and result collectors.
+     * Marks a resource for testing with an optional runtime result collector.
      *
      * Waits for every marked resource, including replicas, and all collectors before completion.
      * The application shuts down unless keep-alive was requested.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
-     * Configuration runs immediately. Collectors start alongside resource execution during testing.
-     * The CLI supplies private resource output destinations; those paths are absent during ordinary runs.
+     * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
+     * The context supplies a private resource output destination. Configure runner report paths independently
+     * and stage collected artifacts into this destination at runtime.
+     * Repeated calls replace the collector while preserving the existing run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -36876,11 +36762,11 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     }
 
     /** @internal */
-    private async _withTestingInternal(callback?: (obj: TestingOptions) => Promise<void>): Promise<ParameterResource> {
-        const callbackId = callback ? registerCallback(async (objData: unknown) => {
-            const objHandle = wrapIfHandle(objData) as TestingOptionsHandle;
-            const obj = new TestingOptionsImpl(objHandle, this._client);
-            await callback(obj);
+    private async _withTestingInternal(callback?: (arg: ResourceTestingContext) => Promise<void>): Promise<ParameterResource> {
+        const callbackId = callback ? registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as ResourceTestingContextHandle;
+            const arg = new ResourceTestingContextImpl(argHandle, this._client);
+            await callback(arg);
         }) : undefined;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (callback !== undefined) rpcArgs.callback = callbackId;
@@ -36892,14 +36778,16 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     }
 
     /**
-     * Configures a resource's testing participation and result collectors.
+     * Marks a resource for testing with an optional runtime result collector.
      *
      * Waits for every marked resource, including replicas, and all collectors before completion.
      * The application shuts down unless keep-alive was requested.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
-     * Configuration runs immediately. Collectors start alongside resource execution during testing.
-     * The CLI supplies private resource output destinations; those paths are absent during ordinary runs.
+     * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
+     * The context supplies a private resource output destination. Configure runner report paths independently
+     * and stage collected artifacts into this destination at runtime.
+     * Repeated calls replace the collector while preserving the existing run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -38169,14 +38057,16 @@ export interface ProjectResource {
      */
     withTerminal(options?: WithTerminalOptions): ProjectResourcePromise;
     /**
-     * Configures a resource's testing participation and result collectors.
+     * Marks a resource for testing with an optional runtime result collector.
      *
      * Waits for every marked resource, including replicas, and all collectors before completion.
      * The application shuts down unless keep-alive was requested.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
-     * Configuration runs immediately. Collectors start alongside resource execution during testing.
-     * The CLI supplies private resource output destinations; those paths are absent during ordinary runs.
+     * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
+     * The context supplies a private resource output destination. Configure runner report paths independently
+     * and stage collected artifacts into this destination at runtime.
+     * Repeated calls replace the collector while preserving the existing run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -38881,14 +38771,16 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      */
     withTerminal(options?: WithTerminalOptions): ProjectResourcePromise;
     /**
-     * Configures a resource's testing participation and result collectors.
+     * Marks a resource for testing with an optional runtime result collector.
      *
      * Waits for every marked resource, including replicas, and all collectors before completion.
      * The application shuts down unless keep-alive was requested.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
-     * Configuration runs immediately. Collectors start alongside resource execution during testing.
-     * The CLI supplies private resource output destinations; those paths are absent during ordinary runs.
+     * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
+     * The context supplies a private resource output destination. Configure runner report paths independently
+     * and stage collected artifacts into this destination at runtime.
+     * Repeated calls replace the collector while preserving the existing run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -40831,11 +40723,11 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
-    private async _withTestingInternal(callback?: (obj: TestingOptions) => Promise<void>): Promise<ProjectResource> {
-        const callbackId = callback ? registerCallback(async (objData: unknown) => {
-            const objHandle = wrapIfHandle(objData) as TestingOptionsHandle;
-            const obj = new TestingOptionsImpl(objHandle, this._client);
-            await callback(obj);
+    private async _withTestingInternal(callback?: (arg: ResourceTestingContext) => Promise<void>): Promise<ProjectResource> {
+        const callbackId = callback ? registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as ResourceTestingContextHandle;
+            const arg = new ResourceTestingContextImpl(argHandle, this._client);
+            await callback(arg);
         }) : undefined;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (callback !== undefined) rpcArgs.callback = callbackId;
@@ -40847,14 +40739,16 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /**
-     * Configures a resource's testing participation and result collectors.
+     * Marks a resource for testing with an optional runtime result collector.
      *
      * Waits for every marked resource, including replicas, and all collectors before completion.
      * The application shuts down unless keep-alive was requested.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
-     * Configuration runs immediately. Collectors start alongside resource execution during testing.
-     * The CLI supplies private resource output destinations; those paths are absent during ordinary runs.
+     * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
+     * The context supplies a private resource output destination. Configure runner report paths independently
+     * and stage collected artifacts into this destination at runtime.
+     * Repeated calls replace the collector while preserving the existing run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -42387,14 +42281,16 @@ export interface TestDatabaseResource {
      */
     withTerminal(options?: WithTerminalOptions): TestDatabaseResourcePromise;
     /**
-     * Configures a resource's testing participation and result collectors.
+     * Marks a resource for testing with an optional runtime result collector.
      *
      * Waits for every marked resource, including replicas, and all collectors before completion.
      * The application shuts down unless keep-alive was requested.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
-     * Configuration runs immediately. Collectors start alongside resource execution during testing.
-     * The CLI supplies private resource output destinations; those paths are absent during ordinary runs.
+     * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
+     * The context supplies a private resource output destination. Configure runner report paths independently
+     * and stage collected artifacts into this destination at runtime.
+     * Repeated calls replace the collector while preserving the existing run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -43259,14 +43155,16 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      */
     withTerminal(options?: WithTerminalOptions): TestDatabaseResourcePromise;
     /**
-     * Configures a resource's testing participation and result collectors.
+     * Marks a resource for testing with an optional runtime result collector.
      *
      * Waits for every marked resource, including replicas, and all collectors before completion.
      * The application shuts down unless keep-alive was requested.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
-     * Configuration runs immediately. Collectors start alongside resource execution during testing.
-     * The CLI supplies private resource output destinations; those paths are absent during ordinary runs.
+     * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
+     * The context supplies a private resource output destination. Configure runner report paths independently
+     * and stage collected artifacts into this destination at runtime.
+     * Repeated calls replace the collector while preserving the existing run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -45619,11 +45517,11 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _withTestingInternal(callback?: (obj: TestingOptions) => Promise<void>): Promise<TestDatabaseResource> {
-        const callbackId = callback ? registerCallback(async (objData: unknown) => {
-            const objHandle = wrapIfHandle(objData) as TestingOptionsHandle;
-            const obj = new TestingOptionsImpl(objHandle, this._client);
-            await callback(obj);
+    private async _withTestingInternal(callback?: (arg: ResourceTestingContext) => Promise<void>): Promise<TestDatabaseResource> {
+        const callbackId = callback ? registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as ResourceTestingContextHandle;
+            const arg = new ResourceTestingContextImpl(argHandle, this._client);
+            await callback(arg);
         }) : undefined;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (callback !== undefined) rpcArgs.callback = callbackId;
@@ -45635,14 +45533,16 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /**
-     * Configures a resource's testing participation and result collectors.
+     * Marks a resource for testing with an optional runtime result collector.
      *
      * Waits for every marked resource, including replicas, and all collectors before completion.
      * The application shuts down unless keep-alive was requested.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
-     * Configuration runs immediately. Collectors start alongside resource execution during testing.
-     * The CLI supplies private resource output destinations; those paths are absent during ordinary runs.
+     * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
+     * The context supplies a private resource output destination. Configure runner report paths independently
+     * and stage collected artifacts into this destination at runtime.
+     * Repeated calls replace the collector while preserving the existing run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -47195,14 +47095,16 @@ export interface TestRedisResource {
      */
     withTerminal(options?: WithTerminalOptions): TestRedisResourcePromise;
     /**
-     * Configures a resource's testing participation and result collectors.
+     * Marks a resource for testing with an optional runtime result collector.
      *
      * Waits for every marked resource, including replicas, and all collectors before completion.
      * The application shuts down unless keep-alive was requested.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
-     * Configuration runs immediately. Collectors start alongside resource execution during testing.
-     * The CLI supplies private resource output destinations; those paths are absent during ordinary runs.
+     * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
+     * The context supplies a private resource output destination. Configure runner report paths independently
+     * and stage collected artifacts into this destination at runtime.
+     * Repeated calls replace the collector while preserving the existing run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -48151,14 +48053,16 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      */
     withTerminal(options?: WithTerminalOptions): TestRedisResourcePromise;
     /**
-     * Configures a resource's testing participation and result collectors.
+     * Marks a resource for testing with an optional runtime result collector.
      *
      * Waits for every marked resource, including replicas, and all collectors before completion.
      * The application shuts down unless keep-alive was requested.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
-     * Configuration runs immediately. Collectors start alongside resource execution during testing.
-     * The CLI supplies private resource output destinations; those paths are absent during ordinary runs.
+     * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
+     * The context supplies a private resource output destination. Configure runner report paths independently
+     * and stage collected artifacts into this destination at runtime.
+     * Repeated calls replace the collector while preserving the existing run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -50615,11 +50519,11 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _withTestingInternal(callback?: (obj: TestingOptions) => Promise<void>): Promise<TestRedisResource> {
-        const callbackId = callback ? registerCallback(async (objData: unknown) => {
-            const objHandle = wrapIfHandle(objData) as TestingOptionsHandle;
-            const obj = new TestingOptionsImpl(objHandle, this._client);
-            await callback(obj);
+    private async _withTestingInternal(callback?: (arg: ResourceTestingContext) => Promise<void>): Promise<TestRedisResource> {
+        const callbackId = callback ? registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as ResourceTestingContextHandle;
+            const arg = new ResourceTestingContextImpl(argHandle, this._client);
+            await callback(arg);
         }) : undefined;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (callback !== undefined) rpcArgs.callback = callbackId;
@@ -50631,14 +50535,16 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /**
-     * Configures a resource's testing participation and result collectors.
+     * Marks a resource for testing with an optional runtime result collector.
      *
      * Waits for every marked resource, including replicas, and all collectors before completion.
      * The application shuts down unless keep-alive was requested.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
-     * Configuration runs immediately. Collectors start alongside resource execution during testing.
-     * The CLI supplies private resource output destinations; those paths are absent during ordinary runs.
+     * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
+     * The context supplies a private resource output destination. Configure runner report paths independently
+     * and stage collected artifacts into this destination at runtime.
+     * Repeated calls replace the collector while preserving the existing run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -52468,14 +52374,16 @@ export interface TestVaultResource {
      */
     withTerminal(options?: WithTerminalOptions): TestVaultResourcePromise;
     /**
-     * Configures a resource's testing participation and result collectors.
+     * Marks a resource for testing with an optional runtime result collector.
      *
      * Waits for every marked resource, including replicas, and all collectors before completion.
      * The application shuts down unless keep-alive was requested.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
-     * Configuration runs immediately. Collectors start alongside resource execution during testing.
-     * The CLI supplies private resource output destinations; those paths are absent during ordinary runs.
+     * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
+     * The context supplies a private resource output destination. Configure runner report paths independently
+     * and stage collected artifacts into this destination at runtime.
+     * Repeated calls replace the collector while preserving the existing run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -53342,14 +53250,16 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      */
     withTerminal(options?: WithTerminalOptions): TestVaultResourcePromise;
     /**
-     * Configures a resource's testing participation and result collectors.
+     * Marks a resource for testing with an optional runtime result collector.
      *
      * Waits for every marked resource, including replicas, and all collectors before completion.
      * The application shuts down unless keep-alive was requested.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
-     * Configuration runs immediately. Collectors start alongside resource execution during testing.
-     * The CLI supplies private resource output destinations; those paths are absent during ordinary runs.
+     * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
+     * The context supplies a private resource output destination. Configure runner report paths independently
+     * and stage collected artifacts into this destination at runtime.
+     * Repeated calls replace the collector while preserving the existing run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -55704,11 +55614,11 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _withTestingInternal(callback?: (obj: TestingOptions) => Promise<void>): Promise<TestVaultResource> {
-        const callbackId = callback ? registerCallback(async (objData: unknown) => {
-            const objHandle = wrapIfHandle(objData) as TestingOptionsHandle;
-            const obj = new TestingOptionsImpl(objHandle, this._client);
-            await callback(obj);
+    private async _withTestingInternal(callback?: (arg: ResourceTestingContext) => Promise<void>): Promise<TestVaultResource> {
+        const callbackId = callback ? registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as ResourceTestingContextHandle;
+            const arg = new ResourceTestingContextImpl(argHandle, this._client);
+            await callback(arg);
         }) : undefined;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (callback !== undefined) rpcArgs.callback = callbackId;
@@ -55720,14 +55630,16 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /**
-     * Configures a resource's testing participation and result collectors.
+     * Marks a resource for testing with an optional runtime result collector.
      *
      * Waits for every marked resource, including replicas, and all collectors before completion.
      * The application shuts down unless keep-alive was requested.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
-     * Configuration runs immediately. Collectors start alongside resource execution during testing.
-     * The CLI supplies private resource output destinations; those paths are absent during ordinary runs.
+     * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
+     * The context supplies a private resource output destination. Configure runner report paths independently
+     * and stage collected artifacts into this destination at runtime.
+     * Repeated calls replace the collector while preserving the existing run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -57092,14 +57004,16 @@ export interface Resource {
      */
     withTerminal(options?: WithTerminalOptions): ResourcePromise;
     /**
-     * Configures a resource's testing participation and result collectors.
+     * Marks a resource for testing with an optional runtime result collector.
      *
      * Waits for every marked resource, including replicas, and all collectors before completion.
      * The application shuts down unless keep-alive was requested.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
-     * Configuration runs immediately. Collectors start alongside resource execution during testing.
-     * The CLI supplies private resource output destinations; those paths are absent during ordinary runs.
+     * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
+     * The context supplies a private resource output destination. Configure runner report paths independently
+     * and stage collected artifacts into this destination at runtime.
+     * Repeated calls replace the collector while preserving the existing run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -57468,14 +57382,16 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      */
     withTerminal(options?: WithTerminalOptions): ResourcePromise;
     /**
-     * Configures a resource's testing participation and result collectors.
+     * Marks a resource for testing with an optional runtime result collector.
      *
      * Waits for every marked resource, including replicas, and all collectors before completion.
      * The application shuts down unless keep-alive was requested.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
-     * Configuration runs immediately. Collectors start alongside resource execution during testing.
-     * The CLI supplies private resource output destinations; those paths are absent during ordinary runs.
+     * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
+     * The context supplies a private resource output destination. Configure runner report paths independently
+     * and stage collected artifacts into this destination at runtime.
+     * Repeated calls replace the collector while preserving the existing run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -58401,11 +58317,11 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     }
 
     /** @internal */
-    private async _withTestingInternal(callback?: (obj: TestingOptions) => Promise<void>): Promise<Resource> {
-        const callbackId = callback ? registerCallback(async (objData: unknown) => {
-            const objHandle = wrapIfHandle(objData) as TestingOptionsHandle;
-            const obj = new TestingOptionsImpl(objHandle, this._client);
-            await callback(obj);
+    private async _withTestingInternal(callback?: (arg: ResourceTestingContext) => Promise<void>): Promise<Resource> {
+        const callbackId = callback ? registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as ResourceTestingContextHandle;
+            const arg = new ResourceTestingContextImpl(argHandle, this._client);
+            await callback(arg);
         }) : undefined;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (callback !== undefined) rpcArgs.callback = callbackId;
@@ -58417,14 +58333,16 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     }
 
     /**
-     * Configures a resource's testing participation and result collectors.
+     * Marks a resource for testing with an optional runtime result collector.
      *
      * Waits for every marked resource, including replicas, and all collectors before completion.
      * The application shuts down unless keep-alive was requested.
      * Exit code zero passes. Startup failure, a nonzero exit code, or an unknown terminal exit code fails.
      * This does not change the lifetime of aspire run.
-     * Configuration runs immediately. Collectors start alongside resource execution during testing.
-     * The CLI supplies private resource output destinations; those paths are absent during ordinary runs.
+     * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
+     * The context supplies a private resource output destination. Configure runner report paths independently
+     * and stage collected artifacts into this destination at runtime.
+     * Repeated calls replace the collector while preserving the existing run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -61201,7 +61119,6 @@ registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUr
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCallbackContext', (handle, client) => new TestCallbackContextImpl(handle as TestCallbackContextHandle, client));
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCollectionContext', (handle, client) => new TestCollectionContextImpl(handle as TestCollectionContextHandle, client));
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext', (handle, client) => new TestEnvironmentContextImpl(handle as TestEnvironmentContextHandle, client));
-registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.TestingOptions', (handle, client) => new TestingOptionsImpl(handle as TestingOptionsHandle, client));
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestMutableCollectionContext', (handle, client) => new TestMutableCollectionContextImpl(handle as TestMutableCollectionContextHandle, client));
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestResourceContext', (handle, client) => new TestResourceContextImpl(handle as TestResourceContextHandle, client));
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestReturnValueContext', (handle, client) => new TestReturnValueContextImpl(handle as TestReturnValueContextHandle, client));
