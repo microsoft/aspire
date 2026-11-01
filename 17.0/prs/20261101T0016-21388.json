@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Included in changelog",
+  "mergedAt": "2026-11-01T00:16:05Z",
+  "number": 21388,
+  "runDate": "2026-11-01T06:05:00Z",
+  "status": "included",
+  "title": "Inherit template sources from explicit init configuration"
+}

@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "When ASPIRE_INIT_SOURCE_URL is set, `aspire new` and `aspire template source list` can include template sources declared in that init-config repository alongside global sources, after a consent prompt, so enterprises can distribute templates without per-developer registration.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🏢",
+  "firstMergedAt": "2026-11-01T00:16:05Z",
+  "lastMergedAt": "2026-11-01T00:16:05Z",
+  "name": "Inherit template sources from init configuration",
+  "owner": "mitchdenny",
+  "prs": [
+    21388
+  ]
+}

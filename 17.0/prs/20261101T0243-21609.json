@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Included in changelog",
+  "mergedAt": "2026-11-01T02:43:16Z",
+  "number": 21609,
+  "runDate": "2026-11-01T06:05:00Z",
+  "status": "included",
+  "title": "Remap *.localhost host names in HostUrl for containers"
+}

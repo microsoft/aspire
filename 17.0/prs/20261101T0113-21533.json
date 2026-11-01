@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Included in changelog",
+  "mergedAt": "2026-11-01T01:13:35Z",
+  "number": 21533,
+  "runDate": "2026-11-01T06:05:00Z",
+  "status": "included",
+  "title": "Reserve proxyless endpoint ports process-wide to avoid cross-app port collisions"
+}

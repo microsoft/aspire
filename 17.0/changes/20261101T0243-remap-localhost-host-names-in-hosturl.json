@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "HostUrl now remaps `*.localhost` host names (such as `frontend.dev.localhost`) for containers, so containers can reach host services addressed that way instead of resolving to their own loopback.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔁",
+  "firstMergedAt": "2026-11-01T02:43:16Z",
+  "lastMergedAt": "2026-11-01T02:43:16Z",
+  "name": "Remap *.localhost host names in HostUrl for containers",
+  "owner": "davidfowl",
+  "prs": [
+    21609
+  ]
+}
