@@ -93,7 +93,18 @@ internal static partial class HelmExtensions
     /// Evaluates a string as a Helm template and quotes the complete result as a YAML scalar.
     /// </summary>
     public static string ToQuotedHelmTemplateExpression(this string value)
-        => $"{StartDelimiter} tpl {JsonSerializer.Serialize(value)} . {PipelineDelimiter} quote {EndDelimiter}";
+        => $"{StartDelimiter} tpl {ToGoStringLiteral(value)} . {PipelineDelimiter} quote {EndDelimiter}";
+
+    /// <summary>
+    /// Quotes a string as a Go template string literal. JSON escaping is Go-compatible except for
+    /// supplementary characters, which JSON writes as UTF-16 surrogate pairs (<c>\uD83D\uDE00</c>)
+    /// that Go rejects, so those are rewritten as <c>\U0001F600</c>.
+    /// </summary>
+    internal static string ToGoStringLiteral(string value)
+        => JsonEscapeSequencePattern().Replace(JsonSerializer.Serialize(value), static match =>
+            match.Groups["high"].Success
+                ? $"\\U{char.ConvertToUtf32((char)Convert.ToInt32(match.Groups["high"].Value, 16), (char)Convert.ToInt32(match.Groups["low"].Value, 16)):X8}"
+                : match.Value);
 
     public static (bool, ScalarStyle?) ShouldDoubleQuoteString(string value)
     {
@@ -143,6 +154,10 @@ internal static partial class HelmExtensions
 
     [GeneratedRegex(@"\{\{\s*if\b")]
     private static partial Regex HelmFlowControlExpressionPattern();
+
+    // Matches each JSON escape sequence in order, so an escaped backslash is never mistaken for the start of a surrogate escape.
+    [GeneratedRegex(@"\\(?:u(?<high>D[89AB][0-9A-F]{2})\\u(?<low>D[C-F][0-9A-F]{2})|u[0-9A-Fa-f]{4}|.)", RegexOptions.IgnoreCase)]
+    private static partial Regex JsonEscapeSequencePattern();
 
     [GeneratedRegex(@"^\{\{\s*tpl\b.*\|\s*quote\s*\}\}$")]
     private static partial Regex QuotedTemplateExpressionPattern();

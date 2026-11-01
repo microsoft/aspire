@@ -203,6 +203,45 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PublishAsync_CompositeArgsUseGoCompatibleUnicodeEscapes()
+    {
+        // Go template string literals reject the UTF-16 surrogate escapes JSON emits for supplementary
+        // characters, so they must be written as \U escapes. Escaped backslashes must be left alone.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        var name = builder.AddParameter("name");
+
+        builder.AddContainer("myapp", "nats", "2.11")
+            .WithArgs(context =>
+            {
+                context.Args.Add(ReferenceExpression.Create($"\U0001F600-{name.Resource}"));
+                context.Args.Add(ReferenceExpression.Create($@"\uD83D\uDE00-{name.Resource}"));
+            });
+
+        var app = builder.Build();
+        app.Run();
+
+        var deployment = await File.ReadAllLinesAsync(Path.Combine(workspace.Path, "templates/myapp/deployment.yaml"));
+        var argsIndex = Array.FindIndex(deployment, l => l.Trim() == "args:");
+        Assert.True(argsIndex >= 0);
+        var args = deployment
+            .Skip(argsIndex + 1)
+            .TakeWhile(l => l.TrimStart().StartsWith("- ", StringComparison.Ordinal))
+            .Select(l => l.TrimStart()[2..])
+            .ToArray();
+
+        Assert.Equal(
+            [
+                """{{ tpl "\U0001F600-{{ .Values.config.myapp.name }}" . | quote }}""",
+                """{{ tpl "\\uD83D\\uDE00-{{ .Values.config.myapp.name }}" . | quote }}""",
+            ],
+            args);
+    }
+
+    [Fact]
     public async Task PublishAppliesServiceCustomizations()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
