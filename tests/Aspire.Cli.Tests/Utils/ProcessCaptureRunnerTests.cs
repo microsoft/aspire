@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using Aspire.Cli.Utils;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Utils;
@@ -66,42 +67,55 @@ public class ProcessCaptureRunnerTests(ITestOutputHelper outputHelper)
         var interruptAfter = TimeSpan.FromSeconds(3);
         using var callerCancel = cancelByCaller ? new CallerCancellation(callerCts, interruptAfter) : null;
 
+        // Start the backlog from the runner's own thread as it enters the post-exit drain. Starting it
+        // from the capture could leave the runner's exit continuation queued behind the backlog, which
+        // tests the pre-exit wait rather than the drain. Hold it through a caller's cancellation so
+        // the runner must report it without waiting for the pool to recover. The deadline is the
+        // runner's own timer, which a starved pool can delay, so release the backlog once it fires;
+        // both paths then observe the same linked token.
+        var captureToken = CancellationToken.None;
+        var backlogStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var logger = new DrainStartLogger(() =>
+        {
+            backlog.Start(cancelByCaller ? CancellationToken.None : captureToken);
+            backlogStarted.TrySetResult();
+        });
+
         var runTask = ProcessCaptureRunner.RunAsync(
             startInfo,
             cancelByCaller ? TimeSpan.FromSeconds(30) : interruptAfter,
-            async (process, cancellationToken) =>
+            (process, cancellationToken) =>
             {
-                await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
-                await Task.Yield();
-                // Hold the backlog through a caller's cancellation so the runner must report it without
-                // waiting for the pool to recover. The deadline is the runner's own timer, which a
-                // starved pool can delay, so release the backlog once it fires; both paths then
-                // observe the same linked token.
-                backlog.Start(cancelByCaller ? CancellationToken.None : cancellationToken);
-
-                if (!captureObservesCancellation)
-                {
-                    // A capture that ignores cancellation stays queued behind the backlog, so only a
-                    // drain that observes the interruption itself can return before the pool recovers.
-                    await ThreadPoolBacklog.QueueBehindAsync().ConfigureAwait(false);
-                    return "late";
-                }
-
-                // Like a reader that returns what it buffered once cancelled, only the interruption
-                // ends this capture, so the result must not be reported as a successful run.
-                try
-                {
-                    await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException)
-                {
-                }
-
-                return "partial";
+                captureToken = cancellationToken;
+                return CaptureAsync(cancellationToken);
             },
             () => "(empty)",
-            NullLogger.Instance,
+            logger,
             callerCts.Token);
+
+        async Task<string> CaptureAsync(CancellationToken cancellationToken)
+        {
+            if (!captureObservesCancellation)
+            {
+                // A capture that ignores cancellation resumes behind the backlog, so only a drain
+                // that observes the interruption itself can return before the pool recovers.
+                await backlogStarted.Task.ConfigureAwait(false);
+                await ThreadPoolBacklog.QueueBehindAsync().ConfigureAwait(false);
+                return "late";
+            }
+
+            // Like a reader that returns what it buffered once cancelled, only the interruption
+            // ends this capture, so the result must not be reported as a successful run.
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+            }
+
+            return "partial";
+        }
 
         // Record completion inline on the completing thread; observing it must not need a pool worker.
         _ = runTask.ContinueWith(
@@ -120,6 +134,21 @@ public class ProcessCaptureRunnerTests(ITestOutputHelper outputHelper)
         Assert.Equal(cancelByCaller, result.Cancelled);
         Assert.Equal(cancelByCaller ? null : ProcessCaptureFailureKind.TimedOut, result.FailureKind);
         Assert.Equal(-1, result.ExitCode);
+    }
+
+    private sealed class DrainStartLogger(Action onDrainStart) : ILogger
+    {
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            if (formatter(state, exception).Contains("exited; draining its output", StringComparison.Ordinal))
+            {
+                onDrainStart();
+            }
+        }
     }
 
     // Cancels from a dedicated thread: timer callbacks can themselves queue behind a starved pool,

@@ -153,6 +153,7 @@ internal static class ProcessCaptureRunner
             // milliseconds). Cap the post-exit drain, but allow more time than the
             // post-kill path: the peer has already exited normally, so losing recently
             // emitted stdout/stderr would make diagnostics flaky under CI load.
+            logger.LogDebug("Process {Pid} exited; draining its output.", TryGetPid(process));
             var (capture, drainInterrupted) = await DrainAfterExitAsync(captureTask, createEmptyCapture, logger, timeoutCts.Token).ConfigureAwait(false);
             if (drainInterrupted)
             {
