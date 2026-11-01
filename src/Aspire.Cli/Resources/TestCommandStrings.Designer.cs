@@ -310,7 +310,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Output format for test resource results (JSON or table).
+        ///   Looks up a localized string similar to Output format for test results (JSON or table; table renders log-style text).
         /// </summary>
         internal static string FormatDescription {
             get {
@@ -373,11 +373,47 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to {0}: {1} ({2}, exit code {3}).
+        ///   Looks up a localized string similar to Resource {0}: {1}.
         /// </summary>
         internal static string ResourceStatus {
             get {
                 return ResourceManager.GetString("ResourceStatus", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Resource {0}: {1} (exit code {2}).
+        /// </summary>
+        internal static string TerminalResourceStatus {
+            get {
+                return ResourceManager.GetString("TerminalResourceStatus", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to unknown.
+        /// </summary>
+        internal static string UnknownExitCode {
+            get {
+                return ResourceManager.GetString("UnknownExitCode", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Resource {0}: {1}; {2} passed, {3} failed, {4} other.
+        /// </summary>
+        internal static string ResourceResults {
+            get {
+                return ResourceManager.GetString("ResourceResults", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Resource {0}: {1}; published so far: {2} passed, {3} failed, {4} other.
+        /// </summary>
+        internal static string PartialResourceResults {
+            get {
+                return ResourceManager.GetString("PartialResourceResults", resourceCulture);
             }
         }
 

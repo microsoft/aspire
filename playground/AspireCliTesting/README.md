@@ -90,8 +90,14 @@ HTTP endpoint; no scenario should hard-code a port.
 `foundation-tests/tests.cs` probes the service and writes `probe.txt` into its
 resource-specific testing output directory. Its `WithTesting` collector starts
 alongside execution, awaits resource completion, checks the artifact, and
-publishes the `shared-service-probe` result. The console/JSON summary includes
-both resource completion and that actual published result. On Unix the probe
+publishes the `shared-service-probe` result. Text output distinguishes `Resource`
+state transitions from `Test` results, shows exit codes only for terminal states,
+and reports each resource's passed/failed/other counts after its collectors finish.
+`Other` counts published skipped results. Interrupted collectors instead show
+the results published so far. Resource-only scenarios do not invent test counts.
+The final output retains the run verdict, published totals and artifact link
+without repeating a resource table. JSON retains both resource completion and
+actual published results. On Unix the probe
 creates its artifact with mode `0600` inside the run's private resource directory.
 
 Subsequent framework layers should append their resource declarations to the

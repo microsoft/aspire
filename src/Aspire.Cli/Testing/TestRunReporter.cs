@@ -18,6 +18,7 @@ namespace Aspire.Cli.Testing;
 internal sealed class TestRunReporter
 {
     private const UnixFileMode FileModeBits = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+    private static readonly string[] s_terminalStates = ["Finished", "Exited", "FailedToStart", "RuntimeUnhealthy"];
     private readonly CliExecutionContext _executionContext;
     private readonly IInteractionService _interaction;
     private readonly bool _interactive;
@@ -27,6 +28,8 @@ internal sealed class TestRunReporter
     private readonly Dictionary<string, TestResourceState> _resources = new(StringComparers.ResourceName);
     private readonly List<PublishedTestResult> _results = [];
     private readonly Dictionary<string, TestCollectionState> _collections = new(StringComparers.ResourceName);
+    private readonly Dictionary<string, (string State, int? ExitCode)> _displayedResourceStates = new(StringComparers.ResourceName);
+    private readonly HashSet<string> _displayedResourceSummaries = new(StringComparers.ResourceName);
     private readonly DateTimeOffset _startedAt;
     private readonly object _gate = new();
     private bool _completed;
@@ -181,7 +184,8 @@ internal sealed class TestRunReporter
             if (_interactive)
             {
                 _interaction.DisplayMessage(KnownEmojis.Microscope, string.Format(CultureInfo.CurrentCulture,
-                    TestCommandStrings.PublishedResult, result.ResourceName, result.Name, DisplayOutcome(result.Outcome)));
+                    TestCommandStrings.PublishedResult, FormatResourceName(result.ResourceName),
+                    $"[blue]{result.Name.EscapeMarkup()}[/]", FormatOutcome(result.Outcome)), allowMarkup: true);
             }
         }
     }
@@ -208,6 +212,7 @@ internal sealed class TestRunReporter
             {
                 _interaction.DisplayError(error);
             }
+            DisplayResourceSummary(collection.ResourceName);
         }
     }
 
@@ -252,10 +257,94 @@ internal sealed class TestRunReporter
         Persist("running", exitCode: null, error: null);
         if (_interactive)
         {
-            _interaction.DisplayMessage(KnownEmojis.Microscope, string.Format(CultureInfo.CurrentCulture,
-                TestCommandStrings.ResourceStatus, resource.ResourceId ?? resource.ResourceName,
-                resource.State ?? "-", DisplayOutcome(resource.Outcome), resource.ExitCode?.ToString(CultureInfo.CurrentCulture) ?? "-"));
+            DisplayResourceState(resource);
+            DisplayResourceSummary(resource.ResourceName);
         }
+    }
+
+    private void DisplayResourceState(TestResourceState resource)
+    {
+        if (string.IsNullOrWhiteSpace(resource.State))
+        {
+            return;
+        }
+
+        // Model placeholders and single runtime replicas describe the same logical resource.
+        // Outcome resolution can also replay a terminal snapshot without a process transition.
+        var identity = resource.ExpectedReplicas == 1 ? resource.ResourceName : resource.ResourceId ?? resource.ResourceName;
+        var terminal = IsTerminal(resource);
+        var state = (State: resource.State, ExitCode: terminal ? resource.ExitCode : null);
+        if (_displayedResourceStates.TryGetValue(identity, out var previous) &&
+            StringComparers.ResourceState.Equals(previous.State, state.State) && previous.ExitCode == state.ExitCode)
+        {
+            return;
+        }
+        _displayedResourceStates[identity] = state;
+        var name = resource.ExpectedReplicas > 1 && resource.ResourceId is not null
+            ? $"{resource.ResourceName} ({resource.ResourceId})"
+            : resource.ResourceName;
+        var message = terminal
+            ? string.Format(CultureInfo.CurrentCulture, TestCommandStrings.TerminalResourceStatus,
+                FormatResourceName(name), resource.State.EscapeMarkup(),
+                resource.ExitCode?.ToString(CultureInfo.CurrentCulture) ?? TestCommandStrings.UnknownExitCode)
+            : string.Format(CultureInfo.CurrentCulture, TestCommandStrings.ResourceStatus,
+                FormatResourceName(name), resource.State.EscapeMarkup());
+        _interaction.DisplayMessage(KnownEmojis.Gear, message, allowMarkup: true);
+    }
+
+    private void DisplayResourceSummary(string resourceName, bool finalizing = false)
+    {
+        if (!_interactive || _displayedResourceSummaries.Contains(resourceName))
+        {
+            return;
+        }
+        var results = _results.Where(r => StringComparers.ResourceName.Equals(r.ResourceName, resourceName)).ToArray();
+        if (results.Length == 0)
+        {
+            return;
+        }
+        var resources = _resources.Values.Where(r => StringComparers.ResourceName.Equals(r.ResourceName, resourceName)).ToArray();
+        var resourceComplete = resources.Length == resources[0].ExpectedReplicas &&
+            resources.All(r => r.Outcome is "passed" or "failed");
+        var collectionComplete = _collections.TryGetValue(resourceName, out var collection) &&
+            collection.Status is "completed" or "failed";
+        if (!finalizing && (!resourceComplete || !collectionComplete))
+        {
+            return;
+        }
+
+        // Process completion precedes artifact harvesting. Counts are final only after both
+        // lifetimes finish; interruption instead reports the actual results published so far.
+        var complete = resourceComplete && collectionComplete;
+        var outcome = !complete ? "incomplete"
+            : resources.Any(r => r.Outcome == "failed") || collection!.Status == "failed" ||
+                results.Any(r => r.Outcome == "failed") ? "failed" : "passed";
+        _interaction.DisplayMessage(KnownEmojis.BarChart, string.Format(CultureInfo.CurrentCulture,
+            complete ? TestCommandStrings.ResourceResults : TestCommandStrings.PartialResourceResults,
+            FormatResourceName(resourceName), FormatOutcome(outcome),
+            FormatCount(results.Count(r => r.Outcome == "passed"), "green"),
+            FormatCount(results.Count(r => r.Outcome == "failed"), "red"),
+            FormatCount(results.Count(r => r.Outcome == "skipped"), "yellow")), allowMarkup: true);
+        _displayedResourceSummaries.Add(resourceName);
+    }
+
+    private static bool IsTerminal(TestResourceState resource) =>
+        resource.Outcome is "passed" or "failed" ||
+        s_terminalStates.Contains(resource.State, StringComparers.ResourceState);
+
+    private static string FormatResourceName(string name) => $"[teal]{name.EscapeMarkup()}[/]";
+
+    private static string FormatCount(int count, string color) => $"[{color}]{count.ToString(CultureInfo.CurrentCulture)}[/]";
+
+    private static string FormatOutcome(string outcome)
+    {
+        var color = outcome switch
+        {
+            "passed" => "green",
+            "failed" => "red",
+            _ => "yellow"
+        };
+        return $"[{color}]{DisplayOutcome(outcome).EscapeMarkup()}[/]";
     }
 
     public void Complete(CommandResult result)
@@ -316,25 +405,18 @@ internal sealed class TestRunReporter
         }
         if (_interactive)
         {
-            _interaction.DisplayMessage(KnownEmojis.Microscope, string.Format(CultureInfo.CurrentCulture,
-                TestCommandStrings.SummaryHeader, DisplayOutcome(status)));
-            var table = new Table();
-            table.AddBoldColumn(TestCommandStrings.Resource);
-            table.AddBoldColumn(TestCommandStrings.State);
-            table.AddBoldColumn(TestCommandStrings.Outcome);
-            table.AddBoldColumn(TestCommandStrings.ExitCode);
-            foreach (var resource in OrderedResources())
+            foreach (var resourceName in _results.Select(r => r.ResourceName).Distinct(StringComparers.ResourceName))
             {
-                table.AddRow((resource.ResourceId ?? resource.ResourceName).EscapeMarkup(),
-                    (resource.State ?? "-").EscapeMarkup(), DisplayOutcome(resource.Outcome).EscapeMarkup(),
-                    resource.ExitCode?.ToString(CultureInfo.CurrentCulture) ?? "-");
+                DisplayResourceSummary(resourceName, finalizing: true);
             }
-            _interaction.DisplayRenderable(table);
+            _interaction.DisplayMessage(KnownEmojis.Microscope, string.Format(CultureInfo.CurrentCulture,
+                TestCommandStrings.SummaryHeader, FormatOutcome(status)), allowMarkup: true);
             if (_results.Count > 0)
             {
                 var totals = ResultSummary();
                 _interaction.DisplayMessage(KnownEmojis.Microscope, string.Format(CultureInfo.CurrentCulture,
-                    TestCommandStrings.PublishedSummary, totals.Passed, totals.Failed, totals.Skipped));
+                    TestCommandStrings.PublishedSummary, FormatCount(totals.Passed, "green"),
+                    FormatCount(totals.Failed, "red"), FormatCount(totals.Skipped, "yellow")), allowMarkup: true);
             }
         }
 

@@ -176,7 +176,21 @@
     <value>Summary JSON: {0}</value>
   </data>
   <data name="ResourceStatus" xml:space="preserve">
-    <value>{0}: {1} ({2}, exit code {3})</value>
+    <value>Resource {0}: {1}</value>
+  </data>
+  <data name="TerminalResourceStatus" xml:space="preserve">
+    <value>Resource {0}: {1} (exit code {2})</value>
+  </data>
+  <data name="UnknownExitCode" xml:space="preserve">
+    <value>unknown</value>
+  </data>
+  <data name="ResourceResults" xml:space="preserve">
+    <value>Resource {0}: {1}; {2} passed, {3} failed, {4} other</value>
+    <comment>Other counts published skipped test results. Counts are final after resources and collectors complete.</comment>
+  </data>
+  <data name="PartialResourceResults" xml:space="preserve">
+    <value>Resource {0}: {1}; published so far: {2} passed, {3} failed, {4} other</value>
+    <comment>Other counts published skipped test results. Partial counts do not imply collector completion.</comment>
   </data>
   <data name="Outcome" xml:space="preserve">
     <value>Outcome</value>
@@ -206,7 +220,7 @@
     <value>Keep the CLI and AppHost running after tests complete for dashboard inspection</value>
   </data>
   <data name="FormatDescription" xml:space="preserve">
-    <value>Output format for test resource results (JSON or table)</value>
+    <value>Output format for test results (JSON or table; table renders log-style text)</value>
   </data>
   <data name="KeepAliveMessage" xml:space="preserve">
     <value>Tests have completed. The CLI and AppHost are still running for inspection. Press Ctrl+C to stop.</value>
@@ -215,7 +229,7 @@
     <value>The AppHost disconnected while being kept alive for test inspection and did not finish shutting down.</value>
   </data>
   <data name="PublishedResult" xml:space="preserve">
-    <value>{0}: {1} ({2})</value>
+    <value>Test {0} / {1}: {2}</value>
   </data>
   <data name="PublishedSummary" xml:space="preserve">
     <value>Published test results: {0} passed, {1} failed, {2} skipped</value>

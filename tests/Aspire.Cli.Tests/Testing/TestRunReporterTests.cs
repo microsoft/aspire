@@ -3,15 +3,19 @@
 
 using System.Security.AccessControl;
 using System.Security.Principal;
+using System.Text;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Testing;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
+using Spectre.Console;
 
 namespace Aspire.Cli.Tests.Testing;
 
@@ -140,7 +144,7 @@ public class TestRunReporterTests(ITestOutputHelper outputHelper)
         reporter.Complete(CommandResult.Failure(CliExitCodes.TestRunFailed));
         AssertPrivateFile(reporter.SummaryPath);
         Assert.Contains(interaction.DisplayedMessages, message => message.Message == TestCommandStrings.RunningHeader);
-        Assert.Single(interaction.DisplayedRenderables);
+        Assert.Empty(interaction.DisplayedRenderables);
         var expectedLink = Aspire.Cli.Utils.MarkupHelpers.SafeFileLink(interaction, reporter.SummaryPath);
         Assert.Contains(paths, message => message.Contains(expectedLink, StringComparison.Ordinal));
 
@@ -169,6 +173,179 @@ public class TestRunReporterTests(ITestOutputHelper outputHelper)
         Assert.Equal(130, summary["cliExitCode"]!.GetValue<int>());
         Assert.Equal("incomplete", summary["resources"]![0]!["outcome"]!.GetValue<string>());
         Assert.Null(summary["resources"]![0]!["exitCode"]);
+    }
+
+    [Fact]
+    public async Task ResourceTransitionsAndDelayedTestResultsHaveDistinctRenderingAndFinalCounts()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interaction = new TestInteractionService();
+        var reporter = CreateReporter(CreateContext(workspace), interaction, interactive: true);
+        var resource = Resource("tests-1", "Starting", null, "pending") with { ExpectedReplicas = 1 };
+        var cargo = resource with { ResourceName = "cargo", ResourceId = "cargo-1", State = "Running" };
+        var backchannel = new TestAppHostBackchannel { WatchTestRunAsyncCallback = _ => Stream() };
+
+        Assert.False(await reporter.WaitForCompletionAsync(backchannel, TestContext.Current.CancellationToken));
+        reporter.ReportCompletedResources(passed: false);
+        var beforeShutdown = interaction.DisplayedMessages.ToArray();
+        reporter.Complete(CommandResult.Failure(CliExitCodes.WaitTimeout));
+        Assert.Equal(beforeShutdown, interaction.DisplayedMessages);
+        Assert.Empty(interaction.DisplayedRenderables);
+        await Verify(interaction.DisplayedMessages.Select(m => new { Emoji = m.Emoji.Name, m.Message }))
+            .UseDirectory("Snapshots");
+
+        async IAsyncEnumerable<TestRunEvent> Stream()
+        {
+            await Task.CompletedTask;
+            yield return new TestRunEvent { Resource = resource with { ResourceId = null, State = null } };
+            yield return new TestRunEvent { Resource = resource with { ResourceId = null } };
+            yield return new TestRunEvent { Resource = resource with { ExitCode = 99 } };
+            yield return new TestRunEvent { Resource = resource with { State = "Running", ExitCode = 99 } };
+            yield return new TestRunEvent { Resource = cargo };
+            yield return new TestRunEvent { Collection = new TestCollectionState { ResourceName = "cargo", Status = "notConfigured" } };
+            yield return new TestRunEvent { Resource = cargo with { State = "Finished", ExitCode = 0, Outcome = "passed" } };
+            yield return new TestRunEvent { Collection = new TestCollectionState { ResourceName = "tests", CollectorCount = 1, Status = "running" } };
+            yield return new TestRunEvent { Resource = resource with { State = "Finished", ExitCode = 0 } };
+            var processTransitionCount = interaction.DisplayedMessages.Count;
+            yield return new TestRunEvent { Resource = resource with { State = "Finished", ExitCode = 0, Outcome = "passed" } };
+            Assert.Equal(processTransitionCount, interaction.DisplayedMessages.Count);
+            foreach (var outcome in new[] { "passed", "failed", "skipped" })
+            {
+                yield return new TestRunEvent
+                {
+                    Result = new PublishedTestResult { ResourceName = "tests", Name = $"fixture-{outcome}", Outcome = outcome }
+                };
+            }
+            Assert.Equal(0, interaction.DisplayedMessages.Count(m => m.Emoji.Name == KnownEmojis.BarChart.Name));
+            yield return new TestRunEvent { Collection = new TestCollectionState { ResourceName = "tests", CollectorCount = 1, Status = "completed" } };
+            Assert.Equal(1, interaction.DisplayedMessages.Count(m => m.Emoji.Name == KnownEmojis.BarChart.Name));
+            yield return new TestRunEvent { Passed = false };
+        }
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task TestLogMarkupEscapesNamesAndRespectsConsoleColorCapabilities(bool color)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var context = CreateContext(workspace);
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = color ? AnsiSupport.Yes : AnsiSupport.No,
+            ColorSystem = color ? ColorSystemSupport.TrueColor : ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(output)),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+        });
+        console.Profile.Width = 200;
+        var realInteraction = new ConsoleInteractionService(new ConsoleEnvironment(console, console, TextReader.Null),
+            context, TestHelpers.CreateInteractiveHostEnvironment(), new EnvironmentProcessPathProvider(),
+            NullLoggerFactory.Instance, new ConsoleLogBufferContext());
+        var interaction = new TestInteractionService
+        {
+            DisplayMessageCallback = (emoji, message, target) => realInteraction.DisplayMessage(emoji, message, allowMarkup: true, consoleOverride: target)
+        };
+        var reporter = CreateReporter(context, interaction, interactive: true);
+        var resource = Resource("tests-1", "Running", null, "pending") with { ResourceName = "resource[red]", ExpectedReplicas = 1 };
+        var backchannel = new TestAppHostBackchannel
+        {
+            WatchTestRunAsyncCallback = _ => Events(
+                new TestRunEvent { Resource = resource },
+                new TestRunEvent { Result = new PublishedTestResult { ResourceName = resource.ResourceName, Name = "test[blue]", Outcome = "skipped" } },
+                new TestRunEvent { Collection = new TestCollectionState { ResourceName = resource.ResourceName, CollectorCount = 1, Status = "completed" } },
+                new TestRunEvent { Resource = resource with { State = "Finished", ExitCode = 0, Outcome = "passed" } },
+                new TestRunEvent { Passed = true })
+        };
+        Assert.True(await reporter.WaitForCompletionAsync(backchannel, TestContext.Current.CancellationToken));
+        reporter.Complete(CommandResult.Success());
+        Assert.Equal("Test [teal]resource[[red]][/] / [blue]test[[blue]][/]: [yellow]skipped[/]",
+            Assert.Single(interaction.DisplayedMessages, m => m.Message.StartsWith("Test [", StringComparison.Ordinal)).Message);
+        Assert.Equal(color, output.ToString().Contains('\u001b'));
+        if (!color)
+        {
+            await Verify(output.ToString()).UseDirectory("Snapshots");
+        }
+    }
+
+    [Theory]
+    [InlineData(CliExitCodes.WaitTimeout)]
+    [InlineData(CliExitCodes.Cancelled)]
+    public async Task InterruptedCollectionShowsPublishedSoFarInsteadOfFinalTotals(int exitCode)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interaction = new TestInteractionService();
+        var reporter = CreateReporter(CreateContext(workspace), interaction, interactive: true);
+        var resource = Resource("tests-1", "Finished", 0, "passed") with { ExpectedReplicas = 1 };
+        var backchannel = new TestAppHostBackchannel
+        {
+            WatchTestRunAsyncCallback = _ => Events(
+                new TestRunEvent { Resource = resource },
+                new TestRunEvent { Collection = new TestCollectionState { ResourceName = "tests", CollectorCount = 1, Status = "running" } },
+                new TestRunEvent { Result = new PublishedTestResult { ResourceName = "tests", Name = "partial", Outcome = "passed" } })
+        };
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            reporter.WaitForCompletionAsync(backchannel, TestContext.Current.CancellationToken));
+        Assert.Equal(0, interaction.DisplayedMessages.Count(m => m.Emoji.Name == KnownEmojis.BarChart.Name));
+        reporter.Complete(CommandResult.Failure(exitCode, errorMessage: "interrupted collection"));
+        Assert.Equal("Resource [teal]tests[/]: [yellow]incomplete[/]; published so far: [green]1[/] passed, [red]0[/] failed, [yellow]0[/] other",
+            Assert.Single(interaction.DisplayedMessages, m => m.Emoji.Name == KnownEmojis.BarChart.Name).Message);
+        Assert.Empty(interaction.DisplayedRenderables);
+        await Verify(interaction.DisplayedMessages.Select(m => m.Message)).UseDirectory("Snapshots").UseParameters(exitCode);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ResourceCountsWaitForEveryReplicaAndKeepProcessAndCollectorFailuresIndependent(bool processFails)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interaction = new TestInteractionService();
+        var reporter = CreateReporter(CreateContext(workspace), interaction, interactive: true);
+        var backchannel = new TestAppHostBackchannel { WatchTestRunAsyncCallback = _ => Stream() };
+        Assert.False(await reporter.WaitForCompletionAsync(backchannel, TestContext.Current.CancellationToken));
+        reporter.Complete(CommandResult.Failure(CliExitCodes.TestRunFailed));
+        Assert.Equal(processFails ? [] : new[] { "collector failed" }, interaction.DisplayedErrors);
+        Assert.Single(interaction.DisplayedMessages, m => m.Emoji.Name == KnownEmojis.BarChart.Name);
+        await Verify(interaction.DisplayedMessages.Select(m => m.Message)).UseDirectory("Snapshots").UseParameters(processFails);
+
+        async IAsyncEnumerable<TestRunEvent> Stream()
+        {
+            await Task.CompletedTask;
+            yield return new TestRunEvent { Resource = Resource("tests-1", "Finished", 0, "passed") };
+            yield return new TestRunEvent { Resource = Resource("tests-2", "Running", null, "pending") };
+            yield return new TestRunEvent { Result = new PublishedTestResult { ResourceName = "tests", Name = "fixture", Outcome = "passed" } };
+            yield return new TestRunEvent
+            {
+                Collection = new TestCollectionState
+                {
+                    ResourceName = "tests", CollectorCount = 1, Status = processFails ? "completed" : "failed",
+                    Error = processFails ? null : "collector failed"
+                }
+            };
+            Assert.Equal(0, interaction.DisplayedMessages.Count(m => m.Emoji.Name == KnownEmojis.BarChart.Name));
+            yield return new TestRunEvent { Resource = Resource("tests-2", "Exited", processFails ? 1 : 0, processFails ? "failed" : "passed") };
+            yield return new TestRunEvent { Passed = false };
+        }
+    }
+
+    [Fact]
+    public async Task UnknownTerminalExitCodeIsExplicitWithoutInventingTestCounts()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interaction = new TestInteractionService();
+        var reporter = CreateReporter(CreateContext(workspace), interaction, interactive: true);
+        var backchannel = new TestAppHostBackchannel
+        {
+            WatchTestRunAsyncCallback = _ => Events(
+                new TestRunEvent { Resource = Resource("tests-1", "Exited", null, "failed") with { ExpectedReplicas = 1 } },
+                new TestRunEvent { Collection = new TestCollectionState { ResourceName = "tests", Status = "notConfigured" } },
+                new TestRunEvent { Passed = false })
+        };
+        Assert.False(await reporter.WaitForCompletionAsync(backchannel, TestContext.Current.CancellationToken));
+        reporter.Complete(CommandResult.Failure(CliExitCodes.TestRunFailed));
+        Assert.Empty(interaction.DisplayedRenderables);
+        await Verify(interaction.DisplayedMessages.Select(m => m.Message)).UseDirectory("Snapshots");
     }
 
     [Theory]

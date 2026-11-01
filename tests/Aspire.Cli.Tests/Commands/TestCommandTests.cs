@@ -574,7 +574,8 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
         }
         else
         {
-            Assert.Single(interaction.DisplayedRenderables);
+            Assert.Empty(interaction.DisplayedRenderables);
+            Assert.Single(interaction.DisplayedMessages, message => message.Message.StartsWith("Test run ", StringComparison.Ordinal));
         }
         cancellation.Cancel();
         Assert.Equal(CliExitCodes.Cancelled, await execution.DefaultTimeout());

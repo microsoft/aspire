@@ -68,8 +68,8 @@
         <note />
       </trans-unit>
       <trans-unit id="FormatDescription">
-        <source>Output format for test resource results (JSON or table)</source>
-        <target state="new">Output format for test resource results (JSON or table)</target>
+        <source>Output format for test results (JSON or table; table renders log-style text)</source>
+        <target state="new">Output format for test results (JSON or table; table renders log-style text)</target>
         <note />
       </trans-unit>
       <trans-unit id="IncompatibleOptions">
@@ -137,6 +137,11 @@
         <target state="new">Test output: {0}</target>
         <note />
       </trans-unit>
+      <trans-unit id="PartialResourceResults">
+        <source>Resource {0}: {1}; published so far: {2} passed, {3} failed, {4} other</source>
+        <target state="new">Resource {0}: {1}; published so far: {2} passed, {3} failed, {4} other</target>
+        <note>Other counts published skipped test results. Partial counts do not imply collector completion.</note>
+      </trans-unit>
       <trans-unit id="Passed">
         <source>passed</source>
         <target state="new">passed</target>
@@ -148,8 +153,8 @@
         <note />
       </trans-unit>
       <trans-unit id="PublishedResult">
-        <source>{0}: {1} ({2})</source>
-        <target state="new">{0}: {1} ({2})</target>
+        <source>Test {0} / {1}: {2}</source>
+        <target state="new">Test {0} / {1}: {2}</target>
         <note />
       </trans-unit>
       <trans-unit id="PublishedSummary">
@@ -167,9 +172,14 @@
         <target state="new">Resource</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourceResults">
+        <source>Resource {0}: {1}; {2} passed, {3} failed, {4} other</source>
+        <target state="new">Resource {0}: {1}; {2} passed, {3} failed, {4} other</target>
+        <note>Other counts published skipped test results. Counts are final after resources and collectors complete.</note>
+      </trans-unit>
       <trans-unit id="ResourceStatus">
-        <source>{0}: {1} ({2}, exit code {3})</source>
-        <target state="new">{0}: {1} ({2}, exit code {3})</target>
+        <source>Resource {0}: {1}</source>
+        <target state="new">Resource {0}: {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="RunningHeader">
@@ -207,6 +217,11 @@
         <target state="new">Test run {0}</target>
         <note />
       </trans-unit>
+      <trans-unit id="TerminalResourceStatus">
+        <source>Resource {0}: {1} (exit code {2})</source>
+        <target state="new">Resource {0}: {1} (exit code {2})</target>
+        <note />
+      </trans-unit>
       <trans-unit id="TimedOut">
         <source>timed out</source>
         <target state="new">timed out</target>
@@ -221,6 +236,11 @@
         <source>Timed out waiting {0}s for AppHost to start. If the AppHost is still building or starting, set {1} to a higher value and try again.</source>
         <target state="new">Timed out waiting {0}s for AppHost to start. If the AppHost is still building or starting, set {1} to a higher value and try again.</target>
         <note>Do not localize the {1} placeholder. It is an environment variable name.</note>
+      </trans-unit>
+      <trans-unit id="UnknownExitCode">
+        <source>unknown</source>
+        <target state="new">unknown</target>
+        <note />
       </trans-unit>
       <trans-unit id="UnrecognizedAppHost">
         <source>The selected AppHost type is not supported for testing.</source>
