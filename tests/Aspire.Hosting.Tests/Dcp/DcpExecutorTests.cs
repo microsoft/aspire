@@ -11429,7 +11429,13 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var dcpDependencyCheckService = new TestDcpDependencyCheckService();
 
         var appResources = new DcpAppResourceStore();
-        var proxylessEndpointPortAllocator = new ProxylessEndpointPortAllocator(Options.Create(dcpOptions));
+        // These executors are never disposed, so keep their reservations out of the process-wide registry.
+        var proxylessEndpointPortAllocator = new ProxylessEndpointPortAllocator(
+            dcpOptions.ProxylessEndpointPortRangeStart,
+            dcpOptions.ProxylessEndpointPortRangeEnd,
+            Random.Shared,
+            ProxylessEndpointPortAllocator.TryProbePort,
+            new ProxylessEndpointPortReservations());
         var applicationOptions = distributedApplicationOptions ?? new DistributedApplicationOptions();
         var containerNetworkEndpointProvisioner = new ContainerNetworkEndpointProvisioner(
             configuration,
