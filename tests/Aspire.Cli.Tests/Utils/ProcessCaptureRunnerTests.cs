@@ -52,18 +52,17 @@ public class ProcessCaptureRunnerTests(ITestOutputHelper outputHelper)
     [InlineData(false)]
     public async Task RunAsync_InterruptedDuringBackloggedDrainReportsInterruption(bool cancelByCaller)
     {
-        using var backlog = new ThreadPoolBacklog(stall: TimeSpan.FromSeconds(8));
+        using var backlog = new ThreadPoolBacklog(stall: TimeSpan.FromSeconds(20));
         using var callerCts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         var startInfo = OperatingSystem.IsWindows()
             ? new ProcessStartInfo("cmd.exe", ["/d", "/c", "exit 0"])
             : new ProcessStartInfo("/bin/sh", ["-c", "exit 0"]);
         startInfo.UseShellExecute = false;
         startInfo.CreateNoWindow = true;
-        var stopwatch = Stopwatch.StartNew();
 
-        // The caller's cancellation or the deadline fires after the 2s drain bound but well before
-        // the backlog releases the capture, so it interrupts the extended drain.
-        var interruptAfter = TimeSpan.FromSeconds(4);
+        // The caller's cancellation or the deadline fires after the 2s drain bound, while the
+        // backlogged pool keeps the runner extending the drain.
+        var interruptAfter = TimeSpan.FromSeconds(3);
         if (cancelByCaller)
         {
             callerCts.CancelAfter(interruptAfter);
@@ -76,17 +75,25 @@ public class ProcessCaptureRunnerTests(ITestOutputHelper outputHelper)
             {
                 await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
                 await Task.Yield();
-                backlog.Start(CancellationToken.None);
+                backlog.Start(cancellationToken);
 
-                await ThreadPoolBacklog.QueueBehindAsync().ConfigureAwait(false);
-                return "captured";
+                // Like a reader that returns what it buffered once cancelled, only the interruption
+                // ends this capture, so the result must not be reported as a successful run.
+                try
+                {
+                    await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                }
+
+                return "partial";
             },
             () => "(empty)",
             NullLogger.Instance,
             callerCts.Token).WaitAsync(TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken);
 
-        outputHelper.WriteLine($"Capture returned after {stopwatch.Elapsed}; backlog released after {backlog.ReleasedAfter}.");
-        Assert.Null(backlog.ReleasedAfter);
+        outputHelper.WriteLine($"Backlog released after {backlog.ReleasedAfter}.");
         Assert.Equal(cancelByCaller, result.Cancelled);
         Assert.Equal(cancelByCaller ? null : ProcessCaptureFailureKind.TimedOut, result.FailureKind);
         Assert.Equal(-1, result.ExitCode);

@@ -156,9 +156,9 @@ internal static class ProcessCaptureRunner
             var (capture, drainInterrupted) = await DrainAfterExitAsync(captureTask, createEmptyCapture, logger, timeoutCts.Token).ConfigureAwait(false);
             if (drainInterrupted)
             {
-                // The deadline or the caller's cancellation fired while the drain was extended for a
-                // backlogged thread pool. Readers may have returned partial output on cancellation, so
-                // report the interruption like the pre-exit path instead of a successful run.
+                // The deadline or the caller's cancellation fired before the output finished draining.
+                // Readers may have returned partial output on cancellation, so report the
+                // interruption like the pre-exit path instead of a successful run.
                 var drainCancelled = cancellationToken.IsCancellationRequested;
                 var interruptedCapture = await SwallowCaptureAsync(captureTask, createEmptyCapture, logger, s_postKillCaptureWaitBound).ConfigureAwait(false);
                 timeoutCts.Cancel();
@@ -279,23 +279,31 @@ internal static class ProcessCaptureRunner
         // Under a pool backlog the bound can therefore expire while the reads are still queued,
         // even though every writer has closed and the output is complete. Only give up once the
         // pool can promptly run queued work; a descendant holding the pipes still releases the
-        // caller after one bound on a responsive pool. The extension stays bounded by the
-        // operation's deadline and the caller's cancellation.
-        try
-        {
-            return (await captureTask.WaitAsync(s_postExitCaptureWaitBound, CancellationToken.None).ConfigureAwait(false), false);
-        }
-        catch (TimeoutException)
-        {
-        }
-        catch (Exception ex)
-        {
-            logger.LogDebug(ex, "Could not capture process output.");
-            return (createEmptyCapture(), false);
-        }
-
+        // caller after one bound on a responsive pool. Every wait also observes the operation's
+        // deadline and the caller's cancellation, which interrupt the drain.
         while (true)
         {
+            try
+            {
+                var capture = await captureTask.WaitAsync(s_postExitCaptureWaitBound, cancellationToken).ConfigureAwait(false);
+
+                // Readers can return partial output when the token fires, so a capture that
+                // completes alongside cancellation is not trusted as complete.
+                return cancellationToken.IsCancellationRequested ? (createEmptyCapture(), true) : (capture, false);
+            }
+            catch (TimeoutException)
+            {
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                return (createEmptyCapture(), true);
+            }
+            catch (Exception ex)
+            {
+                logger.LogDebug(ex, "Could not capture process output.");
+                return (createEmptyCapture(), false);
+            }
+
             // The probe is queued behind any read continuations already waiting for a thread,
             // so it can only run before them if the reads are not queued at all.
             var probeTask = MeasureThreadPoolDelayAsync();
@@ -308,8 +316,6 @@ internal static class ProcessCaptureRunner
                 return (createEmptyCapture(), true);
             }
 
-            // Readers can return partial output when the token fires, so a capture that completes
-            // alongside cancellation is not trusted as complete.
             if (cancellationToken.IsCancellationRequested)
             {
                 return (createEmptyCapture(), true);
@@ -329,23 +335,6 @@ internal static class ProcessCaptureRunner
             }
 
             logger.LogDebug("Thread pool work waited {Delay} for a thread; extending the post-exit output drain.", threadPoolDelay);
-            try
-            {
-                var capture = await captureTask.WaitAsync(s_postExitCaptureWaitBound, cancellationToken).ConfigureAwait(false);
-                return cancellationToken.IsCancellationRequested ? (createEmptyCapture(), true) : (capture, false);
-            }
-            catch (TimeoutException)
-            {
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                return (createEmptyCapture(), true);
-            }
-            catch (Exception ex)
-            {
-                logger.LogDebug(ex, "Could not capture process output.");
-                return (createEmptyCapture(), false);
-            }
         }
     }
 
