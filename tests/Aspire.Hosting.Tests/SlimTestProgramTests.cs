@@ -19,6 +19,7 @@ public class SlimTestProgramTests
     }
 
     [Fact]
+    [QuarantinedTest("https://github.com/microsoft/aspire/issues/9672")]
     public async Task TestProjectStartsAndStopsCleanly()
     {
         var testProgram = _slimTestProgramFixture.TestProgram;
