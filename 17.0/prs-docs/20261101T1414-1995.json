@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "aspire.dev docs/site fix with no matching changelog entry",
+  "mergedAt": "2026-11-01T14:14:56Z",
+  "number": 1995,
+  "runDate": "2026-11-01T18:05:00Z",
+  "status": "excluded",
+  "title": "Fix broken Dashboard landing anchors and relative docs links"
+}

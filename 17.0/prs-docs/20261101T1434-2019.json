@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "aspire.dev docs/site fix with no matching changelog entry",
+  "mergedAt": "2026-11-01T14:34:22Z",
+  "number": 2019,
+  "runDate": "2026-11-01T18:05:00Z",
+  "status": "excluded",
+  "title": "Document aspire dashboard run --application-name and --persistence options"
+}

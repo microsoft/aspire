@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Fixes app host deadlock when using IInteractionService in BeforeStart",
+  "mergedAt": "2026-11-01T17:55:35Z",
+  "number": 21553,
+  "runDate": "2026-11-01T18:05:00Z",
+  "status": "included",
+  "title": "Make IInteractionService unavailable during BeforeStart to prevent deadlock"
+}

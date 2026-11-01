@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "aspire.dev docs/site fix with no matching changelog entry",
+  "mergedAt": "2026-11-01T14:27:52Z",
+  "number": 2001,
+  "runDate": "2026-11-01T18:05:00Z",
+  "status": "excluded",
+  "title": "Use addAzureCosmosDB in the EF Core Cosmos DB TypeScript AppHost samples"
+}

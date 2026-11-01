@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "aspire.dev docs/site fix with no matching changelog entry",
+  "mergedAt": "2026-11-01T14:51:37Z",
+  "number": 2007,
+  "runDate": "2026-11-01T18:05:00Z",
+  "status": "excluded",
+  "title": "Keep search auto-highlight on the first result when results render out of order"
+}
