@@ -1,0 +1,15 @@
+{
+  "id": "vscode-e2e-windows-launch-profiles-deno-debug-startup-timeout",
+  "type": "infra-failure",
+  "title": "VS Code extension E2E (Windows, launch-profiles): Deno AppHost debug startup timeout followed by EBUSY teardown",
+  "error_pattern": "Timed out after 300000ms waiting for debug AppHost startup.\nLaunch profiles E2E teardown failed.\nError: EBUSY: resource busy or locked, rmdir '...\\workspace\\DenoAppHost'",
+  "occurrences": [
+    {
+      "run_id": 41339166517,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/41339166517",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, launch-profiles)",
+      "pr_number": 0,
+      "observed_at": "2026-11-01T20:14:22Z"
+    }
+  ]
+}

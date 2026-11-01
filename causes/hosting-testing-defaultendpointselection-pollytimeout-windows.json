@@ -1,0 +1,16 @@
+{
+  "id": "hosting-testing-defaultendpointselection-pollytimeout-windows",
+  "type": "flaky-test",
+  "title": "Flaky: TestingPublicApiTests.DefaultEndpointSelectionPrefersHttpsOverHttp host start times out after 2 minutes on Windows",
+  "test_name": "Aspire.Hosting.Testing.Tests.TestingPublicApiTests.DefaultEndpointSelectionPrefersHttpsOverHttp",
+  "error_pattern": "Polly.Timeout.TimeoutRejectedException : The operation didn't complete within the allowed timeout of '00:02:00'.\n---- System.OperationCanceledException : A task was canceled.\n-------- System.Threading.Tasks.TaskCanceledException : A task was canceled.\n------------ System.Threading.Tasks.TaskCanceledException : A task was canceled.",
+  "occurrences": [
+    {
+      "run_id": 41339166517,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/41339166517",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Testing.Tests, Hosting.Testing, Hosting.Testing, tests/... / Hosting.Testing (windows-latest)",
+      "pr_number": 0,
+      "observed_at": "2026-11-01T20:14:22Z"
+    }
+  ]
+}

@@ -1,0 +1,264 @@
+{
+  "run_id": 41339166517,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/41339166517",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-01T20:14:22Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 21613,
+    "title": "Give RemoteHost tests thread-pool headroom above xunit's synchronous slots",
+    "author": "davidfowl",
+    "state": "closed",
+    "head_branch": "fix/remotehost-discovery-stall",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/21613",
+    "merged_at": "2026-11-01T18:56:29Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "8487570ff52a6a01bb4e6fe5e806f247b96d2c08",
+    "failed_sha": "9ea245a3bef1dd16c1c035ae4f4be08092036e47",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "6a8f53125b8788df3c409088381057a3c0dacfff",
+        "message": "Fix flaky ExecuteCommandAsync_RebuildCommand_ReturnsBuildOutput build count (#21427) ## Description Fixes the intermittent `ExecuteCommandAsync_RebuildCommand_ReturnsBuildOutput` failure (`Assert.Equal() Failure: Expected: 2, Actual: 3`) on `Hosting-2 (windows-latest)`. **Root cause.** The test project appends to `build-count.txt` from an `AfterTargets=\"Build\"` target and the test asserts that the second rebuild command adds exactly one line. But the project resource itself is launched with `dot",
+        "html_url": "https://github.com/microsoft/aspire/commit/6a8f53125b8788df3c409088381057a3c0dacfff",
+        "pull_request": {
+          "number": 21427,
+          "title": "Fix flaky ExecuteCommandAsync_RebuildCommand_ReturnsBuildOutput build count",
+          "url": "https://github.com/microsoft/aspire/pull/21427",
+          "merged_at": "2026-10-31T06:11:50Z"
+        }
+      },
+      {
+        "sha": "034b7fd88bed17ab22b84e9377ba1cc2181c8645",
+        "message": "Cancel blocked graceful signaler once the child process exits (#21581) ## Description Fixes #18880 `ProcessGuestLauncherTests.LaunchAsync_WithGracefulServices_BlockingSignalerDoesNotConsumeGracefulBudget` is quarantined as a Windows-only timeout. On current `main` it fails **deterministically on every platform**: 5/5 local Linux runs fail at ~5.05s against the test's `< 5s` bound. ### Root cause `ChildProcess.ShutdownLadderAsync` (in `src/Shared/ChildProcess.cs`) dispatches the graceful signaler",
+        "html_url": "https://github.com/microsoft/aspire/commit/034b7fd88bed17ab22b84e9377ba1cc2181c8645",
+        "pull_request": {
+          "number": 21581,
+          "title": "Cancel blocked graceful signaler once the child process exits",
+          "url": "https://github.com/microsoft/aspire/pull/21581",
+          "merged_at": "2026-10-31T15:31:37Z"
+        }
+      },
+      {
+        "sha": "3cc6b58627f98465529a53c57ee58fae9df802a4",
+        "message": "Fix flaky NuGetPackagePrefetcher cancellation logging test (#21599) ## Description Fixes a flaky test: `NuGetPackagePrefetcherTests.PrefetchingCancellationDueToShutdownLogsCleanMessage` times out after 30s waiting for the \"prefetching was cancelled\" log messages. It has 10 recorded occurrences, 9 of them on `Cli (ubuntu-latest)`. ### Root cause This is a race in the test, not a product bug. - `NuGetPackagePrefetcher` is a `BackgroundService`. `StartAsync(stoppingCts.Token)` creates a linked stop",
+        "html_url": "https://github.com/microsoft/aspire/commit/3cc6b58627f98465529a53c57ee58fae9df802a4",
+        "pull_request": {
+          "number": 21599,
+          "title": "Fix flaky NuGetPackagePrefetcher cancellation logging test",
+          "url": "https://github.com/microsoft/aspire/pull/21599",
+          "merged_at": "2026-10-31T19:16:00Z"
+        }
+      },
+      {
+        "sha": "91eb8c82ee5f254fdc71aa9c6be0a6243f3046ec",
+        "message": "Wait for resources to respond before attaching in resource debug E2E (#21577) ## Description Fixes an intermittent failure in the Windows VS Code extension E2E `resource-debug-tools` shard: ``` 1) Aspire resource debug language model tool E2E      attaches to a Go resource launched with Run Without Debugging, hits a breakpoint, and detaches:    Error: Failed to apply E2E control revision …: E2E control command failed. ``` Seen in [run 41186680874, attempt 1](https://github.com/microsoft/aspire/a",
+        "html_url": "https://github.com/microsoft/aspire/commit/91eb8c82ee5f254fdc71aa9c6be0a6243f3046ec",
+        "pull_request": {
+          "number": 21577,
+          "title": "Wait for resources to respond before attaching in resource debug E2E",
+          "url": "https://github.com/microsoft/aspire/pull/21577",
+          "merged_at": "2026-10-31T19:16:46Z"
+        }
+      },
+      {
+        "sha": "92e9528f061a227763ac7c394b3581bf94fd7b9e",
+        "message": "Fix StopNonInteractiveTests launch-port collision between generated AppHosts (#21583) ## Description Fixes #21582. Related to #16643. `StopNonInteractiveTests.StopAllAppHostsFromAppHostDirectory` intermittently fails because the second AppHost crashes with: ``` Failed to bind to address https://127.0.0.1:22001: address already in use ``` This happened in run [41192229293](https://github.com/microsoft/aspire/actions/runs/41192229293), job 124514115730, attempt 1. ### Root cause The test runs `asp",
+        "html_url": "https://github.com/microsoft/aspire/commit/92e9528f061a227763ac7c394b3581bf94fd7b9e",
+        "pull_request": {
+          "number": 21583,
+          "title": "Fix StopNonInteractiveTests launch-port collision between generated AppHosts",
+          "url": "https://github.com/microsoft/aspire/pull/21583",
+          "merged_at": "2026-10-31T19:17:59Z"
+        }
+      },
+      {
+        "sha": "416244400286431cbe930bf2d1f510ff53018a5b",
+        "message": "Style markdown code blocks in interaction notifications and dialogs (#21584) ## Description Markdown code blocks in interaction notifications (and interaction dialogs) render with an unstyled `code` label and a native copy button on their own lines. Long code blocks, such as stack traces, also take over the message bar. **Root cause:** `HighlightedCodeBlockRenderer` emits `.code-block` / `.code-title` / `.code-copy-button` markup. Every style for that markup in `wwwroot/css/markdown.css` is scop",
+        "html_url": "https://github.com/microsoft/aspire/commit/416244400286431cbe930bf2d1f510ff53018a5b",
+        "pull_request": {
+          "number": 21584,
+          "title": "Style markdown code blocks in interaction notifications and dialogs",
+          "url": "https://github.com/microsoft/aspire/pull/21584",
+          "merged_at": "2026-10-31T19:18:20Z"
+        }
+      },
+      {
+        "sha": "8c744929a0cf72b9c9c8a69900892e6b2d49e97d",
+        "message": "Log AppHost startup information before BeforeStartEvent (#21588) ## Description Fixes #6144 If a `BeforeStartEvent` subscriber is slow or deadlocks, the AppHost console stays blank. The first lines users expect to see never appear: `Aspire AppHost version: ...`, `Distributed application starting.` and `Application host directory is: ...`. ### Root cause These messages are logged from `DistributedApplicationLifecycle.StartingAsync`, an `IHostedLifecycleService` callback that only runs inside `IHo",
+        "html_url": "https://github.com/microsoft/aspire/commit/8c744929a0cf72b9c9c8a69900892e6b2d49e97d",
+        "pull_request": {
+          "number": 21588,
+          "title": "Log AppHost startup information before BeforeStartEvent",
+          "url": "https://github.com/microsoft/aspire/pull/21588",
+          "merged_at": "2026-10-31T19:18:40Z"
+        }
+      },
+      {
+        "sha": "5c2e185e7779a866db8ec8ece26a5a2bc20d267a",
+        "message": "Lower minimum Helm version to 4.0.0 (#21590) ## Description Lowers `HelmVersionValidator.MinimumHelmVersion` from **4.2.0** to **4.0.0**, so Helm 4.1.x (preinstalled on GitHub-hosted `windows-2025-vs2026` runners) is no longer rejected by the `check-helm-prereqs-{env}` step. Fixes #20533 ### Root cause #17491 added the validator and chose 4.2.0 because it was \"the latest stable at the time of writing\". No Helm 4.2-specific feature required it. The real requirement is Helm 4 itself: Helm 4 accept",
+        "html_url": "https://github.com/microsoft/aspire/commit/5c2e185e7779a866db8ec8ece26a5a2bc20d267a",
+        "pull_request": {
+          "number": 21590,
+          "title": "Lower minimum Helm version to 4.0.0",
+          "url": "https://github.com/microsoft/aspire/pull/21590",
+          "merged_at": "2026-10-31T19:26:43Z"
+        }
+      },
+      {
+        "sha": "09065bbaa8ea63ae728b78cb5f4e8a73b6fe8c87",
+        "message": "Make ADC rejected-create cancellation test deterministic (#21591) ## Description Fixes the intermittent `Aspire.Hosting.Azure.Tests.AzureSandboxesTests.AzureDevComputeClientKeepsCancellationAfterRejectedCreateDefinite` failure (`Assert.False() Failure … Actual: True` at AzureSandboxesTests.cs:1605). **Root cause:** the test is meant to check that cancelling during the 403 retry delay is reported as a definite rejection (`ResponseMayHaveBeenLost == false`). It cancelled with a wall-clock `Cancell",
+        "html_url": "https://github.com/microsoft/aspire/commit/09065bbaa8ea63ae728b78cb5f4e8a73b6fe8c87",
+        "pull_request": {
+          "number": 21591,
+          "title": "Make ADC rejected-create cancellation test deterministic",
+          "url": "https://github.com/microsoft/aspire/pull/21591",
+          "merged_at": "2026-10-31T19:28:09Z"
+        }
+      },
+      {
+        "sha": "262105cc1d513f13b8e6214a0b181ed3a391f54b",
+        "message": "Inherit template sources from explicit init configuration (#21388) ## Description Enterprises can distribute template sources through their existing init-config repository without asking each developer to register those sources globally. This follows the template-source commands merged in #21329. When `ASPIRE_INIT_SOURCE_URL` is explicitly set, interactive `aspire new` search combines that repository's `templateSources` with the user's global sources. Source listing has a separate consent contra",
+        "html_url": "https://github.com/microsoft/aspire/commit/262105cc1d513f13b8e6214a0b181ed3a391f54b",
+        "pull_request": {
+          "number": 21388,
+          "title": "Inherit template sources from explicit init configuration",
+          "url": "https://github.com/microsoft/aspire/pull/21388",
+          "merged_at": "2026-11-01T00:16:05Z"
+        }
+      },
+      {
+        "sha": "e5a5acd96eff2296a28948587ac7ae58b5e75333",
+        "message": "Reserve proxyless endpoint ports process-wide to avoid cross-app port collisions (#21533) ## Description `DashboardUrlTests.GetDashboardUrlAsyncAuthenticatesDashboardBrowser` intermittently fails with `Expected: Found, Actual: RedirectKeepVerb` on the `/login?t=...` request ([CI log](https://github.com/microsoft/aspire/actions/runs/34379133718/job/102560123231)). ### Root cause Over plain HTTP the dashboard only issues `302 Found` from its login and redirect middleware. A `307` can't come from t",
+        "html_url": "https://github.com/microsoft/aspire/commit/e5a5acd96eff2296a28948587ac7ae58b5e75333",
+        "pull_request": {
+          "number": 21533,
+          "title": "Reserve proxyless endpoint ports process-wide to avoid cross-app port collisions",
+          "url": "https://github.com/microsoft/aspire/pull/21533",
+          "merged_at": "2026-11-01T01:13:35Z"
+        }
+      },
+      {
+        "sha": "370ac3d57773ae74aba148cf10c8db213199ebaa",
+        "message": "Remap *.localhost host names in HostUrl for containers (#21609) ## Description `HostUrl` only treated the literal `localhost`, `127.0.0.1` and `::1` hosts as local. When a container got a `HostUrl` such as `http://frontend.dev.localhost:5115`, the URL went through unchanged. Inside the container, `*.localhost` resolves to the container's own loopback, so the call to the host service failed. Fixes #13130 ### Root cause `HostUrl.IsLocalHost` is the helper behind three things: container remapping i",
+        "html_url": "https://github.com/microsoft/aspire/commit/370ac3d57773ae74aba148cf10c8db213199ebaa",
+        "pull_request": {
+          "number": 21609,
+          "title": "Remap *.localhost host names in HostUrl for containers",
+          "url": "https://github.com/microsoft/aspire/pull/21609",
+          "merged_at": "2026-11-01T02:43:16Z"
+        }
+      },
+      {
+        "sha": "1bccadadf2d73792581f23144aff1f8b6dd90bc0",
+        "message": "Resolve relative dashboard data directory against the AppHost directory (#21525) ## Description A relative dashboard data directory (`Dashboard:Data:Directory` / `ASPIRE_DASHBOARD_DATA_DIRECTORY`) was resolved against the **dashboard's** working directory, which is its install or bundle directory, rather than the AppHost directory. Data was written under the dashboard binaries, and if that directory is read-only, writing it can fail. Fixes #19782 ### Root cause - `DashboardEventHandlers.Configur",
+        "html_url": "https://github.com/microsoft/aspire/commit/1bccadadf2d73792581f23144aff1f8b6dd90bc0",
+        "pull_request": {
+          "number": 21525,
+          "title": "Resolve relative dashboard data directory against the AppHost directory",
+          "url": "https://github.com/microsoft/aspire/pull/21525",
+          "merged_at": "2026-11-01T07:07:32Z"
+        }
+      },
+      {
+        "sha": "fbec992164bdf4e0046e31ee43eda863ae7c96b8",
+        "message": "Unquarantine AppHostServerSession exited-server RPC test (#21616) ## Description This PR unquarantines `AppHostServerSessionTests.GetRpcClientAsync_WhenServerExitsBeforeSocketIsAvailable_FailsWithoutWaitingForConnectionTimeout`. It changes no assertions. ### Why the original failures no longer apply - **The real failures were Windows-only and old.** They happened on 2026-08-07 and 2026-08-11: `GetRpcClientAsync` took about 15s, past the 5s limit, to notice that the server process had exited. - *",
+        "html_url": "https://github.com/microsoft/aspire/commit/fbec992164bdf4e0046e31ee43eda863ae7c96b8",
+        "pull_request": {
+          "number": 21616,
+          "title": "Unquarantine AppHostServerSession exited-server RPC test",
+          "url": "https://github.com/microsoft/aspire/pull/21616",
+          "merged_at": "2026-11-01T17:50:00Z"
+        }
+      },
+      {
+        "sha": "9a4024a0e799784ed066369cd7bf301580e55fb6",
+        "message": "Make IInteractionService unavailable during BeforeStart to prevent deadlock (#21553) ## Description Fixes #11371 Using `IInteractionService` from a `BeforeStartEvent` subscriber deadlocked the app host, even when the prompt was guarded by `interactionService.IsAvailable`. ### Root cause `DistributedApplication.ExecuteBeforeStartHooksAsync` (`BeforeStartEvent` subscribers, `IDistributedApplicationLifecycleHook.BeforeStartAsync`, and the `before-start` pipeline step) runs **before** `_host.StartAs",
+        "html_url": "https://github.com/microsoft/aspire/commit/9a4024a0e799784ed066369cd7bf301580e55fb6",
+        "pull_request": {
+          "number": 21553,
+          "title": "Make IInteractionService unavailable during BeforeStart to prevent deadlock",
+          "url": "https://github.com/microsoft/aspire/pull/21553",
+          "merged_at": "2026-11-01T17:55:35Z"
+        }
+      },
+      {
+        "sha": "9ea245a3bef1dd16c1c035ae4f4be08092036e47",
+        "message": "Give RemoteHost tests thread-pool headroom above xunit's synchronous slots (#21613) ## Description Fixes #21612. Part of #21600. `IntegrationHostLauncherTests.InitializeHostsAsync_WaitsForEveryRegistrationBeforeDiscovery` intermittently fails on Windows with `System.TimeoutException` at the 10s `initialization.WaitAsync` (line 124). **7-day frequency (main `ci.yml`, attempt 1):** | Runner | Failed jobs | Total jobs | |---|---|---| | windows-latest Hosting.RemoteHost | 3 | 57 | | ubuntu Hosting.R",
+        "html_url": "https://github.com/microsoft/aspire/commit/9ea245a3bef1dd16c1c035ae4f4be08092036e47",
+        "pull_request": {
+          "number": 21613,
+          "title": "Give RemoteHost tests thread-pool headroom above xunit's synchronous slots",
+          "url": "https://github.com/microsoft/aspire/pull/21613",
+          "merged_at": "2026-11-01T18:56:29Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.Testing.Tests, Hosting.Testing, Hosting.Testing, tests/... / Hosting.Testing (windows-latest)",
+      "id": 124946375912,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/41339166517/job/124946375912",
+      "classification": "flaky-test",
+      "reason": "Failed test is a timeout flake: Aspire.Hosting.Testing.Tests.TestingPublicApiTests.DefaultEndpointSelectionPrefersHttpsOverHttp",
+      "failed_steps": [
+        "Run tests (Windows)"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, tree-actions)",
+      "id": 124950785984,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/41339166517/job/124950785984",
+      "classification": "flaky-test",
+      "reason": "Failed test is a timeout flake: Aspire tree action command E2E routes view, copy, endpoint, log, and resource commands through tree handlers",
+      "failed_steps": [
+        "Run extension E2E tests"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, launch-profiles)",
+      "id": 124950786138,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/41339166517/job/124950786138",
+      "classification": "transient-infra",
+      "reason": "Deno AppHost debug startup timed out after 300000ms, then EBUSY rmdir on Windows teardown; no structured test result and no deterministic code evidence.",
+      "failed_steps": [
+        "Run extension E2E tests"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.Testing.Tests.TestingPublicApiTests.DefaultEndpointSelectionPrefersHttpsOverHttp",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Testing.Tests, Hosting.Testing, Hosting.Testing, tests/... / Hosting.Testing (windows-latest)",
+      "error": "Polly.Timeout.TimeoutRejectedException : The operation didn't complete within the allowed timeout of '00:02:00'.\n---- System.OperationCanceledException : A task was canceled.\n-------- System.Threading.Tasks.TaskCanceledException : A task was canceled.\n------------ System.Threading.Tasks.TaskCanceledException : A task was canceled.",
+      "stack_trace": "at Polly.Utils.ExceptionUtilities.TrySetStackTrace[T](T exception)\n   at Polly.Timeout.TimeoutResilienceStrategy.ExecuteCore[TResult,TState](Func`3 callback, ResilienceContext context, TState state)\n   at System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1.AsyncStateMachineBox`1.ExecutionContextCallback(Object s)\n   at System.Threading.ExecutionContext.RunInternal(ExecutionContext executionContext, ContextCallback callback, Object state)\n   at System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1.AsyncStateMachineBox`1.MoveNext(Thread threadPoolThread)\n   at System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1.AsyncStateMachineBox`1.MoveNext()\n   at System.Threading.Tasks.AwaitTaskContinuation.RunOrScheduleAction(IAsyncStateMachineBox box, Boolean allowInlining)\n   at System.Threading.Tasks.Task.RunContinuations(Object continuationObject)\n   at Polly.ResiliencePipeline.<>c__10`1.<<ExecuteAsync>b__10_0>d.MoveNext()\n   at System.Threading.ExecutionContext.RunInternal(ExecutionContext executionContext, ContextCallback callback, Object state)\n   at System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1.AsyncStateMachineBox`1.MoveNext()\n   at System.Threading.Tasks.AwaitTaskContinuation.RunOrScheduleAction(IAsyncStateMachineBox box, Boolean allowInlining)\n   at System.Threading.Tasks.Task.RunContinuations(Object continuationObject)\n   at System.Threading.Tasks.Task.TrySetCanceled(CancellationToken tokenToRecord, Object cancellationException)\n   at System.Runtime.CompilerServices.AsyncValueTaskMethodBuilder`1.SetException(Exception exception)\n   at Aspire.Hosting.Dcp.KubernetesService.<>c__DisplayClass20_0`1.<<CreateAsync>b__0>d.MoveNext() in /_/src/Aspire.Hosting/Dcp/KubernetesService.cs:line 183\n   at System.Threading.ExecutionContext.RunInternal(ExecutionContext executionContext, ContextCallback callback, Object state)\n   at System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1.AsyncStateMachineBox`1.MoveNext()\n   at System.Threading.Tasks.AwaitTaskCon",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Timing-related timeout in an environment-dependent test; deterministic cause not evident."
+    },
+    {
+      "name": "Aspire tree action command E2E routes view, copy, endpoint, log, and resource commands through tree handlers",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, tree-actions)",
+      "error": "Timed out after 10000ms waiting for E2E control revision 1793560855797.\nLast error: <none>\nLast state: {\n  \"extensionHostSessionId\": \"6cdfb222-85cd-4044-8b27-cbcf469cd9ca\",\n  \"updatedAt\": \"2026-11-01T19:23:33.840Z\",\n  \"runId\": \"7008-1793560824283\",\n  \"state\": {\n    \"viewMode\": \"workspace\",\n    \"isRepositoryLoading\": false,\n    \"isWorkspaceAppHostDiscoveryComplete\": true,\n    \"hasError\": false,\n    \"workspaceAppHost\": {\n      \"appHostPath\": \"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-ekXq9Y\\\\workspace\\\\AspireE2E.AppHost\\\\AspireE2E.AppHost.csproj\",\n      \"appHostPid\": 7992,\n      \"dashboardUrl\": \"https://localhost:57453/login?t=<redacted>\",\n      \"resources\": [\n        {\n          \"name\": \"e2e-no-commands\",\n          \"displayName\": \"e2e-no-commands\",\n          \"resourceType\": \"NoCommandsResource\",\n          \"projectPath\": null,\n          \"dashboardUrl\": \"https://localhost:57453\",\n          \"urls\": [],\n          \"commands\": {}\n        },\n        {\n          \"name\": \"e2e-terminal-jw",
+      "stack_trace": "Error: Timed out after 10000ms waiting for E2E control revision 1793560855797.\nLast error: <none>\nLast state: {\n  \"extensionHostSessionId\": \"6cdfb222-85cd-4044-8b27-cbcf469cd9ca\",\n  \"updatedAt\": \"2026-11-01T19:23:33.840Z\",\n  \"runId\": \"7008-1793560824283\",\n  \"state\": {\n    \"viewMode\": \"workspace\",\n    \"isRepositoryLoading\": false,\n    \"isWorkspaceAppHostDiscoveryComplete\": true,\n    \"hasError\": false,\n    \"workspaceAppHost\": {\n      \"appHostPath\": \"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-ekXq9Y\\\\workspace\\\\AspireE2E.AppHost\\\\AspireE2E.AppHost.csproj\",\n      \"appHostPid\": 7992,\n      \"dashboardUrl\": \"https://localhost:57453/login?t=<redacted>\",\n      \"resources\": [\n        {\n          \"name\": \"e2e-no-commands\",\n          \"displayName\": \"e2e-no-commands\",\n          \"resourceType\": \"NoCommandsResource\",\n          \"projectPath\": null,\n          \"dashboardUrl\": \"https://localhost:57453\",\n          \"urls\": [],\n          \"commands\": {}\n        },\n        {\n          \"name\": \"e2e-terminal-jwbdvrtf\",\n          \"displayName\": \"e2e-terminal\",\n          \"resourceType\": \"Project\",\n          \"state\": \"Running\",\n          \"projectPath\": \"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-ekXq9Y\\\\workspace\\\\AspireE2E.Worker\\\\AspireE2E.Worker.csproj\",\n          \"dashboardUrl\": \"https://localhost:57453\",\n          \"urls\": [\n            {\n              \"name\": \"http\",\n              \"url\": \"http://localhost:57451\"\n            }\n          ],\n          \"commands\": {\n            \"rebuild\": {\n              \"displayName\": \"Rebuild\",\n              \"description\": \"Stop the resource, rebuild the project from source, and restart. Use this to apply source code changes.\",\n              \"state\": \"Enabled\"\n            },\n            \"restart\": {\n              \"displayName\": \"Restart\",\n              \"description\": \"Restart resource. Source code is not recompiled.\",\n              \"state\": \"Enabled\"\n            },\n            \"stop\": {\n              \"displayName\": \"Stop\",\n              \"descri",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Timing-related timeout in an environment-dependent test; deterministic cause not evident."
+    }
+  ],
+  "causes": [
+    "hosting-testing-defaultendpointselection-pollytimeout-windows",
+    "vscode-e2e-windows-tree-actions-routes-commands-timeout",
+    "vscode-e2e-windows-launch-profiles-deno-debug-startup-timeout"
+  ]
+}

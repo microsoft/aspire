@@ -1,0 +1,16 @@
+{
+  "id": "vscode-e2e-windows-tree-actions-routes-commands-timeout",
+  "type": "flaky-test",
+  "title": "Flaky: VS Code extension E2E (Windows) tree action commands test times out waiting for E2E control revision",
+  "test_name": "Aspire tree action command E2E routes view, copy, endpoint, log, and resource commands through tree handlers",
+  "error_pattern": "Timed out after 10000ms waiting for E2E control revision 1793560855797.\nLast error: <none>\nLast state: {\n  \"extensionHostSessionId\": \"6cdfb222-85cd-4044-8b27-cbcf469cd9ca\",\n  \"updatedAt\": \"2026-11-01T19:23:33.840Z\",\n  \"runId\": \"7008-1793560824283\",\n  \"state\": {\n    \"viewMode\": \"workspace\",\n    \"isRepositoryLoading\": false,\n    \"isWorkspaceAppHostDiscoveryComplete\": true,\n    \"hasError\": false,\n    \"workspaceAppHost\": {\n      \"appHostPath\": \"C:\\\\U",
+  "occurrences": [
+    {
+      "run_id": 41339166517,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/41339166517",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, tree-actions)",
+      "pr_number": 0,
+      "observed_at": "2026-11-01T20:14:22Z"
+    }
+  ]
+}
