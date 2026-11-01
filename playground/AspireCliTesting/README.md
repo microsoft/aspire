@@ -100,6 +100,20 @@ without repeating a resource table. JSON retains both resource completion and
 actual published results. On Unix the probe
 creates its artifact with mode `0600` inside the run's private resource directory.
 
+Artifacts are laid out directly as
+`~/.aspire/testruns/<run-id>/foundation-tests/probe.txt`, alongside
+`<run-id>/summary.json`. There is no `resources` intermediary or generated
+resource-directory suffix. The directory uses the logical resource name;
+replicas share it, so replica-aware runners must avoid overwriting each other's
+artifacts. Repeated `WithTesting` calls keep that same directory while replacing
+collectors. Invalid portable directory names and pre-existing output paths fail
+explicitly rather than being sanitized or reused.
+
+The test-run ID is currently independent of the dashboard's timestamp run ID
+under `~/.aspire/dashboard/runs`. The dashboard generates its ID after AppHost
+model construction, whereas testing output paths must already exist during
+immediate `WithTesting` configuration. Shared run-ID plumbing is deferred.
+
 Subsequent framework layers should append their resource declarations to the
 same `apphost.cs`, before `builder.Build().Run()`, and put their fixtures in
 separate subdirectories. Reuse `service` for `.WaitFor(service)` and

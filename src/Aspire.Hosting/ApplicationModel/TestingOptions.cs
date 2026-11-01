@@ -65,6 +65,10 @@ public sealed class TestingOptions
     /// <summary>
     /// Gets the absolute host path to this resource's private output directory, or null outside testing.
     /// </summary>
+    /// <remarks>
+    /// Named after the logical resource directly beneath the run directory and shared by its replicas.
+    /// Repeated <c>WithTesting</c> calls preserve this path.
+    /// </remarks>
     [AspireExport]
     public string? OutputPath { get; }
 

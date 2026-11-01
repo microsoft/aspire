@@ -4,6 +4,7 @@
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Shared;
+using Aspire.Shared.UserSecrets;
 
 namespace Aspire.Hosting;
 
@@ -37,6 +38,8 @@ public static class TestResourceBuilderExtensions
     /// Calling this method again replaces the collectors, including removing them for a marker-only call,
     /// while preserving the resource's existing run context and output directory. Launch arguments and
     /// environment variables configured by an earlier call therefore remain aligned with collection.
+    /// Each logical resource uses a directory named after the resource directly beneath the run directory.
+    /// Replicas share that directory; this API does not allocate separate per-replica output paths.
     /// </para>
     /// <example>
     /// <code lang="C#">
@@ -59,6 +62,8 @@ public static class TestResourceBuilderExtensions
     /// </ats-remarks>
     /// <ats-returns>The resource builder.</ats-returns>
     /// <exception cref="ArgumentNullException">The builder is null.</exception>
+    /// <exception cref="ArgumentException">The resource name cannot be used as a portable testing output directory.</exception>
+    /// <exception cref="IOException">A new resource's testing output path already exists or cannot be created securely.</exception>
     [AspireExport(RunSyncOnBackgroundThread = true)]
     [Experimental(TestingDiagnostics.DiagnosticId, UrlFormat = TestingDiagnostics.UrlFormat)]
     public static IResourceBuilder<T> WithTesting<T>(this IResourceBuilder<T> builder, Action<TestingOptions>? callback = null) where T : IResource
@@ -78,15 +83,56 @@ public static class TestResourceBuilderExtensions
             // The CLI creates the run directory before model construction. Allocate only within
             // that private boundary so immediate configuration can safely use a real destination.
             SocketPermissionHelper.CreateDirectory(runContext.OutputPath, repairExisting: false);
-            var resourcesPath = Path.Combine(runContext.OutputPath, "resources");
-            SocketPermissionHelper.CreateDirectory(resourcesPath, repairExisting: false);
-            resourceOutputPath = Path.Combine(resourcesPath, Guid.NewGuid().ToString("N"));
-            SocketPermissionHelper.CreateDirectory(resourceOutputPath, repairExisting: false);
+            resourceOutputPath = CreateResourceOutputDirectory(runContext.OutputPath, builder.Resource.Name);
         }
         var options = new TestingOptions(runContext, builder.Resource.Name, resourceOutputPath);
         callback?.Invoke(options);
         options.CompleteConfiguration();
 
         return builder.WithAnnotation(new TestingAnnotation(options), ResourceAnnotationMutationBehavior.Replace);
+    }
+
+    private static string CreateResourceOutputDirectory(string runOutputPath, string resourceName)
+    {
+        ModelName.ValidateName("Testing resource", resourceName);
+        // Model names allow Windows device names (for example CON), but output paths must
+        // be portable. Reject rather than sanitize, which could merge distinct resources.
+        if (!AspireSecretsPathHelper.IsValidEnvironmentName(resourceName))
+        {
+            throw new ArgumentException($"The resource name '{resourceName}' cannot be used as a portable testing output directory.", nameof(resourceName));
+        }
+
+        var resourceOutputPath = Path.Combine(runOutputPath, resourceName);
+        // Model names exclude separators and dots, including reserved run artifacts such as
+        // summary.json. A case-normalized exclusive reservation also protects case-insensitive
+        // resource identity on case-sensitive filesystems and concurrent configuration.
+        var reservationPath = Path.Combine(runOutputPath, $".{resourceName.ToLowerInvariant()}.reserve");
+        var fileOptions = new FileStreamOptions
+        {
+            Mode = FileMode.CreateNew,
+            Access = FileAccess.Write,
+            Share = FileShare.None
+        };
+        if (!OperatingSystem.IsWindows())
+        {
+            fileOptions.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+        }
+        var reservation = new FileStream(reservationPath, fileOptions);
+        try
+        {
+            if (Directory.EnumerateFileSystemEntries(runOutputPath)
+                .Any(path => string.Equals(Path.GetFileName(path), resourceName, StringComparison.OrdinalIgnoreCase)))
+            {
+                throw new IOException($"The testing output path for resource '{resourceName}' already exists in '{runOutputPath}'.");
+            }
+            SocketPermissionHelper.CreateDirectory(resourceOutputPath, repairExisting: false);
+        }
+        finally
+        {
+            reservation.Dispose();
+            File.Delete(reservationPath);
+        }
+
+        return resourceOutputPath;
     }
 }

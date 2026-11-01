@@ -117,7 +117,7 @@ public class TestingCollectorTests(ITestOutputHelper outputHelper)
         Assert.Equal(first.ResourceName, replacement.ResourceName);
         Assert.Equal(first.OutputPath, replacement.OutputPath);
         Assert.Equal(first.OutputPath, Assert.Single(Directory.GetDirectories(
-            Path.Combine(first.RunContext!.OutputPath, "resources"))));
+            first.RunContext!.OutputPath)));
         var environment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(resource.Resource).DefaultTimeout();
         Assert.Equal(replacement.OutputPath, environment["TEST_OUTPUT_DIRECTORY"]);
         await File.WriteAllTextAsync(Path.Combine(environment["TEST_OUTPUT_DIRECTORY"], "result.txt"), "artifact");
@@ -156,7 +156,7 @@ public class TestingCollectorTests(ITestOutputHelper outputHelper)
         Assert.Equal(first.OutputPath, replacement.OutputPath);
         Assert.Empty(replacement.Collectors);
         Assert.Equal(first.OutputPath, Assert.Single(Directory.GetDirectories(
-            Path.Combine(first.RunContext!.OutputPath, "resources"))));
+            first.RunContext!.OutputPath)));
 
         using var notifications = ResourceNotificationServiceTestHelpers.Create();
         using var coordinator = CreateCoordinator(builder, notifications);
@@ -219,6 +219,8 @@ public class TestingCollectorTests(ITestOutputHelper outputHelper)
         resource.WithTesting(options => options.CollectResults(async context =>
         {
             Interlocked.Increment(ref calls);
+            Assert.Equal(Path.Combine(context.RunContext.OutputPath, "tests"), context.OutputPath);
+            Assert.Equal(["tests"], Directory.GetDirectories(context.RunContext.OutputPath).Select(Path.GetFileName));
             context.PublishResult(new TestResult { Name = "live fixture", Outcome = TestOutcome.Passed });
             started.TrySetResult();
             resourceFinished.TrySetResult(await context.WaitForCompletionAsync());
@@ -366,6 +368,8 @@ public class TestingCollectorTests(ITestOutputHelper outputHelper)
         Assert.NotNull(first);
         Assert.NotNull(second);
         Assert.Equal(("first", "second"), (first.ResourceName, second.ResourceName));
+        Assert.Equal(Path.Combine(first.RunContext!.OutputPath, "first"), first.OutputPath);
+        Assert.Equal(Path.Combine(second.RunContext!.OutputPath, "second"), second.OutputPath);
         Assert.NotEqual(first.OutputPath, second.OutputPath);
         Assert.Equal(first.RunContext!.OutputPath, second.RunContext!.OutputPath);
         Assert.True(Directory.Exists(first.OutputPath));
@@ -377,6 +381,139 @@ public class TestingCollectorTests(ITestOutputHelper outputHelper)
             Assert.Equal(mode, File.GetUnixFileMode(second.OutputPath!));
         }
         Assert.Throws<InvalidOperationException>(() => first.CollectResults(_ => Task.CompletedTask));
+    }
+
+    [Theory]
+    [InlineData("../outside")]
+    [InlineData("nested/resource")]
+    [InlineData("nested\\resource")]
+    [InlineData("summary.json")]
+    [InlineData(".hidden")]
+    [InlineData("trailing.")]
+    [InlineData("CON")]
+    [InlineData("nul")]
+    [InlineData("aUx")]
+    [InlineData("COM1")]
+    [InlineData("LPT9")]
+    public void UnsafeResourceOutputNamesFailBeforeConfiguration(string name)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = CreateBuilder(workspace);
+        // CreateResourceBuilder also permits custom resources that bypass AddResource validation.
+        var resource = builder.CreateResourceBuilder(new ContainerResource(name));
+        var configured = false;
+
+        Assert.Throws<ArgumentException>(() => resource.WithTesting(_ => configured = true));
+
+        Assert.False(configured);
+        Assert.Empty(Directory.GetFileSystemEntries(builder.Configuration[KnownConfigNames.TestOutputPath]!));
+    }
+
+    [Theory]
+    [InlineData("tests", false)]
+    [InlineData("TESTS", false)]
+    [InlineData("tests", true)]
+    public void ExistingResourceOutputPathsAreNeverAdopted(string existingName, bool isFile)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = CreateBuilder(workspace);
+        var runPath = builder.Configuration[KnownConfigNames.TestOutputPath]!;
+        var existingPath = Path.Combine(runPath, existingName);
+        if (isFile)
+        {
+            File.WriteAllText(existingPath, "existing");
+        }
+        else
+        {
+            SocketPermissionHelper.CreateDirectory(existingPath, repairExisting: false);
+            File.WriteAllText(Path.Combine(existingPath, "artifact.txt"), "existing");
+        }
+        var resource = builder.AddResource(new ContainerResource("tests"));
+
+        Assert.Throws<IOException>(() => resource.WithTesting());
+
+        Assert.Equal([existingName], Directory.GetFileSystemEntries(runPath).Select(Path.GetFileName));
+        Assert.Equal("existing", File.ReadAllText(isFile ? existingPath : Path.Combine(existingPath, "artifact.txt")));
+        Assert.Empty(resource.Resource.Annotations.OfType<TestingAnnotation>());
+    }
+
+    [Fact]
+    public void LinkedResourceOutputPathIsRejectedWithoutTouchingTarget()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return; // Ordinary Windows test accounts cannot always create symbolic links.
+        }
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = CreateBuilder(workspace);
+        var target = workspace.CreateDirectory("unrelated");
+        var runPath = builder.Configuration[KnownConfigNames.TestOutputPath]!;
+        Directory.CreateSymbolicLink(Path.Combine(runPath, "tests"), target.FullName);
+        var mode = File.GetUnixFileMode(target.FullName);
+
+        Assert.Throws<IOException>(() => builder.AddResource(new ContainerResource("tests")).WithTesting());
+
+        Assert.Equal(mode, File.GetUnixFileMode(target.FullName));
+        Assert.Empty(target.GetFileSystemInfos());
+        Assert.Equal(["tests"], Directory.GetFileSystemEntries(runPath).Select(Path.GetFileName));
+    }
+
+    [Fact]
+    public async Task SeparateRunsUseTheSameShortResourceNameWithoutSharingOutput()
+    {
+        using var firstWorkspace = TemporaryWorkspace.Create(outputHelper);
+        using var secondWorkspace = TemporaryWorkspace.Create(outputHelper);
+        using var firstBuilder = CreateBuilder(firstWorkspace);
+        using var secondBuilder = CreateBuilder(secondWorkspace);
+        var name = new string('a', ModelName.DefaultMaxLength);
+        var paths = await Task.WhenAll(new[] { firstBuilder, secondBuilder }.Select(builder => Task.Run(() =>
+        {
+            string? path = null;
+            builder.AddResource(new ContainerResource(name)).WithTesting(options => path = options.OutputPath);
+            return path!;
+        })));
+
+        Assert.NotEqual(paths[0], paths[1]);
+        Assert.All(paths, path =>
+        {
+            Assert.Equal(name, Path.GetFileName(path));
+            Assert.Equal("test-output", Path.GetFileName(Path.GetDirectoryName(path)));
+            Assert.True(Directory.Exists(path));
+        });
+    }
+
+    [Fact]
+    public async Task ConcurrentCaseInsensitiveResourceNamesCannotShareOutput()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = CreateBuilder(workspace);
+        var resources = new[] { "tests", "TESTS" }
+            .Select(name => builder.CreateResourceBuilder(new ContainerResource(name))).ToArray();
+
+        var errors = await Task.WhenAll(resources.Select(resource =>
+            Task.Run(() => Record.Exception(() => resource.WithTesting()))));
+
+        Assert.Single(errors, error => error is null);
+        Assert.IsAssignableFrom<IOException>(Assert.Single(errors, error => error is not null));
+        var runPath = builder.Configuration[KnownConfigNames.TestOutputPath]!;
+        var outputDirectory = Assert.Single(Directory.GetFileSystemEntries(runPath));
+        Assert.True(Directory.Exists(outputDirectory));
+        Assert.Equal("tests", Path.GetFileName(outputDirectory), ignoreCase: true);
+        Assert.Single(resources.SelectMany(resource => resource.Resource.Annotations.OfType<TestingAnnotation>()));
+    }
+
+    [Fact]
+    public void OrdinaryRunDoesNotApplyTestingFilesystemRestrictions()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+        TestingOptions? configured = null;
+
+        builder.AddResource(new ContainerResource("CON")).WithTesting(options => configured = options);
+
+        Assert.NotNull(configured);
+        Assert.False(configured.IsTestRun);
+        Assert.Null(configured.OutputPath);
+        Assert.Null(configured.RunContext);
     }
 
     [Fact]

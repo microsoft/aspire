@@ -139,7 +139,7 @@ public class TestRunStreamingTests(ITestOutputHelper outputHelper)
         if (expectedOutput)
         {
             Assert.Equal(path, captured.RunContext!.OutputPath);
-            Assert.StartsWith(Path.Combine(path, "resources") + Path.DirectorySeparatorChar, captured.OutputPath);
+            Assert.Equal(Path.Combine(path, "tests"), captured.OutputPath);
             Assert.True(Directory.Exists(captured.OutputPath));
         }
         else
