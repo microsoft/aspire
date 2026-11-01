@@ -138,11 +138,21 @@ function Invoke-Sample {
                 if ($null -eq $total) { continue }
                 $key = "$($p.Id):$($p.ProcessName)"
                 $currentCpu[$key] = $total
-                if ($null -ne $previousTime -and $previousCpu.ContainsKey($key)) {
-                    $elapsed = ($now - $previousTime).TotalSeconds
-                    if ($elapsed -gt 0) {
-                        [pscustomobject]@{ Process = $p; Percent = 100 * ($total - $previousCpu[$key]) / $elapsed / $logicalProcessors }
+                if ($null -eq $previousTime) { continue }
+                $delta = $null
+                if ($previousCpu.ContainsKey($key)) {
+                    $delta = $total - $previousCpu[$key]
+                }
+                else {
+                    # A process that started during this interval spent all of its CPU time in it.
+                    try {
+                        if ($p.StartTime.ToUniversalTime() -ge $previousTime) { $delta = $total }
                     }
+                    catch { }
+                }
+                $elapsed = ($now - $previousTime).TotalSeconds
+                if ($null -ne $delta -and $elapsed -gt 0) {
+                    [pscustomobject]@{ Process = $p; Percent = 100 * $delta / $elapsed / $logicalProcessors }
                 }
             }
             $previousCpu = $currentCpu
@@ -219,6 +229,14 @@ function Invoke-Stop {
         for ($i = 1; $i -lt $rows.Count; $i++) {
             $gap = ([DateTime]::Parse($rows[$i].TimestampUtc, $null, 'RoundtripKind') - [DateTime]::Parse($rows[$i - 1].TimestampUtc, $null, 'RoundtripKind')).TotalSeconds
             if ($gap -gt $maxGap) { $maxGap = $gap }
+        }
+        # Surface collection failures: an empty core counter column means Get-Counter is not working.
+        $missingCounters = @('CpuPercent', 'AvailableMB', 'CommittedPercent', 'CommittedGB', 'CommitLimitGB', 'PageFilePercent', 'DiskQueueLength' | Where-Object {
+                $column = $_
+                -not ($rows | Where-Object { $_.$column -ne '' -and $null -ne $_.$column })
+            })
+        if ($missingCounters.Count -gt 0) {
+            Write-Host "::warning::Resource monitor collected no values for: $($missingCounters -join ', '). See sampler.log in the artifact."
         }
         $highCpuSamples = @($rows | Where-Object { $_.CpuPercent -ne '' -and [double]::Parse($_.CpuPercent, [System.Globalization.CultureInfo]::InvariantCulture) -ge 90 }).Count
 

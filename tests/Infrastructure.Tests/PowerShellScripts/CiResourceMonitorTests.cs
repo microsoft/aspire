@@ -56,6 +56,27 @@ public sealed class CiResourceMonitorTests : IDisposable
         Assert.Contains("| Disk queue length | 2.6 | max 7.2 |", summary);
         Assert.Contains("| System drive free GB | 19.8 | min 1.5 |", summary);
         Assert.Contains("max 97.5", result.Output);
+        Assert.DoesNotContain("collected no values", result.Output);
+    }
+
+    [Fact]
+    [RequiresTools(["pwsh"])]
+    public async Task StopWarnsWhenCoreCountersWereNeverCollected()
+    {
+        Directory.CreateDirectory(_outputDirectory);
+        File.WriteAllLines(Path.Combine(_outputDirectory, "resources.csv"),
+        [
+            CsvHeader,
+            // Disk queue was collected once, every other counter column stayed empty.
+            "2026-11-01T00:00:00.0000000Z,,,,,,,,,0.50,,30.0,140.0,120",
+            "2026-11-01T00:00:20.0000000Z,,,,,,,,,,,30.0,140.0,121",
+        ]);
+
+        var result = await RunScript("Stop");
+
+        result.EnsureSuccessful();
+        Assert.Contains("::warning::Resource monitor collected no values for: CpuPercent, AvailableMB, CommittedPercent, CommittedGB, CommitLimitGB, PageFilePercent. See sampler.log in the artifact.", result.Output);
+        Assert.Contains("| CPU % | n/a | max n/a (0 samples >= 90%) |", File.ReadAllText(_summaryPath));
     }
 
     [Fact]
@@ -91,6 +112,8 @@ public sealed class CiResourceMonitorTests : IDisposable
                 await Task.Delay(250);
             }
 
+            AssertSampleRow(ReadLinesShared(csvPath));
+
             var stopResult = await RunScript("Stop");
 
             stopResult.EnsureSuccessful();
@@ -111,6 +134,44 @@ public sealed class CiResourceMonitorTests : IDisposable
             .WithEnvironmentVariable("GITHUB_STEP_SUMMARY", _summaryPath);
 
         return await cmd.ExecuteAsync(["-Mode", mode, "-OutputDirectory", $"\"{_outputDirectory}\"", .. additionalArgs]);
+    }
+
+    private static void AssertSampleRow(string[] lines)
+    {
+        var header = lines[0].Trim().Split(',');
+        Assert.Equal(CsvHeader.Split(','), header);
+        var values = lines[1].Trim().Split(',');
+        Assert.Equal(header.Length, values.Length);
+        var row = header.Zip(values).ToDictionary(pair => pair.First, pair => pair.Second);
+
+        Assert.True(DateTime.TryParse(row["TimestampUtc"], System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.RoundtripKind, out _), row["TimestampUtc"]);
+        Assert.True(ParseNumber(row["SystemDriveFreeGB"]) > 0);
+        Assert.True(ParseNumber(row["WorkspaceDriveFreeGB"]) > 0);
+        Assert.True(ParseNumber(row["ProcessCount"]) > 0);
+
+        // Performance counters only exist on Windows; elsewhere the sampler leaves those columns empty.
+        if (OperatingSystem.IsWindows())
+        {
+            var cpu = ParseNumber(row["CpuPercent"]);
+            Assert.InRange(cpu, 0, 100);
+            Assert.True(ParseNumber(row["AvailableMB"]) > 0);
+            Assert.InRange(ParseNumber(row["CommittedPercent"]), 0, 100);
+            var committedGb = ParseNumber(row["CommittedGB"]);
+            var commitLimitGb = ParseNumber(row["CommitLimitGB"]);
+            // Bytes are converted to GB, so the commit limit must be a plausible machine size.
+            Assert.InRange(commitLimitGb, 1, 4096);
+            Assert.InRange(committedGb, 0.01, commitLimitGb);
+        }
+        else
+        {
+            Assert.Equal("", row["CpuPercent"]);
+        }
+    }
+
+    private static double ParseNumber(string value)
+    {
+        Assert.True(double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var number), $"'{value}' is not a number.");
+        return number;
     }
 
     private static string[] ReadLinesShared(string path)
