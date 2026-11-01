@@ -2,9 +2,12 @@
 
 This file-based AppHost is the shared, in-repository exerciser for `aspire test`.
 It uses repository hosting projects, not released packages or a private package
-hive. The foundation and MSTest scenarios share the same HTTP service and require
-no containers. The MSTest fixture registers the executable
+hive. The foundation, MSTest and pytest scenarios share the same HTTP service
+and require no containers. The MSTest fixture registers the executable
 Microsoft.Testing.Platform runner and TRX extension explicitly.
+The pytest fixture uses Python 3.10 or later and `uv` on PATH. `WithUv()` installs
+its declared pytest dependency into a local virtual environment before execution;
+no global pytest installation is needed.
 
 ## Run from the repository root
 
@@ -24,7 +27,7 @@ features__testCommandEnabled=true \
 The CLI builds the AppHost from the current sources. The `Aspire.Hosting.AppHost@*`
 directive makes the file discoverable; `Directory.Build.targets` removes that
 package reference and uses `AspireProjectOrPackageReference` to resolve the local
-AppHost and .NET hosting projects. It does not restore the wildcard package.
+AppHost, .NET and Python hosting projects. It does not restore the wildcard package.
 
 Like the other playgrounds, this AppHost adds the repository dashboard with
 `AddDotnetProject` using the reserved `aspire-dashboard` resource name. Hosting
@@ -141,14 +144,21 @@ the repository's xUnit runner setup, matching a consumer MSTest project.
 `serviceEndpoint` through `MSTEST_SERVICE_URL`. Tests check `/`, `/health`, an
 opt-in failure, and a skipped example.
 
-The default combined summary contains **4 passed, 0 failed, 1 skipped**:
-one foundation result plus three passed and one skipped MSTest results. Each
-collection has its own output directory. The foundation writes `probe.txt`;
-MSTest writes into a fresh temporary runner directory configured before launch;
-its runtime `WithTesting` callback waits for completion and stages `results.trx`
-and the report tree into `<run>/mstest-tests`. The AppHost file-system service
-cleans up runner temporary files on disposal. JSON exposes `outputPath`, `summaryPath`, and each
-`collections[].outputPath`. Reports and `summary.json` remain after teardown.
+`pytest-tests/pyproject.toml` declares pytest 9.0.2. `AddPytest("pytest-tests", ...)`
+waits for the same service, receives `serviceEndpoint` through `PYTEST_SERVICE_URL`,
+and launches the virtual environment's pytest executable directly. Its tests
+check `/`, `/health`, an independent opt-in failure, and a skipped example.
+
+The default combined summary contains **7 passed, 0 failed, 2 skipped**:
+one foundation result plus three passed and one skipped result from each framework.
+Each collection has its own output directory. The foundation writes `probe.txt`;
+MSTest and pytest write into fresh temporary runner directories configured before
+launch. Their runtime `WithTesting` callbacks wait for completion and stage
+`results.trx` (and its report tree) into `<run>/mstest-tests`, and the built-in
+JUnit report `pytest.xml` into `<run>/pytest-tests`. The AppHost file-system
+service cleans up runner temporary files on disposal.
+JSON exposes `outputPath`, `summaryPath`, and each `collections[].outputPath`.
+Reports and `summary.json` remain after teardown.
 Staged files use the copy writer's permissions; no per-file `0600` guarantee is made.
 
 Exercise the controlled MSTest failure without changing the foundation scenario:
@@ -160,9 +170,22 @@ dotnet run --project src/Aspire.Cli/Aspire.Cli.csproj --no-launch-profile -- \
   --timeout-seconds 120 --format json --non-interactive
 ```
 
-This returns CLI exit code `23` with **3 passed, 1 failed, 1 skipped**. The MSTest
+This returns CLI exit code `23` with **6 passed, 1 failed, 2 skipped**. The MSTest
 process exits nonzero, but its collector still harvests the finalized TRX report
-and publishes all results. There is no `--output` option; use the paths assigned
+and publishes all results. Foundation and pytest results remain passing.
+
+Exercise the independent pytest failure without changing MSTest:
+
+```bash
+PYTEST_PLAYGROUND_FAIL=true \
+dotnet run --project src/Aspire.Cli/Aspire.Cli.csproj --no-launch-profile -- \
+  test --apphost playground/AspireCliTesting/apphost.cs --isolated \
+  --timeout-seconds 120 --format json --non-interactive
+```
+
+This also returns exit code `23` with **6 passed, 1 failed, 2 skipped**. The pytest
+collector harvests finalized JUnit even after its process exits nonzero.
+There is no `--output` option; use the paths assigned
 by the CLI rather than passing reporting flags to the runner.
 
 Subsequent framework layers should append their resource declarations to the
