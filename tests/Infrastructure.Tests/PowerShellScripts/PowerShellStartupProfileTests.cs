@@ -31,10 +31,10 @@ public class PowerShellStartupProfileTests : IDisposable
 
     [Fact]
     [RequiresTools(["pwsh"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "On Windows pwsh resolves its cache via the LocalApplicationData known folder, which can't be redirected per process.")]
     public async Task PwshLaunchedByTestsDoesNotWriteSharedStartupProfile()
     {
-        // pwsh stores StartupProfileData-* under $XDG_CACHE_HOME/powershell on Unix and
-        // %LOCALAPPDATA%\Microsoft\PowerShell on Windows. Point both at an isolated directory.
+        // pwsh stores StartupProfileData-* under $XDG_CACHE_HOME/powershell on Unix.
         var cacheRoot = Path.Combine(_workspace.Path, "cache");
         Directory.CreateDirectory(cacheRoot);
 
@@ -43,7 +43,6 @@ public class PowerShellStartupProfileTests : IDisposable
 
         using var cmd = new PowerShellCommand(scriptPath, _output)
             .WithEnvironmentVariable("XDG_CACHE_HOME", cacheRoot)
-            .WithEnvironmentVariable("LOCALAPPDATA", cacheRoot)
             .WithTimeout(TimeSpan.FromMinutes(2));
 
         var result = await cmd.ExecuteAsync();
