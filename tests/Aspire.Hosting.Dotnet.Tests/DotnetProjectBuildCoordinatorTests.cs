@@ -1422,6 +1422,52 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task CoordinatedBuildPathsUseOnDiskCasing()
+    {
+        // VS Code can launch the AppHost from a lowercase drive letter on Windows. Blazor WebAssembly builds fail when
+        // MSBuild sees that spelling alongside the on-disk spelling (https://github.com/microsoft/aspire/issues/21621).
+        Assert.SkipUnless(
+            OperatingSystem.IsWindows() || OperatingSystem.IsMacOS(),
+            "Alternate path casing only names the same directory on case-insensitive file systems.");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "AppHost")).FullName;
+        var projectPath = CreateProject(workspace.Path, "Api", "Api.csproj");
+        var buildDirectory = Path.Combine(appHostDirectory, "obj", ".aspire", "build");
+
+        using var buildResource = new DotnetProjectBuildResource(
+            "build",
+            ChangeCasing(appHostDirectory),
+            ChangeCasing(buildDirectory),
+            TimeProvider.System);
+        Assert.Equal(appHostDirectory, buildResource.WorkingDirectory);
+        Assert.Equal(buildDirectory, buildResource.BuildDirectory);
+
+        buildResource.ConfigureTraversalBuild(
+            [ChangeCasing(projectPath)],
+            ChangeCasing(appHostDirectory),
+            buildConfiguration: null,
+            restoreProjectsIndividually: false);
+        Assert.Equal(projectPath, Assert.Single(buildResource.ProjectPaths));
+        Assert.Equal(appHostDirectory, buildResource.WorkingDirectory);
+
+        var buildProjectPath = await buildResource.WriteBuildProjectAsync(
+            NullLogger.Instance,
+            TestContext.Current.CancellationToken);
+        Assert.StartsWith(buildDirectory + Path.DirectorySeparatorChar, buildProjectPath, StringComparison.Ordinal);
+
+        string ChangeCasing(string path)
+        {
+            var relativePath = Path.GetRelativePath(workspace.Path, path)
+                .Replace("AppHost", "aPPhOST", StringComparison.Ordinal)
+                .Replace("Api", "aPI", StringComparison.Ordinal);
+            var changedPath = Path.Combine(workspace.Path, relativePath);
+            return OperatingSystem.IsWindows()
+                ? char.ToLowerInvariant(changedPath[0]) + changedPath[1..]
+                : changedPath;
+        }
+    }
+
+    [Fact]
     public async Task CoordinatedBuildKeepsOutputSubscribedUntilBuildSettles()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
