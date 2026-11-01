@@ -19,7 +19,7 @@ public enum TestFeature
     /// <summary>
     /// The available container runtime can build images from a Dockerfile. Docker needs the buildx
     /// plugin for this; Podman and WSLC build natively through DCP. This does not imply support
-    /// for Aspire's publishing pipeline; also require <see cref="ContainerImagePublishing"/> for that.
+    /// for Aspire's publishing pipeline; use <see cref="ContainerImagePublishing"/> alone for that.
     /// </summary>
     ContainerImageBuild = 1 << 4,
 
@@ -48,7 +48,8 @@ public enum TestFeature
 
     /// <summary>
     /// A Docker or Podman runtime is available for Aspire's container image publishing pipeline,
-    /// including Dockerfile builds and local image-store operations. WSLC can build images through
+    /// including Dockerfile builds and local image-store operations. This implies
+    /// <see cref="ContainerImageBuild"/>. WSLC can build images through
     /// DCP, but has no publishing implementation. SDK-only archive generation does not require this.
     /// </summary>
     ContainerImagePublishing = 1 << 8
