@@ -226,8 +226,8 @@ internal sealed class DotnetProjectBuildResource : ExecutableResource, IDisposab
     /// a build never opens a log that another build still holds.
     /// </remarks>
     internal string? BuildLogPath =>
-        // MSBuild splits logger parameters on ';' and does not honor quoting in LogFile.
-        BuildDirectory.Contains(';')
+        // MSBuild splits logger parameters on ';' and '=' and does not honor quoting in LogFile.
+        BuildDirectory.AsSpan().IndexOfAny(';', '=') >= 0
             ? null
             : Path.Combine(BuildDirectory, BuildLogsDirectoryName, $"{Environment.ProcessId}.{Name}.log");
 

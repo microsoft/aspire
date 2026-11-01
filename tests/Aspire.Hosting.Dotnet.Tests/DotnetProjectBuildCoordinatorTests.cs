@@ -184,14 +184,16 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         using var buildLog = OpenBuildLogLikeMSBuild(Assert.IsType<string>(buildResource.BuildLogPath));
     }
 
-    [Fact]
-    public void CoordinatedBuildOmitsFileLogWhenBuildDirectoryContainsSemicolon()
+    [Theory]
+    [InlineData("a;b")]
+    [InlineData("a=b")]
+    public void CoordinatedBuildOmitsFileLogWhenBuildDirectoryCannotBeALoggerParameter(string directoryName)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var buildResource = new DotnetProjectBuildResource(
             "build",
             workspace.Path,
-            Path.Combine(workspace.Path, "a;b", ".aspire", "build"),
+            Path.Combine(workspace.Path, directoryName, ".aspire", "build"),
             TimeProvider.System);
 
         Assert.Null(buildResource.BuildLogPath);
