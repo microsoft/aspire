@@ -269,8 +269,12 @@ internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, ILog
         probe.FileName = executable;
         probe.ArgumentList.Clear();
         probe.ArgumentList.Add("-V");
+        // Bound the probe only by the caller's acquisition deadline, like every other
+        // Git child. A cold first launch (for example, Windows Defender scanning
+        // ssh.exe) can take several seconds. A private shorter timeout would misreport
+        // a working OpenSSH client as unsupported instead of a Git timeout.
         var result = await ProcessCaptureRunner.RunAsync<string?>(
-            probe, TimeSpan.FromSeconds(5),
+            probe, Timeout.InfiniteTimeSpan,
             async (process, token) =>
             {
                 process.StandardInput.Close();

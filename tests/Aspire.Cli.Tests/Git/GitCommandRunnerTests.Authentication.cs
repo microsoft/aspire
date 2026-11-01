@@ -281,6 +281,66 @@ public partial class GitCommandRunnerTests
         Assert.Equal("", await File.ReadAllTextAsync(config));
     }
 
+    [Fact]
+    [PlatformSpecific(TestPlatforms.AnyUnix)]
+    [RequiresTools(["git"])]
+    public async Task ConfigureUnattendedSsh_SlowOpenSshVersionProbeIsBoundedOnlyByCallerDeadline()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var config = Path.Combine(workspace.Path, "gitconfig");
+        await File.WriteAllTextAsync(config, "");
+        // Simulates a cold first launch, such as Windows Defender scanning ssh.exe on CI.
+        // The delay must exceed the former private 5s probe timeout. That timeout
+        // reported this working OpenSSH client as unsupported.
+        var ssh = await CreateFakeSshAsync(Path.Combine(workspace.Path, "slow-ssh"),
+            "sleep 6\necho 'OpenSSH_9.9p1, slow start' >&2");
+        string[] arguments = ["ls-remote", "--", "ssh://git@example.test/repository"];
+        var runner = CreateRunner();
+        var info = runner.CreateStartInfo(workspace.Path, arguments, GitCommandMode.Unattended);
+        IsolateGit(info, workspace.Path, config);
+        info.Environment["GIT_SSH_COMMAND"] = $"'{ssh}'";
+
+        await runner.ConfigureUnattendedSshAsync(info, arguments, TestContext.Current.CancellationToken);
+
+        AssertOpenSshCommand(ssh, info.Environment["GIT_SSH_COMMAND"]);
+        Assert.Equal("ssh", info.Environment["GIT_SSH_VARIANT"]);
+    }
+
+    [Fact]
+    [PlatformSpecific(TestPlatforms.AnyUnix)]
+    [RequiresTools(["git"])]
+    public async Task ConfigureUnattendedSsh_CallerCancellationStopsHungOpenSshVersionProbe()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var config = Path.Combine(workspace.Path, "gitconfig");
+        await File.WriteAllTextAsync(config, "");
+        var started = Path.Combine(workspace.Path, "probe-started");
+        var ssh = await CreateFakeSshAsync(Path.Combine(workspace.Path, "hung-ssh"),
+            $": > '{ShellPath(started)}'\nexec sleep 600");
+        string[] arguments = ["ls-remote", "--", "ssh://git@example.test/repository"];
+        var runner = CreateRunner();
+        var info = runner.CreateStartInfo(workspace.Path, arguments, GitCommandMode.Unattended);
+        IsolateGit(info, workspace.Path, config);
+        info.Environment["GIT_SSH_COMMAND"] = $"'{ssh}'";
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var probeStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var watcher = new FileSystemWatcher(workspace.Path, Path.GetFileName(started));
+        watcher.Created += (_, _) => probeStarted.TrySetResult();
+        watcher.EnableRaisingEvents = true;
+
+        var configure = runner.ConfigureUnattendedSshAsync(info, arguments, cancellation.Token);
+        if (File.Exists(started))
+        {
+            probeStarted.TrySetResult();
+        }
+        await probeStarted.Task.WaitAsync(TestContext.Current.CancellationToken);
+        cancellation.Cancel();
+
+        // The caller's deadline maps cancellation to a Git timeout diagnostic.
+        // It must not be converted into the unsupported-SSH diagnostic.
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => configure);
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("GIT_SSH")]
@@ -333,6 +393,20 @@ public partial class GitCommandRunnerTests
         var normalized = GitCommandRunner.NormalizeSshPath(path, gitDirectory);
 
         Assert.Equal($"{Path.Combine(gitDirectory, "tools")}{Path.PathSeparator}{absolute}", normalized);
+    }
+
+    private static async Task<string> CreateFakeSshAsync(string directory, string script)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            throw new PlatformNotSupportedException("Fake SSH clients are POSIX shell scripts.");
+        }
+        Directory.CreateDirectory(directory);
+        var ssh = Path.Combine(directory, "ssh");
+        await File.WriteAllTextAsync(ssh, $"#!/bin/sh\n{script}\n");
+        File.SetUnixFileMode(ssh, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+
+        return ssh;
     }
 
     private static string ShellPath(string path) => path.Replace("\\", "/", StringComparison.Ordinal).Replace("'", "'\\''", StringComparison.Ordinal);
