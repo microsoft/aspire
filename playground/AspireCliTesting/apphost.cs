@@ -59,6 +59,14 @@ try
             Environment.GetEnvironmentVariable("MSTEST_PLAYGROUND_FAIL") ?? "false")
         .WaitFor(service);
 
+    builder.AddPytest("pytest-tests", "pytest-tests")
+        .WithUv()
+        .WithArgs("-q")
+        .WithEnvironment("PYTEST_SERVICE_URL", serviceEndpoint)
+        .WithEnvironment("PYTEST_PLAYGROUND_FAIL",
+            Environment.GetEnvironmentVariable("PYTEST_PLAYGROUND_FAIL") ?? "false")
+        .WaitFor(service);
+
     builder.Build().Run();
 }
 finally
