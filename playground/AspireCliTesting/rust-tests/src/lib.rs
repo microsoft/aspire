@@ -1,6 +1,15 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+/// The shared service's expected response.
+///
+/// ```
+/// assert_eq!(aspire_cli_testing::expected_service_body(), "Aspire CLI testing");
+/// ```
+pub fn expected_service_body() -> &'static str {
+    "Aspire CLI testing"
+}
+
 #[cfg(test)]
 mod tests {
     use std::io::{Read, Write};
@@ -9,7 +18,7 @@ mod tests {
 
     #[test]
     fn service_response() {
-        assert_eq!(get_service("/"), "Aspire CLI testing");
+        assert_eq!(get_service("/"), super::expected_service_body());
     }
 
     #[test]

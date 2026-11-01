@@ -139,20 +139,20 @@ without a `ContainerTargetPlatform` mapping still require an authored Dockerfile
 cross-compilation tooling, so the selected build image must already support the target. It is also
 on you to keep the build image, target ABI, and runtime image compatible.
 
-### Testing with nextest
+### Testing with built-in Cargo
 
-The experimental `WithNextestTesting` API (`ASPIRETESTING001`) collects final
-[nextest JUnit reports](https://nexte.st/docs/machine-readable/junit/) during `aspire test`.
-Install [cargo-nextest 0.9.143 or later](https://nexte.st/docs/installation/pre-built-binaries/)
-separately; Aspire does not install it or change global Rust configuration.
+The experimental `WithCargoTesting` API (`ASPIRETESTING001`) includes a finite
+[`cargo test`](https://doc.rust-lang.org/cargo/commands/cargo-test.html) executable
+in `aspire test`. It needs only the standard Rust toolchain: no nextest, nightly
+compiler, report format, or global configuration changes.
 
 **C#**
 
 ```csharp
 #pragma warning disable ASPIRETESTING001
 var tests = builder.AddExecutable("rust-tests", "cargo", "../rust-api",
-        "nextest", "run", "--workspace", "--features=integration")
-    .WithNextestTesting()
+        "test", "--workspace", "--features=integration")
+    .WithCargoTesting()
     .WithEnvironment("API_URL", rustApi.GetEndpoint("http"))
     .WaitFor(rustApi);
 ```
@@ -161,39 +161,36 @@ var tests = builder.AddExecutable("rust-tests", "cargo", "../rust-api",
 
 ```typescript
 const tests = await builder.addExecutable("rust-tests", "cargo", "../rust-api",
-    ["nextest", "run", "--workspace", "--features=integration"])
-  .withNextestTesting()
+    ["test", "--workspace", "--features=integration"])
+  .withCargoTesting()
   .withEnvironment("API_URL", await rustApi.getEndpoint("http"))
   .waitFor(rustApi);
 ```
 
 Use an explicit Cargo executable, not `AddRustApp` (which runs/debugs an application).
 Cargo workspace/package selection, features, manifest, build target, working directory,
-configuration, and environment remain intact. Use nextest's `--cargo-profile` for a Cargo
-build profile; `--profile` selects a runner profile and is reserved during testing.
+configuration, and environment remain intact. Cargo's `--profile` selects a build
+profile. Arguments after `--` retain their normal libtest meaning.
 
-**Controlled runner configuration:** during testing, Aspire supplies a private `--config-file`
-and `aspire` profile instead of loading repository `.config/nextest.toml`. Repository files
-are not edited, but their nextest settings, setup scripts, groups, and per-test overrides
-are **not applied**. This prevents repository config from redirecting the assigned report
-or enabling hidden retries. The adapter disables retries and fail-fast, rejects stress/debug
-execution, and explicitly fails when no tests are selected. Ordinary runs keep the original
-arguments and repository configuration, without report collection. The resource is run-only.
+**Resource-level outcome:** Cargo's exit status determines whether this Rust resource
+passes or fails. No per-test results or skipped counts are parsed, published, or invented.
+Zero Rust published results does **not** mean the tests did not execute. Nonzero build,
+toolchain, test, and doctest exits remain failures without a misleading missing-JUnit error.
+Successful Cargo commands with no selected tests retain Cargo's successful exit status.
+Caller options such as `--no-run` can deliberately compile without executing tests.
 
-Nextest runs unit/integration tests, **not doctests**. Stable Cargo compiler JSON is not test
-result JSON; this adapter does not use nightly libtest JSON or experimental nextest JSON.
-Final JUnit cases, including ignored tests as skipped, contribute to the common summary.
-Filtered-out or interrupted/unexecuted tests are not fabricated as passes or skips.
-Nonzero tool/build/test exits remain failures even when valid test results are collected.
-Missing, malformed, empty, or inconsistent reports fail collection.
+Default Cargo semantics include unit, integration, and **documentation tests** as
+applicable to the selected targets. Aspire does not replace Cargo configuration,
+force target selection or failure behavior, or use unstable JSON test output.
+Ordinary runs retain the same command without capture; publishing excludes this
+finite testing resource.
 
-One native invocation per resource is supported, without terminals, replicas, restarts,
-retries, or stress loops. The assigned resource output directory retains `nextest.toml`,
-`junit.xml` when produced, raw `stdout.log`/`stderr.log`, and `output.complete` after log EOF.
-Configuration and captured logs have private permissions; JUnit is written by nextest
-inside Aspire's private directory and retains runner-controlled permissions. JUnit collection
-is final-report based, not live per-test streaming. CLI foreground/JSON and keep-alive behavior
-are owned by the common testing foundation.
+One native invocation per resource is supported, without terminals, replicas or
+restarts. The assigned private output directory retains raw `stdout.log` and
+`stderr.log`, plus `output.complete` after both streams reach EOF. These
+Aspire-owned artifacts have private permissions (0600 on Unix). The diagnostic
+collector can complete successfully after a failed Cargo process; the resource
+remains failed. Actual capture I/O errors still fail collection explicitly.
 
 ## Additional documentation
 
