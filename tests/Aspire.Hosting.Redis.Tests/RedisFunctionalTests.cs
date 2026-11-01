@@ -206,13 +206,15 @@ public class RedisFunctionalTests(ITestOutputHelper testOutputHelper)
     [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task VerifyRedisResource()
     {
+        var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
 
         var redis = builder.AddRedis("redis");
 
         using var app = builder.Build();
 
-        await app.StartAsync();
+        await app.StartAsync(cts.Token);
+        await app.ResourceNotifications.WaitForResourceHealthyAsync(redis.Resource.Name, cts.Token);
 
         var hb = Host.CreateApplicationBuilder();
         hb.AddTestLogging(testOutputHelper);
