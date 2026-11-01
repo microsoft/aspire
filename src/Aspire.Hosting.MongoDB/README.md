@@ -71,7 +71,7 @@ The shell authenticates against `admin` using the configured credentials, passed
 
 ### Single-member replica set
 
-`WithReplicaSet()` configures **and initializes** a single-member replica set on the same `MongoDBServerResource`; it is no longer just a low-level `mongod` option. No separate replica set resource is needed. `AddDatabase`, `WithReference`, and `WaitFor` continue to work with the server or its databases. Initialization runs during the resource lifecycle, not in health checks. Readiness waits for initialization and primary election, so consumers can use transactions and change streams after `WaitFor`.
+`WithReplicaSet()` configures **and initializes** a single-member replica set on the same `MongoDBServerResource`; it is no longer just a low-level `mongod` option. No separate replica set resource is needed. `AddDatabase`, `WithReference`, and `WaitFor` continue to work with the server or its databases. Initialization runs during the resource lifecycle, not in health checks. Readiness waits for initialization and for the elected primary to accept writes, so consumers can use transactions and change streams after `WaitFor`.
 
 The optional set name defaults to the server's Aspire resource name. To choose a different name:
 

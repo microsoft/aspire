@@ -482,7 +482,7 @@ public static class MongoDBBuilderExtensions
     /// <remarks>
     /// <para>
     /// Enables transactions and change streams without changing database resources or references. The server becomes
-    /// healthy only after initialization and primary election. Connections use the server's normal endpoint directly;
+    /// healthy only after initialization, once the elected primary accepts writes. Connections use the server's normal endpoint directly;
     /// a developer certificate, topology discovery, and fixed host ports are not required.
     /// </para>
     /// <para>
@@ -935,11 +935,11 @@ internal class MyMongoDbHealthCheck : IHealthCheck
                     return HealthCheckResult.Unhealthy(error);
                 }
 
-                var status = await _client.GetDatabase(MongoDBServerResource.DefaultAuthenticationDatabase)
-                    .RunCommandAsync<BsonDocument>(new BsonDocument("replSetGetStatus", 1), ReadPreference.Nearest, cancellationToken)
+                var hello = await _client.GetDatabase(MongoDBServerResource.DefaultAuthenticationDatabase)
+                    .RunCommandAsync<BsonDocument>(new BsonDocument("hello", 1), ReadPreference.Nearest, cancellationToken)
                     .ConfigureAwait(false);
 
-                return MongoDBSingleMemberReplicaSet.IsPrimary(status, replicaSet.Name)
+                return MongoDBSingleMemberReplicaSet.IsWritablePrimary(hello, replicaSet.Name)
                     ? HealthCheckResult.Healthy()
                     : HealthCheckResult.Unhealthy($"MongoDB replica set '{replicaSet.Name}' is not a writable single-member primary.");
             }
