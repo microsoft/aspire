@@ -96,8 +96,9 @@ suite('Aspire coordinated build E2E', function () {
                 }
             } finally {
                 // The resource process and debug session are already terminated by the proof, and suiteSetup
-                // keeps the fixture out of the C# language server's project set. Use the shared bounded retry
-                // helper for transient Windows handle release before proving the fixture path is reusable.
+                // keeps the fixture project out of the C# language server's startup project load. Opening
+                // Program.cs at the breakpoint can still start a short file-based-program load, so use the shared
+                // bounded retry helper for transient Windows handles before proving the fixture path is reusable.
                 removePath(fixture.directory, { recursive: true, force: true });
                 assert.strictEqual(fs.existsSync(fixture.directory), false);
                 fs.mkdirSync(fixture.directory);
