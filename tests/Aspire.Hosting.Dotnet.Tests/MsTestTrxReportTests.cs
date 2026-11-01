@@ -31,7 +31,13 @@ public class MsTestTrxReportTests
 
         Assert.True(report.Failed);
         Assert.Equal(4, report.Results.Count);
-        await Verify(report.Results);
+        await Verify(report.Results.Select(result => new
+        {
+            result.Name,
+            Outcome = result.Outcome.ToString(),
+            result.Duration,
+            result.Message
+        }));
     }
 
     [Fact]

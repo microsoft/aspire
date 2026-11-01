@@ -13,5 +13,11 @@ export interface MsTestOptions {
      * response files, and server mode are reserved by the integration.
      */
     args?: string[];
+},
+  Collector:     withTesting(options?: WithTestingOptions): MsTestResourcePromise;,
+  CollectorOptions:
+export interface WithTestingOptions {
+    /** An optional asynchronous result collector that runs alongside resource execution during testing. */
+    callback?: (arg: ResourceTestingContext) => Promise<void>;
 }
 }
