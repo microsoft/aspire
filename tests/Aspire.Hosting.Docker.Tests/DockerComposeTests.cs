@@ -7,12 +7,14 @@
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIRECONTAINERRUNTIME001
 
+using System.Net;
 using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Testing;
 using Aspire.Hosting.Tests;
+using Aspire.Hosting.Tests.Helpers;
 using Aspire.Hosting.Tests.Publishing;
 using Aspire.Hosting.Utils;
 using Aspire.TestUtilities;
@@ -415,8 +417,9 @@ public class DockerComposeTests(ITestOutputHelper outputHelper)
         // Use a unique project name to avoid conflicts with other tests
         var projectId = Guid.NewGuid().ToString("N")[..8];
 
-        // Use a random port in the dynamic/private port range (49152-65535) to avoid conflicts
-        var hostPort = Random.Shared.Next(49152, 65535);
+        // Docker publishes the host port on all interfaces, so probe 0.0.0.0. The helper's default range is below the
+        // OS ephemeral range, where port-0 listeners and Docker's own host-port allocation can claim ports at any time.
+        var hostPort = await Network.GetAvailablePortAsync(address: IPAddress.Any.ToString());
         outputHelper.WriteLine($"Using random host port: {hostPort}");
 
         // Helper to create a builder with the same configuration
