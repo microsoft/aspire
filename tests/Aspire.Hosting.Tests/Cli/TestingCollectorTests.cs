@@ -4,6 +4,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
+using Aspire.Dashboard.Model;
 using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Cli;
 using Aspire.Hosting.Lifecycle;
@@ -395,6 +396,56 @@ public class TestingCollectorTests(ITestOutputHelper outputHelper)
         await notifications.PublishUpdateAsync(resource.Resource, s => s with { State = KnownResourceStates.Finished, ExitCode = 0 });
         Assert.True(await completion.DefaultTimeout());
         Assert.False(collectorCalled);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ReplacementOptionsRetainDashboardResultsAndTagsAcrossFreshSnapshots(bool markerOnly)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = CreateBuilder(workspace);
+        var originalCollectorCalled = false;
+        var resource = builder.AddResource(new ContainerResource("tests")).WithTags("Backend").WithTesting(options =>
+            options.CollectResults(context =>
+            {
+                originalCollectorCalled = true;
+                context.PublishResult(new TestResult { Name = "original", Outcome = TestOutcome.Failed });
+                return Task.CompletedTask;
+            }));
+        var original = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
+        resource.WithTesting(markerOnly ? null : options => options.CollectResults(async context =>
+        {
+            await context.WaitForCompletionAsync();
+            Assert.Equal(original.Options!.OutputPath, context.OutputPath);
+            context.PublishResult(new TestResult { Name = "replacement", Outcome = TestOutcome.Passed });
+        }));
+        var replacement = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
+        Assert.NotSame(original, replacement);
+        Assert.Same(original.Options!.RunContext, replacement.Options!.RunContext);
+
+        using var notifications = ResourceNotificationServiceTestHelpers.Create();
+        using var coordinator = CreateCoordinator(builder, notifications);
+        var completion = coordinator.WaitForCompletionAsync(TestContext.Current.CancellationToken);
+        await notifications.PublishUpdateAsync(resource.Resource, s => s with { State = KnownResourceStates.Finished, ExitCode = 0 });
+        Assert.True(await completion.DefaultTimeout());
+        Assert.False(originalCollectorCalled);
+        Assert.Null(original.DashboardResults);
+        Assert.NotNull(replacement.DashboardResults);
+
+        var fresh = ResourceTraitSnapshotProperties.AddTraitProperties(resource.Resource, []);
+        var replay = ResourceTraitSnapshotProperties.AddTraitProperties(resource.Resource, fresh);
+        foreach (var properties in new[] { fresh, replay })
+        {
+            Assert.Same(replacement.DashboardResults,
+                Assert.Single(properties, p => p.Name == KnownProperties.Resource.TestingResults).Value);
+            Assert.Equal("true", Assert.Single(properties, p => p.Name == KnownProperties.Resource.Testing).Value);
+            Assert.Equal(["Backend", "Testing"], Assert.IsType<string[]>(
+                Assert.Single(properties, p => p.Name == KnownProperties.Resource.TraitPrefix + KnownResourceTraits.DashboardTag).Value));
+        }
+        var results = replacement.DashboardResults.Clone();
+        results.StructValue.Fields.Remove("revision");
+        await Verify(results.ToString(), "json");
     }
 
     [Fact]
