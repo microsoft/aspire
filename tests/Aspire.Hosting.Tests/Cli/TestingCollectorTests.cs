@@ -77,6 +77,135 @@ public class TestingCollectorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task RepeatedConfigurationPreservesLaunchOutputPathAndReplacesCollectors()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = CreateBuilder(workspace);
+        var resource = builder.AddResource(new ContainerResource("tests"));
+        TestingOptions? first = null;
+        TestingOptions? replacement = null;
+        var originalCollectorCalled = false;
+        resource.WithTesting(options =>
+        {
+            first = options;
+            resource.WithEnvironment("TEST_OUTPUT_DIRECTORY", options.OutputPath);
+            options.CollectResults(context =>
+            {
+                originalCollectorCalled = true;
+                context.PublishResult(new TestResult { Name = "original", Outcome = TestOutcome.Failed });
+                return Task.CompletedTask;
+            });
+        });
+        resource.WithTesting(options =>
+        {
+            replacement = options;
+            options.CollectResults(async context =>
+            {
+                await context.WaitForCompletionAsync();
+                Assert.Equal(first!.OutputPath, context.OutputPath);
+                Assert.Same(first.RunContext, context.RunContext);
+                Assert.Equal("artifact", await File.ReadAllTextAsync(
+                    Path.Combine(context.OutputPath, "result.txt"), context.CancellationToken));
+                context.PublishResult(new TestResult { Name = "replacement", Outcome = TestOutcome.Passed });
+            });
+        });
+
+        Assert.NotNull(first);
+        Assert.NotNull(replacement);
+        Assert.NotSame(first, replacement);
+        Assert.Same(first.RunContext, replacement.RunContext);
+        Assert.Equal(first.ResourceName, replacement.ResourceName);
+        Assert.Equal(first.OutputPath, replacement.OutputPath);
+        Assert.Equal(first.OutputPath, Assert.Single(Directory.GetDirectories(
+            Path.Combine(first.RunContext!.OutputPath, "resources"))));
+        var environment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(resource.Resource).DefaultTimeout();
+        Assert.Equal(replacement.OutputPath, environment["TEST_OUTPUT_DIRECTORY"]);
+        await File.WriteAllTextAsync(Path.Combine(environment["TEST_OUTPUT_DIRECTORY"], "result.txt"), "artifact");
+
+        using var notifications = ResourceNotificationServiceTestHelpers.Create();
+        using var coordinator = CreateCoordinator(builder, notifications);
+        var completion = coordinator.WaitForCompletionAsync(TestContext.Current.CancellationToken);
+        await notifications.PublishUpdateAsync(resource.Resource, s => s with { State = KnownResourceStates.Finished, ExitCode = 0 });
+        Assert.True(await completion.DefaultTimeout());
+        Assert.False(originalCollectorCalled);
+        var events = new ConcurrentQueue<TestRunEvent>();
+        await ReadAsync(coordinator, events).DefaultTimeout();
+        Assert.Equal("replacement", Assert.Single(events, e => e.Result is not null).Result!.Name);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task MarkerOnlyReplacementPreservesOutputContextAndRemovesCollectors(bool configureCollector)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = CreateBuilder(workspace);
+        var collectorCalled = false;
+        var resource = builder.AddResource(new ContainerResource("tests")).WithTesting(configureCollector
+            ? options => options.CollectResults(_ =>
+            {
+                collectorCalled = true;
+                return Task.CompletedTask;
+            })
+            : null);
+        var first = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>()).Options!;
+        resource.WithTesting();
+        var replacement = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>()).Options!;
+        Assert.NotSame(first, replacement);
+        Assert.Same(first.RunContext, replacement.RunContext);
+        Assert.Equal(first.OutputPath, replacement.OutputPath);
+        Assert.Empty(replacement.Collectors);
+        Assert.Equal(first.OutputPath, Assert.Single(Directory.GetDirectories(
+            Path.Combine(first.RunContext!.OutputPath, "resources"))));
+
+        using var notifications = ResourceNotificationServiceTestHelpers.Create();
+        using var coordinator = CreateCoordinator(builder, notifications);
+        var completion = coordinator.WaitForCompletionAsync(TestContext.Current.CancellationToken);
+        await notifications.PublishUpdateAsync(resource.Resource, s => s with { State = KnownResourceStates.Finished, ExitCode = 0 });
+        Assert.True(await completion.DefaultTimeout());
+        Assert.False(collectorCalled);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task OrdinaryRunReplacementDoesNotInventOutputContextOrInvokeCollectors(bool markerOnly)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+        var collectorCalled = false;
+        var resource = builder.AddResource(new ContainerResource("tests")).WithTesting(options =>
+            options.CollectResults(_ =>
+            {
+                collectorCalled = true;
+                return Task.CompletedTask;
+            }));
+        var first = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>()).Options!;
+        resource.WithTesting(markerOnly ? null : options =>
+        {
+            Assert.Null(options.RunContext);
+            Assert.Null(options.OutputPath);
+            options.CollectResults(_ =>
+            {
+                collectorCalled = true;
+                return Task.CompletedTask;
+            });
+        });
+        var replacement = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>()).Options!;
+        Assert.NotSame(first, replacement);
+        Assert.False(replacement.IsTestRun);
+        Assert.Null(replacement.RunContext);
+        Assert.Null(replacement.OutputPath);
+        Assert.Equal(markerOnly ? 0 : 1, replacement.Collectors.Length);
+
+        using var notifications = ResourceNotificationServiceTestHelpers.Create();
+        using var coordinator = CreateCoordinator(builder, notifications);
+        var completion = coordinator.WaitForCompletionAsync(TestContext.Current.CancellationToken);
+        await notifications.PublishUpdateAsync(resource.Resource, s => s with { State = KnownResourceStates.Finished, ExitCode = 0 });
+        Assert.True(await completion.DefaultTimeout());
+        Assert.False(collectorCalled);
+    }
+
+    [Fact]
     public async Task LivePublicationIsReplayedAndCompletionJoinsCollectorsAndAllReplicas()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

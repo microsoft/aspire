@@ -33,6 +33,11 @@ public static class TestResourceBuilderExtensions
     /// Published failures or collector exceptions fail testing without discarding other results.
     /// Outside testing, configuration still runs but output paths are null and collectors do not run.
     /// </para>
+    /// <para>
+    /// Calling this method again replaces the collectors, including removing them for a marker-only call,
+    /// while preserving the resource's existing run context and output directory. Launch arguments and
+    /// environment variables configured by an earlier call therefore remain aligned with collection.
+    /// </para>
     /// <example>
     /// <code lang="C#">
     /// var api = builder.AddProject&lt;Projects.Api&gt;("api");
@@ -50,6 +55,7 @@ public static class TestResourceBuilderExtensions
     /// This does not change the lifetime of aspire run.
     /// Configuration runs immediately. Collectors start alongside resource execution during testing.
     /// The CLI supplies private resource output destinations; those paths are absent during ordinary runs.
+    /// Repeated calls replace collectors while preserving the existing run context and output directory.
     /// </ats-remarks>
     /// <ats-returns>The resource builder.</ats-returns>
     /// <exception cref="ArgumentNullException">The builder is null.</exception>
@@ -59,9 +65,12 @@ public static class TestResourceBuilderExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        TestRunContext? runContext = null;
-        string? resourceOutputPath = null;
-        if (builder.ApplicationBuilder.ExecutionContext.IsRunMode &&
+        builder.Resource.TryGetLastAnnotation<TestingAnnotation>(out var annotation);
+        var existingOptions = annotation?.Options;
+        var runContext = existingOptions?.RunContext;
+        var resourceOutputPath = existingOptions?.OutputPath;
+        if (existingOptions is null &&
+            builder.ApplicationBuilder.ExecutionContext.IsRunMode &&
             builder.ApplicationBuilder.Configuration[KnownConfigNames.TestOutputPath] is { } outputPath)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(outputPath);
