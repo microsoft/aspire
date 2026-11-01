@@ -47,9 +47,55 @@ public class ProcessCaptureRunnerTests(ITestOutputHelper outputHelper)
         Assert.Equal("captured", result.Capture);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task RunAsync_InterruptedDuringBackloggedDrainReportsInterruption(bool cancelByCaller)
+    {
+        using var backlog = new ThreadPoolBacklog(stall: TimeSpan.FromSeconds(8));
+        using var callerCts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var startInfo = OperatingSystem.IsWindows()
+            ? new ProcessStartInfo("cmd.exe", ["/d", "/c", "exit 0"])
+            : new ProcessStartInfo("/bin/sh", ["-c", "exit 0"]);
+        startInfo.UseShellExecute = false;
+        startInfo.CreateNoWindow = true;
+        var stopwatch = Stopwatch.StartNew();
+
+        // The caller's cancellation or the deadline fires after the 2s drain bound but well before
+        // the backlog releases the capture, so it interrupts the extended drain.
+        var interruptAfter = TimeSpan.FromSeconds(4);
+        if (cancelByCaller)
+        {
+            callerCts.CancelAfter(interruptAfter);
+        }
+
+        var result = await ProcessCaptureRunner.RunAsync(
+            startInfo,
+            cancelByCaller ? TimeSpan.FromSeconds(30) : interruptAfter,
+            async (process, cancellationToken) =>
+            {
+                await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
+                await Task.Yield();
+                backlog.Start(CancellationToken.None);
+
+                await ThreadPoolBacklog.QueueBehindAsync().ConfigureAwait(false);
+                return "captured";
+            },
+            () => "(empty)",
+            NullLogger.Instance,
+            callerCts.Token).WaitAsync(TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken);
+
+        outputHelper.WriteLine($"Capture returned after {stopwatch.Elapsed}; backlog released after {backlog.ReleasedAfter}.");
+        Assert.Null(backlog.ReleasedAfter);
+        Assert.Equal(cancelByCaller, result.Cancelled);
+        Assert.Equal(cancelByCaller ? null : ProcessCaptureFailureKind.TimedOut, result.FailureKind);
+        Assert.Equal(-1, result.ExitCode);
+    }
+
     private sealed class ThreadPoolBacklog(TimeSpan stall) : IDisposable
     {
         private readonly ManualResetEventSlim _release = new();
+        private readonly ManualResetEventSlim _disposed = new();
         private readonly Stopwatch _stopwatch = new();
         private Thread? _releaser;
 
@@ -68,7 +114,7 @@ public class ProcessCaptureRunnerTests(ITestOutputHelper outputHelper)
             // Release from a dedicated thread: when the runner abandons the capture, or once the stall elapses.
             _releaser = new Thread(() =>
             {
-                abandoned.WaitHandle.WaitOne(stall);
+                WaitHandle.WaitAny([abandoned.WaitHandle, _disposed.WaitHandle], stall);
                 Release();
             })
             { IsBackground = true, Name = nameof(ThreadPoolBacklog) };
@@ -90,8 +136,9 @@ public class ProcessCaptureRunnerTests(ITestOutputHelper outputHelper)
 
         public void Dispose()
         {
-            Release();
+            _disposed.Set();
             _releaser?.Join();
+            Release();
         }
     }
 }
