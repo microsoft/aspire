@@ -7,5 +7,9 @@
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Dotnet" />
   </ItemGroup>
 
+  <ItemGroup Condition="'$(IsAspireHost)' == 'true'">
+    <Compile Include="$([MSBuild]::GetPathOfFileAbove('KnownResourceNames.cs', '$(MSBuildThisFileDirectory)../'))" Link="KnownResourceNames.cs" />
+  </ItemGroup>
+
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.targets', '$(MSBuildThisFileDirectory)../'))" />
 </Project>

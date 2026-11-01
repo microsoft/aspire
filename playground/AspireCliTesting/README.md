@@ -14,11 +14,7 @@ Use that SDK for both the CLI and its child processes:
 export DOTNET_ROOT="$PWD/.dotnet"
 export PATH="$DOTNET_ROOT:$PATH"
 
-dotnet build src/Aspire.Dashboard/Aspire.Dashboard.csproj
-export ASPIRE_DASHBOARD_PATH="$PWD/artifacts/bin/Aspire.Dashboard/Debug/net11.0/Aspire.Dashboard.dll"
-
-dotnet run --project src/Aspire.Cli/Aspire.Cli.csproj --no-launch-profile -- \
-  test --apphost playground/AspireCliTesting/apphost.cs --isolated
+./run-aspire.sh test --apphost playground/AspireCliTesting/apphost.cs --isolated
 ```
 
 The CLI builds the AppHost from the current sources. The `Aspire.Hosting.AppHost@*`
@@ -26,11 +22,20 @@ directive makes the file discoverable; `Directory.Build.targets` removes that
 package reference and uses `AspireProjectOrPackageReference` to resolve the local
 AppHost and .NET hosting projects. It does not restore the wildcard package.
 
-The explicit dashboard path keeps this playground on the repository build.
-The AppHost still opts into the CLI bundle; without an override, the CLI can
-inject its bundled dashboard path ahead of the AppHost's local assembly metadata.
-Rebuild the dashboard and CLI after updating the branch; avoid `--no-build` when
-refreshing the AppHost.
+Like the other playgrounds, this AppHost adds the repository dashboard with
+`AddDotnetProject` using the reserved `aspire-dashboard` resource name. Hosting
+configures that resource instead of launching the CLI's bundled dashboard.
+The source dashboard is built and launched without a manual environment export.
+Avoid `--no-build` when refreshing the AppHost.
+
+To test an explicitly selected dashboard binary instead, set
+`DcpPublisher__DashboardPath` for that invocation; the AppHost preserves that
+configuration and omits the source resource. To use the ordinary automatic
+dashboard/bundle selection, build with `SkipDashboardProjectReference=true`
+(for example, `SkipDashboardProjectReference=true ./run-aspire.sh test --apphost
+playground/AspireCliTesting/apphost.cs --isolated`). This existing playground
+opt-out also honors `ASPIRE_DASHBOARD_PATH` overrides, which otherwise do not
+replace an explicitly modeled source dashboard.
 
 The modern dashboard is the default in current source, not a separate preview
 binary or an `aspire test` switch. `Dashboard:UI:DisableModernDashboard=true`

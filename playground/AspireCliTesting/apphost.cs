@@ -11,6 +11,16 @@ using Aspire.Hosting.ApplicationModel;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
+#if !SKIP_DASHBOARD_REFERENCE
+// A build reference alone does not select the source dashboard when the CLI
+// supplies a bundled path. The reserved resource replaces automatic launch.
+// Keep explicit DcpPublisher configuration available for binary-level testing.
+if (string.IsNullOrWhiteSpace(builder.Configuration["DcpPublisher:DashboardPath"]))
+{
+    builder.AddDotnetProject(KnownResourceNames.AspireDashboard, "../../src/Aspire.Dashboard/Aspire.Dashboard.csproj");
+}
+#endif
+
 var service = builder.AddDotnetProject("service", "service/service.cs")
     .WithHttpEndpoint(env: "ASPNETCORE_HTTP_PORTS")
     .WithHttpHealthCheck("/health");
