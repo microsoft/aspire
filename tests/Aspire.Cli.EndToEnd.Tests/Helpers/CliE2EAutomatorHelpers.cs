@@ -1209,7 +1209,8 @@ internal static class CliE2EAutomatorHelpers
         // The prompt counter is unreliable after a hang (the hung command's prompt was never consumed), so wait for
         // a unique marker instead. The marker is split in the typed command so the echoed command line cannot match.
         var markerId = Guid.NewGuid().ToString("N");
-        await auto.TypeAsync(capture + $"kill -KILL $(jobs -p) 2>/dev/null; echo \"hung-command-\"\"recovered-{markerId}\"");
+        // Each job runs in its own process group, so signal the whole group to also stop pipeline members and children.
+        await auto.TypeAsync(capture + $"for pgid in $(jobs -p); do kill -KILL -- -$pgid; done 2>/dev/null; echo \"hung-command-\"\"recovered-{markerId}\"");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync($"hung-command-recovered-{markerId}", timeout: timeout ?? TimeSpan.FromSeconds(15));
     }

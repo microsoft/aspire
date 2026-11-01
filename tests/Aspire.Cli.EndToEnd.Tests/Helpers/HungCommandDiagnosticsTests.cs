@@ -37,8 +37,9 @@ public class HungCommandDiagnosticsTests(ITestOutputHelper output)
             await File.WriteAllTextAsync(Path.Combine(home, ".aspire", "logs", "cli_hung.log"), "msbuild -getProperty started", TestContext.Current.CancellationToken);
             await auto.RunCommandAsync($"export HOME={AspireCliShellCommandHelpers.QuoteBashArg(home)}", counter);
 
-            // Wait until the command owns the terminal so Ctrl+Z reaches it rather than bash's line editor.
-            await auto.TypeAsync("sh -c 'echo hung-command-\"\"started; exec sleep 3601'");
+            // A pipeline (like `aspire start ... | tee ...`) stands in for a hung CLI command; every member must be
+            // stopped. Wait until it owns the terminal so Ctrl+Z reaches it rather than bash's line editor.
+            await auto.TypeAsync("sleep 3602 | sh -c 'echo hung-command-\"\"started; exec sleep 3601'");
             await auto.EnterAsync();
             await auto.WaitUntilTextAsync("hung-command-started", timeout: TimeSpan.FromSeconds(15));
 
@@ -48,10 +49,11 @@ public class HungCommandDiagnosticsTests(ITestOutputHelper output)
             var snapshot = await File.ReadAllTextAsync(Path.Combine(diagnostics, CliE2EAutomatorHelpers.HungCommandProcessesFileName), TestContext.Current.CancellationToken);
             output.WriteLine(snapshot);
             Assert.Contains("sleep 3601", snapshot);
+            Assert.Contains("sleep 3602", snapshot);
             Assert.Equal("msbuild -getProperty started", await File.ReadAllTextAsync(Path.Combine(diagnostics, "logs", "cli_hung.log"), TestContext.Current.CancellationToken));
 
             // The shell must be usable again and the hung command must be gone so the terminal can exit.
-            await auto.TypeAsync("echo \"sleep-processes:$(ps -eo args | grep -c '^sleep 3601$')\"");
+            await auto.TypeAsync("echo \"sleep-processes:$(ps -eo args | grep -c '^sleep 360[12]$')\"");
             await auto.EnterAsync();
             await auto.WaitUntilTextAsync("sleep-processes:0", timeout: TimeSpan.FromSeconds(15));
 
