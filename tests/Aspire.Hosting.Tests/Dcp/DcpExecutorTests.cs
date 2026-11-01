@@ -9705,13 +9705,16 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         }
     }
 
-    [Fact]
-    public async Task ContainerHostUrlWithoutMatchingHostEndpointUsesContainerHostBridge()
+    [Theory]
+    [InlineData("localhost")]
+    [InlineData("frontend.dev.localhost")]
+    [InlineData("Frontend.Dev.Localhost")]
+    public async Task ContainerHostUrlWithoutMatchingHostEndpointUsesContainerHostBridge(string host)
     {
         var builder = DistributedApplication.CreateBuilder();
 
         builder.AddContainer("aContainer", "image")
-            .WithEnvironment("URL", new HostUrl("https://localhost:17092/path"));
+            .WithEnvironment("URL", new HostUrl($"https://{host}:17092/path"));
 
         var kubernetesService = new TestKubernetesService();
         using var app = builder.Build();
@@ -9734,8 +9737,10 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             s => s.Metadata.Annotations.ContainsKey(CustomResource.ContainerTunnelInstanceName));
     }
 
-    [Fact]
-    public async Task ContainerHostUrlMatchingHostEndpointUsesTunnelPort()
+    [Theory]
+    [InlineData("localhost")]
+    [InlineData("frontend.dev.localhost")]
+    public async Task ContainerHostUrlMatchingHostEndpointUsesTunnelPort(string host)
     {
         var builder = DistributedApplication.CreateBuilder();
 
@@ -9743,7 +9748,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             .WithEndpoint(name: "http", targetPort: 1234, port: 5678, isProxied: true);
 
         builder.AddContainer("aContainer", "image")
-            .WithEnvironment("URL", new HostUrl("https://localhost:5678/path"));
+            .WithEnvironment("URL", new HostUrl($"https://{host}:5678/path"));
 
         var kubernetesService = new TestKubernetesService();
         using var app = builder.Build();
@@ -11429,7 +11434,13 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var dcpDependencyCheckService = new TestDcpDependencyCheckService();
 
         var appResources = new DcpAppResourceStore();
-        var proxylessEndpointPortAllocator = new ProxylessEndpointPortAllocator(Options.Create(dcpOptions));
+        // These executors are never disposed, so keep their reservations out of the process-wide registry.
+        var proxylessEndpointPortAllocator = new ProxylessEndpointPortAllocator(
+            dcpOptions.ProxylessEndpointPortRangeStart,
+            dcpOptions.ProxylessEndpointPortRangeEnd,
+            Random.Shared,
+            ProxylessEndpointPortAllocator.TryProbePort,
+            new ProxylessEndpointPortReservations());
         var applicationOptions = distributedApplicationOptions ?? new DistributedApplicationOptions();
         var containerNetworkEndpointProvisioner = new ContainerNetworkEndpointProvisioner(
             configuration,

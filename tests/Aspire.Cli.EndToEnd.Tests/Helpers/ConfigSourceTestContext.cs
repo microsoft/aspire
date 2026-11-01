@@ -57,7 +57,7 @@ internal sealed class ConfigSourceTestContext
 
     public async Task CreateProjectAsync()
     {
-        await _auto.RunCommandAsync($"{NewCommand} --use-config-source true --non-interactive", _counter,
+        await _auto.RunCommandAsync($"{NewCommand} --use-config-source --non-interactive", _counter,
             timeout: TimeSpan.FromMinutes(3));
         await ConfigureProjectAsync();
     }
@@ -66,7 +66,7 @@ internal sealed class ConfigSourceTestContext
     {
         await _auto.RunCommandAsync("mkdir SourceApp && cd SourceApp && dotnet new sln --name SourceApp", _counter);
         await _auto.RunCommandAsync(
-            "aspire init --language csharp --suppress-agent-init --use-config-source true --non-interactive",
+            "aspire init --language csharp --suppress-agent-init --use-config-source --non-interactive",
             _counter, timeout: TimeSpan.FromMinutes(3));
         await _auto.RunCommandAsync(
             "test ! -f aspire.config.json && test -f SourceApp.AppHost/aspire.config.json && " +
@@ -123,7 +123,7 @@ internal sealed class ConfigSourceTestContext
             $"result=$?; cat \"$ASPIRE_E2E_WORKSPACE/consent.log\"; test \"$result\" -eq {CliExitCodes.InvalidCommand}",
             _counter, timeout: TimeSpan.FromMinutes(3));
         var consentOutput = await File.ReadAllTextAsync(Path.Combine(_root, "consent.log"), _cancellationToken);
-        Assert.Contains("Specify --use-config-source true to accept it or --use-config-source false",
+        Assert.Contains("Specify --use-config-source to accept it or --use-config-source false",
             Regex.Replace(consentOutput, @"\s+", " "));
         Assert.False(Directory.Exists(Path.Combine(_root, "SourceApp")));
         await AssertSourceNotAcquiredAsync();
@@ -132,7 +132,7 @@ internal sealed class ConfigSourceTestContext
     public async Task CreateProjectWithGitAuthenticationAsync()
     {
         await ConfigureGitAuthenticationAsync();
-        await _auto.TypeAsync($"{NewCommand} --use-config-source true");
+        await _auto.TypeAsync($"{NewCommand} --use-config-source");
         await _auto.EnterAsync();
         var authenticationPrompt = new CellPatternSearcher().Find("Configuration source Git authentication code:");
         await _auto.WaitUntilAsync(snapshot => authenticationPrompt.Search(snapshot).Count > 0,

@@ -312,7 +312,7 @@ This SHA is illustrative and must be replaced with an actual commit available fr
 
 Leaving `ASPIRE_INIT_SOURCE_REF` unset follows the repository's current default branch instead. If `ASPIRE_INIT_SOURCE_URL` is unset, both `ASPIRE_INIT_SOURCE_PATH` and `ASPIRE_INIT_SOURCE_REF` are ignored, including when employee detection selects the Microsoft repository. Priya must keep the URL explicitly set to customize that repository's path or ref.
 
-For scripted creation or initialization, `--use-config-source true` explicitly accepts the candidate and `--use-config-source false` explicitly declines it. `--non-interactive` alone is not consent; when a candidate exists, omitting that choice fails with instructions. Other creation or initialization choices must also be supplied as needed for non-interactive execution.
+For scripted creation or initialization, `--use-config-source` explicitly accepts the candidate and `--use-config-source false` explicitly declines it. The bare flag means `true`; the explicit `--use-config-source true` form is also accepted for compatibility. `--non-interactive` alone is not consent; when a candidate exists, omitting the option fails with instructions. Other creation or initialization choices must also be supplied as needed for non-interactive execution.
 
 The variables affect initial source selection, not later commands on a bound project. Re-running initialization on an already-bound app does not retarget its source or implicitly apply new source values; it can perform the same advisory check as other ordinary commands.
 

@@ -14,6 +14,9 @@ Use that SDK for both the CLI and its child processes:
 export DOTNET_ROOT="$PWD/.dotnet"
 export PATH="$DOTNET_ROOT:$PATH"
 
+dotnet build src/Aspire.Dashboard/Aspire.Dashboard.csproj
+export ASPIRE_DASHBOARD_PATH="$PWD/artifacts/bin/Aspire.Dashboard/Debug/net11.0/Aspire.Dashboard.dll"
+
 dotnet run --project src/Aspire.Cli/Aspire.Cli.csproj --no-launch-profile -- \
   test --apphost playground/AspireCliTesting/apphost.cs --isolated
 ```
@@ -22,6 +25,21 @@ The CLI builds the AppHost from the current sources. The `Aspire.Hosting.AppHost
 directive makes the file discoverable; `Directory.Build.targets` removes that
 package reference and uses `AspireProjectOrPackageReference` to resolve the local
 AppHost and .NET hosting projects. It does not restore the wildcard package.
+
+The explicit dashboard path keeps this playground on the repository build.
+The AppHost still opts into the CLI bundle; without an override, the CLI can
+inject its bundled dashboard path ahead of the AppHost's local assembly metadata.
+Rebuild the dashboard and CLI after updating the branch; avoid `--no-build` when
+refreshing the AppHost.
+
+The modern dashboard is the default in current source, not a separate preview
+binary or an `aspire test` switch. `Dashboard:UI:DisableModernDashboard=true`
+(environment alias `DASHBOARD__UI__DISABLEMODERNDASHBOARD`) forces the previous
+experience. A saved `Aspire_Dashboard_Experience=legacy` browser cookie can also
+select it. If the current binary still opens the previous experience, check that
+configuration and select **New dashboard** under **Settings > Dashboard
+experience**, or clear that experience cookie. Updating Git alone does not change
+an already running dashboard or its saved browser preference.
 
 For a machine-readable summary, add `--format json`. For dashboard inspection
 after collection, add `--keep-alive` and stop with Ctrl+C when finished:
