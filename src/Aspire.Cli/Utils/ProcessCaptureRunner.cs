@@ -27,6 +27,11 @@ internal static class ProcessCaptureRunner
     private static readonly TimeSpan s_postKillCaptureWaitBound = TimeSpan.FromMilliseconds(250);
     private static readonly TimeSpan s_postExitCaptureWaitBound = TimeSpan.FromSeconds(2);
 
+    // A work item queued to an idle thread pool runs within microseconds. When one waits
+    // longer than this, the pool has a backlog and the capture's read continuations are
+    // probably waiting for a thread rather than for a descendant to close the pipe.
+    private static readonly TimeSpan s_threadPoolBacklogThreshold = TimeSpan.FromMilliseconds(250);
+
     public static async Task<ProcessCaptureResult<TCapture>> RunAsync<TCapture>(
         ProcessStartInfo startInfo,
         TimeSpan timeout,
@@ -148,7 +153,7 @@ internal static class ProcessCaptureRunner
             // milliseconds). Cap the post-exit drain, but allow more time than the
             // post-kill path: the peer has already exited normally, so losing recently
             // emitted stdout/stderr would make diagnostics flaky under CI load.
-            var capture = await SwallowCaptureAsync(captureTask, createEmptyCapture, logger, s_postExitCaptureWaitBound).ConfigureAwait(false);
+            var capture = await DrainAfterExitAsync(captureTask, createEmptyCapture, logger, timeoutCts.Token).ConfigureAwait(false);
             var exitCode = process.ExitCode;
 
             // If the bounded drain timed out (pipes inherited by descendants), the
@@ -248,6 +253,58 @@ internal static class ProcessCaptureRunner
             logger.LogDebug(ex, "Could not capture process output.");
             return createEmptyCapture();
         }
+    }
+
+    private static async Task<TCapture> DrainAfterExitAsync<TCapture>(Task<TCapture> captureTask, Func<TCapture> createEmptyCapture, ILogger logger, CancellationToken cancellationToken)
+    {
+        // Read continuations run on the thread pool (on Windows, even reads from the synchronous
+        // redirected pipes yield to it), but the bound's timer does not wait for a pool thread.
+        // Under a pool backlog the bound can therefore expire while the reads are still queued,
+        // even though every writer has closed and the output is complete. Only give up once the
+        // pool can promptly run queued work; a descendant holding the pipes still releases the
+        // caller after one bound on a responsive pool.
+        while (true)
+        {
+            try
+            {
+                return await captureTask.WaitAsync(s_postExitCaptureWaitBound, CancellationToken.None).ConfigureAwait(false);
+            }
+            catch (TimeoutException)
+            {
+            }
+            catch (Exception ex)
+            {
+                logger.LogDebug(ex, "Could not capture process output.");
+                return createEmptyCapture();
+            }
+
+            // The probe is queued behind any read continuations already waiting for a thread,
+            // so awaiting it also gives those continuations a chance to run.
+            var threadPoolDelay = await MeasureThreadPoolDelayAsync().ConfigureAwait(false);
+            if (captureTask.IsCompleted)
+            {
+                return await SwallowCaptureAsync(captureTask, createEmptyCapture, logger).ConfigureAwait(false);
+            }
+
+            if (threadPoolDelay < s_threadPoolBacklogThreshold || cancellationToken.IsCancellationRequested)
+            {
+                logger.LogDebug("Timed out waiting {Bound}s for process output capture.", s_postExitCaptureWaitBound.TotalSeconds);
+                ObserveCaptureFault(captureTask);
+                return createEmptyCapture();
+            }
+
+            logger.LogDebug("Thread pool work waited {Delay} for a thread; extending the post-exit output drain.", threadPoolDelay);
+        }
+    }
+
+    private static Task<TimeSpan> MeasureThreadPoolDelayAsync()
+    {
+        var measurement = new TaskCompletionSource<TimeSpan>();
+        ThreadPool.UnsafeQueueUserWorkItem(
+            static state => state.Measurement.TrySetResult(Stopwatch.GetElapsedTime(state.QueuedAt)),
+            (Measurement: measurement, QueuedAt: Stopwatch.GetTimestamp()),
+            preferLocal: false);
+        return measurement.Task;
     }
 
     private static void ObserveCaptureFault<TCapture>(Task<TCapture> task)
