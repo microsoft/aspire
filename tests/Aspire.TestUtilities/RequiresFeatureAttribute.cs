@@ -132,6 +132,15 @@ public class RequiresFeatureAttribute(TestFeature feature) : Attribute, ITraitAt
             : IsContainerRuntimeSupported();
     }
 
+    private static bool IsContainerImagePublishingSupported()
+    {
+        // DCP can build and run WSLC images, but IContainerRuntimeResolver only provides
+        // Docker/Podman publishing implementations. Windows CI has neither engine.
+        return PlatformDetection.IsRunningOnCI
+            ? OperatingSystem.IsLinux()
+            : IsContainerRuntimeSupported();
+    }
+
     // Testcontainers needs a Docker-compatible API *endpoint*, not just a CLI on PATH: it speaks HTTP to
     // the engine rather than shelling out. A Podman-only host does not always have one — Testcontainers
     // 4.8.1 cannot use Podman's Windows named pipe, and on Linux Podman is daemonless unless
@@ -225,6 +234,10 @@ public class RequiresFeatureAttribute(TestFeature feature) : Attribute, ITraitAt
             return false;
         }
         if ((feature & TestFeature.ContainerCompose) == TestFeature.ContainerCompose && !IsContainerComposeSupported())
+        {
+            return false;
+        }
+        if ((feature & TestFeature.ContainerImagePublishing) == TestFeature.ContainerImagePublishing && !IsContainerImagePublishingSupported())
         {
             return false;
         }

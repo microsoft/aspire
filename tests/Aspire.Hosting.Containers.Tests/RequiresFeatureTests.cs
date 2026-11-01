@@ -30,6 +30,11 @@ public class RequiresFeatureTests
             Assert.Equal(OperatingSystem.IsLinux(), RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Docker));
             Assert.Equal(OperatingSystem.IsLinux(), RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Testcontainers));
             Assert.Equal(OperatingSystem.IsLinux(), RequiresFeatureAttribute.IsFeatureSupported(TestFeature.ContainerCompose));
+            Assert.Equal(OperatingSystem.IsLinux(), RequiresFeatureAttribute.IsFeatureSupported(TestFeature.ContainerImagePublishing));
+            Assert.Equal(OperatingSystem.IsLinux() && ciVariable != "BUILD_BUILDID",
+                RequiresFeatureAttribute.IsFeatureSupported(TestFeature.ContainerImagePublishing | TestFeature.ContainerImageBuild));
+            Assert.Equal(expectedContainerRuntime && ciVariable != "BUILD_BUILDID",
+                RequiresFeatureAttribute.IsFeatureSupported(TestFeature.ContainerRuntime | TestFeature.ContainerImageBuild));
             Assert.Equal(expectedContainerRuntime, RequiresFeatureAttribute.IsFeatureSupported(TestFeature.SSLCertificate));
             Assert.Equal(OperatingSystem.IsLinux(), TestcontainersPodmanConfiguration.IsConfigurationInitialized);
         }, ciVariable).Dispose();

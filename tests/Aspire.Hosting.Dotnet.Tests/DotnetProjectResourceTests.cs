@@ -281,7 +281,7 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    [RequiresFeature(TestFeature.ContainerRuntime | TestFeature.ContainerImageBuild)]
+    [RequiresFeature(TestFeature.ContainerImagePublishing | TestFeature.ContainerImageBuild)]
     public async Task FileBasedAppWithContainerFilesPreservesLocalImageAndBuildsArchive(bool legacyProject)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
