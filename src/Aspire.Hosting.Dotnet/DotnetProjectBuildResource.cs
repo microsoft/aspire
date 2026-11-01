@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.IO.Hashing;
 using System.Text;
 using System.Xml;
@@ -18,7 +19,7 @@ namespace Aspire.Hosting.Dotnet;
 /// </summary>
 internal sealed class DotnetProjectBuildResource : ExecutableResource, IDisposable
 {
-    private const string BuildLogFileName = "build.log";
+    private const string BuildLogsDirectoryName = "logs";
 
     private readonly object _lock = new();
     private readonly List<string> _projectPaths = [];
@@ -214,70 +215,81 @@ internal sealed class DotnetProjectBuildResource : ExecutableResource, IDisposab
         _artifactManager.IsLeaseActive(hash);
 
     /// <summary>
-    /// Gets the file that the coordinated build writes its MSBuild file log to, or <see langword="null"/> when
-    /// MSBuild cannot address the build directory in logger parameters.
+    /// Gets the file that this AppHost's coordinated build writes its MSBuild file log to, or <see langword="null"/>
+    /// when MSBuild cannot address the build directory in logger parameters.
     /// </summary>
     /// <remarks>
     /// MSBuild's file logger keeps this file open with write access for the lifetime of the build process, so an
-    /// open handle also marks a coordinated build that is still running in this directory. That build can outlive
-    /// the AppHost that launched it: <c>aspire stop</c> returns once the AppHost exits, DCP cleans up afterwards,
-    /// and <c>dotnet build</c> keeps running after SIGTERM.
+    /// open handle on any log in this directory marks a coordinated build that is still running. That build can
+    /// outlive the AppHost that launched it: <c>aspire stop</c> returns once the AppHost exits, DCP cleans up
+    /// afterwards, and <c>dotnet build</c> keeps running after SIGTERM. Each AppHost process uses its own log file so
+    /// a build never opens a log that another build still holds.
     /// </remarks>
     internal string? BuildLogPath =>
         // MSBuild splits logger parameters on ';' and does not honor quoting in LogFile.
-        BuildDirectory.Contains(';') ? null : Path.Combine(BuildDirectory, BuildLogFileName);
+        BuildDirectory.Contains(';')
+            ? null
+            : Path.Combine(BuildDirectory, BuildLogsDirectoryName, $"{Environment.ProcessId}.{Name}.log");
 
     /// <summary>
-    /// Gets or sets how long <see cref="WaitForRunningBuildAsync"/> waits for another build before building anyway.
+    /// Gets or sets how long <see cref="WaitForRunningBuildsAsync"/> waits for other builds before building anyway.
     /// </summary>
     internal TimeSpan RunningBuildWaitTimeout { get; set; } = TimeSpan.FromMinutes(5);
 
     /// <summary>
-    /// Waits until no other coordinated build process is writing <see cref="BuildLogPath"/>.
+    /// Waits until no other coordinated build is writing a log in <see cref="BuildDirectory"/>.
     /// </summary>
-    /// <returns>
-    /// <see langword="true"/> when this build can write <see cref="BuildLogPath"/>; <see langword="false"/> when there is
-    /// no log path or another build still holds the log after the wait timed out.
-    /// </returns>
     /// <remarks>
     /// Two builds of the same projects write the same intermediate outputs, so a build started while a previous
     /// AppHost's build is still running can fail with sharing violations (for example in static web asset
-    /// compression). Waiting for the previous build is enough: once it finishes, this build is incremental.
+    /// compression). Waiting for the previous build is enough: once it finishes, this build is incremental. When
+    /// waiting times out, this build proceeds anyway.
     /// </remarks>
-    internal async Task<bool> WaitForRunningBuildAsync(ILogger logger, CancellationToken cancellationToken)
+    internal async Task WaitForRunningBuildsAsync(ILogger logger, CancellationToken cancellationToken)
     {
-        if (BuildLogPath is not { } buildLogPath)
+        if (BuildLogPath is not { } buildLogPath ||
+            Path.GetDirectoryName(buildLogPath) is not { } logsDirectory ||
+            !Directory.Exists(logsDirectory))
         {
-            return false;
+            return;
         }
 
-        using (var buildLog = FileLock.TryAcquire(buildLogPath))
+        var startTimestamp = Stopwatch.GetTimestamp();
+        var waitingLogged = false;
+        foreach (var runningBuildLog in Directory.GetFiles(logsDirectory, "*.log"))
         {
+            // Acquiring a log that no build holds deletes it.
+            using var buildLog = FileLock.TryAcquire(runningBuildLog);
             if (buildLog is not null)
             {
-                return true;
+                continue;
             }
-        }
 
-        logger.LogInformation(
-            "Waiting for a coordinated build that is still running in '{BuildDirectory}' to finish before building.",
-            BuildDirectory);
-        try
-        {
-            using var buildLog = await FileLock.AcquireAsync(
-                buildLogPath,
-                cancellationToken,
-                RunningBuildWaitTimeout).ConfigureAwait(false);
-            return true;
-        }
-        catch (TimeoutException ex)
-        {
-            logger.LogWarning(
-                ex,
-                "A coordinated build in '{BuildDirectory}' is still running after {Timeout}. Building anyway.",
-                BuildDirectory,
-                RunningBuildWaitTimeout);
-            return false;
+            if (!waitingLogged)
+            {
+                waitingLogged = true;
+                logger.LogInformation(
+                    "Waiting for a coordinated build that is still running in '{BuildDirectory}' to finish before building.",
+                    BuildDirectory);
+            }
+
+            var remaining = RunningBuildWaitTimeout - Stopwatch.GetElapsedTime(startTimestamp);
+            try
+            {
+                using var finishedBuildLog = await FileLock.AcquireAsync(
+                    runningBuildLog,
+                    cancellationToken,
+                    remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero).ConfigureAwait(false);
+            }
+            catch (TimeoutException ex)
+            {
+                logger.LogWarning(
+                    ex,
+                    "A coordinated build in '{BuildDirectory}' is still running after {Timeout}. Building anyway.",
+                    BuildDirectory,
+                    RunningBuildWaitTimeout);
+                return;
+            }
         }
     }
 
