@@ -2,8 +2,9 @@
 
 This file-based AppHost is the shared, in-repository exerciser for `aspire test`.
 It uses repository hosting projects, not released packages or a private package
-hive. No containers or platform-specific test frameworks are required for the
-foundation scenario.
+hive. The foundation and MSTest scenarios share the same HTTP service and require
+no containers. The MSTest fixture registers the executable
+Microsoft.Testing.Platform runner and TRX extension explicitly.
 
 ## Run from the repository root
 
@@ -130,11 +131,39 @@ under `~/.aspire/dashboard/runs`. The dashboard generates its ID after AppHost
 model construction, whereas the CLI creates the test-run directory before
 launching the AppHost. Shared run-ID plumbing is deferred.
 
+`mstest-tests/Playground.MSTest.csproj` is an executable MSTest 4.4.0 project with
+Microsoft.Testing.Extensions.TrxReport 2.4.0. Its local build files isolate it from
+the repository's xUnit runner setup, matching a consumer MSTest project.
+`AddMsTest("mstest-tests", ...)` waits for the same `service` and receives
+`serviceEndpoint` through `MSTEST_SERVICE_URL`. Tests check `/`, `/health`, an
+opt-in failure, and a skipped example.
+
+The default combined summary contains **4 passed, 0 failed, 1 skipped**:
+one foundation result plus three passed and one skipped MSTest results. Each
+collection has its own output directory. The foundation writes `probe.txt`;
+MSTest writes `results.trx`. JSON exposes `outputPath`, `summaryPath`, and each
+`collections[].outputPath`. Reports and `summary.json` remain after teardown.
+Runner-written TRX file permissions are controlled by MSTest, not Aspire.
+
+Exercise the controlled MSTest failure without changing the foundation scenario:
+
+```bash
+MSTEST_PLAYGROUND_FAIL=true \
+dotnet run --project src/Aspire.Cli/Aspire.Cli.csproj --no-launch-profile -- \
+  test --apphost playground/AspireCliTesting/apphost.cs --isolated \
+  --timeout-seconds 120 --format json --non-interactive
+```
+
+This returns CLI exit code `23` with **3 passed, 1 failed, 1 skipped**. The MSTest
+process exits nonzero, but its collector still harvests the finalized TRX report
+and publishes all results. There is no `--output` option; use the paths assigned
+by the CLI rather than passing reporting flags to the runner.
+
 Subsequent framework layers should append their resource declarations to the
 same `apphost.cs`, before `builder.Build().Run()`, and put their fixtures in
 separate subdirectories. Reuse `service` for `.WaitFor(service)` and
 `serviceEndpoint` for endpoint injection. Add each required hosting package to
 `AspireProjectOrPackageReference` in `Directory.Build.targets` so it resolves to
-the current repository source. Do not add released testing packages or
+the current repository source. Do not add released Aspire hosting packages or
 machine-specific paths. Keep experimental API suppressions scoped to this
 playground; the foundation collector APIs use `ASPIRETESTING001`.
