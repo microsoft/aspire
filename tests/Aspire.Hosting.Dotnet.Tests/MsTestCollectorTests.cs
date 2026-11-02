@@ -4,6 +4,7 @@
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Cli;
+using Aspire.Hosting.Dotnet.Tests.Helpers;
 using Aspire.Hosting.Testing;
 using Aspire.Hosting.Tests;
 using Aspire.Hosting.Tests.Utils;
@@ -33,6 +34,31 @@ public class MsTestCollectorTests(ITestOutputHelper outputHelper)
           <ResultSummary outcome="Completed"><Counters total="1" passed="1" failed="0" timeout="0" notExecuted="0" /></ResultSummary>
         </TestRun>
         """;
+
+    [Theory]
+    [InlineData("Error", "error")]
+    [InlineData("Timeout", "timedOut")]
+    [InlineData("Inconclusive", "inconclusive")]
+    [InlineData("Aborted", "cancelled")]
+    public async Task ExplicitFailureResultsFailAggregateWithoutProcessFailureOrCancellingCollection(string source, string wire)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = CreateBuilder(workspace);
+        var resource = AddResource(builder, workspace);
+        File.WriteAllText(Path.Combine(workspace.Path, "runner reports", "results.trx"),
+            MsTestReportFixture.Create(source).ToString());
+        using var notifications = ResourceNotificationServiceTestHelpers.Create();
+        using var coordinator = CreateCoordinator(builder, notifications);
+        var completion = coordinator.WaitForCompletionAsync(TestContext.Current.CancellationToken);
+        await notifications.PublishUpdateAsync(resource.Resource, snapshot =>
+            snapshot with { State = KnownResourceStates.Finished, ExitCode = 0 });
+
+        Assert.False(await completion.DefaultTimeout());
+        var events = await ReadAsync(coordinator);
+        Assert.Equal(wire, Assert.Single(events, e => e.Result is not null).Result!.Outcome);
+        Assert.Equal("completed", events.Last(e => e.Collection is not null).Collection!.Status);
+        Assert.True(File.Exists(GetReportPath(resource)));
+    }
 
     [Theory]
     [InlineData(0)]
@@ -71,6 +97,10 @@ public class MsTestCollectorTests(ITestOutputHelper outputHelper)
     [InlineData("stale")]
     [InlineData("malformed")]
     [InlineData("run-failure")]
+    [InlineData("run-Error")]
+    [InlineData("run-Timeout")]
+    [InlineData("run-Aborted")]
+    [InlineData("run-Inconclusive")]
     public async Task ReportFailuresFailCollectionExplicitly(string failure)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -84,7 +114,8 @@ public class MsTestCollectorTests(ITestOutputHelper outputHelper)
         {
             File.WriteAllText(Path.Combine(workspace.Path, "runner reports", "results.trx"), failure == "malformed"
                 ? "<TestRun>"
-                : Report.Replace("outcome=\"Completed\"", "outcome=\"Failed\"", StringComparison.Ordinal));
+                : Report.Replace("outcome=\"Completed\"",
+                    $"outcome=\"{(failure == "run-failure" ? "Failed" : failure["run-".Length..])}\"", StringComparison.Ordinal));
         }
         using var notifications = ResourceNotificationServiceTestHelpers.Create();
         using var coordinator = CreateCoordinator(builder, notifications);
@@ -97,7 +128,7 @@ public class MsTestCollectorTests(ITestOutputHelper outputHelper)
         var collection = events.Last(e => e.Collection is not null).Collection!;
         Assert.Equal("failed", collection.Status);
         Assert.NotEmpty(collection.Error!);
-        Assert.Equal(failure == "run-failure" ? 1 : 0, events.Count(e => e.Result is not null));
+        Assert.Equal(failure.StartsWith("run-", StringComparison.Ordinal) ? 1 : 0, events.Count(e => e.Result is not null));
         if (failure == "malformed")
         {
             Assert.Equal("<TestRun>", await File.ReadAllTextAsync(GetReportPath(resource), TestContext.Current.CancellationToken));

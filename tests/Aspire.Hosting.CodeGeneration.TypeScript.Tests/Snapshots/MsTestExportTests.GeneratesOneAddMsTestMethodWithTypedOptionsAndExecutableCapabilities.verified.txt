@@ -19,5 +19,22 @@ export interface MsTestOptions {
 export interface WithTestingOptions {
     /** An optional asynchronous result collector that runs alongside resource execution during testing. */
     callback?: (arg: ResourceTestingContext) => Promise<void>;
+},
+  Outcomes:
+export enum TestOutcome {
+    /** The test failed. */
+    Failed = "Failed",
+    /** The test passed. */
+    Passed = "Passed",
+    /** The test was skipped. */
+    Skipped = "Skipped",
+    /** The test did not reach a conclusive result. */
+    Inconclusive = "Inconclusive",
+    /** The test encountered an execution error. */
+    Error = "Error",
+    /** The test exceeded its runner's time limit. */
+    TimedOut = "TimedOut",
+    /** The test was cancelled by its runner. */
+    Cancelled = "Cancelled",
 }
 }

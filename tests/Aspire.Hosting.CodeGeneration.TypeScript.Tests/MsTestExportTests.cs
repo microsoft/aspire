@@ -22,11 +22,13 @@ public class MsTestExportTests
         var options = Regex.Match(code, @"(?ms)^export interface MsTestOptions \{.*?^\}").Value;
         var collector = Regex.Match(code, @"(?m)^    withTesting\([^\r\n]*: MsTestResourcePromise;").Value;
         var collectorOptions = Regex.Match(code, @"(?ms)^export interface WithTestingOptions \{.*?^\}").Value;
+        var outcomes = Regex.Match(code, @"(?ms)^export enum TestOutcome \{.*?^\}").Value;
         Assert.NotEmpty(method);
         Assert.NotEmpty(options);
         Assert.NotEmpty(collector);
         Assert.NotEmpty(collectorOptions);
+        Assert.NotEmpty(outcomes);
 
-        await Verify(new { Method = method, Options = options, Collector = collector, CollectorOptions = collectorOptions });
+        await Verify(new { Method = method, Options = options, Collector = collector, CollectorOptions = collectorOptions, Outcomes = outcomes });
     }
 }

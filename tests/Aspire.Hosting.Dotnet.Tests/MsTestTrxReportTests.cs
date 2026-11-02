@@ -41,19 +41,82 @@ public class MsTestTrxReportTests
     }
 
     [Fact]
-    public async Task SummaryTimeoutsAreFailedTestsAndRunFailureDoesNotDiscardPassingResults()
+    public async Task SummaryTimeoutsDoNotInventPerTestIdentitiesAndRunFailureDoesNotDiscardPassingResults()
     {
-        var document = MsTestReportFixture.Create("Failed");
+        var document = MsTestReportFixture.Create("Failed", "Failed");
         var counters = document.Descendants(MsTestReportFixture.Namespace + "Counters").Single();
-        counters.SetAttributeValue("failed", 0);
+        counters.SetAttributeValue("failed", 1);
         counters.SetAttributeValue("timeout", 1);
-        Assert.Equal(TestOutcome.Failed, Assert.Single((await ReadAsync(document)).Results).Outcome);
+        Assert.Equal([TestOutcome.Failed, TestOutcome.Failed],
+            (await ReadAsync(document)).Results.Select(result => result.Outcome));
 
         document = MsTestReportFixture.Create("Passed");
         document.Descendants(MsTestReportFixture.Namespace + "ResultSummary").Single().SetAttributeValue("outcome", "Failed");
         var report = await ReadAsync(document);
         Assert.True(report.Failed);
         Assert.Equal(TestOutcome.Passed, Assert.Single(report.Results).Outcome);
+    }
+
+    [Theory]
+    [InlineData("Error", TestOutcome.Error)]
+    [InlineData("Timeout", TestOutcome.TimedOut)]
+    [InlineData("Inconclusive", TestOutcome.Inconclusive)]
+    [InlineData("Aborted", TestOutcome.Cancelled)]
+    public async Task ExplicitTerminalTrxOutcomesRetainTheirMeaning(string source, TestOutcome expected)
+    {
+        var report = await ReadAsync(MsTestReportFixture.Create(source));
+        Assert.True(report.Failed);
+        Assert.Equal(expected, Assert.Single(report.Results).Outcome);
+    }
+
+    [Theory]
+    [InlineData("Error")]
+    [InlineData("Timeout")]
+    [InlineData("Aborted")]
+    [InlineData("Inconclusive")]
+    public async Task RunLevelFailureDoesNotRewritePassedOrSkippedTests(string outcome)
+    {
+        var document = MsTestReportFixture.Create("Passed", "NotExecuted");
+        document.Descendants(MsTestReportFixture.Namespace + "ResultSummary").Single().SetAttributeValue("outcome", outcome);
+        var report = await ReadAsync(document);
+        Assert.True(report.Failed);
+        Assert.Equal([TestOutcome.Passed, TestOutcome.Skipped], report.Results.Select(result => result.Outcome));
+    }
+
+    [Theory]
+    [InlineData("InProgress")]
+    [InlineData("Pending")]
+    [InlineData("Warning")]
+    [InlineData("Completed")]
+    [InlineData("NotRunnable")]
+    [InlineData("Disconnected")]
+    [InlineData("PassedButRunAborted")]
+    [InlineData("Cancelled")]
+    public async Task UnsupportedOrNonTestStatesCannotBecomePassingOrSkippedResults(string outcome)
+    {
+        await Assert.ThrowsAsync<InvalidDataException>(() => ReadAsync(MsTestReportFixture.Create(outcome)));
+    }
+
+    [Theory]
+    [InlineData("Error", "error")]
+    [InlineData("Timeout", "timeout")]
+    [InlineData("Inconclusive", "inconclusive")]
+    [InlineData("Aborted", "aborted")]
+    public async Task ExplicitOutcomeCountersMustMatchRows(string outcome, string counter)
+    {
+        var document = MsTestReportFixture.Create(outcome);
+        document.Descendants(MsTestReportFixture.Namespace + "Counters").Single().SetAttributeValue(counter, 0);
+        await Assert.ThrowsAsync<InvalidDataException>(() => ReadAsync(document));
+    }
+
+    [Fact]
+    public async Task ExplicitTimeoutCannotBeCountedAsAnOrdinaryFailure()
+    {
+        var document = MsTestReportFixture.Create("Timeout");
+        var counters = document.Descendants(MsTestReportFixture.Namespace + "Counters").Single();
+        counters.SetAttributeValue("failed", 1);
+        counters.SetAttributeValue("timeout", 0);
+        await Assert.ThrowsAsync<InvalidDataException>(() => ReadAsync(document));
     }
 
     [Fact]
@@ -81,7 +144,7 @@ public class MsTestTrxReportTests
     [InlineData("unexpected-namespace")]
     [InlineData("nested-results")]
     [InlineData("nonzero-error")]
-    [InlineData("aborted-run")]
+    [InlineData("in-progress-run")]
     [InlineData("duplicate-results")]
     public async Task InvalidOrIncompleteReportsFailExplicitly(string invalidCase)
     {
@@ -92,7 +155,7 @@ public class MsTestTrxReportTests
         var counters = document.Descendants(ns + "Counters").Single();
         switch (invalidCase)
         {
-            case "unknown-outcome": entry.SetAttributeValue("outcome", "Inconclusive"); break;
+            case "unknown-outcome": entry.SetAttributeValue("outcome", "Unknown"); break;
             case "missing-name": entry.Attribute("testName")!.Remove(); break;
             case "invalid-duration": entry.SetAttributeValue("duration", "not a duration"); break;
             case "negative-duration": entry.SetAttributeValue("duration", "-00:00:01"); break;
@@ -106,7 +169,7 @@ public class MsTestTrxReportTests
             case "unexpected-namespace": document.Root!.Name = "TestRun"; break;
             case "nested-results": entry.Add(new XElement(ns + "InnerResults", new XElement(entry))); break;
             case "nonzero-error": counters.SetAttributeValue("error", 1); break;
-            case "aborted-run": document.Descendants(ns + "ResultSummary").Single().SetAttributeValue("outcome", "Aborted"); break;
+            case "in-progress-run": document.Descendants(ns + "ResultSummary").Single().SetAttributeValue("outcome", "InProgress"); break;
             case "duplicate-results": document.Root!.Add(new XElement(ns + "Results")); break;
         }
         await Assert.ThrowsAsync<InvalidDataException>(() => ReadAsync(document));
