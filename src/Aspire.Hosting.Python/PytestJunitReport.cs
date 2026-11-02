@@ -28,7 +28,7 @@ internal static class PytestJunitReport
             {
                 throw new InvalidDataException("The pytest report directory must not contain symbolic links or reparse points.");
             }
-            if (directory.FullName == context.RunContext.OutputPath)
+            if (directory.FullName == context.TestingContext.OutputPath)
             {
                 break;
             }

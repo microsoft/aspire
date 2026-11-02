@@ -130,7 +130,7 @@ public class PytestCollectorTests(ITestOutputHelper outputHelper)
         var options = resource.Resource.Annotations.OfType<TestingAnnotation>().Single();
         var published = new List<TestResult>();
         using var cancellation = new CancellationTokenSource();
-        var context = new ResourceTestingContext(options.RunContext!, "tests", options.OutputPath!,
+        var context = new ResourceTestingContext(options.TestingContext!, "tests", options.OutputPath!,
             published.Add, new TaskCompletionSource<bool>().Task, cancellation.Token);
         var collection = options.Collector!(context);
         cancellation.Cancel();
@@ -177,7 +177,7 @@ public class PytestCollectorTests(ITestOutputHelper outputHelper)
             File.WriteAllText(Path.Combine(source, "pytest.xml"), Report);
             File.CreateSymbolicLink(GetReportPath(resource), target);
         }
-        var context = new ResourceTestingContext(options.RunContext!, "tests", options.OutputPath!,
+        var context = new ResourceTestingContext(options.TestingContext!, "tests", options.OutputPath!,
             _ => Assert.Fail("Linked reports must not publish results."), Task.FromResult(true), TestContext.Current.CancellationToken);
         if (link == "destination-report")
         {
