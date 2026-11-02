@@ -78,6 +78,7 @@ public sealed class SettingsDialogTests : DashboardTestContext
 
         Assert.Equal(ResourceListDensity.Comfortable, preferences.Density);
         Assert.Equal(GroupOverview.Summary, preferences.GroupOverview);
+        Assert.Equal(GroupOverview.Summary, preferences.DefaultGroupOverview);
         Assert.Equal(ThemeManager.ThemeSettingDark, themeManager.SelectedTheme);
         Assert.Equal("Comfortable", stored[BrowserStorageKeys.ResourceListDensity]);
         Assert.Equal("Summary", stored[BrowserStorageKeys.GroupOverview]);

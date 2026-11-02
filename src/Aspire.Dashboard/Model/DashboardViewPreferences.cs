@@ -73,12 +73,13 @@ public enum RecordingsStyle
 
 /// <summary>
 /// The view preferences chosen in the settings. They're kept in the browser's local storage, and shared by the
-/// settings panel and the views that apply them, which update as soon as a preference changes.
+/// settings panel and the views that apply them. The active overview layout is kept only for the current circuit.
 /// </summary>
 public sealed class DashboardViewPreferences(ILocalStorage localStorage, IOptionsMonitor<DashboardOptions> options)
 {
     private Task? _loadTask;
     private GroupOverview _groupOverview;
+    private GroupOverview _defaultGroupOverview;
 
     /// <summary>
     /// Gets the resource list's density.
@@ -86,7 +87,7 @@ public sealed class DashboardViewPreferences(ILocalStorage localStorage, IOption
     public ResourceListDensity Density { get; private set; }
 
     /// <summary>
-    /// Gets what the overview of several resources shows.
+    /// Gets the active overview layout. Navigation within a circuit preserves it; a reload or new tab uses the saved default.
     /// </summary>
     /// <remarks>
     /// A graph choice stored before Dashboard:UI:DisableResourceGraph was set shows the cards instead. The stored
@@ -97,6 +98,12 @@ public sealed class DashboardViewPreferences(ILocalStorage localStorage, IOption
         get => _groupOverview == GroupOverview.Graph && !IsGraphEnabled ? GroupOverview.Cards : _groupOverview;
         private set => _groupOverview = value;
     }
+
+    /// <summary>
+    /// Gets the saved overview layout used when a new circuit opens.
+    /// </summary>
+    public GroupOverview DefaultGroupOverview =>
+        _defaultGroupOverview == GroupOverview.Graph && !IsGraphEnabled ? GroupOverview.Cards : _defaultGroupOverview;
 
     /// <summary>
     /// Gets a value indicating whether the overview can show the resource graph, which Dashboard:UI:DisableResourceGraph turns off.
@@ -132,12 +139,29 @@ public sealed class DashboardViewPreferences(ILocalStorage localStorage, IOption
 
     public async Task SetGroupOverviewAsync(GroupOverview groupOverview)
     {
+        await EnsureLoadedAsync().ConfigureAwait(false);
+
         // Graph deep links and shortcuts go through here, so this is where a disabled graph is enforced.
         if (GroupOverview == groupOverview || (groupOverview == GroupOverview.Graph && !IsGraphEnabled))
         {
             return;
         }
 
+        GroupOverview = groupOverview;
+        Changed?.Invoke();
+    }
+
+    public async Task SetDefaultGroupOverviewAsync(GroupOverview groupOverview)
+    {
+        await EnsureLoadedAsync().ConfigureAwait(false);
+
+        if (DefaultGroupOverview == groupOverview || (groupOverview == GroupOverview.Graph && !IsGraphEnabled))
+        {
+            return;
+        }
+
+        // Settings applies the new default immediately, but temporary layout changes never write it back.
+        _defaultGroupOverview = groupOverview;
         GroupOverview = groupOverview;
         Changed?.Invoke();
         await localStorage.SetUnprotectedAsync(BrowserStorageKeys.GroupOverview, groupOverview.ToString()).ConfigureAwait(false);
@@ -160,6 +184,7 @@ public sealed class DashboardViewPreferences(ILocalStorage localStorage, IOption
         try
         {
             var density = await ReadAsync<ResourceListDensity>(BrowserStorageKeys.ResourceListDensity).ConfigureAwait(false);
+            // Reuse the existing saved choice as the default; older versions also wrote temporary layouts here.
             var groupOverview = await ReadAsync<GroupOverview>(BrowserStorageKeys.GroupOverview).ConfigureAwait(false);
             if (groupOverview == GroupOverview.Resources)
             {
@@ -167,9 +192,10 @@ public sealed class DashboardViewPreferences(ILocalStorage localStorage, IOption
                 await localStorage.SetUnprotectedAsync(BrowserStorageKeys.GroupOverview, groupOverview.ToString()).ConfigureAwait(false);
             }
             var recordingsStyle = await ReadAsync<RecordingsStyle>(BrowserStorageKeys.RecordingsStyle).ConfigureAwait(false);
-            if (density != Density || groupOverview != GroupOverview || recordingsStyle != RecordingsStyle)
+            if (density != Density || groupOverview != _defaultGroupOverview || recordingsStyle != RecordingsStyle)
             {
                 Density = density;
+                _defaultGroupOverview = groupOverview;
                 GroupOverview = groupOverview;
                 RecordingsStyle = recordingsStyle;
                 Changed?.Invoke();

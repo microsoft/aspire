@@ -35,11 +35,12 @@
                 <IconToggleGroup TValue="GroupOverview"
                                  Label="@Loc[nameof(Dialogs.SettingsDialogGroupOverview)]"
                                  Options="@_groupOverviewOptions"
-                                 Value="@ViewPreferences.GroupOverview"
-                                 ValueChanged="@(groupOverview => ViewPreferences.SetGroupOverviewAsync(groupOverview))"
+                                 Value="@ViewPreferences.DefaultGroupOverview"
+                                 ValueChanged="@(groupOverview => ViewPreferences.SetDefaultGroupOverviewAsync(groupOverview))"
                                  ShowCurrentLabel="false"
                                  ShowOptionText="true" />
             </div>
+            <p class="setting-subtext">@Loc[nameof(Dialogs.SettingsDialogGroupOverviewDescription)]</p>
         </section>
 
         <section class="settings-group" aria-labelledby="settings-language-time-title">
