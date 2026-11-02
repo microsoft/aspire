@@ -165,11 +165,11 @@ test("standalone discovery uses the login-shell executable for status and token 
   }
 });
 
-test("login-shell discovery uses platform defaults and preserves legacy status support", async () => {
+test("login-shell discovery preserves legacy status support", async () => {
   for (const [platform, shell] of [["darwin", "/bin/zsh"], ["linux", "/bin/sh"]]) {
     const calls = [];
     const candidates = await detectCandidates({
-      env: {},
+      env: { SHELL: shell },
       platform,
       run: async (command, args) => {
         calls.push({ command, args });
@@ -191,14 +191,14 @@ test("missing gh reports executable discovery failure rather than suggesting log
   for (const platform of ["darwin", "linux", "win32"]) {
     const calls = [];
     await assert.rejects(detectCandidates({
-      env: {},
+      env: { SHELL: "/test/login-shell" },
       platform,
       run: async (command) => {
         calls.push(command);
         throw Object.assign(new Error("private details"), { code: command === "gh" ? "ENOENT" : 1, stdout: "" });
       },
     }), { code: "gh_cli_missing" });
-    assert.deepEqual(calls, platform === "win32" ? ["gh"] : ["gh", platform === "darwin" ? "/bin/zsh" : "/bin/sh"]);
+    assert.deepEqual(calls, platform === "win32" ? ["gh"] : ["gh", "/test/login-shell"]);
   }
 });
 
@@ -206,7 +206,7 @@ test("login-shell lookup rejects ambiguous output and keeps independent credenti
   for (const stdout of ["", "gh", "gh is an alias", "/opt/bin/gh\nstartup output", "/opt/bin/gh\0"]) {
     const diagnostics = [];
     const candidates = await detectCandidates({
-      env: { GH_TOKEN: "env-token" },
+      env: { GH_TOKEN: "env-token", SHELL: "/bin/zsh" },
       platform: "darwin",
       diagnostics,
       run: async (command) => {

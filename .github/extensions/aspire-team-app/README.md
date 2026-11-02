@@ -171,7 +171,9 @@ No credential is written to the extension preferences.
 
 On macOS and Linux, a standalone canvas launched with a restricted `PATH` falls
 back to the user's login shell to locate `gh` and `az`, then uses their absolute
-executables for GitHub account/token reads and Azure DevOps queries. This reuses
+executables for GitHub account/token reads and Azure DevOps queries. Shell selection
+uses `SHELL`, then the OS account's configured shell, then a platform default.
+POSIX-style shells and Fish use their respective argument syntax. This reuses
 existing CLI logins without relying on Copilot-injected credentials. Only executable
 paths are discovered; the shell's environment is not imported. If discovery fails,
 the canvas reports a CLI or shell configuration error rather than asking an
