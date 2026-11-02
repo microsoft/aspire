@@ -66,8 +66,8 @@ internal abstract class BaseCommand : Command
     protected AspireCliTelemetry Telemetry { get; }
     protected ConfigSourceService ConfigSources { get; }
 
-    // "Stopping Aspire." reads as "the AppHost is stopping", so only commands that own a running
-    // AppHost (such as `aspire run`) should use it. Other commands report a neutral cancellation.
+    // Commands that start an AppHost or dashboard provide their own stopping message.
+    // Other commands report a neutral cancellation.
     protected virtual string? CancellationMessage => InteractionServiceStrings.OperationCancelled;
 
     private void DisplayCancellationMessage(ConsoleOutput? consoleOverride = null)
@@ -151,8 +151,8 @@ internal abstract class BaseCommand : Command
             // Wait for either the handler to complete or a termination signal to trigger cancellation and timeout.
             var terminationTask = services.CancellationManager.ProcessTerminationCompletionSource.Task;
 
-            // After cancellation is triggered, show "Stopping Aspire..." after 200ms if the
-            // handler hasn't completed yet, so the user knows shutdown is in progress.
+            // After cancellation is triggered, show the command's cancellation message after
+            // 200ms if the handler hasn't completed yet, so the user knows shutdown is in progress.
             var stoppingMessageTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             using var stoppingMessageRegistration = cancellationToken.Register(() =>
                 Task.Delay(200).ContinueWith(_ => stoppingMessageTcs.TrySetResult(), TaskScheduler.Default));
