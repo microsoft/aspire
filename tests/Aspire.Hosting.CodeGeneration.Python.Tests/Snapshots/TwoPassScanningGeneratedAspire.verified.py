@@ -1615,7 +1615,7 @@ ResourceCommandState = typing.Literal["Enabled", "Disabled", "Hidden"]
 
 ResourceCommandVisibility = typing.Literal["None", "UI", "Api"]
 
-TestOutcome = typing.Literal["Passed", "Failed", "Skipped"]
+TestOutcome = typing.Literal["Failed", "Passed", "Skipped", "Inconclusive", "Error", "TimedOut", "Cancelled"]
 
 TestPersistenceMode = typing.Literal["None", "Volume", "Bind"]
 
@@ -7022,13 +7022,13 @@ class ResourceTestingContext:
         return self._handle
 
     @_cached_property
-    def run_context(self) -> TestRunContext:
-        """Gets the context for the containing test run."""
+    def testing_context(self) -> TestingContext:
+        """Gets the context for the containing testing invocation."""
         result = self._client.invoke_capability(
-            'Aspire.Hosting.ApplicationModel/ResourceTestingContext.runContext',
+            'Aspire.Hosting.ApplicationModel/ResourceTestingContext.testingContext',
             {'context': self._handle}
         )
-        return typing.cast(TestRunContext, result)
+        return typing.cast(TestingContext, result)
 
     @_cached_property
     def resource_name(self) -> str:
@@ -7056,9 +7056,11 @@ class ResourceTestingContext:
         )
         token.cancel()
 
-    def wait_for_completion(self) -> bool:
+    def wait_for_completion(self, *, timeout: int | None = None) -> bool:
         """Waits until every replica of this resource has reached an authoritative terminal outcome."""
         rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        if timeout is not None:
+            rpc_args['cancellationToken'] = self._client.register_cancellation_token(timeout)
         result = self._client.invoke_capability(
             'Aspire.Hosting.ApplicationModel/waitForCompletionAsync',
             rpc_args,
@@ -7344,15 +7346,15 @@ class TestEnvironmentContext:
         )
 
 
-class TestingOptions:
-    """Type class for TestingOptions."""
+class TestingContext:
+    """Type class for TestingContext."""
 
     def __init__(self, handle: Handle, client: AspireClient) -> None:
         self._handle = handle
         self._client = client
 
     def __repr__(self) -> str:
-        return f"TestingOptions(handle={self._handle.handle_id})"
+        return f"TestingContext(handle={self._handle.handle_id})"
 
     @_uncached_property
     def handle(self) -> Handle:
@@ -7360,49 +7362,13 @@ class TestingOptions:
         return self._handle
 
     @_cached_property
-    def run_context(self) -> TestRunContext:
-        """Gets the containing test run context, or null outside an `aspire test` invocation."""
+    def output_path(self) -> str:
+        """Gets the absolute host path to the unique output directory for this invocation."""
         result = self._client.invoke_capability(
-            'Aspire.Hosting.ApplicationModel/TestingOptions.runContext',
-            {'context': self._handle}
-        )
-        return typing.cast(TestRunContext, result)
-
-    @_cached_property
-    def is_test_run(self) -> bool:
-        """Gets whether the CLI supplied a test run output destination for this AppHost."""
-        result = self._client.invoke_capability(
-            'Aspire.Hosting.ApplicationModel/TestingOptions.isTestRun',
-            {'context': self._handle}
-        )
-        return typing.cast(bool, result)
-
-    @_cached_property
-    def resource_name(self) -> str:
-        """Gets the logical resource name whose testing behavior is being configured."""
-        result = self._client.invoke_capability(
-            'Aspire.Hosting.ApplicationModel/TestingOptions.resourceName',
+            'Aspire.Hosting.ApplicationModel/TestingContext.outputPath',
             {'context': self._handle}
         )
         return typing.cast(str, result)
-
-    @_cached_property
-    def output_path(self) -> str | None:
-        """Gets the absolute host path to this resource's private output directory, or null outside testing."""
-        result = self._client.invoke_capability(
-            'Aspire.Hosting.ApplicationModel/TestingOptions.outputPath',
-            {'context': self._handle}
-        )
-        return typing.cast(str | None, result)
-
-    def collect_results(self, collector: typing.Callable[[ResourceTestingContext], None]) -> None:
-        """Registers a callback that publishes framework-neutral results for this resource."""
-        rpc_args: dict[str, typing.Any] = {'context': self._handle}
-        rpc_args['collector'] = self._client.register_callback(collector, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceTestingContext",))
-        self._client.invoke_capability(
-            'Aspire.Hosting.ApplicationModel/collectResults',
-            rpc_args
-        )
 
 
 class TestMutableCollectionContext:
@@ -7656,31 +7622,6 @@ class TestReturnValueContext:
         return result
 
 
-class TestRunContext:
-    """Type class for TestRunContext."""
-
-    def __init__(self, handle: Handle, client: AspireClient) -> None:
-        self._handle = handle
-        self._client = client
-
-    def __repr__(self) -> str:
-        return f"TestRunContext(handle={self._handle.handle_id})"
-
-    @_uncached_property
-    def handle(self) -> Handle:
-        """The underlying object reference handle."""
-        return self._handle
-
-    @_cached_property
-    def output_path(self) -> str:
-        """Gets the absolute host path to the unique output directory for this invocation."""
-        result = self._client.invoke_capability(
-            'Aspire.Hosting.ApplicationModel/TestRunContext.outputPath',
-            {'context': self._handle}
-        )
-        return typing.cast(str, result)
-
-
 class UpdateCommandStateContext:
     """Type class for UpdateCommandStateContext."""
 
@@ -7851,8 +7792,8 @@ class AbstractResource(abc.ABC):
         """Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions."""
 
     @abc.abstractmethod
-    def with_testing(self, *, callback: typing.Callable[[TestingOptions], None] | None = None) -> typing.Self:
-        """Configures a resource's testing participation and result collectors."""
+    def with_testing(self, *, callback: typing.Callable[[ResourceTestingContext], None] | None = None) -> typing.Self:
+        """Marks a resource for testing with an optional runtime result collector."""
 
     @abc.abstractmethod
     def with_pipeline_step_factory(self, step_name: str, callback: typing.Callable[[PipelineStepContext], None], *, depends_on: typing.Iterable[str] | None = None, required_by: typing.Iterable[str] | None = None, tags: typing.Iterable[str] | None = None, description: str | None = None) -> typing.Self:
@@ -8263,7 +8204,7 @@ class _BaseResourceKwargs(typing.TypedDict, total=False):
     tags: typing.Iterable[str]
     dashboard_position: int
     terminal: typing.Callable[[TerminalOptions], None] | typing.Literal[True]
-    testing: typing.Callable[[TestingOptions], None] | typing.Literal[True]
+    testing: typing.Callable[[ResourceTestingContext], None] | typing.Literal[True]
     pipeline_step_factory: tuple[str, typing.Callable[[PipelineStepContext], None]] | PipelineStepFactoryParameters
     pipeline_config: typing.Callable[[PipelineConfigurationContext], None]
     on_before_resource_started: typing.Callable[[BeforeResourceStartedEvent], None]
@@ -8676,11 +8617,11 @@ class _BaseResource(AbstractResource):
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_testing(self, *, callback: typing.Callable[[TestingOptions], None] | None = None) -> typing.Self:
-        """Configures a resource's testing participation and result collectors."""
+    def with_testing(self, *, callback: typing.Callable[[ResourceTestingContext], None] | None = None) -> typing.Self:
+        """Marks a resource for testing with an optional runtime result collector."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         if callback is not None:
-            rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.TestingOptions",))
+            rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceTestingContext",))
         result = self._client.invoke_capability(
             'Aspire.Hosting/withTesting',
             rpc_args,
@@ -9269,15 +9210,15 @@ class _BaseResource(AbstractResource):
             else:
                 raise TypeError("Invalid type for option 'terminal'. Expected: Callable[[TerminalOptions], None] or Literal[True]")
         if (_testing := kwargs.pop("testing", None)) is not None and _testing is not False:
-            if _validate_type(_testing, typing.Callable[[TestingOptions], None]):
+            if _validate_type(_testing, typing.Callable[[ResourceTestingContext], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[TestingOptions], None], _testing), ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.TestingOptions",))
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[ResourceTestingContext], None], _testing), ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceTestingContext",))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withTesting', rpc_args))
             elif _testing is True:
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withTesting', rpc_args))
             else:
-                raise TypeError("Invalid type for option 'testing'. Expected: Callable[[TestingOptions], None] or Literal[True]")
+                raise TypeError("Invalid type for option 'testing'. Expected: Callable[[ResourceTestingContext], None] or Literal[True]")
         if (_pipeline_step_factory := kwargs.pop("pipeline_step_factory", None)) is not None:
             if _validate_tuple_types(_pipeline_step_factory, (str, typing.Callable[[PipelineStepContext], None])):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -13888,11 +13829,10 @@ _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.Resourc
 _register_handle_wrapper("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCallbackContext", TestCallbackContext)
 _register_handle_wrapper("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCollectionContext", TestCollectionContext)
 _register_handle_wrapper("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext", TestEnvironmentContext)
-_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.TestingOptions", TestingOptions)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.TestingContext", TestingContext)
 _register_handle_wrapper("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestMutableCollectionContext", TestMutableCollectionContext)
 _register_handle_wrapper("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestResourceContext", TestResourceContext)
 _register_handle_wrapper("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestReturnValueContext", TestReturnValueContext)
-_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.TestRunContext", TestRunContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.UpdateCommandStateContext", UpdateCommandStateContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.Resource", _BaseResource)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerRegistryResource", ContainerRegistryResource)

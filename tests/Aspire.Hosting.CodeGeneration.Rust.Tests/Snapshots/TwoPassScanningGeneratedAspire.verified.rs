@@ -604,20 +604,32 @@ impl std::fmt::Display for UrlDisplayLocation {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TestOutcome {
     #[default]
-    #[serde(rename = "Passed")]
-    Passed,
     #[serde(rename = "Failed")]
     Failed,
+    #[serde(rename = "Passed")]
+    Passed,
     #[serde(rename = "Skipped")]
     Skipped,
+    #[serde(rename = "Inconclusive")]
+    Inconclusive,
+    #[serde(rename = "Error")]
+    Error,
+    #[serde(rename = "TimedOut")]
+    TimedOut,
+    #[serde(rename = "Cancelled")]
+    Cancelled,
 }
 
 impl std::fmt::Display for TestOutcome {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Passed => write!(f, "Passed"),
             Self::Failed => write!(f, "Failed"),
+            Self::Passed => write!(f, "Passed"),
             Self::Skipped => write!(f, "Skipped"),
+            Self::Inconclusive => write!(f, "Inconclusive"),
+            Self::Error => write!(f, "Error"),
+            Self::TimedOut => write!(f, "TimedOut"),
+            Self::Cancelled => write!(f, "Cancelled"),
         }
     }
 }
@@ -3253,7 +3265,7 @@ impl CSharpAppResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Configures a resource's testing participation and result collectors.
+    /// Marks a resource for testing with an optional runtime result collector.
     pub fn with_testing(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4798,7 +4810,7 @@ impl ContainerRegistryResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Configures a resource's testing participation and result collectors.
+    /// Marks a resource for testing with an optional runtime result collector.
     pub fn with_testing(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -6287,7 +6299,7 @@ impl ContainerResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Configures a resource's testing participation and result collectors.
+    /// Marks a resource for testing with an optional runtime result collector.
     pub fn with_testing(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -8279,7 +8291,7 @@ impl DotnetToolResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Configures a resource's testing participation and result collectors.
+    /// Marks a resource for testing with an optional runtime result collector.
     pub fn with_testing(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10243,7 +10255,7 @@ impl ExecutableResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Configures a resource's testing participation and result collectors.
+    /// Marks a resource for testing with an optional runtime result collector.
     pub fn with_testing(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11132,7 +11144,7 @@ impl ExternalServiceResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Configures a resource's testing participation and result collectors.
+    /// Marks a resource for testing with an optional runtime result collector.
     pub fn with_testing(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14768,7 +14780,7 @@ impl ParameterResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Configures a resource's testing participation and result collectors.
+    /// Marks a resource for testing with an optional runtime result collector.
     pub fn with_testing(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -16570,7 +16582,7 @@ impl ProjectResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Configures a resource's testing participation and result collectors.
+    /// Marks a resource for testing with an optional runtime result collector.
     pub fn with_testing(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -17600,13 +17612,13 @@ impl ResourceTestingContext {
         &self.client
     }
 
-    /// Gets the context for the containing test run.
-    pub fn run_context(&self) -> Result<TestRunContext, Box<dyn std::error::Error>> {
+    /// Gets the context for the containing testing invocation.
+    pub fn testing_context(&self) -> Result<TestingContext, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
-        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ResourceTestingContext.runContext", args)?;
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ResourceTestingContext.testingContext", args)?;
         let handle: Handle = serde_json::from_value(result)?;
-        Ok(TestRunContext::new(handle, self.client.clone()))
+        Ok(TestingContext::new(handle, self.client.clone()))
     }
 
     /// Gets the logical resource name associated with every result published through this context.
@@ -17635,9 +17647,13 @@ impl ResourceTestingContext {
     }
 
     /// Waits until every replica of this resource has reached an authoritative terminal outcome.
-    pub fn wait_for_completion_async(&self) -> Result<bool, Box<dyn std::error::Error>> {
+    pub fn wait_for_completion_async(&self, cancellation_token: Option<&CancellationToken>) -> Result<bool, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
+        if let Some(token) = cancellation_token {
+            let token_id = register_cancellation(token, self.client.clone());
+            args.insert("cancellationToken".to_string(), Value::String(token_id));
+        }
         let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/waitForCompletionAsync", args)?;
         Ok(serde_json::from_value(result)?)
     }
@@ -19022,7 +19038,7 @@ impl TestDatabaseResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Configures a resource's testing participation and result collectors.
+    /// Marks a resource for testing with an optional runtime result collector.
     pub fn with_testing(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -20715,7 +20731,7 @@ impl TestRedisResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Configures a resource's testing participation and result collectors.
+    /// Marks a resource for testing with an optional runtime result collector.
     pub fn with_testing(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -21506,40 +21522,6 @@ impl TestReturnValueContext {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getIntValueTaskAsync", args)?;
-        Ok(serde_json::from_value(result)?)
-    }
-}
-
-/// Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.TestRunContext
-pub struct TestRunContext {
-    handle: Handle,
-    client: Arc<AspireClient>,
-}
-
-impl HasHandle for TestRunContext {
-    fn handle(&self) -> &Handle {
-        &self.handle
-    }
-}
-
-impl TestRunContext {
-    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
-        Self { handle, client }
-    }
-
-    pub fn handle(&self) -> &Handle {
-        &self.handle
-    }
-
-    pub fn client(&self) -> &Arc<AspireClient> {
-        &self.client
-    }
-
-    /// Gets the absolute host path to the unique output directory for this invocation.
-    pub fn output_path(&self) -> Result<String, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("context".to_string(), self.handle.to_json());
-        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/TestRunContext.outputPath", args)?;
         Ok(serde_json::from_value(result)?)
     }
 }
@@ -22662,7 +22644,7 @@ impl TestVaultResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Configures a resource's testing participation and result collectors.
+    /// Marks a resource for testing with an optional runtime result collector.
     pub fn with_testing(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -23091,19 +23073,19 @@ impl TestVaultResource {
     }
 }
 
-/// Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.TestingOptions
-pub struct TestingOptions {
+/// Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.TestingContext
+pub struct TestingContext {
     handle: Handle,
     client: Arc<AspireClient>,
 }
 
-impl HasHandle for TestingOptions {
+impl HasHandle for TestingContext {
     fn handle(&self) -> &Handle {
         &self.handle
     }
 }
 
-impl TestingOptions {
+impl TestingContext {
     pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
         Self { handle, client }
     }
@@ -23116,47 +23098,12 @@ impl TestingOptions {
         &self.client
     }
 
-    /// Gets the containing test run context, or null outside an `aspire test` invocation.
-    pub fn run_context(&self) -> Result<TestRunContext, Box<dyn std::error::Error>> {
+    /// Gets the absolute host path to the unique output directory for this invocation.
+    pub fn output_path(&self) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
-        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/TestingOptions.runContext", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(TestRunContext::new(handle, self.client.clone()))
-    }
-
-    /// Gets whether the CLI supplied a test run output destination for this AppHost.
-    pub fn is_test_run(&self) -> Result<bool, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("context".to_string(), self.handle.to_json());
-        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/TestingOptions.isTestRun", args)?;
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/TestingContext.outputPath", args)?;
         Ok(serde_json::from_value(result)?)
-    }
-
-    /// Gets the logical resource name whose testing behavior is being configured.
-    pub fn resource_name(&self) -> Result<String, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("context".to_string(), self.handle.to_json());
-        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/TestingOptions.resourceName", args)?;
-        Ok(serde_json::from_value(result)?)
-    }
-
-    /// Gets the absolute host path to this resource's private output directory, or null outside testing.
-    pub fn output_path(&self) -> Result<Option<String>, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("context".to_string(), self.handle.to_json());
-        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/TestingOptions.outputPath", args)?;
-        Ok(serde_json::from_value(result)?)
-    }
-
-    /// Registers a callback that publishes framework-neutral results for this resource.
-    pub fn collect_results(&self, collector: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<(), Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("context".to_string(), self.handle.to_json());
-        let callback_id = register_callback(collector);
-        args.insert("collector".to_string(), Value::String(callback_id));
-        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/collectResults", args)?;
-        Ok(())
     }
 }
 

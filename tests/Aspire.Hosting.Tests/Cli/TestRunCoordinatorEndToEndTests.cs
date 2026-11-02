@@ -44,11 +44,19 @@ public class TestRunCoordinatorEndToEndTests(ITestOutputHelper outputHelper)
             ready.TrySetResult(e);
             return Task.CompletedTask;
         });
-        var runnerOutput = workspace.CreateDirectory("runner-output");
+        var runnerOutput = workspace.CreateDirectory("runner output");
+        if (OperatingSystem.IsWindows() && exitCode is not null)
+        {
+            // Keep path expansion in a batch file because cmd.exe's quoting differs
+            // from executable argument quoting, especially for paths containing spaces.
+            await File.WriteAllTextAsync(Path.Combine(runnerOutput.FullName, "tests.cmd"),
+                $"@if not exist \"%TEST_OUTPUT_DIRECTORY%\\.\" exit /b 99\r\n@exit /b {exitCode}\r\n");
+        }
+
         var process = exitCode is null
             ? builder.AddExecutable("tests", "aspire-test-command-that-does-not-exist", ".")
             : OperatingSystem.IsWindows()
-                ? builder.AddExecutable("tests", "cmd.exe", ".", "/c", $"if not exist \"%TEST_OUTPUT_DIRECTORY%\\.\" exit /b 99 & exit /b {exitCode}")
+                ? builder.AddExecutable("tests", "cmd.exe", runnerOutput.FullName, "/d", "/c", "tests.cmd")
                 : builder.AddExecutable("tests", "/bin/sh", ".", "-c", $"test -d \"$TEST_OUTPUT_DIRECTORY\" || exit 99; exit {exitCode}");
         process.WithEnvironment("TEST_OUTPUT_DIRECTORY", runnerOutput.FullName);
         var collectorStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -78,10 +86,11 @@ public class TestRunCoordinatorEndToEndTests(ITestOutputHelper outputHelper)
         var streamEvents = new ConcurrentQueue<TestRunEvent>();
         var completion = ReadTestStreamAsync(rpc, streamEvents, timeout.Token);
 
-        await app.ResourceNotifications.WaitForResourceAsync(process.Resource.Name,
+        var terminal = await app.ResourceNotifications.WaitForResourceAsync(process.Resource.Name,
             e => KnownResourceStates.TerminalStates.Contains(e.Snapshot.State?.Text) &&
                 (exitCode is null || e.Snapshot.ExitCode is not null),
             timeout.Token);
+        Assert.Equal(exitCode, terminal.Snapshot.ExitCode);
         Assert.False(completion.IsCompleted);
         var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
         Assert.False(lifetime.ApplicationStopping.IsCancellationRequested);
