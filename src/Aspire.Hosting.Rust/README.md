@@ -146,6 +146,16 @@ The experimental `WithCargoTesting` API (`ASPIRETESTING001`) includes a finite
 in `aspire test`. It needs only the standard Rust toolchain: no nextest, nightly
 compiler, report format, or global configuration changes.
 
+The preview CLI command is disabled by default. Opt in for the invocation without
+changing saved configuration:
+
+```bash
+features__testCommandEnabled=true aspire test
+```
+
+This flag gates CLI registration only; it does not change hosting APIs or ordinary
+`aspire run` behavior.
+
 **C#**
 
 ```csharp

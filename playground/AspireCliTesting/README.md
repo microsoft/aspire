@@ -248,7 +248,7 @@ all four named outcomes. The other ecosystems remain passing.
 Exercise the independent Rust failure:
 
 ```bash
-RUST_PLAYGROUND_FAIL=true \
+features__testCommandEnabled=true RUST_PLAYGROUND_FAIL=true \
 dotnet run --project src/Aspire.Cli/Aspire.Cli.csproj --no-launch-profile -- \
   test --apphost playground/AspireCliTesting/apphost.cs --isolated \
   --timeout-seconds 120 --format json --non-interactive
@@ -266,6 +266,7 @@ Failure flags are independent and case-insensitive; unset flags default to
 `false`. To demonstrate all four failures together:
 
 ```bash
+features__testCommandEnabled=true \
 MSTEST_PLAYGROUND_FAIL=true PYTEST_PLAYGROUND_FAIL=true \
 GO_PLAYGROUND_FAIL=true RUST_PLAYGROUND_FAIL=true \
 dotnet run --project src/Aspire.Cli/Aspire.Cli.csproj --no-launch-profile -- \
