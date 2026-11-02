@@ -190,6 +190,9 @@ restarts. The runtime `WithTesting(context => context.CaptureOutputAsync())`
 callback starts alongside resource execution only during `aspire test`, never
 during model construction. Cargo arguments, environment and launch safeguards
 are configured independently before execution.
+The callback receives a `ResourceTestingContext`: `context.OutputPath` is its
+resource artifact directory, while `context.TestingContext.OutputPath` is the
+whole run root supplied by `TestingContext`.
 The private `<run-id>/<logical-resource-name>/` output directory retains raw `stdout.log` and
 `stderr.log`, plus `output.complete` after both streams reach EOF. These
 Aspire-owned artifacts have private permissions (0600 on Unix). The diagnostic

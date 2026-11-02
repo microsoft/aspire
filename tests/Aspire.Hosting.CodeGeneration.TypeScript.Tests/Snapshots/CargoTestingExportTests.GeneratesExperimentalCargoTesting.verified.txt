@@ -1,3 +1,6 @@
 ﻿{
-  Method:     withCargoTesting(): ExecutableResourcePromise;
+  Method:     withCargoTesting(): ExecutableResourcePromise;,
+  Context:     testingContext(): TestingContextPromise;,
+  ContextGetter: Aspire.Hosting.ApplicationModel/ResourceTestingContext.testingContext,
+  RootOutputGetter: Aspire.Hosting.ApplicationModel/TestingContext.outputPath
 }

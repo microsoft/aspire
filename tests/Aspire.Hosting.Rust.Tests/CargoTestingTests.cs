@@ -58,10 +58,11 @@ public class CargoTestingTests(ITestOutputHelper outputHelper)
         Assert.Equal("value", environment["CUSTOM"]);
         var annotation = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
         Assert.NotNull(annotation.Collector);
-        Assert.Equal(testing, annotation.RunContext is not null);
+        Assert.Equal(testing, annotation.TestingContext is not null);
         Assert.Equal(testing ? Path.Combine(workspace.Path, "output", "tests") : null, annotation.OutputPath);
         if (testing)
         {
+            Assert.Equal(Path.Combine(workspace.Path, "output"), annotation.TestingContext!.OutputPath);
             Assert.Empty(Directory.GetFiles(annotation.OutputPath!));
         }
     }
@@ -78,7 +79,7 @@ public class CargoTestingTests(ITestOutputHelper outputHelper)
         var annotation = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
         var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var captured = false;
-        var context = new ResourceTestingContext(annotation.RunContext!, "tests", annotation.OutputPath!,
+        var context = new ResourceTestingContext(annotation.TestingContext!, "tests", annotation.OutputPath!,
             _ => Assert.Fail("Cargo must not invent per-test outcomes."), completion.Task,
             TestContext.Current.CancellationToken)
         {
@@ -88,6 +89,9 @@ public class CargoTestingTests(ITestOutputHelper outputHelper)
                 return Task.CompletedTask;
             }
         };
+        Assert.Same(annotation.TestingContext, context.TestingContext);
+        Assert.Equal(Path.Combine(workspace.Path, "output"), context.TestingContext.OutputPath);
+        Assert.Equal(Path.Combine(context.TestingContext.OutputPath, "tests"), context.OutputPath);
         var collection = annotation.Collector!(context);
         Assert.False(collection.IsCompleted);
         completion.SetResult(passed);
@@ -108,12 +112,12 @@ public class CargoTestingTests(ITestOutputHelper outputHelper)
         resource.WithTesting(replacement);
         var replaced = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
         Assert.Same(replacement, replaced.Collector);
-        Assert.Same(original.RunContext, replaced.RunContext);
+        Assert.Same(original.TestingContext, replaced.TestingContext);
         Assert.Equal(original.OutputPath, replaced.OutputPath);
         resource.WithTesting();
         var marker = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
         Assert.Null(marker.Collector);
-        Assert.Same(original.RunContext, marker.RunContext);
+        Assert.Same(original.TestingContext, marker.TestingContext);
         Assert.Equal(original.OutputPath, marker.OutputPath);
         await using var app = builder.Build();
         await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services,
@@ -136,7 +140,7 @@ public class CargoTestingTests(ITestOutputHelper outputHelper)
         var annotation = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
         var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var captures = 0;
-        var context = new ResourceTestingContext(annotation.RunContext!, "tests", annotation.OutputPath!,
+        var context = new ResourceTestingContext(annotation.TestingContext!, "tests", annotation.OutputPath!,
             _ => Assert.Fail("Cargo must not invent per-test outcomes."), completion.Task,
             TestContext.Current.CancellationToken)
         {
@@ -169,7 +173,7 @@ public class CargoTestingTests(ITestOutputHelper outputHelper)
         var annotation = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
         var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
-        var context = new ResourceTestingContext(annotation.RunContext!, "tests", annotation.OutputPath!,
+        var context = new ResourceTestingContext(annotation.TestingContext!, "tests", annotation.OutputPath!,
             _ => Assert.Fail("Cargo must not invent per-test outcomes."), completion.Task, cancellation.Token)
         {
             CaptureOutputCallback = (_, _) => throw new InvalidOperationException("Execution has not finished.")
