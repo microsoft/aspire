@@ -74,6 +74,12 @@ before generating or running an application: source content can run code on your
 machine. Pinning a Git commit provides a stable source tree, not proof that its
 contents are trustworthy.
 
+Configured template sources, including those inherited from a machine-configured
+configuration source, provide optional discovery defaults, not an administrative
+allowlist. Developers may choose other sources or not use the configured sources;
+doing so is supported, not a security bypass. See
+[configuration-source defaults](cli-config-sources.md) for the non-enforcement contract.
+
 Git-backed template discovery displays the CLI's shared localized source-trust
 warning once per command before contacting repositories, including configured
 sources and cached checkouts. `aspire template source add` displays the same warning before its

@@ -141,7 +141,7 @@ internal sealed class ConfigSourceService(
     }
 
     /// <summary>
-    /// Resolves a candidate configuration source from the environment or employee detection,
+    /// Resolves an optional configuration source from the environment or employee detection,
     /// obtains consent, and acquires the accepted source.
     /// </summary>
     public Task<ConfigSource?> ResolveAndAcquireConfigSourceAsync(ParseResult parseResult, CancellationToken cancellationToken) =>
@@ -179,6 +179,9 @@ internal sealed class ConfigSourceService(
             explicitSource ? CliConfigNames.InitSourceUrl : ConfigSourceStrings.EmployeeOrigin));
         DisplaySourceTrustWarning();
 
+        // Machine-configured or detected sources suggest useful defaults for new apps;
+        // they do not enforce organizational policy or establish a security boundary.
+        // Declining the source is supported, not a security bypass.
         var accepted = parseResult.GetValue(s_useSourceOption);
         if (accepted is null)
         {
@@ -271,8 +274,8 @@ internal sealed class ConfigSourceService(
 
     internal async Task<JsonObject> GetTemplateSourcesAsync(CancellationToken cancellationToken)
     {
-        // An explicitly configured URL authorizes runtime template inheritance, not
-        // project-file materialization. Do not infer this authority from employee detection.
+        // An explicitly configured URL opts into optional runtime template-source inheritance,
+        // not project-file materialization. Employee detection alone does not opt in.
         var repository = environment.GetEnvironmentVariable(CliConfigNames.InitSourceUrl);
         if (repository is null)
         {

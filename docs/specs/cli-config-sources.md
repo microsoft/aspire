@@ -4,6 +4,14 @@
 
 For example developer journeys, see [Microsoft first-party config-source scenarios](cli-config-sources-1p-scenarios.md).
 
+**Configuration sources provide optional defaults, not policy enforcement.** A source
+configured on a machine, including through organization-managed environment variables,
+or proposed by employee detection is a suggestion, not a requirement for new applications.
+Developers may decline it, choose another source, or edit the resulting application
+configuration. Opting out or overriding these defaults is supported, not a security
+bypass. This feature does not let administrators restrict which configuration,
+templates, or packages developers may use, and it does not establish a security boundary.
+
 Config sources let organizations provide shared Aspire CLI configuration through a Git-hosted `aspire.config.json`. There are two separate phases:
 
 1. **Acquire configuration:** select a remote source, obtain consent, acquire the file using Git, and merge allowlisted values into the application's `aspire.config.json`. Retain the fetched source and metadata in Aspire home for tracking.
@@ -140,6 +148,10 @@ package feeds, and documentation it references before accepting it. Source conte
 can run code on your machine, and documentation can influence AI agents. The CLI's
 correctness checks do not establish that a source or its content is trustworthy.
 
+Optional defaults do not remove the need to trust a source that is used. Explicit source
+settings must still be valid, and failures acquiring a selected source are reported
+rather than silently falling back to other defaults.
+
 The CLI uses one shared localized warning when offering a configuration source in
 `aspire new` or `aspire init`, refreshing it with `aspire update --config-source`,
 or acquiring configuration for runtime template inheritance. Explicit consent flags
@@ -158,7 +170,7 @@ Use the user's Git installation and normal credential helpers or SSH authenticat
 
 Configuration sources and repository templates share [GitClient](../../src/Aspire.Cli/Git/GitClient.cs) for repository initialization, shallow fetches, commit identification, and Git object access. [GitCommandRunner](../../src/Aspire.Cli/Git/GitCommandRunner.cs) owns process capture, environment isolation, failure classification, and lifecycle diagnostics. It reuses the existing tree-aware process-capture infrastructure; lifecycle logs contain no repository addresses, command arguments, or captured output. Callers retain their operation-wide timeout budgets and explicitly select interaction policy. Configuration sources use bare repositories and validate blobs without checkout; templates retain their ref-resolution rules, detached checkouts, and immutable cache publication. Template acquisition continues disabling terminal prompts without changing its existing credential-helper policy.
 
-[ConfigSourceService](../../src/Aspire.Cli/Configuration/ConfigSourceService.cs) owns configuration acquisition and version-check policy directly: each operation has a 30-second budget, versions are blob IDs, and acquisition validates regular-file modes, the 4 MiB size limit, and configuration content before publishing a snapshot.
+[ConfigSourceService](../../src/Aspire.Cli/Configuration/ConfigSourceService.cs) owns configuration acquisition and version-check policy directly: each operation has a 30-second budget, versions are blob IDs, and acquisition validates Git blobs and configuration content before publishing a snapshot.
 
 Resolve the configured selector before initializing the bare acquisition repository, and explicitly select SHA-1 or SHA-256 from the resolved commit ID. This also supports SHA-256 repositories selected by branch or default ref, rather than only by a pinned commit. Ref resolution shares the operation's timeout and interactive or unattended authentication policy. Interactive ref resolution captures the advertised refs on stdout but inherits stderr so Git authentication instructions remain visible immediately.
 
