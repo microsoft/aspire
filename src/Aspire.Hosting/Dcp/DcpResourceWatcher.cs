@@ -628,6 +628,24 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         }
     }
 
+    public Task<Stream> GetRawOutputAsync(string resourceName, bool standardError, CancellationToken cancellationToken)
+    {
+        if (!_resourceState.ExecutablesMap.TryGetValue(resourceName, out var executable) ||
+            executable.Spec.Terminal is not null || executable.Spec.ExecutionType != ExecutionType.Process ||
+            executable.Status?.State != ExecutableState.Finished ||
+            executable.Status.ExitCode is null or Conventions.UnknownExitCode)
+        {
+            throw new NotSupportedException("Raw output capture requires a completed native, non-terminal executable.");
+        }
+
+        // DCP captures before startup and replays the complete stream, including output older
+        // than the dashboard backlog. Only follow EOF proves the producer's pipes have drained.
+        // Do not use ResourceLogSource, which merges streams and applies display transformations.
+        return _kubernetesService.GetLogStreamAsync(executable,
+            standardError ? Logs.StreamTypeStdErr : Logs.StreamTypeStdOut,
+            cancellationToken, follow: true, timestamps: false, lineNumbers: false);
+    }
+
     private static IEnumerable<LogEntry> CreateLogEntries(IReadOnlyList<ResourceLogEntry> batch)
     {
         foreach (var entry in batch)

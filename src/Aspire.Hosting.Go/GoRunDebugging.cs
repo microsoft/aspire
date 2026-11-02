@@ -34,7 +34,7 @@ internal static class GoRunDebugging
                 context.ExecutionContext, context.Logger, original, "GOFLAGS", context.CancellationToken).ConfigureAwait(false))?.Value;
         if (string.IsNullOrEmpty(goFlags))
         {
-            goFlags = await ReadGoFlagsAsync(context, goFlags).ConfigureAwait(false);
+            goFlags = await ReadGoFlagsAsync(context, goFlags, throwOnError: false).ConfigureAwait(false);
             original = null;
         }
 
@@ -86,7 +86,7 @@ internal static class GoRunDebugging
                 : $"{DefaultFlags} {goFlags}{suffix}";
     }
 
-    private static async Task<string> ReadGoFlagsAsync(EnvironmentCallbackContext context, string? resourceFlags)
+    internal static async Task<string> ReadGoFlagsAsync(EnvironmentCallbackContext context, string? resourceFlags, bool throwOnError)
     {
         var environment = new Dictionary<string, string>(
             OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
@@ -117,7 +117,7 @@ internal static class GoRunDebugging
         // Reading settings must not download a different Go toolchain.
         environment["GOTOOLCHAIN"] = "local";
         var output = new StringBuilder();
-        var resource = (GoAppResource)context.Resource;
+        var resource = (ExecutableResource)context.Resource;
         var runner = context.ExecutionContext.Services.GetRequiredService<IProcessRunner>();
         try
         {
@@ -147,7 +147,7 @@ internal static class GoRunDebugging
             return document.RootElement.GetProperty("GOFLAGS").GetString()
                 ?? throw new InvalidOperationException("go env returned a null GOFLAGS value.");
         }
-        catch (Exception exception) when (!context.CancellationToken.IsCancellationRequested &&
+        catch (Exception exception) when (!throwOnError && !context.CancellationToken.IsCancellationRequested &&
             exception is Win32Exception or IOException or InvalidOperationException or JsonException or KeyNotFoundException)
         {
             context.Logger.LogWarning(exception, "Could not read GOFLAGS using 'go env -json GOFLAGS'. Continuing with available GOFLAGS and default Go debugger flags.");
@@ -194,7 +194,7 @@ internal static class GoRunDebugging
         return stripsSymbols;
     }
 
-    private static IEnumerable<string> SplitFlags(string flags)
+    internal static IEnumerable<string> SplitFlags(string flags)
     {
         // GOFLAGS uses Go's quoted fields, not shell escaping:
         //   -tags=netgo "-ldflags=-X main.version=1.2.3"
