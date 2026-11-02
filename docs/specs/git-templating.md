@@ -79,6 +79,9 @@ configuration source, provide optional discovery defaults, not an administrative
 allowlist. Developers may choose other sources or not use the configured sources;
 doing so is supported, not a security bypass. See
 [configuration-source defaults](cli-config-sources.md) for the non-enforcement contract.
+Declining a configuration source during `aspire new`, interactively or through
+`--use-config-source false`, also disables template sources inherited from it for
+that command. Independently configured global template sources remain available.
 
 Git-backed template discovery displays the CLI's shared localized source-trust
 warning once per command before contacting repositories, including configured

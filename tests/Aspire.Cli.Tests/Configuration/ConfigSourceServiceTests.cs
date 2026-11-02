@@ -97,6 +97,57 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    [InlineData(null)]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TemplateSources_RespectsCreationConsent(bool? consent)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var environment = new TestEnvironment(new Dictionary<string, string?>
+        {
+            [CliConfigNames.InitSourceUrl] = "https://git.example/configuration"
+        });
+        var interaction = new TestInteractionService
+        {
+            PromptForSelectionCallback = (_, _, _, _) => ConfigSourceStrings.Decline
+        };
+        var git = new TestConfigSourceRepository
+        {
+            ReadConfiguration = (_, _) => Task.FromResult(("version-1", JsonNode.Parse("""
+                {"templateSources":{"enterprise":{"repository":"https://git.example/templates"}}}
+                """)!.AsObject()))
+        };
+        using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(),
+            git: git, environment: environment, interaction: interaction, interactive: true);
+
+        var source = await service.ResolveAndAcquireConfigSourceAsync(ParseConsent(consent), CancellationToken.None);
+        var sources = await service.GetTemplateSourcesAsync(CancellationToken.None);
+        var repeatedSources = await service.GetTemplateSourcesAsync(CancellationToken.None);
+
+        if (consent is true)
+        {
+            Assert.NotNull(source);
+            Assert.Equal("enterprise", Assert.Single(sources).Key);
+            Assert.Equal("enterprise", Assert.Single(repeatedSources).Key);
+            Assert.Equal(1, git.Calls);
+        }
+        else
+        {
+            Assert.Null(source);
+            Assert.Empty(sources);
+            Assert.Empty(repeatedSources);
+            Assert.Empty(git.FetchModes);
+            Assert.Equal(0, git.Calls);
+            Assert.False(Directory.Exists(service.GetCacheDirectory(new ConfigSource
+            {
+                Repository = "https://git.example/configuration",
+                Path = AspireConfigFile.FileName
+            })));
+        }
+        Assert.False(File.Exists(Path.Combine(workspace.Path, AspireConfigFile.FileName)));
+    }
+
+    [Theory]
     [InlineData("""{"templateSources":null}""")]
     [InlineData("""{"templateSources":{"invalid.name":{"repository":"https://git.example/templates"}}}""")]
     [InlineData("""{"templateSources":{"enterprise":{}}}""")]

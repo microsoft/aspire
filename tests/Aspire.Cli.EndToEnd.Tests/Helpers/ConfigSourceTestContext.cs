@@ -100,17 +100,33 @@ internal sealed class ConfigSourceTestContext
         await _auto.RunCommandAsync("aspire config set appHost.path AppHost/apphost.cs", _counter);
     }
 
-    public async Task CreateProjectWithConsentAsync(bool accept)
+    public async Task CreateProjectWithConsentAsync(bool accept, bool useOption)
     {
-        await _auto.TypeAsync(NewCommand);
+        // A template subcommand or --language bypasses configured-template discovery.
+        // Exercise the interactive picker so declining must also suppress runtime inheritance.
+        var consentOption = useOption ? accept ? " --use-config-source" : " --use-config-source false" : "";
+        await _auto.TypeAsync(
+            $"aspire new --name SourceApp --output SourceApp --suppress-agent-init --localhost-tld false{consentOption}");
         await _auto.EnterAsync();
-        var consentPrompt = new CellPatternSearcher().Find("Use configuration from this source?");
-        await _auto.WaitUntilAsync(snapshot => consentPrompt.Search(snapshot).Count > 0,
-            timeout: TimeSpan.FromMinutes(2), description: "waiting for configuration source consent");
-        if (!accept)
+        if (!useOption)
         {
-            await _auto.DownAsync();
+            var consentPrompt = new CellPatternSearcher().Find("Use configuration from this source?");
+            await _auto.WaitUntilAsync(snapshot => consentPrompt.Search(snapshot).Count > 0,
+                timeout: TimeSpan.FromMinutes(2), description: "waiting for configuration source consent");
+            if (!accept)
+            {
+                await _auto.DownAsync();
+            }
+            await _auto.EnterAsync();
         }
+        var templatePrompt = new CellPatternSearcher().Find("> Starter App");
+        await _auto.WaitUntilAsync(snapshot => templatePrompt.Search(snapshot).Count > 0,
+            timeout: TimeSpan.FromMinutes(2), description: "waiting for template selection after configuration source consent");
+        await _auto.TypeAsync("Empty AppHost");
+        await _auto.EnterAsync();
+        var languagePrompt = new CellPatternSearcher().Find("Which language would you like to use?");
+        await _auto.WaitUntilAsync(snapshot => languagePrompt.Search(snapshot).Count > 0,
+            timeout: TimeSpan.FromSeconds(30), description: "waiting for the empty AppHost language prompt");
         await _auto.EnterAsync();
         await _auto.WaitForSuccessPromptAsync(_counter, timeout: TimeSpan.FromMinutes(3));
         await ConfigureProjectAsync();

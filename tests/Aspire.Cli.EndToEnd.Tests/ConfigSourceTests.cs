@@ -45,7 +45,7 @@ public sealed class ConfigSourceTests(ITestOutputHelper output)
     public Task New_AcceptingConfigurationSourceAppliesSettings()
         => ConfigSourceTestContext.RunAsync(output, "sha1", async context =>
         {
-            await context.CreateProjectWithConsentAsync(accept: true);
+            await context.CreateProjectWithConsentAsync(accept: true, useOption: false);
             await context.AssertConsentResultAsync(accepted: true);
         });
 
@@ -54,7 +54,16 @@ public sealed class ConfigSourceTests(ITestOutputHelper output)
     public Task New_DecliningConfigurationSourcePersistsOptOut()
         => ConfigSourceTestContext.RunAsync(output, "sha1", async context =>
         {
-            await context.CreateProjectWithConsentAsync(accept: false);
+            await context.CreateProjectWithConsentAsync(accept: false, useOption: false);
+            await context.AssertConsentResultAsync(accepted: false);
+        });
+
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public Task New_DeclineOptionPreventsConfigurationSourceUseDuringTemplateSelection()
+        => ConfigSourceTestContext.RunAsync(output, "sha1", async context =>
+        {
+            await context.CreateProjectWithConsentAsync(accept: false, useOption: true);
             await context.AssertConsentResultAsync(accepted: false);
         });
 

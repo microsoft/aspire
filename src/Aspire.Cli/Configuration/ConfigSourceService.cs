@@ -42,6 +42,7 @@ internal sealed class ConfigSourceService(
     private readonly CancellationTokenSource _stopping = new();
     private Task? _check;
     private bool _sourceTrustWarningDisplayed;
+    private bool _sourceDeclined;
 
     internal static readonly Option<bool?> s_useSourceOption = new("--use-config-source")
     {
@@ -196,7 +197,8 @@ internal sealed class ConfigSourceService(
                 cancellationToken: cancellationToken);
             accepted = selection == ConfigSourceStrings.Accept;
         }
-        if (!accepted.Value)
+        _sourceDeclined = !accepted.Value;
+        if (_sourceDeclined)
         {
             return new ConfigSource { OptOut = true };
         }
@@ -274,6 +276,12 @@ internal sealed class ConfigSourceService(
 
     internal async Task<JsonObject> GetTemplateSourcesAsync(CancellationToken cancellationToken)
     {
+        // Discovery runs after creation consent and must not re-enable a declined source.
+        if (_sourceDeclined)
+        {
+            return new JsonObject();
+        }
+
         // An explicitly configured URL opts into optional runtime template-source inheritance,
         // not project-file materialization. Employee detection alone does not opt in.
         var repository = environment.GetEnvironmentVariable(CliConfigNames.InitSourceUrl);
