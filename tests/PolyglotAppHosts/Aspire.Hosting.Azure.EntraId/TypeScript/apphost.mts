@@ -69,6 +69,7 @@ await createdEntra.withRedirectUris(redirectUris);
 await createdEntra.withRedirectUris(redirectHost, { callbackPaths: ["/signin", "/signout"] });
 await createdEntra.withRedirectUris(endpoint, { callbackPaths: ["/signin"] });
 await container.withReference(createdEntra);
+await createdEntra.runWithLocalDeveloperCertificateCredential();
 await createdEntra.publishWithFederatedManagedIdentityCredential();
 await createdEntra.publishWithFederatedManagedIdentityCredential({ identity: container });
 await createdEntra.publishWithFederatedManagedIdentityCredential({ identity });

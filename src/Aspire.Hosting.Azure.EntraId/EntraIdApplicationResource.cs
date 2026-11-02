@@ -4,6 +4,7 @@
 #pragma warning disable ASPIREPIPELINES001 // Existing registrations remove the framework's provisioning annotations.
 #pragma warning disable ASPIREAZURE003 // Tenant-scoped resource annotations are experimental.
 
+using System.Globalization;
 using System.IO.Hashing;
 using System.Text;
 using Aspire.Hosting.ApplicationModel;
@@ -27,6 +28,9 @@ namespace Aspire.Hosting.Azure;
 /// <para>
 /// Aspire creates new registrations using a resource-group-scoped Microsoft Graph Bicep deployment.
 /// Use <c>AddExistingEntraApplication</c> to reference an existing registration without deploying infrastructure.
+/// Registration-only builder APIs throw on existing references. Converting a resource with
+/// <c>AsExistingApplication</c> also throws if registration-only configuration was already applied.
+/// Consumer configuration and explicit metadata describing existing API URIs and scopes remain supported.
 /// </para>
 /// <para>
 /// References to this resource inject configuration as environment variables.
@@ -133,8 +137,51 @@ public class EntraIdApplicationResource : AzureProvisioningResource, IResourceWi
         return EntraIdResourceExtensions.WithReference(builder, application, connectionName);
     }
 
+    internal void EnsureCanBeExistingApplication()
+    {
+        var incompatibleSetting = this switch
+        {
+            _ when _redirectUriValues.Count > 0 => nameof(EntraIdResourceExtensions.WithRedirectUris),
+            _ when ApplicationOwners.Count > 0 => nameof(EntraIdResourceExtensions.WithApplicationOwners),
+            _ when ServicePrincipalOwners.Count > 0 => nameof(EntraIdResourceExtensions.WithServicePrincipalOwners),
+            _ when EnableIdTokenIssuance => nameof(EntraIdResourceExtensions.WithIdTokenIssuance),
+            _ when AppRoles.Count > 0 => nameof(EntraIdResourceExtensions.WithAppRole),
+            _ when PreAuthorizedClients.Count > 0 => nameof(EntraIdResourceExtensions.WithPreAuthorizedApplication),
+            _ when ApiAccess.Any(a => a.Consented.Count > 0) => nameof(EntraIdResourceExtensions.WithAdminConsent),
+            _ when UsesDefaultApplicationIdUri => nameof(EntraIdResourceExtensions.WithApplicationIdUri),
+            _ when HasLocalDeveloperCertificateConfiguration || ClientCredentials.OfType<EntraIdLocalDeveloperCertificateCredential>().Any()
+                => nameof(EntraIdResourceExtensions.RunWithLocalDeveloperCertificateCredential),
+            _ when HasPublishFederationConfiguration || ClientCredentials.OfType<EntraIdFederatedIdentityCredential>().Any(c => c.IsResourceBacked)
+                => nameof(EntraIdResourceExtensions.PublishWithFederatedManagedIdentityCredential),
+            _ => null
+        };
+        if (incompatibleSetting is not null)
+        {
+            throw new InvalidOperationException(
+                $"Entra ID application '{Name}' cannot be converted to an existing registration because '{incompatibleSetting}' requires a registration created by Aspire. " +
+                $"Remove that registration-only configuration before calling AsExistingApplication and configure it on the registration yourself. " +
+                "Aspire does not modify existing registrations. For an existing API, use WithApplicationIdUri with its registered URI.");
+        }
+    }
+
+    // Keep intent even in the mode where these APIs do nothing, so conversion is independent of run/publish mode.
+    internal bool HasLocalDeveloperCertificateConfiguration { get; set; }
+
+    internal bool HasPublishFederationConfiguration { get; set; }
+
+    internal void ThrowIfExistingApplication(string guidance)
+    {
+        if (IsExistingApplication)
+        {
+            throw new InvalidOperationException(
+                $"Entra ID application '{Name}' is an existing registration, and Aspire does not modify existing registrations. {guidance}");
+        }
+    }
+
     internal void SetExistingApplication()
     {
+        EnsureCanBeExistingApplication();
+
         IsExistingApplication = true;
         ProvisioningTaskCompletionSource = null;
 
@@ -515,6 +562,25 @@ public class EntraIdApplicationResource : AzureProvisioningResource, IResourceWi
             application.AppRoles = [.. resource.AppRoles.Select(role => CreateAppRole(resource, role))];
         }
 
+        if (resource.ClientCredentials.OfType<EntraIdLocalDeveloperCertificateCredential>().SingleOrDefault() is { } localCredential)
+        {
+            // This developer registration owns the full key collection. Embed only the selected public
+            // certificate so renewal changes the template checksum without a separate Graph read.
+            // Let Graph assign keyId: resubmitting an explicit existing ID can fail with KeyNotUpdatable.
+            // See https://learn.microsoft.com/graph/applications-how-to-add-certificate#step-2-add-the-certificate-details-using-microsoft-graph.
+            var certificate = localCredential.GetCertificate(resource);
+            application.KeyCredentials = [new MicrosoftGraphKeyCredential
+            {
+                CustomKeyIdentifier = certificate.Thumbprint,
+                DisplayName = "Aspire local developer certificate",
+                EndDateTime = certificate.NotAfter.ToString("O", CultureInfo.InvariantCulture),
+                Key = certificate.PublicCertificate,
+                StartDateTime = certificate.NotBefore.ToString("O", CultureInfo.InvariantCulture),
+                Type = "AsymmetricX509Cert",
+                Usage = "Verify"
+            }];
+        }
+
         resource.ValidateScopeReferences();
 
         // Names for the API access settings are allocated against everything that the template already declares.
@@ -739,7 +805,7 @@ public class EntraIdApplicationResource : AzureProvisioningResource, IResourceWi
     /// </summary>
     /// <remarks>
     /// Defaults to <see langword="false"/>. This does not enable implicit access-token issuance and is not required
-    /// for authorization-code-only flows. Existing registrations are not modified.
+    /// for authorization-code-only flows. Existing registrations are not modified; configure their Authentication settings manually.
     /// </remarks>
     public bool EnableIdTokenIssuance { get; set; }
 

@@ -132,6 +132,9 @@
   <data name="GitTimedOut" xml:space="preserve">
     <value>The Git operation timed out after two minutes.</value>
   </data>
+  <data name="GitUnattendedSshUnsupported" xml:space="preserve">
+    <value>Unattended Git requires a verified OpenSSH executable, not a custom SSH command or wrapper. Run interactively, or select OpenSSH using GIT_SSH and configure keys and host options in your OpenSSH config instead of GIT_SSH_COMMAND or core.sshCommand.</value>
+  </data>
   <data name="MinimumSdkVersionNotMet" xml:space="preserve">
     <value>C# AppHost requires .NET SDK version {0} or later. Detected: {1}.</value>
   </data>

@@ -143,6 +143,7 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
                             {
                                 change.Notification.LinkUrl = notification.LinkUrl;
                             }
+                            change.Notification.UnresolvedParameterNames.AddRange(notification.UnresolvedParameterNames);
                         }
                         else if (interaction.InteractionInfo is InputsInteractionInfo inputs)
                         {

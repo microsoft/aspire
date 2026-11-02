@@ -101,6 +101,7 @@ internal sealed class UpdateCommand : BaseCommand
         Options.Add(s_appHostOption);
         Options.Add(s_selfOption);
         Options.Add(s_configSourceOption);
+        Options.Add(ConfigSourceService.s_useSourceOption);
         Options.Add(s_yesOption);
         Options.Add(s_migrateOption);
         Options.Add(s_nugetConfigDirOption);
@@ -295,6 +296,11 @@ internal sealed class UpdateCommand : BaseCommand
             if (projectFile is null && toolManifests.Count == 0)
             {
                 return CommandResult.Failure(CliExitCodes.FailedToFindProject);
+            }
+
+            if (projectFile is not null)
+            {
+                await ConfigSources.SelectForUpdateAsync(updateDirectory, parseResult, cancellationToken);
             }
 
             var project = projectFile is not null ? _projectFactory.GetProject(projectFile) : null;

@@ -12,6 +12,10 @@ internal sealed class ConfigSource
 {
     public const string SectionName = "configSource";
 
+    [JsonPropertyName("optOut")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool OptOut { get; init; }
+
     // General configuration loading must tolerate incomplete advisory bindings.
     // Validate rejects missing values before a source operation uses them.
     [JsonPropertyName("repository")]
@@ -37,7 +41,8 @@ internal sealed class ConfigSource
     }
 
     public static bool HasSameIdentity(ConfigSource first, ConfigSource second)
-        => first.Repository == second.Repository
+        => first.OptOut == second.OptOut
+            && first.Repository == second.Repository
             && first.Path == second.Path
             && first.Ref == second.Ref;
 
@@ -99,7 +104,7 @@ internal sealed class ConfigSource
 internal sealed record ConfigSourceMetadata(ConfigSource Source, string Commit, string Version, DateTimeOffset FetchedAt);
 
 internal sealed record ConfigSourceCheckMetadata(
-    ConfigSource Source, string Commit, string Version, DateTimeOffset CheckedAt, string[]? ComparedAppliedVersions);
+    ConfigSource Source, string Commit, string Version, DateTimeOffset CheckedAt, string? ComparedAppliedVersion);
 
 internal sealed record ConfigSourceSnapshot(ConfigSourceMetadata Metadata, JsonObject Configuration);
 

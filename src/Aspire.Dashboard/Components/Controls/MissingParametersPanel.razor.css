@@ -1,0 +1,158 @@
+.missing-parameters-panel {
+    height: 100%;
+    min-height: 0;
+    overflow: auto;
+}
+
+.missing-parameters-card {
+    width: 100%;
+    min-width: 0;
+    padding: 14px 16px;
+    overflow: hidden;
+    border: 1px solid var(--colorNeutralStroke3);
+    border-radius: 12px;
+    background: var(--aspire-control-background);
+}
+
+.missing-parameters-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.missing-parameters-header-icon {
+    background: color-mix(in srgb, var(--warning) 16%, transparent);
+    color: var(--colorPaletteDarkOrangeForeground1);
+}
+
+.missing-parameters-header h2 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 20px;
+}
+
+.missing-parameters-count {
+    padding: 0 6px;
+    border-radius: 8px;
+    background: var(--colorNeutralBackground3);
+    color: var(--colorNeutralForeground2);
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.missing-parameters-description {
+    margin: 0 0 10px 34px;
+    color: var(--colorNeutralForeground2);
+    font-size: 12.5px;
+    line-height: 18px;
+}
+
+.missing-parameters-fields {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    padding-block: 10px;
+    border-top: 1px solid var(--colorNeutralStroke3);
+}
+
+.missing-parameter-field {
+    min-width: 0;
+    padding: 14px 0;
+}
+
+.missing-parameter-field + .missing-parameter-field {
+    border-top: 1px solid var(--colorNeutralStroke3);
+}
+
+.missing-parameter-field ::deep .missing-parameter-control,
+.missing-parameter-field ::deep fluent-field,
+.missing-parameter-field ::deep .interaction-input-label {
+    width: 100%;
+}
+
+.missing-parameter-field ::deep .interaction-input-label {
+    margin-bottom: 8px;
+    line-height: 20px;
+}
+
+.missing-parameter-field ::deep .input-description {
+    margin-top: 8px;
+    color: var(--colorNeutralForeground2);
+    line-height: 20px;
+}
+
+.missing-parameter-field ::deep .input-description p {
+    margin: 0;
+}
+
+.missing-parameter-file {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.missing-parameter-files {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.missing-parameter-file-name {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--colorNeutralForeground2);
+    font-size: 12.5px;
+}
+
+.missing-parameter-file-name.error {
+    color: var(--colorPaletteRedForeground1);
+}
+
+.missing-parameters-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 16px;
+    margin-top: 10px;
+    padding-top: 12px;
+    border-top: 1px solid var(--colorNeutralStroke3);
+}
+
+.missing-parameters-save {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-right: auto;
+    cursor: pointer;
+}
+
+.missing-parameters-save ::deep fluent-checkbox {
+    flex: 0 0 auto;
+}
+
+.missing-parameters-complete {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 180px;
+    color: var(--colorNeutralForeground2);
+}
+
+@media (max-width: 600px) {
+    .missing-parameter-field {
+        padding-block: 12px;
+    }
+
+    .missing-parameters-actions {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .missing-parameters-save {
+        margin-right: 0;
+    }
+}

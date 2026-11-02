@@ -1,0 +1,42 @@
+@namespace Aspire.Dashboard.Components
+
+@using System.Globalization
+@using Aspire.Dashboard.Components.Controls.Chart
+
+@* The SVG stretches to its container's width; strokes use non-scaling-stroke so they keep their width. *@
+<svg class="metric-sparkline @Class" viewBox="0 0 @s_width @s_height" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+    @if (Data.Kind == SparklineKind.Bars)
+    {
+        @* Bars rise from zero at the bottom edge (bar data is never negative). The baseline
+           keeps an interval range with no increases reading as zero instead of a missing chart. *@
+        <line class="metric-sparkline-baseline" x1="0" x2="@s_width" y1="@s_baselineY" y2="@s_baselineY" />
+        <path class="metric-sparkline-bars" d="@Data.Path" />
+    }
+    else
+    {
+        <defs>
+            <linearGradient id="@_gradientId" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" class="metric-sparkline-stop-top" />
+                <stop offset="100%" class="metric-sparkline-stop-bottom" />
+            </linearGradient>
+        </defs>
+        <path class="metric-sparkline-area" d="@Data.AreaPath" fill="url(#@_gradientId)" />
+        <path class="metric-sparkline-line" d="@Data.Path" />
+    }
+</svg>
+
+@code {
+    private static readonly string s_width = LiveSparklinesBase.SparklineWidth.ToString(CultureInfo.InvariantCulture);
+    private static readonly string s_height = LiveSparklinesBase.SparklineHeight.ToString(CultureInfo.InvariantCulture);
+    private static readonly string s_baselineY = (LiveSparklinesBase.SparklineHeight - SparklinePath.Inset).ToString(CultureInfo.InvariantCulture);
+    private static int s_nextId;
+
+    // Gradient ids are document-wide, so each sparkline needs its own.
+    private readonly string _gradientId = $"metric-sparkline-{Interlocked.Increment(ref s_nextId)}";
+
+    [Parameter, EditorRequired]
+    public required SparklineData Data { get; set; }
+
+    [Parameter]
+    public string? Class { get; set; }
+}

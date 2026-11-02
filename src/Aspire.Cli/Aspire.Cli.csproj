@@ -198,6 +198,7 @@
     <Compile Include="$(SharedDir)WindowsTrayPayload.cs" Link="Layout\WindowsTrayPayload.cs" />
     <Compile Include="$(SharedDir)BundleVersionLease.cs" Link="Bundles\BundleVersionLease.cs" />
     <Compile Include="$(SharedDir)ChannelExtensions.cs" Link="Utils\ChannelExtensions.cs" />
+    <Compile Include="$(SharedDir)CertificateFactory.cs" Link="Certificates\CertificateGeneration\CertificateFactory.cs" />
     <Compile Include="$(SharedDir)CommandLineArgsParser.cs" Link="Utils\CommandLineArgsParser.cs" />
     <Compile Include="$(SharedDir)EnumerableExtensions.cs" Link="Utils\EnumerableExtensions.cs" />
     <Compile Include="$(SharedDir)FileLock.cs" Link="Utils\FileLock.cs" />

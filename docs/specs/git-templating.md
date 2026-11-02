@@ -269,6 +269,78 @@ those tokens. To use a raw source directory or a copied Git template, first
 materialize those values or replace them with template symbols, such as the
 `AspireVersion` parameter described below.
 
+### Project-derived prompt defaults
+
+The engine's `defaultValue` is a literal, not an expression. A template can keep
+an override parameter visible while displaying its project-derived fallback by
+opting into `defaultValueSource` in the selected host file:
+
+```json
+{
+  "symbolInfo": {
+    "displayName": { "defaultValueSource": "displayNameValue" },
+    "shortName": { "defaultValueSource": "shortNameValue" }
+  }
+}
+```
+
+Each source names the native `coalesce` symbol that consumes that parameter.
+For example, the corresponding `template.json` symbols can be:
+
+```json
+{
+  "displayName": { "type": "parameter", "datatype": "string", "defaultValue": "" },
+  "shortName": { "type": "parameter", "datatype": "string", "defaultValue": "" },
+  "displayNameValue": {
+    "type": "generated",
+    "generator": "coalesce",
+    "parameters": { "sourceVariableName": "displayName", "fallbackVariableName": "name" },
+    "replaces": "DISPLAY_NAME"
+  },
+  "normalizedName": {
+    "type": "generated",
+    "generator": "regex",
+    "parameters": {
+      "source": "name",
+      "steps": [
+        { "regex": "[^A-Za-z0-9]+", "replacement": "-" },
+        { "regex": "^-+|-+$", "replacement": "" },
+        { "regex": "^$", "replacement": "service" }
+      ]
+    }
+  },
+  "shortNameValue": {
+    "type": "generated",
+    "generator": "coalesce",
+    "parameters": { "sourceVariableName": "shortName", "fallbackVariableName": "normalizedName" },
+    "replaces": "SHORT_NAME"
+  }
+}
+```
+
+For project name `Demo.App`, the prompts display `Demo.App` and `Demo-App`.
+Pressing Enter accepts those fallbacks without submitting the override
+parameters to the engine. A different answer remains explicit input. An answer
+equal to the displayed fallback is also treated as omission. Noninteractive
+generation retains native fallback behavior.
+
+This is a display-only host opt-in, not a new template expression language.
+Targets must be optional string parameters with an empty default, without a
+NuGet `valueSource` or reserved CLI projection. Source graphs may depend only on
+the engine's project-name parameter `name`, the omitted override parameter, and
+native `regex`/`coalesce` symbols. Templates must not redefine the `name` leaf.
+The omitted override may appear only as a coalesce source; `name` may appear as
+a regex source or coalesce fallback, but not as a coalesce source. These
+restrictions avoid previews that disagree with the engine's parameter-default
+and suppliedness semantics. The CLI uses the engine's own macro implementations.
+Every reachable reference, including unused coalesce branches, is validated
+before prompting for the project name or output path. Invalid references,
+cycles, and unsupported dependencies fail before prompting or writing project
+files. Bound values, other parameters (which could contain secrets), and
+nondeterministic generators such as random ports are not previewed.
+Existing literal defaults, choices, conditional prompts, and hidden parameters
+are unchanged when no `defaultValueSource` is specified.
+
 ### NuGet-computed parameter values
 
 A template can opt an ordinary string parameter into package-specific version

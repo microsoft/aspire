@@ -403,6 +403,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Unattended Git requires a verified OpenSSH executable, not a custom SSH command or wrapper. Run interactively, or select OpenSSH using GIT_SSH and configure keys and host options in your OpenSSH config instead of GIT_SSH_COMMAND or core.sshCommand..
+        /// </summary>
+        internal static string GitUnattendedSshUnsupported {
+            get {
+                return ResourceManager.GetString("GitUnattendedSshUnsupported", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to The AppHost path cannot be set in global settings. Use &apos;appHost.path&apos; in a local aspire.config.json file instead..
         /// </summary>
         internal static string GlobalAppHostPathCannotBeSetWithConfigCommand {

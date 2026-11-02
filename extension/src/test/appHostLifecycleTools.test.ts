@@ -29,6 +29,7 @@ import { extensionLogOutputChannel } from '../utils/logging';
 import { SafeAppHostTargetResolver } from '../lm/safeAppHostTargetResolver';
 import { resolveIsolated } from '../utils/gitWorktree';
 import { writeLinkedWorktreeMetadata } from './testGitWorktree';
+import { ScriptedRealpath } from './helpers/scriptedRealpath';
 
 import { removeDirectorySafely } from './testHelpers';
 interface LaunchCall {
@@ -327,7 +328,10 @@ class FakeDiscoveryService implements AppHostLifecycleDiscoveryService {
         return this.registeredPaths
             .filter(candidatePath => {
                 const relative = path.relative(folderPath, candidatePath);
-                return relative.length > 0 && !relative.startsWith('..') && !path.isAbsolute(relative);
+                return relative.length > 0 &&
+                    relative !== '..' &&
+                    !relative.startsWith(`..${path.sep}`) &&
+                    !path.isAbsolute(relative);
             })
             .map(candidatePath => ({ path: candidatePath, language: 'csharp', status: 'buildable' }));
     }
@@ -493,9 +497,12 @@ suite('AppHost lifecycle language model tools', () => {
                     tool.name === aspireAppHostStartToolName ||
                     tool.name === aspireAppHostStopToolName);
 
-            assert.deepStrictEqual(tools.map(tool => tool.name), [aspireAppHostStartToolName, aspireAppHostStopToolName]);
+            const lifecycleTools = tools.filter(tool =>
+                tool.name === aspireAppHostStartToolName ||
+                tool.name === aspireAppHostStopToolName);
+            assert.deepStrictEqual(lifecycleTools.map(tool => tool.name), [aspireAppHostStartToolName, aspireAppHostStopToolName]);
 
-            for (const tool of tools) {
+            for (const tool of lifecycleTools) {
                 for (const localizedField of ['displayName', 'modelDescription', 'userDescription']) {
                     const reference = tool[localizedField] as string;
                     assert.match(reference, /^%[\w.-]+%$/, `${tool.name}.${localizedField} must be a package.nls reference.`);
@@ -667,6 +674,18 @@ suite('AppHost lifecycle language model tools', () => {
 
             assert.strictEqual(result.outcome, 'invalidInput');
             assert.strictEqual(discoveryService.discoverCalls, 0);
+        });
+
+        test('rejects line and paragraph separators before consulting the AppHost registry', async () => {
+            for (const separator of ['\u2028', '\u2029']) {
+                const result = await service.start(
+                    { appHostPath: `AppHost${separator}/AppHost.csproj`, mode: 'run' },
+                    new vscode.CancellationTokenSource().token);
+
+                assert.strictEqual(result.outcome, 'invalidInput');
+                assert.strictEqual(discoveryService.discoverCalls, 0);
+                assert.strictEqual(launchService.launchCalls.length, 0);
+            }
         });
 
         test('rejects a non-boolean isolated property before consulting the AppHost registry', async () => {
@@ -968,6 +987,19 @@ suite('AppHost lifecycle language model tools', () => {
 
             assert.strictEqual(result.outcome, 'started');
             assert.strictEqual(result.appHostPath, 'SingleFile/apphost.cs');
+        });
+
+        test('accepts an in-workspace directory whose name begins with two dots', async () => {
+            const directory = path.join(workspaceRoot, '..services');
+            fs.mkdirSync(directory, { recursive: true });
+            const project = path.join(directory, 'AppHost.csproj');
+            fs.writeFileSync(project, appHostProjectContents);
+            discoveryService.registeredPaths.push(project);
+
+            const result = await service.start({ appHostPath: '..services/AppHost.csproj', mode: 'run' }, new vscode.CancellationTokenSource().token);
+
+            assert.strictEqual(result.outcome, 'started');
+            assert.strictEqual(result.appHostPath, '..services/AppHost.csproj');
         });
 
         test('treats a symlinked AppHost as the AppHost it points at', async function () {
@@ -2121,39 +2153,24 @@ suite('AppHost lifecycle language model tools', () => {
 
         test('rejects indistinguishable preparations that resolved to different AppHosts', async () => {
             const input = { appHostPath: 'AppHost/AppHost.csproj', mode: 'run' } as const;
-            const inputKey = JSON.stringify([input.appHostPath, input.mode, null, null]);
-            const preparedActions = (service as unknown as {
-                _preparedActions: Array<{
-                    tool: string;
-                    inputKey: string;
-                    identity: string;
-                    isolated: boolean;
-                    expiresAt: number;
-                }>;
-            })._preparedActions;
-            preparedActions.push(
-                {
-                    tool: aspireAppHostStartToolName,
-                    inputKey,
-                    identity: 'apphost-a',
-                    isolated: false,
-                    expiresAt: performance.now() + 60_000,
-                },
-                {
-                    tool: aspireAppHostStartToolName,
-                    inputKey,
-                    identity: 'apphost-b',
-                    isolated: false,
-                    expiresAt: performance.now() + 60_000,
-                });
+            const otherAppHost = path.join(workspaceRoot, 'OtherAppHost.csproj');
+            fs.writeFileSync(otherAppHost, '<Project />');
+            const realpath = new ScriptedRealpath();
             const tool = new AppHostStartLanguageModelTool(service);
+            const token = new vscode.CancellationTokenSource().token;
+            try {
+                await tool.prepareInvocation({ input }, token);
+                realpath.script(appHostProjectPath, { results: [], thereafter: otherAppHost });
+                await tool.prepareInvocation({ input }, token);
 
-            const result = readToolResultPayload(await tool.invoke(
-                { input, toolInvocationToken: undefined },
-                new vscode.CancellationTokenSource().token));
+                const result = readToolResultPayload(await tool.invoke({ input, toolInvocationToken: undefined }, token));
 
-            assert.strictEqual(result.outcome, 'failed');
-            assert.strictEqual(launchService.launchCalls.length, 0);
+                assert.strictEqual(result.outcome, 'failed');
+                assert.strictEqual(launchService.launchCalls.length, 0);
+            }
+            finally {
+                realpath.restore();
+            }
         });
 
         test('rejects a start when inferred isolation changes after preparation', async () => {

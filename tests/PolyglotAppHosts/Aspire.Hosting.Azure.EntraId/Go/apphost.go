@@ -79,6 +79,7 @@ func main() {
 	createdEntra.WithRedirectUris(redirectHost, &aspire.WithRedirectUrisOptions{CallbackPaths: []string{"/signin", "/signout"}})
 	createdEntra.WithRedirectUris(endpoint, &aspire.WithRedirectUrisOptions{CallbackPaths: []string{"/signin"}})
 	container.WithReference(createdEntra)
+	createdEntra.RunWithLocalDeveloperCertificateCredential()
 	createdEntra.PublishWithFederatedManagedIdentityCredential()
 	createdEntra.PublishWithFederatedManagedIdentityCredential(&aspire.PublishWithFederatedManagedIdentityCredentialOptions{Identity: container})
 	createdEntra.PublishWithFederatedManagedIdentityCredential(&aspire.PublishWithFederatedManagedIdentityCredentialOptions{Identity: identity})

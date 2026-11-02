@@ -3,6 +3,7 @@
 
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
@@ -12,7 +13,8 @@ namespace Aspire.Cli.Templating;
 internal sealed class ConfiguredTemplateSourceService(
     IConfigurationService configurationService,
     ITemplateProvider templateProvider,
-    IInteractionService interactionService)
+    IInteractionService interactionService,
+    ConfigSourceService configSources)
 {
     internal async Task<IReadOnlyList<KeyValuePair<string, ConfiguredTemplateSource>>> GetSourcesAsync(CancellationToken cancellationToken)
     {
@@ -25,20 +27,27 @@ internal sealed class ConfiguredTemplateSourceService(
         }
         catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
         {
-            return [];
+            settings = null;
         }
 
+        var inherited = await configSources.GetTemplateSourcesAsync(cancellationToken);
+        var inheritedSettings = new JsonObject
+        {
+            [AspireConfigFile.TemplateSourcesSectionName] = inherited
+        }.Deserialize(JsonSourceGenerationContext.Default.AspireConfigFile);
+        var definitions = TemplateSourceConfiguration.MergeSources(
+            inheritedSettings?.TemplateSources ?? [], settings?.TemplateSources ?? []);
         List<KeyValuePair<string, ConfiguredTemplateSource>> sources = [];
-        foreach (var (name, definition) in settings?.TemplateSources ?? [])
+        foreach (var (name, definition) in definitions)
         {
             cancellationToken.ThrowIfCancellationRequested();
             TemplateSourceConfiguration.ValidateName(name);
             if (definition is null)
             {
-                throw new TemplateSourceConfigurationException($"templateSources.{name}", NewCommandStrings.InvalidConfiguredTemplateSource);
+                throw new TemplateSourceConfigurationException($"{AspireConfigFile.TemplateSourcesSectionName}.{name}", NewCommandStrings.InvalidConfiguredTemplateSource);
             }
             var source = TemplateSourceConfiguration.Parse(
-                definition.Path, definition.Repository, definition.Ref, $"templateSources.{name}", requireComplete: true);
+                definition.Path, definition.Repository, definition.Ref, $"{AspireConfigFile.TemplateSourcesSectionName}.{name}", requireComplete: true);
             sources.Add(new(name, source));
         }
 

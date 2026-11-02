@@ -1,4 +1,6 @@
-::deep.layout > header {
+﻿::deep.layout > header {
+    /* The recording pill is centered on the header. */
+    position: relative;
     display: flex;
     align-items: center;
     min-width: 0;
@@ -10,10 +12,11 @@
 }
 
 ::deep.layout > header > a.application-name {
-    display: flex;
-    align-items: center;
+    display: block;
     flex: 0 1 auto;
     min-width: 0;
+    /* Long application names truncate with an ellipsis; the full name is in the tooltip. */
+    max-width: min(220px, 22vw);
     height: 28px;
     padding: 0 2px;
     overflow: hidden;
@@ -21,9 +24,10 @@
     font-family: var(--aspire-font-display);
     font-size: 20px;
     font-weight: var(--fontWeightRegular);
-    line-height: 20px;
+    line-height: 28px;
     text-decoration: none;
     text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 ::deep.layout > header > .flex-filler {
@@ -38,7 +42,7 @@
     height: 24px;
 }
 
-::deep.layout:has(a.logo:hover, a.application-name:hover, .page-header:hover) :is(a.logo, a.application-name) {
+::deep.layout:has(a.logo:hover, a.application-name:hover) :is(a.logo, a.application-name) {
     filter: brightness(var(--aspire-brand-hover-brightness));
 }
 
@@ -105,8 +109,8 @@
 ::deep.layout > .messagebar-container > .top-messagebar {
     flex: 1 1 auto;
     min-width: 0;
-    padding: 12px;
-    gap: 8px;
+    padding: 8px;
+    gap: 6px;
 }
 
 ::deep.layout > .messagebar-container > .top-messagebar:empty {
@@ -148,6 +152,13 @@
     border-top: 1px solid var(--colorNeutralStroke1);
     border-left: 1px solid var(--colorNeutralStroke1);
     display: flex;
+    max-height: min(240px, 35dvh);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+::deep.layout > .messagebar-container:has(> .top-messagebar:empty) {
+    display: none;
 }
 
 ::deep .header-right {
@@ -162,39 +173,26 @@
 
 @media (min-width: 768px) {
     ::deep.layout {
-        --desktop-nav-collapsed-width: 68px;
-        --desktop-nav-expanded-width: 176px;
-        grid-template-rows: auto auto 1fr;
-        /* The header spans BOTH columns ("head head") so it is a full-width top bar rather than a cell
-           confined to the column beside the rail. This lets the logo + app name + page title live in the
-           header as one brand lockup whose left edge is fixed, independent of the nav rail width below —
-           so the title no longer slides right/left when the rail collapses/expands. The rail ("nav") now
-           starts under the header in column 1. */
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto auto minmax(0, 1fr);
         grid-template-areas:
-            "head head"
-            "nav messagebar"
-            "nav main";
-    }
-
-    ::deep.layout.nav-collapsed {
-        grid-template-columns: var(--desktop-nav-collapsed-width) minmax(0, 1fr);
-    }
-
-    ::deep.layout.nav-expanded {
-        grid-template-columns: var(--desktop-nav-expanded-width) minmax(0, 1fr);
+            "head"
+            "messagebar"
+            "main";
     }
 
     ::deep.layout > header {
-        padding-left: 0;
+        padding-left: 12px;
     }
 
     ::deep.layout > header > .brand-logo-container {
         display: flex;
         align-items: center;
         justify-content: center;
-        flex: 0 0 var(--desktop-nav-collapsed-width);
-        width: var(--desktop-nav-collapsed-width);
+        flex: 0 0 24px;
+        width: 24px;
         height: 100%;
+        margin-right: 4px;
     }
 
     ::deep.layout > header > .brand-logo-container > a.logo {
@@ -202,238 +200,93 @@
         flex: 0 0 24px;
     }
 
-    ::deep.layout > header > .page-title-slot {
+    ::deep.layout > header > .header-context {
         display: flex;
-        align-items: center;
-        flex: 0 1 auto;
-        min-width: 0;
-        max-width: 45vw;
-        margin-inline-start: 8px;
-        gap: 12px;
-        overflow: hidden;
-    }
-
-    ::deep.layout > header > .page-title-slot:has(.page-header)::before {
-        content: "";
-        flex: 0 0 auto;
-        width: 1px;
-        height: 1.15em;
-        background-color: color-mix(in srgb, var(--colorNeutralForeground3) 60%, transparent);
-    }
-
-    ::deep.layout > header > .page-title-slot .page-header {
-        min-width: 0;
-        max-width: 100%;
-        margin: 0;
-        padding: 0;
-        overflow: hidden;
-        color: var(--colorNeutralForeground1);
-        font-family: var(--aspire-font-display);
-        font-size: 14px;
-        line-height: 20px;
-        font-weight: 500;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-
-    ::deep.layout > .desktop-nav-rail {
-        grid-area: nav;
-        display: flex;
-        flex-direction: column;
-        width: 100%;
-        min-height: 0;
-        background: var(--colorNeutralBackground4);
-    }
-
-    /* Tab list fills the rail and scrolls if it ever overflows; the bottom toggle (a sibling below)
-       stays pinned because it is flex-shrink:0. min-height:0 lets the scroll container shrink. */
-    ::deep.layout > .desktop-nav-rail > .fluent-appbar {
         flex: 1 1 auto;
-        width: 100%;
-        min-height: 0;
-        overflow-y: auto;
-        background: var(--colorNeutralBackground4);
+        align-items: center;
+        min-width: 0;
+        height: 100%;
+        margin-left: 16px;
+        margin-right: auto;
+        padding-left: 16px;
+        border-left: 1px solid var(--colorNeutralStroke2);
     }
 
-    ::deep.layout > .desktop-nav-rail .fluent-appbar-item {
-        width: 100%;
-        min-height: 48px !important;
-        height: 48px;
-    }
-
-    ::deep.layout > .desktop-nav-rail .fluent-appbar-item > a,
-    ::deep.layout > .desktop-nav-rail .fluent-appbaritem-stack {
-        width: 100%;
+    ::deep.layout > header .resource-tabs-nav {
         height: 100%;
     }
 
-    ::deep.layout > .desktop-nav-rail .fluent-appbar-item > a:hover {
-        background-color: var(--colorNeutralBackground3);
-        color: var(--colorNeutralForeground1);
-    }
-
-    ::deep.layout > .desktop-nav-rail .fluent-appbar-item > a:hover svg {
-        fill: var(--colorBrandForeground1) !important;
-    }
-
-    ::deep.layout > .desktop-nav-rail button.fluent-appbar-more-item {
-        --appbar-item-height-adjustment: calc(var(--appbar-item-size) - 48px);
-        display: flex;
-        width: 100%;
-        min-width: 0;
-        height: 48px;
-        min-height: 48px;
-        flex: 0 0 48px;
+    ::deep.layout > header .resources-tab-header {
+        align-self: stretch;
         align-items: center;
-        justify-content: flex-start;
-    }
-
-    ::deep.layout > .desktop-nav-rail button.fluent-appbar-more-item > .fluent-stack-vertical {
-        width: var(--desktop-nav-collapsed-width) !important;
-        height: 100% !important;
-        flex: 0 0 var(--desktop-nav-collapsed-width);
-    }
-
-    ::deep.layout > .desktop-nav-rail button.fluent-appbar-more-item:hover {
-        background-color: var(--colorNeutralBackground3);
-    }
-
-    ::deep.layout > .desktop-nav-rail button.fluent-appbar-more-item:hover svg {
-        fill: var(--colorBrandForeground1) !important;
-    }
-
-    ::deep.layout > .desktop-nav-rail .fluent-appbar-item > a.active {
-        background-color: color-mix(in srgb, var(--colorBrandBackground) 14%, transparent);
-        box-shadow: inset 3px 0 0 var(--colorBrandBackground);
-    }
-
-    ::deep.layout > .desktop-nav-rail .fluent-appbar-item > a.active svg {
-        fill: var(--colorBrandForeground1) !important;
-    }
-
-    ::deep.layout.nav-collapsed > .desktop-nav-rail .fluent-appbaritem-stack {
-        flex-direction: column !important;
-        align-items: center !important;
-        justify-content: center !important;
-    }
-
-    ::deep.layout.nav-collapsed > .desktop-nav-rail .fluent-appbar-item svg {
-        width: 24px !important;
-        height: 24px !important;
-    }
-
-    ::deep.layout.nav-expanded > .desktop-nav-rail .fluent-appbaritem-stack {
-        flex-direction: row !important;
-        align-items: center !important;
-        justify-content: flex-start !important;
-        column-gap: 12px !important;
-        padding-inline: 20px 8px;
-    }
-
-    ::deep.layout.nav-expanded > .desktop-nav-rail .fluent-appbar-item svg {
-        width: 19px !important;
-        height: 19px !important;
-    }
-
-    /* Keep collapsed labels available to assistive technology while removing them visually. */
-    ::deep.layout.nav-collapsed > .desktop-nav-rail .fluent-appbar-item [part="label"] {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        padding: 0;
-        margin: -1px;
-        overflow: hidden;
-        clip: rect(0, 0, 0, 0);
-        white-space: nowrap;
-        border: 0;
-    }
-
-    ::deep.layout.nav-expanded > .desktop-nav-rail .fluent-appbar-item [part="label"] {
-        position: static;
-        width: auto;
-        height: auto;
-        min-width: 0;
-        margin: 0;
-        overflow: hidden;
-        clip: auto;
-        color: var(--colorNeutralForeground1);
-        font-family: var(--fontFamilyBase);
-        font-size: var(--fontSizeBase300);
-        font-weight: var(--fontWeightRegular);
-        line-height: 1;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-
-    ::deep.layout.nav-expanded > .desktop-nav-rail .fluent-appbar-item > a.active [part="label"] {
-        font-weight: var(--fontWeightSemibold);
-    }
-
-    ::deep.layout > .desktop-nav-rail > .nav-toggle-button {
-        --aspire-button-background: transparent;
-        --aspire-button-border-color: currentColor;
-        --aspire-button-icon-color: var(--colorNeutralForeground1);
-        display: flex;
-        width: 100%;
-        min-width: 0;
-        height: 48px;
-        margin: 0;
-        padding-inline: 0;
-        border: 0;
-        border-radius: 0;
-        background: var(--aspire-button-background);
-        flex: 0 0 48px;
-        justify-content: flex-start;
-        /* Shell rerenders can restart Fluent's host transition while the pointer remains over the toggle. */
-        transition: none;
-    }
-
-    ::deep.layout > .desktop-nav-rail > .nav-toggle-button:hover {
-        background: var(--colorNeutralBackground1Hover);
-    }
-
-    ::deep.layout > .desktop-nav-rail > .nav-toggle-button > .nav-toggle-content {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: var(--desktop-nav-collapsed-width);
-        height: 100%;
-        flex: 0 0 var(--desktop-nav-collapsed-width);
-    }
-
-    ::deep.layout > .desktop-nav-rail > .nav-toggle-button::part(control) {
-        width: 100%;
-        height: 48px;
+        min-height: 50px;
+        gap: 6px;
         padding: 0;
         border: 0;
         border-radius: 0;
         background: transparent;
-        justify-content: flex-start;
     }
 
-    ::deep.layout > .desktop-nav-rail > .nav-toggle-button:hover .nav-toggle-content svg {
-        fill: var(--aspire-button-icon-hover-color, var(--colorBrandForeground1)) !important;
+    ::deep.layout > header .resources-tab-header fluent-tab {
+        position: relative;
+        height: 32px;
+        padding: 0 10px;
+        border: 0;
+        border-radius: 8px;
+        background: transparent;
+        font-weight: var(--fontWeightSemibold);
+    }
+
+    ::deep.layout > header .resources-tab-header fluent-tab[aria-selected="true"] {
+        color: var(--colorBrandForeground1);
+        background: transparent;
+    }
+
+    ::deep.layout > header .resources-tab-header fluent-tab[aria-selected="true"]::after {
+        content: "";
+        position: absolute;
+        inset-inline: 8px;
+        bottom: -9px;
+        display: block;
+        height: 3px;
+        border-radius: 2px 2px 0 0;
+        background: var(--colorBrandBackground);
+    }
+
+    ::deep.layout > header .resources-tab-header fluent-tab[aria-selected="false"] {
+        color: var(--colorNeutralForeground2);
+    }
+
+    ::deep.layout > header .resources-tab-header fluent-tab[aria-selected="false"] svg {
+        color: var(--colorNeutralForeground2);
+    }
+
+    ::deep.layout > header .resources-tab-header fluent-tab[aria-selected="false"]:hover {
+        background: var(--colorNeutralBackground3);
+        color: var(--colorNeutralForeground1);
     }
 
     ::deep.layout > .layout-body-container {
         display: flex;
         flex: 1;
+        border-left: none;
     }
 
+    ::deep.layout > .messagebar-container {
+        border-left: none;
+    }
 }
 
 @media (max-width: 768px) {
     ::deep.layout {
-        /* MobileNavMenu uses this same value to keep its scrollport within the
-           visible viewport instead of extending underneath the header at high zoom. */
+        /* MobileNavMenu uses this same value to place its sheet directly under the header and to keep its
+           scrollport within the visible viewport instead of extending underneath the header at high zoom. */
         --mobile-header-height: 50px;
-        --mobile-nav-menu-offset: 2px;
         --mobile-nav-menu-focus-padding: 4px;
         grid-template-columns: auto 1fr;
-        grid-template-rows: var(--mobile-header-height) minmax(0, auto) auto minmax(0, 1fr);
+        grid-template-rows: var(--mobile-header-height) auto minmax(0, 1fr);
         grid-template-areas:
             "icon head"
-            "nav-menu nav-menu"
             "messagebar messagebar"
             "main main";
     }
@@ -474,14 +327,6 @@
         width: 24px;
     }
 
-}
-
-::deep .desktop-nav-menu > .fluent-appbar-item > .fluentui-counterbadge-container > a > .stack-vertical {
-    /* FluentAppBarItems have a default width. However, we have a wide range of widths
-       in content depending on the language (ie, from traces to seguimientos).
-       Remove the default horizontal padding to allow for more text  */
-    padding-left: 0;
-    padding-right: 0;
 }
 
 ::deep.layout > .aspire-icon fluent-anchor[appearance=stealth].logo::part(control) {

@@ -1,0 +1,212 @@
+.parameter-overview {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    /* The resource overview that hosts this already pads its content. */
+    padding: 0;
+    container-type: inline-size;
+}
+
+.parameter-overview-grid {
+    display: grid;
+    grid-template-columns: minmax(320px, 0.9fr) minmax(380px, 1.1fr);
+    grid-template-rows: auto minmax(360px, 1fr);
+    gap: 14px;
+    height: 100%;
+}
+
+.parameter-card {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 190px;
+    padding: 14px 16px;
+    border: 1px solid var(--colorNeutralStroke3);
+    border-radius: 12px;
+    background: var(--aspire-control-background);
+}
+
+.parameter-details-card {
+    grid-column: 1;
+    min-height: 0;
+}
+
+.parameter-value-card {
+    grid-column: 2;
+    align-self: start;
+    min-height: 0;
+}
+
+.parameter-json-card {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.parameter-card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.parameter-card-header h2 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 20px;
+}
+
+.parameter-sensitive-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 7px;
+    border-radius: 10px;
+    color: var(--colorNeutralForeground2);
+    background: var(--colorNeutralBackground3);
+    font-size: 11px;
+    line-height: 16px;
+}
+
+.parameter-empty {
+    color: var(--colorNeutralForeground3);
+    font-family: var(--fontFamilyBase);
+}
+
+.parameter-value-form {
+    display: grid;
+    gap: 8px;
+}
+
+.parameter-value-input {
+    width: 100%;
+}
+
+.parameter-value-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.parameter-properties {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 6px 14px;
+    margin: 0;
+    font-size: 13px;
+}
+
+.parameter-properties dt {
+    display: flex;
+    align-items: center;
+    min-height: 28px;
+    color: var(--colorNeutralForeground2);
+    line-height: 20px;
+}
+
+.parameter-properties dd {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    min-height: 28px;
+    gap: 6px;
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 20px;
+}
+
+.parameter-properties dd ::deep .state-column-cell {
+    min-height: 28px;
+    line-height: 20px;
+}
+
+.parameter-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.parameter-copy-name {
+    flex: 0 0 auto;
+}
+
+.parameter-json-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: auto;
+}
+
+.parameter-card-header ::deep .parameter-card-action {
+    --aspire-control-height: 26px;
+    margin-block: -3px;
+}
+
+.parameter-card-header ::deep .parameter-card-action::part(control) {
+    width: 26px;
+    min-width: 26px;
+    height: 26px;
+    padding: 0;
+    border: 1px solid var(--colorNeutralStroke1);
+    border-radius: 6px;
+    background: var(--colorNeutralBackground1);
+}
+
+.parameter-card-header ::deep .parameter-card-action:hover::part(control) {
+    border-color: var(--colorNeutralStroke1Hover);
+    background: var(--colorNeutralBackground1Hover);
+}
+
+.parameter-json-content {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    border: 1px solid var(--colorNeutralStroke3);
+    border-radius: 8px;
+}
+
+.parameter-secret-warning {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+    flex: 1 1 auto;
+    padding: 18px;
+    border-radius: 8px;
+    background: var(--colorNeutralBackground2);
+}
+
+.parameter-secret-warning div {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+@container (max-width: 760px) {
+    .parameter-overview {
+        overflow: auto;
+    }
+
+    .parameter-overview-grid {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto;
+        height: auto;
+    }
+
+    .parameter-details-card,
+    .parameter-value-card,
+    .parameter-json-card {
+        grid-column: 1;
+    }
+
+    .parameter-json-card {
+        grid-row: auto;
+        min-height: 360px;
+    }
+
+}

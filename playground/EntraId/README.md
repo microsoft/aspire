@@ -9,6 +9,7 @@ Like HashR, both use ID-token-only OpenID Connect implicit sign-in: Entra return
 and the app validates its signature, issuer, audience, lifetime, and nonce before creating a local login session.
 Neither app exchanges an authorization code or requires a client secret.
 Neither app calls the other or a downstream API.
+An opt-in local certificate scenario below enables authorization-code redemption and a Microsoft Graph call in the .NET app; the default and Node sign-in flows stay unchanged.
 The two front ends have separate local sessions, although Entra ID can reuse your browser's single-sign-on session.
 
 ## Choose a mode in the AppHost
@@ -65,6 +66,18 @@ dotnet user-secrets set "Parameters:entra-web-client-id" "<web-client-id>"
 
 Set `useExistingApplication = false`. You do not need to create a registration manually or supply `entra-tenant-id` and
 `entra-web-client-id`; these parameters are only declared in existing mode. Previously saved values are ignored, not deleted.
+
+### Opt in to the local certificate scenario
+
+**Use a development-only registration, never production.** Choose a developer-specific **Tenant-scoped resource suffix** in the Azure configuration dialog, different from production. Different resource groups do not isolate registrations in the same tenant.
+
+Keep `useExistingApplication = false` and set `useLocalCertificate = true` in `EntraId.AppHost/AppHost.cs`. The scenario is only enabled in run mode.
+
+On the next run, Aspire provisions a short-lived developer certificate and the delegated Graph `User.Read` permission, and the .NET app switches to authorization code flow. Sign in again, consent when prompted (your tenant may require administrator approval), then select **Call Microsoft Graph /me**.
+
+The certificate renews automatically at startup when 24 hours or less remain. Restart the AppHost before it expires.
+
+Set `useLocalCertificate = false` to turn the scenario off. See the [integration's local certificate contract](../../src/Aspire.Hosting.Azure.EntraId/README.md#local-developer-certificate) for storage, permissions, and security details.
 
 ### Configure Azure provisioning
 

@@ -89,6 +89,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_redirect_uris(serialize_handle(&endpoint), Some(vec!["/signin".into()]))?;
     container.with_reference(serialize_handle(&created_entra), None, None, None)?;
     created_entra
+        .run_with_local_developer_certificate_credential()?
         .publish_with_federated_managed_identity_credential(None)?
         .publish_with_federated_managed_identity_credential(Some(serialize_handle(&container)))?
         .publish_with_federated_managed_identity_credential(Some(serialize_handle(&identity)))?;

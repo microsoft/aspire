@@ -69,6 +69,7 @@ void main() throws Exception {
         createdEntra.withRedirectUris(redirectHost, new String[] { "/signin", "/signout" });
         createdEntra.withRedirectUris(endpoint, new String[] { "/signin" });
         container.withReference(createdEntra, new WithReferenceOptions());
+        createdEntra.runWithLocalDeveloperCertificateCredential();
         createdEntra.publishWithFederatedManagedIdentityCredential();
         createdEntra.publishWithFederatedManagedIdentityCredential(container);
         createdEntra.publishWithFederatedManagedIdentityCredential(identity);

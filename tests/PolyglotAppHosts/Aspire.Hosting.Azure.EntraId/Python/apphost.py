@@ -78,6 +78,7 @@ with create_builder() as builder:
     created_entra.with_redirect_uris(redirect_host, callback_paths=["/signin", "/signout"])
     created_entra.with_redirect_uris(endpoint, callback_paths=["/signin"])
     container.with_reference(created_entra)
+    created_entra.run_with_local_developer_certificate_credential()
     created_entra.publish_with_federated_managed_identity_credential()
     created_entra.publish_with_federated_managed_identity_credential(identity=container)
     created_entra.publish_with_federated_managed_identity_credential(identity=identity)

@@ -1,0 +1,79 @@
+@namespace Aspire.Dashboard.Components
+@inherits LiveSparklinesBase
+
+@using System.Globalization
+@using Aspire.Dashboard.Resources
+@using MetricsResources = Aspire.Dashboard.Resources.Metrics
+
+@inject IStringLocalizer<MetricsResources> Loc
+
+<div class="meter-overview" @ref="_container">
+    @* Instruments without data go last, so the cards worth reading come first. The sort is stable,
+       so each group keeps its own order (alphabetical, or the order instruments were pinned). *@
+    @foreach (var instrument in GetOrderedInstruments())
+    {
+        var cardData = GetSparkline(instrument);
+        var icon = GetInstrumentIcon(instrument.Type);
+
+        @* The pin button sits beside the link rather than inside it: interactive content isn't allowed
+           inside <a>, and nesting would make clicking the pin also navigate to the instrument. *@
+        <div @key="instrument" class="meter-card @(cardData.LatestValue is null ? "no-data" : null)" data-instrument-id="@GetInstrumentId(instrument)">
+        <a class="meter-card-link" href="@GetInstrumentUrl(instrument)">
+            @if (GetResourceLabel is not null || ShowMeterName)
+            {
+                @* The instrument's source labels share one line: its resource, since the same instrument can come from
+                   several resources, and its meter when the list mixes meters. *@
+                <div class="meter-card-tags">
+                    @if (GetResourceLabel is { } getResourceLabel)
+                    {
+                        var resourceLabel = getResourceLabel(instrument);
+                        var resourceColor = ColorGenerator.Instance.GetColorVariableByKey(resourceLabel);
+                        <span class="meter-card-resource" title="@resourceLabel" style="--meter-card-resource-color: @resourceColor">
+                            <span class="meter-card-resource-dot" aria-hidden="true"></span>
+                            <span class="meter-card-resource-name">@resourceLabel</span>
+                        </span>
+                    }
+                    @if (ShowMeterName)
+                    {
+                        <span class="meter-card-meter" title="@instrument.Parent.Name">@instrument.Parent.Name</span>
+                    }
+                </div>
+            }
+            <div class="meter-card-header">
+                @if (icon is not null)
+                {
+                    <span class="meter-card-icon" data-tooltip="@GetInstrumentTypeName(instrument.Type)">
+                        <FluentIcon Value="@icon" Color="Color.Custom" CustomColor="currentColor" />
+                    </span>
+                }
+                <span class="meter-card-name" title="@instrument.Name">@instrument.Name</span>
+            </div>
+
+            @if (!string.IsNullOrEmpty(instrument.Description))
+            {
+                <div class="meter-card-description" title="@instrument.Description">@instrument.Description</div>
+            }
+
+            <div class="meter-card-body">
+                @if (cardData.LatestValue is { } latestValue)
+                {
+                    <div class="meter-card-value">
+                        @if (instrument.Type == OtlpInstrumentType.Histogram)
+                        {
+                            <span class="meter-card-value-label">P50</span>
+                        }
+                        <span class="meter-card-value-number">@FormatCompactValue(latestValue, CultureInfo.CurrentCulture)</span>
+                        <span class="meter-card-value-unit">@FormatUnit(instrument, latestValue)</span>
+                    </div>
+                    <MetricSparkline Data="@cardData" />
+                }
+                else
+                {
+                    <div class="meter-card-no-data">@Loc[nameof(MetricsResources.MetricsOverviewNoData)]</div>
+                }
+            </div>
+        </a>
+        <MetricPinButton InstrumentKey="@instrument.GetKey()" Class="meter-card-pin" />
+        </div>
+    }
+</div>

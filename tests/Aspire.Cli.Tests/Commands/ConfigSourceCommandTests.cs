@@ -526,7 +526,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task UpdateConfigSource_RefreshesGlobalBindingWhenNearestConfigurationHasNone(bool explicitAppHost)
+    public async Task UpdateConfigSource_IgnoresGlobalBindingWhenNearestConfigurationHasNone(bool explicitAppHost)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var localPath = Path.Combine(workspace.Path, AspireConfigFile.FileName);
@@ -535,11 +535,16 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         {
             await File.WriteAllTextAsync(Path.Combine(workspace.Path, "apphost.cs"), "#:sdk Aspire.AppHost.Sdk");
         }
-        using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper).BuildServiceProvider();
+        var interaction = new TestInteractionService();
+        using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interaction;
+        }).BuildServiceProvider();
         var globalFile = new FileInfo(provider.GetRequiredService<IConfigurationService>().GetSettingsFilePath(isGlobal: true));
         globalFile.Directory!.Create();
         await TestConfigSourceServices.SaveBindingAsync(s_source, globalFile.Directory, CancellationToken.None);
         File.Move(Path.Combine(globalFile.Directory.FullName, AspireConfigFile.FileName), globalFile.FullName);
+        var originalGlobalConfiguration = await File.ReadAllTextAsync(globalFile.FullName);
         var git = Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>());
         git.ReadConfiguration = (_, _) => Task.FromResult(("version-2", new JsonObject()));
         var appHostArgument = explicitAppHost ? $" --apphost \"{Path.Combine(workspace.Path, "apphost.cs")}\"" : "";
@@ -548,11 +553,180 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
 
-        Assert.Equal(1, git.Calls);
+        Assert.Equal(0, git.Calls);
         Assert.Equal(0, git.CheckCalls);
+        Assert.Equal(0, Assert.IsType<TestConfigSourceDetector>(provider.GetRequiredService<IInternalMicrosoftDetector>()).Calls);
+        Assert.Equal(ConfigSourceStrings.NoBinding, Assert.Single(interaction.DisplayedMessages).Message);
         Assert.Equal("{}", await File.ReadAllTextAsync(localPath));
-        var globalConfiguration = JsonNode.Parse(await File.ReadAllTextAsync(globalFile.FullName))!;
-        Assert.Equal("version-2", globalConfiguration["configSource"]!["appliedVersion"]!.GetValue<string>());
+        Assert.Equal(originalGlobalConfiguration, await File.ReadAllTextAsync(globalFile.FullName));
+    }
+
+    [Theory]
+    [InlineData(true, false, false)]
+    [InlineData(false, false, false)]
+    [InlineData(true, true, false)]
+    [InlineData(false, true, false)]
+    [InlineData(true, false, true)]
+    [InlineData(false, false, true)]
+    public async Task Update_OffersSourceForExistingAppHostAndRemembersChoice(bool accepted, bool employeeSource, bool explicitConsent)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostDirectory = workspace.CreateDirectory("AppHost");
+        var projectFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(projectFile.FullName, "<Project />");
+        var configPath = Path.Combine(workspace.Path, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(configPath, """{"custom":"keep","docs":{"llmsTxtUrl":"https://local.example/llms.txt"}}""");
+        var prompts = 0;
+        var interaction = new TestInteractionService
+        {
+            PromptForSelectionCallback = (prompt, _, _, _) =>
+            {
+                Assert.Equal(ConfigSourceStrings.UseSourcePrompt, prompt);
+                prompts++;
+                return accepted ? ConfigSourceStrings.Accept : ConfigSourceStrings.Decline;
+            }
+        };
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+            {
+                options.InteractionServiceFactory = _ => interaction;
+                options.CliHostEnvironmentFactory = _ => explicitConsent
+                    ? TestHelpers.CreateNonInteractiveHostEnvironment()
+                    : TestHelpers.CreateInteractiveHostEnvironment();
+                options.ProjectLocatorFactory = _ => new TestProjectLocator
+                {
+                    UseOrFindAppHostProjectFileAsyncCallback = (_, _, _) => Task.FromResult<FileInfo?>(projectFile)
+                };
+                options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner();
+                options.ProjectUpdaterFactory = _ => new TestProjectUpdater
+                {
+                    UpdateProjectAsyncCallback = (_, _) => Task.FromResult(new ProjectUpdateResult { UpdatedApplied = false })
+                };
+                options.PackagingServiceFactory = _ => new TestPackagingService();
+            });
+            if (!employeeSource)
+            {
+                services.AddSingleton<IEnvironment>(new TestEnvironment(new Dictionary<string, string?>
+                {
+                    [CliConfigNames.InitSourceUrl] = s_source.Repository
+                }));
+            }
+            services.AddSingleton<IInternalMicrosoftDetector>(new TestConfigSourceDetector { IsInternal = employeeSource });
+            var git = new TestConfigSourceRepository
+            {
+                ReadConfiguration = (_, _) => Task.FromResult(("version-1", new JsonObject
+                {
+                    ["docs"] = new JsonObject { ["llmsTxtUrl"] = "https://docs.example/llms.txt" }
+                }))
+            };
+            services.AddSingleton<IGitClient>(git);
+            using var provider = services.BuildServiceProvider();
+            var consent = explicitConsent ? $" --use-config-source{(accepted ? "" : " false")} --non-interactive" : "";
+            var result = provider.GetRequiredService<RootCommand>().Parse($"update --apphost \"{projectFile.FullName}\" --yes{consent}");
+
+            Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+
+            var configuration = JsonNode.Parse(await File.ReadAllTextAsync(configPath))!;
+            var expectedSource = accepted
+                ? new ConfigSource
+                {
+                    Repository = employeeSource ? ConfigSourceService.MicrosoftRepository : s_source.Repository,
+                    Path = s_source.Path,
+                    AppliedVersion = s_source.AppliedVersion
+                }
+                : new ConfigSource { OptOut = true };
+            Assert.Equivalent(expectedSource, AspireConfigFile.Load(workspace.Path)!.ConfigSource, strict: true);
+            Assert.Equal("keep", configuration["custom"]!.GetValue<string>());
+            Assert.Equal(accepted ? "https://docs.example/llms.txt" : "https://local.example/llms.txt",
+                configuration["docs"]!["llmsTxtUrl"]!.GetValue<string>());
+            Assert.Equal(accepted && attempt == 0 ? 1 : 0, git.Calls);
+            Assert.False(File.Exists(Path.Combine(appHostDirectory.FullName, AspireConfigFile.FileName)));
+        }
+
+        Assert.Equal(explicitConsent ? 0 : 1, prompts);
+        Assert.Empty(interaction.DisplayedErrors);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task Update_FromSolutionRootPreservesFlattenedAppHostSourceChoice(bool optOut, bool explicitConsent)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostDirectory = workspace.CreateDirectory("AppHost");
+        var projectFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(projectFile.FullName, "<Project />");
+        var configPath = Path.Combine(appHostDirectory.FullName, AspireConfigFile.FileName);
+        var configuration = optOut
+            ? """{"configSource:optOut":true,"custom":"keep"}"""
+            : $$"""
+                {"configSource:repository":"{{s_source.Repository}}","configSource:path":"{{s_source.Path}}","configSource:appliedVersion":"{{s_source.AppliedVersion}}","custom":"keep"}
+                """;
+        await File.WriteAllTextAsync(configPath, configuration);
+        var interaction = new TestInteractionService
+        {
+            PromptForSelectionCallback = (_, _, _, _) => throw new InvalidOperationException("Unexpected source prompt.")
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interaction;
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.ProjectLocatorFactory = _ => new TestProjectLocator
+            {
+                UseOrFindAppHostProjectFileAsyncCallback = (_, _, _) => Task.FromResult<FileInfo?>(projectFile)
+            };
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner();
+            options.ProjectUpdaterFactory = _ => new TestProjectUpdater
+            {
+                UpdateProjectAsyncCallback = (_, _) => Task.FromResult(new ProjectUpdateResult { UpdatedApplied = false })
+            };
+            options.PackagingServiceFactory = _ => new TestPackagingService();
+        });
+        var detector = new TestConfigSourceDetector { IsInternal = true };
+        services.AddSingleton<IInternalMicrosoftDetector>(detector);
+        using var provider = services.BuildServiceProvider();
+        var consent = explicitConsent ? " --use-config-source" : "";
+        var result = provider.GetRequiredService<RootCommand>().Parse($"update --apphost \"{projectFile.FullName}\" --yes{consent}");
+
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+
+        Assert.Equal(configuration, await File.ReadAllTextAsync(configPath));
+        Assert.Equal(0, detector.Calls);
+        Assert.Equal(0, Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>()).Calls);
+        Assert.Empty(interaction.DisplayedErrors);
+    }
+
+    [Fact]
+    public async Task Update_NonInteractiveDoesNotAdoptSourceWithoutExplicitConsent()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
+        const string configuration = """{"appHost":{"path":"AppHost.csproj"},"custom":"keep"}""";
+        await File.WriteAllTextAsync(path, configuration);
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "AppHost.csproj"), "<Project />");
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => new TestInteractionService();
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner();
+            options.ProjectUpdaterFactory = _ => new TestProjectUpdater
+            {
+                UpdateProjectAsyncCallback = (_, _) => Task.FromResult(new ProjectUpdateResult { UpdatedApplied = false })
+            };
+            options.PackagingServiceFactory = _ => new TestPackagingService();
+        });
+        var detector = new TestConfigSourceDetector { IsInternal = true };
+        services.AddSingleton<IInternalMicrosoftDetector>(detector);
+        using var provider = services.BuildServiceProvider();
+
+        var result = provider.GetRequiredService<RootCommand>().Parse("update --yes --non-interactive");
+
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+        Assert.Equal(configuration, await File.ReadAllTextAsync(path));
+        Assert.Equal(0, detector.Calls);
+        Assert.Equal(0, Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>()).Calls);
     }
 
     [Theory]
@@ -821,32 +995,34 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         var services = CreateCreationServices(workspace);
         using var provider = services.BuildServiceProvider();
         var result = provider.GetRequiredService<RootCommand>().Parse(
-            $"new {templateOptions} --name CreatedProject --output \"{output}\" --suppress-agent-init --use-config-source {accepted.ToString().ToLowerInvariant()} --non-interactive");
+            $"new {templateOptions} --name CreatedProject --output \"{output}\" --suppress-agent-init --use-config-source{(accepted ? "" : " false")} --non-interactive");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.Equivalent(accepted ? s_source : null, AspireConfigFile.Load(output)?.ConfigSource, strict: true);
+        Assert.Equivalent(accepted ? s_source : new ConfigSource { OptOut = true }, AspireConfigFile.Load(output)?.ConfigSource, strict: true);
         var configuration = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(output, AspireConfigFile.FileName)))!;
         Assert.Equal(accepted ? "https://docs.example/llms.txt" : null, configuration["docs"]?["llmsTxtUrl"]?.GetValue<string>());
         Assert.Equal(accepted ? 1 : 0, Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>()).Calls);
         Assert.False(File.Exists(Path.Combine(workspace.Path, AspireConfigFile.FileName)));
     }
 
-    [Fact]
-    public async Task Init_PersistsAcceptedSourceAlongsideSkeleton()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Init_PersistsSourceChoiceAlongsideSkeleton(bool accepted)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var provider = CreateCreationServices(workspace).BuildServiceProvider();
         var result = provider.GetRequiredService<RootCommand>().Parse(
-            "init --file-based --language csharp --suppress-agent-init --use-config-source true --non-interactive");
+            $"init --file-based --language csharp --suppress-agent-init --use-config-source{(accepted ? "" : " false")} --non-interactive");
 
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
-        Assert.Equivalent(s_source, AspireConfigFile.Load(workspace.Path)!.ConfigSource, strict: true);
+        Assert.Equivalent(accepted ? s_source : new ConfigSource { OptOut = true }, AspireConfigFile.Load(workspace.Path)!.ConfigSource, strict: true);
         var configuration = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(workspace.Path, AspireConfigFile.FileName)))!;
-        Assert.Equal("https://docs.example/llms.txt", configuration["docs"]!["llmsTxtUrl"]!.GetValue<string>());
+        Assert.Equal(accepted ? "https://docs.example/llms.txt" : null, configuration["docs"]?["llmsTxtUrl"]?.GetValue<string>());
         Assert.True(File.Exists(Path.Combine(workspace.Path, "apphost.cs")));
-        Assert.Equal(1, Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>()).Calls);
+        Assert.Equal(accepted ? 1 : 0, Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>()).Calls);
     }
 
     [Fact]

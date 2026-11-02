@@ -39,6 +39,7 @@ public class PlotlyChartTests : DashboardTestContext
             Parent = new OtlpScope("meter", string.Empty, []),
             Type = OtlpInstrumentType.Histogram,
             AggregationTemporality = OtlpAggregationTemporality.Cumulative,
+            IsMonotonic = false,
             ResourceView = new OtlpResourceView(resource, Array.Empty<KeyValuePair<string, string>>())
         };
         var sampleTime = timeProvider.GetUtcNow().AddSeconds(-2);
@@ -129,6 +130,8 @@ public class PlotlyChartTests : DashboardTestContext
             Parent = new OtlpScope("Parent-Name-<b>Bold</b>", string.Empty, []),
             Type = OtlpInstrumentType.Sum,
             AggregationTemporality = OtlpAggregationTemporality.Cumulative,
+            // Not a counter: counters chart their change per interval, and this test checks the reported value.
+            IsMonotonic = false,
             ResourceView = new OtlpResourceView(resource, Array.Empty<KeyValuePair<string, string>>())
         };
 
@@ -171,6 +174,109 @@ public class PlotlyChartTests : DashboardTestContext
                 });
                 Assert.Equal(expectedPlotlyTimeFormat, Assert.IsType<PlotlyUserLocale>(i.Arguments[5]).Time);
             });
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Render_Counter_ShowsChangePerIntervalUnlessRunningTotalSelected(bool showRunningTotal)
+    {
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        MetricsSetupHelpers.SetupPlotlyChart(this);
+
+        var context = new OtlpContext { Options = new TelemetryLimitOptions(), Logger = NullLogger.Instance };
+        var resource = new OtlpResource("resource", instanceId: null, uninstrumentedPeer: false, context);
+        var instrumentSummary = new OtlpInstrumentSummary
+        {
+            Name = "requests",
+            Unit = "{request}",
+            Description = string.Empty,
+            Parent = new OtlpScope("meter", string.Empty, []),
+            Type = OtlpInstrumentType.Sum,
+            AggregationTemporality = OtlpAggregationTemporality.Cumulative,
+            IsMonotonic = true,
+            ResourceView = new OtlpResourceView(resource, Array.Empty<KeyValuePair<string, string>>())
+        };
+
+        // A running total of 5 that doesn't change during the chart's time range.
+        var dimension = new DimensionScope(capacity: 100, []);
+        dimension.AddPointValue(new NumberDataPoint { AsInt = 5, StartTimeUnixNano = 0, TimeUnixNano = long.MaxValue }, context);
+
+        var model = new InstrumentViewModel { ShowRunningTotal = showRunningTotal };
+        await model.UpdateDataAsync(instrumentSummary, [dimension], hasOverflow: false);
+
+        var cut = Render<PlotlyChart>(builder =>
+        {
+            builder.Add(p => p.InstrumentViewModel, model);
+            builder.Add(p => p.Duration, TimeSpan.FromSeconds(1));
+            builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+
+        cut.WaitForAssertion(() =>
+        {
+            var invocation = Assert.Single(JSInterop.Invocations, i => i.Identifier == "initializeChart");
+            var trace = Assert.Single((IEnumerable<PlotlyTrace>)invocation.Arguments[1]!);
+            var values = trace.Y.OfType<double>().ToList();
+            Assert.NotEmpty(values);
+            if (showRunningTotal)
+            {
+                Assert.Equal("{request}", trace.Name);
+                Assert.All(values, v => Assert.Equal(5, v));
+            }
+            else
+            {
+                // The total doesn't grow, so nothing happened in any interval.
+                Assert.Equal("{request} per interval", trace.Name);
+                Assert.All(values, v => Assert.Equal(0, v));
+            }
+        });
+    }
+
+    [Fact]
+    public async Task UpdateDataAsync_RefreshedDimensionsWithEqualAttributes_DoesNotReinitializeChart()
+    {
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        MetricsSetupHelpers.SetupPlotlyChart(this);
+
+        var context = new OtlpContext { Options = new TelemetryLimitOptions(), Logger = NullLogger.Instance };
+        var resource = new OtlpResource("resource", instanceId: null, uninstrumentedPeer: false, context);
+        var instrumentSummary = new OtlpInstrumentSummary
+        {
+            Name = "requests",
+            Unit = "{request}",
+            Description = string.Empty,
+            Parent = new OtlpScope("meter", string.Empty, []),
+            Type = OtlpInstrumentType.Sum,
+            AggregationTemporality = OtlpAggregationTemporality.Cumulative,
+            IsMonotonic = true,
+            ResourceView = new OtlpResourceView(resource, Array.Empty<KeyValuePair<string, string>>())
+        };
+
+        // Refreshing instrument data builds new dimension instances with new attribute arrays,
+        // even when the attribute values are the same.
+        DimensionScope CreateDimension(int value)
+        {
+            var dimension = new DimensionScope(capacity: 100, [KeyValuePair.Create("http.route", "/"), KeyValuePair.Create("http.response.status_code", "200")]);
+            dimension.AddPointValue(new NumberDataPoint { AsInt = value, StartTimeUnixNano = 0, TimeUnixNano = long.MaxValue }, context);
+            return dimension;
+        }
+
+        var model = new InstrumentViewModel();
+        await model.UpdateDataAsync(instrumentSummary, [CreateDimension(1)], hasOverflow: false);
+
+        var cut = Render<PlotlyChart>(builder =>
+        {
+            builder.Add(p => p.InstrumentViewModel, model);
+            builder.Add(p => p.Duration, TimeSpan.FromSeconds(1));
+            builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+        cut.WaitForAssertion(() => Assert.Single(JSInterop.Invocations, i => i.Identifier == "initializeChart"));
+
+        await cut.InvokeAsync(() => model.UpdateDataAsync(instrumentSummary, [CreateDimension(2)], hasOverflow: false));
+        cut.Render();
+
+        // A full re-initialization replaces the chart's DOM, which flickers and can reset the page's scroll position.
+        Assert.Single(JSInterop.Invocations, i => i.Identifier == "initializeChart");
     }
 
     [Fact]

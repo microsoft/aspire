@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { spawn } from 'child_process';
+import { ChildProcess, spawn } from 'child_process';
 import { once } from 'events';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -102,9 +102,14 @@ async function collectDiagnostics(root: string, hooks: CollectionHooks = {}, wor
     await exports.collect();
 }
 
+const lockHolders = new Set<ChildProcess>();
+
 async function withExclusiveFileLock(filePath: string, action: () => Promise<void>): Promise<void> {
     // Node's open flags cannot request Windows FileShare.None. Match Shared/FileLock.cs, including
     // DeleteOnClose, in an owned child that releases its handle when the parent closes stdin.
+    // The holder has no lifetime timeout of its own: a cold PowerShell start on a Windows CI runner
+    // can consume most of a fixed budget, and killing a healthy holder fails the test. The Mocha test
+    // timeout bounds the test, and suite teardown terminates any holder a timed-out test leaves behind.
     const holder = spawn('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', `
         $ErrorActionPreference = 'Stop'
         $lock = [System.IO.FileStream]::new(
@@ -125,12 +130,14 @@ async function withExclusiveFileLock(filePath: string, action: () => Promise<voi
     `], {
         env: { ...process.env, ASPIRE_EXTENSION_TEST_LOCK_PATH: filePath },
         windowsHide: true,
-        timeout: 15000,
     });
+    lockHolders.add(holder);
+    holder.on('close', () => lockHolders.delete(holder));
     const output = createInterface({ input: holder.stdout });
     let stderr = '';
     holder.stderr.setEncoding('utf8').on('data', chunk => { stderr += chunk; });
     const closed = once(holder, 'close');
+    let succeeded = false;
 
     try {
         const [line] = await Promise.race([
@@ -141,12 +148,16 @@ async function withExclusiveFileLock(filePath: string, action: () => Promise<voi
         ]);
         assert.strictEqual(line, 'locked');
         await action();
+        succeeded = true;
     }
     finally {
         holder.stdin.end();
         output.close();
         const [code, signal] = await closed;
-        assert.strictEqual(code, 0, `Lock holder failed: signal=${signal}, ${stderr}`);
+        // Don't replace the original failure with the holder's exit status.
+        if (succeeded) {
+            assert.strictEqual(code, 0, `Lock holder failed: signal=${signal}, ${stderr}`);
+        }
     }
 }
 
@@ -159,7 +170,12 @@ suite('E2E storage diagnostics', () => {
             .map(([relativePath, contents]) => [relativePath.startsWith('aspire-home/') ? relativePath : `storage/${relativePath}`, contents])));
     });
 
-    teardown(() => {
+    teardown(async () => {
+        await Promise.all([...lockHolders].map(async holder => {
+            const closed = once(holder, 'close');
+            holder.kill();
+            await closed;
+        }));
         fs.rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
     });
 

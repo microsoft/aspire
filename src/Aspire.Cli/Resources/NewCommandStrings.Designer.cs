@@ -538,7 +538,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Add a named template source to global configuration..
+        ///   Looks up a localized string similar to Add a named template source to global configuration after confirming you trust it..
         /// </summary>
         internal static string TemplateSourceAddDescription {
             get {
@@ -763,6 +763,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Templates can run code. Do you trust template source &apos;{0}&apos; ({1})?.
+        /// </summary>
+        internal static string TemplateSourceTrustPrompt {
+            get {
+                return ResourceManager.GetString("TemplateSourceTrustPrompt", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Unknown source field. Use an absolute &apos;path&apos;, or &apos;repository&apos; with optional &apos;ref&apos;/&apos;path&apos;..
         /// </summary>
         internal static string TemplateSourceUnknownField {
@@ -777,6 +786,15 @@ namespace Aspire.Cli.Resources {
         internal static string TemplateSourceWriteFailed {
             get {
                 return ResourceManager.GetString("TemplateSourceWriteFailed", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Trust the template source and skip confirmation..
+        /// </summary>
+        internal static string TemplateSourceYesOptionDescription {
+            get {
+                return ResourceManager.GetString("TemplateSourceYesOptionDescription", resourceCulture);
             }
         }
 
