@@ -53,8 +53,8 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Run an AppHost until all resources marked with WithTesting() and their collectors finish</source>
-        <target state="new">Run an AppHost until all resources marked with WithTesting() and their collectors finish</target>
+        <source>Run an AppHost until all resources marked with WithTesting() and their collectors finish (Preview)</source>
+        <target state="new">Run an AppHost until all resources marked with WithTesting() and their collectors finish (Preview)</target>
         <note />
       </trans-unit>
       <trans-unit id="Error">

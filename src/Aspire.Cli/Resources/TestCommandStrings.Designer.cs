@@ -157,7 +157,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Run an AppHost until all resources marked with WithTesting() and their collectors finish.
+        ///   Looks up a localized string similar to Run an AppHost until all resources marked with WithTesting() and their collectors finish (Preview).
         /// </summary>
         internal static string Description {
             get {

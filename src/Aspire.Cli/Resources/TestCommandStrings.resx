@@ -152,7 +152,7 @@
     <value>Do not build or restore the AppHost before testing</value>
   </data>
   <data name="Description" xml:space="preserve">
-    <value>Run an AppHost until all resources marked with WithTesting() and their collectors finish</value>
+    <value>Run an AppHost until all resources marked with WithTesting() and their collectors finish (Preview)</value>
   </data>
   <data name="IncompatibleOptions" xml:space="preserve">
     <value>aspire test does not support detached execution, profile capture, or extension-managed debug sessions.</value>
