@@ -5,8 +5,10 @@ projects and file-based C# apps (added **by path**) in an Aspire solution. It is
 `Aspire.Hosting.Python`, and `Aspire.Hosting.JavaScript`.
 
 > [!NOTE]
-> `Aspire.Hosting.Dotnet` is a prerelease package.
-> Its API surface may change in future releases.
+> Starting with Aspire 17.0, `Aspire.Hosting.Dotnet` follows Aspire's regular package versioning:
+> stabilized builds produce a stable package, while preview and daily builds remain prerelease.
+> Package stabilization does not graduate integration-authoring APIs marked `ASPIREPROJECTS001`;
+> those APIs remain experimental.
 
 ## Getting started
 
