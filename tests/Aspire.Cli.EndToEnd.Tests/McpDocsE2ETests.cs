@@ -21,21 +21,17 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// They are marked as outerloop tests to avoid slowing down regular CI.
 /// </remarks>
 [OuterloopTest("Requires network access to fetch aspire.dev documentation")]
-public partial class McpDocsE2ETests(McpDocsE2ETests.CliBuildFixture cliBuild) : IAsyncLifetime, IClassFixture<McpDocsE2ETests.CliBuildFixture>
+public partial class McpDocsE2ETests(McpDocsE2ETests.CliInstallFixture cli) : IAsyncLifetime, IClassFixture<McpDocsE2ETests.CliInstallFixture>
 {
     private McpClient? _mcpClient;
 
     public async ValueTask InitializeAsync()
     {
-        // The CLI is built once by the class fixture. Launching it with --no-build keeps compilation out of
-        // McpClient.CreateAsync, whose initialization timeout should only cover the server's MCP handshake.
-        string[] arguments = ["run", "--no-build", "--project", cliBuild.CliProjectPath, "--", "agent", "mcp"];
-
         var options = new StdioClientTransportOptions
         {
             Name = "aspire-mcp-e2e-test",
-            Command = "dotnet",
-            Arguments = arguments
+            Command = cli.AspireExecutablePath,
+            Arguments = ["agent", "mcp"]
         };
 
         var transport = new StdioClientTransport(options);
@@ -309,41 +305,138 @@ public partial class McpDocsE2ETests(McpDocsE2ETests.CliBuildFixture cliBuild) :
     private static partial Regex SlugRegex();
 
     /// <summary>
-    /// Builds the Aspire CLI from source once for all tests in the class.
+    /// Installs the Aspire CLI selected by <see cref="CliInstallStrategy.Detect"/> once for all tests in the class.
     /// </summary>
     /// <remarks>
-    /// CI installs the CLI from an archive and does not build src/Aspire.Cli, so the first <c>dotnet run</c>
-    /// would otherwise compile the CLI while the MCP client is waiting for the server to initialize.
+    /// <para>
+    /// These tests talk to <c>aspire agent mcp</c> over stdio from the host, so they can't use the Docker-based install
+    /// helpers. The CLI is installed into an isolated temporary prefix (rather than <c>~/.aspire</c>) with the same
+    /// acquisition scripts those helpers use. On CI, <c>ASPIRE_E2E_CLI_ARCHIVE_DIR</c> selects
+    /// <see cref="CliInstallMode.LocalArchive"/>, so the tests exercise the packaged native CLI built for the commit.
+    /// </para>
+    /// <para>
+    /// Installing up front also keeps acquisition out of <c>McpClient.CreateAsync</c>, whose initialization timeout
+    /// should only cover the server's MCP handshake.
+    /// </para>
     /// </remarks>
-    public sealed class CliBuildFixture : IAsyncLifetime
+    public sealed class CliInstallFixture : IAsyncLifetime
     {
-        public string CliProjectPath { get; } = Path.Combine(CliE2ETestHelpers.GetRepoRoot(), "src", "Aspire.Cli", "Aspire.Cli.csproj");
+        private static readonly TimeSpan s_installTimeout = TimeSpan.FromMinutes(5);
+
+        private DirectoryInfo? _installPrefix;
+
+        public string AspireExecutablePath { get; private set; } = string.Empty;
 
         public async ValueTask InitializeAsync()
         {
-            if (!File.Exists(CliProjectPath))
+            var strategy = CliInstallStrategy.Detect();
+            var scriptsDir = Path.Combine(CliE2ETestHelpers.GetRepoRoot(), "eng", "scripts");
+
+            if (strategy.Mode is CliInstallMode.Preinstalled)
             {
-                throw new InvalidOperationException($"Could not find CLI project at: {CliProjectPath}");
+                AspireExecutablePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".aspire", "bin", "aspire");
+            }
+            else
+            {
+                _installPrefix = Directory.CreateTempSubdirectory("aspire-mcp-e2e-cli-");
+                var installPrefix = _installPrefix.FullName;
+                var quotedPrefix = AspireCliShellCommandHelpers.QuoteBashArg(installPrefix);
+                var prScript = $"bash {AspireCliShellCommandHelpers.QuoteBashArg(Path.Combine(scriptsDir, "get-aspire-cli-pr.sh"))}";
+                var installScript = $"bash {AspireCliShellCommandHelpers.QuoteBashArg(Path.Combine(scriptsDir, "get-aspire-cli.sh"))}";
+
+                // Keep the install self-contained: no PATH/profile edits, shell completions or VS Code extension.
+                const string isolatedInstallArgs = "--skip-path --skip-completions";
+                const string isolatedPrInstallArgs = $"--skip-extension {isolatedInstallArgs}";
+
+                (string command, string cliBinDir) = strategy.Mode switch
+                {
+                    CliInstallMode.LocalArchive => (
+                        $"{AspireCliShellCommandHelpers.GetLocalArchiveInstallCommand(strategy.ArchiveDir!, prScript)} --install-path {quotedPrefix} {isolatedPrInstallArgs}",
+                        Path.Combine(installPrefix, "bin")),
+                    CliInstallMode.PullRequest => GetPullRequestInstall(CliE2ETestHelpers.GetRequiredPrNumber()),
+                    CliInstallMode.InstallScript => (
+                        $"{AspireCliShellCommandHelpers.GetInstallScriptCommand(strategy, installScript)} --install-path {AspireCliShellCommandHelpers.QuoteBashArg(Path.Combine(installPrefix, "bin"))} {isolatedInstallArgs}",
+                        Path.Combine(installPrefix, "bin")),
+                    _ => throw new InvalidOperationException(
+                        $"CLI install mode '{strategy}' is not supported by {nameof(McpDocsE2ETests)}, which launches the CLI on the host. " +
+                        $"Set {CliInstallStrategy.CliArchiveDirEnvironmentVariableName} to a directory containing the CLI archive to test a local build.")
+                };
+
+                // get-aspire-cli-pr.sh isolates PR installs under <prefix>/dogfood/pr-<N>/bin.
+                (string, string) GetPullRequestInstall(int prNumber) => (
+                    $"{AspireCliShellCommandHelpers.GetPullRequestInstallCommand(prNumber, prScript)} --install-path {quotedPrefix} {isolatedPrInstallArgs}",
+                    Path.Combine(installPrefix, "dogfood", $"pr-{prNumber}", "bin"));
+
+                await RunBashAsync(command);
+                AspireExecutablePath = Path.Combine(cliBinDir, "aspire");
             }
 
-            var startInfo = new ProcessStartInfo("dotnet")
+            if (!File.Exists(AspireExecutablePath))
+            {
+                throw new InvalidOperationException($"The Aspire CLI was not found at '{AspireExecutablePath}' after installing with strategy '{strategy}'.");
+            }
+
+            await VerifyVersionAsync(strategy);
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            _installPrefix?.Delete(recursive: true);
+            return ValueTask.CompletedTask;
+        }
+
+        // Mirrors CliE2EAutomatorHelpers.VerifyAspireCliVersionAsync so a stale or wrong binary fails setup instead
+        // of silently testing a different CLI. Running the CLI once here also keeps any first-run work out of the
+        // MCP initialization window.
+        private async Task VerifyVersionAsync(CliInstallStrategy strategy)
+        {
+            // Example output: "17.0.0-pr.21450.g14083e0b". Some builds append "+<commit>" build metadata, which is ignored.
+            var installedVersion = (await RunProcessAsync(AspireExecutablePath, ["--version"])).Trim();
+            var baseVersion = installedVersion.Split('+')[0];
+
+            if (strategy.ExpectedVersion is not null)
+            {
+                Assert.True(
+                    baseVersion == strategy.ExpectedVersion,
+                    $"Aspire CLI version mismatch. Expected '{strategy.ExpectedVersion}' (from {strategy.Mode}) but got '{installedVersion}'.");
+            }
+            else if (CliE2ETestHelpers.IsRunningInCI && strategy.Mode is CliInstallMode.LocalArchive)
+            {
+                Assert.Fail(
+                    "Running on CI with LocalArchive mode but could not extract expected CLI version " +
+                    $"from Aspire.Cli.*.nupkg in the archive directory ({strategy.ArchiveDir}).");
+            }
+        }
+
+        private static Task<string> RunBashAsync(string command) => RunProcessAsync("bash", ["-c", command]);
+
+        private static async Task<string> RunProcessAsync(string fileName, string[] arguments)
+        {
+            var startInfo = new ProcessStartInfo(fileName)
             {
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false
             };
-            startInfo.ArgumentList.Add("build");
-            startInfo.ArgumentList.Add(CliProjectPath);
-            startInfo.ArgumentList.Add("-nologo");
+
+            foreach (var argument in arguments)
+            {
+                startInfo.ArgumentList.Add(argument);
+            }
 
             using var process = Process.Start(startInfo)
-                ?? throw new InvalidOperationException("Failed to start 'dotnet build' for the Aspire CLI.");
+                ?? throw new InvalidOperationException($"Failed to start '{fileName}'.");
+
+            // Read both streams concurrently to avoid deadlock when a pipe buffer fills.
             var stdout = process.StandardOutput.ReadToEndAsync();
             var stderr = process.StandardError.ReadToEndAsync();
 
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+            timeoutCts.CancelAfter(s_installTimeout);
+
             try
             {
-                await process.WaitForExitAsync(TestContext.Current.CancellationToken);
+                await process.WaitForExitAsync(timeoutCts.Token);
             }
             catch (OperationCanceledException)
             {
@@ -354,10 +447,10 @@ public partial class McpDocsE2ETests(McpDocsE2ETests.CliBuildFixture cliBuild) :
             if (process.ExitCode != 0)
             {
                 throw new InvalidOperationException(
-                    $"'dotnet build {CliProjectPath}' failed with exit code {process.ExitCode}.{Environment.NewLine}{await stdout}{Environment.NewLine}{await stderr}");
+                    $"'{fileName} {string.Join(' ', arguments)}' failed with exit code {process.ExitCode}.{Environment.NewLine}{await stdout}{Environment.NewLine}{await stderr}");
             }
-        }
 
-        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+            return await stdout;
+        }
     }
 }
