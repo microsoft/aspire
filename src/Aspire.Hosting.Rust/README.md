@@ -186,11 +186,21 @@ Ordinary runs retain the same command without capture; publishing excludes this
 finite testing resource.
 
 One native invocation per resource is supported, without terminals, replicas or
-restarts. The assigned private output directory retains raw `stdout.log` and
+restarts. The runtime `WithTesting(context => context.CaptureOutputAsync())`
+callback starts alongside resource execution only during `aspire test`, never
+during model construction. Cargo arguments, environment and launch safeguards
+are configured independently before execution.
+The private `<run-id>/<logical-resource-name>/` output directory retains raw `stdout.log` and
 `stderr.log`, plus `output.complete` after both streams reach EOF. These
 Aspire-owned artifacts have private permissions (0600 on Unix). The diagnostic
 collector can complete successfully after a failed Cargo process; the resource
 remains failed. Actual capture I/O errors still fail collection explicitly.
+Capture observes test-run cancellation; partial files can remain after interruption.
+Repeated or concurrent captures share one task. Cancelling a caller-local
+`WaitForCompletionAsync(token)` wait does not cancel that shared capture or
+resource completion. Replacing or clearing the collector with `WithTesting`
+preserves the assigned context and directory, without changing Cargo's command
+or single-invocation safeguards.
 
 ## Additional documentation
 

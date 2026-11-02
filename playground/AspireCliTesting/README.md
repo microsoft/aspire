@@ -197,6 +197,11 @@ the Go command's separate stderr.
 Rust writes only `stdout.log`, `stderr.log` and `output.complete` through the same
 durable raw-output capture. These retain human Cargo/libtest diagnostics, including
 actual test execution, but are not parsed into fabricated testcase metadata.
+Its runtime `WithTesting(context => context.CaptureOutputAsync())` callback writes
+directly into `<run>/rust-tests`, with no temporary framework report directory.
+Cargo command configuration and single-invocation safeguards are independent of
+the collector. Run cancellation interrupts capture; cancelling an optional
+caller-local completion wait does not cancel the shared capture task.
 JSON exposes `outputPath`, `summaryPath`, and each `collections[].outputPath`.
 Reports and `summary.json` remain after teardown.
 Framework-staged reports use the copy writer's permissions; unlike Aspire-owned

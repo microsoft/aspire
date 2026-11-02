@@ -56,8 +56,14 @@ public class CargoTestingTests(ITestOutputHelper outputHelper)
             await ArgumentEvaluator.GetArgumentListAsync(resource.Resource, app.Services));
         var environment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(resource.Resource, serviceProvider: app.Services);
         Assert.Equal("value", environment["CUSTOM"]);
-        var options = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>()).Options!;
-        Assert.Equal(testing ? 1 : 0, options.Collectors.Length);
+        var annotation = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
+        Assert.NotNull(annotation.Collector);
+        Assert.Equal(testing, annotation.RunContext is not null);
+        Assert.Equal(testing ? Path.Combine(workspace.Path, "output", "tests") : null, annotation.OutputPath);
+        if (testing)
+        {
+            Assert.Empty(Directory.GetFiles(annotation.OutputPath!));
+        }
     }
 
     [Theory]
@@ -69,10 +75,10 @@ public class CargoTestingTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
         builder.Configuration["ASPIRE_TEST_OUTPUT_PATH"] = Path.Combine(workspace.Path, "output");
         var resource = builder.AddExecutable("tests", "cargo", workspace.Path, "test").WithCargoTesting();
-        var options = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>()).Options!;
+        var annotation = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
         var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var captured = false;
-        var context = new ResourceTestingContext(options.RunContext!, "tests", options.OutputPath!,
+        var context = new ResourceTestingContext(annotation.RunContext!, "tests", annotation.OutputPath!,
             _ => Assert.Fail("Cargo must not invent per-test outcomes."), completion.Task,
             TestContext.Current.CancellationToken)
         {
@@ -82,12 +88,96 @@ public class CargoTestingTests(ITestOutputHelper outputHelper)
                 return Task.CompletedTask;
             }
         };
-        var collection = Assert.Single(options.Collectors)(context);
+        var collection = annotation.Collector!(context);
         Assert.False(collection.IsCompleted);
         completion.SetResult(passed);
         await collection;
         Assert.True(captured);
         Assert.Equal(passed, await context.WaitForCompletionAsync());
+    }
+
+    [Fact]
+    public async Task ReplacingOrClearingCollectorPreservesContextPathAndLaunchGuards()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+        builder.Configuration["ASPIRE_TEST_OUTPUT_PATH"] = Path.Combine(workspace.Path, "output");
+        var resource = builder.AddExecutable("tests", "cargo", workspace.Path, "test").WithCargoTesting();
+        var original = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
+        Func<ResourceTestingContext, Task> replacement = _ => throw new InvalidOperationException("Runtime only.");
+        resource.WithTesting(replacement);
+        var replaced = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
+        Assert.Same(replacement, replaced.Collector);
+        Assert.Same(original.RunContext, replaced.RunContext);
+        Assert.Equal(original.OutputPath, replaced.OutputPath);
+        resource.WithTesting();
+        var marker = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
+        Assert.Null(marker.Collector);
+        Assert.Same(original.RunContext, marker.RunContext);
+        Assert.Equal(original.OutputPath, marker.OutputPath);
+        await using var app = builder.Build();
+        await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services,
+            new DistributedApplicationModel(builder.Resources)), TestContext.Current.CancellationToken);
+        Assert.Equal(["test"], await ArgumentEvaluator.GetArgumentListAsync(resource.Resource, app.Services));
+        Assert.Empty(Directory.GetFiles(marker.OutputPath!));
+        await builder.Eventing.PublishAsync(new BeforeResourceStartedEvent(resource.Resource, app.Services),
+            TestContext.Current.CancellationToken);
+        await Assert.ThrowsAsync<DistributedApplicationException>(() => builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(resource.Resource, app.Services), TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task CancelledLocalWaitDoesNotCancelSharedCargoCapture()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+        builder.Configuration["ASPIRE_TEST_OUTPUT_PATH"] = Path.Combine(workspace.Path, "output");
+        var resource = builder.AddExecutable("tests", "cargo", workspace.Path, "test").WithCargoTesting();
+        var annotation = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
+        var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var captures = 0;
+        var context = new ResourceTestingContext(annotation.RunContext!, "tests", annotation.OutputPath!,
+            _ => Assert.Fail("Cargo must not invent per-test outcomes."), completion.Task,
+            TestContext.Current.CancellationToken)
+        {
+            CaptureOutputCallback = (_, _) =>
+            {
+                Interlocked.Increment(ref captures);
+                return Task.CompletedTask;
+            }
+        };
+        var collection = annotation.Collector!(context);
+        Assert.Same(collection, context.CaptureOutputAsync());
+        using var localCancellation = new CancellationTokenSource();
+        var localWait = context.WaitForCompletionAsync(localCancellation.Token);
+        localCancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => localWait);
+        Assert.False(collection.IsCompleted);
+        completion.SetResult(false);
+        await collection;
+        Assert.Equal(1, captures);
+        Assert.False(await context.WaitForCompletionAsync());
+    }
+
+    [Fact]
+    public async Task RunCancellationStopsCargoCaptureWithoutPublishingResults()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+        builder.Configuration["ASPIRE_TEST_OUTPUT_PATH"] = Path.Combine(workspace.Path, "output");
+        var resource = builder.AddExecutable("tests", "cargo", workspace.Path, "test").WithCargoTesting();
+        var annotation = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
+        var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var context = new ResourceTestingContext(annotation.RunContext!, "tests", annotation.OutputPath!,
+            _ => Assert.Fail("Cargo must not invent per-test outcomes."), completion.Task, cancellation.Token)
+        {
+            CaptureOutputCallback = (_, _) => throw new InvalidOperationException("Execution has not finished.")
+        };
+        var collection = annotation.Collector!(context);
+        cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => collection);
+        Assert.False(completion.Task.IsCompleted);
     }
 
     [Theory]
