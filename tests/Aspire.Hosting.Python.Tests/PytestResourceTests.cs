@@ -84,7 +84,7 @@ public class PytestResourceTests(ITestOutputHelper outputHelper)
         else
         {
             Assert.Null(annotation.OutputPath);
-            Assert.Null(annotation.RunContext);
+            Assert.Null(annotation.TestingContext);
         }
         expected.AddRange(["--", "tests with spaces"]);
         Assert.Equal(expected, arguments);
@@ -171,8 +171,10 @@ public class PytestResourceTests(ITestOutputHelper outputHelper)
         var annotation = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
         var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var published = new List<TestResult>();
-        var context = new ResourceTestingContext(annotation.RunContext!, "tests", annotation.OutputPath!,
+        var context = new ResourceTestingContext(annotation.TestingContext!, "tests", annotation.OutputPath!,
             published.Add, completion.Task, TestContext.Current.CancellationToken);
+        Assert.Equal(builder.Configuration["ASPIRE_TEST_OUTPUT_PATH"], context.TestingContext.OutputPath);
+        Assert.Equal(Path.Combine(context.TestingContext.OutputPath, "tests"), context.OutputPath);
         var collection = annotation.Collector!(context);
         Assert.False(collection.IsCompleted);
         await using var app = builder.Build();
@@ -211,7 +213,7 @@ public class PytestResourceTests(ITestOutputHelper outputHelper)
             return Task.CompletedTask;
         });
         var replacement = Assert.Single(first.Resource.Annotations.OfType<TestingAnnotation>());
-        Assert.Same(original.RunContext, replacement.RunContext);
+        Assert.Same(original.TestingContext, replacement.TestingContext);
         Assert.Equal(original.OutputPath, replacement.OutputPath);
         Assert.Equal(markerOnly, replacement.Collector is null);
         var second = builder.AddPytest("second", workspace.Path);
@@ -257,7 +259,7 @@ public class PytestResourceTests(ITestOutputHelper outputHelper)
         Assert.True(publishedResource.IsExcludedFromPublish());
         var annotation = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
         Assert.Null(annotation.OutputPath);
-        Assert.Null(annotation.RunContext);
+        Assert.Null(annotation.TestingContext);
         await using var app = builder.Build();
         var manifest = await ManifestUtils.GetManifestForModel(app.Services.GetRequiredService<DistributedApplicationModel>(), workspace.Path);
 
