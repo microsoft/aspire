@@ -30,7 +30,6 @@ public sealed class TestCommandTests(ITestOutputHelper output)
         await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
-        await auto.RunCommandAsync("umask 077", counter);
         await auto.InstallAspireCliAsync(strategy, counter);
         if (typeScript)
         {
@@ -48,6 +47,10 @@ public sealed class TestCommandTests(ITestOutputHelper output)
         }
 
         WriteFixtures(projectDirectory, typeScript);
+        // The harness shares scaffolded source across host/container UIDs. Keep that
+        // accessible for fixture writes, then harden this container's own Aspire home
+        // and runtime-created files before allocating private test artifacts.
+        await auto.RunCommandAsync("umask 077 && chmod 700 \"$HOME/.aspire\"", counter);
         await auto.RunCommandAsync("cd TestingApp && aspire restore --non-interactive", counter, TimeSpan.FromMinutes(3));
         if (typeScript)
         {
