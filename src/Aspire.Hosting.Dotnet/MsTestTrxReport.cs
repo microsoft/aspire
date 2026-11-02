@@ -28,7 +28,7 @@ internal static class MsTestTrxReport
             {
                 throw new InvalidDataException("The MSTest report directory must not contain symbolic links or reparse points.");
             }
-            if (directory.FullName == context.RunContext.OutputPath)
+            if (directory.FullName == context.TestingContext.OutputPath)
             {
                 break;
             }

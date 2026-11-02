@@ -78,7 +78,7 @@ public class MsTestResourceTests(ITestOutputHelper outputHelper)
         else
         {
             Assert.Null(testing.OutputPath);
-            Assert.Null(testing.RunContext);
+            Assert.Null(testing.TestingContext);
         }
         Assert.Equal(expected, arguments);
         var environment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(resource.Resource, serviceProvider: app.Services);
@@ -147,7 +147,7 @@ public class MsTestResourceTests(ITestOutputHelper outputHelper)
         var original = Assert.Single(first.Resource.Annotations.OfType<TestingAnnotation>());
         first.WithTesting();
         var replacement = Assert.Single(first.Resource.Annotations.OfType<TestingAnnotation>());
-        Assert.Same(original.RunContext, replacement.RunContext);
+        Assert.Same(original.TestingContext, replacement.TestingContext);
         Assert.Equal(original.OutputPath, replacement.OutputPath);
         Assert.Null(replacement.Collector);
         var second = builder.AddMsTest("second", path);
@@ -178,7 +178,7 @@ public class MsTestResourceTests(ITestOutputHelper outputHelper)
         var resource = builder.AddMsTest("tests", path);
         var annotation = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
         Assert.Null(annotation.OutputPath);
-        Assert.Null(annotation.RunContext);
+        Assert.Null(annotation.TestingContext);
         await using var app = builder.Build();
         var args = await ArgumentEvaluator.GetArgumentListAsync(resource.Resource, app.Services);
         Assert.Equal(["run", "--project", path, "--no-launch-profile", "--"], args);
