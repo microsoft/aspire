@@ -147,6 +147,8 @@ public class JsonRpcCallbackInvokerTests
                 var error = await Record.ExceptionAsync(() =>
                     invocation.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
                 Assert.True(error is OperationCanceledException or ConnectionLostException, error?.ToString());
+                // Disconnection can cancel callbacks before JSON-RPC publishes completion.
+                await connection.ServerRpc.Completion.WaitAsync(TestContext.Current.CancellationToken);
                 Assert.True(invoker.LifetimeToken.IsCancellationRequested);
                 Assert.False(invoker.IsConnected);
             }
