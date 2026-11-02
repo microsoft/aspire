@@ -193,24 +193,28 @@
                     {
                         var url = group.Primary;
                         var label = url.DisplayName is { } displayName && url.Name == "-" ? displayName : url.Name;
-                        <li>
+                        var maskedUrl = DashboardUIHelpers.MaskQueryStringValues(url.OriginalUrlString);
+                        <li class="overview-endpoint">
                             <span class="overview-list-label" data-tooltip="@label">@label</span>
-                            @if (url.Url is not null)
-                            {
-                                var maskedUrl = DashboardUIHelpers.MaskQueryStringValues(url.Url);
-                                <a class="overview-list-value" href="@url.Url" data-tooltip="@maskedUrl" target="_blank" rel="noreferrer noopener">@(url.DisplayName ?? maskedUrl)</a>
-                            }
-                            else
-                            {
-                                <span class="overview-list-value overview-mono" data-tooltip="@url.Text">@url.Text</span>
-                            }
-                            @if (group.Secondary?.Url is { } secondaryUrl)
-                            {
-                                @* The secondary url (typically the internal address of the same endpoint) is shown as faint
-                                   supplementary text instead of a duplicate row, and hides first as space runs out. *@
-                                var maskedSecondaryUrl = DashboardUIHelpers.MaskQueryStringValues(secondaryUrl);
-                                <span class="overview-list-ghost overview-mono" data-tooltip="@maskedSecondaryUrl">@maskedSecondaryUrl</span>
-                            }
+                            <div class="overview-endpoint-addresses">
+                                @if (url.DisplayName is { } friendlyName && friendlyName != label)
+                                {
+                                    <span class="overview-endpoint-name">@friendlyName</span>
+                                }
+                                @if (url.Url is not null)
+                                {
+                                    <a class="overview-endpoint-address overview-mono" href="@url.Url" data-tooltip="@maskedUrl" target="_blank" rel="noreferrer noopener">@maskedUrl</a>
+                                }
+                                else
+                                {
+                                    <span class="overview-endpoint-address overview-mono" data-tooltip="@maskedUrl">@maskedUrl</span>
+                                }
+                                @if (group.Secondary is { } secondary)
+                                {
+                                    var maskedSecondaryUrl = DashboardUIHelpers.MaskQueryStringValues(secondary.OriginalUrlString);
+                                    <span class="overview-endpoint-address overview-muted overview-mono" data-tooltip="@maskedSecondaryUrl">@maskedSecondaryUrl</span>
+                                }
+                            </div>
                             @if (url.IsInternal)
                             {
                                 <span class="overview-badge">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewInternalEndpoint)]</span>
