@@ -33,9 +33,14 @@ internal static class ResourceSetupHelpers
         context.JSInterop.Setup<string>("Blazor._internal.PageTitle.getAndRemoveExistingTitle", _ => true).SetResult(string.Empty);
     }
 
-    public static void SetupResourcesLayout(BunitContext context, ViewportInformation viewport, IDashboardClient dashboardClient, ILocalStorage? localStorage = null)
+    public static void SetupResourcesLayout(
+        BunitContext context,
+        ViewportInformation viewport,
+        IDashboardClient dashboardClient,
+        ILocalStorage? localStorage = null,
+        ISessionStorage? sessionStorage = null)
     {
-        SetupResourcesPage(context, viewport, dashboardClient, localStorage: localStorage);
+        SetupResourcesPage(context, viewport, dashboardClient, localStorage: localStorage, sessionStorage: sessionStorage);
         context.Services.AddLogging();
         FluentUISetupHelpers.SetupFluentTextField(context);
         context.JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Utilities.Attributes.observeAttributeChange", _ => true).SetVoidResult();

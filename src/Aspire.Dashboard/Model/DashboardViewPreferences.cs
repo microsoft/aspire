@@ -73,9 +73,13 @@ public enum RecordingsStyle
 
 /// <summary>
 /// The view preferences chosen in the settings. They're kept in the browser's local storage, and shared by the
-/// settings panel and the views that apply them. The active overview layout is kept only for the current circuit.
+/// settings panel and the views that apply them. The active overview layout is kept separately for the current tab.
 /// </summary>
-public sealed class DashboardViewPreferences(ILocalStorage localStorage, IOptionsMonitor<DashboardOptions> options)
+public sealed class DashboardViewPreferences(
+    ILocalStorage localStorage,
+    ISessionStorage sessionStorage,
+    IJSRuntime js,
+    IOptionsMonitor<DashboardOptions> options)
 {
     private Task? _loadTask;
     private GroupOverview _groupOverview;
@@ -87,7 +91,7 @@ public sealed class DashboardViewPreferences(ILocalStorage localStorage, IOption
     public ResourceListDensity Density { get; private set; }
 
     /// <summary>
-    /// Gets the active overview layout. Navigation within a circuit preserves it; a reload or new tab uses the saved default.
+    /// Gets the active overview layout. Dashboard navigation and reload preserve it; a newly opened tab uses the saved default.
     /// </summary>
     /// <remarks>
     /// A graph choice stored before Dashboard:UI:DisableResourceGraph was set shows the cards instead. The stored
@@ -100,7 +104,7 @@ public sealed class DashboardViewPreferences(ILocalStorage localStorage, IOption
     }
 
     /// <summary>
-    /// Gets the saved overview layout used when a new circuit opens.
+    /// Gets the saved overview layout used when a dashboard tab opens, without changing existing tabs.
     /// </summary>
     public GroupOverview DefaultGroupOverview =>
         _defaultGroupOverview == GroupOverview.Graph && !IsGraphEnabled ? GroupOverview.Cards : _defaultGroupOverview;
@@ -149,6 +153,7 @@ public sealed class DashboardViewPreferences(ILocalStorage localStorage, IOption
 
         GroupOverview = groupOverview;
         Changed?.Invoke();
+        await sessionStorage.SetAsync(BrowserStorageKeys.ActiveGroupOverview, groupOverview.ToString()).ConfigureAwait(false);
     }
 
     public async Task SetDefaultGroupOverviewAsync(GroupOverview groupOverview)
@@ -160,9 +165,7 @@ public sealed class DashboardViewPreferences(ILocalStorage localStorage, IOption
             return;
         }
 
-        // Settings applies the new default immediately, but temporary layout changes never write it back.
         _defaultGroupOverview = groupOverview;
-        GroupOverview = groupOverview;
         Changed?.Invoke();
         await localStorage.SetUnprotectedAsync(BrowserStorageKeys.GroupOverview, groupOverview.ToString()).ConfigureAwait(false);
     }
@@ -184,7 +187,6 @@ public sealed class DashboardViewPreferences(ILocalStorage localStorage, IOption
         try
         {
             var density = await ReadAsync<ResourceListDensity>(BrowserStorageKeys.ResourceListDensity).ConfigureAwait(false);
-            // Reuse the existing saved choice as the default; older versions also wrote temporary layouts here.
             var groupOverview = await ReadAsync<GroupOverview>(BrowserStorageKeys.GroupOverview).ConfigureAwait(false);
             if (groupOverview == GroupOverview.Resources)
             {
@@ -192,11 +194,24 @@ public sealed class DashboardViewPreferences(ILocalStorage localStorage, IOption
                 await localStorage.SetUnprotectedAsync(BrowserStorageKeys.GroupOverview, groupOverview.ToString()).ConfigureAwait(false);
             }
             var recordingsStyle = await ReadAsync<RecordingsStyle>(BrowserStorageKeys.RecordingsStyle).ConfigureAwait(false);
-            if (density != Density || groupOverview != _defaultGroupOverview || recordingsStyle != RecordingsStyle)
+            var activeGroupOverview = groupOverview;
+            // An opener-created tab inherits sessionStorage. Restore the active layout only for an actual
+            // reload, so both ordinary new tabs and opener-created tabs start with the saved default.
+            if (await js.InvokeAsync<bool>("isPageReload").ConfigureAwait(false))
+            {
+                var activeResult = await sessionStorage.GetAsync<string>(BrowserStorageKeys.ActiveGroupOverview).ConfigureAwait(false);
+                // Layouts are enum names such as "Graph"; invalid values use the saved default.
+                if (activeResult.Success && Enum.TryParse<GroupOverview>(activeResult.Value, out var active) && Enum.IsDefined(active))
+                {
+                    activeGroupOverview = active;
+                }
+            }
+            await sessionStorage.SetAsync(BrowserStorageKeys.ActiveGroupOverview, activeGroupOverview.ToString()).ConfigureAwait(false);
+            if (density != Density || groupOverview != _defaultGroupOverview || activeGroupOverview != _groupOverview || recordingsStyle != RecordingsStyle)
             {
                 Density = density;
                 _defaultGroupOverview = groupOverview;
-                GroupOverview = groupOverview;
+                GroupOverview = activeGroupOverview;
                 RecordingsStyle = recordingsStyle;
                 Changed?.Invoke();
             }

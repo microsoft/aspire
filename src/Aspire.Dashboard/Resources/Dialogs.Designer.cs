@@ -1866,15 +1866,6 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Applies now and when you reload or open a new dashboard tab. Switching layouts in the overview does not change this default..
-        /// </summary>
-        public static string SettingsDialogGroupOverviewDescription {
-            get {
-                return ResourceManager.GetString("SettingsDialogGroupOverviewDescription", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to Summary.
         /// </summary>
         public static string SettingsDialogGroupOverviewSummary {

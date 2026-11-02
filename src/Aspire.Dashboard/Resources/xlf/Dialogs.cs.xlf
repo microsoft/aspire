@@ -1028,11 +1028,6 @@ Další informace o používání agentů AI s řídicím panelem včetně nasta
         <target state="new">Cards</target>
         <note />
       </trans-unit>
-      <trans-unit id="SettingsDialogGroupOverviewDescription">
-        <source>Applies now and when you reload or open a new dashboard tab. Switching layouts in the overview does not change this default.</source>
-        <target state="new">Applies now and when you reload or open a new dashboard tab. Switching layouts in the overview does not change this default.</target>
-        <note />
-      </trans-unit>
       <trans-unit id="SettingsDialogGroupOverviewSummary">
         <source>Home</source>
         <target state="new">Home</target>

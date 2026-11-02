@@ -701,9 +701,6 @@
   <data name="SettingsDialogGroupOverview" xml:space="preserve">
     <value>Default overview layout</value>
   </data>
-  <data name="SettingsDialogGroupOverviewDescription" xml:space="preserve">
-    <value>Applies now and when you reload or open a new dashboard tab. Switching layouts in the overview does not change this default.</value>
-  </data>
   <data name="SettingsDialogGroupOverviewSummary" xml:space="preserve">
     <value>Home</value>
   </data>

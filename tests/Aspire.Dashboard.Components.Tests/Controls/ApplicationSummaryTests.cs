@@ -24,64 +24,61 @@ namespace Aspire.Dashboard.Components.Tests.Controls;
 [UseCulture("en-US")]
 public class ApplicationSummaryTests : DashboardTestContext
 {
-    [Theory]
-    [InlineData("Cards")]
-    [InlineData("Graph")]
-    public async Task SavedDefault_TemporaryLayoutSurvivesNavigationButNotNewCircuit(string temporaryLayout)
+    [Fact]
+    public async Task SavedDefault_ChangesFutureTabsWithoutChangingCurrentLayout()
     {
-        var stored = new Dictionary<string, object?>();
+        var stored = new Dictionary<string, object?> { [BrowserStorageKeys.GroupOverview] = "Summary" };
+        var tabState = new Dictionary<string, object?>();
         var localStorage = new TestLocalStorage
         {
             OnGetUnprotectedAsync = key => stored.TryGetValue(key, out var value) ? (true, value) : (false, null),
             OnSetUnprotectedAsync = (key, value) => stored[key] = value
         };
+        var sessionStorage = new TestSessionStorage
+        {
+            OnGetAsync = key => tabState.TryGetValue(key, out var value) ? (true, value) : (false, null),
+            OnSetAsync = (key, value) => tabState[key] = value
+        };
         JSInterop.SetupModule("/js/app-resourcegraph.js").Mode = JSRuntimeMode.Loose;
         FluentUISetupHelpers.SetupFluentList(this);
-        var summary = RenderSummary(localStorage: localStorage);
+        var summary = RenderSummary(localStorage: localStorage, sessionStorage: sessionStorage);
         var preferences = Services.GetRequiredService<DashboardViewPreferences>();
         await Services.GetRequiredService<ThemeManager>().EnsureInitializedAsync();
         var settings = Render<SettingsDialog>();
         var header = Render<SectionOutlet>(p => p.Add(p => p.SectionName, ResourcesLayout.HeaderActionsSectionName));
 
-        await settings.InvokeAsync(() => settings.Find(".icon-toggle[aria-label='Home']").Click());
+        await settings.InvokeAsync(() => settings.Find(".icon-toggle[aria-label='Graph']").Click());
         summary.WaitForAssertion(() => Assert.Single(summary.FindAll(".home-hero")));
-        Assert.Equal("Summary", stored[BrowserStorageKeys.GroupOverview]);
-        Assert.Equal("Home", settings.Find("[aria-label='Default overview layout'] .icon-toggle[aria-pressed='true']").GetAttribute("aria-label"));
-        Assert.Contains("Switching layouts in the overview does not change this default.", settings.Markup);
+        Assert.Equal("Graph", stored[BrowserStorageKeys.GroupOverview]);
+        Assert.Equal(GroupOverview.Summary, preferences.GroupOverview);
+        Assert.Equal("Summary", tabState[BrowserStorageKeys.ActiveGroupOverview]);
 
-        await header.InvokeAsync(() => header.Find($".icon-toggle[aria-label='{temporaryLayout}']").Click());
-
+        await header.InvokeAsync(() => header.Find(".icon-toggle[aria-label='Graph']").Click());
+        await settings.InvokeAsync(() => settings.Find(".icon-toggle[aria-label='Home']").Click());
         summary.WaitForAssertion(() =>
         {
             Assert.Empty(summary.FindAll(".home-hero"));
-            if (temporaryLayout == "Cards")
-            {
-                Assert.Equal(2, summary.FindAll(".resource-card").Count);
-            }
-            else
-            {
-                Assert.False(summary.Find(".home-resource-graph-layout").HasAttribute("hidden"));
-            }
+            Assert.False(summary.Find(".home-resource-graph-layout").HasAttribute("hidden"));
         });
         Assert.Equal("Home", settings.Find("[aria-label='Default overview layout'] .icon-toggle[aria-pressed='true']").GetAttribute("aria-label"));
         Assert.Equal(GroupOverview.Summary, preferences.DefaultGroupOverview);
         Assert.Equal("Summary", stored[BrowserStorageKeys.GroupOverview]);
+        Assert.Equal("Graph", tabState[BrowserStorageKeys.ActiveGroupOverview]);
 
         summary.Dispose();
         var navigated = Render<ApplicationSummary>(p => p.AddCascadingValue(new ViewportInformation(true, false, false)));
         navigated.WaitForAssertion(() => Assert.Empty(navigated.FindAll(".home-hero")));
-        Assert.Equal(temporaryLayout, header.Find(".icon-toggle[aria-pressed='true']").GetAttribute("aria-label"));
+        Assert.Equal("Graph", header.Find(".icon-toggle[aria-pressed='true']").GetAttribute("aria-label"));
+
+        await using var reloaded = new ApplicationSummaryTests();
+        reloaded.JSInterop.SetupModule("/js/app-resourcegraph.js").Mode = JSRuntimeMode.Loose;
+        var reloadedSummary = reloaded.RenderSummary(localStorage: localStorage, sessionStorage: sessionStorage, isReload: true);
+        reloadedSummary.WaitForAssertion(() => Assert.False(reloadedSummary.Find(".home-resource-graph-layout").HasAttribute("hidden")));
 
         await using var reopened = new ApplicationSummaryTests();
-        var reopenedSummary = reopened.RenderSummary(localStorage: localStorage);
+        var reopenedSummary = reopened.RenderSummary(localStorage: localStorage, sessionStorage: sessionStorage);
         reopenedSummary.WaitForAssertion(() => Assert.Single(reopenedSummary.FindAll(".home-hero")));
         Assert.Equal(GroupOverview.Summary, reopened.Services.GetRequiredService<DashboardViewPreferences>().GroupOverview);
-
-        // Settings updates both the active circuit and the next circuit's saved default.
-        await settings.InvokeAsync(() => settings.Find(".icon-toggle[aria-label='Cards']").Click());
-        navigated.WaitForAssertion(() => Assert.Equal(2, navigated.FindAll(".resource-card").Count));
-        Assert.Equal(GroupOverview.Cards, preferences.DefaultGroupOverview);
-        Assert.Equal("Cards", stored[BrowserStorageKeys.GroupOverview]);
     }
 
     [Theory]
@@ -258,7 +255,11 @@ public class ApplicationSummaryTests : DashboardTestContext
         });
     }
 
-    private IRenderedComponent<ApplicationSummary> RenderSummary(ViewportInformation? viewport = null, ILocalStorage? localStorage = null)
+    private IRenderedComponent<ApplicationSummary> RenderSummary(
+        ViewportInformation? viewport = null,
+        ILocalStorage? localStorage = null,
+        ISessionStorage? sessionStorage = null,
+        bool isReload = false)
     {
         viewport ??= new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
@@ -268,7 +269,8 @@ public class ApplicationSummaryTests : DashboardTestContext
                 ModelTestHelpers.CreateResource("api", state: KnownResourceState.Running, resourceType: "Project"),
                 ModelTestHelpers.CreateResource("broken", state: KnownResourceState.FailedToStart, resourceType: "Container")
             ],
-            resourceChannelProvider: () => channel), localStorage: localStorage);
+            resourceChannelProvider: () => channel), localStorage: localStorage, sessionStorage: sessionStorage);
+        JSInterop.Setup<bool>("isPageReload").SetResult(isReload);
 
         // The resource actions take the viewport from the layout.
         return Render<ApplicationSummary>(builder => builder.AddCascadingValue(viewport));
