@@ -207,12 +207,12 @@
                                 }
                                 else
                                 {
-                                    <span class="overview-endpoint-address overview-mono" data-tooltip="@maskedUrl">@maskedUrl</span>
+                                    <span class="overview-endpoint-address overview-mono" data-tooltip="@maskedUrl" tabindex="0">@maskedUrl</span>
                                 }
                                 @if (group.Secondary is { } secondary)
                                 {
                                     var maskedSecondaryUrl = DashboardUIHelpers.MaskQueryStringValues(secondary.OriginalUrlString);
-                                    <span class="overview-endpoint-address overview-muted overview-mono" data-tooltip="@maskedSecondaryUrl">@maskedSecondaryUrl</span>
+                                    <span class="overview-endpoint-address overview-muted overview-mono" data-tooltip="@maskedSecondaryUrl" tabindex="0">@maskedSecondaryUrl</span>
                                 }
                             </div>
                             @if (url.IsInternal)

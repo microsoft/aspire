@@ -20,7 +20,9 @@ public sealed class ResourceOverviewEndpointTests : PlaywrightTestsBase<Resource
     private const string MaskedInternalUrl = "http://catalog:8080/catalog?token=" + Mask;
     private const string TcpUrl = "tcp://localhost:6379/?token=example";
     private const string MaskedTcpUrl = "tcp://localhost:6379/?token=" + Mask;
-    private static readonly string s_longUrl = "https://localhost:7443/" + new string('a', 160) + "/openapi";
+    private static readonly string s_longAddress = "https://localhost:7443/" + new string('a', 160) + "/openapi";
+    private static readonly string s_longUrl = s_longAddress + "?token=example";
+    private static readonly string s_maskedLongUrl = s_longAddress + "?token=" + Mask;
 
     public ResourceOverviewEndpointTests(EndpointResourcesFixture dashboardServerFixture)
         : base(dashboardServerFixture)
@@ -32,7 +34,7 @@ public sealed class ResourceOverviewEndpointTests : PlaywrightTestsBase<Resource
     [InlineData(390, 844)]
     [InlineData(768, 1024)]
     [InlineData(1440, 900)]
-    public async Task Endpoints_ShowNamesAndMaskedAddressesWithoutHorizontalOverflow(int width, int height)
+    public async Task Endpoints_ShowMaskedAddressesAndFullTooltipsOnHoverAndKeyboardFocus(int width, int height)
     {
         await RunTestAsync(async page =>
         {
@@ -51,15 +53,34 @@ public sealed class ResourceOverviewEndpointTests : PlaywrightTestsBase<Resource
             await Assertions.Expect(link).ToHaveAttributeAsync("target", "_blank");
             await Assertions.Expect(link).ToHaveAttributeAsync("rel", "noreferrer noopener");
             await Assertions.Expect(link).ToHaveAttributeAsync("data-tooltip", MaskedPublicUrl);
-            await link.FocusAsync();
-            await Assertions.Expect(link).ToBeFocusedAsync();
-            await link.BlurAsync();
             await Assertions.Expect(catalog.Locator(".overview-endpoint-address")).ToHaveTextAsync([MaskedPublicUrl, MaskedInternalUrl]);
+
+            var tooltip = page.Locator(".dashboard-tooltip");
+            await link.ScrollIntoViewIfNeededAsync();
+            await link.HoverAsync();
+            await Assertions.Expect(tooltip).ToBeVisibleAsync();
+            await Assertions.Expect(tooltip).ToHaveTextAsync(MaskedPublicUrl);
+            await page.Keyboard.PressAsync("Escape");
+            await Assertions.Expect(tooltip).ToHaveCountAsync(0);
+            var secondary = catalog.Locator("span.overview-endpoint-address");
+            await secondary.ScrollIntoViewIfNeededAsync();
+            await link.FocusAsync();
+            await page.Keyboard.PressAsync("Tab");
+            await Assertions.Expect(secondary).ToBeFocusedAsync();
+            await Assertions.Expect(tooltip).ToBeVisibleAsync();
+            await Assertions.Expect(tooltip).ToHaveTextAsync(MaskedInternalUrl);
+            await page.Keyboard.PressAsync("Escape");
 
             var tcp = rows.Filter(new() { Has = page.GetByText("Cache connection", new() { Exact = true }) });
             await Assertions.Expect(tcp.Locator(".overview-endpoint-address")).ToHaveTextAsync(MaskedTcpUrl);
             await Assertions.Expect(tcp.GetByRole(AriaRole.Link)).ToHaveCountAsync(0);
             await Assertions.Expect(tcp.Locator(".overview-badge")).ToHaveTextAsync("Internal");
+            await tcp.Locator(".overview-endpoint-address").ScrollIntoViewIfNeededAsync();
+            await tcp.Locator(".overview-endpoint-address").FocusAsync();
+            await Assertions.Expect(tooltip).ToBeVisibleAsync();
+            await Assertions.Expect(tooltip).ToHaveTextAsync(MaskedTcpUrl);
+            await page.Keyboard.PressAsync("Escape");
+            await page.Mouse.MoveAsync(0, 0);
 
             var docs = rows.Filter(new() { Has = page.GetByText("Documentation", new() { Exact = true }) });
             await Assertions.Expect(docs.Locator(".overview-list-label")).ToHaveTextAsync("Documentation");
@@ -68,25 +89,40 @@ public sealed class ResourceOverviewEndpointTests : PlaywrightTestsBase<Resource
             var plain = rows.Filter(new() { Has = page.GetByText("http", new() { Exact = true }) });
             await Assertions.Expect(plain.GetByRole(AriaRole.Link)).ToHaveTextAsync("http://localhost:5080");
 
-            var longAddress = card.GetByRole(AriaRole.Link, new() { Name = s_longUrl, Exact = true });
+            await card.ScrollIntoViewIfNeededAsync();
+            await card.Locator(".overview-list").EvaluateAsync("el => el.scrollTop = 0");
+            await page.ScreenshotAsync(new() { Path = Path.Combine(AppContext.BaseDirectory, $"endpoints-compact-{width}x{height}.png") });
+
+            var longAddress = card.GetByRole(AriaRole.Link, new() { Name = s_maskedLongUrl, Exact = true });
             await Assertions.Expect(longAddress).ToHaveAttributeAsync("href", s_longUrl);
             await longAddress.ScrollIntoViewIfNeededAsync();
             await Assertions.Expect(longAddress).ToBeVisibleAsync();
-            await page.ScreenshotAsync(new() { Path = Path.Combine(AppContext.BaseDirectory, $"endpoints-long-{width}x{height}.png") });
+            await page.ScreenshotAsync(new() { Path = Path.Combine(AppContext.BaseDirectory, $"endpoints-compact-long-{width}x{height}.png") });
 
-            // Check the rendered card and every address, not just the viewport: an inner scrollbar can hide
-            // overflow even when the document itself fits. Unbroken paths must wrap without clipping text.
+            // Ellipsis clips only the displayed address. The complete masked value remains available through
+            // the shared tooltip on hover and keyboard focus, while the link retains the original destination.
             Assert.True(await card.EvaluateAsync<bool>("card => card.scrollWidth <= card.clientWidth"));
             foreach (var address in await card.Locator(".overview-endpoint-address").AllAsync())
             {
-                Assert.True(await address.EvaluateAsync<bool>("el => el.scrollWidth <= el.clientWidth"));
+                Assert.True(await address.EvaluateAsync<bool>(
+                    "el => { const range = document.createRange(); range.selectNodeContents(el); return new Set([...range.getClientRects()].map(rect => Math.round(rect.top))).size === 1; }"));
             }
-            Assert.True(await longAddress.EvaluateAsync<bool>("el => el.clientHeight > parseFloat(getComputedStyle(el).lineHeight)"));
+            Assert.True(await longAddress.EvaluateAsync<bool>("el => el.scrollWidth > el.clientWidth"));
             Assert.True(await page.Locator(".resource-overview").EvaluateAsync<bool>("el => el.scrollWidth <= el.clientWidth"));
             Assert.True(await page.EvaluateAsync<bool>("document.documentElement.scrollWidth <= innerWidth"));
-            await card.ScrollIntoViewIfNeededAsync();
-            await card.Locator(".overview-list").EvaluateAsync("el => el.scrollTop = 0");
-            await page.ScreenshotAsync(new() { Path = Path.Combine(AppContext.BaseDirectory, $"endpoints-{width}x{height}.png") });
+
+            await longAddress.HoverAsync();
+            await Assertions.Expect(tooltip).ToBeVisibleAsync();
+            await Assertions.Expect(tooltip).ToHaveTextAsync(s_maskedLongUrl);
+            await page.ScreenshotAsync(new() { Path = Path.Combine(AppContext.BaseDirectory, $"endpoints-compact-hover-{width}x{height}.png") });
+            await page.Mouse.MoveAsync(0, 0);
+            await page.Keyboard.PressAsync("Escape");
+            await longAddress.FocusAsync();
+            await Assertions.Expect(longAddress).ToBeFocusedAsync();
+            await Assertions.Expect(tooltip).ToBeVisibleAsync();
+            await Assertions.Expect(tooltip).ToHaveTextAsync(s_maskedLongUrl);
+            await Assertions.Expect(longAddress).ToHaveAttributeAsync("href", s_longUrl);
+            await page.ScreenshotAsync(new() { Path = Path.Combine(AppContext.BaseDirectory, $"endpoints-compact-focus-{width}x{height}.png") });
         });
     }
 
