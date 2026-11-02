@@ -2,6 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.Dashboard;
+using Aspire.Hosting.Backchannel;
+using Aspire.Hosting.Cli;
+using Google.Protobuf.WellKnownTypes;
 using Aspire.Hosting.Tests.Helpers;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
@@ -10,6 +13,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Resource = Aspire.Hosting.ApplicationModel.Resource;
+using ResourceSnapshot = Aspire.Hosting.Dashboard.ResourceSnapshot;
 
 namespace Aspire.Hosting.Tests.Dashboard;
 
@@ -26,6 +30,77 @@ namespace Aspire.Hosting.Tests.Dashboard;
 [Trait("Partition", "3")]
 public class DashboardServiceDataTerminalTests
 {
+    [Fact]
+    public async Task TestingResultsArePublishedLiveAndRetainedAcrossFreshReplicaSnapshots()
+    {
+        var (data, notifications, resource) = CreateHarness(addTerminal: false,
+            dcpInstances: [new DcpInstance("myapp-aaa", "aaa", 0), new DcpInstance("myapp-bbb", "bbb", 1)], replicaCount: 2);
+        using var ownedData = data;
+        resource.Annotations.Add(new ReplicaAnnotation(2));
+#pragma warning disable ASPIRETESTING001 // Exercise dashboard transport of real testing events.
+        resource.Annotations.Add(new TestingAnnotation());
+#pragma warning restore ASPIRETESTING001
+        foreach (var name in new[] { "myapp-aaa", "myapp-bbb" })
+        {
+            await notifications.PublishUpdateAsync(resource, name, s => s with { State = KnownResourceStates.Running });
+        }
+        var publisher = new TestResourceSnapshotPublisher(new DistributedApplicationModel([resource]), notifications);
+        publisher.Start();
+        foreach (var name in new[] { "myapp-aaa", "myapp-bbb" })
+        {
+            publisher.Publish(new TestRunEvent { Resource = new TestResourceState { ResourceName = resource.Name, ResourceId = name, State = "Running", ExpectedReplicas = 2 } });
+        }
+        publisher.Publish(new TestRunEvent { Collection = new TestCollectionState { ResourceName = resource.Name, CollectorCount = 1, Status = "running", OutputPath = "/private/collector/path" } });
+        publisher.Publish(new TestRunEvent { Result = new PublishedTestResult { ResourceName = resource.Name, Name = "live test", Outcome = "passed", DurationMilliseconds = 12 } });
+        var live = await data.WaitForResourceAsync("myapp-aaa", r =>
+            r.Properties.Any(p => p.Name == "resource.testing.results" && p.Value.StructValue.Fields["results"].ListValue.Values.Count == 1)).DefaultTimeout();
+        Assert.Equal("running", Assert.Single(live.Properties, p => p.Name == "resource.testing.results").Value.StructValue.Fields["collectionStatus"].StringValue);
+        publisher.Publish(new TestRunEvent { Resource = new TestResourceState { ResourceName = resource.Name, ResourceId = "myapp-aaa", Outcome = "passed", ExpectedReplicas = 2 } });
+        publisher.Publish(new TestRunEvent { Resource = new TestResourceState { ResourceName = resource.Name, ResourceId = "myapp-bbb", Outcome = "failed", ExpectedReplicas = 2 } });
+        publisher.Publish(new TestRunEvent { Collection = new TestCollectionState { ResourceName = resource.Name, CollectorCount = 1, Status = "failed", Error = "collector fixture failure" } });
+        await publisher.CompleteAsync().DefaultTimeout();
+        Assert.False(notifications.TryGetCurrentState(resource.Name, out _));
+        foreach (var name in new[] { "myapp-aaa", "myapp-bbb" })
+        {
+            await notifications.PublishUpdateAsync(resource, name, s => s with { State = KnownResourceStates.Finished, Properties = [] });
+            var replay = await data.WaitForResourceAsync(name, r => r.State == "Finished").DefaultTimeout();
+            var results = Assert.Single(replay.Properties, p => p.Name == "resource.testing.results").Value;
+            Assert.Equal(2, Assert.Single(replay.Properties, p => p.Name == "resource.testing.expectedReplicas").Value.NumberValue);
+            Assert.Equal(Value.KindOneofCase.StructValue, results.KindCase);
+            Assert.Equal("failed", results.StructValue.Fields["resourceOutcome"].StringValue);
+            Assert.Equal("failed", results.StructValue.Fields["collectionStatus"].StringValue);
+            Assert.Equal("collector fixture failure", results.StructValue.Fields["collectionError"].StringValue);
+            Assert.Equal("live test", Assert.Single(results.StructValue.Fields["results"].ListValue.Values).StructValue.Fields["name"].StringValue);
+        }
+    }
+
+    [Fact]
+    public async Task TestingMetadataAndTagsSurviveReplicaUpdatesAndReplay()
+    {
+        var (data, notifications, resource) = CreateHarness(addTerminal: false);
+        using var _ = data;
+#pragma warning disable ASPIRETESTING001 // Tests projection of the experimental annotation during ordinary runs.
+        resource.Annotations.Add(new TestingAnnotation());
+#pragma warning restore ASPIRETESTING001
+        resource.Annotations.Add(new TraitAnnotation("Aspire_Dashboard_Tag", "Backend"));
+
+        foreach (var resourceId in new[] { "myapp-aaa", "myapp-bbb" })
+        {
+            foreach (var state in new[] { "Running", "Finished" })
+            {
+                await notifications.PublishUpdateAsync(resource, resourceId, s => s with { State = new ResourceStateSnapshot(state, null) }).DefaultTimeout();
+                var snapshot = await data.WaitForResourceAsync(resourceId, r => r.State == state).DefaultTimeout();
+                Assert.Equal("true", Assert.Single(snapshot.Properties, p => p.Name == "resource.testing").Value.StringValue);
+                Assert.Equal(["Backend", "Testing"],
+                    Assert.Single(snapshot.Properties, p => p.Name == "resource.trait.Aspire_Dashboard_Tag").Value.ListValue.Values.Select(v => v.StringValue));
+                Assert.Equal(nameof(TestResource), snapshot.ResourceType);
+            }
+        }
+        // A new subscriber receives the current snapshot rather than relying on a one-time event.
+        var replay = await data.WaitForResourceAsync("myapp-aaa", r => r.State == "Finished").DefaultTimeout();
+        Assert.Equal("true", Assert.Single(replay.Properties, p => p.Name == "resource.testing").Value.StringValue);
+    }
+
     [Fact]
     public async Task Snapshot_WithRepeatedTraits_PreservesAllValuesAlongsideTerminalMetadata()
     {

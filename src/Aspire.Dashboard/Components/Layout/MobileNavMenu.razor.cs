@@ -143,6 +143,12 @@ public partial class MobileNavMenu : ComponentBase, IAsyncDisposable
     {
         if (DashboardClient.IsEnabled)
         {
+            yield return new MobileNavMenuEntry(
+                Loc[nameof(Resources.Layout.ResourcePaneTesting)],
+                () => NavigateToAsync(DesktopNavMenu.GetSelectionPageUrl(NavigationManager, ResourceTab.Testing)),
+                new Icons.Regular.Size24.Beaker(),
+                ActiveIcon: new Icons.Filled.Size24.Beaker(),
+                LinkMatchRegex: GetNonIndexPageRegex(DashboardUrls.TestingUrl()));
             if (HasResourceTerminals)
             {
                 yield return new MobileNavMenuEntry(

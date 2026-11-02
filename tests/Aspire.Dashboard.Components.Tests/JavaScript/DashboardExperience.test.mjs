@@ -53,6 +53,12 @@ test("legacy experience redirects modern pages and keeps the original spelling",
     assert.equal(navigate("/traces", { defaultExperience: "legacy" }), "/legacy/traces");
 });
 
+test("testing routes retain resource selection in both experiences", () => {
+    assert.equal(navigate("/testing/resource/tests", { cookie: legacyCookie }), "/legacy/testing/resource/tests");
+    assert.equal(navigate("/legacy/testing/resource/tests"), "/testing/resource/tests");
+    assert.equal(navigate("/testing", { search: "?resource=api&resource=worker", cookie: legacyCookie }), "/legacy/testing?resource=api&resource=worker");
+});
+
 test("legacy experience keeps the root query for the resources page", () => {
     assert.equal(navigate("/", { search: "?resource=api", cookie: legacyCookie }), "/legacy?resource=api");
     assert.equal(navigate("/", { search: "?view=Graph&hiddenTypes=Container", cookie: legacyCookie }), "/legacy?view=Graph&hiddenTypes=Container");

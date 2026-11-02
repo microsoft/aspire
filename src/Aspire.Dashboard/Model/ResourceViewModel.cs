@@ -48,6 +48,7 @@ public sealed class ResourceViewModel
     public IconVariant? IconVariant { get; init; }
     internal bool ConsoleLogsLoaded { get; set; }
     public bool IsParameter => string.Equals(ResourceType, KnownResourceTypes.Parameter, StringComparison.Ordinal);
+    internal bool IsTesting => Properties.TryGetValue(KnownProperties.Resource.Testing, out var property) && property.Value.TryConvertToBool(out var testing) && testing;
 
     /// <summary>Gets the immutable AppHost values for a case-sensitive trait name.</summary>
     public IReadOnlyList<string> GetTraitValues(string name) =>

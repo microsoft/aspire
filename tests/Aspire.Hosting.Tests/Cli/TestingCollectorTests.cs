@@ -4,6 +4,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
+using Aspire.Dashboard.Model;
 using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Cli;
 using Aspire.Hosting.Lifecycle;
@@ -397,6 +398,82 @@ public class TestingCollectorTests(ITestOutputHelper outputHelper)
         Assert.False(collectorCalled);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ReplacementCallbackRetainsDashboardResultsAndTagsAcrossFreshSnapshots(bool markerOnly)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = CreateBuilder(workspace);
+        var originalCollectorCalled = false;
+        var resource = builder.AddResource(new ContainerResource("tests")).WithTags("Backend").WithTesting(context =>
+        {
+            originalCollectorCalled = true;
+            context.PublishResult(new TestResult { Name = "original", Outcome = TestOutcome.Failed });
+            return Task.CompletedTask;
+        });
+        var original = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
+        resource.WithTesting(markerOnly ? null : async context =>
+        {
+            await context.WaitForCompletionAsync();
+            Assert.Equal(original.OutputPath, context.OutputPath);
+            context.PublishResult(new TestResult { Name = "replacement", Outcome = TestOutcome.Passed });
+        });
+        var replacement = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
+        Assert.NotSame(original, replacement);
+        Assert.Same(original.TestingContext, replacement.TestingContext);
+
+        using var notifications = ResourceNotificationServiceTestHelpers.Create();
+        using var coordinator = CreateCoordinator(builder, notifications);
+        var completion = coordinator.WaitForCompletionAsync(TestContext.Current.CancellationToken);
+        await notifications.PublishUpdateAsync(resource.Resource, s => s with { State = KnownResourceStates.Finished, ExitCode = 0 });
+        Assert.True(await completion.DefaultTimeout());
+        Assert.False(originalCollectorCalled);
+        Assert.Null(original.DashboardResults);
+        Assert.NotNull(replacement.DashboardResults);
+
+        var fresh = ResourceTraitSnapshotProperties.AddTraitProperties(resource.Resource, []);
+        var replay = ResourceTraitSnapshotProperties.AddTraitProperties(resource.Resource, fresh);
+        foreach (var properties in new[] { fresh, replay })
+        {
+            Assert.Same(replacement.DashboardResults,
+                Assert.Single(properties, p => p.Name == KnownProperties.Resource.TestingResults).Value);
+            Assert.Equal("true", Assert.Single(properties, p => p.Name == KnownProperties.Resource.Testing).Value);
+            Assert.Equal(["Backend", "Testing"], Assert.IsType<string[]>(
+                Assert.Single(properties, p => p.Name == KnownProperties.Resource.TraitPrefix + KnownResourceTraits.DashboardTag).Value));
+        }
+        var results = replacement.DashboardResults.Clone();
+        results.StructValue.Fields.Remove("revision");
+        await Verify(results.ToString(), "json");
+    }
+
+    [Fact]
+    public async Task AllPublishedOutcomesRetainExactWireValuesInDashboardSnapshots()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = CreateBuilder(workspace);
+        var resource = builder.AddResource(new ContainerResource("tests")).WithTesting(async context =>
+        {
+            await context.WaitForCompletionAsync();
+            foreach (var outcome in Enum.GetValues<TestOutcome>())
+            {
+                context.PublishResult(new TestResult { Name = outcome.ToString(), Outcome = outcome });
+            }
+        });
+        using var notifications = ResourceNotificationServiceTestHelpers.Create();
+        using var coordinator = CreateCoordinator(builder, notifications);
+        var completion = coordinator.WaitForCompletionAsync(TestContext.Current.CancellationToken);
+        await notifications.PublishUpdateAsync(resource.Resource, s => s with { State = KnownResourceStates.Finished, ExitCode = 0 });
+        Assert.False(await completion.DefaultTimeout());
+        var annotation = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
+        var fresh = ResourceTraitSnapshotProperties.AddTraitProperties(resource.Resource, []);
+        Assert.Same(annotation.DashboardResults,
+            Assert.Single(fresh, p => p.Name == KnownProperties.Resource.TestingResults).Value);
+        var results = annotation.DashboardResults!.Clone();
+        results.StructValue.Fields.Remove("revision");
+        await Verify(results.ToString(), "json");
+    }
+
     [Fact]
     public async Task LivePublicationIsReplayedAndCompletionJoinsCollectorsAndAllReplicas()
     {
@@ -451,6 +528,10 @@ public class TestingCollectorTests(ITestOutputHelper outputHelper)
         await ReadAsync(coordinator, replay).DefaultTimeout();
         Assert.Equal(events.ToArray(), replay.ToArray());
         Assert.Equal(1, calls);
+        Assert.False(notifications.TryGetCurrentState(resource.Resource.Name, out _));
+        var dashboardResults = resource.Resource.Annotations.OfType<TestingAnnotation>().Single().DashboardResults!.Clone();
+        dashboardResults.StructValue.Fields.Remove("revision");
+        await Verify(dashboardResults.ToString(), "json");
     }
 
     [Fact]
@@ -549,6 +630,9 @@ public class TestingCollectorTests(ITestOutputHelper outputHelper)
         var failure = Assert.Single(events, e => e.Collection is { Status: "failed" }).Collection!;
         Assert.Equal("first", failure.ResourceName);
         Assert.Contains("fixture collector failure", failure.Error);
+        var dashboardResults = first.Resource.Annotations.OfType<TestingAnnotation>().Single().DashboardResults!.Clone();
+        dashboardResults.StructValue.Fields.Remove("revision");
+        await Verify(dashboardResults.ToString(), "json");
     }
 
     [Fact]

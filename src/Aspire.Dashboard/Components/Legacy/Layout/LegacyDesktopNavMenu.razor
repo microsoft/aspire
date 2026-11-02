@@ -36,4 +36,11 @@
             IconActive="TerminalsIcon(active: true)"
             Text="@Loc[nameof(Layout.NavMenuTerminalsTab)]" />
     }
+    @if (DashboardClient.IsEnabled)
+    {
+        <FluentAppBarItem Href="@LegacyNavUrls.ToLegacyUrl(DashboardUrls.TestingUrl())"
+            IconRest="@(new Microsoft.FluentUI.AspNetCore.Components.Icons.Regular.Size24.Beaker())"
+            IconActive="@(new Microsoft.FluentUI.AspNetCore.Components.Icons.Filled.Size24.Beaker())"
+            Text="@Loc[nameof(Layout.ResourcePaneTesting)]" />
+    }
 </FluentAppBar>

@@ -98,6 +98,52 @@ dotnet run --project src/Aspire.Cli/Aspire.Cli.csproj --no-launch-profile -- \
 The service remains running after the probe finishes under `aspire run`. Testing
 output directories and collectors are only activated by `aspire test`.
 
+## Dashboard testing indicators
+
+The modern resource pane includes a beaker toggle labeled **Testing**. The six
+testing resources are shown by default, alongside ordinary resources. Turn off
+**Resources** and **Parameters** to list just testing resources; turn off
+**Testing** to hide them instead. These preferences also scope the overview and
+telemetry pages, and persist across reloads. Grouping by tags, type or state
+continues to work. Testing resources retain their actual Project or Executable
+types and their existing resource icons.
+
+`WithTesting(...)` automatically adds an immutable **Testing** tag alongside any
+AppHost-defined or user tags, including during ordinary `aspire run` invocation.
+The framework-specific adapters inherit this behavior. A user-applied Testing
+tag alone does not make a resource participate in testing or in the beaker
+category. The shared snapshot metadata also exposes the tag in the previous
+dashboard's resource properties and through `aspire describe`.
+
+For this playground, the beaker category contains `foundation-tests`,
+`mstest-tests`, `pytest-tests`, `go-tests`, `rust-tests` and `java-tests`; `service` and
+`pytest-tests-installer` remain ordinary resources.
+
+Select **Testing**, alongside **Metrics**, to view published test outcomes grouped
+by resource. Foundation, MSTest, pytest, Go and Java JUnit publish individual
+results; Cargo publishes no individual outcomes and is represented by one
+resource-outcome row.
+Passing individual results do not hide execution or collector failures, and a
+pending or unknown resource is not reported as passed. The page shows distinct
+Passed, Failed, Skipped, Inconclusive, Error, Timed out and Cancelled test statuses.
+Only Passed and Skipped are non-failing;
+Inconclusive, Error, Timed out and Cancelled results fail their resource group
+even when the process exits successfully. A published Timed out or Cancelled
+test is not a CLI timeout or cancellation and does not change the command lifetime.
+The page updates during collection and replays finalized results on a late connection
+or reload while `features__testCommandEnabled=true aspire test --keep-alive` is
+running. The previous dashboard has a Testing navigation entry with the same table.
+
+During ordinary `aspire run`, collectors are not activated; annotated resources
+still appear with one resource-outcome row based on their actual execution state.
+The preview flag gates CLI command registration, not dashboard categorization or
+hosting metadata, so ordinary runs do not need it to show Testing resources.
+The dashboard does not start tests or change execution behavior. To exercise a
+failure in the resource-only fallback, prefix the testing command with
+`RUST_PLAYGROUND_FAIL=true`. `MSTEST_PLAYGROUND_FAIL`, `PYTEST_PLAYGROUND_FAIL`,
+`GO_PLAYGROUND_FAIL` and `JAVA_PLAYGROUND_FAIL` exercise individual-result
+failures independently.
+
 ## Shared scenario and extension points
 
 `apphost.cs` defines `service`, a small HTTP service with `/health` and a `/`

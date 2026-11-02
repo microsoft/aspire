@@ -18,6 +18,8 @@ public sealed class DashboardExperienceRedirectMiddlewareTests
     [InlineData("legacy", "/home", "?resource=api", "/legacy#")]
     [InlineData("legacy", "/resources/api", "", "/legacy#")]
     [InlineData("legacy", "/traces", "", "/legacy/traces#")]
+    [InlineData("legacy", "/testing/resource/tests", "", "/legacy/testing/resource/tests#")]
+    [InlineData("modern", "/legacy/testing/resource/tests", "", "/testing/resource/tests#")]
     [InlineData("legacy", "/traces/detail/abc123", "", "/legacy/traces/detail/abc123#")]
     [InlineData("legacy", "/consolelogs/resource/api", "", "/legacy/consolelogs/resource/api#")]
     [InlineData("legacy", "/structuredlogs/resource/my api", "?logLevel=error", "/legacy/structuredlogs/resource/my%20api?logLevel=error#")]

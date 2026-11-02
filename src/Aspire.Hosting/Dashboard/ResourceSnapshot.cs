@@ -61,6 +61,7 @@ internal abstract class ResourceSnapshot
     {
         return value switch
         {
+            Value protobufValue => protobufValue,
             string s => Value.ForString(s),
             int i => Value.ForNumber(i),
             IEnumerable<KeyValuePair<string, string>> properties => ConvertToValue(properties),

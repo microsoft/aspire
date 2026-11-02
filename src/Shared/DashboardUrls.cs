@@ -18,6 +18,8 @@ internal static class DashboardUrls
     public const string ExtensionsBasePath = "extensions";
     public const string ConsoleLogBasePath = "consolelogs";
     public const string MetricsBasePath = "metrics";
+    public const string TestingBasePath = "testing";
+
     public const string StructuredLogsBasePath = "structuredlogs";
     public const string TracesBasePath = "traces";
     public const string LoginBasePath = "login";
@@ -304,6 +306,10 @@ internal static class DashboardUrls
 
         return url;
     }
+
+    public static string TestingUrl(string? resource = null) => resource is null
+        ? $"/{TestingBasePath}"
+        : $"/{TestingBasePath}/resource/{Uri.EscapeDataString(resource)}";
 
     public static string MetricsUrl(string? resource = null, string? meter = null, string? instrument = null, int? duration = null, string? view = null, bool pinned = false, bool total = false, bool all = false)
     {

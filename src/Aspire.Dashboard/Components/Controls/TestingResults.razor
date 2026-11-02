@@ -1,0 +1,53 @@
+@using Aspire.Dashboard.Resources
+@using Aspire.Dashboard.Model
+@using Aspire.Dashboard.Components.Controls.Grid
+
+<div class="page-content-container testing-content">
+    <h1 class="page-header">@Loc[nameof(Layout.ResourcePaneTesting)]</h1>
+    @if (_subscriptionFailed)
+    {
+        <p role="alert">@Loc[nameof(Layout.TestingSubscriptionFailed)]</p>
+    }
+    @if (!_loaded)
+    {
+        <FluentSpinner />
+    }
+    else if (!_subscriptionFailed && Groups.Count == 0)
+    {
+        <p role="status">@Loc[nameof(Layout.TestingNoResources)]</p>
+    }
+    @foreach (var group in Groups)
+    {
+        <section class="testing-group" aria-label="@group.ResourceName" @key="group.ResourceName">
+            <h2>@group.ResourceName <span class="testing-group-outcome @StatusClass(group.Outcome)">@Status(group.Outcome)</span></h2>
+            @if (group.Error is { } error)
+            {
+                <p role="alert">@error</p>
+            }
+            @if (group.HasInvalidData)
+            {
+                <p role="alert">@Loc[nameof(Layout.TestingInvalidData)]</p>
+            }
+            @if (group.Outcome == "failed")
+            {
+                <p role="status">@Loc[nameof(Layout.TestingFailureSummary)]</p>
+            }
+            <FluentDataGrid TGridItem="TestingResultRow" ItemsProvider="@EnumerableGridItemsProvider.Create(() => GetRows(group))"
+                            GridTemplateColumns="minmax(16rem, 2fr) 6rem 6rem minmax(12rem, 1fr)" MultiLine="true" aria-label="@group.ResourceName">
+                <TemplateColumn Title="@Loc[nameof(Layout.TestingName)]" Context="row">
+                    <span class="testing-name">@(string.IsNullOrEmpty(row.Name) ? Status("unknown") : row.Name)</span>
+                    @if (group.Results.Count == 0)
+                    {
+                        @(" ")
+                        <span class="testing-fallback">@Loc[nameof(Layout.TestingResourceOutcome)]</span>
+                    }
+                </TemplateColumn>
+                <TemplateColumn Title="@Loc[nameof(Layout.TestingStatus)]" Context="row">
+                    <span class="@StatusClass(row.Outcome)">@Status(row.Outcome)</span>
+                </TemplateColumn>
+                <TemplateColumn Title="@Loc[nameof(Layout.TestingDuration)]" Context="row">@Duration(row.DurationMilliseconds)</TemplateColumn>
+                <PropertyColumn Title="@Loc[nameof(Layout.TestingMessage)]" Property="@(row => row.Message)" />
+            </FluentDataGrid>
+        </section>
+    }
+</div>

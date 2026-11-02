@@ -1,0 +1,1 @@
+﻿{ "results": [ { "name": "before error", "outcome": "passed" } ], "collectionStatus": "failed", "resourceOutcome": "passed", "collectionError": "Test result collection failed for resource 'first': fixture collector failure" }

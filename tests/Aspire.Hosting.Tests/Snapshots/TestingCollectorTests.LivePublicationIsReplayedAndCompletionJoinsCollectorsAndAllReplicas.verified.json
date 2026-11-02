@@ -1,0 +1,1 @@
+﻿{ "results": [ { "name": "live fixture", "outcome": "passed" }, { "name": "final fixture", "outcome": "skipped", "message": "fixture skip" } ], "collectionStatus": "completed", "resourceOutcome": "passed" }

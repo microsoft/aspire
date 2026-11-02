@@ -77,8 +77,9 @@
             @if (_isLoaded && DashboardClient.IsEnabled)
             {
                 var allResources = _resourceByName.Values.Where(r => !r.IsResourceHidden(_filter.ShowHiddenResources)).ToList();
-                var allResourceCount = allResources.Count(r => !r.IsParameter);
-                var allParameterCount = allResources.Count(r => r.IsParameter);
+                var allResourceCount = allResources.Count(r => !r.IsParameter && !r.IsTesting);
+                var allParameterCount = allResources.Count(r => r.IsParameter && !r.IsTesting);
+                var allTestingCount = allResources.Count(r => r.IsTesting);
 
                 @* The toggles are outside the scrolling list, so a scrollbar appearing or leaving never changes their
                    width or layout. They decide what the list shows and what "all resources" covers. *@
@@ -86,6 +87,7 @@
                     <div class="resource-kind-toggles" role="group" aria-label="@Loc[nameof(Dashboard.Resources.Layout.ResourcePaneKindsLandmark)]">
                         @KindToggle(ResourcePaneKind.Resources, allResourceCount, new Icons.Regular.Size20.AppFolder(), ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesHeader)])
                         @KindToggle(ResourcePaneKind.Parameters, allParameterCount, new Icons.Regular.Size20.Key(), Loc[nameof(Dashboard.Resources.Layout.NavMenuParametersTab)])
+                        @KindToggle(ResourcePaneKind.Testing, allTestingCount, new Icons.Regular.Size20.Beaker(), Loc[nameof(Dashboard.Resources.Layout.ResourcePaneTesting)])
                         @KindToggle(ResourcePaneKind.TelemetrySources, _telemetryOnlyResources.Count, new Icons.Regular.Size20.DataUsage(), Loc[nameof(Dashboard.Resources.Layout.NavMenuTelemetrySourcesTab)])
                     </div>
                     @* Selects every item again, like the "All resources" row. It stays pressed while everything is selected,
@@ -159,7 +161,7 @@
                 {
                     @* Below the toggles, which are the way to bring items back when every kind is off. *@
                     <div class="resource-pane-message">
-                        @(!_showResources && !_showParameters && !_showTelemetryOnlyResources
+                        @(!_showResources && !_showParameters && !_showTesting && !_showTelemetryOnlyResources
                             ? Loc[nameof(Dashboard.Resources.Layout.ResourcePaneNoKindsHint)]
                             : ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesNoResources)])
                     </div>
@@ -507,6 +509,7 @@
         {
             ResourcePaneKind.Resources => string.Format(CultureInfo.CurrentCulture, Loc[count == 1 ? nameof(Dashboard.Resources.Layout.ResourcePaneCountSingular) : nameof(Dashboard.Resources.Layout.ResourcePaneCountPlural)], count),
             ResourcePaneKind.Parameters => string.Format(CultureInfo.CurrentCulture, Loc[count == 1 ? nameof(Dashboard.Resources.Layout.ResourcePaneParameterCountSingular) : nameof(Dashboard.Resources.Layout.ResourcePaneParameterCountPlural)], count),
+            ResourcePaneKind.Testing => string.Format(CultureInfo.CurrentCulture, Loc[count == 1 ? nameof(Dashboard.Resources.Layout.ResourcePaneTestingCountSingular) : nameof(Dashboard.Resources.Layout.ResourcePaneTestingCountPlural)], count),
             _ => string.Format(CultureInfo.CurrentCulture, Loc[count == 1 ? nameof(Dashboard.Resources.Layout.TelemetryPaneCountSingular) : nameof(Dashboard.Resources.Layout.TelemetryPaneCountPlural)], count)
         };
 

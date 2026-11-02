@@ -970,6 +970,213 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Testing.
+        /// </summary>
+        public static string ResourcePaneTesting {
+            get {
+                return ResourceManager.GetString("ResourcePaneTesting", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to No testing resources in this selection..
+        /// </summary>
+        public static string TestingNoResources {
+            get {
+                return ResourceManager.GetString("TestingNoResources", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Unable to load testing resources. Results may be incomplete..
+        /// </summary>
+        public static string TestingSubscriptionFailed {
+            get {
+                return ResourceManager.GetString("TestingSubscriptionFailed", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The resource published invalid testing data. Its outcome cannot be determined from these results..
+        /// </summary>
+        public static string TestingInvalidData {
+            get {
+                return ResourceManager.GetString("TestingInvalidData", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Test.
+        /// </summary>
+        public static string TestingName {
+            get {
+                return ResourceManager.GetString("TestingName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Status.
+        /// </summary>
+        public static string TestingStatus {
+            get {
+                return ResourceManager.GetString("TestingStatus", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Duration.
+        /// </summary>
+        public static string TestingDuration {
+            get {
+                return ResourceManager.GetString("TestingDuration", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Message.
+        /// </summary>
+        public static string TestingMessage {
+            get {
+                return ResourceManager.GetString("TestingMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Resource outcome.
+        /// </summary>
+        public static string TestingResourceOutcome {
+            get {
+                return ResourceManager.GetString("TestingResourceOutcome", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Test results, resource execution or collection failed. Passing individual tests do not override this outcome..
+        /// </summary>
+        public static string TestingFailureSummary {
+            get {
+                return ResourceManager.GetString("TestingFailureSummary", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Passed.
+        /// </summary>
+        public static string TestingPassed {
+            get {
+                return ResourceManager.GetString("TestingPassed", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Failed.
+        /// </summary>
+        public static string TestingFailed {
+            get {
+                return ResourceManager.GetString("TestingFailed", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Skipped.
+        /// </summary>
+        public static string TestingSkipped {
+            get {
+                return ResourceManager.GetString("TestingSkipped", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Inconclusive.
+        /// </summary>
+        public static string TestingInconclusive {
+            get {
+                return ResourceManager.GetString("TestingInconclusive", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Error.
+        /// </summary>
+        public static string TestingError {
+            get {
+                return ResourceManager.GetString("TestingError", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Timed out.
+        /// </summary>
+        public static string TestingTimedOut {
+            get {
+                return ResourceManager.GetString("TestingTimedOut", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Running.
+        /// </summary>
+        public static string TestingRunning {
+            get {
+                return ResourceManager.GetString("TestingRunning", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Pending.
+        /// </summary>
+        public static string TestingPending {
+            get {
+                return ResourceManager.GetString("TestingPending", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Cancelled.
+        /// </summary>
+        public static string TestingCancelled {
+            get {
+                return ResourceManager.GetString("TestingCancelled", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Unknown.
+        /// </summary>
+        public static string TestingUnknown {
+            get {
+                return ResourceManager.GetString("TestingUnknown", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0:N0} ms.
+        /// </summary>
+        public static string TestingMilliseconds {
+            get {
+                return ResourceManager.GetString("TestingMilliseconds", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0} testing resource.
+        /// </summary>
+        public static string ResourcePaneTestingCountSingular {
+            get {
+                return ResourceManager.GetString("ResourcePaneTestingCountSingular", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0} testing resources.
+        /// </summary>
+        public static string ResourcePaneTestingCountPlural {
+            get {
+                return ResourceManager.GetString("ResourcePaneTestingCountPlural", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to More views.
         /// </summary>
         public static string ResourceTabsMore {

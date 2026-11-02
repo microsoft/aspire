@@ -1412,6 +1412,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         {
             null => null,
             JsonNode jsonNode => jsonNode.DeepClone(),
+            Google.Protobuf.WellKnownTypes.Value protobufValue => JsonNode.Parse(protobufValue.ToString()),
             string stringValue => JsonValue.Create(stringValue),
             bool boolValue => JsonValue.Create(boolValue),
             byte byteValue => JsonValue.Create(byteValue),
