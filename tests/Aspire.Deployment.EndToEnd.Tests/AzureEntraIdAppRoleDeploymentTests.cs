@@ -60,6 +60,8 @@ public sealed class AzureEntraIdAppRoleDeploymentTests(ITestOutputHelper output)
         File.WriteAllText(appHostPath, $$"""
             {{string.Join(Environment.NewLine, directives)}}
 
+            using Aspire.Hosting.Azure;
+
             var builder = DistributedApplication.CreateBuilder(args);
             builder.AddAzureContainerAppEnvironment("env");
             var assignedIdentity = builder.AddAzureUserAssignedIdentity("assigned-identity");
