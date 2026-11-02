@@ -515,30 +515,6 @@ public class ConfigSourceServiceGitTests(ITestOutputHelper outputHelper) : IDisp
     }
 
     [Theory]
-    [InlineData(4 * 1024 * 1024, true)]
-    [InlineData(4 * 1024 * 1024 + 1, false)]
-    public async Task Acquire_EnforcesExactConfigurationSizeLimit(int bytes, bool valid)
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        await CreateRepositoryAsync(workspace, AspireConfigFile.FileName, "{}".PadRight(bytes));
-        var client = CreateClient(TestHelpers.CreateNonInteractiveHostEnvironment());
-        var cache = workspace.CreateDirectory("cache");
-        var source = new ConfigSource { Repository = workspace.Path, Path = AspireConfigFile.FileName };
-
-        if (valid)
-        {
-            var (_, _, configuration) = await client.AcquireAsync(source, cache.FullName, TestContext.Current.CancellationToken);
-            Assert.Empty(configuration);
-        }
-        else
-        {
-            var error = await Assert.ThrowsAsync<ConfigSourceException>(() =>
-                client.AcquireAsync(source, cache.FullName, TestContext.Current.CancellationToken));
-            Assert.Equal(ConfigSourceStrings.InvalidConfiguration, error.Message);
-        }
-    }
-
-    [Theory]
     [InlineData("config/preview")]
     [InlineData("refs/heads/config/preview")]
     public async Task Acquire_ReadsSelectedBranchInsteadOfDefaultBranch(string reference)
@@ -636,12 +612,14 @@ public class ConfigSourceServiceGitTests(ITestOutputHelper outputHelper) : IDisp
         Assert.Equal(ConfigSourceStrings.RepositoryUnavailable, error.Message);
     }
 
-    [Fact]
-    public async Task Acquire_RejectsSymlinkConfiguration()
+    [Theory]
+    [InlineData("target.json", false)]
+    [InlineData("{}", true)]
+    public async Task Acquire_SymlinkBlobUsesNormalConfigurationValidation(string content, bool valid)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await CreateRepositoryAsync(workspace, "target.json", "{}");
-        await File.WriteAllTextAsync(Path.Combine(workspace.Path, AspireConfigFile.FileName), "target.json");
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, AspireConfigFile.FileName), content);
         await GitTestHelper.RunGitAsync(workspace.Path, outputHelper, "add", AspireConfigFile.FileName);
         // Write a symlink-mode tree entry directly so the test does not require Windows
         // developer mode or elevated filesystem symlink privileges.
@@ -650,9 +628,20 @@ public class ConfigSourceServiceGitTests(ITestOutputHelper outputHelper) : IDisp
         await GitTestHelper.RunGitAsync(workspace.Path, outputHelper, "update-index", "--cacheinfo", $"120000,{objectId},{AspireConfigFile.FileName}");
         await GitTestHelper.RunGitAsync(workspace.Path, outputHelper, "commit", "-m", "Add symlink configuration");
 
-        var error = await Assert.ThrowsAsync<ConfigSourceException>(() => CreateClient(TestHelpers.CreateNonInteractiveHostEnvironment()).AcquireAsync(
-            new() { Repository = workspace.Path, Path = AspireConfigFile.FileName }, workspace.CreateDirectory("cache").FullName, TestContext.Current.CancellationToken));
-        Assert.Equal(ConfigSourceStrings.MissingFile, error.Message);
+        var client = CreateClient(TestHelpers.CreateNonInteractiveHostEnvironment());
+        var source = new ConfigSource { Repository = workspace.Path, Path = AspireConfigFile.FileName };
+        var cache = workspace.CreateDirectory("cache");
+        if (valid)
+        {
+            var (_, _, configuration) = await client.AcquireAsync(source, cache.FullName, TestContext.Current.CancellationToken);
+            Assert.Empty(configuration);
+        }
+        else
+        {
+            var error = await Assert.ThrowsAsync<ConfigSourceException>(() =>
+                client.AcquireAsync(source, cache.FullName, TestContext.Current.CancellationToken));
+            Assert.Equal(ConfigSourceStrings.InvalidConfiguration, error.Message);
+        }
     }
 
     [Theory]

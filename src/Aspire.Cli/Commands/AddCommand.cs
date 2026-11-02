@@ -122,6 +122,10 @@ internal sealed class AddCommand : BaseCommand
                 : PackageSourceOverrideMappings.ResolveForWorkingDirectory(
                     source,
                     ExecutionContext.WorkingDirectory);
+            if (source is not null)
+            {
+                InteractionService.DisplayMessage(KnownEmojis.Warning, SharedCommandStrings.SourceTrustWarning, consoleOverride: ConsoleOutput.Error);
+            }
             addActivity = _profilingTelemetry.StartAddCommand(integrationName, version, source, passedAppHostProjectFile);
 
             AppHostProjectSearchResult searchResult;

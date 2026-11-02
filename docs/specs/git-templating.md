@@ -67,6 +67,22 @@ Existing non-empty output directories are rejected. Project name and output
 selection use the existing new-command prompting and validation helpers.
 Optional agent initialization still applies; `--suppress-agent-init` skips it.
 
+## Source trust
+
+Only use sources you trust. Review downloaded templates and their package feeds
+before generating or running an application: source content can run code on your
+machine. Pinning a Git commit provides a stable source tree, not proof that its
+contents are trustworthy.
+
+Git-backed template discovery displays the CLI's shared localized source-trust
+warning once per command before contacting repositories, including configured
+sources and cached checkouts. `aspire template source add` displays the same warning before its
+existing trust confirmation; `--yes` skips the confirmation, not the warning.
+Explicit package feeds accepted by `aspire new --source` and `aspire add --source`
+use the same warning. Configuration-source creation, initialization, and refresh
+also use it, as described in [configuration sources](cli-config-sources.md#source-trust).
+Warnings go to stderr and do not add confirmation requirements.
+
 ## Component responsibilities
 
 | Component | Responsibility |

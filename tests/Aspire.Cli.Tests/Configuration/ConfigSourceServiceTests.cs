@@ -37,10 +37,14 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
             [CliConfigNames.InitSourceRef] = "config-preview"
         });
         var detector = new TestConfigSourceDetector { IsInternal = true };
+        var interaction = new TestInteractionService();
         var git = new TestConfigSourceRepository
         {
             ReadConfiguration = (source, _) =>
             {
+                var warning = Assert.Single(interaction.DisplayedMessages);
+                Assert.Equal(SharedCommandStrings.SourceTrustWarning, warning.Message);
+                Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
                 Assert.Equal("https://git.example/configuration", source.Repository);
                 Assert.Equal(path ?? AspireConfigFile.FileName, source.Path);
                 Assert.Equal("config-preview", source.Ref);
@@ -56,13 +60,14 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
             }
         };
         using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(),
-            git: git, environment: environment, detector: detector);
+            git: git, environment: environment, detector: detector, interaction: interaction);
 
         var sources = await service.GetTemplateSourcesAsync(CancellationToken.None);
         await service.GetTemplateSourcesAsync(CancellationToken.None);
 
         Assert.Equal(0, detector.Calls);
         Assert.Equal(1, git.Calls);
+        Assert.Single(interaction.DisplayedMessages);
         var definition = Assert.Single(sources);
         Assert.Equal("enterprise", definition.Key);
         Assert.Equal("https://git.example/templates", definition.Value!["repository"]!.GetValue<string>());
@@ -809,6 +814,54 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         Assert.Equal(0, git.Calls);
     }
 
+    [Theory]
+    [InlineData(null, true)]
+    [InlineData(true, true)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(false, false)]
+    public async Task SelectForCreation_WarnsBeforeConsentAndAcquisition(bool? consent, bool interactive)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interaction = new TestInteractionService();
+        var prompted = false;
+        interaction.PromptForSelectionCallback = (_, _, _, _) =>
+        {
+            prompted = true;
+            var warning = Assert.Single(interaction.DisplayedMessages,
+                message => message.Message == SharedCommandStrings.SourceTrustWarning);
+            Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
+            return ConfigSourceStrings.Accept;
+        };
+        var git = new TestConfigSourceRepository
+        {
+            ReadConfiguration = (_, _) =>
+            {
+                Assert.Single(interaction.DisplayedMessages,
+                    message => message.Message == SharedCommandStrings.SourceTrustWarning);
+                return Task.FromResult(("version-1", new JsonObject()));
+            }
+        };
+        var environment = new TestEnvironment(new Dictionary<string, string?>
+        {
+            [CliConfigNames.InitSourceUrl] = s_source.Repository
+        });
+        using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(),
+            git: git, environment: environment, interaction: interaction, interactive: interactive);
+
+        var source = await service.ResolveAndAcquireConfigSourceAsync(ParseConsent(consent), CancellationToken.None);
+        if (source is not null)
+        {
+            await service.MaterializeAsync(source, workspace.WorkspaceRoot, CancellationToken.None);
+        }
+
+        Assert.Equal(consent is null, prompted);
+        Assert.Equal(consent is false ? 0 : 1, git.Calls);
+        var warning = Assert.Single(interaction.DisplayedMessages,
+            message => message.Message == SharedCommandStrings.SourceTrustWarning);
+        Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
+    }
+
     [Fact]
     public async Task SelectForCreation_NonInteractiveRequiresConsent()
     {
@@ -1007,7 +1060,24 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task Materialize_PreservesProjectSettingsAndCopiesAllowedSections()
+    public async Task Materialize_PersistsDefaultPathAndOmitsUnspecifiedRef()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var environment = new TestEnvironment(new Dictionary<string, string?>
+        {
+            [CliConfigNames.InitSourceUrl] = s_source.Repository
+        });
+        using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), environment: environment);
+
+        var source = Assert.IsType<ConfigSource>(
+            await service.ResolveAndAcquireConfigSourceAsync(ParseConsent(true), TestContext.Current.CancellationToken));
+        await service.MaterializeAsync(source, workspace.WorkspaceRoot, TestContext.Current.CancellationToken);
+
+        await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, AspireConfigFile.FileName)), "json");
+    }
+
+    [Fact]
+    public async Task Materialize_PreservesProjectSettingsAndCopiesOnlyAllowedLeaves()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var project = workspace.CreateDirectory("created-project");
@@ -1747,8 +1817,13 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
 
         await next.CheckProjectAsync(workspace.WorkspaceRoot, true, CancellationToken.None);
 
-        Assert.Contains(changed ? ConfigSourceStrings.Refreshed : ConfigSourceStrings.RefreshedUnchanged,
-            Assert.Single(interaction.DisplayedMessages).Message);
+        Assert.Collection(interaction.DisplayedMessages,
+            message =>
+            {
+                Assert.Equal(SharedCommandStrings.SourceTrustWarning, message.Message);
+                Assert.Equal(ConsoleOutput.Error, message.ConsoleOverride);
+            },
+            message => Assert.Contains(changed ? ConfigSourceStrings.Refreshed : ConfigSourceStrings.RefreshedUnchanged, message.Message));
         if (!changed)
         {
             Assert.Equal(original, await File.ReadAllTextAsync(path));

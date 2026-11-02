@@ -1357,6 +1357,10 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         {
             ScaffoldAsyncCallback = (context, _) =>
             {
+                Assert.NotNull(interactionService);
+                var warning = Assert.Single(interactionService.DisplayedMessages,
+                    message => message.Message == SharedCommandStrings.SourceTrustWarning);
+                Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
                 capturedPackageSourceOverride = context.PackageSourceOverride;
                 File.WriteAllText(Path.Combine(context.TargetDirectory.FullName, scaffoldFileName), "// test apphost");
                 return Task.FromResult(true);
@@ -1372,6 +1376,8 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(sourceOverride, capturedPackageSourceOverride);
         AssertSourceOverrideNuGetConfig(Path.Combine(workspace.WorkspaceRoot.FullName, "output"), sourceOverride);
         Assert.NotNull(interactionService);
+        Assert.Single(interactionService.DisplayedMessages,
+            message => message.Message == SharedCommandStrings.SourceTrustWarning);
         Assert.DoesNotContain(
             interactionService!.DisplayedMessages,
             entry => entry.Message == TemplatingStrings.SourceOverrideNotPersistedWarning);

@@ -78,6 +78,8 @@ Configuration file: aspire.config.json
 Configuration ref: default branch
 Source origin: Microsoft employee default
 
+Only use sources you trust. Content from these sources can run code on your machine.
+
 Use configuration from this source?
   Yes
   No, use standard Aspire configuration
@@ -131,6 +133,25 @@ aspire update --yes --non-interactive --use-config-source false
 
 These options affect only initial adoption; an existing binding or opt-out remains authoritative. Adoption failure leaves the existing configuration unchanged and fails the command rather than silently continuing with another source. `aspire update --config-source` remains a refresh-only operation and never discovers or adopts a source.
 
+### Source trust
+
+Only use sources you trust. Review the configuration and the template repositories,
+package feeds, and documentation it references before accepting it. Source content
+can run code on your machine, and documentation can influence AI agents. The CLI's
+correctness checks do not establish that a source or its content is trustworthy.
+
+The CLI uses one shared localized warning when offering a configuration source in
+`aspire new` or `aspire init`, refreshing it with `aspire update --config-source`,
+or acquiring configuration for runtime template inheritance. Explicit consent flags
+do not suppress the warning. Repeated configuration acquisition in the same command
+does not repeat it, and background update checks remain silent until their ordinary
+advisory notification.
+
+The same warning is used for Git-backed templates, `aspire template source add`,
+and explicit package sources supplied through `aspire new --source` or
+`aspire add --source`. Warnings go to stderr to preserve machine-readable stdout.
+They do not introduce new confirmation prompts or change existing automation flags.
+
 ### Acquire using Git
 
 Use the user's Git installation and normal credential helpers or SSH authentication. Do not introduce a separate login flow or reuse credentials from employee detection.
@@ -151,7 +172,7 @@ If a non-interactive fetch blocks waiting for a custom authentication helper, th
 
 For creation, initialization, and explicit updates, acquire the selected branch or exact commit, using the current default branch only when no ref was selected. Resolve a branch to one commit and read the selected configuration file from that snapshot. Validate it before applying values to the project or publishing a tracking copy. Record the configured selector, source-file version, and resolved commit separately; a branch name is not the immutable commit actually fetched. Do not turn the tracking copy into runtime configuration.
 
-Git acquisition and advisory checks support cancellation and have a 30-second timeout. Cancellation terminates the running Git process tree, with bounded waits for exit and output draining. Captured output is also drained with a bounded wait after normal process exit, so descendants holding output pipes cannot block indefinitely; incomplete capture fails rather than returning successful empty output. Read the Git blob without checking out the repository, reject symlink configuration entries, and validate the JSON object and known Aspire settings before use. Configuration files are limited to 4 MiB and cannot declare another configuration source. Normalization must scale with the input's property count and key lengths, rather than repeatedly scanning sibling keys or shifting root entries for each flat key. Report missing Git, inaccessible repositories, missing files, and invalid configuration distinctly; classify authentication failures separately when diagnostics are captured non-interactively. Do not silently substitute standard configuration after the user accepts a source.
+Git acquisition and advisory checks support cancellation and have a 30-second timeout. Cancellation terminates the running Git process tree, with bounded waits for exit and output draining. Captured output is also drained with a bounded wait after normal process exit, so descendants holding output pipes cannot block indefinitely; incomplete capture fails rather than returning successful empty output. Read the Git blob without checking out the repository or interpreting file modes, and validate the JSON object and known Aspire settings before use. Symlink blobs contain their target path as text; they are read as content, not followed, and must pass the same JSON validation as other blobs. There is no configuration-file size limit. These checks ensure correctness, not security enforcement. Reject declarations of another configuration source to reserve recursive sources for future support, rather than silently activating previously ignored declarations after an upgrade. Normalization must scale with the input's property count and key lengths, rather than repeatedly scanning sibling keys or shifting root entries for each flat key. Report missing Git, inaccessible repositories, missing files, and invalid configuration distinctly; classify authentication failures separately when diagnostics are captured non-interactively. Do not silently substitute standard configuration after the user accepts a source.
 
 ### Materialize an allowlist into the app configuration
 

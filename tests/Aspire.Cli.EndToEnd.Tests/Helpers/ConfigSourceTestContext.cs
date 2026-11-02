@@ -31,7 +31,7 @@ internal sealed class ConfigSourceTestContext
         _repository = CliE2ETestHelpers.ToContainerPath(Path.Combine(_root, "configuration source"), workspace);
     }
 
-    public static async Task RunAsync(ITestOutputHelper output, Func<ConfigSourceTestContext, Task> test)
+    public static async Task RunAsync(ITestOutputHelper output, string objectFormat, Func<ConfigSourceTestContext, Task> test)
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
@@ -51,7 +51,7 @@ internal sealed class ConfigSourceTestContext
         await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, cancellationToken);
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
-        await context.InitializeRepositoryAsync();
+        await context.InitializeRepositoryAsync(objectFormat);
         await test(context);
     }
 
@@ -320,12 +320,12 @@ internal sealed class ConfigSourceTestContext
         Assert.Equal(original.ToJsonString(), actual.ToJsonString());
     }
 
-    private async Task InitializeRepositoryAsync()
+    private async Task InitializeRepositoryAsync(string objectFormat)
     {
         await _auto.RunCommandAsync("aspire config set features.updateNotificationsEnabled false -g", _counter);
         // The bind-mounted directory belongs to the host runner, not the container's root user.
         await _auto.RunCommandAsync("git config --global --add safe.directory \"$ASPIRE_E2E_WORKSPACE/configuration source\"", _counter);
-        await _auto.RunCommandAsync("git -C 'configuration source' init --initial-branch=main", _counter);
+        await _auto.RunCommandAsync($"git -C 'configuration source' init --initial-branch=main --object-format={objectFormat}", _counter);
         await _auto.RunCommandAsync("git -C 'configuration source' config user.name 'Aspire E2E'", _counter);
         await _auto.RunCommandAsync("git -C 'configuration source' config user.email aspire-e2e@example.com", _counter);
         await CommitSourceAsync();
