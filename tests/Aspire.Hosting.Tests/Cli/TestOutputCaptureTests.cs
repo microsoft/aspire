@@ -33,7 +33,7 @@ public class TestOutputCaptureTests(ITestOutputHelper outputHelper)
             }
         });
         var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var context = new ResourceTestingContext(new TestRunContext(workspace.Path), "tests", workspace.Path,
+        var context = new ResourceTestingContext(new TestingContext(workspace.Path), "tests", workspace.Path,
             _ => Assert.Fail(), completion.Task, TestContext.Current.CancellationToken)
         {
             CaptureOutputCallback = (ctx, token) => TestOutputCapture.CaptureAsync(
@@ -125,7 +125,7 @@ public class TestOutputCaptureTests(ITestOutputHelper outputHelper)
                 return Task.FromResult((error ? stderr : stdout).Reader.AsStream());
             }
         });
-        var context = new ResourceTestingContext(new TestRunContext(workspace.Path), "tests", workspace.Path,
+        var context = new ResourceTestingContext(new TestingContext(workspace.Path), "tests", workspace.Path,
             _ => Assert.Fail(), Task.FromResult(false), cancellation.Token)
         {
             CaptureOutputCallback = (ctx, token) => TestOutputCapture.CaptureAsync(
@@ -164,7 +164,7 @@ public class TestOutputCaptureTests(ITestOutputHelper outputHelper)
         using var cancellation = new CancellationTokenSource();
         var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var calls = 0;
-        var context = new ResourceTestingContext(new TestRunContext(workspace.Path), "tests", workspace.Path,
+        var context = new ResourceTestingContext(new TestingContext(workspace.Path), "tests", workspace.Path,
             _ => Assert.Fail(), completion.Task, TestContext.Current.CancellationToken)
         {
             CaptureOutputCallback = (_, token) =>
@@ -190,7 +190,7 @@ public class TestOutputCaptureTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var cancellation = new CancellationTokenSource();
-        var context = new ResourceTestingContext(new TestRunContext(workspace.Path), "tests", workspace.Path,
+        var context = new ResourceTestingContext(new TestingContext(workspace.Path), "tests", workspace.Path,
             _ => Assert.Fail(), new TaskCompletionSource<bool>().Task, cancellation.Token);
         var capture = context.CaptureOutputAsync();
         cancellation.Cancel();
@@ -210,7 +210,7 @@ public class TestOutputCaptureTests(ITestOutputHelper outputHelper)
         {
             resource.Annotations.Add(new ReplicaAnnotation(2));
         }
-        var context = new ResourceTestingContext(new TestRunContext(workspace.Path), "tests", workspace.Path,
+        var context = new ResourceTestingContext(new TestingContext(workspace.Path), "tests", workspace.Path,
             _ => Assert.Fail(), Task.FromResult(true), TestContext.Current.CancellationToken)
         {
             CaptureOutputCallback = (ctx, token) => TestOutputCapture.CaptureAsync(resource, logs, ctx, token)
@@ -227,7 +227,7 @@ public class TestOutputCaptureTests(ITestOutputHelper outputHelper)
         var target = Directory.CreateDirectory(Path.Combine(workspace.Path, "target"));
         var link = Path.Combine(workspace.Path, "link");
         Directory.CreateSymbolicLink(link, target.FullName);
-        var context = new ResourceTestingContext(new TestRunContext(workspace.Path), "tests", link,
+        var context = new ResourceTestingContext(new TestingContext(workspace.Path), "tests", link,
             _ => Assert.Fail(), Task.FromResult(true), TestContext.Current.CancellationToken)
         {
             CaptureOutputCallback = (ctx, token) => TestOutputCapture.CaptureAsync(
@@ -238,7 +238,7 @@ public class TestOutputCaptureTests(ITestOutputHelper outputHelper)
     }
 
     private static ResourceTestingContext CreateContext(TemporaryWorkspace workspace, ResourceLoggerService logs) =>
-        new(new TestRunContext(workspace.Path), "tests", workspace.Path, _ => Assert.Fail(),
+        new(new TestingContext(workspace.Path), "tests", workspace.Path, _ => Assert.Fail(),
             Task.FromResult(true), TestContext.Current.CancellationToken)
         {
             CaptureOutputCallback = (ctx, token) => TestOutputCapture.CaptureAsync(

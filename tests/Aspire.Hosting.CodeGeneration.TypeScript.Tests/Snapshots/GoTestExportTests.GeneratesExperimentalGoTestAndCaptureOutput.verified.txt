@@ -12,5 +12,8 @@ export interface WithTestingOptions {
 export interface WaitForCompletionAsyncOptions {
     /** An optional token that cancels only this wait, in addition to test-run cancellation. */
     cancellationToken?: AbortSignal | CancellationToken;
-}
+},
+  Context:     testingContext(): TestingContextPromise;,
+  ContextGetter: Aspire.Hosting.ApplicationModel/ResourceTestingContext.testingContext,
+  RootOutputGetter: Aspire.Hosting.ApplicationModel/TestingContext.outputPath
 }

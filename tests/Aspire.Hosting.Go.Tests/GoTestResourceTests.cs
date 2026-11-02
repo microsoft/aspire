@@ -212,12 +212,12 @@ public class GoTestResourceTests(ITestOutputHelper outputHelper)
         resource.WithTesting(replacement);
         var replaced = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
         Assert.Same(replacement, replaced.Collector);
-        Assert.Same(original.RunContext, replaced.RunContext);
+        Assert.Same(original.TestingContext, replaced.TestingContext);
         Assert.Equal(original.OutputPath, replaced.OutputPath);
         resource.WithTesting();
         var marker = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
         Assert.Null(marker.Collector);
-        Assert.Same(original.RunContext, marker.RunContext);
+        Assert.Same(original.TestingContext, marker.TestingContext);
         Assert.Equal(original.OutputPath, marker.OutputPath);
         await using var app = builder.Build();
         await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services,

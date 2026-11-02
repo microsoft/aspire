@@ -91,7 +91,9 @@ public class GoTestExecutionTests(ITestOutputHelper outputHelper)
             };
             Assert.Equal(expected, (results.Count(r => r.Outcome == "passed"),
                 results.Count(r => r.Outcome == "failed"), results.Count(r => r.Outcome == "skipped")));
-            var path = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>()).OutputPath!;
+            var annotation = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
+            Assert.Equal(Path.Combine(workspace.Path, "results"), annotation.TestingContext!.OutputPath);
+            var path = annotation.OutputPath!;
             Assert.Equal(Path.Combine(workspace.Path, "results", "tests"), path);
             Assert.True(File.Exists(Path.Combine(path, "output.complete")));
             Assert.True(File.Exists(Path.Combine(path, "stderr.log")));
