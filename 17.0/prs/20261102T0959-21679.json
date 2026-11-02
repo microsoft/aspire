@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Grouped into project-bound Git configuration sources entry",
+  "mergedAt": "2026-11-02T09:59:35Z",
+  "number": 21679,
+  "runDate": "2026-11-02T12:05:00Z",
+  "status": "included",
+  "title": "Limit configuration sources to project-local settings"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only change: unquarantines tests",
+  "mergedAt": "2026-11-02T06:25:05Z",
+  "number": 21649,
+  "runDate": "2026-11-02T12:05:00Z",
+  "status": "excluded",
+  "title": "Unquarantine 2 CLI E2E tests that pass 100% in the quarantine lane"
+}

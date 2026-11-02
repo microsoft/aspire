@@ -6,7 +6,9 @@
   "changeType": "Improvements",
   "communityContributors": [],
   "description": "AppHost build failures when the CLI bundle can't be set up (ASPIRE009) now include the captured DNX/CLI setup output, including both attempts when a PATH CLI falls back to DNX, so feed and authentication errors are visible without diagnostic verbosity.",
-  "docsPrs": [],
+  "docsPrs": [
+    1943
+  ],
   "docsRequired": false,
   "emoji": "🩺",
   "firstMergedAt": "2026-10-23T14:40:33Z",
