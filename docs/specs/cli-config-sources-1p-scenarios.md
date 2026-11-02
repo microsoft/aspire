@@ -81,7 +81,7 @@ For this scenario, suppose the repository initially supplies:
 
 The application is still created from the selected Aspire starter. Acquiring this configuration does not itself download a custom starter, install a private integration, or replace the embedded agent skills.
 
-If Maya declines, creation continues with standard Aspire configuration and no new source binding or Git acquisition. If she cancels the source prompt, the app is not created. If she accepts but repository access or validation fails, creation reports the error rather than silently switching to standard configuration.
+If Maya declines, creation continues with standard Aspire configuration and saves `"configSource": { "optOut": true }` without Git acquisition. This prevents subsequent adoption prompts for that project. If she cancels the source prompt, the app is not created. If she accepts but repository access or validation fails, creation reports the error rather than silently switching to standard configuration.
 
 ## Scenario 2: Maya finds out what was saved
 
@@ -213,7 +213,7 @@ Noah can prepare Git authentication as Maya did. If a check completes with an ac
 The behavior is project-scoped:
 
 - A bound project's ordinary commands use its app file; commands that resolve the project or select a running AppHost also check the source for update availability.
-- A project without a binding does not check or acquire a source merely because Noah is a Microsoft employee or another project uses one.
+- A project without a binding does not check or acquire a source merely because Noah is a Microsoft employee or another project uses one. Plain `aspire update` can offer to adopt an available source, but requires consent before acquisition and saves an explicit opt-out if Noah declines.
 - Changing initialization environment variables does not retarget Inventory's saved binding.
 - Having a tracking entry does not opt another project into using the source or supply that project's settings.
 
@@ -270,6 +270,8 @@ A successful explicit fetch records the fetch time even if the source-file versi
 If authentication expires, Maya repairs Git access, verifies it with `git ls-remote`, and retries. If acquisition or validation fails during an explicit update, the update exits nonzero and preserves the previous app configuration, applied version, and fetched tracking copy. This is different from an advisory check failure.
 
 `aspire update --config-source` is not a way to enable a source on an unbound project. If neither the nearest local settings file nor the global settings file has a saved binding, it reports that there is no configuration source to update and exits successfully without changing configuration or acquiring a source. The option cannot be combined with CLI self-update, migration, or channel/package-source overrides. A binding without an applied version gets instructions to run this explicit update rather than having source values silently loaded. Configuration sources are not supported in legacy `.aspire/settings.json` files.
+
+For an AppHost created before configuration sources were available, Maya can instead run plain `aspire update`. If its nearest local configuration has no source choice and a source is available from the environment or employee detection, Aspire displays the source and asks whether to use it. Accepting applies the allowed settings and saves the binding. Declining saves `"configSource": { "optOut": true }`, preserving existing settings and preventing repeated prompts. Removing that entry allows a later adoption prompt. Non-interactive updates skip adoption unless `--use-config-source` or `--use-config-source false` explicitly supplies the choice; `--yes` alone is not source consent.
 
 ## Scenario 6: Priya explicitly selects a team configuration during initialization
 

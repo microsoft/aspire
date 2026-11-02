@@ -17,13 +17,13 @@ The `configSource` binding itself is not copied or inherited into a child config
 
 Configuration sources are supported in modern `aspire.config.json` files, not legacy configurations such as `.aspire/settings.json`. This feature does not add legacy migration or compatibility handling. Existing shared discovery behavior is unchanged; incidental behavior with legacy files is not a supported contract.
 
-Source-driven writes to app configuration happen only during initial materialization by `aspire new` or `aspire init`, or an explicit `aspire update --config-source`. Global configuration with a saved binding is refreshed only by that explicit update command. Runtime template discovery and consented template-source listing can also acquire configuration and publish the user-directory tracking snapshot, but use only the `templateSources` overlay without saving inherited values into app or global configuration. Other commands may check for updates and report their availability, but must not apply them. This restriction does not prohibit explicit local configuration edits or a command's unrelated project bookkeeping.
+Source-driven writes to app configuration happen only during initial materialization by `aspire new` or `aspire init`, consented adoption by `aspire update`, or an explicit `aspire update --config-source`. Global configuration with a saved binding is refreshed only by that explicit update command. Runtime template discovery and consented template-source listing can also acquire configuration and publish the user-directory tracking snapshot, but use only the `templateSources` overlay without saving inherited values into app or global configuration. Other commands may check for updates and report their availability, but must not apply them. This restriction does not prohibit explicit local configuration edits or a command's unrelated project bookkeeping.
 
 ## Phase 1: Acquire remote configuration
 
 ### Select a source
 
-During `aspire new` or `aspire init`, resolve a candidate source:
+During `aspire new`, `aspire init`, or adoption by `aspire update`, resolve a candidate source:
 
 | Priority | Source |
 |---|---|
@@ -84,10 +84,10 @@ Use configuration from this source?
 ```
 
 - **Accept:** acquire and validate the remote file, then materialize allowlisted values and a `configSource` binding in the created or initialized project's `aspire.config.json`.
-- **Decline:** continue normally, without Git acquisition or a `configSource` entry.
+- **Decline:** continue normally without Git acquisition, and save `"configSource": { "optOut": true }` after successful project creation or initialization.
 - **Cancel:** stop without creating the application.
 
-The choice applies to the project being created or initialized, not every project beneath the invoking directory. Existing projects use their saved `configSource` without repeating the prompt. Initialization checks the target directory's `aspire.config.json`; it does not reuse an ancestor's binding. An environment variable or employee detection alone never enables a source.
+The choice applies to the project being created or initialized, not every project beneath the invoking directory. Existing projects use their saved `configSource` or opt-out without repeating the prompt. An opt-out does not require repository, path, ref, or applied-version fields, and source checks and refresh skip that file without preventing other configuration files' bindings from being processed. Initialization checks the target directory's `aspire.config.json`; it does not reuse an ancestor's binding. An environment variable or employee detection alone never enables a source.
 
 Initialization selects and materializes the source in the configuration file used by the AppHost. In C# solution mode, a new AppHost template creates `aspire.config.json` inside `<solution>.AppHost`, so that file receives the binding and source values rather than the solution-root configuration. An existing AppHost uses its nearest configuration; the solution-root file remains the target when there is no nearer AppHost configuration. An existing binding in the selected file is reused without renewed consent or reapplying source values, even when the initialization environment proposes another source. A parent binding hidden by the AppHost's own configuration is not reused or changed. File-based and polyglot initialization use the working-directory configuration. Agent setup still uses the solution/workspace root independently of the AppHost configuration.
 
@@ -105,6 +105,31 @@ Non-interactive creation requires `--use-config-source` to accept the candidate 
 aspire new aspire-starter --use-config-source
 aspire init --use-config-source false
 ```
+
+### Adopt a source in an existing project
+
+Plain `aspire update` also offers the candidate source when the selected AppHost's nearest local configuration has neither a `configSource` binding nor an explicit opt-out. It uses the same environment-variable and employee-detection precedence and the same consent prompt as project creation. If no candidate is available, nothing is saved.
+
+Accepting acquires and validates the source, then merges allowlisted settings and a binding with its applied version into that nearest configuration file. If no local configuration exists, create `aspire.config.json` beside the AppHost. Declining saves only the opt-out alongside existing settings:
+
+```json
+{
+  "configSource": {
+    "optOut": true
+  }
+}
+```
+
+Both choices prevent subsequent adoption prompts. Saved bindings are not retargeted or reapplied by plain `aspire update`; their existing advisory checks remain unchanged. Remove the `configSource` entry to allow a later adoption prompt. CLI self-update and repository-tool-only updates do not offer project configuration sources.
+
+Unattended package updates do not introduce a new consent requirement: without `--use-config-source`, skip adoption entirely, without recording an opt-out. `--yes` alone does not consent to source adoption. To accept or decline explicitly:
+
+```shell
+aspire update --yes --non-interactive --use-config-source
+aspire update --yes --non-interactive --use-config-source false
+```
+
+These options affect only initial adoption; an existing binding or opt-out remains authoritative. Adoption failure leaves the existing configuration unchanged and fails the command rather than silently continuing with another source. `aspire update --config-source` remains a refresh-only operation and never discovers or adopts a source.
 
 ### Acquire using Git
 
@@ -273,7 +298,7 @@ This is a configuration-update mode of `aspire update`, separate from its packag
 - Never process sources in parallel. On the first acquisition, validation, or write failure, stop and exit nonzero; preserve earlier successful updates without rolling them back.
 - Publish the fetched source JSON and fetch metadata in Aspire home as tracking data. Record a successful fetch/check time even if the selected file's version is unchanged. If tracking publication fails, report it explicitly; do not use shared tracking as proof that an app was updated.
 - Report the source, resolved commit, and whether the app configuration changed. Make clear that supplied allowlisted values can replace local edits.
-- Do not update the CLI, SDK, or packages, change the binding's repository, path, or ref, regenerate AppHost source or application code, or reinstall content. The app configuration file and its applied-version stamp are intentionally updated. Reject combinations with `--self`, `--migrate`, or channel/package-source overrides. Plain `aspire update` retains its existing package-update behavior and only performs an advisory source check.
+- Do not update the CLI, SDK, or packages, change the binding's repository, path, or ref, regenerate AppHost source or application code, or reinstall content. The app configuration file and its applied-version stamp are intentionally updated. Reject combinations with `--self`, `--migrate`, or channel/package-source overrides. Plain `aspire update` retains its existing package-update behavior and performs an advisory source check for saved bindings; unbound projects can explicitly adopt a source as described above.
 - Follow `aspire update`'s existing non-interactive confirmation contract: automation uses `aspire update --config-source --yes --non-interactive`. The saved binding supplies source consent; this command does not establish a new binding or prompt to enable one.
 
 Failed or cancelled acquisition or validation must not replace the app settings, applied version, or last valid fetched tracking copy, and must not report success. Unlike an advisory check failure, failure of this explicit update is an operation failure with a nonzero exit code.
@@ -319,7 +344,7 @@ For explicit updates, cover fresh/missing tracking, unchanged source versions, `
 
 Cover nearest-local and global bindings independently and together, including no local file, an unbound nearest modern file that hides a farther ancestor binding, a nonstandard global file path, and local/global paths identifying the same file. Verify serial acquisition, shared-source deduplication and cache freshness across differing applied versions, preservation of unrelated files, and failure/cancellation after an earlier successful refresh.
 
-Keep no-source, declined-source materialization, unrelated global-command, help, and completion paths free of source acquisition/checks. Template search and source listing can acquire explicitly configured runtime template sources as described below. Verify plain `aspire update` does not implicitly materialize configuration-source changes.
+Keep no-source, declined-source materialization, unrelated global-command, help, and completion paths free of source acquisition/checks. Template search and source listing can acquire explicitly configured runtime template sources as described below. Verify plain `aspire update` does not implicitly materialize changes to saved bindings. Cover consented brownfield adoption from environment and employee candidates, persisted opt-outs, repeat invocations, selected AppHost configuration scope, failure preservation, and unattended updates that skip adoption unless explicit consent is supplied.
 
 ## Runtime template sources
 
