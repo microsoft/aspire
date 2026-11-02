@@ -23,9 +23,17 @@ public class GoTestExportTests
         var code = new AtsTypeScriptCodeGenerator().GenerateDistributedApplication(scan.ToAtsContext())["aspire.mts"];
         var add = Regex.Match(code, @"(?m)^    addGoTest\([^\r\n]*;").Value;
         var captureMethod = Regex.Match(code, @"(?m)^    captureOutputAsync\([^\r\n]*;").Value;
+        var testingMethod = Regex.Match(code, @"(?m)^    withTesting\([^\r\n]*: GoTestResourcePromise;").Value;
+        var waitMethod = Regex.Match(code, @"(?m)^    waitForCompletionAsync\([^\r\n]*;").Value;
+        var testingOptions = Regex.Match(code, @"(?ms)^export interface WithTestingOptions \{.*?^\}").Value;
+        var waitOptions = Regex.Match(code, @"(?ms)^export interface WaitForCompletionAsyncOptions \{.*?^\}").Value;
         Assert.NotEmpty(add);
         Assert.NotEmpty(captureMethod);
-        var methods = new { Add = add, Capture = captureMethod };
+        Assert.NotEmpty(testingMethod);
+        Assert.NotEmpty(waitMethod);
+        Assert.NotEmpty(testingOptions);
+        Assert.NotEmpty(waitOptions);
+        var methods = new { Add = add, Capture = captureMethod, Testing = testingMethod, Wait = waitMethod, testingOptions, waitOptions };
         await Verify(methods);
     }
 }

@@ -72,74 +72,71 @@ public static class GoTestingExtensions
             .WithOtlpExporter()
             .ExcludeFromManifest();
 
-        resource.WithTesting(testing =>
+        resource.WithTesting(async context =>
         {
-            builder.OnBeforeStart((_, _) =>
+            await context.CaptureOutputAsync().ConfigureAwait(false);
+            var stream = new FileStream(Path.Combine(context.OutputPath, "stdout.log"),
+                FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.Asynchronous | FileOptions.SequentialScan);
+            await using (stream.ConfigureAwait(false))
             {
-                if (testing.IsTestRun &&
-                    (resource.Resource.Command != "go" ||
-                     resource.Resource.TryGetLastAnnotation<ReplicaAnnotation>(out var replicas) && replicas.Replicas != 1 ||
-                     resource.Resource.TryGetLastAnnotation<TerminalAnnotation>(out _) ||
-                     !resource.Resource.TryGetLastAnnotation<ExecutableLaunchRecipeAnnotation>(out var launch) ||
-                     launch.Recipe != DirectExecutableLaunchRecipe.Instance))
-                {
-                    throw new DistributedApplicationException("Go testing supports exactly one native, non-terminal go process.");
-                }
-                resource.WithArgs(async context =>
-                {
-                    if (testing.IsTestRun)
-                    {
-                        var resolved = new List<object>();
-                        foreach (var argument in context.Args)
-                        {
-                            var value = await context.Resource.ResolveValueAsync(context.ExecutionContext,
-                                context.Logger, argument, "Go test argument", context.CancellationToken).ConfigureAwait(false);
-                            resolved.Add(value?.Value ?? throw new ArgumentException("Go test arguments cannot resolve to null."));
-                        }
-                        ValidateArguments(resolved);
-                    }
-                    var separator = context.Args.IndexOf("-args");
-                    var insertion = separator < 0 ? context.Args.Count : separator;
-                    foreach (var package in packages)
-                    {
-                        context.Args.Insert(insertion++, package);
-                    }
-                    context.Args.Insert(0, "test");
-                    if (testing.IsTestRun)
-                    {
-                        context.Args.Insert(1, "-json");
-                        context.Args.Insert(2, "-count=1");
-                    }
-                });
-                if (testing.IsTestRun)
-                {
-                    // Register after model definition so later WithEnvironment calls, including
-                    // deferred GOFLAGS parameters, are present before the strict settings probe.
-                    resource.WithEnvironment(async context =>
-                    {
-                        var flags = context.EnvironmentVariables.GetValueOrDefault("GOFLAGS");
-                        var resolved = flags is null ? null : (await context.Resource.ResolveValueAsync(
-                            context.ExecutionContext, context.Logger, flags, "GOFLAGS", context.CancellationToken).ConfigureAwait(false))?.Value;
-                        var effective = await GoRunDebugging.ReadGoFlagsAsync(context, resolved, throwOnError: true).ConfigureAwait(false);
-                        ValidateArguments(GoRunDebugging.SplitFlags(effective).Cast<object>());
-                    });
-                }
-                return Task.CompletedTask;
-            });
-            if (!testing.IsTestRun)
-            {
-                return;
+                await GoTestJsonReport.ReadAsync(stream, context.PublishResult, context.CancellationToken).ConfigureAwait(false);
             }
-            testing.CollectResults(async context =>
+        });
+        var isTestRun = builder.ExecutionContext.IsRunMode && builder.Configuration["ASPIRE_TEST_OUTPUT_PATH"] is not null;
+        builder.OnBeforeStart((_, _) =>
+        {
+            if (isTestRun &&
+                (resource.Resource.Command != "go" ||
+                 resource.Resource.TryGetLastAnnotation<ReplicaAnnotation>(out var replicas) && replicas.Replicas != 1 ||
+                 resource.Resource.TryGetLastAnnotation<TerminalAnnotation>(out _) ||
+                 !resource.Resource.TryGetLastAnnotation<ExecutableLaunchRecipeAnnotation>(out var launch) ||
+                 launch.Recipe != DirectExecutableLaunchRecipe.Instance))
             {
-                await context.CaptureOutputAsync().ConfigureAwait(false);
-                var stream = new FileStream(Path.Combine(context.OutputPath, "stdout.log"),
-                    FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.Asynchronous | FileOptions.SequentialScan);
-                await using (stream.ConfigureAwait(false))
+                throw new DistributedApplicationException("Go testing supports exactly one native, non-terminal go process.");
+            }
+            resource.WithArgs(async context =>
+            {
+                if (isTestRun)
                 {
-                    await GoTestJsonReport.ReadAsync(stream, context.PublishResult, context.CancellationToken).ConfigureAwait(false);
+                    var resolved = new List<object>();
+                    foreach (var argument in context.Args)
+                    {
+                        var value = await context.Resource.ResolveValueAsync(context.ExecutionContext,
+                            context.Logger, argument, "Go test argument", context.CancellationToken).ConfigureAwait(false);
+                        resolved.Add(value?.Value ?? throw new ArgumentException("Go test arguments cannot resolve to null."));
+                    }
+                    ValidateArguments(resolved);
+                }
+                var separator = context.Args.IndexOf("-args");
+                var insertion = separator < 0 ? context.Args.Count : separator;
+                foreach (var package in packages)
+                {
+                    context.Args.Insert(insertion++, package);
+                }
+                context.Args.Insert(0, "test");
+                if (isTestRun)
+                {
+                    context.Args.Insert(1, "-json");
+                    context.Args.Insert(2, "-count=1");
                 }
             });
+            if (isTestRun)
+            {
+                // Register after model definition so later WithEnvironment calls, including
+                // deferred GOFLAGS parameters, are present before the strict settings probe.
+                resource.WithEnvironment(async context =>
+                {
+                    var flags = context.EnvironmentVariables.GetValueOrDefault("GOFLAGS");
+                    var resolved = flags is null ? null : (await context.Resource.ResolveValueAsync(
+                        context.ExecutionContext, context.Logger, flags, "GOFLAGS", context.CancellationToken).ConfigureAwait(false))?.Value;
+                    var effective = await GoRunDebugging.ReadGoFlagsAsync(context, resolved, throwOnError: true).ConfigureAwait(false);
+                    ValidateArguments(GoRunDebugging.SplitFlags(effective).Cast<object>());
+                });
+            }
+            return Task.CompletedTask;
+        });
+        if (isTestRun)
+        {
             var starts = 0;
             resource.OnBeforeResourceStarted((_, _, _) =>
             {
@@ -149,7 +146,7 @@ public static class GoTestingExtensions
                 }
                 return Task.CompletedTask;
             });
-        });
+        }
 
         return resource;
     }
