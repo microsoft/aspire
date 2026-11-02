@@ -36,9 +36,24 @@
       "type": "string"
     },
     "configSource": {
-      "description": "The Git repository, configuration path, optional branch or commit, and version last applied to this app.",
+      "description": "The Git repository, configuration path, optional branch or commit, and version last applied to this app, or an explicit opt-out.",
       "type": "object",
       "properties": {
+        "optOut": {
+          "description": "",
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          ]
+        },
         "repository": {
           "description": "",
           "type": "string"
@@ -441,6 +456,28 @@
           },
           "openCodeV2Catalog": {
             "description": "HTTPS skills catalog URL for OpenCode V2. Omit for sources without an OpenCode catalog.",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "templateSources": {
+      "description": "Named global template sources. Each source specifies an absolute local path or a Git repository with optional ref and path.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "description": "",
+            "type": "string"
+          },
+          "repository": {
+            "description": "",
+            "type": "string"
+          },
+          "ref": {
+            "description": "",
             "type": "string"
           }
         },

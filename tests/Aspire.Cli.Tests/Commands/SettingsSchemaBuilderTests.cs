@@ -9,6 +9,25 @@ namespace Aspire.Cli.Tests.Commands;
 
 public class SettingsSchemaBuilderTests
 {
+    [Fact]
+    public void BuildConfigFileSchema_HonorsConditionalJsonIgnore()
+    {
+        var schema = SettingsSchemaBuilder.BuildConfigFileSchema(excludeLocalOnly: false);
+
+        Assert.Equal(
+            ["appHost", "certificates", "channel", "configSource", "containerTunnel", "docs", "features",
+                "packages", "profiles", "sdk", "skillSources", "templateSources"],
+            schema.Properties.Select(property => property.Name));
+        var configSource = Assert.Single(schema.Properties, property => property.Name == "configSource");
+        Assert.NotNull(configSource.SubProperties);
+        Assert.Equal(
+            ["optOut", "repository", "path", "ref", "appliedVersion"],
+            configSource.SubProperties.Select(property => property.Name));
+        var optOut = Assert.Single(configSource.SubProperties, property => property.Name == "optOut");
+        Assert.Equal("boolean", optOut.Type);
+        Assert.False(optOut.Required);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
