@@ -11,6 +11,13 @@
       "job": "Tests / No-package tests (regular, Aspire.Hosting.Azure.Tests, Hosting.Azure, Hosting.Azure, tests/Aspire... / Hosting.Azure (ubuntu-latest)",
       "pr_number": 0,
       "observed_at": "2026-10-31T21:46:38Z"
+    },
+    {
+      "run_id": 41413699481,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/41413699481",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Azure.Tests, Hosting.Azure, Hosting.Azure, tests/Aspire... / Hosting.Azure (ubuntu-latest)",
+      "pr_number": 0,
+      "observed_at": "2026-11-02T09:47:59Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/21620"

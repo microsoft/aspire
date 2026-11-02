@@ -1,0 +1,87 @@
+{
+  "run_id": 41413699481,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/41413699481",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-02T09:47:59Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 21678,
+    "title": "Support config source adoption and explicit project opt-out",
+    "author": "JamesNK",
+    "state": "closed",
+    "head_branch": "jamesnk/config-source-brownfield",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/21678",
+    "merged_at": "2026-11-02T08:31:25Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "1d3c45f9a299c30d46fc3166148902d466043df2",
+    "failed_sha": "7961070663e774084a46b4ee908ea4c0149db633",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "a8dff1cee6a428a0e5eff5dbdf7bf258f6cc32d0",
+        "message": "Only show 'Stopping Aspire' when canceling aspire run (#21561) Co-authored-by: davidfowl <95136+davidfowl@users.noreply.github.com> Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com> Co-authored-by: James Newton-King <james@newtonking.com>",
+        "html_url": "https://github.com/microsoft/aspire/commit/a8dff1cee6a428a0e5eff5dbdf7bf258f6cc32d0",
+        "pull_request": {
+          "number": 21561,
+          "title": "Only show 'Stopping Aspire' when canceling aspire run",
+          "url": "https://github.com/microsoft/aspire/pull/21561",
+          "merged_at": "2026-11-02T05:29:25Z"
+        }
+      },
+      {
+        "sha": "ae2c92730f335db41c02dffb22fdfc83793e231d",
+        "message": "Unquarantine 2 CLI E2E tests that pass 100% in the quarantine lane (#21649) ## Description This unquarantines 2 CLI E2E tests that have passed 100% of the time in the quarantined-tests lane over the last 14 days. No product or test logic changes: the PR only removes `[QuarantinedTest]` and the now-unused `using Aspire.TestUtilities;` directives. Quarantine-lane evidence comes from `tests-quarantine.yml` scheduled runs created 2026-10-18 to 2026-11-01. I parsed each run's Final Results table (174",
+        "html_url": "https://github.com/microsoft/aspire/commit/ae2c92730f335db41c02dffb22fdfc83793e231d",
+        "pull_request": {
+          "number": 21649,
+          "title": "Unquarantine 2 CLI E2E tests that pass 100% in the quarantine lane",
+          "url": "https://github.com/microsoft/aspire/pull/21649",
+          "merged_at": "2026-11-02T06:25:05Z"
+        }
+      },
+      {
+        "sha": "7961070663e774084a46b4ee908ea4c0149db633",
+        "message": "Support config source adoption and explicit project opt-out (#21678)",
+        "html_url": "https://github.com/microsoft/aspire/commit/7961070663e774084a46b4ee908ea4c0149db633",
+        "pull_request": {
+          "number": 21678,
+          "title": "Support config source adoption and explicit project opt-out",
+          "url": "https://github.com/microsoft/aspire/pull/21678",
+          "merged_at": "2026-11-02T08:31:25Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.Azure.Tests, Hosting.Azure, Hosting.Azure, tests/Aspire... / Hosting.Azure (ubuntu-latest)",
+      "id": 125173168965,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/41413699481/job/125173168965",
+      "classification": "flaky-test",
+      "reason": "Test ran and failed with TaskCanceledException in DistributedApplication.StopAsync; matches known flaky cause",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureFunctionsTests.AddAzureFunctionsProject_WorksWithMultipleProjects",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Azure.Tests, Hosting.Azure, Hosting.Azure, tests/Aspire... / Hosting.Azure (ubuntu-latest)",
+      "error": "System.Threading.Tasks.TaskCanceledException : A task was canceled.",
+      "stack_trace": "at Microsoft.Extensions.Hosting.Internal.Host.ForeachService[T](IEnumerable`1 services, CancellationToken token, Boolean concurrent, Boolean abortOnFirstException, List`1 exceptions, Func`3 operation)\n   at Microsoft.Extensions.Hosting.Internal.Host.StopAsync(CancellationToken cancellationToken)\n   at Aspire.Hosting.DistributedApplication.StopAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/DistributedApplication.cs:line 500\n   at Aspire.Hosting.Azure.Tests.AzureFunctionsTests.AddAzureFunctionsProject_WorksWithMultipleProjects() in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.Azure.Tests/AzureFunctionsTests.cs:line 201\n--- End of stack trace from previous location ---",
+      "standard_output": "| [2026-11-02T08:38:07] Aspire.Hosting.DistributedApplication Information: Aspire AppHost version: 17.0.0-ci\n| [2026-11-02T08:38:07] Aspire.Hosting.DistributedApplication Information: Distributed application starting.\n| [2026-11-02T08:38:07] Aspire.Hosting.DistributedApplication Information: Application host directory is: /home/runner/work/aspire/aspire/tests/Aspire.Hosting.TestUtilities\n| [2026-11-02T08:38:07] Aspire.Hosting.Devcontainers.Codespaces.CodespacesResourceUrlRewriterService Trace: Not running in Codespaces, skipping URL rewriting.\n| [2026-11-02T08:38:07] Aspire.Hosting.Backchannel.AuxiliaryBackchannelService Debug: Starting auxiliary backchannel service on socket path: /home/runner/.aspire/cli/bch/KfshLkY6TmInb3Infvv.4706\n| [2026-11-02T08:38:07] Aspire.Hosting.Backchannel.AuxiliaryBackchannelService Debug: Auxiliary backchannel listening on /home/runner/.aspire/cli/bch/KfshLkY6TmInb3Infvv.4706\n| [2026-11-02T08:38:07] Aspire.Hosting.Cli.BackchannelService Debug: Backchannel socket path was not specified.\n| [2026-11-02T08:38:07] Aspire.Hosting.Cli.CliOrphanDetector Debug: No CLI process ID configured. Orphan detection disabled.\n| [2026-11-02T08:38:07] Aspire.Hosting.Dcp.DcpHost Debug: Prepared DCP TLS certificate files for thumbprint 757A5699A790C3DBFC2F77C1818EFB2FA5DBD2D8.\n| [2026-11-02T08:38:07] Aspire.Hosting.FileSystemService Debug: Allocated temporary directory: /tmp/aspire-dcp77ByzQ\n| [2026-11-02T08:38:07] Aspire.Hosting.Dcp.DcpHost Information: Starting DCP with arguments: start-apiserver --monitor 4706 --detach --kubeconfig \"/tmp/aspire-dcp77ByzQ/kubeconfig\" --tls-cert-thumbprint \"757A5699A790C3DBFC2F77C1818EFB2FA5DBD2D8\" --tls-cert-file \"/home/runner/.aspire/dev-certs/https/1D9889D5FC3D42C9332DA4B50546CAE74F8C51560CA8CA41C9FAD1237D0D7D42.crt\" --tls-key-file \"/home/runner/.aspire/dev-certs/https/1D9889D5FC3D42C9332DA4B50546CAE74F8C51560CA8CA41C9FAD1237D0D7D42.key\"\n| [2026-11-02T08:38:07] Aspire.Hosting.Dcp.DcpExecutor Debug: Preparing services. Ports randomized: True\n| [2026-11-02T08:38:07] Aspire.Hosting.ApplicationModel.ResourceNotificationService Trace: Version: 1 Resource azure-environment/azure-environment update published: ResourceType = AzureEnvironmentResource, CreationTimeStamp = 2026-11-02T08:38:07, State = { Text = NotStarted, Style = (null) }, IsHidden = True, HeathStatus = (null), ResourceReady = False, ExitCode = (null), Urls = {  }, EnvironmentVariables = {  }, Properties = {  }, HealthReports = {  }, Commands = { reset-provisioning-state (Reset provisioning state) = Enabled change-azure-context (Change Azure context) = Enabled reprovision-all (Reprovision all) = Enabled delete-azure-resources (Delete Azure resources) = Enabled }\n| [2026-11-02T08:38:07] Aspire.Hosting.ApplicationModel.ResourceNotificationService Trace: Version: 1 Resource funcstorage53c8d/funcstorage53c8d-wbkvhvhe update published: ResourceType = AzureStorageResource, CreationTimeStamp = (null), State = { Text = (null), Style = (null) }, IsHidden = False, HeathStatus = (null), ResourceReady = False, ExitCode = (null), Urls = {  }, EnvironmentVariables = {  }, Properties = {  }, HealthReports = { funcstorage53c8d_check = (null) }, Commands = { start (Start) = Disabled stop (Stop) = Hidden restart (Restart) = Disabled }\n| [2026-11-02T08:38:07] Aspire.Hosting.ApplicationModel.ResourceNotificationService Trace: Version: 1 Resource funcapp/funcapp-sftrzkaj update published: ResourceType = Project, CreationTimeStamp = (null), State = { Text = (null), Style = (null) }, IsHidden = False, HeathStatus = (null), ResourceReady = False, ExitCode = (null), Urls = {  }, EnvironmentVariables = {  }, Properties = {  }, HealthReports = {  }, Commands = { start (Start) = Disabled stop (Stop) = Hidden restart (Restart) = Disabled rebuild (Rebuild) = Disabled }\n| [2026-11-02T08:38:07] Aspire.Hosting.ApplicationModel.ResourceNotificationService Trace: Version: 1 Resource funcapp2/funcapp2-tatbbjpz update published: ResourceType = Project, Creation",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Shutdown cancellation race in StopAsync; matches prior flaky cause"
+    }
+  ],
+  "causes": [
+    "aspire-hosting-azure-tests-addazurefunctionsproject-multipleprojects-stopasync-taskcanceled"
+  ]
+}
