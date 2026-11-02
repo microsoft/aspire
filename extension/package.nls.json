@@ -110,6 +110,7 @@
   "aspire-vscode.strings.fieldRequired": "This field is required.",
   "aspire-vscode.strings.runProject": "Run {0}",
   "aspire-vscode.strings.debugProject": "Debug {0}",
+  "aspire-vscode.strings.dotnetDisplayName": ".NET: {0}",
   "aspire-vscode.strings.watchProject": "Watch {0} ({1})",
   "aspire-vscode.strings.noCsharpBuildTask": "No C# Dev Kit build task found, defaulting to dotnet CLI. Maybe the workspace hasn't finished loading?",
   "aspire-vscode.strings.noWatchTask": "No watch task found. Please ensure a watch task is defined in your workspace.",

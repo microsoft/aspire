@@ -7,6 +7,9 @@
     <trans-unit id="aspire-vscode.strings.resourceCountDescription">
       <source xml:lang="en">({0} resources)</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.dotnetDisplayName">
+      <source xml:lang="en">.NET: {0}</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.debugSessionAlreadyExists">
       <source xml:lang="en">A debug session is already active for id {0}.</source>
     </trans-unit>

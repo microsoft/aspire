@@ -1752,9 +1752,9 @@ type DistributedApplicationResourceEvent interface {
 //
 // This interface identifies the source-program model shared by legacy
 // [ProjectResource] instances and language integrations such as
-// Aspire.Hosting.Dotnet. Implementing this interface does not by itself enable
-// SDK container publishing; use the publishing configuration supplied by the
-// resource's builder API.
+// Aspire.Hosting.Dotnet. Implementing this interface does not by itself apply
+// project metadata, launch defaults, build coordination, or SDK container
+// publishing. Use the configuration supplied by the resource's builder API.
 type DotnetProgramResource interface {
 	handleReference
 }
@@ -2584,7 +2584,7 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	//	Args = args,
 	//	TrustDeveloperCertificate = false,
 	//	});
-	//	var project = builder.AddProject<MyService>("my-service")
+	//	var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
 	//	.WithDeveloperCertificateTrust(true);
 	//
 	// Parameters:
@@ -6098,7 +6098,7 @@ type CSharpAppResource interface {
 	//	Args = args,
 	//	TrustDeveloperCertificate = false,
 	//	});
-	//	var project = builder.AddProject<MyService>("my-service")
+	//	var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
 	//	.WithDeveloperCertificateTrust(true);
 	//
 	// Parameters:
@@ -12256,7 +12256,7 @@ type ContainerResource interface {
 	//	Args = args,
 	//	TrustDeveloperCertificate = false,
 	//	});
-	//	var project = builder.AddProject<MyService>("my-service")
+	//	var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
 	//	.WithDeveloperCertificateTrust(true);
 	//
 	// Parameters:
@@ -15415,6 +15415,9 @@ type DistributedApplicationBuilder interface {
 	//
 	// Parameters:
 	//   - options: Optional parameters; see [AddProjectOptions].
+	//
+	// Deprecated: Use addDotnetProject from the Aspire.Hosting.Dotnet package
+	// instead.
 	AddProject(name string, projectPath string, options ...*AddProjectOptions) ProjectResource
 
 	// AddTestRedis adds a test Redis resource from ATS documentation.
@@ -17654,7 +17657,7 @@ type DotnetToolResource interface {
 	//	Args = args,
 	//	TrustDeveloperCertificate = false,
 	//	});
-	//	var project = builder.AddProject<MyService>("my-service")
+	//	var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
 	//	.WithDeveloperCertificateTrust(true);
 	//
 	// Parameters:
@@ -21945,7 +21948,7 @@ type ExecutableResource interface {
 	//	Args = args,
 	//	TrustDeveloperCertificate = false,
 	//	});
-	//	var project = builder.AddProject<MyService>("my-service")
+	//	var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
 	//	.WithDeveloperCertificateTrust(true);
 	//
 	// Parameters:
@@ -31640,7 +31643,7 @@ type ProjectResource interface {
 	//	Args = args,
 	//	TrustDeveloperCertificate = false,
 	//	});
-	//	var project = builder.AddProject<MyService>("my-service")
+	//	var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
 	//	.WithDeveloperCertificateTrust(true);
 	//
 	// Parameters:
@@ -36703,7 +36706,7 @@ type TestDatabaseResource interface {
 	//	Args = args,
 	//	TrustDeveloperCertificate = false,
 	//	});
-	//	var project = builder.AddProject<MyService>("my-service")
+	//	var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
 	//	.WithDeveloperCertificateTrust(true);
 	//
 	// Parameters:
@@ -40440,7 +40443,7 @@ type TestRedisResource interface {
 	//	Args = args,
 	//	TrustDeveloperCertificate = false,
 	//	});
-	//	var project = builder.AddProject<MyService>("my-service")
+	//	var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
 	//	.WithDeveloperCertificateTrust(true);
 	//
 	// Parameters:

@@ -1,0 +1,11 @@
+﻿{
+  "docs": {
+    "llmsTxtUrl": "https://docs.example/llms.txt"
+  },
+  "configSource": {
+    "repository": "https://git.example/configuration",
+    "path": "aspire.config.json",
+    "ref": "config-preview",
+    "appliedVersion": "version-1"
+  }
+}

@@ -52,6 +52,7 @@ export const aspireOutputChannelName = vscode.l10n.t('Aspire Extension');
 export const fieldRequired = vscode.l10n.t('This field is required.');
 export const runProject = (projectName: string) => vscode.l10n.t('Run {0}', projectName);
 export const debugProject = (projectName: string) => vscode.l10n.t('Debug {0}', projectName);
+export const dotnetDisplayName = (projectName: string) => vscode.l10n.t('.NET: {0}', projectName);
 export const watchProject = (projectName: string, projectType: string) => vscode.l10n.t('Watch {0} ({1})', projectName, projectType);
 export const noCsharpBuildTask = vscode.l10n.t('No C# Dev Kit build task found, defaulting to dotnet CLI. Maybe the workspace hasn\'t finished loading?');
 export const noWatchTask = vscode.l10n.t('No watch task found. Please ensure a watch task is defined in your workspace.');

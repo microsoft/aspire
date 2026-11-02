@@ -16,6 +16,7 @@ From your AppHost directory, add the `Aspire.Hosting.Azure.EntraId` integration 
 
 ```bash
 aspire add Aspire.Hosting.Azure.EntraId
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Usage example
@@ -39,10 +40,10 @@ var entraWeb = builder.AddEntraIdApplication("entra-web")
                           "https://localhost:7123/signin-oidc",
                           "https://localhost:7123/signout-callback-oidc");
 
-builder.AddProject<Projects.Api>("api")
+builder.AddDotnetProject("api", "../Api/Api.csproj")
        .WithReference(entraApi);
 
-builder.AddProject<Projects.Web>("web")
+builder.AddDotnetProject("web", "../Web/Web.csproj")
        .WithReference(entraWeb);
 ```
 
@@ -159,10 +160,10 @@ var entraWeb = builder.AddEntraIdApplication("entra-web")
                       // Optional: consent for all users, so that nobody is prompted.
                       .WithAdminConsent(entraApi, "Weather.Read");
 
-var apiService = builder.AddProject<Projects.Api>("apiservice")
+var apiService = builder.AddDotnetProject("apiservice", "../Api/Api.csproj")
        .WithReference(entraApi);
 
-builder.AddProject<Projects.Web>("webfrontend")
+builder.AddDotnetProject("webfrontend", "../Web/Web.csproj")
        .WithReference(entraWeb)
        .WithReference(apiService);
 ```
@@ -239,7 +240,13 @@ Each registration deploys as its own module. Pre-authorization makes the API's m
 
 #### Existing registrations
 
-Existing registrations are configuration only. On one, call `WithApplicationIdUri` and `WithScope` (with `EntraIdScope.Id` set to the ID the registration defines) so callers can declare permissions to it and build scope names with `GetScopeUri`. An existing client registration's declarations and consent aren't deployed.
+Aspire does not modify existing registrations. To reference an existing API's scopes, supply its registered URI with `WithApplicationIdUri("api://the-registered-uri")` and describe its scopes with `WithScope`. Set `EntraIdScope.Id` to the registered scope ID when callers declare permissions. The parameterless `WithApplicationIdUri()` is only for new registrations.
+
+Consumer settings, including credentials, audiences, and `WithApiPermissions` for `DownstreamApis`, remain supported. They must match the existing registration; they do not register credentials, change supported account types, or grant permissions.
+
+Methods that change a registration, such as redirect URI, owner, role, consent, and certificate or federation provisioning methods, throw on existing references. Configure those settings in the [Microsoft Entra admin center](https://entra.microsoft.com) instead. `AsExistingApplication` also rejects registration-only settings applied before conversion.
+
+Use `AddExistingEntraApplication` to avoid enabling Azure provisioning. `AddEntraIdApplication(...).AsExistingApplication(...)` retains Azure setup but does not provision the registration.
 
 #### TypeScript
 
@@ -322,7 +329,7 @@ To retire a role, remove its `PublishWithAppRoleAssignment` calls, deploy it wit
 
 ```csharp
 var callerIdentity = builder.AddAzureUserAssignedIdentity("caller-identity");
-var caller = builder.AddProject<Projects.Worker>("worker")
+var caller = builder.AddDotnetProject("worker", "../Worker/Worker.csproj")
     .WithAzureUserAssignedIdentity(callerIdentity);
 
 var entraApi = builder.AddEntraIdApplication("entra-api")
@@ -330,7 +337,7 @@ var entraApi = builder.AddEntraIdApplication("entra-api")
     .WithAppRole(new EntraIdAppRole("Orders.Read", "Read orders", "Read orders.", ["Application"]))
     .PublishWithAppRoleAssignment(callerIdentity, "Orders.Read");
 
-var api = builder.AddProject<Projects.Api>("api").WithReference(entraApi);
+var api = builder.AddDotnetProject("api", "../Api/Api.csproj").WithReference(entraApi);
 
 // Alternatively, pass the workload instead of callerIdentity.
 entraApi.PublishWithAppRoleAssignment(caller, "Orders.Read");
@@ -381,7 +388,7 @@ var apiClientId = builder.AddParameter("EntraApiClientId");
 var entraApi = builder.AddEntraIdApplication("entra-api")
                       .AsExistingApplication(tenantId: tenantId, clientId: apiClientId);
 
-var api = builder.AddProject<Projects.Api>("api")
+var api = builder.AddDotnetProject("api", "../Api/Api.csproj")
                  .WithReference(entraApi);
 ```
 
@@ -470,7 +477,7 @@ For a different .NET configuration section, set `connectionName`. Colons in nest
 to double underscores; for example, `"Authentication:AzureAd"` produces `Authentication__AzureAd__ClientId`:
 
 ```csharp
-var customApi = builder.AddProject<Projects.Api>("custom-api")
+var customApi = builder.AddDotnetProject("custom-api", "../Api/Api.csproj")
                        .WithReference(entraApi, connectionName: "Authentication:AzureAd");
 ```
 
@@ -525,7 +532,7 @@ var entraWeb = builder.AddEntraIdApplication("entra-web")
                       .RunWithLocalDeveloperCertificateCredential()
                       .PublishWithFederatedManagedIdentityCredential();
 
-builder.AddProject<Projects.Web>("web")
+builder.AddDotnetProject("web", "../Web/Web.csproj")
        .WithReference(entraWeb);
 ```
 
@@ -566,7 +573,7 @@ For deployed applications, use a federated managed identity credential so that n
 var entraWeb = builder.AddEntraIdApplication("entra-web")
                       .PublishWithFederatedManagedIdentityCredential();
 
-builder.AddProject<Projects.Web>("web")
+builder.AddDotnetProject("web", "../Web/Web.csproj")
        .WithReference(entraWeb);
 ```
 
@@ -576,7 +583,7 @@ To trust only specific workloads, or a specific identity, pass them. A workload 
 
 ```csharp
 var entraWeb = builder.AddEntraIdApplication("entra-web");
-var web = builder.AddProject<Projects.Web>("web").WithReference(entraWeb);
+var web = builder.AddDotnetProject("web", "../Web/Web.csproj").WithReference(entraWeb);
 
 entraWeb.PublishWithFederatedManagedIdentityCredential(web);
 ```
@@ -586,7 +593,7 @@ var identity = builder.AddAzureUserAssignedIdentity("web-identity");
 var entraWeb = builder.AddEntraIdApplication("entra-web")
                       .PublishWithFederatedManagedIdentityCredential(identity);
 
-builder.AddProject<Projects.Web>("web")
+builder.AddDotnetProject("web", "../Web/Web.csproj")
        .WithAzureUserAssignedIdentity(identity)
        .WithReference(entraWeb);
 ```

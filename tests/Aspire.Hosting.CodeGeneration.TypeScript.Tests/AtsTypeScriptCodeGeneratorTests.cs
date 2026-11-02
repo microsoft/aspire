@@ -2472,6 +2472,30 @@ public class AtsTypeScriptCodeGeneratorTests
     // ===== DTO Generation Tests =====
 
     [Fact]
+    public async Task Generate_LegacyAddProject_RetainsDeprecatedBuilderMethod()
+    {
+        var context = AtsCapabilityScanner.ScanAssemblies(
+            [typeof(DistributedApplication).Assembly, typeof(DotnetProjectHostingExtensions).Assembly]).ToAtsContext();
+        var capability = Assert.Single(context.Capabilities, capability => capability.CapabilityId == "Aspire.Hosting/addProject");
+
+        Assert.True(capability.IsObsolete);
+        Assert.False(capability.IsExperimental);
+        Assert.Equal("Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.", capability.ObsoleteMessage);
+        Assert.Equal("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ProjectResource", capability.ReturnType.TypeId);
+        Assert.Equal(["name", "projectPath", "launchProfileOrOptions"], capability.Parameters.Select(parameter => parameter.Name));
+        Assert.True(capability.Parameters[^1].IsOptional);
+
+        var code = _generator.GenerateDistributedApplication(context)["aspire.mts"];
+        var lines = code.Split('\n');
+        var methodIndex = Array.FindIndex(lines, line => line.TrimStart().StartsWith("addProject(", StringComparison.Ordinal));
+        Assert.True(methodIndex >= 0);
+        var commentIndex = Array.FindLastIndex(lines, methodIndex, line => line.Trim() == "/**");
+        Assert.True(commentIndex >= 0);
+
+        await Verify(string.Join('\n', lines[commentIndex..(methodIndex + 1)]).Trim(), extension: "ts");
+    }
+
+    [Fact]
     public async Task Generate_DotnetProjectOptions_UsesDtoWithoutChangingLegacyOptions()
     {
         var context = AtsCapabilityScanner.ScanAssemblies(

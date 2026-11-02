@@ -347,7 +347,10 @@ internal partial class ChildProcess : IChildProcess
     {
         // Signalling can itself await exit. Dispatch it concurrently with the same shared
         // command budget, and observe it even when the child exits before dispatch finishes.
-        var signalTask = InvokeSignalerAsync(requestShutdown, _processId, gracefulToken);
+        // Once the child is gone the signal is moot, so cancel it rather than letting a signaler
+        // that is still blocked (e.g. DCP stop-process-tree) hold shutdown for the whole drain.
+        using var signalCancellation = CancellationTokenSource.CreateLinkedTokenSource(gracefulToken);
+        var signalTask = InvokeSignalerAsync(requestShutdown, _processId, signalCancellation.Token);
         try
         {
             try
@@ -371,6 +374,7 @@ internal partial class ChildProcess : IChildProcess
         }
         finally
         {
+            signalCancellation.Cancel();
             try
             {
                 await signalTask.WaitAsync(_options.TerminationTimeout, _options.TimeProvider, CancellationToken.None).ConfigureAwait(false);

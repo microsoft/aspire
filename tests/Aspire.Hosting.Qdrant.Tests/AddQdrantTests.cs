@@ -168,10 +168,12 @@ public class AddQdrantTests(ITestOutputHelper testOutputHelper)
         Assert.Equal($"Endpoint=http://localhost:6334;Key=pass", connectionString);
     }
 
-    [Fact]
-    public async Task QdrantClientAppWithReferenceContainsConnectionStrings()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task QdrantClientAppWithReferenceContainsConnectionStrings(bool useDotnetProject)
     {
-        var appBuilder = DistributedApplication.CreateBuilder();
+        using var appBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var pass = appBuilder.AddParameter("pass", "pass");
 
@@ -187,8 +189,12 @@ public class AddQdrantTests(ITestOutputHelper testOutputHelper)
                 e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "my-qdrant.dev.internal", 6333, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkId: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
             });
 
-        var projectA = appBuilder.AddProject<ProjectA>("projecta", o => o.ExcludeLaunchProfile = true)
-            .WithReference(qdrant);
+#pragma warning disable CS0618 // Exercise connection-string consumers through both project factories.
+        IResourceBuilder<IResourceWithEnvironment> projectA = useDotnetProject
+            ? appBuilder.AddDotnetProject("projecta", "projecta.csproj", o => o.ExcludeLaunchProfile = true)
+            : appBuilder.AddProject<ProjectA>("projecta", o => o.ExcludeLaunchProfile = true);
+#pragma warning restore CS0618
+        projectA.WithReference(qdrant);
 
         var context = new EnvironmentCallbackContext(appBuilder.ExecutionContext, projectA.Resource);
         foreach (var callback in projectA.Resource.Annotations.OfType<EnvironmentCallbackAnnotation>())

@@ -56,7 +56,7 @@
          builds than the stable versions the rest of the repo uses (see Directory.Packages.props).
          These prereleases come from the dotnet11 feed, which does not carry the stable versions,
          so NuGet.config maps NuGet.* to both feeds. -->
-    <NuGetPackageVersionForCli>7.12.0-rc.25</NuGetPackageVersionForCli>
+    <NuGetPackageVersionForCli>8.0.0-rc.133</NuGetPackageVersionForCli>
     <!-- MicroBuild.Core version for VS Code extension signing -->
     <MicrosoftVisualStudioEngMicroBuildCoreVersion>1.0.0</MicrosoftVisualStudioEngMicroBuildCoreVersion>
   </PropertyGroup>

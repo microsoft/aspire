@@ -86,6 +86,7 @@ In your AppHost project, install the `Aspire.Hosting.Azure.Redis` library with [
 
 ```dotnetcli
 dotnet add package Aspire.Hosting.Azure.Redis
+dotnet add package Aspire.Hosting.Dotnet
 ```
 
 Then, in the _Program.cs_ file of `AppHost`, register an Azure Cache for Redis instance and consume the connection using the following methods:
@@ -93,7 +94,7 @@ Then, in the _Program.cs_ file of `AppHost`, register an Azure Cache for Redis i
 ```csharp
 var redis = builder.AddAzureRedis("cache");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(redis);
 ```
 

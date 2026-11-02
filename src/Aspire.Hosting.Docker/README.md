@@ -10,6 +10,7 @@ From your AppHost directory, add the `Aspire.Hosting.Docker` integration with th
 
 ```bash
 aspire add Aspire.Hosting.Docker
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Usage example
@@ -37,7 +38,7 @@ Use an environment variable so projects and executables can use a local Aspire s
 **C#**
 
 ```csharp
-builder.AddProject<Projects.Api>("api")
+builder.AddDotnetProject("api", "../Api/Api.csproj")
     .WithVolume("data", "/data", env: "DATA_PATH");
 ```
 

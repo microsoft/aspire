@@ -57,16 +57,31 @@ internal sealed class ConfigSourceTestContext
 
     public async Task CreateProjectAsync()
     {
-        await _auto.RunCommandAsync($"{NewCommand} --use-config-source true --non-interactive", _counter,
+        await _auto.RunCommandAsync($"{NewCommand} --use-config-source --non-interactive", _counter,
             timeout: TimeSpan.FromMinutes(3));
         await ConfigureProjectAsync();
+    }
+
+    public async Task<JsonObject> CreateUnboundProjectAsync()
+    {
+        await _auto.RunCommandAsync($"{NewCommand} --use-config-source false --non-interactive", _counter,
+            timeout: TimeSpan.FromMinutes(3));
+        await ConfigureProjectAsync();
+        // Remove the saved choice to model an existing project created before source adoption.
+        await _auto.RunCommandAsync("aspire config delete configSource", _counter);
+        await _auto.RunCommandAsync("aspire config set docs.llmsTxtUrl https://local.example/llms.txt", _counter);
+        var configuration = await ReadConfigurationAsync();
+        Assert.Null(configuration["configSource"]);
+        Assert.Equal("https://local.example/llms.txt", configuration["docs"]!["llmsTxtUrl"]!.GetValue<string>());
+        await AssertSourceNotAcquiredAsync();
+        return configuration;
     }
 
     public async Task InitializeSolutionAsync()
     {
         await _auto.RunCommandAsync("mkdir SourceApp && cd SourceApp && dotnet new sln --name SourceApp", _counter);
         await _auto.RunCommandAsync(
-            "aspire init --language csharp --suppress-agent-init --use-config-source true --non-interactive",
+            "aspire init --language csharp --suppress-agent-init --use-config-source --non-interactive",
             _counter, timeout: TimeSpan.FromMinutes(3));
         await _auto.RunCommandAsync(
             "test ! -f aspire.config.json && test -f SourceApp.AppHost/aspire.config.json && " +
@@ -110,7 +125,7 @@ internal sealed class ConfigSourceTestContext
         else
         {
             var configuration = await ReadConfigurationAsync();
-            Assert.Null(configuration["configSource"]);
+            Assert.True(configuration["configSource"]!["optOut"]!.GetValue<bool>());
             Assert.Equal("""{"custom":"keep"}""", configuration["docs"]!.ToJsonString());
             await AssertSourceNotAcquiredAsync();
         }
@@ -123,7 +138,7 @@ internal sealed class ConfigSourceTestContext
             $"result=$?; cat \"$ASPIRE_E2E_WORKSPACE/consent.log\"; test \"$result\" -eq {CliExitCodes.InvalidCommand}",
             _counter, timeout: TimeSpan.FromMinutes(3));
         var consentOutput = await File.ReadAllTextAsync(Path.Combine(_root, "consent.log"), _cancellationToken);
-        Assert.Contains("Specify --use-config-source true to accept it or --use-config-source false",
+        Assert.Contains("Specify --use-config-source to accept it or --use-config-source false",
             Regex.Replace(consentOutput, @"\s+", " "));
         Assert.False(Directory.Exists(Path.Combine(_root, "SourceApp")));
         await AssertSourceNotAcquiredAsync();
@@ -132,7 +147,7 @@ internal sealed class ConfigSourceTestContext
     public async Task CreateProjectWithGitAuthenticationAsync()
     {
         await ConfigureGitAuthenticationAsync();
-        await _auto.TypeAsync($"{NewCommand} --use-config-source true");
+        await _auto.TypeAsync($"{NewCommand} --use-config-source");
         await _auto.EnterAsync();
         var authenticationPrompt = new CellPatternSearcher().Find("Configuration source Git authentication code:");
         await _auto.WaitUntilAsync(snapshot => authenticationPrompt.Search(snapshot).Count > 0,
@@ -203,6 +218,37 @@ internal sealed class ConfigSourceTestContext
         var message = expectChanges ? "configuration updated" : "configuration already up to date";
         var updateOutput = await File.ReadAllTextAsync(Path.Combine(_root, "update.log"), _cancellationToken);
         Assert.Contains(message, Regex.Replace(updateOutput, @"\s+", " "));
+    }
+
+    public async Task AssertRefreshWithoutBindingAsync()
+    {
+        await _auto.RunCommandAsync(
+            "aspire update --config-source --yes --non-interactive > \"$ASPIRE_E2E_WORKSPACE/missing-source.log\" 2>&1",
+            _counter, timeout: TimeSpan.FromMinutes(2));
+        var output = await File.ReadAllTextAsync(Path.Combine(_root, "missing-source.log"), _cancellationToken);
+        Assert.Contains("No configuration source to update.", Regex.Replace(output, @"\s+", " "));
+        await AssertSourceNotAcquiredAsync();
+    }
+
+    public async Task UpdateProjectWithSourceConsentAsync()
+    {
+        await _auto.TypeAsync("aspire update --yes");
+        await _auto.EnterAsync();
+        var candidate = new CellPatternSearcher().Find("Configuration source:");
+        var consentPrompt = new CellPatternSearcher().Find("Use configuration from this source?");
+        await _auto.WaitUntilAsync(snapshot => candidate.Search(snapshot).Count > 0 && consentPrompt.Search(snapshot).Count > 0,
+            timeout: TimeSpan.FromMinutes(2), description: "waiting for brownfield configuration source consent");
+        await _auto.EnterAsync();
+        await _auto.WaitForSuccessPromptAsync(_counter, timeout: TimeSpan.FromMinutes(5));
+    }
+
+    public async Task AssertConfigurationSourceAdoptedAsync(JsonObject original)
+    {
+        var actual = await AssertSourceAppliedAsync("original");
+        original["docs"]!["llmsTxtUrl"] = actual["docs"]!["llmsTxtUrl"]!.DeepClone();
+        original["docs"]!["api"] = actual["docs"]!["api"]!.DeepClone();
+        original["configSource"] = actual["configSource"]!.DeepClone();
+        Assert.Equal(original.ToJsonString(), actual.ToJsonString());
     }
 
     public async Task AssertConfigurationUpdatedAsync(JsonObject original)
