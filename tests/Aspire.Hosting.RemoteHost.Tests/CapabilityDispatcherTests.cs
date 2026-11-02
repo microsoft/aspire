@@ -15,6 +15,65 @@ namespace Aspire.Hosting.RemoteHost.Tests;
 
 public class CapabilityDispatcherTests
 {
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task AnnotatedContextCallbackUsesContextCancellationWithoutChangingOrdinaryCallbacks(bool overrideTimeout, bool nullContext)
+    {
+        await using var handles = new HandleRegistry();
+        using var cancellation = new CancellationTokenSource();
+        var invoker = new TestCallbackInvoker();
+        var (_, factory) = CreateTestMarshallerWithCallbacks(handles, invoker, typeof(TestCancellationTokenContext).Assembly);
+        using var factoryLifetime = factory;
+        var callback = Assert.IsType<Func<TestCancellationTokenContext?, Task>>(factory.CreateProxy(
+            "context", typeof(Func<TestCancellationTokenContext?, Task>), overrideTimeout ? Timeout.InfiniteTimeSpan : null));
+        var context = nullContext ? null : new TestCancellationTokenContext { CancellationToken = cancellation.Token };
+
+        await callback(context);
+
+        Assert.Equal(overrideTimeout && !nullContext ? cancellation.Token : CancellationToken.None, invoker.LastCancellationToken);
+    }
+
+    [Theory]
+    [InlineData("invokeCallback", null)]
+    [InlineData("invokeCallbackWithExtendedTimeout", 2000)]
+    [InlineData("invokeCallbackWithInfiniteTimeout", Timeout.Infinite)]
+    public async Task Invoke_CallbackParameterTimeoutOverridesConfiguredDefault(string methodName, int? millisecondsTimeout)
+    {
+        await using var handles = new HandleRegistry();
+        var invoker = new TestCallbackInvoker();
+        var (marshaller, callbackFactory) = CreateTestMarshallerWithCallbacks(handles, invoker);
+        using var callbackFactoryLifetime = callbackFactory;
+        var dispatcher = new CapabilityDispatcher(handles, marshaller, [typeof(TestCapabilitiesWithCallback).Assembly]);
+
+        dispatcher.Invoke($"Aspire.Hosting.RemoteHost.Tests/{methodName}", new JsonObject { ["callback"] = "callback" });
+
+        Assert.Single(invoker.Invocations);
+        Assert.Equal(millisecondsTimeout is { } timeout ? TimeSpan.FromMilliseconds(timeout) : (TimeSpan?)null, invoker.LastTimeout);
+    }
+
+    [Fact]
+    public async Task Invoke_ContextMethodCallbackParameterTimeoutOverridesConfiguredDefault()
+    {
+        await using var handles = new HandleRegistry();
+        var invoker = new TestCallbackInvoker();
+        var (marshaller, callbackFactory) = CreateTestMarshallerWithCallbacks(handles, invoker, typeof(TestCancellationTokenContext).Assembly);
+        using var callbackFactoryLifetime = callbackFactory;
+        var dispatcher = new CapabilityDispatcher(handles, marshaller, [typeof(TestCancellationTokenContext).Assembly]);
+        var handle = handles.Register(new TestCancellationTokenContext(), "Aspire.Hosting.RemoteHost.Tests/Aspire.Hosting.RemoteHost.Tests.TestCancellationTokenContext");
+
+        dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/contextCallbackWithInfiniteTimeout", new JsonObject
+        {
+            ["context"] = new JsonObject { ["$handle"] = handle },
+            ["callback"] = "callback"
+        });
+
+        Assert.Single(invoker.Invocations);
+        Assert.Equal(Timeout.InfiniteTimeSpan, invoker.LastTimeout);
+    }
+
     [Fact]
     [RequiresTools(["python3"])]
     [SkipOnPlatform(TestPlatforms.Windows, "Uses the Unix Python executable.")]
@@ -2339,6 +2398,9 @@ internal sealed class TestSynchronizationContextCallbackInvoker : ICallbackInvok
         return Task.FromResult(default(TResult)!);
     }
 
+    public Task<TResult> InvokeAsync<TResult>(string callbackId, JsonNode? args, CancellationToken cancellationToken, TimeSpan timeout) =>
+        InvokeAsync<TResult>(callbackId, args, cancellationToken);
+
     public Task InvokeAsync(string callbackId, JsonNode? args, CancellationToken cancellationToken = default)
     {
         LastObservedSynchronizationContext = SynchronizationContext.Current;
@@ -2464,6 +2526,13 @@ internal sealed class TestContextType
 internal sealed class TestCancellationTokenContext
 {
     public CancellationToken CancellationToken { get; set; }
+
+    [AspireExport("contextCallbackWithInfiniteTimeout")]
+    public Task InvokeCallback([AspireCallbackTimeout(Timeout.Infinite)] Func<Task> callback)
+    {
+        CancellationToken.ThrowIfCancellationRequested();
+        return callback();
+    }
 }
 
 /// <summary>
@@ -2572,6 +2641,12 @@ internal static class TestCapabilitiesWithCallback
     {
         callback().GetAwaiter().GetResult();
     }
+
+    [AspireExport]
+    public static Task InvokeCallbackWithExtendedTimeout([AspireCallbackTimeout(2000)] Func<Task> callback) => callback();
+
+    [AspireExport]
+    public static Task InvokeCallbackWithInfiniteTimeout([AspireCallbackTimeout(Timeout.Infinite)] Func<Task> callback) => callback();
 
     /// <summary>
     /// A method that invokes a typed callback with arguments.

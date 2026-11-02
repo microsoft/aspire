@@ -23,6 +23,44 @@ public class AttributeDataReaderTests
 
     #region Full Name Discovery Tests
 
+    [Theory]
+    [InlineData(Timeout.Infinite)]
+    [InlineData(1)]
+    [InlineData(int.MaxValue)]
+    public void GetAspireCallbackTimeout_ReadsCompatibleAttributeWithoutConstructingIt(int millisecondsTimeout)
+    {
+        var parameter = CreateCallbackTimeoutParameter(HostingTypeNames.AspireCallbackTimeoutAttribute, millisecondsTimeout);
+
+        Assert.Equal(TimeSpan.FromMilliseconds(millisecondsTimeout), AttributeDataReader.GetAspireCallbackTimeout(parameter));
+    }
+
+    [Theory]
+    [InlineData(-2)]
+    [InlineData(0)]
+    public void GetAspireCallbackTimeout_RejectsInvalidCompatibleAttribute(int millisecondsTimeout)
+    {
+        var parameter = CreateCallbackTimeoutParameter(HostingTypeNames.AspireCallbackTimeoutAttribute, millisecondsTimeout);
+
+        var error = Assert.Throws<InvalidOperationException>(() => AttributeDataReader.GetAspireCallbackTimeout(parameter));
+        Assert.Equal("The callback timeout on parameter 'callback' must be a positive number of milliseconds or Timeout.Infinite.", error.Message);
+    }
+
+    [Fact]
+    public void GetAspireCallbackTimeout_IgnoresDifferentNamespace()
+    {
+        var parameter = CreateCallbackTimeoutParameter("Other.AspireCallbackTimeoutAttribute", 2000);
+
+        Assert.Null(AttributeDataReader.GetAspireCallbackTimeout(parameter));
+    }
+
+    [Fact]
+    public void GetAspireCallbackTimeout_AbsentAttributeUsesConfiguredDefault()
+    {
+        var parameter = typeof(TestCapabilitiesWithCallback).GetMethod(nameof(TestCapabilitiesWithCallback.InvokeCallback))!.GetParameters()[0];
+
+        Assert.Null(AttributeDataReader.GetAspireCallbackTimeout(parameter));
+    }
+
     [Fact]
     public void GetAspireExportData_FindsOfficialAttribute_OnMethod()
     {
@@ -332,6 +370,30 @@ public class AttributeDataReaderTests
     }
 
     #endregion
+
+    private static ParameterInfo CreateCallbackTimeoutParameter(string attributeFullName, int millisecondsTimeout)
+    {
+        var assemblyName = new AssemblyName($"CompatibleCallbackTimeout_{Guid.NewGuid():N}");
+        var assembly = AssemblyBuilder.DefineDynamicAssembly(assemblyName, AssemblyBuilderAccess.RunAndCollect);
+        var module = assembly.DefineDynamicModule(assemblyName.Name!);
+        var attribute = module.DefineType(attributeFullName,
+            TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.Sealed, typeof(Attribute));
+        var constructor = attribute.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard, [typeof(int)]);
+        var constructorIl = constructor.GetILGenerator();
+        constructorIl.Emit(OpCodes.Ldarg_0);
+        constructorIl.Emit(OpCodes.Call, s_attributeConstructor);
+        constructorIl.Emit(OpCodes.Ldstr, "Metadata inspection must not instantiate the attribute.");
+        constructorIl.Emit(OpCodes.Newobj, typeof(InvalidOperationException).GetConstructor([typeof(string)])!);
+        constructorIl.Emit(OpCodes.Throw);
+        var attributeType = attribute.CreateType()!;
+        var exports = module.DefineType("Generated.CallbackExports", TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Sealed);
+        var method = exports.DefineMethod("Configure", MethodAttributes.Public | MethodAttributes.Static, typeof(void), [typeof(Func<Task>)]);
+        method.DefineParameter(1, ParameterAttributes.None, "callback").SetCustomAttribute(
+            new CustomAttributeBuilder(attributeType.GetConstructor([typeof(int)])!, [millisecondsTimeout]));
+        method.GetILGenerator().Emit(OpCodes.Ret);
+
+        return exports.CreateType()!.GetMethod("Configure")!.GetParameters()[0];
+    }
 
     private static Assembly CreateCompatibleAssembly(AttributeTargets? experimentalTarget, bool nestedType)
     {

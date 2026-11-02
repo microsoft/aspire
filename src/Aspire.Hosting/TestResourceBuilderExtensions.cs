@@ -26,6 +26,7 @@ public static class TestResourceBuilderExtensions
     /// <para>
     /// The callback does not run during model definition. It starts alongside resource execution and may
     /// use <see cref="ResourceTestingContext.WaitForCompletionAsync"/> before harvesting final artifacts.
+    /// Remote collectors use test-run cancellation rather than the ordinary remote callback timeout.
     /// The command waits for all marked resources, including their replicas, and all collectors.
     /// It then shuts down the application unless <c>--keep-alive</c> was requested.
     /// A terminal state with exit code zero passes; startup failure, a nonzero exit code, or an unknown
@@ -68,7 +69,8 @@ public static class TestResourceBuilderExtensions
     /// <exception cref="IOException">A new resource's testing output path already exists or cannot be created securely.</exception>
     [AspireExport]
     [Experimental(TestingDiagnostics.DiagnosticId, UrlFormat = TestingDiagnostics.UrlFormat)]
-    public static IResourceBuilder<T> WithTesting<T>(this IResourceBuilder<T> builder, Func<ResourceTestingContext, Task>? callback = null) where T : IResource
+    public static IResourceBuilder<T> WithTesting<T>(this IResourceBuilder<T> builder,
+        [AspireCallbackTimeout(Timeout.Infinite)] Func<ResourceTestingContext, Task>? callback = null) where T : IResource
     {
         ArgumentNullException.ThrowIfNull(builder);
 
