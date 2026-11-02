@@ -3,6 +3,7 @@
 
 using Aspire.Cli.EndToEnd.Tests.Helpers;
 using Hex1b.Automation;
+using Hex1b.Input;
 using Xunit;
 
 namespace Aspire.Cli.EndToEnd.Tests;
@@ -67,6 +68,25 @@ public sealed class TestCommandTests(ITestOutputHelper output)
                 $"actual=$?; cat {scenario}.stderr; python3 verify.py {scenario} \"$actual\"",
                 counter, TimeSpan.FromMinutes(4));
         }
+
+        if (typeScript)
+        {
+            // Reuse the guest AppHost and installation rather than adding another
+            // expensive E2E setup. The CLI remains the foreground job for real Ctrl+C.
+            await auto.TypeAsync("python3 inspect.py & SCENARIO=passed aspire test --format json --keep-alive > keep-alive.json 2> keep-alive.stderr");
+            await auto.EnterAsync();
+            await auto.WaitUntilAsync(
+                snapshot => snapshot.ContainsText("Verified keep-alive inspection"),
+                timeout: TimeSpan.FromMinutes(3),
+                description: "completed collection and a responsive dependency during keep-alive");
+            await auto.Ctrl().KeyAsync(Hex1bKey.C);
+            await auto.WaitUntilAsync(
+                snapshot => snapshot.ContainsText($"[{counter.Value} ERR:130] $ "),
+                timeout: TimeSpan.FromSeconds(30),
+                description: "keep-alive CLI returning exit code 130 after Ctrl+C");
+            counter.Increment();
+            await auto.RunCommandAsync("python3 verify.py keep-alive 130", counter);
+        }
     }
 
     private static void WriteFixtures(string directory, bool typeScript)
@@ -105,8 +125,37 @@ public sealed class TestCommandTests(ITestOutputHelper output)
             with urllib.request.urlopen(os.environ["SERVICE_URL"], timeout=10) as response:
                 body = response.read().decode()
             assert body == "dependency alive", body
+            pathlib.Path("service.url").write_text(os.environ["SERVICE_URL"])
             pathlib.Path(name + ".txt").write_text(body)
             sys.exit(7 if name == "primary" and os.environ["SCENARIO"] == "process-failed" else 0)
+            """);
+        File.WriteAllText(Path.Combine(directory, "inspect.py"), """
+            import json
+            import pathlib
+            import time
+            import urllib.request
+
+            deadline = time.monotonic() + 180
+            while True:
+                # The CLI emits one JSON object, but the file can be observed mid-write.
+                try:
+                    summary = json.loads(pathlib.Path("keep-alive.json").read_text())
+                    break
+                except (FileNotFoundError, json.JSONDecodeError):
+                    if time.monotonic() >= deadline:
+                        raise TimeoutError("The keep-alive CLI did not finalize its results")
+                    time.sleep(0.05)
+
+            assert summary["status"] == "passed", summary
+            assert summary["cliExitCode"] is None, summary
+            collections = {c["resourceName"]: c for c in summary["collections"]}
+            assert collections["primary"]["status"] == "completed", collections
+            for name in ["apphost", "service"]:
+                pid = pathlib.Path(name + ".pid").read_text()
+                assert pathlib.Path("/proc", pid).exists(), (name, pid)
+            with urllib.request.urlopen(pathlib.Path("service.url").read_text(), timeout=10) as response:
+                assert response.read().decode() == "dependency alive"
+            print("Verified keep-alive inspection", flush=True)
             """);
         File.WriteAllText(Path.Combine(directory, "verify.py"), """
             import json
@@ -115,15 +164,26 @@ public sealed class TestCommandTests(ITestOutputHelper output)
             import time
 
             scenario, actual = sys.argv[1], int(sys.argv[2])
-            expected = 0 if scenario == "passed" else 23
+            keep_alive = scenario == "keep-alive"
+            expected = 130 if keep_alive else 0 if scenario == "passed" else 23
             assert actual == expected, (scenario, actual, expected)
             # json.loads rejects banners, extra JSON objects, and trailing console output.
             summary = json.loads(pathlib.Path(scenario + ".json").read_text())
             persisted = json.loads(pathlib.Path(summary["summaryPath"]).read_text())
-            assert summary == persisted, (summary, persisted)
+            if keep_alive:
+                # Inspection emits completed results once; cancellation updates only
+                # the persisted command status, not those results or stdout.
+                assert summary["status"] == "passed", summary
+                assert summary["cliExitCode"] is None, summary
+                assert persisted["status"] == "cancelled", persisted
+                assert persisted["cliExitCode"] == 130, persisted
+                for key in ["resources", "collections", "testResults", "publishedResults"]:
+                    assert persisted[key] == summary[key], (key, summary, persisted)
+            else:
+                assert summary == persisted, (summary, persisted)
+                assert summary["cliExitCode"] == expected
+                assert summary["status"] == ("passed" if expected == 0 else "failed")
             assert summary["schemaVersion"] == 1
-            assert summary["cliExitCode"] == expected
-            assert summary["status"] == ("passed" if expected == 0 else "failed")
             assert summary["error"] is None, summary
             results = summary["testResults"]
             outcome = "failed" if scenario == "result-failed" else "passed"
