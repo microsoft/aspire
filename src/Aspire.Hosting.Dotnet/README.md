@@ -252,6 +252,23 @@ waits for process completion, stages the report tree into `context.OutputPath`, 
 publishes individual test results to the common run. Failed processes still have their reports collected.
 Missing reports, malformed XML, unsupported outcomes, and inconsistent counters fail
 collection explicitly. Passing tests cannot override a failed process or failed collection.
+Explicit TRX outcomes preserve their meaning: `Passed` maps to Passed, `Failed` to Failed,
+`Error` to Error, `Timeout` to TimedOut, `Inconclusive` to Inconclusive, and `Aborted` to
+Cancelled. MTP's `NotExecuted` represents a skipped test and maps to Skipped; a run-level
+abort does not rewrite it or invent results for tests with no reported row.
+Only Passed and Skipped are non-failing, including when a process exits zero.
+Published TimedOut or Cancelled results are ordinary test failures, not command timeout
+or interruption.
+
+The [MTP TRX serializer](https://github.com/microsoft/testfx/blob/v4.4.0/src/Platform/Microsoft.Testing.Extensions.TrxReport/TrxReportEngine.Results.cs)
+currently writes timeout rows as `Failed` and distinguishes them only in aggregate counters.
+Its [state converter](https://github.com/microsoft/testfx/blob/v4.4.0/src/Platform/Microsoft.Testing.Extensions.TrxReport/Streaming/TrxTestResultExtractor.cs)
+also collapses error/cancellation into `Failed`. Those reports retain
+Failed: this integration cannot recover per-test identities or categories lost upstream.
+Summary counters are reconciled without inferring which failed row timed out.
+Run-level errors fail collection without manufacturing individual error results, and
+unknown/progress-only test states fail explicitly.
+
 Raw reports and attachments within that fresh report tree remain in the resource directory.
 Paths referenced by the TRX are not followed; symbolic links/reparse points in either tree
 are rejected. Runner temporary files are cleaned up by the AppHost's file-system service

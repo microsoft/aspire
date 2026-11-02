@@ -30,12 +30,16 @@ internal static class MsTestReportFixture
                 new XElement(Namespace + "UnitTest", new XAttribute("id", testId),
                     new XElement(Namespace + "TestMethod",
                         new XAttribute("className", "Example.Tests"), new XAttribute("name", "DataRow")))),
-            new XElement(Namespace + "ResultSummary", new XAttribute("outcome", outcomes.Contains("Failed") ? "Failed" : "Completed"),
+            new XElement(Namespace + "ResultSummary",
+                new XAttribute("outcome", outcomes.Any(o => o is not ("Passed" or "NotExecuted")) ? "Failed" : "Completed"),
                 new XElement(Namespace + "Counters",
                     new XAttribute("total", outcomes.Length),
                     new XAttribute("passed", outcomes.Count(o => o == "Passed")),
                     new XAttribute("failed", outcomes.Count(o => o == "Failed")),
-                    new XAttribute("timeout", 0),
+                    new XAttribute("timeout", outcomes.Count(o => o == "Timeout")),
+                    new XAttribute("error", outcomes.Count(o => o == "Error")),
+                    new XAttribute("aborted", outcomes.Count(o => o == "Aborted")),
+                    new XAttribute("inconclusive", outcomes.Count(o => o == "Inconclusive")),
                     new XAttribute("notExecuted", outcomes.Count(o => o == "NotExecuted"))))));
     }
 }
