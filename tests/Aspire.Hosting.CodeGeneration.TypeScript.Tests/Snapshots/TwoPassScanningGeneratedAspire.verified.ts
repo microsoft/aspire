@@ -371,7 +371,7 @@ type ResourceUrlsEditorHandle = Handle<'Aspire.Hosting/Aspire.Hosting.Applicatio
  * The CLI creates the directory before launching the AppHost. Runtime collectors use their own isolated output paths
  * beneath this run directory. This is a host filesystem path, not an in-container path.
  */
-type TestRunContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.TestRunContext'>;
+type TestingContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.TestingContext'>;
 
 /** Context for {@link ResourceCommandAnnotation.UpdateState}. */
 type UpdateCommandStateContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.UpdateCommandStateContext'>;
@@ -8612,10 +8612,10 @@ const ResourceStoppedEventPromiseImpl = $aspireCreateFluentPromiseClass<Resource
 export interface ResourceTestingContext {
     toJSON(): MarshalledHandle;
     /**
-     * Gets the context for the containing test run.
+     * Gets the context for the containing testing invocation.
      * @experimental
      */
-    runContext(): TestRunContextPromise;
+    testingContext(): TestingContextPromise;
     /**
      * Gets the logical resource name associated with every result published through this context.
      * @experimental
@@ -8662,10 +8662,10 @@ export interface ResourceTestingContext {
 
 export interface ResourceTestingContextPromise extends PromiseLike<ResourceTestingContext> {
     /**
-     * Gets the context for the containing test run.
+     * Gets the context for the containing testing invocation.
      * @experimental
      */
-    runContext(): TestRunContextPromise;
+    testingContext(): TestingContextPromise;
     /**
      * Gets the logical resource name associated with every result published through this context.
      * @experimental
@@ -8727,15 +8727,15 @@ class ResourceTestingContextImpl implements ResourceTestingContext {
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
 
-    runContext(): TestRunContextPromise {
+    testingContext(): TestingContextPromise {
         const promise = (async () => {
-            const handle = await this._client.invokeCapability<TestRunContextHandle>(
-                'Aspire.Hosting.ApplicationModel/ResourceTestingContext.runContext',
+            const handle = await this._client.invokeCapability<TestingContextHandle>(
+                'Aspire.Hosting.ApplicationModel/ResourceTestingContext.testingContext',
                 { context: this._handle }
             );
-            return new TestRunContextImpl(handle, this._client);
+            return new TestingContextImpl(handle, this._client);
         })();
-        return new TestRunContextPromiseImpl(promise, this._client, false);
+        return new TestingContextPromiseImpl(promise, this._client, false);
     }
 
     async resourceName(): Promise<string> {
@@ -8809,7 +8809,7 @@ class ResourceTestingContextImpl implements ResourceTestingContext {
 
 /** @internal */
 const ResourceTestingContextPromiseImpl = $aspireCreateFluentPromiseClass<ResourceTestingContext, ResourceTestingContextPromise>((): $aspireFluentPromiseTransitions => ({
-    ["runContext"]: [() => TestRunContextPromiseImpl, false] as const,
+    ["testingContext"]: [() => TestingContextPromiseImpl, false] as const,
     ["resourceName"]: null,
     ["outputPath"]: null,
     ["cancellationToken"]: null,
@@ -9287,6 +9287,63 @@ class TestEnvironmentContextImpl implements TestEnvironmentContext {
 }
 
 // ============================================================================
+// TestingContext
+// ============================================================================
+
+/**
+ * Provides the output destination for the current `aspire test` invocation.
+ *
+ * The CLI creates the directory before launching the AppHost. Runtime collectors use their own isolated output paths
+ * beneath this run directory. This is a host filesystem path, not an in-container path.
+ */
+export interface TestingContext {
+    toJSON(): MarshalledHandle;
+    /**
+     * Gets the absolute host path to the unique output directory for this invocation.
+     * @experimental
+     */
+    outputPath(): Promise<string>;
+}
+
+export interface TestingContextPromise extends PromiseLike<TestingContext> {
+    /**
+     * Gets the absolute host path to the unique output directory for this invocation.
+     * @experimental
+     */
+    outputPath(): Promise<string>;
+}
+
+// ============================================================================
+// TestingContextImpl
+// ============================================================================
+
+/**
+ * Provides the output destination for the current `aspire test` invocation.
+ *
+ * The CLI creates the directory before launching the AppHost. Runtime collectors use their own isolated output paths
+ * beneath this run directory. This is a host filesystem path, not an in-container path.
+ */
+class TestingContextImpl implements TestingContext {
+    constructor(private _handle: TestingContextHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    async outputPath(): Promise<string> {
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting.ApplicationModel/TestingContext.outputPath',
+            { context: this._handle }
+        );
+    }
+
+}
+
+/** @internal */
+const TestingContextPromiseImpl = $aspireCreateFluentPromiseClass<TestingContext, TestingContextPromise>((): $aspireFluentPromiseTransitions => ({
+    ["outputPath"]: null,
+}));
+
+// ============================================================================
 // TestMutableCollectionContext
 // ============================================================================
 
@@ -9648,63 +9705,6 @@ const TestReturnValueContextPromiseImpl = $aspireCreateFluentPromiseClass<TestRe
     ["getInt"]: null,
     ["getIntTaskAsync"]: null,
     ["getIntValueTaskAsync"]: null,
-}));
-
-// ============================================================================
-// TestRunContext
-// ============================================================================
-
-/**
- * Provides the output destination for the current `aspire test` invocation.
- *
- * The CLI creates the directory before launching the AppHost. Runtime collectors use their own isolated output paths
- * beneath this run directory. This is a host filesystem path, not an in-container path.
- */
-export interface TestRunContext {
-    toJSON(): MarshalledHandle;
-    /**
-     * Gets the absolute host path to the unique output directory for this invocation.
-     * @experimental
-     */
-    outputPath(): Promise<string>;
-}
-
-export interface TestRunContextPromise extends PromiseLike<TestRunContext> {
-    /**
-     * Gets the absolute host path to the unique output directory for this invocation.
-     * @experimental
-     */
-    outputPath(): Promise<string>;
-}
-
-// ============================================================================
-// TestRunContextImpl
-// ============================================================================
-
-/**
- * Provides the output destination for the current `aspire test` invocation.
- *
- * The CLI creates the directory before launching the AppHost. Runtime collectors use their own isolated output paths
- * beneath this run directory. This is a host filesystem path, not an in-container path.
- */
-class TestRunContextImpl implements TestRunContext {
-    constructor(private _handle: TestRunContextHandle, private _client: AspireClientRpc) {}
-
-    /** Serialize for JSON-RPC transport */
-    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
-
-    async outputPath(): Promise<string> {
-        return await this._client.invokeCapability<string>(
-            'Aspire.Hosting.ApplicationModel/TestRunContext.outputPath',
-            { context: this._handle }
-        );
-    }
-
-}
-
-/** @internal */
-const TestRunContextPromiseImpl = $aspireCreateFluentPromiseClass<TestRunContext, TestRunContextPromise>((): $aspireFluentPromiseTransitions => ({
-    ["outputPath"]: null,
 }));
 
 // ============================================================================
@@ -61133,10 +61133,10 @@ registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUr
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCallbackContext', (handle, client) => new TestCallbackContextImpl(handle as TestCallbackContextHandle, client));
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCollectionContext', (handle, client) => new TestCollectionContextImpl(handle as TestCollectionContextHandle, client));
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext', (handle, client) => new TestEnvironmentContextImpl(handle as TestEnvironmentContextHandle, client));
+registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.TestingContext', (handle, client) => new TestingContextImpl(handle as TestingContextHandle, client));
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestMutableCollectionContext', (handle, client) => new TestMutableCollectionContextImpl(handle as TestMutableCollectionContextHandle, client));
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestResourceContext', (handle, client) => new TestResourceContextImpl(handle as TestResourceContextHandle, client));
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestReturnValueContext', (handle, client) => new TestReturnValueContextImpl(handle as TestReturnValueContextHandle, client));
-registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.TestRunContext', (handle, client) => new TestRunContextImpl(handle as TestRunContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.UpdateCommandStateContext', (handle, client) => new UpdateCommandStateContextImpl(handle as UpdateCommandStateContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.IAspireStore', (handle, client) => new AspireStoreImpl(handle as IAspireStoreHandle, client));
 registerHandleWrapper('Microsoft.Extensions.Configuration.Abstractions/Microsoft.Extensions.Configuration.IConfiguration', (handle, client) => new ConfigurationImpl(handle as IConfigurationHandle, client));

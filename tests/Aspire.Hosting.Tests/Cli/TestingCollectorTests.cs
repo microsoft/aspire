@@ -25,7 +25,7 @@ public class TestingCollectorTests(ITestOutputHelper outputHelper)
     [Fact]
     public void PublicTestingContractIsExperimental()
     {
-        Assert.All(new[] { typeof(ResourceTestingContext), typeof(TestRunContext),
+        Assert.All(new[] { typeof(ResourceTestingContext), typeof(TestingContext),
             typeof(TestResult), typeof(TestOutcome), typeof(TestingAnnotation), typeof(TestResourceBuilderExtensions) },
             type => Assert.Equal("ASPIRETESTING001", type.GetCustomAttribute<ExperimentalAttribute>()!.DiagnosticId));
         Assert.Equal("ASPIRETESTING001",
@@ -46,7 +46,7 @@ public class TestingCollectorTests(ITestOutputHelper outputHelper)
         var annotation = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
         Assert.False(collectorCalled);
         Assert.Null(annotation.OutputPath);
-        Assert.Null(annotation.RunContext);
+        Assert.Null(annotation.TestingContext);
         using var notifications = ResourceNotificationServiceTestHelpers.Create();
         using var coordinator = CreateCoordinator(builder, notifications);
         var completion = coordinator.WaitForCompletionAsync(TestContext.Current.CancellationToken);
@@ -74,7 +74,7 @@ public class TestingCollectorTests(ITestOutputHelper outputHelper)
         using var coordinator = CreateCoordinator(builder, notifications);
         var completion = coordinator.WaitForCompletionAsync(TestContext.Current.CancellationToken);
         var context = await started.Task.DefaultTimeout();
-        Assert.Same(annotation.RunContext, context.RunContext);
+        Assert.Same(annotation.TestingContext, context.TestingContext);
         Assert.Equal(annotation.OutputPath, context.OutputPath);
         Assert.Equal("tests", context.ResourceName);
         Assert.False(completion.IsCompleted);
@@ -93,7 +93,7 @@ public class TestingCollectorTests(ITestOutputHelper outputHelper)
     [InlineData("fixture", TestOutcome.Passed, -1)]
     public void InvalidPublishedResultsAreExplicitErrors(string name, TestOutcome outcome, int duration)
     {
-        var context = new ResourceTestingContext(new TestRunContext("run-output"), "tests", "resource-output",
+        var context = new ResourceTestingContext(new TestingContext("run-output"), "tests", "resource-output",
             _ => throw new InvalidOperationException("Invalid results must not be published."), Task.FromResult(true), CancellationToken.None);
         Assert.ThrowsAny<ArgumentException>(() => context.PublishResult(new TestResult
         {
@@ -108,7 +108,7 @@ public class TestingCollectorTests(ITestOutputHelper outputHelper)
     public void DefaultOutcomeIsFailedAndOutcomeRemainsRequired()
     {
         TestResult? published = null;
-        var context = new ResourceTestingContext(new TestRunContext("run-output"), "tests", "resource-output",
+        var context = new ResourceTestingContext(new TestingContext("run-output"), "tests", "resource-output",
             result => published = result, Task.FromResult(true), CancellationToken.None);
 
         context.PublishResult(new TestResult { Name = "fixture", Outcome = default });
@@ -168,17 +168,17 @@ public class TestingCollectorTests(ITestOutputHelper outputHelper)
         {
             await context.WaitForCompletionAsync();
             Assert.Equal(first.OutputPath, context.OutputPath);
-            Assert.Same(first.RunContext, context.RunContext);
+            Assert.Same(first.TestingContext, context.TestingContext);
             Assert.Equal("artifact", await File.ReadAllTextAsync(
                 Path.Combine(context.OutputPath, "result.txt"), context.CancellationToken));
             context.PublishResult(new TestResult { Name = "replacement", Outcome = TestOutcome.Passed });
         });
         var replacement = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
         Assert.NotSame(first, replacement);
-        Assert.Same(first.RunContext, replacement.RunContext);
+        Assert.Same(first.TestingContext, replacement.TestingContext);
         Assert.Equal(first.OutputPath, replacement.OutputPath);
         Assert.Equal(first.OutputPath, Assert.Single(Directory.GetDirectories(
-            first.RunContext!.OutputPath)));
+            first.TestingContext!.OutputPath)));
         Assert.False(originalCollectorCalled);
 
         using var notifications = ResourceNotificationServiceTestHelpers.Create();
@@ -211,11 +211,11 @@ public class TestingCollectorTests(ITestOutputHelper outputHelper)
         resource.WithTesting();
         var replacement = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
         Assert.NotSame(first, replacement);
-        Assert.Same(first.RunContext, replacement.RunContext);
+        Assert.Same(first.TestingContext, replacement.TestingContext);
         Assert.Equal(first.OutputPath, replacement.OutputPath);
         Assert.Null(replacement.Collector);
         Assert.Equal(first.OutputPath, Assert.Single(Directory.GetDirectories(
-            first.RunContext!.OutputPath)));
+            first.TestingContext!.OutputPath)));
 
         using var notifications = ResourceNotificationServiceTestHelpers.Create();
         using var coordinator = CreateCoordinator(builder, notifications);
@@ -249,7 +249,7 @@ public class TestingCollectorTests(ITestOutputHelper outputHelper)
         });
         var replacement = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
         Assert.NotSame(first, replacement);
-        Assert.Null(replacement.RunContext);
+        Assert.Null(replacement.TestingContext);
         Assert.Null(replacement.OutputPath);
         Assert.Equal(markerOnly, replacement.Collector is null);
 
@@ -275,8 +275,8 @@ public class TestingCollectorTests(ITestOutputHelper outputHelper)
         resource.WithTesting(async context =>
         {
             Interlocked.Increment(ref calls);
-            Assert.Equal(Path.Combine(context.RunContext.OutputPath, "tests"), context.OutputPath);
-            Assert.Equal(["tests"], Directory.GetDirectories(context.RunContext.OutputPath).Select(Path.GetFileName));
+            Assert.Equal(Path.Combine(context.TestingContext.OutputPath, "tests"), context.OutputPath);
+            Assert.Equal(["tests"], Directory.GetDirectories(context.TestingContext.OutputPath).Select(Path.GetFileName));
             context.PublishResult(new TestResult { Name = "live fixture", Outcome = TestOutcome.Passed });
             started.TrySetResult();
             resourceFinished.TrySetResult(await context.WaitForCompletionAsync());
@@ -451,10 +451,10 @@ public class TestingCollectorTests(ITestOutputHelper outputHelper)
         var secondResource = builder.AddResource(new ContainerResource("second")).WithTesting();
         var first = Assert.Single(firstResource.Resource.Annotations.OfType<TestingAnnotation>());
         var second = Assert.Single(secondResource.Resource.Annotations.OfType<TestingAnnotation>());
-        Assert.Equal(Path.Combine(first.RunContext!.OutputPath, "first"), first.OutputPath);
-        Assert.Equal(Path.Combine(second.RunContext!.OutputPath, "second"), second.OutputPath);
+        Assert.Equal(Path.Combine(first.TestingContext!.OutputPath, "first"), first.OutputPath);
+        Assert.Equal(Path.Combine(second.TestingContext!.OutputPath, "second"), second.OutputPath);
         Assert.NotEqual(first.OutputPath, second.OutputPath);
-        Assert.Equal(first.RunContext!.OutputPath, second.RunContext!.OutputPath);
+        Assert.Equal(first.TestingContext!.OutputPath, second.TestingContext!.OutputPath);
         Assert.True(Directory.Exists(first.OutputPath));
         Assert.True(Directory.Exists(second.OutputPath));
         if (!OperatingSystem.IsWindows())
@@ -594,7 +594,7 @@ public class TestingCollectorTests(ITestOutputHelper outputHelper)
         var resource = builder.AddResource(new ContainerResource("CON")).WithTesting();
         var annotation = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
         Assert.Null(annotation.OutputPath);
-        Assert.Null(annotation.RunContext);
+        Assert.Null(annotation.TestingContext);
     }
 
     [Fact]
@@ -620,7 +620,7 @@ public class TestingCollectorTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var cancellation = new CancellationTokenSource();
-        var context = new ResourceTestingContext(new TestRunContext(workspace.WorkspaceRoot.FullName),
+        var context = new ResourceTestingContext(new TestingContext(workspace.WorkspaceRoot.FullName),
             "tests", workspace.WorkspaceRoot.FullName, _ => { }, Task.FromResult(passed), cancellation.Token);
         cancellation.Cancel();
 
@@ -637,7 +637,7 @@ public class TestingCollectorTests(ITestOutputHelper outputHelper)
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10), timeProvider);
         using var caller = new CancellationTokenSource();
         var sharedCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var context = new ResourceTestingContext(new TestRunContext(workspace.WorkspaceRoot.FullName),
+        var context = new ResourceTestingContext(new TestingContext(workspace.WorkspaceRoot.FullName),
             "tests", workspace.WorkspaceRoot.FullName, _ => { }, sharedCompletion.Task, deadline.Token);
 
         var waiting = context.WaitForCompletionAsync(supplyCallerToken ? caller.Token : default);
@@ -656,7 +656,7 @@ public class TestingCollectorTests(ITestOutputHelper outputHelper)
         using var caller = new CancellationTokenSource();
         using var otherCaller = new CancellationTokenSource();
         var sharedCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var context = new ResourceTestingContext(new TestRunContext(workspace.WorkspaceRoot.FullName),
+        var context = new ResourceTestingContext(new TestingContext(workspace.WorkspaceRoot.FullName),
             "tests", workspace.WorkspaceRoot.FullName, _ => { }, sharedCompletion.Task, run.Token);
         var localWait = context.WaitForCompletionAsync(caller.Token);
         var defaultWait = context.WaitForCompletionAsync();
@@ -682,7 +682,7 @@ public class TestingCollectorTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var run = new CancellationTokenSource();
         using var caller = new CancellationTokenSource();
-        var context = new ResourceTestingContext(new TestRunContext(workspace.WorkspaceRoot.FullName),
+        var context = new ResourceTestingContext(new TestingContext(workspace.WorkspaceRoot.FullName),
             "tests", workspace.WorkspaceRoot.FullName, _ => { }, Task.FromResult(true),
             runCanBeCancelled ? run.Token : CancellationToken.None);
         caller.Cancel();

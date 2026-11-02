@@ -54,7 +54,7 @@ public class TestRunCoordinatorEndToEndTests(ITestOutputHelper outputHelper)
         var collectorStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         process.WithTesting(async context =>
         {
-            Assert.Equal(outputDirectory.FullName, context.RunContext.OutputPath);
+            Assert.Equal(outputDirectory.FullName, context.TestingContext.OutputPath);
             Assert.True(Directory.Exists(context.OutputPath));
             collectorStarted.TrySetResult();
             await context.WaitForCompletionAsync();

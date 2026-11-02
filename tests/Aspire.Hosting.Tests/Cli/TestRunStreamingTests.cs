@@ -140,18 +140,18 @@ public class TestRunStreamingTests(ITestOutputHelper outputHelper)
         var annotation = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
         Assert.Equal(0, callbacks);
         Assert.NotSame(first, annotation);
-        Assert.Same(first.RunContext, annotation.RunContext);
+        Assert.Same(first.TestingContext, annotation.TestingContext);
         Assert.Equal(first.OutputPath, annotation.OutputPath);
         if (expectedOutput)
         {
-            Assert.Equal(path, annotation.RunContext!.OutputPath);
+            Assert.Equal(path, annotation.TestingContext!.OutputPath);
             Assert.Equal(Path.Combine(path, "tests"), annotation.OutputPath);
             Assert.True(Directory.Exists(annotation.OutputPath));
         }
         else
         {
             Assert.Null(annotation.OutputPath);
-            Assert.Null(annotation.RunContext);
+            Assert.Null(annotation.TestingContext);
         }
         Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
     }

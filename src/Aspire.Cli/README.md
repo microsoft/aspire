@@ -102,7 +102,8 @@ runner's arguments/environment and report location independently, without
 depending on callback execution before its first await.
 During testing, `ResourceTestingContext.OutputPath` is an existing private
 `<run-id>/<logical-resource-name>` directory shared by that resource's replicas;
-`RunContext.OutputPath` identifies the containing run. Repeated `WithTesting`
+`ResourceTestingContext.TestingContext.OutputPath` identifies the containing
+invocation through its `TestingContext`. Repeated `WithTesting`
 calls replace the collector while retaining the same run context and output
 destination. A marker-only call clears the collector. No testing directory is
 invented outside testing.

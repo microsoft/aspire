@@ -252,7 +252,7 @@ internal sealed class TestRunCoordinator(
     private async Task<bool> CollectAsync(IResource resource, Task<bool> resourceCompletion, CancellationToken cancellationToken)
     {
         resource.TryGetLastAnnotation<TestingAnnotation>(out var annotation);
-        var configured = annotation is { RunContext: not null, OutputPath: not null, Collector: not null };
+        var configured = annotation is { TestingContext: not null, OutputPath: not null, Collector: not null };
         var state = new TestCollectionState
         {
             ResourceName = resource.Name,
@@ -261,13 +261,13 @@ internal sealed class TestRunCoordinator(
             Status = configured ? "running" : "notConfigured"
         };
         Publish(new TestRunEvent { Collection = state });
-        if (annotation is not { RunContext: { } runContext, OutputPath: { } outputPath, Collector: { } collector })
+        if (annotation is not { TestingContext: { } testingContext, OutputPath: { } outputPath, Collector: { } collector })
         {
             return true;
         }
         try
         {
-            var outcome = await RunCollectorAsync(resource.Name, runContext, outputPath,
+            var outcome = await RunCollectorAsync(resource.Name, testingContext, outputPath,
                 resourceCompletion, collector, cancellationToken).ConfigureAwait(false);
             Publish(new TestRunEvent
             {
@@ -286,11 +286,11 @@ internal sealed class TestRunCoordinator(
         }
     }
 
-    private async Task<(bool Passed, string? Error)> RunCollectorAsync(string resourceName, TestRunContext runContext, string outputPath,
+    private async Task<(bool Passed, string? Error)> RunCollectorAsync(string resourceName, TestingContext testingContext, string outputPath,
         Task<bool> resourceCompletion, Func<ResourceTestingContext, Task> collector, CancellationToken cancellationToken)
     {
         var hasFailedResult = false;
-        var context = new ResourceTestingContext(runContext, resourceName, outputPath, result =>
+        var context = new ResourceTestingContext(testingContext, resourceName, outputPath, result =>
         {
             var published = new PublishedTestResult
             {

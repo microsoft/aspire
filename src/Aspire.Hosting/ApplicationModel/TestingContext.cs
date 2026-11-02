@@ -25,9 +25,9 @@ namespace Aspire.Hosting.ApplicationModel;
 /// </example>
 [AspireExport]
 [Experimental(TestingDiagnostics.DiagnosticId, UrlFormat = TestingDiagnostics.UrlFormat)]
-public sealed class TestRunContext
+public sealed class TestingContext
 {
-    internal TestRunContext(string outputPath)
+    internal TestingContext(string outputPath)
     {
         OutputPath = outputPath;
     }

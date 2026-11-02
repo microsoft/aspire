@@ -31,10 +31,10 @@ public sealed class ResourceTestingContext
     private readonly object _gate = new();
     private bool _closed;
 
-    internal ResourceTestingContext(TestRunContext runContext, string resourceName, string outputPath,
+    internal ResourceTestingContext(TestingContext testingContext, string resourceName, string outputPath,
         Action<TestResult> publish, Task<bool> resourceCompletion, CancellationToken cancellationToken)
     {
-        RunContext = runContext;
+        TestingContext = testingContext;
         ResourceName = resourceName;
         OutputPath = outputPath;
         _publish = publish;
@@ -43,10 +43,10 @@ public sealed class ResourceTestingContext
     }
 
     /// <summary>
-    /// Gets the context for the containing test run.
+    /// Gets the context for the containing testing invocation.
     /// </summary>
     [AspireExport]
-    public TestRunContext RunContext { get; }
+    public TestingContext TestingContext { get; }
 
     /// <summary>
     /// Gets the logical resource name associated with every result published through this context.

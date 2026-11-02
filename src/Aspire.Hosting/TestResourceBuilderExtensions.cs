@@ -73,23 +73,23 @@ public static class TestResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
 
         builder.Resource.TryGetLastAnnotation<TestingAnnotation>(out var annotation);
-        var runContext = annotation?.RunContext;
+        var testingContext = annotation?.TestingContext;
         var resourceOutputPath = annotation?.OutputPath;
-        if (runContext is null &&
+        if (testingContext is null &&
             builder.ApplicationBuilder.ExecutionContext.IsRunMode &&
             builder.ApplicationBuilder.Configuration[KnownConfigNames.TestOutputPath] is { } outputPath)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(outputPath);
-            runContext = new TestRunContext(Path.GetFullPath(outputPath));
+            testingContext = new TestingContext(Path.GetFullPath(outputPath));
             // The CLI creates the run directory before model construction. Allocate only within
             // that private boundary before execution, without invoking the runtime collector.
-            SocketPermissionHelper.CreateDirectory(runContext.OutputPath, repairExisting: false);
-            resourceOutputPath = CreateResourceOutputDirectory(runContext.OutputPath, builder.Resource.Name);
+            SocketPermissionHelper.CreateDirectory(testingContext.OutputPath, repairExisting: false);
+            resourceOutputPath = CreateResourceOutputDirectory(testingContext.OutputPath, builder.Resource.Name);
         }
         return builder.WithAnnotation(new TestingAnnotation
         {
             Collector = callback,
-            RunContext = runContext,
+            TestingContext = testingContext,
             OutputPath = resourceOutputPath
         }, ResourceAnnotationMutationBehavior.Replace);
     }

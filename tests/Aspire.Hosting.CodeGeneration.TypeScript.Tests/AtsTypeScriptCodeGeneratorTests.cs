@@ -1848,6 +1848,10 @@ public class AtsTypeScriptCodeGeneratorTests
         var cancellation = Assert.Single(wait.Parameters, parameter => parameter.Name == "cancellationToken");
         Assert.True(cancellation.IsOptional);
         Assert.Equal(AtsConstants.CancellationToken, cancellation.Type?.TypeId);
+        var testingContext = Assert.Single(scanResult.Capabilities, capability =>
+            capability.CapabilityId == "Aspire.Hosting.ApplicationModel/ResourceTestingContext.testingContext");
+        Assert.Equal(AtsCapabilityKind.PropertyGetter, testingContext.CapabilityKind);
+        Assert.Equal("Aspire.Hosting/Aspire.Hosting.ApplicationModel.TestingContext", testingContext.ReturnType?.TypeId);
         var outcome = Assert.Single(scanResult.EnumTypes, type => type.Name == nameof(TestOutcome));
         Assert.Equal(["Failed", "Passed", "Skipped", "Inconclusive", "Error", "TimedOut", "Cancelled"], outcome.Values);
 #pragma warning restore ASPIRETESTING001

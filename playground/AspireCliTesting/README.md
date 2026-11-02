@@ -95,6 +95,9 @@ stages it into `context.OutputPath` before publishing the `shared-service-probe`
 result. The runner report directory is removed at AppHost shutdown.
 The callback runs at runtime, never during model construction; configure runner
 arguments/environment independently rather than depending on its synchronous prefix.
+It receives a `ResourceTestingContext`: `context.OutputPath` is the resource's
+artifact directory, while `context.TestingContext.OutputPath` identifies the
+containing invocation through its `TestingContext`.
 Ordinary runs still execute the probe but do not invoke the collector.
 Text output distinguishes `Resource`
 state transitions from `Test` results, shows exit codes only for terminal states,

@@ -25,6 +25,6 @@ public sealed class TestingAnnotation : IResourceAnnotation
     }
 
     internal Func<ResourceTestingContext, Task>? Collector { get; init; }
-    internal TestRunContext? RunContext { get; init; }
+    internal TestingContext? TestingContext { get; init; }
     internal string? OutputPath { get; init; }
 }
