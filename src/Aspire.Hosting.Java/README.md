@@ -81,6 +81,101 @@ await builder.build().run();
 `appDirectory` is the process working directory and the publish build context, so everything the build
 needs must live inside it.
 
+### JUnit testing with Maven Surefire
+
+The experimental `WithJUnitTesting()` API (`ASPIRETESTING001`) includes an existing Java
+resource in `aspire test`. This first adapter supports a **single-module Maven project**,
+its checked-in wrapper and the `test` lifecycle phase with standard Surefire XML reporting.
+JUnit is the test framework; Maven/Surefire compiles and launches it and produces reports.
+Declare JUnit and Surefire in the POM; Aspire does not install a test framework.
+The [CLI testing playground](../../playground/AspireCliTesting/java-tests/pom.xml) is a
+complete JUnit Jupiter 5.12.2 / Surefire 3.5.3 example requiring JDK 17 or later.
+
+The preview CLI command is disabled by default. Opt in for each invocation without
+changing saved user configuration:
+
+```bash
+features__testCommandEnabled=true aspire test --apphost apphost.cs
+```
+
+**C#**
+
+```csharp
+#pragma warning disable ASPIRETESTING001
+builder.AddJavaApp("java-tests", "../java-tests")
+    .WithMavenGoal("test", "--batch-mode", "--no-transfer-progress")
+    .WithJUnitTesting()
+    .WithEnvironment("SERVICE_URL", service.GetEndpoint("http"))
+    .WaitFor(service);
+```
+
+**TypeScript**
+
+```typescript
+const tests = await builder.addJavaApp("java-tests", "../java-tests");
+await tests.withMavenGoal("test", ["--batch-mode", "--no-transfer-progress"]);
+await tests.withJUnitTesting();
+await tests.withEnvironment("SERVICE_URL", service.getEndpoint("http"));
+await tests.waitFor(service);
+```
+
+Surefire's `reportsDirectory` is a plugin configuration parameter, **not** a documented
+`-Dsurefire.reportsDirectory` switch. Add this profile to the POM so Aspire can assign a
+fresh private directory per invocation without changing the project's build directory:
+
+```xml
+<profiles>
+  <profile>
+    <id>aspire-testing</id>
+    <activation>
+      <property><name>env.ASPIRE_JUNIT_REPORT_DIRECTORY</name></property>
+    </activation>
+    <build>
+      <plugins>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-surefire-plugin</artifactId>
+          <configuration>
+            <reportsDirectory>${env.ASPIRE_JUNIT_REPORT_DIRECTORY}</reportsDirectory>
+          </configuration>
+        </plugin>
+      </plugins>
+    </build>
+  </profile>
+</profiles>
+```
+
+Only test mode sets `ASPIRE_JUNIT_REPORT_DIRECTORY`. Keep it unset for ordinary Maven
+runs, which retain the project's default `target/surefire-reports` behavior.
+Compilation outputs and dependency caches still follow Maven conventions; Aspire neither
+copies nor rewrites the original source tree. Normal Java applications are unaffected.
+
+The runtime collector waits for authoritative process completion, including nonzero exits,
+then copies only the fresh directory's top-level `TEST-*.xml` files to
+`<run-output>/java-tests/TEST-<class>.xml`. Nested directories, unrelated XML, text reports,
+and stale `target/surefire-reports` files are not ingested. Source/destination symbolic links
+and overwriting existing artifacts are rejected. Runner files are removed at AppHost disposal;
+staged reports remain with copy-writer permissions inside the private resource directory.
+Replacing `WithTesting(...)` replaces the single collector, not prelaunch report routing.
+
+Standard Surefire `testsuite` reports publish class-qualified test names (including literal
+parameterized invocation names), durations, failure/error/skip diagnostics and captured output.
+`failure` maps to `Failed`, `error` to `Error`, `skipped` to `Skipped`, and an outcome-free
+testcase to `Passed`. Exception text does not imply `TimedOut`, `Cancelled`, or `Inconclusive`.
+All suite counters must match, identities must be unique across files, and unknown outcomes,
+retry/flaky entries, malformed reports and missing reports fail collection explicitly.
+An explicit zero-case suite publishes zero results. Build/no-test failures never fabricate cases;
+a failing Maven process fails the resource even if its reported cases pass.
+
+Use `WithArgs("-Dtest=ServiceTest")` for selection, attached `-D` properties or `-P` profiles,
+and ordinary logging/offline flags. Alternate POMs, extra goals, reactor/module selection,
+Gradle, Failsafe, retries, terminal execution, replicas and resource restarts are not supported.
+Configure one test resource per single-module suite. This helper excludes test resources from
+publishing; do not combine it with a separate `WithMavenBuild()` step.
+
+See [Surefire reporting](https://maven.apache.org/surefire/maven-surefire-plugin/) and
+[reportsDirectory](https://maven.apache.org/surefire/maven-surefire-plugin/test-mojo.html#reportsDirectory).
+
 ### Spring Boot
 
 `AddSpringBootApp` is `AddJavaApp` with the four calls every Spring Boot service repeats already made.

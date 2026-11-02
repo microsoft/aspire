@@ -2,7 +2,7 @@
 
 This file-based AppHost is the shared, in-repository exerciser for `aspire test`.
 It uses repository hosting projects, not released packages or a private package
-hive. The foundation, MSTest, pytest, Go and Rust scenarios share the same HTTP service
+hive. The foundation, MSTest, pytest, Go, Rust and Java scenarios share the same HTTP service
 and require no containers. The MSTest fixture registers the executable
 Microsoft.Testing.Platform runner and TRX extension explicitly.
 The pytest fixture uses Python 3.10 or later and `uv` on PATH. `WithUv()` installs
@@ -13,6 +13,9 @@ no additional Go test runner or dependencies are needed.
 The Rust fixture uses only the standard library and the **built-in `cargo test`**
 runner. Only the Rust toolchain is needed on PATH; nextest is not required.
 No tools are installed globally and no Cargo configuration is rewritten.
+The Java fixture needs JDK 17 or later on PATH (`JAVA_HOME` may select it).
+Its checked-in wrapper pins Maven 3.9.9 and downloads the declared JUnit Jupiter 5.12.2
+and Surefire 3.5.3 dependencies. No global Maven installation is needed.
 
 ## Run from the repository root
 
@@ -32,7 +35,7 @@ features__testCommandEnabled=true \
 The CLI builds the AppHost from the current sources. The `Aspire.Hosting.AppHost@*`
 directive makes the file discoverable; `Directory.Build.targets` removes that
 package reference and uses `AspireProjectOrPackageReference` to resolve the local
-AppHost, .NET, Python, Go and Rust hosting projects. It does not restore the wildcard package.
+AppHost, .NET, Python, Go, Rust and Java hosting projects. It does not restore the wildcard package.
 
 Like the other playgrounds, this AppHost adds the repository dashboard with
 `AddDotnetProject` using the reserved `aspire-dashboard` resource name. Hosting
@@ -178,10 +181,34 @@ outcome, and no individual Rust outcomes or skipped counts are published.
 Zero published Rust results does not imply no Rust tests executed.
 Only one native invocation is supported, without terminals, replicas or restarts.
 
-The default published-result summary contains **10 passed, 0 failed, 3 skipped**:
+`java-tests/pom.xml` defines a single-module JUnit Jupiter suite launched with
+`AddJavaApp(...).WithMavenGoal("test").WithJUnitTesting()`. Maven Surefire is the
+launcher/reporter; JUnit is the framework. The resource waits for the shared service,
+receives `serviceEndpoint` through `JAVA_SERVICE_URL`, and checks `/`, `/health`,
+an independent opt-in failure and a disabled example.
+
+The POM's environment-activated `aspire-testing` profile configures Surefire's
+`reportsDirectory` from `ASPIRE_JUNIT_REPORT_DIRECTORY`. Aspire assigns a fresh private
+directory before launch, independently of the runtime collector. Normal Maven runs,
+with that variable unset, retain `target/surefire-reports`. No source tree is copied
+or rewritten; compiler output and caches remain Maven-owned.
+
+After process completion, even a nonzero exit, the collector stages top-level
+`TEST-*.xml` reports into `<run>/java-tests` and validates the whole set before publishing.
+It preserves class-qualified names, parameterized invocation names, durations and diagnostics.
+JUnit failures map to Failed, errors to Error, skips to Skipped, and outcome-free cases
+to Passed. Command cancellation/deadlines are not inferred from Java exception text.
+Missing/invalid reports, inconsistent counters, duplicate identities and unsupported retry
+entries fail explicitly. Build/no-test failures invent no cases. Old reports under `target`,
+unrelated XML and nested files are not consumed. Source/destination links and artifact
+overwrites are rejected. The AppHost file-system service cleans runner files on disposal.
+Gradle, Failsafe, reactor builds, retries, terminals, replicas and restarts are not supported.
+See the [Java API and POM configuration](../../src/Aspire.Hosting.Java/README.md#junit-testing-with-maven-surefire).
+
+The default published-result summary contains **13 passed, 0 failed, 4 skipped**:
 one foundation result plus three passed and one skipped from each of MSTest,
-pytest and Go. Rust contributes a **passing resource outcome**, not per-test
-counts; all five testing resources pass.
+pytest, Go and Java. Rust contributes a **passing resource outcome**, not per-test
+counts; all six testing resources pass.
 Each collection has its own output directory. The foundation writes `probe.txt`;
 MSTest and pytest write into fresh temporary runner directories configured before
 launch. Their runtime `WithTesting` callbacks wait for completion and stage
@@ -216,9 +243,9 @@ dotnet run --project src/Aspire.Cli/Aspire.Cli.csproj --no-launch-profile -- \
   --timeout-seconds 120 --format json --non-interactive
 ```
 
-This returns CLI exit code `23` with **9 passed, 1 failed, 3 skipped**. The MSTest
+This returns CLI exit code `23` with **12 passed, 1 failed, 4 skipped**. The MSTest
 process exits nonzero, but its collector still harvests the finalized TRX report
-and publishes all results. Foundation, pytest, Go and Rust resources remain passing.
+and publishes all results. Foundation, pytest, Go, Rust and Java resources remain passing.
 
 Exercise the independent pytest failure without changing MSTest:
 
@@ -229,7 +256,7 @@ dotnet run --project src/Aspire.Cli/Aspire.Cli.csproj --no-launch-profile -- \
   --timeout-seconds 120 --format json --non-interactive
 ```
 
-This also returns exit code `23` with **9 passed, 1 failed, 3 skipped**. The pytest
+This also returns exit code `23` with **12 passed, 1 failed, 4 skipped**. The pytest
 collector harvests finalized JUnit even after its process exits nonzero.
 
 Exercise the independent Go failure without changing foundation, MSTest or pytest:
@@ -241,7 +268,7 @@ dotnet run --project src/Aspire.Cli/Aspire.Cli.csproj --no-launch-profile -- \
   --timeout-seconds 120 --format json --non-interactive
 ```
 
-This returns exit code `23` with **9 passed, 1 failed, 3 skipped**. The Go process
+This returns exit code `23` with **12 passed, 1 failed, 4 skipped**. The Go process
 exits nonzero, but raw capture still drains through EOF and its collector harvests
 all four named outcomes. The other ecosystems remain passing.
 
@@ -255,27 +282,41 @@ dotnet run --project src/Aspire.Cli/Aspire.Cli.csproj --no-launch-profile -- \
 ```
 
 This returns exit code `23` with a **failed Rust resource** and unchanged published
-counts of **10 passed, 0 failed, 3 skipped**. This is not a contradiction: the
+counts of **13 passed, 0 failed, 4 skipped**. This is not a contradiction: the
 resource's nonzero exit makes the whole run fail without inventing a failed
 testcase. Diagnostic capture completes normally and no JUnit is expected.
 Inspect the Rust collection's `stdout.log` and `stderr.log` for Cargo build, test
 or doctest failures. Cargo can also succeed with no selected tests; Aspire does
 not override that behavior or infer test counts.
 
-Failure flags are independent and case-insensitive; unset flags default to
-`false`. To demonstrate all four failures together:
+Exercise the independent Java assertion failure:
 
 ```bash
-features__testCommandEnabled=true \
-MSTEST_PLAYGROUND_FAIL=true PYTEST_PLAYGROUND_FAIL=true \
-GO_PLAYGROUND_FAIL=true RUST_PLAYGROUND_FAIL=true \
+features__testCommandEnabled=true JAVA_PLAYGROUND_FAIL=true \
 dotnet run --project src/Aspire.Cli/Aspire.Cli.csproj --no-launch-profile -- \
   test --apphost playground/AspireCliTesting/apphost.cs --isolated \
   --timeout-seconds 120 --format json --non-interactive
 ```
 
-This returns exit code `23` with **7 passed, 3 failed, 3 skipped** published
-results and **four failed resource outcomes**; the foundation probe still passes.
+This returns exit code `23` with **12 passed, 1 failed, 4 skipped**. Surefire exits
+nonzero, but collection stages its finalized XML and publishes all four Java cases.
+The other ecosystems remain passing. An unexpected Java exception is reported as
+an Error rather than a failed assertion; both fail the aggregate.
+
+Failure flags are independent and case-insensitive; unset flags default to
+`false`. To demonstrate all five failures together:
+
+```bash
+features__testCommandEnabled=true \
+MSTEST_PLAYGROUND_FAIL=true PYTEST_PLAYGROUND_FAIL=true \
+GO_PLAYGROUND_FAIL=true RUST_PLAYGROUND_FAIL=true JAVA_PLAYGROUND_FAIL=true \
+dotnet run --project src/Aspire.Cli/Aspire.Cli.csproj --no-launch-profile -- \
+  test --apphost playground/AspireCliTesting/apphost.cs --isolated \
+  --timeout-seconds 120 --format json --non-interactive
+```
+
+This returns exit code `23` with **9 passed, 4 failed, 4 skipped** published
+results and **five failed resource outcomes**; the foundation probe still passes.
 
 There is no `--output` option; use the paths assigned
 by the CLI rather than passing reporting flags to the runner.

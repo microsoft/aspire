@@ -80,6 +80,14 @@ try
             Environment.GetEnvironmentVariable("RUST_PLAYGROUND_FAIL") ?? "false")
         .WaitFor(service);
 
+    builder.AddJavaApp("java-tests", "java-tests")
+        .WithMavenGoal("test", "--batch-mode", "--no-transfer-progress")
+        .WithJUnitTesting()
+        .WithEnvironment("JAVA_SERVICE_URL", serviceEndpoint)
+        .WithEnvironment("JAVA_PLAYGROUND_FAIL",
+            Environment.GetEnvironmentVariable("JAVA_PLAYGROUND_FAIL") ?? "false")
+        .WaitFor(service);
+
     builder.Build().Run();
 }
 finally
