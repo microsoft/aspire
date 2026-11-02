@@ -917,11 +917,36 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task OptOut_SuppressesInitializationAndUpdatePromptsAndChecks(bool force)
+    public async Task Materialize_RejectsFlattenedBindingChange(bool optOut)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
-        const string configuration = """{"ConfigSource":{"optOut":true},"custom":"keep"}""";
+        var configuration = $$"""
+            {"configSource:repository":"{{s_source.Repository}}","configSource:path":"different.json","configSource:appliedVersion":"saved-version","custom":"keep"}
+            """;
+        await File.WriteAllTextAsync(path, configuration);
+        var git = new TestConfigSourceRepository();
+        using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git);
+
+        var error = await Assert.ThrowsAsync<ConfigSourceException>(() =>
+            service.MaterializeAsync(optOut ? new ConfigSource { OptOut = true } : s_source,
+                workspace.WorkspaceRoot, CancellationToken.None));
+
+        Assert.Equal(ConfigSourceStrings.BindingChanged, error.Message);
+        Assert.Equal(configuration, await File.ReadAllTextAsync(path));
+        Assert.Equal(optOut ? 0 : 1, git.Calls);
+        Assert.Equal(0, git.CheckCalls);
+    }
+
+    [Theory]
+    [InlineData(false, """{"ConfigSource":{"optOut":true},"custom":"keep"}""")]
+    [InlineData(true, """{"ConfigSource":{"optOut":true},"custom":"keep"}""")]
+    [InlineData(false, """{"ConfigSource:optOut":true,"custom":"keep"}""")]
+    [InlineData(true, """{"ConfigSource:optOut":true,"custom":"keep"}""")]
+    public async Task OptOut_SuppressesInitializationAndUpdatePromptsAndChecks(bool force, string configuration)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
         await File.WriteAllTextAsync(path, configuration);
         var git = new TestConfigSourceRepository();
         var detector = new TestConfigSourceDetector { IsInternal = true };

@@ -258,7 +258,6 @@ internal sealed class ConfigSourceService(
             {
                 throw new ConfigSourceException(ConfigSourceStrings.BindingChanged);
             }
-            ConfigurationHelper.NormalizeSettings(configuration);
             configuration[GetKey(configuration, ConfigSource.SectionName)] = new JsonObject { ["optOut"] = true };
             await ConfigurationHelper.WriteSettingsFileAtomicallyAsync(path, configuration, cancellationToken);
             return;
@@ -340,7 +339,6 @@ internal sealed class ConfigSourceService(
             throw new ConfigSourceException(ConfigSourceStrings.BindingChanged);
         }
         var previous = configuration.ToJsonString();
-        ConfigurationHelper.NormalizeSettings(configuration);
         foreach (var setting in s_allowedSettings)
         {
             if (TryGetValue(snapshot.Configuration, setting, out var value))
@@ -482,11 +480,19 @@ internal sealed class ConfigSourceService(
 
     private static async Task<JsonObject?> ReadConfigurationFileAsync(string path, CancellationToken cancellationToken)
     {
-        return File.Exists(path)
-            ? JsonNode.Parse(await File.ReadAllTextAsync(path, cancellationToken),
-                documentOptions: ConfigurationHelper.ParseOptions) as JsonObject
-                ?? throw new ConfigSourceException(string.Format(CultureInfo.CurrentCulture, ErrorStrings.ConfigurationFileMustBeJsonObject, path))
-            : null;
+        if (!File.Exists(path))
+        {
+            return null;
+        }
+
+        var configuration = JsonNode.Parse(await File.ReadAllTextAsync(path, cancellationToken),
+            documentOptions: ConfigurationHelper.ParseOptions) as JsonObject
+            ?? throw new ConfigSourceException(string.Format(CultureInfo.CurrentCulture, ErrorStrings.ConfigurationFileMustBeJsonObject, path));
+        // Normalize before binding lookups so legacy keys such as {"configSource:optOut":true}
+        // are honored by both read-only checks and write-time binding guards.
+        ConfigurationHelper.NormalizeSettings(configuration);
+
+        return configuration;
     }
 
     private static ConfigSource? ReadBinding(JsonObject? config)

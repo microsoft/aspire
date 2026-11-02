@@ -110,7 +110,7 @@ internal sealed class ConfigSourceTestContext
         else
         {
             var configuration = await ReadConfigurationAsync();
-            Assert.Null(configuration["configSource"]);
+            Assert.True(configuration["configSource"]!["optOut"]!.GetValue<bool>());
             Assert.Equal("""{"custom":"keep"}""", configuration["docs"]!.ToJsonString());
             await AssertSourceNotAcquiredAsync();
         }

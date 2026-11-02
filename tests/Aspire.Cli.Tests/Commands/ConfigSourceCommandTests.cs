@@ -642,6 +642,57 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         Assert.Empty(interaction.DisplayedErrors);
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task Update_FromSolutionRootPreservesFlattenedAppHostSourceChoice(bool optOut, bool explicitConsent)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostDirectory = workspace.CreateDirectory("AppHost");
+        var projectFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(projectFile.FullName, "<Project />");
+        var configPath = Path.Combine(appHostDirectory.FullName, AspireConfigFile.FileName);
+        var configuration = optOut
+            ? """{"configSource:optOut":true,"custom":"keep"}"""
+            : $$"""
+                {"configSource:repository":"{{s_source.Repository}}","configSource:path":"{{s_source.Path}}","configSource:appliedVersion":"{{s_source.AppliedVersion}}","custom":"keep"}
+                """;
+        await File.WriteAllTextAsync(configPath, configuration);
+        var interaction = new TestInteractionService
+        {
+            PromptForSelectionCallback = (_, _, _, _) => throw new InvalidOperationException("Unexpected source prompt.")
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interaction;
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.ProjectLocatorFactory = _ => new TestProjectLocator
+            {
+                UseOrFindAppHostProjectFileAsyncCallback = (_, _, _) => Task.FromResult<FileInfo?>(projectFile)
+            };
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner();
+            options.ProjectUpdaterFactory = _ => new TestProjectUpdater
+            {
+                UpdateProjectAsyncCallback = (_, _) => Task.FromResult(new ProjectUpdateResult { UpdatedApplied = false })
+            };
+            options.PackagingServiceFactory = _ => new TestPackagingService();
+        });
+        var detector = new TestConfigSourceDetector { IsInternal = true };
+        services.AddSingleton<IInternalMicrosoftDetector>(detector);
+        using var provider = services.BuildServiceProvider();
+        var consent = explicitConsent ? " --use-config-source" : "";
+        var result = provider.GetRequiredService<RootCommand>().Parse($"update --apphost \"{projectFile.FullName}\" --yes{consent}");
+
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+
+        Assert.Equal(configuration, await File.ReadAllTextAsync(configPath));
+        Assert.Equal(0, detector.Calls);
+        Assert.Equal(0, Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>()).Calls);
+        Assert.Empty(interaction.DisplayedErrors);
+    }
+
     [Fact]
     public async Task Update_NonInteractiveDoesNotAdoptSourceWithoutExplicitConsent()
     {
