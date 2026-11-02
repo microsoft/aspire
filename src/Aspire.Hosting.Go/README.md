@@ -108,6 +108,9 @@ temporary framework reports or GUID subdirectories. Replacing the collector with
 `WithTesting(callback)`, or clearing it with `WithTesting()`, preserves the output
 destination and runner configuration. The replacement is responsible for harvesting
 results if desired.
+The callback's `ResourceTestingContext.TestingContext` is the shared `TestingContext`.
+Its `OutputPath` is the run root; the resource-specific `context.OutputPath`
+remains the raw capture destination.
 
 Go's named `pass`, `fail`, and `skip` events map only to `Passed`, `Failed`, and
 `Skipped`. The common API also supports `Inconclusive`, `Error`, `TimedOut`, and

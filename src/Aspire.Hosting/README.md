@@ -45,6 +45,9 @@ The output directory is `<run>/<logical-resource-name>`. Replacing or clearing t
 collector preserves this path and run context. `WaitForCompletionAsync(token)` also
 supports caller-local cancellation without cancelling shared completion or capture;
 run cancellation always applies.
+`ResourceTestingContext.TestingContext` exposes the containing `TestingContext`;
+`context.TestingContext.OutputPath` is the run root, while `context.OutputPath`
+is the logical resource's private directory.
 
 ```csharp
 #pragma warning disable ASPIRETESTING001

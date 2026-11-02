@@ -4,6 +4,7 @@
 using System.Text.RegularExpressions;
 using Aspire.Hosting.Go;
 using Aspire.Hosting.RemoteHost;
+using Aspire.TypeSystem;
 
 #pragma warning disable ASPIRETESTING001
 
@@ -27,13 +28,26 @@ public class GoTestExportTests
         var waitMethod = Regex.Match(code, @"(?m)^    waitForCompletionAsync\([^\r\n]*;").Value;
         var testingOptions = Regex.Match(code, @"(?ms)^export interface WithTestingOptions \{.*?^\}").Value;
         var waitOptions = Regex.Match(code, @"(?ms)^export interface WaitForCompletionAsyncOptions \{.*?^\}").Value;
+        var contextMethod = Regex.Match(code, @"(?m)^    testingContext\(\): TestingContextPromise;").Value;
+        var contextGetter = Assert.Single(scan.Capabilities, c =>
+            c.CapabilityId == "Aspire.Hosting.ApplicationModel/ResourceTestingContext.testingContext");
+        var rootOutputGetter = Assert.Single(scan.Capabilities, c =>
+            c.CapabilityId == "Aspire.Hosting.ApplicationModel/TestingContext.outputPath");
+        Assert.Equal(AtsCapabilityKind.PropertyGetter, contextGetter.CapabilityKind);
+        Assert.Equal("Aspire.Hosting/Aspire.Hosting.ApplicationModel.TestingContext", contextGetter.ReturnType!.TypeId);
+        Assert.Equal(AtsCapabilityKind.PropertyGetter, rootOutputGetter.CapabilityKind);
         Assert.NotEmpty(add);
         Assert.NotEmpty(captureMethod);
         Assert.NotEmpty(testingMethod);
         Assert.NotEmpty(waitMethod);
         Assert.NotEmpty(testingOptions);
         Assert.NotEmpty(waitOptions);
-        var methods = new { Add = add, Capture = captureMethod, Testing = testingMethod, Wait = waitMethod, testingOptions, waitOptions };
+        Assert.NotEmpty(contextMethod);
+        var methods = new
+        {
+            Add = add, Capture = captureMethod, Testing = testingMethod, Wait = waitMethod, testingOptions, waitOptions,
+            Context = contextMethod, ContextGetter = contextGetter.CapabilityId, RootOutputGetter = rootOutputGetter.CapabilityId
+        };
         await Verify(methods);
     }
 }
