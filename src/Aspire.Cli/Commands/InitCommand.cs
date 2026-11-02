@@ -296,9 +296,22 @@ internal sealed class InitCommand : BaseCommand
         }
 
         return sources.Any(source => (source.Plugins ?? ["aspire"]).Contains("aspire", StringComparer.Ordinal) &&
-            string.Equals(AspireSkillsRemoteConfiguration.NormalizeRepositoryUrl(source.GetRepositoryUrl()),
-                AspireSkillsRemoteConfiguration.NormalizeRepositoryUrl(AspireSkillsRemoteConfiguration.RepositoryUrl),
-                StringComparison.OrdinalIgnoreCase));
+            IsOfficialAspireSkillsRepository(source.GetRepositoryUrl()));
+    }
+
+    private static bool IsOfficialAspireSkillsRepository(string repositoryUrl)
+    {
+        repositoryUrl = AspireSkillsRemoteConfiguration.NormalizeRepositoryUrl(repositoryUrl);
+        if (Uri.TryCreate(repositoryUrl, UriKind.Absolute, out var uri))
+        {
+            return uri.Scheme is "https" or "ssh" &&
+                uri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase) &&
+                uri.AbsolutePath.Equals($"/{AspireSkillsRemoteConfiguration.Repository}", StringComparison.OrdinalIgnoreCase);
+        }
+
+        // SCP-style Git addresses have no URI scheme, e.g. git@github.com:microsoft/aspire-skills.git.
+        // https://git-scm.com/docs/git-clone#URLS
+        return string.Equals(repositoryUrl, $"git@github.com:{AspireSkillsRemoteConfiguration.Repository}", StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task<int> DropCSharpSkeletonAsync(DirectoryInfo workingDirectory, FileInfo? solutionFile, CancellationToken cancellationToken)

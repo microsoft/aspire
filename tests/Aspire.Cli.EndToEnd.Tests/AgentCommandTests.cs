@@ -390,6 +390,40 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
             workspace.WorkspaceRoot.FullName, "StarterApp", ".claude", "skills", "aspireify")));
     }
 
+    [Theory]
+    [InlineData("ssh://git@github.com/microsoft/aspire-skills.git")]
+    [InlineData("git@github.com:microsoft/aspire-skills.git")]
+    [CaptureWorkspaceOnFailure]
+    public async Task AspireInit_OfficialSshSource_RecommendsAspireify(string repository)
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        RequireCurrentNativeSkillsConfiguration(strategy);
+        var workspace = TemporaryWorkspace.Create(output);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+        await File.WriteAllTextAsync(
+            Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json"),
+            JsonSerializer.Serialize(new { skillSources = new { @default = new { repository } } }),
+            TestContext.Current.CancellationToken);
+        await auto.RunCommandAsync("cd \"$ASPIRE_E2E_WORKSPACE\"", counter);
+        await auto.RunCommandAsync(
+            "aspire init --language csharp --file-based --agents claude --scope project --skills aspire --use-config-source=false --non-interactive --nologo",
+            counter, TimeSpan.FromMinutes(2));
+
+        Assert.Contains("claude \"run the aspireify skill\"", auto.CreateSnapshot().GetScreenText());
+        var settings = JsonNode.Parse(await File.ReadAllTextAsync(
+            Path.Combine(workspace.WorkspaceRoot.FullName, ".claude", "settings.json"), TestContext.Current.CancellationToken))!;
+        Assert.True(settings["enabledPlugins"]!["aspire@aspire-skills"]!.GetValue<bool>());
+        Assert.Equal(repository, settings["extraKnownMarketplaces"]!["aspire-skills"]!["source"]!["url"]!.GetValue<string>());
+    }
+
     [Fact]
     [CaptureWorkspaceOnFailure]
     public async Task AgentInit_RegistersAllClientsOfflineAndPreservesSettingsOnRepeat()
