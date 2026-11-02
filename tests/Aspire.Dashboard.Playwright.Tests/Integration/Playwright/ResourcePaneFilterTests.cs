@@ -163,9 +163,14 @@ public sealed class ResourcePaneLongFilterTests : PlaywrightTestsBase<ResourcePa
             foreach (var viewport in new[] { (Width: 1440, Height: 900), (Width: 768, Height: 1024), (Width: 390, Height: 844) })
             {
                 await page.SetViewportSizeAsync(viewport.Width, viewport.Height);
-                // Crossing the drawer breakpoint can close the popover as its anchor is re-rendered.
-                await AsyncTestHelpers.AssertIsTrueRetryAsync(async () => await trigger.IsVisibleAsync(),
-                    "The resource pane should remain accessible after resizing.");
+                // Wait for the responsive header: the throttled resize callback can leave desktop markup briefly visible.
+                var drawerButton = page.Locator("h1.resource-title").GetByRole(AriaRole.Button, new() { Name = "resource-00", Exact = true });
+                await Assertions.Expect(drawerButton).ToHaveCountAsync(viewport.Width <= 768 ? 1 : 0);
+                if (viewport.Width <= 768 && await drawerButton.GetAttributeAsync("aria-expanded") == "false")
+                {
+                    await drawerButton.ClickAsync();
+                }
+                await Assertions.Expect(trigger).ToBeVisibleAsync();
                 if (!await filter.IsVisibleAsync())
                 {
                     await trigger.ClickAsync();
