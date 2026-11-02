@@ -36,5 +36,65 @@ export enum TestOutcome {
     TimedOut = "TimedOut",
     /** The test was cancelled by its runner. */
     Cancelled = "Cancelled",
+},
+  ResourceContext:
+export interface ResourceTestingContext {
+    toJSON(): MarshalledHandle;
+    /**
+     * Gets the context for the containing testing invocation.
+     * @experimental
+     */
+    testingContext(): TestingContextPromise;
+    /**
+     * Gets the logical resource name associated with every result published through this context.
+     * @experimental
+     */
+    resourceName(): Promise<string>;
+    /**
+     * Gets the absolute host path to this resource's private output directory.
+     *
+     * Named after the logical resource directly beneath the run directory and shared by its replicas.
+     * Configure runner report paths independently and stage artifacts here during collection.
+     * Repeated `WithTesting` calls preserve this destination.
+     * @experimental
+     */
+    outputPath(): Promise<string>;
+    /**
+     * Gets the token used to cancel collection.
+     * @experimental
+     */
+    cancellationToken(): Promise<CancellationToken>;
+    /**
+     * Waits until every replica of this resource has reached an authoritative terminal outcome.
+     *
+     * Collection starts alongside execution. Use this helper before harvesting files written at
+     * process completion. It shares the run's completion tracking, handles resources that already
+     * finished, and waits for late exit-code notifications. Collector completion itself is not awaited.
+     * The default token still observes `CancellationToken`, including command deadlines
+     * and interruption. A supplied token cannot disable run cancellation, and cancelling this wait
+     * does not cancel the shared resource-completion task or other waiters.
+     * @param options Additional options.
+     * @returns True if resource execution passed; otherwise false. Published test results do not affect this value.
+     * @experimental
+     */
+    waitForCompletionAsync(options?: WaitForCompletionAsyncOptions): Promise<boolean>;
+    /**
+     * Publishes an observed test result for this resource.
+     *
+     * Results are associated with the resource by the context. Publishing does not infer any
+     * other test results, and a passing result cannot override a resource execution failure.
+     * @param result The framework-neutral result.
+     * @experimental
+     */
+    publishResult(result: TestResult): ResourceTestingContextPromise;
+},
+  TestingContext:
+export interface TestingContext {
+    toJSON(): MarshalledHandle;
+    /**
+     * Gets the absolute host path to the unique output directory for this invocation.
+     * @experimental
+     */
+    outputPath(): Promise<string>;
 }
 }

@@ -144,7 +144,7 @@ public class MsTestCollectorTests(ITestOutputHelper outputHelper)
         var options = resource.Resource.Annotations.OfType<TestingAnnotation>().Single();
         var published = new List<TestResult>();
         using var cancellation = new CancellationTokenSource();
-        var context = new ResourceTestingContext(options.RunContext!, "tests", options.OutputPath!,
+        var context = new ResourceTestingContext(options.TestingContext!, "tests", options.OutputPath!,
             published.Add, new TaskCompletionSource<bool>().Task, cancellation.Token);
         var collection = options.Collector!(context);
         cancellation.Cancel();
@@ -185,7 +185,7 @@ public class MsTestCollectorTests(ITestOutputHelper outputHelper)
                 File.WriteAllText(Path.Combine(source, "nested", "artifact.txt"), "not copied");
             }
         }
-        var context = new ResourceTestingContext(annotation.RunContext!, "tests", annotation.OutputPath!,
+        var context = new ResourceTestingContext(annotation.TestingContext!, "tests", annotation.OutputPath!,
             _ => Assert.Fail("Linked artifacts must not publish results."), Task.FromResult(true), TestContext.Current.CancellationToken);
         await Assert.ThrowsAsync<InvalidDataException>(() => annotation.Collector!(context));
         string[] expected = link == "source-directory" ? ["external.txt", "results.trx"] : ["external.txt"];
@@ -219,7 +219,7 @@ public class MsTestCollectorTests(ITestOutputHelper outputHelper)
         {
             File.CreateSymbolicLink(Path.Combine(workspace.Path, "runner reports", "results.trx"), target);
         }
-        var context = new ResourceTestingContext(options.RunContext!, "tests", options.OutputPath!,
+        var context = new ResourceTestingContext(options.TestingContext!, "tests", options.OutputPath!,
             _ => Assert.Fail("A linked report must not publish results."), Task.FromResult(true), TestContext.Current.CancellationToken);
 
         await Assert.ThrowsAsync<InvalidDataException>(() => options.Collector!(context));

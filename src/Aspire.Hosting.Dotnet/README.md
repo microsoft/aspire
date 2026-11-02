@@ -250,6 +250,9 @@ of the runtime collector and configures the runner to write `results.trx` there.
 The asynchronous `WithTesting(context => ...)` collector starts only during testing,
 waits for process completion, stages the report tree into `context.OutputPath`, and
 publishes individual test results to the common run. Failed processes still have their reports collected.
+The callback receives a `ResourceTestingContext`: `context.OutputPath` is the resource
+directory, while `context.TestingContext.OutputPath` is the containing run root.
+Generated TypeScript exposes the same root through `await context.testingContext().outputPath()`.
 Missing reports, malformed XML, unsupported outcomes, and inconsistent counters fail
 collection explicitly. Passing tests cannot override a failed process or failed collection.
 Explicit TRX outcomes preserve their meaning: `Passed` maps to Passed, `Failed` to Failed,
