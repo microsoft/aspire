@@ -10,14 +10,15 @@ Microsoft.Testing.Platform runner and TRX extension explicitly.
 
 Set up the repository SDK with `./restore.sh` if it has not already been restored.
 Use that SDK for both the CLI and its child processes. The preview command is
-disabled by default; enable it before running the AppHost:
+disabled by default; opt in for each testing invocation without changing saved
+configuration:
 
 ```bash
 export DOTNET_ROOT="$PWD/.dotnet"
 export PATH="$DOTNET_ROOT:$PATH"
 
-./run-aspire.sh config set features.testCommandEnabled true
-./run-aspire.sh test --apphost playground/AspireCliTesting/apphost.cs --isolated
+features__testCommandEnabled=true \
+  ./run-aspire.sh test --apphost playground/AspireCliTesting/apphost.cs --isolated
 ```
 
 The CLI builds the AppHost from the current sources. The `Aspire.Hosting.AppHost@*`
@@ -35,7 +36,7 @@ To test an explicitly selected dashboard binary instead, set
 `DcpPublisher__DashboardPath` for that invocation; the AppHost preserves that
 configuration and omits the source resource. To use the ordinary automatic
 dashboard/bundle selection, build with `SkipDashboardProjectReference=true`
-(for example, `SkipDashboardProjectReference=true ./run-aspire.sh test --apphost
+(for example, `features__testCommandEnabled=true SkipDashboardProjectReference=true ./run-aspire.sh test --apphost
 playground/AspireCliTesting/apphost.cs --isolated`). This existing playground
 opt-out also honors `ASPIRE_DASHBOARD_PATH` overrides, which otherwise do not
 replace an explicitly modeled source dashboard.
@@ -53,6 +54,7 @@ For a machine-readable summary, add `--format json`. For dashboard inspection
 after collection, add `--keep-alive` and stop with Ctrl+C when finished:
 
 ```bash
+features__testCommandEnabled=true \
 dotnet run --project src/Aspire.Cli/Aspire.Cli.csproj --no-launch-profile -- \
   test --apphost playground/AspireCliTesting/apphost.cs --isolated --keep-alive
 ```
@@ -60,6 +62,7 @@ dotnet run --project src/Aspire.Cli/Aspire.Cli.csproj --no-launch-profile -- \
 CI can bound the entire command, including build, startup and collectors:
 
 ```bash
+features__testCommandEnabled=true \
 dotnet run --project src/Aspire.Cli/Aspire.Cli.csproj --no-launch-profile -- \
   test --apphost playground/AspireCliTesting/apphost.cs --isolated \
   --timeout-seconds 120 --format json --non-interactive
@@ -151,7 +154,7 @@ Staged files use the copy writer's permissions; no per-file `0600` guarantee is 
 Exercise the controlled MSTest failure without changing the foundation scenario:
 
 ```bash
-MSTEST_PLAYGROUND_FAIL=true \
+features__testCommandEnabled=true MSTEST_PLAYGROUND_FAIL=true \
 dotnet run --project src/Aspire.Cli/Aspire.Cli.csproj --no-launch-profile -- \
   test --apphost playground/AspireCliTesting/apphost.cs --isolated \
   --timeout-seconds 120 --format json --non-interactive

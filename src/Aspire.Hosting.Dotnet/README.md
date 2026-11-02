@@ -242,7 +242,10 @@ await builder.addMsTest("api-tests", "../Api.Tests/Api.Tests.csproj")
     .waitFor(api);
 ```
 
-Run the application with `aspire test`. The CLI reports the run's output location under its
+The preview CLI command is disabled by default. Run the application with
+`features__testCommandEnabled=true aspire test` to opt in for that invocation.
+This flag gates CLI registration only; it does not change the hosting APIs or ordinary runs.
+The CLI reports the run's output location under its
 `testruns` directory. Each logical resource has a private directory named after it directly
 under the run directory (`<run>/api-tests`), shared by its replicas.
 Before launch, the integration allocates a fresh temporary report directory independently
