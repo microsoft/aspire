@@ -719,9 +719,11 @@ affected_project_rules:
     reason: OUTERLOOP-ONLY today; builds testproject apphost against built nugets
   - projects:
       - Aspire.AppHost.Sdk
+      - Aspire.Azure.Storage.Blobs
       - Aspire.Cli
       - Aspire.Hosting
       - Aspire.Hosting.AppHost
+      - Aspire.Hosting.Azure.Storage
       - Aspire.Hosting.Blazor
       - Aspire.Hosting.CodeGeneration.Go
       - Aspire.Hosting.CodeGeneration.Java
