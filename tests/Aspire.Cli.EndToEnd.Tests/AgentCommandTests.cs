@@ -418,10 +418,11 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
             counter, TimeSpan.FromMinutes(2));
 
         Assert.Contains("claude \"run the aspireify skill\"", auto.CreateSnapshot().GetScreenText());
-        var settings = JsonNode.Parse(await File.ReadAllTextAsync(
-            Path.Combine(workspace.WorkspaceRoot.FullName, ".claude", "settings.json"), TestContext.Current.CancellationToken))!;
-        Assert.True(settings["enabledPlugins"]!["aspire@aspire-skills"]!.GetValue<bool>());
-        Assert.Equal(repository, settings["extraKnownMarketplaces"]!["aspire-skills"]!["source"]!["url"]!.GetValue<string>());
+        // Newly created native settings are owner-only, so inspect them as the container's user.
+        await auto.RunCommandAsync(
+            $"jq -e --arg repository {AspireCliShellCommandHelpers.QuoteBashArg(repository)} " +
+            """'.enabledPlugins["aspire@aspire-skills"] == true and .extraKnownMarketplaces["aspire-skills"].source.url == $repository' "$ASPIRE_E2E_WORKSPACE/.claude/settings.json" """,
+            counter);
     }
 
     [Fact]
