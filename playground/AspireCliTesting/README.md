@@ -157,6 +157,8 @@ It executes `go test -json -count=1` during testing, checking `/`, `/health`, an
 independent opt-in failure, and a skipped example. The Go collector uses
 `CaptureOutputAsync()` to drain DCP's separate, durable raw stdout and stderr
 through EOF before reading the Go JSON events; it does not parse dashboard logs.
+Its collector is runtime-only and writes directly into `<run>/go-tests`; it does
+not need a temporary framework-report directory.
 
 The default combined summary contains **10 passed, 0 failed, 3 skipped**:
 one foundation result plus three passed and one skipped result from each framework.
@@ -174,7 +176,8 @@ controls. Test-binary stderr is embedded in Go JSON, while `stderr.log` holds
 the Go command's separate stderr.
 JSON exposes `outputPath`, `summaryPath`, and each `collections[].outputPath`.
 Reports and `summary.json` remain after teardown.
-Staged files use the copy writer's permissions; no per-file `0600` guarantee is made.
+Framework-staged reports use the copy writer's permissions; unlike Aspire-owned
+Go captures and the custom probe, no per-file `0600` guarantee is made for those reports.
 
 Exercise the controlled MSTest failure without changing the foundation scenario:
 

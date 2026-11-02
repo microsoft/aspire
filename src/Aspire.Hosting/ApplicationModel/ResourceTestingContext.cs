@@ -131,7 +131,7 @@ public sealed class ResourceTestingContext
     /// </remarks>
     /// <example>
     /// <code lang="csharp">
-    /// options.CollectResults(async context =>
+    /// tests.WithTesting(async context =>
     /// {
     ///     await context.CaptureOutputAsync();
     ///     var output = Path.Combine(context.OutputPath, "stdout.log");
