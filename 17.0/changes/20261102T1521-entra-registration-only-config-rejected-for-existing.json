@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Registration-only Entra ID configuration (redirect URIs, owners, ID-token issuance, pre-authorization, admin consent, application ID URI, roles, certificates, federation) on existing application references now fails at the configuration call with guidance for configuring the registration manually, instead of silently doing nothing and failing later during authentication.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🚧",
+  "firstMergedAt": "2026-11-02T15:21:50Z",
+  "lastMergedAt": "2026-11-02T15:21:50Z",
+  "name": "Entra existing references reject registration-only configuration",
+  "owner": "eerhardt",
+  "prs": [
+    21493
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Fixes array handling in aspire config set",
+  "mergedAt": "2026-11-02T12:35:27Z",
+  "number": 21572,
+  "runDate": "2026-11-02T18:10:00Z",
+  "status": "included",
+  "title": "Fix array-aware CLI configuration editing"
+}

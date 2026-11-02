@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Entra existing references reject registration-only configuration",
+  "mergedAt": "2026-11-02T15:21:50Z",
+  "number": 21493,
+  "runDate": "2026-11-02T18:10:00Z",
+  "status": "included",
+  "title": "Reject registration-only configuration on existing Entra references"
+}

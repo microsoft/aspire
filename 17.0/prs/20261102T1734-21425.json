@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Key Vault resource references for Entra certificate credentials",
+  "mergedAt": "2026-11-02T17:34:47Z",
+  "number": 21425,
+  "runDate": "2026-11-02T18:10:00Z",
+  "status": "included",
+  "title": "Support Key Vault resource references for Entra certificate credentials"
+}

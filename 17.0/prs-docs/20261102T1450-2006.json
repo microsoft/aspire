@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only fix to aspire.dev homepage E2E; no matching changelog entry",
+  "mergedAt": "2026-11-02T14:50:02Z",
+  "number": 2006,
+  "runDate": "2026-11-02T18:10:00Z",
+  "status": "excluded",
+  "title": "Wait for the hero scroll frame before checking receded copy"
+}
