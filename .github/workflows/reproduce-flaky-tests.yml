@@ -28,11 +28,11 @@ env:
   #   --filter-method "*.TestMethodName"
   #   --filter-class "*.TestClassName"
   #   --filter-method "*.Test1" --filter-method "*.Test2"
-  TEST_FILTER: '--filter-method "*.ConfigureUnattendedSsh_VerifiesOpenSshUnderConcurrentStartup" --filter-not-trait "outerloop=true" --output Detailed'
+  TEST_FILTER: '--filter-class "*.GitCommandRunnerTests" --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"'
 
   # Target operating systems (comma-separated)
   # Options: ubuntu-latest, windows-latest, macos-latest
-  TARGET_OSES: "windows-latest"
+  TARGET_OSES: "ubuntu-latest,windows-latest,macos-latest"
 
   # Number of parallel runners per OS
   # Total jobs = RUNNERS_PER_OS × number of OSes (must be ≤ 256)
