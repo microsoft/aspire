@@ -469,18 +469,6 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _innerBuilder.Services.AddHostedService<CliOrphanDetector>();
         _innerBuilder.Services.AddSingleton<BackchannelService>();
         _innerBuilder.Services.AddSingleton<TestRunCoordinator>();
-        Eventing.Subscribe<BeforeStartEvent>((e, cancellationToken) =>
-        {
-            if (ExecutionContext.IsRunMode && e.Services.GetRequiredService<IConfiguration>()[KnownConfigNames.TestOutputPath] is { } outputPath)
-            {
-                // Start runtime collectors alongside resource execution, not when the CLI
-                // eventually connects. These callbacks are not model-configuration hooks.
-                cancellationToken.ThrowIfCancellationRequested();
-                e.Services.GetRequiredService<TestRunCoordinator>().Start(
-                    e.Services.GetRequiredService<IHostApplicationLifetime>().ApplicationStopping);
-            }
-            return Task.CompletedTask;
-        });
         _innerBuilder.Services.AddHostedService<BackchannelService>(sp => sp.GetRequiredService<BackchannelService>());
         _innerBuilder.Services.AddSingleton<ProfilingTelemetry>();
         _innerBuilder.Services.AddSingleton<AppHostStartupState>();

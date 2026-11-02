@@ -6,12 +6,16 @@ using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Cli;
+using Aspire.Hosting.Lifecycle;
+using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Testing;
+using Aspire.Hosting.Tests.Helpers;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Aspire.Shared;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.DotNet.RemoteExecutor;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using TestResult = Aspire.Hosting.ApplicationModel.TestResult;
@@ -23,6 +27,137 @@ namespace Aspire.Hosting.Tests;
 [Trait("Partition", "4")]
 public class TestingCollectorTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData("event", false, false)]
+    [InlineData("event", false, true)]
+    [InlineData("event", true, false)]
+    [InlineData("event", true, true)]
+    [InlineData("lifecycle", false, false)]
+    [InlineData("lifecycle", false, true)]
+    [InlineData("lifecycle", true, false)]
+    [InlineData("lifecycle", true, true)]
+    [InlineData("pipeline", false, false)]
+    [InlineData("pipeline", false, true)]
+    [InlineData("pipeline", true, false)]
+    [InlineData("pipeline", true, true)]
+    public async Task DiscoveryIncludesTestsAddedOrAnnotatedDuringBeforeStart(string phase, bool addResource, bool existingTest)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = CreateBuilder(workspace);
+        var late = addResource ? null : builder.AddParameter("late", "value");
+        var collectorStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var hooksCompleted = false;
+        if (existingTest)
+        {
+            builder.AddParameter("early", "value").WithTesting();
+        }
+
+        async Task ConfigureTestAsync(ResourceNotificationService notifications)
+        {
+            late ??= builder.AddParameter("late", "value");
+            late.WithTesting(async context =>
+            {
+                Assert.True(hooksCompleted);
+                collectorStarted.TrySetResult();
+                Assert.True(await context.WaitForCompletionAsync());
+                context.PublishResult(new TestResult { Name = "late-result", Outcome = TestOutcome.Passed });
+            });
+            var annotation = Assert.Single(late.Resource.Annotations.OfType<TestingAnnotation>());
+            Assert.Equal(Path.Combine(builder.Configuration[KnownConfigNames.TestOutputPath]!, "late"), annotation.OutputPath);
+            Assert.True(Directory.Exists(annotation.OutputPath));
+            await notifications.PublishUpdateAsync(late.Resource,
+                snapshot => snapshot with { State = KnownResourceStates.Finished, ExitCode = 0 });
+        }
+
+        switch (phase)
+        {
+            case "event":
+                builder.Eventing.Subscribe<BeforeStartEvent>((e, _) => ConfigureTestAsync(e.Services.GetRequiredService<ResourceNotificationService>()));
+                break;
+            case "lifecycle":
+#pragma warning disable CS0618 // Existing lifecycle hooks remain supported model-mutation points.
+                builder.Services.AddLifecycleHook(services => new CallbackLifecycleHook((_, _) => ConfigureTestAsync(services.GetRequiredService<ResourceNotificationService>())));
+#pragma warning restore CS0618
+                break;
+            case "pipeline":
+                builder.Pipeline.AddStep("configure-test", context => ConfigureTestAsync(context.Services.GetRequiredService<ResourceNotificationService>()), requiredBy: WellKnownPipelineSteps.BeforeStart);
+                break;
+        }
+        builder.Pipeline.WithFinalAction(WellKnownPipelineSteps.BeforeStart, _ =>
+        {
+            hooksCompleted = true;
+            return Task.CompletedTask;
+        });
+        await using var app = builder.Build();
+        var notifications = app.ResourceNotifications;
+        if (existingTest)
+        {
+            await notifications.PublishUpdateAsync(builder.Resources.Single(resource => resource.Name == "early"),
+                snapshot => snapshot with { State = KnownResourceStates.Finished, ExitCode = 0 });
+        }
+
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken).DefaultTimeout();
+        await collectorStarted.Task.DefaultTimeout();
+        var events = new ConcurrentQueue<TestRunEvent>();
+        await ReadAsync(app.Services.GetRequiredService<TestRunCoordinator>(), events).DefaultTimeout();
+
+        Assert.True(events.Last().Passed);
+        Assert.Equal(existingTest ? ["early", "late"] : ["late"],
+            events.Where(item => item.Resource?.Outcome is "passed" or "failed").Select(item => item.Resource!.ResourceName).Order());
+        Assert.Equal("late-result", Assert.Single(events, item => item.Result is not null).Result!.Name);
+    }
+
+    [Fact]
+    public async Task NoTestsAfterBeforeStartHooksFailsExplicitly()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = CreateBuilder(workspace);
+        var tests = builder.AddParameter("tests", "value").WithTesting();
+        var hooksCompleted = false;
+        builder.Pipeline.WithFinalAction(WellKnownPipelineSteps.BeforeStart, _ =>
+        {
+            tests.Resource.Annotations.Remove(Assert.Single(tests.Resource.Annotations.OfType<TestingAnnotation>()));
+            hooksCompleted = true;
+            return Task.CompletedTask;
+        });
+        await using var app = builder.Build();
+        await app.ResourceNotifications.PublishUpdateAsync(tests.Resource,
+            snapshot => snapshot with { State = KnownResourceStates.Finished, ExitCode = 0 });
+
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.True(hooksCompleted);
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
+            app.Services.GetRequiredService<TestRunCoordinator>().WaitForCompletionAsync(TestContext.Current.CancellationToken));
+        Assert.Equal("No test resources were found. Mark a resource with WithTesting() before running aspire test.", exception.Message);
+    }
+
+    [Theory]
+    [InlineData(DistributedApplicationOperation.Run, false)]
+    [InlineData(DistributedApplicationOperation.Publish, true)]
+    public async Task OrdinaryRunAndPublishDoNotStartTestDiscovery(DistributedApplicationOperation operation, bool supplyPath)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(operation, outputHelper);
+        if (supplyPath)
+        {
+            builder.Configuration[KnownConfigNames.TestOutputPath] = workspace.WorkspaceRoot.FullName;
+        }
+        var early = builder.AddParameter("early", "value").WithTesting();
+        await using var app = builder.Build();
+        await app.ResourceNotifications.PublishUpdateAsync(early.Resource,
+            snapshot => snapshot with { State = KnownResourceStates.Finished, ExitCode = 0 });
+
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken).DefaultTimeout();
+        var late = builder.AddParameter("late", "value").WithTesting();
+        await app.ResourceNotifications.PublishUpdateAsync(late.Resource,
+            snapshot => snapshot with { State = KnownResourceStates.Finished, ExitCode = 1 });
+
+        // An eager startup snapshot would contain only the passing first resource.
+        Assert.False(await app.Services.GetRequiredService<TestRunCoordinator>()
+            .WaitForCompletionAsync(TestContext.Current.CancellationToken).DefaultTimeout());
+    }
+
     [Fact]
     public void PublicTestingContractIsExperimental()
     {
