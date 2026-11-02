@@ -158,16 +158,7 @@ public partial class NewCommandLocalTemplateTests
         Assert.Equal(1, git.Calls);
         Assert.Equal(originalGlobal, await File.ReadAllTextAsync(globalPath));
         var projectConfig = Path.Combine(workspace.Path, "out", AspireConfigFile.FileName);
-        if (materialize)
-        {
-            var configuration = JsonNode.Parse(await File.ReadAllTextAsync(projectConfig))!.AsObject();
-            Assert.Equal(["configSource", "docs"], configuration.Select(property => property.Key).Order(StringComparer.Ordinal));
-            Assert.Equal("https://docs.example/llms.txt", configuration["docs"]!["llmsTxtUrl"]!.GetValue<string>());
-        }
-        else
-        {
-            Assert.False(File.Exists(projectConfig));
-        }
+        await Verify(await File.ReadAllTextAsync(projectConfig), "json");
         Assert.Equal("Enterprise: Hello", await File.ReadAllTextAsync(Path.Combine(workspace.Path, "out", "Demo.txt")));
     }
 

@@ -146,7 +146,6 @@ internal abstract class PipelineCommandBase : BaseCommand
 
     protected abstract string GetOutputPathDescription();
     protected abstract Task<string[]> GetRunArgumentsAsync(string? fullyQualifiedOutputPath, string[] unmatchedTokens, string? targetStep, ParseResult parseResult, CancellationToken cancellationToken);
-    protected abstract string GetCanceledMessage();
     protected abstract string GetProgressMessage(ParseResult parseResult);
 
     /// <summary>
@@ -441,9 +440,8 @@ internal abstract class PipelineCommandBase : BaseCommand
             // Send terminal progress bar stop sequence on cancellation
             StopTerminalProgressBar();
             _logger.LogDebug(ex, "Operation was cancelled.");
-            var canceledMessage = GetCanceledMessage();
-            Telemetry.RecordError(canceledMessage, ex);
-            return CommandResult.Failure(CliExitCodes.FailedToBuildArtifacts, canceledMessage);
+            // Pipeline cancellation uses the build-artifact failure exit code for compatibility.
+            return CommandResult.Cancelled(CliExitCodes.FailedToBuildArtifacts);
         }
         catch (ProjectLocatorException ex)
         {

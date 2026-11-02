@@ -838,7 +838,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git,
             detector: new TestConfigSourceDetector { IsInternal = true }, interaction: interaction, interactive: true);
 
-        Assert.Equivalent(accepted ? new ConfigSource { Repository = ConfigSourceService.MicrosoftRepository, Path = AspireConfigFile.FileName } : null,
+        Assert.Equivalent(accepted ? new ConfigSource { Repository = ConfigSourceService.MicrosoftRepository, Path = AspireConfigFile.FileName } : new ConfigSource { OptOut = true },
             await service.ResolveAndAcquireConfigSourceAsync(ParseConsent(null), CancellationToken.None), strict: true);
         Assert.Equal(accepted ? 1 : 0, git.Calls);
     }
@@ -856,6 +856,154 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.ResolveAndAcquireConfigSourceAsync(ParseConsent(null), CancellationToken.None));
         Assert.Equal(0, git.Calls);
         Assert.False(File.Exists(Path.Combine(workspace.Path, AspireConfigFile.FileName)));
+    }
+
+    [Fact]
+    public async Task Materialize_OptOutPreservesProjectSettingsWithoutAcquisition()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(path, """
+            {"appHost":{"path":"apphost.cs"},"docs":{"llmsTxtUrl":"https://local.example/llms.txt"},"custom":"keep"}
+            """);
+        var git = new TestConfigSourceRepository();
+        using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git);
+
+        await service.MaterializeAsync(new ConfigSource { OptOut = true }, workspace.WorkspaceRoot, CancellationToken.None);
+
+        Assert.True(AspireConfigFile.Load(workspace.Path)!.ConfigSource!.OptOut);
+        Assert.Equal(0, git.Calls);
+        Assert.Equal(0, git.CheckCalls);
+        await Verify(await File.ReadAllTextAsync(path), "json");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Materialize_RejectsFlattenedBindingChange(bool optOut)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
+        var configuration = $$"""
+            {"configSource:repository":"{{s_source.Repository}}","configSource:path":"different.json","configSource:appliedVersion":"saved-version","custom":"keep"}
+            """;
+        await File.WriteAllTextAsync(path, configuration);
+        var git = new TestConfigSourceRepository();
+        using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git);
+
+        var error = await Assert.ThrowsAsync<ConfigSourceException>(() =>
+            service.MaterializeAsync(optOut ? new ConfigSource { OptOut = true } : s_source,
+                workspace.WorkspaceRoot, CancellationToken.None));
+
+        Assert.Equal(ConfigSourceStrings.BindingChanged, error.Message);
+        Assert.Equal(configuration, await File.ReadAllTextAsync(path));
+        Assert.Equal(optOut ? 0 : 1, git.Calls);
+        Assert.Equal(0, git.CheckCalls);
+    }
+
+    [Theory]
+    [InlineData(false, """{"ConfigSource":{"optOut":true},"custom":"keep"}""")]
+    [InlineData(true, """{"ConfigSource":{"optOut":true},"custom":"keep"}""")]
+    [InlineData(false, """{"ConfigSource:optOut":true,"custom":"keep"}""")]
+    [InlineData(true, """{"ConfigSource:optOut":true,"custom":"keep"}""")]
+    public async Task OptOut_SuppressesInitializationAndUpdatePromptsAndChecks(bool force, string configuration)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(path, configuration);
+        var git = new TestConfigSourceRepository();
+        var detector = new TestConfigSourceDetector { IsInternal = true };
+        var interaction = new TestInteractionService
+        {
+            PromptForSelectionCallback = (_, _, _, _) => throw new InvalidOperationException("Unexpected source prompt.")
+        };
+        using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git,
+            detector: detector, interaction: interaction, interactive: true);
+
+        Assert.Null(await service.SelectForInitializationAsync(workspace.WorkspaceRoot, ParseConsent(null), CancellationToken.None));
+        await service.WaitForChecksAsync().DefaultTimeout();
+        await service.SelectForUpdateAsync(workspace.WorkspaceRoot, ParseConsent(null), CancellationToken.None);
+        await service.CheckProjectAsync(workspace.WorkspaceRoot, force, CancellationToken.None);
+        service.NotifyIfUpdateAvailable();
+
+        Assert.Equal(configuration, await File.ReadAllTextAsync(path));
+        Assert.Equal(0, detector.Calls);
+        Assert.Equal(0, git.Calls);
+        Assert.Equal(0, git.CheckCalls);
+        Assert.Empty(interaction.DisplayedErrors);
+        Assert.Equal(force ? [ConfigSourceStrings.NoBinding] : Array.Empty<string>(), interaction.DisplayedMessages.Select(message => message.Message));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CheckProject_LocalOptOutDoesNotFallBackToGlobalBinding(bool force)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interaction = new TestInteractionService();
+        using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interaction;
+        }).BuildServiceProvider();
+        var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
+        const string configuration = """{"configSource":{"optOut":true}}""";
+        await File.WriteAllTextAsync(path, configuration);
+        var globalFile = new FileInfo(provider.GetRequiredService<IConfigurationService>().GetSettingsFilePath(isGlobal: true));
+        var global = globalFile.Directory!;
+        global.Create();
+        await TestConfigSourceServices.SaveBindingAsync(s_appliedSource, global, CancellationToken.None);
+        File.Move(Path.Combine(global.FullName, AspireConfigFile.FileName), globalFile.FullName);
+        var originalGlobal = await File.ReadAllTextAsync(globalFile.FullName);
+        var git = Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>());
+        var service = provider.GetRequiredService<ConfigSourceService>();
+
+        await service.CheckProjectAsync(workspace.WorkspaceRoot, force, CancellationToken.None);
+        service.NotifyIfUpdateAvailable();
+
+        Assert.Equal(configuration, await File.ReadAllTextAsync(path));
+        Assert.Equal(originalGlobal, await File.ReadAllTextAsync(globalFile.FullName));
+        Assert.Equal(0, git.Calls);
+        Assert.Equal(0, git.CheckCalls);
+        Assert.Empty(interaction.DisplayedErrors);
+        Assert.Equal(force ? [ConfigSourceStrings.NoBinding] : Array.Empty<string>(), interaction.DisplayedMessages.Select(message => message.Message));
+    }
+
+    [Fact]
+    public async Task Update_WithoutCandidateDoesNotWriteConfiguration()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var detector = new TestConfigSourceDetector();
+        var git = new TestConfigSourceRepository();
+        using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git,
+            detector: detector, interactive: true);
+
+        await service.SelectForUpdateAsync(workspace.WorkspaceRoot, ParseConsent(null), CancellationToken.None);
+
+        Assert.False(File.Exists(Path.Combine(workspace.Path, AspireConfigFile.FileName)));
+        Assert.Equal(1, detector.Calls);
+        Assert.Equal(0, git.Calls);
+    }
+
+    [Fact]
+    public async Task Update_FailedAcquisitionPreservesUnboundConfiguration()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
+        const string configuration = """{"custom":"keep"}""";
+        await File.WriteAllTextAsync(path, configuration);
+        var git = new TestConfigSourceRepository
+        {
+            ReadConfiguration = (_, _) => throw new ConfigSourceException(ConfigSourceStrings.AuthenticationFailed)
+        };
+        using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git,
+            detector: new TestConfigSourceDetector { IsInternal = true });
+
+        var exception = await Assert.ThrowsAsync<ConfigSourceException>(() =>
+            service.SelectForUpdateAsync(workspace.WorkspaceRoot, ParseConsent(true), CancellationToken.None));
+
+        Assert.Equal(ConfigSourceStrings.AuthenticationFailed, exception.Message);
+        Assert.Equal(configuration, await File.ReadAllTextAsync(path));
+        Assert.Equal(1, git.Calls);
     }
 
     [Fact]
