@@ -10,7 +10,9 @@ using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Agents.Copilot;
 using Aspire.Cli.Agents.Hooks;
+using Aspire.Cli.Agents.OpenCode;
 using Aspire.Cli.Agents.Playwright;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
@@ -33,6 +35,8 @@ internal sealed class AgentInitCommand : BaseCommand
     private readonly ILanguageDiscovery _languageDiscovery;
     private readonly ITelemetryHookConfigurator _telemetryHookConfigurator;
     private readonly ICliHostEnvironment _hostEnvironment;
+    private readonly IConfigurationService _configurationService;
+    private readonly IProjectLocator _projectLocator;
     private static readonly string[] s_skillChoices =
         [CommonAgentApplicators.AspireSkillName, SkillDefinition.PlaywrightCli.Name, SkillDefinition.DotnetInspect.Name];
 
@@ -43,6 +47,8 @@ internal sealed class AgentInitCommand : BaseCommand
         IGitRepository gitRepository,
         ILanguageDiscovery languageDiscovery,
         ITelemetryHookConfigurator telemetryHookConfigurator,
+        IConfigurationService configurationService,
+        IProjectLocator projectLocator,
         CommonCommandServices services)
         : base("init", AgentCommandStrings.InitCommand_Description, services)
     {
@@ -54,6 +60,8 @@ internal sealed class AgentInitCommand : BaseCommand
         _languageDiscovery = languageDiscovery;
         _telemetryHookConfigurator = telemetryHookConfigurator;
         _hostEnvironment = services.HostEnvironment;
+        _configurationService = configurationService;
+        _projectLocator = projectLocator;
         Options.Add(s_workspaceRootOption);
         Options.Add(s_mcpOption);
         Options.Add(AgentsOption);
@@ -202,6 +210,7 @@ internal sealed class AgentInitCommand : BaseCommand
         IInteractionService interactionService,
         int previousResultExitCode,
         DirectoryInfo workspaceRoot,
+        DirectoryInfo configurationDirectory,
         PromptBinding<bool> agentInitBinding,
         PromptBinding<string?> agentsBinding,
         PromptBinding<string?> skillsBinding,
@@ -224,7 +233,7 @@ internal sealed class AgentInitCommand : BaseCommand
         if (runAgentInit)
         {
             return await ExecuteAgentInitAsync(
-                workspaceRoot, agentsBinding, skillsBinding,
+                workspaceRoot, configurationDirectory, agentsBinding, skillsBinding,
                 scopeBinding, mcpBinding: null, cancellationToken);
         }
 
@@ -236,12 +245,37 @@ internal sealed class AgentInitCommand : BaseCommand
         var workspaceRoot = await PromptForWorkspaceRootAsync(parseResult, cancellationToken);
         var result = await ExecuteAgentInitAsync(
             workspaceRoot,
+            configurationDirectory: null,
             PromptBinding.Create(parseResult, AgentsOption),
             PromptBinding.Create(parseResult, s_skillsOption, CommonAgentApplicators.AspireSkillName),
             PromptBinding.Create(parseResult, s_scopeOption, AgentConfigurationScope.Project),
             PromptBinding.CreateBoolConfirm(parseResult, s_mcpOption, defaultValue: false),
             cancellationToken);
         return CommandResult.FromExitCode(result.ExitCode);
+    }
+
+    private async Task<DirectoryInfo> GetConfigurationDirectoryAsync(CancellationToken cancellationToken)
+    {
+        // Discover the AppHost without the advisory configuration-source checks performed
+        // by UseOrFindAppHostProjectFileAsync. Agent setup only consumes saved settings.
+        var appHost = await _projectLocator.GetAppHostFromSettingsAsync(cancellationToken);
+        if (appHost is null)
+        {
+            var candidates = await _projectLocator.FindAppHostProjectFilesAsync(
+                ExecutionContext.WorkingDirectory, AppHostDiscoveryScope.DefaultFiltered, cancellationToken, skipValidation: true);
+            appHost = candidates.Count switch
+            {
+                0 => null,
+                1 => candidates[0],
+                _ => await InteractionService.PromptForSelectionAsync(
+                    InteractionServiceStrings.SelectAppHostToUse,
+                    candidates,
+                    file => $"{file.Name.EscapeMarkup()} ({Path.GetRelativePath(ExecutionContext.WorkingDirectory.FullName, file.FullName).EscapeMarkup()})",
+                    cancellationToken: cancellationToken)
+            };
+        }
+
+        return appHost?.Directory ?? ExecutionContext.WorkingDirectory;
     }
 
     private async Task<DirectoryInfo> PromptForWorkspaceRootAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -276,6 +310,7 @@ internal sealed class AgentInitCommand : BaseCommand
 
     private async Task<AgentInitExecutionResult> ExecuteAgentInitAsync(
         DirectoryInfo workspaceRoot,
+        DirectoryInfo? configurationDirectory,
         PromptBinding<string?> agentsBinding,
         PromptBinding<string?> skillsBinding,
         PromptBinding<AgentConfigurationScope> scopeBinding,
@@ -360,11 +395,35 @@ internal sealed class AgentInitCommand : BaseCommand
         var playwright = selectedSkillNames.Contains(SkillDefinition.PlaywrightCli.Name);
         var dotnetInspect = selectedSkillNames.Contains(SkillDefinition.DotnetInspect.Name);
         var configureAspire = selectedSkillNames.Contains(CommonAgentApplicators.AspireSkillName);
+        IReadOnlyList<SkillSource> skillSources = [];
+
         if (configureAspire)
         {
-            InteractionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture,
-                AgentCommandStrings.InitCommand_PluginRiskWarning, AspireSkillsRemoteConfiguration.RepositoryUrl));
-            InteractionService.DisplayEmptyLine();
+            configurationDirectory ??= await GetConfigurationDirectoryAsync(cancellationToken);
+            skillSources = SkillSource.Resolve(configurationDirectory, new FileInfo(_configurationService.GetSettingsFilePath(isGlobal: true)));
+            var usesPlugins = selectedClients.Any(client => client.Id != OpenCodeAgentClient.ClientId);
+            var usesOpenCode = selectedClients.Any(client => client.Id == OpenCodeAgentClient.ClientId);
+            foreach (var skillSource in skillSources)
+            {
+                var sourceUrls = new List<string>();
+                if (usesPlugins)
+                {
+                    sourceUrls.Add(skillSource.GetRepositoryUrl());
+                }
+                if (usesOpenCode)
+                {
+                    sourceUrls.AddRange(new[] { skillSource.OpenCodeV1Catalog, skillSource.OpenCodeV2Catalog }.OfType<string>());
+                }
+                if (sourceUrls.Count == 0)
+                {
+                    continue;
+                }
+
+                InteractionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture,
+                    AgentCommandStrings.InitCommand_PluginRiskWarning,
+                    string.Join(", ", sourceUrls.Distinct(StringComparer.Ordinal))));
+                InteractionService.DisplayEmptyLine();
+            }
         }
 
         // `mcpBinding` is only supplied by standalone `aspire agent init` (see s_mcpOption).
@@ -434,7 +493,6 @@ internal sealed class AgentInitCommand : BaseCommand
                     InteractionService.DisplayEmptyLine();
                 }
             }
-
             if (conflict is not null)
             {
                 InteractionService.DisplayError(conflict);
@@ -474,7 +532,7 @@ internal sealed class AgentInitCommand : BaseCommand
         if (configureAspire)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var results = await AgentConfiguration.ApplyRemoteAsync(selectedClients, workspaceRoot, scope, cancellationToken);
+            var results = await AgentConfiguration.ApplyRemoteAsync(selectedClients, workspaceRoot, scope, skillSources, cancellationToken);
             hasErrors |= DisplayRemoteConfigurationResults(results, workspaceRoot);
             registeredClients = results
                 .Where(result => result.Status is AgentConfigurationStatus.Configured or AgentConfigurationStatus.Unchanged)

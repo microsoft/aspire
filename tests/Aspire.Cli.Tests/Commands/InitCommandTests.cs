@@ -185,7 +185,8 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
 
         Assert.True(Directory.Exists(Path.Combine(workspace.Path, "Test.AppHost")));
         Assert.True(AspireSkillsRemoteConfiguration.HasPluginRegistration(
-            [Path.Combine(workspace.Path, ".github", "copilot", "settings.json")], TestContext.Current.CancellationToken));
+            [Path.Combine(workspace.Path, ".github", "copilot", "settings.json")],
+            [new SkillSource { Plugins = ["aspire"], Marketplace = "aspire-skills" }]));
         Assert.False(Directory.Exists(Path.Combine(workspace.Path, ".agents", "skills")));
         Assert.False(File.Exists(Path.Combine(workspace.Path, AspireConfigFile.FileName)));
         var git = Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>());
@@ -883,7 +884,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var selectedPath = client.GetIntegrationConfigPath(selectedScope, workspace.WorkspaceRoot);
         var unselectedPath = client.GetIntegrationConfigPath(unselectedScope, workspace.WorkspaceRoot);
         Assert.True(AspireSkillsRemoteConfiguration.HasPluginRegistration(
-            [selectedPath], TestContext.Current.CancellationToken));
+            [selectedPath], [SkillSource.BuiltIn]));
         Assert.False(File.Exists(unselectedPath));
         Assert.False(Directory.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills")));
         Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".mcp.json")));
@@ -1744,6 +1745,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
 
         var tripwireConfigService = new global::Aspire.Cli.Tests.TestServices.TestConfigurationService
         {
+            SettingsFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "settings.global.json"),
             OnGetConfiguration = key =>
             {
                 if (string.Equals(key, "channel", StringComparison.Ordinal))

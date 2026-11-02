@@ -211,6 +211,7 @@ internal sealed class InitCommand : BaseCommand
             InteractionService,
             CliExitCodes.Success,
             workspaceRoot,
+            configurationDirectory,
             agentInitBinding,
             PromptBinding.Create(parseResult, _agentInitCommand.AgentsOption),
             PromptBinding.Create(parseResult, AgentInitCommand.s_skillsOption, CommonAgentApplicators.AspireSkillName),

@@ -272,7 +272,7 @@
     <value>Invalid skill/tool selection '{0}'. Use {1}, '{2}', or '{3}'.</value>
   </data>
   <data name="InitCommand_AspireSkillChoice" xml:space="preserve">
-    <value>Agent assets from microsoft/aspire-skills</value>
+    <value>Agent assets from configured skill sources</value>
   </data>
   <data name="InitCommand_FailedTarget" xml:space="preserve">
     <value>Failed to configure Aspire plugin:
@@ -289,7 +289,7 @@
 Review the source before enabling it at {0}. Plugin-provided tools and scripts can execute code with your permissions.
 
 Prefer skill files only? Install skills directly from {0}.</value>
-    <comment>{0} is the official Aspire skills repository URL.</comment>
+    <comment>{0} lists the comma-separated configured skill source repository and/or catalog URLs for the selected agent clients.</comment>
   </data>
   <data name="InitCommand_ConfiguredTargets" xml:space="preserve">
     <value>Configured Aspire plugin:

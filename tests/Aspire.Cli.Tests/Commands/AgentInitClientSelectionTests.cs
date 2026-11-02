@@ -4,6 +4,7 @@
 using System.Globalization;
 using System.Text.Json;
 using Aspire.Cli.Agents;
+using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Agents.OpenCode;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Interaction;
@@ -36,10 +37,10 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
         var copilot = provider.GetServices<IAgentClient>().Single(client => string.Equals(client.Id, "copilot", StringComparisons.AgentClientId));
         Assert.True(copilot.HasIntegrationRegistration(
-            workspace.WorkspaceRoot, AgentConfigurationScope.Project, TestContext.Current.CancellationToken));
+            workspace.WorkspaceRoot, AgentConfigurationScope.Project, [SkillSource.BuiltIn]));
         Assert.False(provider.GetServices<IAgentClient>()
             .Single(client => string.Equals(client.Id, "claude", StringComparisons.AgentClientId))
-            .HasIntegrationRegistration(workspace.WorkspaceRoot, AgentConfigurationScope.Project, TestContext.Current.CancellationToken));
+            .HasIntegrationRegistration(workspace.WorkspaceRoot, AgentConfigurationScope.Project, [SkillSource.BuiltIn]));
         Assert.False(Directory.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills")));
         Assert.Equal(AgentEnvironment.CopilotApp | AgentEnvironment.CopilotCli | AgentEnvironment.VsCode, copilot.Environments);
     }
@@ -109,7 +110,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
             clients.Where(client =>
                     File.Exists(client.GetIntegrationConfigPath(selectedScope, workspace.WorkspaceRoot)) &&
                     client.HasIntegrationRegistration(
-                        workspace.WorkspaceRoot, selectedScope, TestContext.Current.CancellationToken))
+                        workspace.WorkspaceRoot, selectedScope, [SkillSource.BuiltIn]))
                 .Select(client => client.GetIntegrationConfigPath(selectedScope, workspace.WorkspaceRoot))
                 .Distinct().Order(StringComparer.Ordinal));
         var unselectedRoot = scope == "project" ? homeDirectory : workspace.WorkspaceRoot;
@@ -410,7 +411,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         var copilot = provider.GetServices<IAgentClient>().Single(client =>
             string.Equals(client.Id, "copilot", StringComparisons.AgentClientId));
         Assert.True(copilot.HasIntegrationRegistration(
-            workspace.WorkspaceRoot, AgentConfigurationScope.Global, TestContext.Current.CancellationToken));
+            workspace.WorkspaceRoot, AgentConfigurationScope.Global, [SkillSource.BuiltIn]));
         Assert.True(File.Exists(Path.Combine(homeDirectory.FullName, ".copilot", "mcp-config.json")));
     }
 
@@ -456,7 +457,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
             .Where(client => client.Id is "copilot" or "opencode"))
         {
             Assert.True(client.HasIntegrationRegistration(
-                workspace.WorkspaceRoot, AgentConfigurationScope.Project, TestContext.Current.CancellationToken));
+                workspace.WorkspaceRoot, AgentConfigurationScope.Project, [SkillSource.BuiltIn]));
         }
     }
 
@@ -1221,7 +1222,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         var claude = provider.GetServices<IAgentClient>().Single(client =>
             string.Equals(client.Id, "claude", StringComparisons.AgentClientId));
         Assert.True(claude.HasIntegrationRegistration(
-            workspace.WorkspaceRoot, AgentConfigurationScope.Project, TestContext.Current.CancellationToken));
+            workspace.WorkspaceRoot, AgentConfigurationScope.Project, [SkillSource.BuiltIn]));
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".mcp.json")));
     }
 

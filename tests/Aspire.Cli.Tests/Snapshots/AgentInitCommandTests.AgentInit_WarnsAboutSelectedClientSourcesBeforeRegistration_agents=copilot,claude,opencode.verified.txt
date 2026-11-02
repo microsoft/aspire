@@ -1,0 +1,14 @@
+﻿[
+  Use the Aspire plugin at your own risk.
+Review the source before enabling it at https://github.com/microsoft/aspire-skills, https://third-party.example/skills/, https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v2/. Plugin-provided tools and scripts can execute code with your permissions.
+
+Prefer skill files only? Install skills directly from https://github.com/microsoft/aspire-skills, https://third-party.example/skills/, https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v2/.,
+  Use the Aspire plugin at your own risk.
+Review the source before enabling it at https://github.com/example/plugins. Plugin-provided tools and scripts can execute code with your permissions.
+
+Prefer skill files only? Install skills directly from https://github.com/example/plugins.,
+  Use the Aspire plugin at your own risk.
+Review the source before enabling it at https://github.com/example/team, https://team.example/skills/. Plugin-provided tools and scripts can execute code with your permissions.
+
+Prefer skill files only? Install skills directly from https://github.com/example/team, https://team.example/skills/.
+]

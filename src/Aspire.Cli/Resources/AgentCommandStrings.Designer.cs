@@ -223,7 +223,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Agent assets from microsoft/aspire-skills.
+        ///   Looks up a localized string similar to Agent assets from configured skill sources.
         /// </summary>
         internal static string InitCommand_AspireSkillChoice {
             get {
@@ -305,8 +305,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Failed to configure Aspire plugin:
-        ///  {0}.
+        ///   Looks up a localized string similar to Failed to configure Aspire plugin:   {0}.
         /// </summary>
         internal static string InitCommand_FailedTarget {
             get {
@@ -405,8 +404,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Local Aspire skill files may override plugin skills:
-        ///{0}.
+        ///   Looks up a localized string similar to Local Aspire skill files may override plugin skills: {0}.
         /// </summary>
         internal static string InitCommand_LocalSkillsConflict {
             get {
