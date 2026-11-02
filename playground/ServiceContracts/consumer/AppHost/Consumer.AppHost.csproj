@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <NoWarn>$(NoWarn);ASPIRESERVICECONTRACTS001</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- The prototype is not published. Use the actual repository-built hosting library. -->
+    <ProjectReference Include="$(AspireRepoRoot)/src/Aspire.Hosting.AppHost/Aspire.Hosting.AppHost.csproj" />
+  </ItemGroup>
+  <Target Name="RequirePrototypeCheckout" BeforeTargets="PrepareForBuild">
+    <Error Condition="'$(AspireRepoRoot)' == ''" Text="Set AspireRepoRoot to the absolute path of the Aspire prototype checkout." />
+  </Target>
+</Project>

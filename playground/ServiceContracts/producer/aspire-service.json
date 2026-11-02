@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "contoso.catalog",
+  "version": "1.0.0",
+  "image": "aspire-contract-catalog",
+  "imageTag": "1.0.0",
+  "project": "src/Catalog.Api/Catalog.Api.csproj",
+  "http": {
+    "targetPort": 8080,
+    "portEnvironmentVariable": "ASPNETCORE_HTTP_PORTS",
+    "readinessPath": "/health"
+  },
+  "inputs": [
+    { "name": "region", "environmentVariable": "CATALOG_REGION" },
+    { "name": "api-key", "environmentVariable": "CATALOG_API_KEY" }
+  ]
+}

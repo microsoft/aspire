@@ -176,6 +176,8 @@ tests/PolyglotAppHosts/**/Java/**/*.class
 
 # Azure Developer CLI files
 /playground/**/.gitignore
+!/playground/ServiceContracts/producer/.gitignore
+!/playground/ServiceContracts/consumer/.gitignore
 /playground/**/azure.yaml
 /playground/**/next-steps.md
 *.svclog

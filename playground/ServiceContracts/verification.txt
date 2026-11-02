@@ -1,0 +1,117 @@
+Producer/consumer service-contract proof of concept
+Recorded: 2026-10-19 UTC
+Aspire base: 5bcd4dfc95d5000b36a14c5680c4ec73c63e9986
+Environment: Linux x64; SDK 11.0.100-rc.1.26425.128; runtime .NET 10.0.13
+Native orchestrator: Microsoft.DeveloperControlPlane.linux-amd64 0.27.0
+Docker daemon: 29.1.3 (existing daemon reused)
+
+Reproduction:
+  ./dotnet.sh run --project playground/ServiceContracts/Verify -- --workspace <new-directory>
+  See README.md for dependencies, manual switching, and exact test commands.
+  The standalone .NET runner has no package references or scripting-runtime dependency.
+  All 14 probes below were rerun with this replacement runner on 2026-10-19 UTC.
+  Runner build: succeeded with warnings treated as errors.
+  Existing-workspace rejection and clean fixture repositories: verified.
+  The installed .NET 10 + ASP.NET Core host is selected explicitly; the pinned
+  SDK-only .NET 11 host remains responsible for builds, not application execution.
+
+Builds:
+  Aspire.Hosting and AppHost support: succeeded
+  Aspire.Dashboard: succeeded
+  Consumer.AppHost and Storefront: succeeded
+  Producer source, including producer-only path refactor: succeeded
+  Every final build: 0 warnings, 0 errors
+  Producer's standalone multistage Dockerfile: succeeded
+
+Tests:
+  Built tests/Aspire.Hosting.Tests/Aspire.Hosting.Tests.csproj, then ran its
+  net10.0 test assembly using /usr/bin/dotnet with six --filter-class options:
+    Aspire.Hosting.Tests.ServiceContractTests (34 cases)
+    Aspire.Hosting.Tests.ProjectResourceTests
+    Aspire.Hosting.Tests.WithEnvironmentTests
+    Aspire.Hosting.Tests.KestrelConfigTests
+    Aspire.Hosting.Tests.Utils.ContainerReferenceParserTests
+    Aspire.Hosting.Tests.Publishing.ContainerImageArchiveRewriterTests
+  Test run summary: Passed! (net10.0|x64)
+    total: 167
+    failed: 0
+    succeeded: 167
+    skipped: 0
+
+Runtime assertions (actual consumer HTTP /shop -> producer HTTP /products):
+  PASS source:
+    {"service":"catalog","contractVersion":1,"region":"north","products":["tea","coffee"]}
+  PASS source-missing-parameter: explicit catalog-api-key error, no successful /shop
+  PASS source-kestrel: same response with explicit Kestrel endpoint configuration;
+    both native allocated Kestrel URL and contract port-variable binding retained.
+  PASS source-evolved: same response after producer-only path move and version 1.1.0
+  PASS source-major-mismatch: expected 'contoso.catalog' major 1, got 2.0.0
+  PASS artifact-identity-mismatch: expected 'contoso.catalog', got 'contoso.other'
+  PASS artifact-schema-mismatch: schemaVersion must be 1
+  PASS missing-binding: Missing: [tenant]
+  PASS unexpected-binding: Unexpected: [api-key]
+  PASS invalid-json: Invalid service contract
+  PASS missing-contract: obtain producer contract artifact
+  PASS missing-checkout: select checkout containing aspire-service.json
+  PASS container-without-source:
+    {"service":"catalog","contractVersion":1,"region":"north","products":["tea","coffee"]}
+    Producer directory was renamed away during the entire container-mode run.
+  PASS container-missing-parameter: explicit catalog-api-key error, no successful /shop
+
+Readiness evidence (timestamps extracted from normal resource logs):
+  Source:
+    14:41:43.1079295Z storefront waiting for catalog to become healthy
+    14:41:49.7970000Z catalog /health completed HTTP 200
+    14:41:49.8370000Z storefront process launched
+  Source with explicit Kestrel endpoint:
+    14:41:59.0839052Z storefront waiting for catalog to become healthy
+    14:42:03.0710000Z catalog /health completed HTTP 200
+    14:42:03.1060000Z storefront process launched
+  Container:
+    14:42:28.3941163Z storefront waiting for catalog to become healthy
+    14:42:28.5689447Z catalog /health completed HTTP 200
+    14:42:28.6300000Z storefront process launched
+
+Artifacts retained by the recorded run:
+  Local image: aspire-contract-catalog:1.0.0
+  Image ID: sha256:13a56b3a48ebc94fcf1584063215dc37a7b17b4e68146c37c764346c8a7109ac
+  Producer fixture commit: 2a9e55377be56a1b46ab0c93a4997de98d6113e8
+  Consumer fixture commit: d951bcfc3daa9da7c58662746bd57b900efe3082
+  Both fixture working trees were clean after the runner restored its probes.
+  AppHosts stopped and no experiment containers remained running.
+  Fixture commits/image IDs are per-run artifacts, not remotely published releases.
+  The PR publishes the implementation, fixture sources, and reproduction runner.
+
+Post-publication regression:
+  A focused Kestrel source-mode test reproduced a missing
+  Kestrel__Endpoints__http__Url allocation override on the original implementation.
+  Binding the port variable separately preserves native project URL/Kestrel
+  injection. The same test now passes, alongside the existing Kestrel suite and
+  a real HTTP source-mode Kestrel runtime probe.
+  Subsequent review fixes normalize source paths with the same helper as
+  AddProject (including mixed/backslash separators and traversal), parse images
+  on a detached resource before registration, and exclude independent fixtures
+  from the default build glob. All 104 tests and all 14 runtime probes passed
+  after these changes. Evaluating eng/Build.props retained 184 regular playground
+  projects and selected no ServiceContracts fixtures.
+  Image tags now use the existing archive rewriter's tag grammar, shared through
+  ContainerReferenceParser. Invalid separators, whitespace, leading punctuation,
+  and tags longer than 128 characters fail before model registration. All 167
+  targeted tests and all 14 runtime probes passed after this additional fix.
+  The readiness timestamps above are from the replacement .NET runner's run.
+
+Clean-checkout prerequisite validation:
+  Original PR head 649a296c11a61ac5bea1e4f63c96ee8405f64f53 was cloned separately
+  with no source build outputs or local SDK and a new NUGET_PACKAGES directory.
+  The committed runner downloaded the pinned public SDK and public feed packages,
+  built all dependencies, and passed all 13 original runtime probes.
+  The producer Dockerfile also rebuilt with --no-cache from clean sources.
+  Initial SDK bootstrap emitted warnings for the unavailable audit service;
+  experiment application builds completed without warnings or errors.
+  Final-head clean-checkout and GitHub CI results are tracked in the PR.
+
+Limits:
+  Local evidence only; not a CI run, package audit, security review, image registry
+  publication, deployment test, IDE test, or proof of HTTP semantic compatibility.
+  Audit endpoint unavailable: experiment restores explicitly disabled NuGet audit.
+  One HTTP service; trusted data artifact; source checkout is supplied explicitly.

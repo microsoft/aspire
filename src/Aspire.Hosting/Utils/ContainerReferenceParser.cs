@@ -9,6 +9,30 @@ namespace Aspire.Hosting.Utils;
 /// </summary>
 internal sealed partial class ContainerReferenceParser
 {
+    public static bool IsValidTag(string tag)
+    {
+        if (tag.Length is 0 or > 128 || !IsTagStartCharacter(tag[0]))
+        {
+            return false;
+        }
+
+        foreach (var character in tag.AsSpan(1))
+        {
+            if (!IsTagCharacter(character))
+            {
+                return false;
+            }
+        }
+
+        return true;
+
+        static bool IsTagStartCharacter(char character)
+            => char.IsAsciiLetterOrDigit(character) || character == '_';
+
+        static bool IsTagCharacter(char character)
+            => IsTagStartCharacter(character) || character is '.' or '-';
+    }
+
     public static ContainerReference Parse(string input)
     {
         if (string.IsNullOrEmpty(input))

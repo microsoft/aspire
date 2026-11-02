@@ -4,6 +4,7 @@
 using System.Formats.Tar;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Publishing;
 
@@ -597,29 +598,7 @@ internal static class ContainerImageArchiveRewriter
             $"Container image archive entry '{entryName}' has invalid naming metadata: {reason}.");
     }
 
-    private static bool IsValidTag(string tag)
-    {
-        if (tag.Length is 0 or > 128 || !IsTagStartCharacter(tag[0]))
-        {
-            return false;
-        }
-
-        foreach (var character in tag.AsSpan(1))
-        {
-            if (!IsTagCharacter(character))
-            {
-                return false;
-            }
-        }
-
-        return true;
-
-        static bool IsTagStartCharacter(char character)
-            => char.IsAsciiLetterOrDigit(character) || character == '_';
-
-        static bool IsTagCharacter(char character)
-            => IsTagStartCharacter(character) || character is '.' or '-';
-    }
+    private static bool IsValidTag(string tag) => ContainerReferenceParser.IsValidTag(tag);
 
     private static void ValidateRepositoryName(string imageName)
     {
