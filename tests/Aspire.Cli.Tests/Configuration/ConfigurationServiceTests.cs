@@ -543,11 +543,10 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
 
         await Verify(await File.ReadAllTextAsync(settingsPath), "json").UseParameters(key, isGlobal);
         var loaded = AspireConfigFile.Load(Path.GetDirectoryName(settingsPath)!);
-        Assert.NotNull(loaded?.ExtensionData);
-        var plugins = loaded.ExtensionData["skillSources"].GetProperty("team").GetProperty("plugins");
-        var pluginNames = plugins.Deserialize<string[]>();
-        Assert.NotNull(pluginNames);
-        Assert.Equal(["deployment", "other"], pluginNames);
+        Assert.NotNull(loaded?.SkillSources);
+        var plugins = loaded.SkillSources["team"].Plugins;
+        Assert.NotNull(plugins);
+        Assert.Equal(["deployment", "other"], plugins);
     }
 
     [Theory]
