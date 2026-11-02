@@ -1,0 +1,8 @@
+﻿[
+  Tests are running,
+  Resource [teal]tests[/]: Finished (exit code 0),
+  Test [teal]tests[/] / [blue]partial[/]: [green]passed[/],
+  Resource [teal]tests[/]: [yellow]incomplete[/]; published so far: [green]1[/] passed, [red]0[/] failed, [yellow]0[/] other,
+  Test run [yellow]cancelled[/],
+  Published test results: [green]1[/] passed, [red]0[/] failed, [yellow]0[/] skipped
+]
