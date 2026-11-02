@@ -17,7 +17,25 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Build with packages
-        run: ./build.sh -restore -build -ci -pack -bl -p:InstallBrowsersForPlaywright=false -p:SkipTestProjects=true -p:SkipPlaygroundProjects=true -p:SkipBundleDeps=true ${{ inputs.versionOverrideArg }}
+        shell: bash
+        env:
+          VERSION_OVERRIDE_ARG: ${{ inputs.versionOverrideArg }}
+        run: |
+          # Overrides contain whitespace-separated MSBuild switches, such as /p:VersionSuffix=pr.123.gabcdef12.
+          # Split them as arguments without evaluating caller-supplied values as shell code.
+          read -r -a versionOverrideArgs <<< "$VERSION_OVERRIDE_ARG"
+          ./build.sh \
+            -restore \
+            -build \
+            -ci \
+            -pack \
+            -bl \
+            -p:InstallBrowsersForPlaywright=false \
+            -p:SkipTestProjects=true \
+            -p:SkipPlaygroundProjects=true \
+            -p:SkipBundleDeps=true \
+            -p:SkipNativeBuild=true \
+            "${versionOverrideArgs[@]}"
 
       - name: Generate template component manifest
         shell: pwsh

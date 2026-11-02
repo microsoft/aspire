@@ -4,7 +4,7 @@
     <body>
       <trans-unit id="AddingAppHostProjectToSolution">
         <source>Adding AppHost project to solution...</source>
-        <target state="needs-review-translation">Adicionando o projeto AppHost à solução...</target>
+        <target state="translated">Adicionando o projeto AppHost à solução...</target>
         <note />
       </trans-unit>
       <trans-unit id="AddingProjectsToSolution">
@@ -19,12 +19,12 @@
       </trans-unit>
       <trans-unit id="AppHostCreatedRunOne">
         <source>Aspire AppHost created! To complete setup, run:</source>
-        <target state="new">Aspire AppHost created! To complete setup, run:</target>
+        <target state="translated">O Aspire AppHost foi criado! Para concluir a configuração, execute:</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostCreatedRunOneOf">
         <source>Aspire AppHost created! To complete setup, run one of:</source>
-        <target state="new">Aspire AppHost created! To complete setup, run one of:</target>
+        <target state="translated">O Aspire AppHost foi criado! Para concluir a instalação, execute uma das seguintes opções:</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireInitializationComplete">
@@ -34,17 +34,17 @@
       </trans-unit>
       <trans-unit id="CreatedFile">
         <source>Created {0}</source>
-        <target state="new">Created {0}</target>
+        <target state="translated">Criado {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="CreatingAppHostFromTemplate">
         <source>Creating AppHost from template...</source>
-        <target state="new">Creating AppHost from template...</target>
+        <target state="translated">Criando um AppHost com base no modelo...</target>
         <note />
       </trans-unit>
       <trans-unit id="CreatingAppHostProject">
         <source>Creating AppHost project...</source>
-        <target state="needs-review-translation">Criando o projeto AppHost...</target>
+        <target state="translated">Criando o projeto AppHost...</target>
         <note />
       </trans-unit>
       <trans-unit id="CreatingServiceDefaultsProject">
@@ -54,52 +54,52 @@
       </trans-unit>
       <trans-unit id="DeprecatedOptionWarning">
         <source>`aspire init {0}` is deprecated and no longer affects generated AppHosts. It is accepted for compatibility and will be removed in a future version.</source>
-        <target state="new">`aspire init {0}` is deprecated and no longer affects generated AppHosts. It is accepted for compatibility and will be removed in a future version.</target>
+        <target state="translated">`aspire init {0}` está obsoleto e não afeta mais os AppHosts gerados. Ele é aceito por compatibilidade e será removido em uma versão futura.</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
         <source>Initialize Aspire in an existing codebase</source>
-        <target state="needs-review-translation">Ative o suporte ao Aspire em uma solução existente ou crie um AppHost de arquivo único.</target>
+        <target state="translated">Inicialize o Aspire em uma base de código existente</target>
         <note />
       </trans-unit>
       <trans-unit id="FailedToCreateAppHostFromTemplate">
         <source>Failed to create AppHost from template (exit code {0}).</source>
-        <target state="new">Failed to create AppHost from template (exit code {0}).</target>
+        <target state="translated">Falha ao criar o AppHost a partir do modelo (código de saída {0}).</target>
         <note />
       </trans-unit>
       <trans-unit id="FailedToParseExistingConfig">
         <source>Failed to parse existing {0} at '{1}': {2}</source>
-        <target state="new">Failed to parse existing {0} at '{1}': {2}</target>
+        <target state="translated">Falha ao analisar {0} existentes em '{1}': {2}</target>
         <note />
       </trans-unit>
       <trans-unit id="FileAlreadyExistsSkipping">
         <source>{0} already exists — skipping.</source>
-        <target state="new">{0} already exists — skipping.</target>
+        <target state="translated">{0} já existe — ignorando.</target>
         <note />
       </trans-unit>
       <trans-unit id="FileBasedOptionDescription">
         <source>Create apphost.cs in the current directory, skipping .NET solution discovery. Requires C#.</source>
-        <target state="new">Create apphost.cs in the current directory, skipping .NET solution discovery. Requires C#.</target>
+        <target state="translated">Crie apphost.cs no diretório atual, ignorando a descoberta da solução .NET. Requer C#.</target>
         <note />
       </trans-unit>
       <trans-unit id="FileBasedRequiresCSharp">
         <source>The --file-based option requires C#. Select --language csharp or omit --file-based.</source>
-        <target state="new">The --file-based option requires C#. Select --language csharp or omit --file-based.</target>
+        <target state="translated">A opção --file-based requer C#. Selecione --language csharp ou omita --file-based.</target>
         <note />
       </trans-unit>
       <trans-unit id="FixOrRemoveConfigAndRerun">
         <source>Fix or remove {0} and re-run `aspire init`.</source>
-        <target state="new">Fix or remove {0} and re-run `aspire init`.</target>
+        <target state="translated">Corrija ou remova {0} e execute novamente `aspire init`.</target>
         <note />
       </trans-unit>
       <trans-unit id="InstallingAspireProjectTemplates">
         <source>Installing Aspire project templates...</source>
-        <target state="new">Installing Aspire project templates...</target>
+        <target state="translated">Instalando os modelos de projeto do Aspire...</target>
         <note />
       </trans-unit>
       <trans-unit id="LanguageOptionDescription">
         <source>The programming language for the AppHost (csharp, typescript)</source>
-        <target state="new">The programming language for the AppHost (csharp, typescript)</target>
+        <target state="translated">A linguagem de programação para o AppHost (csharp, typescript)</target>
         <note />
       </trans-unit>
       <trans-unit id="MultipleSolutionsFound">
@@ -109,7 +109,7 @@
       </trans-unit>
       <trans-unit id="NoSolutionFoundCreatingSingleFileAppHost">
         <source>No solution file found. Creating single-file AppHost...</source>
-        <target state="needs-review-translation">Não há arquivos de solução abertos. Criando o AppHost de arquivo único...</target>
+        <target state="translated">Não há arquivos de solução abertos. Criando o AppHost de arquivo único...</target>
         <note />
       </trans-unit>
       <trans-unit id="ResolvingTemplateVersion">
@@ -129,7 +129,7 @@
       </trans-unit>
       <trans-unit id="SolutionAndProjectInSameDirectory">
         <source>The solution file '{0}' and project file '{1}' are in the same directory. The AppHost and ServiceDefaults projects cannot be created inside an existing project directory. Move the solution file to a parent directory or the project file to a subdirectory.</source>
-        <target state="new">The solution file '{0}' and project file '{1}' are in the same directory. The AppHost and ServiceDefaults projects cannot be created inside an existing project directory. Move the solution file to a parent directory or the project file to a subdirectory.</target>
+        <target state="translated">O arquivo de solução '{0}' e o arquivo de projeto '{1}' estão no mesmo diretório. Os projetos AppHost e ServiceDefaults não podem ser criados dentro de um diretório de projeto existente. Mova o arquivo de solução para um diretório pai ou o arquivo de projeto para um subdiretório.</target>
         <note />
       </trans-unit>
     </body>

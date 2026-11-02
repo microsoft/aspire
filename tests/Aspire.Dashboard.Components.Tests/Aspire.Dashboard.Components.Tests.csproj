@@ -11,6 +11,12 @@
     <WarningsNotAsErrors>$(WarningsNotAsErrors);ASPDEPR004;ASPDEPR008;SYSLIB0057</WarningsNotAsErrors>
   </PropertyGroup>
 
+  <ItemGroup Condition="'$(IncludeLegacyDashboard)' == 'false'">
+    <Compile Remove="Dialogs\LegacySettingsDialogTests.cs" />
+    <Compile Remove="Layout\LegacyNavMenuTests.cs" />
+    <Compile Remove="Layout\MainLayoutTests.Legacy.cs" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\..\src\Aspire.Dashboard\Aspire.Dashboard.csproj" />
     <!-- Preview package warning suppressions do not flow through the Aspire.Dashboard project reference. -->

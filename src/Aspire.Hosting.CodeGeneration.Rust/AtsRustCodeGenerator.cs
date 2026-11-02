@@ -463,7 +463,6 @@ internal sealed class AtsRustCodeGenerator : ICodeGenerator
         var parameters = capability.Parameters
             .Where(p => !string.Equals(p.Name, targetParamName, StringComparison.Ordinal))
             .ToList();
-
         // Check if this is a List/Dict property getter (no parameters, returns List/Dict)
         if (parameters.Count == 0 && IsListOrDictPropertyGetter(capability.ReturnType))
         {

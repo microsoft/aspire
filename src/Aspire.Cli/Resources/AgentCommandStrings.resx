@@ -123,6 +123,9 @@
   <data name="InitCommand_NoConfigurationSelected" xml:space="preserve">
     <value>No agent configuration selected. Existing configuration was left unchanged.</value>
   </data>
+  <data name="ConfigurationWriteRefused" xml:space="preserve">
+    <value>Could not safely update '{0}'. Check for concurrent changes, links, or restrictive permissions, then retry or configure it manually.</value>
+  </data>
   <data name="InitCommand_ProjectScope" xml:space="preserve">
     <value>Project (Install in your workspace root; committed with your project)</value>
   </data>
@@ -136,7 +139,7 @@
     <value>Configure Aspire MCP for {0} at {1}</value>
   </data>
   <data name="InitCommand_SelectSkills" xml:space="preserve">
-    <value>Which skills should be installed?</value>
+    <value>Which skills and tools do you want to configure?</value>
   </data>
   <data name="InitCommand_ConfigureMcpServerPrompt" xml:space="preserve">
     <value>Configure the Aspire MCP server for selected agent environments?</value>
@@ -271,7 +274,7 @@
     <value>Invalid scope '{0}'. Use 'project' or 'global'.</value>
   </data>
   <data name="InitCommand_SkillsOptionDescription" xml:space="preserve">
-    <value>Comma-separated list of skills to install. Bundle skills are loaded dynamically; CLI-provided skills include {0}. Use '{1}' or '{2}'</value>
+    <value>Comma-separated skill/tool IDs ({0}), '{1}', or '{2}' (default: aspire)</value>
   </data>
   <data name="InitCommand_McpOptionDescription" xml:space="preserve">
     <value>Configure the Aspire MCP server for selected agent environments. Omit to leave MCP unconfigured, pass '--mcp' to opt in, or pass '--mcp=false' to explicitly opt out</value>
@@ -299,5 +302,62 @@
   </data>
   <data name="AgentTelemetryCommand_TimestampDescription" xml:space="preserve">
     <value>The timestamp recorded for the event</value>
+  </data>
+  <data name="InitCommand_ExistingConfigurationConflict" xml:space="preserve">
+    <value>Cannot register Aspire because '{0}' conflicts with existing settings or an override. Existing settings were left unchanged.</value>
+    <comment>{0} identifies the conflicting JSON setting or environment override.</comment>
+  </data>
+  <data name="InitCommand_AspireSourceOptionDescription" xml:space="preserve">
+    <value>Source for Aspire agent assets from microsoft/aspire-skills: remote (plugin) or embedded (bundled skill files)</value>
+  </data>
+  <data name="InitCommand_EmbeddedSkillsChoice" xml:space="preserve">
+    <value>Embedded (bundled skill files)</value>
+  </data>
+  <data name="InitCommand_ConfigureAspireSourcePrompt" xml:space="preserve">
+    <value>Which source do you want to use for Aspire?</value>
+  </data>
+  <data name="InitCommand_InvalidSkills" xml:space="preserve">
+    <value>Invalid skill/tool selection '{0}'. Use {1}, '{2}', or '{3}'.</value>
+  </data>
+  <data name="InitCommand_AspireSkillChoice" xml:space="preserve">
+    <value>Agent assets from microsoft/aspire-skills</value>
+  </data>
+  <data name="InitCommand_FailedTarget" xml:space="preserve">
+    <value>Failed to configure Aspire plugin:
+  {0}</value>
+    <comment>{0} lists each agent's configuration path and failure details, one target per line.</comment>
+  </data>
+  <data name="InitCommand_InvalidAspireSource" xml:space="preserve">
+    <value>Invalid Aspire source '{0}'. Choose either 'remote' or 'embedded'.</value>
+  </data>
+  <data name="InitCommand_LocalSkillsConflict" xml:space="preserve">
+    <value>Local Aspire skill files may override plugin skills:
+{0}</value>
+    <comment>{0} lists the local skill entry-point paths, one per line.</comment>
+  </data>
+  <data name="InitCommand_RemoteSkillsChoice" xml:space="preserve">
+    <value>Remote (plugin)</value>
+  </data>
+  <data name="InitCommand_RemoteSkillsConflict" xml:space="preserve">
+    <value>The Aspire plugin is already enabled. Embedded skills were not installed and no configuration was changed. Keep the plugin, or disable its Aspire registration before choosing embedded skills.</value>
+  </data>
+  <data name="InitCommand_PluginRiskWarning" xml:space="preserve">
+    <value>Use the Aspire plugin at your own risk.
+Review the source before enabling it.
+
+Prefer skill files only? Choose Embedded, or install skills directly from {0}.</value>
+    <comment>{0} is the official Aspire skills repository URL.</comment>
+  </data>
+  <data name="InitCommand_ConfiguredTargets" xml:space="preserve">
+    <value>Configured Aspire plugin:
+  {0}</value>
+    <comment>{0} lists one agent per line, with that agent's configuration paths comma-separated.</comment>
+  </data>
+  <data name="InitCommand_ConfigurationTarget" xml:space="preserve">
+    <value>{0}: {1}</value>
+    <comment>{0} is the agent name, and {1} lists its configuration paths separated by commas.</comment>
+  </data>
+  <data name="LocalSkills_ReadFailed" xml:space="preserve">
+    <value>Could not check local Aspire skills at '{0}': {1}</value>
   </data>
 </root>

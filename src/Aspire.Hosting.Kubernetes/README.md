@@ -6,7 +6,7 @@ Use this integration to model, configure, and deploy Aspire compute resources to
 
 ### Prerequisites
 
-- [Helm](https://helm.sh/docs/intro/install/) **v4.2.0 or later** on your `PATH`.
+- [Helm](https://helm.sh/docs/intro/install/) **v4.0.0 or later** on your `PATH`.
 
 Aspire shells out to `helm upgrade --install` to deploy the generated chart and validates the Helm version up front, so missing or older installs produce a clear actionable error instead of cryptic flag failures.
 
@@ -16,6 +16,7 @@ From your AppHost directory, add the `Aspire.Hosting.Kubernetes` integration wit
 
 ```bash
 aspire add Aspire.Hosting.Kubernetes
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Usage example
@@ -45,7 +46,7 @@ Assign a registry to a project or Dockerfile-backed resource to include its regi
 ```csharp
 var registry = builder.AddContainerRegistry("registry", "registry.example.com", "apps");
 
-builder.AddProject<Projects.Api>("api")
+builder.AddDotnetProject("api", "../Api/Api.csproj")
     .WithContainerRegistry(registry);
 ```
 
@@ -68,7 +69,7 @@ Use a target-neutral volume when the Kubernetes environment's default storage po
 **C#**
 
 ```csharp
-builder.AddProject<Projects.Api>("api")
+builder.AddDotnetProject("api", "../Api/Api.csproj")
     .WithVolume("data", "/data", env: "DATA_PATH");
 ```
 
@@ -92,7 +93,7 @@ var k8s = builder.AddKubernetesEnvironment("k8s");
 var data = k8s.AddPersistentVolume("data")
     .WithCapacity("20Gi");
 
-builder.AddProject<Projects.Api>("api")
+builder.AddDotnetProject("api", "../Api/Api.csproj")
     .WithPersistentVolume(data, "/data", env: "DATA_PATH");
 ```
 
@@ -114,6 +115,42 @@ When published or deployed, `DATA_PATH` contains `/data`. Applications can there
 ```shell
 aspire publish -o k8s-artifacts
 ```
+
+### Persistent volume claim customization
+
+Use `WithConfiguration` / `withConfiguration` to customize the generated claim after the environment defaults and fluent volume settings have been applied. Multiple callbacks run in registration order and see changes made by earlier callbacks.
+
+**C#**
+
+```csharp
+var data = k8s.AddPersistentVolume("data")
+    .WithConfiguration(claim =>
+    {
+        claim.Metadata.Labels["example.com/retention"] = "retain";
+        claim.Spec.VolumeMode = "Filesystem";
+        claim.Spec.StorageClassName = "";
+    });
+```
+
+**TypeScript**
+
+```typescript
+const data = await k8s.addPersistentVolume("data");
+await data.withConfiguration(async (claim) => {
+    const metadata = await claim.metadata.get();
+    await metadata.labels.set("example.com/retention", "retain");
+
+    const spec = await claim.spec.get();
+    await spec.volumeMode.set("Filesystem");
+    await spec.storageClassName.set("");
+});
+```
+
+TypeScript callbacks receive live remote objects: await property and collection operations rather than assigning JavaScript properties. The supported claim surface includes labels, annotations, storage class, volume name, volume mode, access modes, and resource requests. For example, use `await metadata.annotations()`, `await spec.accessModes()`, and `await (await spec.resources.get()).requests()` to access the corresponding mutable collections.
+
+Setting `storageClassName` to `""` requests a classless volume; setting it to `null` omits the field so Kubernetes can assign its default StorageClass. The fluent equivalents are `withStorageClass("")` and `withoutStorageClass()`. Use the existing parameterized fluent methods when storage class, capacity, or annotations should be resolved through Helm parameters; callbacks see the generated values.
+
+Other claim fields, including selectors, data sources, volume attributes classes, resource limits, and claim name/namespace customization, remain C#-only. Setting `volumeMode` to `"Block"` does not create the workload's required `volumeDevices` bindings; the persistent-volume mount APIs generate filesystem mounts.
 
 ### ACME certificates with cert-manager
 

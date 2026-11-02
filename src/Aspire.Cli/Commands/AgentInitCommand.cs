@@ -8,6 +8,7 @@ using System.Globalization;
 using System.Text.Json;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.AspireSkills;
+using Aspire.Cli.Agents.Copilot;
 using Aspire.Cli.Agents.Hooks;
 using Aspire.Cli.Agents.Playwright;
 using Aspire.Cli.Git;
@@ -25,41 +26,48 @@ namespace Aspire.Cli.Commands;
 /// </summary>
 internal sealed class AgentInitCommand : BaseCommand
 {
+    internal const string DefaultAspireSource = "remote";
+
     private readonly IAgentEnvironmentDetector _agentEnvironmentDetector;
+    private readonly IReadOnlyList<IAgentClient> _clients;
     private readonly IAspireSkillsInstaller _aspireSkillsInstaller;
     private readonly PlaywrightCliInstaller _playwrightCliInstaller;
     private readonly IGitRepository _gitRepository;
     private readonly ILanguageDiscovery _languageDiscovery;
     private readonly ITelemetryHookConfigurator _telemetryHookConfigurator;
-    private readonly IEnvironment _environment;
     private readonly ICliHostEnvironment _hostEnvironment;
+    private static readonly string[] s_skillChoices =
+        [CommonAgentApplicators.AspireSkillName, SkillDefinition.PlaywrightCli.Name, SkillDefinition.DotnetInspect.Name];
+
     public AgentInitCommand(
         IAgentEnvironmentDetector agentEnvironmentDetector,
+        IEnumerable<IAgentClient> clients,
         IAspireSkillsInstaller aspireSkillsInstaller,
         PlaywrightCliInstaller playwrightCliInstaller,
         IGitRepository gitRepository,
         ILanguageDiscovery languageDiscovery,
         ITelemetryHookConfigurator telemetryHookConfigurator,
-        IEnvironment environment,
         CommonCommandServices services)
         : base("init", AgentCommandStrings.InitCommand_Description, services)
     {
         _agentEnvironmentDetector = agentEnvironmentDetector;
+        _clients = clients.ToArray();
+        AgentsOption = CreateAgentsOption(_clients);
         _aspireSkillsInstaller = aspireSkillsInstaller;
         _playwrightCliInstaller = playwrightCliInstaller;
         _gitRepository = gitRepository;
         _languageDiscovery = languageDiscovery;
         _telemetryHookConfigurator = telemetryHookConfigurator;
-        _environment = environment;
         _hostEnvironment = services.HostEnvironment;
         Options.Add(s_workspaceRootOption);
         Options.Add(s_mcpOption);
-        Options.Add(s_agentsOption);
+        Options.Add(AgentsOption);
         Options.Add(s_scopeOption);
         Options.Add(s_skillsOption);
+        Options.Add(s_aspireSourceOption);
     }
 
-    internal static readonly Option<string?> s_agentsOption = CreateAgentsOption();
+    internal Option<string?> AgentsOption { get; }
     internal static readonly Option<AgentConfigurationScope> s_scopeOption = CreateScopeOption();
 
     internal static readonly Option<string?> s_workspaceRootOption = new("--workspace-root")
@@ -67,14 +75,8 @@ internal sealed class AgentInitCommand : BaseCommand
         Description = AgentCommandStrings.InitCommand_WorkspaceRootOptionDescription
     };
 
-    internal static readonly Option<string?> s_skillsOption = new("--skills")
-    {
-        Description = string.Format(CultureInfo.InvariantCulture, AgentCommandStrings.InitCommand_SkillsOptionDescription,
-            string.Join(",", SkillDefinition.CliDefined.Select(s => s.Name)),
-            ConsoleInteractionService.AllChoice,
-            ConsoleInteractionService.NoneChoice),
-        Recursive = true
-    };
+    internal static readonly Option<string?> s_skillsOption = CreateSkillsOption();
+    internal static readonly Option<string?> s_aspireSourceOption = CreateAspireSourceOption();
 
     /// <summary>
     /// Confirms whether standalone <c>aspire agent init</c> configures the Aspire MCP server for
@@ -89,9 +91,72 @@ internal sealed class AgentInitCommand : BaseCommand
         Recursive = true
     };
 
-    private static Option<string?> CreateAgentsOption()
+    private static Option<string?> CreateSkillsOption()
     {
-        var supportedClients = string.Join(",", AgentClient.All.Select(static client => client.Id));
+        var supportedSkills = string.Join(",", s_skillChoices);
+        var option = new Option<string?>("--skills")
+        {
+            HelpName = "skills",
+            Description = string.Format(CultureInfo.InvariantCulture, AgentCommandStrings.InitCommand_SkillsOptionDescription,
+                supportedSkills, ConsoleInteractionService.AllChoice, ConsoleInteractionService.NoneChoice),
+            Recursive = true,
+            Arity = ArgumentArity.ExactlyOne,
+            CustomParser = result =>
+            {
+                if (result.Tokens.Count != 1)
+                {
+                    return null;
+                }
+
+                // For example: "aspire,playwright-cli". "all" selects these skills/tools, never MCP.
+                var value = result.Tokens[0].Value;
+                var selected = ConsoleInteractionService.MatchChoices(value, s_skillChoices, static name => name);
+                if (selected is null || selected.Count == 0 &&
+                    !string.Equals(value, ConsoleInteractionService.NoneChoice, StringComparison.OrdinalIgnoreCase))
+                {
+                    result.AddError(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InvalidSkills,
+                        value, supportedSkills, ConsoleInteractionService.AllChoice, ConsoleInteractionService.NoneChoice));
+                }
+
+                return value;
+            }
+        };
+        option.CompletionSources.Clear();
+        option.CompletionSources.Add([.. s_skillChoices, ConsoleInteractionService.AllChoice, ConsoleInteractionService.NoneChoice]);
+
+        return option;
+    }
+
+    private static Option<string?> CreateAspireSourceOption()
+    {
+        var option = new Option<string?>("--aspire-source")
+        {
+            HelpName = "remote|embedded",
+            Description = AgentCommandStrings.InitCommand_AspireSourceOptionDescription,
+            Recursive = true,
+            Arity = ArgumentArity.ExactlyOne,
+            DefaultValueFactory = static _ => DefaultAspireSource,
+            CustomParser = result =>
+            {
+                var value = string.Join(",", result.Tokens.Select(static token => token.Value));
+                if (!string.Equals(value, "embedded", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(value, "remote", StringComparison.OrdinalIgnoreCase))
+                {
+                    result.AddError(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InvalidAspireSource, value));
+                }
+
+                return value;
+            }
+        };
+        option.CompletionSources.Clear();
+        option.CompletionSources.Add("remote", "embedded");
+
+        return option;
+    }
+
+    private static Option<string?> CreateAgentsOption(IReadOnlyList<IAgentClient> clients)
+    {
+        var supportedClients = string.Join(",", clients.Select(static client => client.Id));
         var option = new Option<string?>("--agents")
         {
             HelpName = "agents",
@@ -107,7 +172,7 @@ internal sealed class AgentInitCommand : BaseCommand
                 }
 
                 var value = result.Tokens[0].Value;
-                var selected = ConsoleInteractionService.MatchChoices(value, AgentClient.All, static client => client.Id);
+                var selected = ConsoleInteractionService.MatchChoices(value, clients, static client => client.Id);
                 if (selected is null || selected.Count == 0 &&
                     !string.Equals(value, ConsoleInteractionService.NoneChoice, StringComparison.OrdinalIgnoreCase))
                 {
@@ -119,8 +184,8 @@ internal sealed class AgentInitCommand : BaseCommand
             }
         };
         option.CompletionSources.Clear();
-        option.CompletionSources.Add(static _ =>
-            [.. AgentClient.All.Select(static client => new CompletionItem(client.Id)),
+        option.CompletionSources.Add(_ =>
+            [.. clients.Select(static client => new CompletionItem(client.Id)),
                 new CompletionItem(ConsoleInteractionService.AllChoice), new CompletionItem(ConsoleInteractionService.NoneChoice)]);
         return option;
     }
@@ -162,7 +227,6 @@ internal sealed class AgentInitCommand : BaseCommand
     /// <summary>
     /// Prompts the user to run agent init after a successful command, then chains into agent init if accepted.
     /// Used by commands (e.g. <c>aspire init</c>, <c>aspire new</c>) to offer agent init as a follow-up step.
-    /// Every bundle-sourced skill is pre-selected, including aspireify.
     /// Chained flows never register <c>--mcp</c> and never offer MCP server configuration: this
     /// method always executes agent init with MCP configuration unavailable, so MCP remains an
     /// explicit opt-in reachable only through standalone <c>aspire agent init</c>.
@@ -175,6 +239,7 @@ internal sealed class AgentInitCommand : BaseCommand
         PromptBinding<bool> agentInitBinding,
         PromptBinding<string?> agentsBinding,
         PromptBinding<string?> skillsBinding,
+        PromptBinding<string?> aspireSourceBinding,
         PromptBinding<AgentConfigurationScope> scopeBinding,
         CancellationToken cancellationToken)
     {
@@ -194,7 +259,8 @@ internal sealed class AgentInitCommand : BaseCommand
         if (runAgentInit)
         {
             return await ExecuteAgentInitAsync(
-                workspaceRoot, agentsBinding, skillsBinding, scopeBinding, mcpBinding: null, cancellationToken);
+                workspaceRoot, agentsBinding, skillsBinding, aspireSourceBinding,
+                scopeBinding, mcpBinding: null, cancellationToken);
         }
 
         return new(CliExitCodes.Success, [], []);
@@ -205,8 +271,9 @@ internal sealed class AgentInitCommand : BaseCommand
         var workspaceRoot = await PromptForWorkspaceRootAsync(parseResult, cancellationToken);
         var result = await ExecuteAgentInitAsync(
             workspaceRoot,
-            PromptBinding.Create(parseResult, s_agentsOption),
-            PromptBinding.Create(parseResult, s_skillsOption),
+            PromptBinding.Create(parseResult, AgentsOption),
+            PromptBinding.Create(parseResult, s_skillsOption, CommonAgentApplicators.AspireSkillName),
+            PromptBinding.Create(parseResult, s_aspireSourceOption, DefaultAspireSource),
             PromptBinding.Create(parseResult, s_scopeOption, AgentConfigurationScope.Project),
             PromptBinding.CreateBoolConfirm(parseResult, s_mcpOption, defaultValue: false),
             cancellationToken);
@@ -247,6 +314,7 @@ internal sealed class AgentInitCommand : BaseCommand
         DirectoryInfo workspaceRoot,
         PromptBinding<string?> agentsBinding,
         PromptBinding<string?> skillsBinding,
+        PromptBinding<string?> aspireSourceBinding,
         PromptBinding<AgentConfigurationScope> scopeBinding,
         PromptBinding<bool>? mcpBinding,
         CancellationToken cancellationToken)
@@ -260,14 +328,14 @@ internal sealed class AgentInitCommand : BaseCommand
         AgentEnvironment? detectedEnvironments = null;
 
         var (agentsProvided, requestedAgents) = agentsBinding.Resolve();
-        IReadOnlyList<AgentClient> selectedClients;
+        IReadOnlyList<IAgentClient> selectedClients;
         if (agentsProvided && requestedAgents is not null)
         {
-            var matchedClients = ConsoleInteractionService.MatchChoices(requestedAgents, AgentClient.All, static client => client.Id);
+            var matchedClients = ConsoleInteractionService.MatchChoices(requestedAgents, _clients, static client => client.Id);
             if (matchedClients is null)
             {
                 InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InvalidEnvironments,
-                    requestedAgents, string.Join(",", AgentClient.All.Select(static client => client.Id)),
+                    requestedAgents, string.Join(",", _clients.Select(static client => client.Id)),
                     ConsoleInteractionService.AllChoice, ConsoleInteractionService.NoneChoice));
                 return new(CliExitCodes.InvalidCommand, [], []);
             }
@@ -283,16 +351,16 @@ internal sealed class AgentInitCommand : BaseCommand
 
             // Shared discovery does not authorize configuring another agent. Defaults
             // express detected agent use, independently of assets and their destinations.
-            var defaultClients = AgentClient.All
-                .Where(client => client.Includes(detectedEnvironments.Value)).ToArray();
+            var defaultClients = _clients
+                .Where(client => (client.Environments & detectedEnvironments.Value) != AgentEnvironment.None).ToArray();
             if (defaultClients.Length == 0)
             {
-                defaultClients = [AgentClient.Copilot];
+                defaultClients = [_clients.Single(client => string.Equals(client.Id, CopilotAgentClient.ClientId, StringComparisons.AgentClientId))];
             }
 
             selectedClients = await InteractionService.PromptForSelectionsAsync(
                 AgentCommandStrings.InitCommand_SelectAgentsPrompt,
-                AgentClient.All.OrderByDescending(client => defaultClients.Contains(client)),
+                _clients.OrderByDescending(client => defaultClients.Contains(client)),
                 static client => client.DisplayName.EscapeMarkup(),
                 preSelected: defaultClients,
                 optional: true,
@@ -311,55 +379,51 @@ internal sealed class AgentInitCommand : BaseCommand
         // Detect the AppHost language to determine which skills to offer.
         // When no language is detected (e.g., standalone `aspire agent init`), language-restricted skills are excluded.
         var detectedLanguage = await _languageDiscovery.DetectLanguageRecursiveAsync(workspaceRoot, cancellationToken);
-
-        AspireSkillsBundle? aspireSkillsBundle = null;
-        string? bundleInstallFailureMessage = null;
-
-        IReadOnlyList<SkillDefinition> availableSkills;
-        if (ShouldSkipBundleCatalogResolution(skillsBinding))
-        {
-            availableSkills = SkillDefinition.CliDefined
-                .Where(s => s.IsApplicableToLanguage(detectedLanguage))
-                .ToList();
-        }
-        else
-        {
-            (availableSkills, aspireSkillsBundle, bundleInstallFailureMessage) = await ResolveAvailableSkillsAsync(detectedLanguage, cancellationToken);
-        }
-
-        // Order the merged catalog deterministically by name so the prompt is stable
-        // regardless of manifest order. OrdinalIgnoreCase matches the case-insensitive
-        // --skills parsing used elsewhere.
-        availableSkills = [.. availableSkills.OrderBy(static s => s.Name, StringComparer.OrdinalIgnoreCase)];
-
-        var defaultSkills = availableSkills.Where(static s => s.IsDefault).ToList();
-        var defaultSkillNames = string.Join(",", defaultSkills.Select(s => s.Name));
-        var skillsBindingWithDefault = skillsBinding.WithDefault(defaultSkillNames);
-
-        // When the bundle failed to install and the caller passed an explicit --skills value
-        // that names a bundle-only skill, the upcoming MatchChoicesOrThrow will reject the
-        // value as "not a valid choice" with no hint that the underlying cause was the
-        // bundle. Surface the install failure first so users can see why the catalog is short.
-        // We only do this when the value contains a name that is not in the available catalog
-        // and not a CLI-defined skill, so happy-path runs stay silent.
-        if (bundleInstallFailureMessage is not null)
-        {
-            var (wasProvided, requestedSkills, _) = PromptBinding.Resolve(skillsBindingWithDefault);
-            if (wasProvided && requestedSkills is not null && HasUnknownBundleSkillCandidate(requestedSkills, availableSkills))
-            {
-                InteractionService.DisplayError(bundleInstallFailureMessage);
-            }
-        }
-
-        var selectedSkills = await InteractionService.PromptForSelectionsAsync(
+        var availableSkillChoices = s_skillChoices
+            .Where(name => name != SkillDefinition.DotnetInspect.Name || SkillDefinition.DotnetInspect.IsApplicableToLanguage(detectedLanguage))
+            .ToArray();
+        var selectedSkillNames = await InteractionService.PromptForSelectionsAsync(
             AgentCommandStrings.InitCommand_SelectSkills,
-            availableSkills,
-            skill => $"{skill.Name.EscapeMarkup()} — {SimplifyDescription(skill.Description).EscapeMarkup()}",
-            preSelected: defaultSkills,
+            availableSkillChoices,
+            name => $"{name.EscapeMarkup()} — {(name == CommonAgentApplicators.AspireSkillName
+                ? AgentCommandStrings.InitCommand_AspireSkillChoice
+                : SimplifyDescription(SkillDefinition.CliDefined.Single(skill => skill.HasName(name)).Description)).EscapeMarkup()}",
+            preSelected: [CommonAgentApplicators.AspireSkillName],
             optional: true,
-            binding: skillsBindingWithDefault,
+            binding: skillsBinding,
             echoSelected: false,
             cancellationToken: cancellationToken);
+
+        var playwright = selectedSkillNames.Contains(SkillDefinition.PlaywrightCli.Name);
+        var dotnetInspect = selectedSkillNames.Contains(SkillDefinition.DotnetInspect.Name);
+        var skillsMode = AspireSkillsMode.None;
+
+        if (selectedSkillNames.Contains(CommonAgentApplicators.AspireSkillName))
+        {
+            var (sourceProvided, requestedSource, defaultSource) = PromptBinding.Resolve(aspireSourceBinding);
+            if ((!sourceProvided && _hostEnvironment.SupportsInteractiveInput) ||
+                string.Equals(sourceProvided ? requestedSource : defaultSource, "remote", StringComparison.OrdinalIgnoreCase))
+            {
+                InteractionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture,
+                    AgentCommandStrings.InitCommand_PluginRiskWarning, AspireSkillsRemoteConfiguration.RepositoryUrl));
+                InteractionService.DisplayEmptyLine();
+            }
+
+            var source = await InteractionService.PromptForSelectionAsync(
+                AgentCommandStrings.InitCommand_ConfigureAspireSourcePrompt,
+                new[] { "remote", "embedded" },
+                value => value == "embedded"
+                    ? AgentCommandStrings.InitCommand_EmbeddedSkillsChoice
+                    : AgentCommandStrings.InitCommand_RemoteSkillsChoice,
+                binding: aspireSourceBinding,
+                cancellationToken: cancellationToken);
+            skillsMode = source switch
+            {
+                "embedded" => AspireSkillsMode.Embedded,
+                "remote" => AspireSkillsMode.Remote,
+                _ => throw new UnreachableException($"Unexpected Aspire source: '{source}'.")
+            };
+        }
 
         // `mcpBinding` is only supplied by standalone `aspire agent init` (see s_mcpOption).
         // Chained flows (`aspire new`, `aspire init`) never construct a binding for it, so MCP
@@ -376,7 +440,7 @@ internal sealed class AgentInitCommand : BaseCommand
                 cancellationToken: cancellationToken);
         }
 
-        if (selectedSkills.Count == 0 && !configureMcp)
+        if (skillsMode is AspireSkillsMode.None && !playwright && !dotnetInspect && !configureMcp)
         {
             InteractionService.DisplaySubtleMessage(AgentCommandStrings.InitCommand_NoConfigurationSelected);
             return new(CliExitCodes.Success, selectedClients, []);
@@ -384,7 +448,6 @@ internal sealed class AgentInitCommand : BaseCommand
 
         var (scopeProvided, requestedScope) = scopeBinding.Resolve();
         var scope = scopeProvided ? requestedScope : scopeBinding.DefaultValue;
-        var installSkills = selectedSkills.Count > 0;
 
         if (!scopeProvided && _hostEnvironment.SupportsInteractiveInput)
         {
@@ -406,21 +469,103 @@ internal sealed class AgentInitCommand : BaseCommand
                 emoji: KnownEmojis.Robot);
         }
 
-        DisplayInstallationLocations(selectedClients, scope, workspaceRoot, installSkills, configureMcp);
+        try
+        {
+            string? conflict = null;
+            if (skillsMode is AspireSkillsMode.Remote)
+            {
+                var local = LocalAspireSkills.Find(ExecutionContext.WorkingDirectory, workspaceRoot,
+                    selectedClients, cancellationToken);
+                // Malformed settings are reported per target below, so other clients and
+                // independently requested MCP remain configurable.
+                if (local.HasFileErrors)
+                {
+                    conflict = string.Join(System.Environment.NewLine, local.Errors);
+                }
+                if (local.Files.Count > 0)
+                {
+                    InteractionService.DisplayMessage(KnownEmojis.Warning,
+                        string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocalSkillsConflict,
+                            string.Join(System.Environment.NewLine, local.Files
+                                .Select(path => $"  {GetDisplayConfigurationPath(path, workspaceRoot)}")
+                                .Order(StringComparer.Ordinal))));
+                    InteractionService.DisplayEmptyLine();
+                }
+            }
+            else if (skillsMode is AspireSkillsMode.Embedded)
+            {
+                foreach (var client in selectedClients)
+                {
+                    if (client.HasIntegrationRegistration(workspaceRoot, scope, cancellationToken))
+                    {
+                        conflict = AgentCommandStrings.InitCommand_RemoteSkillsConflict;
+                        break;
+                    }
+                }
+            }
+
+            if (conflict is not null)
+            {
+                InteractionService.DisplayError(conflict);
+                return new(CliExitCodes.InvalidCommand, selectedClients, []);
+            }
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException or IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            InteractionService.DisplayError(ex.Message);
+            return new(CliExitCodes.InvalidCommand, selectedClients, []);
+        }
+
+        AspireSkillsBundle? aspireSkillsBundle = null;
+        List<SkillDefinition> selectedSkills = [];
+        var hasErrors = false;
+        if (skillsMode is AspireSkillsMode.Embedded)
+        {
+            var result = await _aspireSkillsInstaller.InstallAsync(cancellationToken);
+            if (result.Status is not AspireSkillsInstallStatus.Installed)
+            {
+                InteractionService.DisplayError(result.Message ?? AgentCommandStrings.ConfigurationCompletedWithErrors);
+                hasErrors = true;
+            }
+            else
+            {
+                aspireSkillsBundle = result.Bundle ?? throw new InvalidOperationException("Aspire skills installer returned an installed result without a bundle.");
+                selectedSkills.AddRange(aspireSkillsBundle.GetSkillDefinitions()
+                    .Where(skill => !IsCliDefinedSkillName(skill.Name) && skill.IsApplicableToLanguage(detectedLanguage))
+                    .OrderBy(skill => skill.Name, StringComparer.OrdinalIgnoreCase));
+            }
+        }
+        if (playwright)
+        {
+            selectedSkills.Add(SkillDefinition.PlaywrightCli);
+        }
+        if (dotnetInspect)
+        {
+            selectedSkills.Add(SkillDefinition.DotnetInspect);
+        }
+        if (selectedSkills.Count > 0 || configureMcp)
+        {
+            DisplayInstallationLocations(selectedClients, scope, workspaceRoot, selectedSkills.Count > 0, configureMcp);
+        }
 
         // The selected clients determine destinations; defaults never fabricate detection.
         var selectedSkillDirs = new HashSet<string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
         if (selectedSkills.Count > 0)
         {
             selectedSkillDirs.UnionWith(selectedClients
-                .Select(client => client.GetSkillBaseDirectory(scope, workspaceRoot, ExecutionContext, _environment)));
+                .Select(client => client.GetSkillBaseDirectory(scope, workspaceRoot)));
+        }
+
+        if (skillsMode is AspireSkillsMode.Remote)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var results = await AgentConfiguration.ApplyRemoteAsync(selectedClients, workspaceRoot, scope, cancellationToken);
+            hasErrors |= DisplayRemoteConfigurationResults(results, workspaceRoot);
         }
 
         // --- Phase 3: Apply copied skill files at each unique destination ---
         // Each skill file write is fast (small markdown files), so sequential execution
         // is fine — parallelizing would complicate error handling for no meaningful gain.
-        var hasErrors = false;
-
         var installedSkills = new List<InstalledSkillSummaryItem>();
 
         foreach (var skillDirectory in selectedSkillDirs)
@@ -493,8 +638,8 @@ internal sealed class AgentInitCommand : BaseCommand
             var pathComparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
             // Aliased paths can use distinct server keys; coalesce file I/O, not client formats.
             var targetsByPath = selectedClients.SelectMany(client =>
-                client.GetMcpConfigPaths(scope, workspaceRoot, ExecutionContext, _environment)
-                    .Select(target => (Client: client, target.Path, target.ServersPropertyName, target.ConfigureServer)))
+                client.GetMcpConfigPaths(scope, workspaceRoot)
+                    .Select(target => (Client: client, target.Path, target.ConfigureServer)))
                 .GroupBy(static target => target.Path, pathComparer);
             foreach (var targets in targetsByPath)
             {
@@ -503,23 +648,21 @@ internal sealed class AgentInitCommand : BaseCommand
                     AgentCommandStrings.InitCommand_McpConfigurationDescription, firstTarget.Client.DisplayName, targets.Key);
                 try
                 {
-                    var (config, configFilePath) = await McpConfigFileHelper.ReadSelectedConfigAsync(
-                        targets.Key, firstTarget.Client, scope, _environment, cancellationToken);
+                    var edit = new AgentConfiguration();
+                    var (config, configFilePath) = await firstTarget.Client.ReadMcpConfigAsync(
+                        targets.Key, workspaceRoot, scope, edit, cancellationToken);
                     var notifications = new List<(KnownEmoji Emoji, string Message)>();
                     // Legacy repairs share the same selection, scope, and consent as new configuration.
-                    foreach (var (client, _, serversPropertyName, configureServer) in targets)
+                    foreach (var (client, _, configureServer) in targets)
                     {
-                        var updated = McpConfigFileHelper.UpdateDeprecatedCommand(config, serversPropertyName);
-                        var configured = configureServer && McpConfigFileHelper.ConfigureMcpServer(
-                            config, client, scope, configFilePath);
-
-                        if (updated)
+                        var (repaired, added) = client.UpdateMcpConfig(config, configFilePath, configureServer, scope);
+                        if (repaired)
                         {
                             notifications.Add((KnownEmojis.Wrench,
                                 string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.DeprecatedConfigUpdate_Description, client.DisplayName)));
                         }
 
-                        if (configured)
+                        if (added)
                         {
                             notifications.Add((KnownEmojis.CheckMarkButton, string.Format(CultureInfo.CurrentCulture,
                                 AgentCommandStrings.InitCommand_McpConfigurationDescription, client.DisplayName, configFilePath)));
@@ -528,7 +671,7 @@ internal sealed class AgentInitCommand : BaseCommand
 
                     if (notifications.Count > 0)
                     {
-                        await ConfigurationHelper.WriteSettingsFileAsync(configFilePath, config, cancellationToken);
+                        await edit.PublishAsync(configFilePath, config, cancellationToken);
                     }
 
                     foreach (var (emoji, message) in notifications)
@@ -628,94 +771,6 @@ internal sealed class AgentInitCommand : BaseCommand
             AgentEnvironment.OpenCode => "OpenCode",
             _ => environment.ToString(),
         };
-
-    private async Task<(IReadOnlyList<SkillDefinition> Skills, AspireSkillsBundle? Bundle, string? FailureMessage)> ResolveAvailableSkillsAsync(LanguageId? detectedLanguage, CancellationToken cancellationToken)
-    {
-        var skills = new List<SkillDefinition>();
-        AspireSkillsBundle? bundle = null;
-        string? failureMessage = null;
-
-        var result = await _aspireSkillsInstaller.InstallAsync(cancellationToken);
-        if (result.Status is AspireSkillsInstallStatus.Installed)
-        {
-            bundle = result.Bundle ?? throw new InvalidOperationException("Aspire skills installer returned an installed result without a bundle.");
-            skills.AddRange(bundle.GetSkillDefinitions().Where(static skill => !IsCliDefinedSkillName(skill.Name)));
-        }
-        else
-        {
-            // Preserve the install failure so the caller can surface it only when the user
-            // passed an explicit --skills value that names a bundle-only skill. Happy-path
-            // (interactive prompt with the embedded fallback) stays silent.
-            failureMessage = result.Message;
-        }
-
-        // When the bundle is unavailable (network failure, version mismatch, etc.), fall back
-        // silently to the CLI-defined skills. The installer already logs the underlying cause
-        // at debug level, so the user is not interrupted with a warning they cannot act on.
-        skills.AddRange(SkillDefinition.CliDefined);
-
-        return (skills
-            .Where(s => s.IsApplicableToLanguage(detectedLanguage))
-            .ToList(), bundle, failureMessage);
-    }
-
-    private static bool HasUnknownBundleSkillCandidate(string requestedSkills, IReadOnlyList<SkillDefinition> availableSkills)
-    {
-        // Tokens like "all" / "none" don't name skills, so the "looks like a bundle skill but missing"
-        // diagnostic doesn't apply — let the normal validation path handle them.
-        if (string.IsNullOrWhiteSpace(requestedSkills) ||
-            string.Equals(requestedSkills, ConsoleInteractionService.AllChoice, StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(requestedSkills, ConsoleInteractionService.NoneChoice, StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        var requested = requestedSkills.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        foreach (var name in requested)
-        {
-            if (IsCliDefinedSkillName(name))
-            {
-                continue;
-            }
-
-            if (!availableSkills.Any(s => s.HasName(name, StringComparison.OrdinalIgnoreCase)))
-            {
-                // A non-CLI name that isn't in the catalog is exactly the case the bundle would have provided.
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private static bool ShouldSkipBundleCatalogResolution(PromptBinding<string?> skillsBinding)
-    {
-        var (wasProvided, optionValue, _) = PromptBinding.Resolve(skillsBinding);
-        if (!wasProvided)
-        {
-            return false;
-        }
-
-        return ShouldSkipBundleCatalogResolution(optionValue);
-    }
-
-    private static bool ShouldSkipBundleCatalogResolution(string? value)
-    {
-        if (string.Equals(value, ConsoleInteractionService.NoneChoice, StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        if (string.IsNullOrWhiteSpace(value) ||
-            string.Equals(value, ConsoleInteractionService.AllChoice, StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        var selectedSkillNames = value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        return selectedSkillNames.Length > 0 &&
-               selectedSkillNames.All(static name => IsCliDefinedSkillName(name));
-    }
 
     private static bool IsCliDefinedSkillName(string name)
     {
@@ -870,6 +925,55 @@ internal sealed class AgentInitCommand : BaseCommand
         return uniqueValues;
     }
 
+    private bool DisplayRemoteConfigurationResults(IReadOnlyList<AgentTargetResult> results, DirectoryInfo workspaceRoot)
+    {
+        var hasErrors = false;
+        foreach (var resultGroup in results.GroupBy(result => result.Status switch
+        {
+            AgentConfigurationStatus.Configured or AgentConfigurationStatus.Unchanged => false,
+            AgentConfigurationStatus.Failed => true,
+            _ => throw new UnreachableException()
+        }))
+        {
+            var entries = resultGroup.SelectMany(result => result.Clients, (result, client) => (Result: result, Client: client));
+            var targets = resultGroup.Key
+                ? entries.Select(entry =>
+                {
+                    var target = string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_ConfigurationTarget,
+                        entry.Client.DisplayName, GetDisplayConfigurationPath(entry.Result.TargetPath, workspaceRoot));
+
+                    return entry.Result.Message is null ? target : $"{target}{Environment.NewLine}  {entry.Result.Message}";
+                })
+                : entries.GroupBy(entry => entry.Client.Id, StringComparers.AgentClientId).Select(agent =>
+                    string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_ConfigurationTarget,
+                        agent.First().Client.DisplayName,
+                        string.Join(", ", agent.Select(entry => entry.Result.TargetPath).Distinct(StringComparers.FileSystemPath)
+                            .Select(path => GetDisplayConfigurationPath(path, workspaceRoot)))));
+            var format = resultGroup.Key ? AgentCommandStrings.InitCommand_FailedTarget : AgentCommandStrings.InitCommand_ConfiguredTargets;
+            var message = string.Format(CultureInfo.CurrentCulture, format, string.Join($"{Environment.NewLine}  ", targets));
+            if (resultGroup.Key)
+            {
+                InteractionService.DisplayError(message);
+                hasErrors = true;
+            }
+            else
+            {
+                InteractionService.DisplayMessage(KnownEmojis.Robot, message);
+            }
+        }
+
+        return hasErrors;
+    }
+
+    private string GetDisplayConfigurationPath(string path, DirectoryInfo workspaceRoot)
+    {
+        var displayPath = GetDisplayConfigurationPath(path, AgentConfigurationScope.Project, workspaceRoot);
+
+        return Path.IsPathRooted(displayPath)
+            ? GetDisplayConfigurationPath(path, AgentConfigurationScope.Global, workspaceRoot)
+            : displayPath;
+    }
+
     private string GetDisplayConfigurationPath(string path, AgentConfigurationScope scope, DirectoryInfo workspaceRoot)
     {
         var root = scope is AgentConfigurationScope.Project ? workspaceRoot : ExecutionContext.HomeDirectory;
@@ -887,32 +991,32 @@ internal sealed class AgentInitCommand : BaseCommand
         return scope is AgentConfigurationScope.Global ? $"~/{displayRelativePath}" : displayRelativePath;
     }
 
-    private void DisplayInstallationLocations(IReadOnlyList<AgentClient> clients, AgentConfigurationScope scope, DirectoryInfo workspaceRoot, bool installSkills, bool configureMcp)
+    private void DisplayInstallationLocations(IReadOnlyList<IAgentClient> clients, AgentConfigurationScope scope, DirectoryInfo workspaceRoot, bool installSkills, bool configureMcp)
     {
         var lines = new List<string> { AgentCommandStrings.InitCommand_InstallationLocations };
         var pathComparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
         var hasSharedLocation = false;
         if (installSkills)
         {
-            var directories = clients.Select(client => client.GetSkillBaseDirectory(scope, workspaceRoot, ExecutionContext, _environment))
+            var directories = clients.Select(client => client.GetSkillBaseDirectory(scope, workspaceRoot))
                 .Distinct(pathComparer);
             foreach (var directory in directories)
             {
                 AddLocation(AgentCommandStrings.InitCommand_SkillsLocationHint, directory,
-                    [.. AgentClient.All.Where(client => pathComparer.Equals(directory,
-                        client.GetSkillBaseDirectory(scope, workspaceRoot, ExecutionContext, _environment)))]);
+                    [.. _clients.Where(client => pathComparer.Equals(directory,
+                        client.GetSkillBaseDirectory(scope, workspaceRoot)))]);
             }
         }
 
         if (configureMcp)
         {
-            var paths = clients.Select(client => client.GetMcpConfigPath(scope, workspaceRoot, ExecutionContext, _environment))
+            var paths = clients.Select(client => client.GetMcpConfigPath(scope, workspaceRoot))
                 .Distinct(pathComparer);
             foreach (var path in paths)
             {
                 AddLocation(AgentCommandStrings.InitCommand_McpLocationHint, path,
-                    [.. AgentClient.All.Where(client => pathComparer.Equals(path,
-                        client.GetMcpConfigPath(scope, workspaceRoot, ExecutionContext, _environment)))]);
+                    [.. _clients.Where(client => pathComparer.Equals(path,
+                        client.GetMcpConfigPath(scope, workspaceRoot)))]);
             }
         }
 
@@ -923,7 +1027,7 @@ internal sealed class AgentInitCommand : BaseCommand
 
         InteractionService.DisplaySubtleMessage(string.Join(Environment.NewLine, lines));
 
-        void AddLocation(string format, string path, IReadOnlyList<AgentClient> sharedClients)
+        void AddLocation(string format, string path, IReadOnlyList<IAgentClient> sharedClients)
         {
             var location = GetDisplayConfigurationPath(path, scope, workspaceRoot);
             if (sharedClients.Count > 1)
@@ -964,5 +1068,12 @@ internal sealed class AgentInitCommand : BaseCommand
 
 internal readonly record struct AgentInitExecutionResult(
     int ExitCode,
-    IReadOnlyList<AgentClient> SelectedClients,
+    IReadOnlyList<IAgentClient> SelectedClients,
     IReadOnlyList<SkillDefinition> SelectedSkills);
+
+internal enum AspireSkillsMode
+{
+    Embedded,
+    Remote,
+    None
+}

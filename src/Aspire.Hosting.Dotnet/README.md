@@ -1,7 +1,7 @@
-# .NET / C# app hosting integration
+# .NET app hosting integration
 
-Use this integration to model, configure, and orchestrate C# projects and file-based C# apps
-(added **by path**) in an Aspire solution. It is the C# peer of `Aspire.Hosting.Go`,
+Use this integration to model, configure, and orchestrate SDK-style C#, F#, and Visual Basic
+projects and file-based C# apps (added **by path**) in an Aspire solution. It is the .NET peer of `Aspire.Hosting.Go`,
 `Aspire.Hosting.Python`, and `Aspire.Hosting.JavaScript`.
 
 > [!NOTE]
@@ -25,8 +25,10 @@ aspire add Aspire.Hosting.Dotnet
 
 ## Usage example
 
-In the AppHost, add a C# app resource by path. The path can point at a project file (`.csproj`),
-a directory containing a single `.csproj`, or a file-based app (`.cs`):
+In the AppHost, add a .NET app resource by path. The path can point at an SDK-style project
+file (`.csproj`, `.fsproj`, or `.vbproj`), a directory containing exactly one supported project
+in total, or a file-based C# app (`.cs`). Paths are relative to the AppHost directory, not the
+shell's working directory; replace the example paths with your actual service paths.
 
 **C#**
 
@@ -66,18 +68,31 @@ file-based launches use `--no-cache` instead. Start and Restart reuse the coordi
 project-based resources. Use the Rebuild command after source changes to rebuild and restart the resource.
 
 Endpoints, environment variables, and service discovery are configured from the project's
-`launchSettings.json` and Kestrel configuration, matching `AddProject<T>`.
+`launchSettings.json` and Kestrel configuration. V2 VB services prefer
+`My Project/launchSettings.json`, falling back to `Properties/launchSettings.json`.
+Legacy service-profile discovery is unchanged.
 
-### Migrating from AddCSharpApp
+### Migrating from AddProject or AddCSharpApp
 
-`AddCSharpApp` (and the polyglot `addCSharpApp` export) is obsolete. Add the
-`Aspire.Hosting.Dotnet` integration and replace it with `AddDotnetProject` / `addDotnetProject`.
-The replacement accepts the same kinds of paths: `.cs`, `.csproj`, or a directory containing
-a single `.csproj`.
+All six legacy `AddProject` overloads, `AddCSharpApp`, and their polyglot exports are obsolete.
+Add this integration and use `AddDotnetProject` / `addDotnetProject` with the actual project path,
+not a guessed conversion of a generated `Projects.*` name. The extension methods are in
+`Aspire.Hosting`; explicitly typed resources also need `using Aspire.Hosting.Dotnet`.
 
-The new API returns a `DotnetProjectResource`, not a `ProjectResource` / `CSharpAppResource`.
-Update explicitly typed resource builders and project-specific customizations accordingly.
-Legacy `AddCSharpApp` calls retain their existing launch and publishing behavior.
+The new API returns `IResourceBuilder<DotnetProjectResource>`, not a
+`ProjectResource` / `CSharpAppResource` builder. Update returns, stored values, generic definitions,
+explicit generic calls, and model queries separately. Ordinary concrete `WithReplicas`,
+`DisableForwardedHeaders`, `WithEndpointsInEnvironment`, and `GetProjectMetadata` calls are stable;
+shared integration-authoring seams remain experimental.
+
+Use the canonical [AddProject migration guide](../../docs/migrate-from-addproject.md) for all six
+overload mappings, C#/polyglot null differences, compile-correct typed/fluent examples,
+build ownership, EF, composition, and retained legacy exceptions. Existing legacy calls keep
+their launch/publishing behavior; Functions and MAUI migrate separately.
+
+F#/VB support covers SDK-style project files, not scripts or old project systems. The new
+service/AppHost watcher is not implemented. Rebuild and non-watch debugging do not imply
+`aspire run --watch` support.
 
 ### Restoring projects individually
 
@@ -140,14 +155,19 @@ profile name. Set `excludeKestrelEndpoints: true` to stop deriving model endpoin
 configuration; this does not rewrite or disable the service's own Kestrel configuration.
 The corresponding C# `ProjectResourceOptions` properties have the same behavior.
 
+When migrating the obsolete C# string overload, `launchProfileName: null` instead meant
+**disable profiles**: translate it to `options => options.ExcludeLaunchProfile = true`.
+Legacy polyglot omitted/null arguments mean default options, not profile exclusion.
+See the [migration guide](../../docs/migrate-from-addproject.md#c-launch-profiles-null-is-not-always-the-default).
+
 The plain-data `DotnetProjectOptions` input is specific to the polyglot `addDotnetProject` API.
 It does not change the shared `ProjectResourceOptions` handle used by the legacy polyglot
 `addProject` and `addCSharpApp` APIs.
 
 ### Configure the build environment
 
-Use `WithBuildEnvironment` when an environment variable must affect MSBuild evaluation for a `.csproj`
-resource. File-based `.cs` apps do not support build-only environment variables and are rejected when
+Use `WithBuildEnvironment` when an environment variable must affect MSBuild evaluation for an SDK-style
+`.csproj`, `.fsproj`, or `.vbproj` resource. File-based `.cs` apps do not support build-only environment variables and are rejected when
 `WithBuildEnvironment` is called. Projects with build-specific environment variables use serialized direct
 builds instead of a shared traversal build. Build environment variables are not added to the launched process;
 configure the same variable with `WithEnvironment` as well when it is needed at runtime. The same build-only
@@ -190,7 +210,7 @@ or bundles. EF may use suitable output, select different or stale output, or fai
 is missing. Ordinary run-mode EF commands retain `--no-build`; publish-time script and bundle generation
 allow EF to build the participating projects.
 
-Where equivalent, use shared `.csproj` or `Directory.Build.props` settings so the coordinated build and EF
+Where equivalent, use shared project-file or `Directory.Build.props` settings so the coordinated build and EF
 evaluate the same values. Runtime `WithEnvironment` is not an equivalent workaround. See the
 [EF Core integration guidance](../Aspire.Hosting.EntityFrameworkCore/README.md#coordinated-builds-and-custom-build-inputs)
 for the remaining compatibility risk.
@@ -198,9 +218,13 @@ for the remaining compatibility risk.
 ## Publishing
 
 Resources created with `AddDotnetProject` participate in the same .NET SDK container publishing pipeline as
-resources created with `AddProject`. Project files, directories containing a single project file, and file-based
+legacy project resources. Project files, directories containing a single supported project file, and file-based
 C# apps are emitted as project resources in the Aspire manifest and can be deployed through supported compute
 environments.
+
+Constructing `DotnetProjectResource` directly does not supply metadata, SDK publishing, or registration
+with the coordinated-build planner. Use the factory and compose annotations/configuration rather than
+subclassing to obtain those behaviors.
 
 File-based apps preserve the .NET SDK's publishing defaults, including Native AOT. Native AOT cannot compile
 across operating systems, so publishing a file-based app from Windows or macOS to a Linux container can fail.
@@ -242,11 +266,14 @@ available only during local orchestration.
 
 ## Migrating from legacy project resources
 
-For C# and TypeScript AppHosts targeting Aspire 13.6 or newer, the
+Start with the [AddProject migration guide](../../docs/migrate-from-addproject.md).
+For C# and TypeScript AppHosts targeting a version that includes Project V2, the
 [`aspire-project-v2-migration` agent skill](https://github.com/microsoft/aspire-skills/tree/main/skills/aspire-project-v2-migration)
 assesses existing project resources and proposes a migration for approval before editing.
-It preserves supported resource configuration and identifies unsupported patterns, including
-Azure Functions and custom integrations tied to `ProjectResource`. It does not upgrade the AppHost's Aspire version.
+It preserves supported resource configuration and identifies unsupported patterns. Its inventory must
+be updated separately for SDK-style F#/VB support, stable consumer APIs, and retained Functions, MAUI,
+custom-metadata/subtype, and external-build exceptions; an installed skill may predate those changes.
+It does not upgrade the AppHost's Aspire version.
 
 ## Additional documentation
 

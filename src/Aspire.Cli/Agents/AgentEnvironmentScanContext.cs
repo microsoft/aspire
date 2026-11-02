@@ -22,13 +22,7 @@ internal sealed record AgentEnvironmentScanContext
 
     public DirectoryInfo? FindProjectDirectory(string directoryName, DirectoryInfo homeDirectory)
     {
-        var relativePath = Path.GetRelativePath(RepositoryRoot.FullName, WorkingDirectory.FullName);
-        // An explicitly selected workspace need not contain the invocation directory.
-        var currentDirectory = Path.IsPathRooted(relativePath) ||
-            relativePath == ".." || relativePath.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
-                ? RepositoryRoot
-                : WorkingDirectory;
-        while (currentDirectory is not null)
+        foreach (var currentDirectory in AgentPath.ProjectDirectories(WorkingDirectory, RepositoryRoot))
         {
             // Home-level agent settings do not establish use in this project, and
             // project discovery must not walk above the selected repository root.
@@ -38,13 +32,6 @@ internal sealed record AgentEnvironmentScanContext
             {
                 return new DirectoryInfo(path);
             }
-
-            if (Path.GetRelativePath(RepositoryRoot.FullName, currentDirectory.FullName) == ".")
-            {
-                break;
-            }
-
-            currentDirectory = currentDirectory.Parent;
         }
 
         return null;

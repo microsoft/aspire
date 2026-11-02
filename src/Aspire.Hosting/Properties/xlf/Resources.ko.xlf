@@ -24,7 +24,7 @@
       </trans-unit>
       <trans-unit id="DcpVersionCheckTooLowMessage">
         <source>Newer version of the Aspire.Hosting.AppHost package is required to run the application. Ensure you are referencing at least version '{0}'.</source>
-        <target state="translated">애플리케이션을 실행하려면 새 버전의 Hosting.Hosting.AppHost 패키지가 필요합니다. 버전 '{0}' 이상 참조하고 있는지 확인하세요.</target>
+        <target state="translated">애플리케이션을 실행하려면 새 버전의 Aspire.Hosting.AppHost 패키지가 필요합니다. 버전 '{0}' 이상 참조하고 있는지 확인하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="LaunchSettingsFileDoesNotContainProfileExceptionMessage">

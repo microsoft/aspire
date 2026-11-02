@@ -1,0 +1,191 @@
+.meter-overview {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: var(--spacingVerticalM);
+    max-width: 1400px;
+    /* The scroll container has no right padding, so without this the last column touches the edge. */
+    padding-right: var(--spacingHorizontalL);
+    padding-bottom: var(--spacingVerticalL);
+}
+
+.meter-card {
+    position: relative;
+    display: flex;
+    min-width: 0;
+    border: 1px solid var(--colorNeutralStroke2);
+    border-radius: 8px;
+    background-color: var(--colorNeutralBackground1);
+    transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.meter-card:hover {
+    border-color: var(--colorNeutralStroke1Hover);
+    box-shadow: var(--shadow4);
+}
+
+.meter-card-link {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--spacingVerticalXS);
+    min-width: 0;
+    padding: 12px 14px;
+    border-radius: inherit;
+    color: var(--colorNeutralForeground1);
+    text-decoration: none;
+}
+
+.meter-card-link:focus-visible {
+    outline: 2px solid var(--colorStrokeFocus2);
+    outline-offset: 1px;
+}
+
+/* The pin is only shown on hover or focus to keep cards quiet, but always shown once pinned
+   so pinned instruments are recognizable while scanning. */
+::deep .meter-card-pin {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    opacity: 0;
+    transition: opacity 120ms ease;
+}
+
+.meter-card:hover ::deep .meter-card-pin,
+.meter-card:focus-within ::deep .meter-card-pin,
+::deep .meter-card-pin.pinned {
+    opacity: 1;
+}
+
+/* The card's source labels: the resource an instrument comes from, and its meter when a list mixes meters. They're
+   squared tags in the monospace font of identifiers elsewhere in the dashboard, small and grey so they stay
+   secondary to the instrument's name and value. The resource tag is outlined in the resource's color, the same
+   color the resource has everywhere else in the dashboard. */
+/* One line, leaving room for the pin button at the card's top right. The tags shrink, and cut their text, before
+   the line wraps. */
+.meter-card-tags {
+    display: flex;
+    gap: 4px;
+    min-width: 0;
+    max-width: calc(100% - 24px);
+    margin-bottom: 4px;
+}
+
+.meter-card-resource,
+.meter-card-meter {
+    box-sizing: border-box;
+    flex: 0 1 auto;
+    min-width: 0;
+    padding: 0 6px;
+    border: 1px solid var(--colorNeutralStroke2);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--colorNeutralForeground3);
+    font-family: var(--aspire-font-mono);
+    font-size: 11px;
+    line-height: 16px;
+}
+
+.meter-card-resource {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border-color: var(--meter-card-resource-color, var(--colorNeutralStroke2));
+}
+
+.meter-card-meter {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.meter-card-resource-dot {
+    flex: none;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--meter-card-resource-color, var(--colorNeutralStroke2));
+}
+
+.meter-card-resource-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.meter-card-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    /* Leave room for the pin button in the top-right corner. */
+    padding-right: 24px;
+}
+
+.meter-card-icon {
+    display: inline-flex;
+    flex: none;
+    color: var(--colorNeutralForeground3);
+}
+
+.meter-card-name {
+    overflow: hidden;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.meter-card-description {
+    display: -webkit-box;
+    overflow: hidden;
+    min-height: 2.6em;
+    color: var(--colorNeutralForeground3);
+    font-size: var(--type-ramp-minus-1-font-size);
+    line-height: 1.3em;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+.meter-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: auto;
+    padding-top: var(--spacingVerticalXS);
+}
+
+.meter-card-value {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+    min-width: 0;
+    white-space: nowrap;
+}
+
+.meter-card-value-label {
+    color: var(--colorNeutralForeground3);
+    font-size: var(--type-ramp-minus-1-font-size);
+}
+
+.meter-card-value-number {
+    font-family: var(--aspire-font-display);
+    font-size: 22px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.meter-card-value-unit {
+    overflow: hidden;
+    color: var(--colorNeutralForeground3);
+    text-overflow: ellipsis;
+}
+
+.meter-card-no-data {
+    display: flex;
+    align-items: center;
+    height: 70px;
+    color: var(--colorNeutralForeground4);
+}
+
+.meter-card.no-data .meter-card-name {
+    color: var(--colorNeutralForeground3);
+}

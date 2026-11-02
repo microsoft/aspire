@@ -179,6 +179,7 @@ In your AppHost project, install the `Aspire.Hosting.{Technology}` library with 
 
 \```dotnetcli
 dotnet add package Aspire.Hosting.{Technology}
+dotnet add package Aspire.Hosting.Dotnet
 \```
 
 Then, in the _AppHost.cs_ file of `AppHost`, register {a/an} {Technology} {server/database/resource} and consume the connection using the following methods:
@@ -186,7 +187,7 @@ Then, in the _AppHost.cs_ file of `AppHost`, register {a/an} {Technology} {serve
 \```csharp
 var {resource} = builder.Add{Technology}("{resourceName}"){.AddDatabase("dbname") if applicable};
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference({resource});
 \```
 
@@ -203,6 +204,16 @@ builder.Add{Technology}{Client}("{connectionName}");
 - Demonstrate the `Add{Technology}` and `WithReference` pattern
 - Explicitly explain that `WithReference` configures the connection name
 - Show how the connection name matches between AppHost and service project
+- Include `Aspire.Hosting.Dotnet` in the **AppHost's** installation instructions when using
+  `AddDotnetProject`; it is not a new dependency to install in the consuming service.
+- Use a resource name and the actual AppHost-relative service path, not a generic metadata
+  type or a guessed transformation of `Projects.*`.
+  `AddDotnetProject` is in `Aspire.Hosting`; explicit resource types also need
+  `Aspire.Hosting.Dotnet`, and builders/capabilities use `Aspire.Hosting.ApplicationModel`.
+- For migration-specific guidance, link to the [canonical migration guide](../../docs/migrate-from-addproject.md) for typed
+  helpers, profile semantics, build ownership, and retained legacy cases instead of repeating it.
+  Do not append path-layout or migration-guide boilerplate to ordinary usage examples.
+  Foundry's own `AddProject` is unrelated; do not rename it.
 - For Azure services in AppHost, may need to show `ExecutionContext.IsPublishMode` pattern
 - Note the file name difference: _AppHost.cs_ in AppHost vs _Program.cs_ in service project
 
@@ -334,6 +345,7 @@ In your AppHost project, install the `Aspire.Hosting.PostgreSQL` library with [N
 
 \```dotnetcli
 dotnet add package Aspire.Hosting.PostgreSQL
+dotnet add package Aspire.Hosting.Dotnet
 \```
 
 Then, in the _AppHost.cs_ file of `AppHost`, register a Postgres database and consume the connection using the following methods:
@@ -341,7 +353,7 @@ Then, in the _AppHost.cs_ file of `AppHost`, register a Postgres database and co
 \```csharp
 var postgresdb = builder.AddPostgres("pg").AddDatabase("postgresdb");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(postgresdb);
 \```
 
@@ -462,6 +474,7 @@ When reviewing or creating a client integration README.md:
 - [ ] Configuration key path follows the `Aspire:{Technology}:{Component}` pattern
 - [ ] JSON examples are properly formatted and realistic
 - [ ] AppHost extensions section shows the full workflow
+- [ ] AppHost .NET service examples install the Dotnet integration and supply a name and real path
 - [ ] Connection name matches between AppHost and service examples
 - [ ] Additional documentation includes technology link and Components README link
 - [ ] Feedback & contributing section is present

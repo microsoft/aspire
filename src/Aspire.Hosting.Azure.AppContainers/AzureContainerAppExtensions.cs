@@ -284,6 +284,14 @@ public static class AzureContainerAppExtensions
                     $"Remove {nameof(WithHttpsUpgrade)}(false) or use {nameof(WithHttpsUpgrade)}(true).");
             }
 
+            if (appEnvResource.IsExpress && appEnvResource.IsPublicNetworkAccessDisabled)
+            {
+                throw new InvalidOperationException(
+                    $"Azure Container Apps Express environment '{appEnvResource.Name}' cannot be the target of a private link, such as Azure Front Door Private Link, " +
+                    "because Express environments don't support private endpoints. Remove AsExpress() to use a workload profiles environment. " +
+                    "See https://learn.microsoft.com/azure/container-apps/express-overview#considerations.");
+            }
+
             // When the user has marked this environment as existing (via AsExisting / PublishAsExisting),
             // we must not generate a brand-new managed environment + Log Analytics + Dashboard. Instead,
             // emit a thin module that references the existing environment and still wires up the ACR pull
@@ -421,6 +429,12 @@ public static class AzureContainerAppExtensions
             }
 
             infra.Add(containerAppEnvironment);
+
+            if (appEnvResource.IsPublicNetworkAccessDisabled)
+            {
+                // The environment is the target of a private link, so it's reachable only through that link.
+                containerAppEnvironment.PublicNetworkAccess = ContainerAppPublicNetworkAccess.Disabled;
+            }
 
             if (appEnvResource.EnableDashboard)
             {
@@ -762,7 +776,8 @@ public static class AzureContainerAppExtensions
     ///   <item><description>Creating a new <c>ContainerAppManagedEnvironment</c> — the existing one is referenced.</description></item>
     ///   <item><description>Creating a new <c>OperationalInsightsWorkspace</c> — the existing env already has logging configured.</description></item>
     ///   <item><description>Creating the Aspire Dashboard <c>dotNetComponent</c> — the existing env already owns its dashboard configuration.</description></item>
-    ///   <item><description>Storage accounts / file shares for container volumes and VNet configuration — these cannot be
+    ///   <item><description>Storage accounts / file shares for container volumes, VNet configuration, and disabling public network
+    ///   access for a private link — these cannot be
     ///   added to an env that already exists without mutating it. If the user attempts to combine these features with
     ///   <c>AsExisting</c>, we throw a clear error.</description></item>
     /// </list>
@@ -797,6 +812,15 @@ public static class AzureContainerAppExtensions
                 "configured with a Log Analytics workspace via WithAzureLogAnalyticsWorkspace. The existing managed " +
                 "environment already owns its Log Analytics workspace and Aspire cannot reconfigure it. Remove the " +
                 "WithAzureLogAnalyticsWorkspace call or stop marking the environment as existing.");
+        }
+
+        if (appEnvResource.IsPublicNetworkAccessDisabled)
+        {
+            throw new InvalidOperationException(
+                $"The Azure Container App Environment '{appEnvResource.Name}' is marked as existing but is also " +
+                "the target of a private link, such as Azure Front Door Private Link. Aspire must disable public network access " +
+                "on the managed environment for the private link, which it cannot do for an existing environment. Remove the " +
+                "private link or stop marking the environment as existing.");
         }
 
         // This tells azd to avoid creating infrastructure.
@@ -907,6 +931,22 @@ public static class AzureContainerAppExtensions
         infra.Add(new ProvisioningOutput("AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN", typeof(string))
         {
             Value = containerAppEnvironment.DefaultDomain.ToBicepExpression()
+        });
+
+        // The region of the environment, for resources that connect to it, such as the private endpoint that
+        // Azure Front Door Private Link creates. A managed environment returns a display name such as 'West US 2',
+        // but Front Door takes the programmatic name, 'westus2', so emit that. Terraform's provider normalizes the
+        // same way before it calls the Front Door API:
+        // https://github.com/hashicorp/terraform-provider-azurerm/blob/main/internal/services/cdn/resources/cdn_frontdoor_origin/r_create.go
+        infra.Add(new ProvisioningOutput(AzureContainerAppEnvironmentResource.LocationOutputName, typeof(string))
+        {
+            Value = new FunctionCallExpression(
+                new IdentifierExpression("toLower"),
+                new FunctionCallExpression(
+                    new IdentifierExpression("replace"),
+                    containerAppEnvironment.Location.ToBicepExpression(),
+                    new StringLiteralExpression(" "),
+                    new StringLiteralExpression(string.Empty)))
         });
     }
 

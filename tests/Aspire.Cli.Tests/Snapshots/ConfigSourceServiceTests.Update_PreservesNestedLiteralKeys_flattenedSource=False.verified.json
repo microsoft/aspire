@@ -1,0 +1,24 @@
+﻿{
+  "configSource": {
+    "repository": "https://git.example/organization/config",
+    "path": "teams/platform.json",
+    "appliedVersion": "version-2"
+  },
+  "docs": {
+    "api": {
+      "sitemapUrl": "https://remote.example/sitemap.xml"
+    },
+    "custom": "preserved",
+    "custom:key": "literal"
+  },
+  "profiles": {
+    "dev:local": {
+      "environmentVariables": {
+        "Logging:LogLevel:Default": "Debug"
+      }
+    }
+  },
+  "custom": {
+    "setting": "root-flat"
+  }
+}

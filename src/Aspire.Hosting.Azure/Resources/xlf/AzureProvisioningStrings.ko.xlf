@@ -4,311 +4,311 @@
     <body>
       <trans-unit id="CancelCommandConfirmation">
         <source>This requests cancellation of the active Azure operation that includes this resource, or the active Azure deployment for this resource. If the operation includes other Azure resources, they will be canceled too. Azure may continue work that cannot be canceled immediately, and resources already created are not deleted. Do you want to continue?</source>
-        <target state="new">This requests cancellation of the active Azure operation that includes this resource, or the active Azure deployment for this resource. If the operation includes other Azure resources, they will be canceled too. Azure may continue work that cannot be canceled immediately, and resources already created are not deleted. Do you want to continue?</target>
+        <target state="translated">이 리소스가 포함된 활성 Azure 작업 또는 이 리소스에 대한 활성 Azure 배포의 취소를 요청합니다. 작업에 다른 Azure 리소스가 포함된 경우 해당 리소스도 취소됩니다. Azure는 즉시 취소할 수 없는 작업을 계속할 수 있으며 이미 생성된 리소스는 삭제되지 않습니다. 계속하시겠습니까?</target>
         <note />
       </trans-unit>
       <trans-unit id="CancelCommandDescription">
         <source>Requests cancellation of the active Azure operation or deployment for this resource.</source>
-        <target state="new">Requests cancellation of the active Azure operation or deployment for this resource.</target>
+        <target state="translated">이 리소스에 대한 활성 Azure 작업 또는 배포 취소를 요청합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="CancelCommandName">
         <source>Cancel</source>
-        <target state="new">Cancel</target>
+        <target state="translated">취소</target>
         <note />
       </trans-unit>
       <trans-unit id="CancelCommandSuccess">
         <source>Azure cancellation requested.</source>
-        <target state="new">Azure cancellation requested.</target>
+        <target state="translated">Azure 취소가 요청되었습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeAzureContextCommandConfirmation">
         <source>This updates the Azure context for this AppHost and reprovisions all Azure resources using the values you enter next.</source>
-        <target state="new">This updates the Azure context for this AppHost and reprovisions all Azure resources using the values you enter next.</target>
+        <target state="translated">이 작업은 이 AppHost에 대한 Azure 컨텍스트를 업데이트하고, 다음에 입력하는 값을 사용하여 모든 Azure 리소스를 재프로비전합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeAzureContextCommandDescription">
         <source>Updates the Azure tenant, subscription, resource group, or location for this AppHost and reprovisions all Azure resources.</source>
-        <target state="new">Updates the Azure tenant, subscription, resource group, or location for this AppHost and reprovisions all Azure resources.</target>
+        <target state="translated">이 AppHost에 대한 Azure 테넌트, 구독, 리소스 그룹 또는 위치를 업데이트하고 모든 Azure 리소스를 재프로비전합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeAzureContextCommandName">
         <source>Change Azure context</source>
-        <target state="new">Change Azure context</target>
+        <target state="translated">Azure 컨텍스트 변경</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeAzureContextCommandSuccess">
         <source>Azure context updated and resources reprovisioned.</source>
-        <target state="new">Azure context updated and resources reprovisioned.</target>
+        <target state="translated">Azure 컨텍스트가 업데이트되고 리소스가 재프로비전되었습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeResourceLocationCommandDescription">
         <source>Changes the Azure location for this resource. If Aspire must delete and recreate the existing Azure resource, any data in it may be permanently lost.</source>
-        <target state="new">Changes the Azure location for this resource. If Aspire must delete and recreate the existing Azure resource, any data in it may be permanently lost.</target>
+        <target state="translated">이 리소스의 Azure 위치를 변경합니다. Aspire가 기존 Azure 리소스를 삭제하고 다시 만들어야 하는 경우 리소스에 있는 모든 데이터가 영구적으로 손실될 수 있습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeResourceLocationCommandName">
         <source>Change location</source>
-        <target state="new">Change location</target>
+        <target state="translated">위치 변경</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeResourceLocationCommandSuccess">
         <source>Azure resource location updated and reprovisioning completed.</source>
-        <target state="new">Azure resource location updated and reprovisioning completed.</target>
+        <target state="translated">Azure 리소스 위치를 업데이트하고 재프로비전이 완료되었습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeResourceLocationConfirmDeleteDescription">
         <source>Allow Aspire to delete and recreate the existing Azure resource when changing its location. Any data in the deleted resource may be permanently lost.</source>
-        <target state="new">Allow Aspire to delete and recreate the existing Azure resource when changing its location. Any data in the deleted resource may be permanently lost.</target>
+        <target state="translated">위치를 변경할 때 Aspire가 기존 Azure 리소스를 삭제하고 다시 만들 수 있도록 허용합니다. 삭제된 리소스의 모든 데이터가 영구적으로 손실될 수 있습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeResourceLocationConfirmDeleteLabel">
         <source>Allow deletion and possible permanent data loss</source>
-        <target state="new">Allow deletion and possible permanent data loss</target>
+        <target state="translated">삭제 및 영구 데이터 손실 가능성 허용</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeResourceLocationDeleteConfirmationRequiredFormat">
         <source>Changing the location of Azure resource '{0}' requires deleting and recreating it. Any data in the deleted resource may be permanently lost. Set the '{1}' command argument to true to continue.</source>
-        <target state="new">Changing the location of Azure resource '{0}' requires deleting and recreating it. Any data in the deleted resource may be permanently lost. Set the '{1}' command argument to true to continue.</target>
+        <target state="translated">리소스 '{0}' Azure 위치를 변경하려면 삭제하고 다시 만들어야 합니다. 삭제된 리소스의 모든 데이터가 영구적으로 손실될 수 있습니다. 계속하려면 '{1}' 명령 인수를 true로 설정하십시오.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeResourceLocationKeyVaultUnsupported">
         <source>Azure Key Vault resources cannot change location because soft-deleted vault names remain reserved globally. Use delete, reprovision, or forget state to recover this resource.</source>
-        <target state="new">Azure Key Vault resources cannot change location because soft-deleted vault names remain reserved globally. Use delete, reprovision, or forget state to recover this resource.</target>
+        <target state="translated">일시 삭제된 자격 증명 모음 이름이 전역적으로 예약된 상태로 유지되므로 Azure Key Vault 리소스는 위치를 변경할 수 없습니다. 삭제, 다시 프로비전 또는 지우기 상태를 사용하여 이 리소스를 복구합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeResourceLocationPromptMessage">
         <source>Select or enter a new Azure location for '{0}'. If Aspire must delete and recreate the existing Azure resource, any data in it may be permanently lost.</source>
-        <target state="new">Select or enter a new Azure location for '{0}'. If Aspire must delete and recreate the existing Azure resource, any data in it may be permanently lost.</target>
+        <target state="translated">'{0}'에 대한 새 Azure 위치를 선택하거나 입력하세요. Aspire에서 기존 Azure 리소스를 삭제하고 다시 만들어야 하는 경우 리소스에 저장된 데이터가 영구적으로 손실될 수 있습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeResourceLocationPromptTitle">
         <source>Change Azure resource location</source>
-        <target state="new">Change Azure resource location</target>
+        <target state="translated">Azure 리소스 위치 변경</target>
         <note />
       </trans-unit>
       <trans-unit id="ContextPropertyLocationDisplayName">
         <source>Azure location</source>
-        <target state="new">Azure location</target>
+        <target state="translated">Azure 위치</target>
         <note />
       </trans-unit>
       <trans-unit id="ContextPropertyResourceGroupDisplayName">
         <source>Azure resource group</source>
-        <target state="new">Azure resource group</target>
+        <target state="translated">Azure 리소스 그룹</target>
         <note />
       </trans-unit>
       <trans-unit id="ContextPropertySubscriptionIdDisplayName">
         <source>Azure subscription ID</source>
-        <target state="new">Azure subscription ID</target>
+        <target state="translated">Azure 구독 ID</target>
         <note />
       </trans-unit>
       <trans-unit id="ContextPropertyTenantDomainDisplayName">
         <source>Azure tenant domain</source>
-        <target state="new">Azure tenant domain</target>
+        <target state="translated">Azure 테넌트 도메인</target>
         <note />
       </trans-unit>
       <trans-unit id="ContextPropertyTenantIdDisplayName">
         <source>Azure tenant ID</source>
-        <target state="new">Azure tenant ID</target>
+        <target state="translated">Azure 테넌트 ID</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteAzureResourceCommandConfirmation">
         <source>This cancels the cached Azure deployment, deletes Azure resources targeted by this resource's deployment, purges recoverable Key Vaults so their names can be reused, and clears cached deployment state. Do you want to continue?</source>
-        <target state="new">This cancels the cached Azure deployment, deletes Azure resources targeted by this resource's deployment, purges recoverable Key Vaults so their names can be reused, and clears cached deployment state. Do you want to continue?</target>
+        <target state="translated">이 작업은 캐시된 Azure 배포를 취소하고, 이 리소스의 배포 대상인 Azure 리소스를 삭제하고, 복구 가능한 Key Vault를 영구 삭제하여 이름을 다시 사용할 수 있게 하고, 캐시된 배포 상태를 지웁니다. 계속하시겠습니까?</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteAzureResourceCommandDescription">
         <source>Cancels the cached Azure deployment, deletes Azure resources targeted by the deployment, purges recoverable Key Vaults so their names can be reused, and clears cached deployment state for this resource.</source>
-        <target state="new">Cancels the cached Azure deployment, deletes Azure resources targeted by the deployment, purges recoverable Key Vaults so their names can be reused, and clears cached deployment state for this resource.</target>
+        <target state="translated">캐시된 Azure 배포를 취소하고, 배포 대상인 Azure 리소스를 삭제하고, 복구 가능한 Key Vault를 영구 삭제하여 이름을 다시 사용할 수 있게 하고, 캐시된 배포 상태를 지웁니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteAzureResourceCommandName">
         <source>Delete Azure resource</source>
-        <target state="new">Delete Azure resource</target>
+        <target state="translated">Azure 리소스 삭제</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteAzureResourceCommandSuccess">
         <source>Azure resources deleted and provisioning state reset.</source>
-        <target state="new">Azure resources deleted and provisioning state reset.</target>
+        <target state="translated">Azure 리소스를 삭제하고 프로비전 상태를 다시 설정했습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteAzureResourcesCommandConfirmation">
         <source>This deletes the current Azure resource group and every Azure resource inside it for this AppHost, then clears the cached deployment state. Do you want to continue?</source>
-        <target state="new">This deletes the current Azure resource group and every Azure resource inside it for this AppHost, then clears the cached deployment state. Do you want to continue?</target>
+        <target state="translated">이 작업은 이 AppHost에 대한 현재 Azure 리소스 그룹과 그 안의 모든 Azure 리소스를 삭제한 다음, 캐시된 배포 상태를 지웁니다. 계속하시겠습니까?</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteAzureResourcesCommandDescription">
         <source>Deletes the current Azure resource group for this AppHost, clears cached deployment state, and leaves the Azure context intact for reprovisioning.</source>
-        <target state="new">Deletes the current Azure resource group for this AppHost, clears cached deployment state, and leaves the Azure context intact for reprovisioning.</target>
+        <target state="translated">이 AppHost의 현재 Azure 리소스 그룹을 삭제하고, 캐시된 배포 상태를 지우며, 재프로비전을 위해 Azure 컨텍스트는 그대로 유지합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteAzureResourcesCommandName">
         <source>Delete Azure resources</source>
-        <target state="new">Delete Azure resources</target>
+        <target state="translated">Azure 리소스 삭제</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteAzureResourcesCommandSuccess">
         <source>Azure resources deleted and provisioning state reset.</source>
-        <target state="new">Azure resources deleted and provisioning state reset.</target>
+        <target state="translated">Azure 리소스를 삭제하고 프로비전 상태를 다시 설정했습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteAzureResourcesRemainingResourcesFormat">
         <source>Resource-group deletion completed. These resources were not deleted: {0}.</source>
-        <target state="new">Resource-group deletion completed. These resources were not deleted: {0}.</target>
+        <target state="translated">리소스 그룹 삭제가 완료되었습니다. 이러한 리소스는 삭제되지 않았습니다. {0}.</target>
         <note>{0} is a list of resource names, provider types, and object IDs.</note>
       </trans-unit>
       <trans-unit id="DeleteAzureResourcesRemainingResourcesWarning">
         <source>The listed resources were not deleted because they exist outside the resource group. Delete them separately using their service's portal or API.</source>
-        <target state="new">The listed resources were not deleted because they exist outside the resource group. Delete them separately using their service's portal or API.</target>
+        <target state="translated">나열된 리소스는 리소스 그룹 외부에 있으므로 삭제되지 않았습니다. 서비스의 포털 또는 API를 사용하여 별도로 삭제합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DeploymentOperationCanceledResourcesFormat">
         <source>Canceled Azure resources: {0}</source>
-        <target state="new">Canceled Azure resources: {0}</target>
+        <target state="translated">취소된 Azure 리소스: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="DeploymentOperationFailedResourcesFormat">
         <source>Failed Azure resources: {0}</source>
-        <target state="new">Failed Azure resources: {0}</target>
+        <target state="translated">실패한 Azure 리소스: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="DeploymentOperationRunningResourcesFormat">
         <source>Provisioning Azure resources: {0}</source>
-        <target state="new">Provisioning Azure resources: {0}</target>
+        <target state="translated">Azure 리소스 프로비전: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="DeploymentOperationSummaryDisplayName">
         <source>Azure deployment diagnostics</source>
-        <target state="new">Azure deployment diagnostics</target>
+        <target state="translated">Azure 배포 진단</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyCodeDisplayName">
         <source>Azure error code</source>
-        <target state="new">Azure error code</target>
+        <target state="translated">Azure 오류 코드</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyCorrelationIdDisplayName">
         <source>Azure correlation ID</source>
-        <target state="new">Azure correlation ID</target>
+        <target state="translated">Azure 상관 관계 ID</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyCurrentLocationDisplayName">
         <source>Azure current location</source>
-        <target state="new">Azure current location</target>
+        <target state="translated">Azure 현재 위치</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyFailedResourcesDisplayName">
         <source>Failed Azure resources</source>
-        <target state="new">Failed Azure resources</target>
+        <target state="translated">실패한 Azure 리소스</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyHttpStatusDisplayName">
         <source>Azure HTTP status</source>
-        <target state="new">Azure HTTP status</target>
+        <target state="translated">Azure HTTP 상태</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyMessageDisplayName">
         <source>Azure error message</source>
-        <target state="new">Azure error message</target>
+        <target state="translated">Azure 오류 메시지</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyOperationDisplayName">
         <source>Azure operation</source>
-        <target state="new">Azure operation</target>
+        <target state="translated">Azure 작업</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyProviderDisplayName">
         <source>Azure provider</source>
-        <target state="new">Azure provider</target>
+        <target state="translated">Azure 공급자</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyRecommendedActionsDisplayName">
         <source>Azure recommended actions</source>
-        <target state="new">Azure recommended actions</target>
+        <target state="translated">Azure 권장 작업</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyRequestIdDisplayName">
         <source>Azure request ID</source>
-        <target state="new">Azure request ID</target>
+        <target state="translated">Azure 요청 ID</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyResourceNameDisplayName">
         <source>Azure resource name</source>
-        <target state="new">Azure resource name</target>
+        <target state="translated">Azure 리소스 이름</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyResourceTypeDisplayName">
         <source>Azure resource type</source>
-        <target state="new">Azure resource type</target>
+        <target state="translated">Azure 리소스 종류</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertySupportedLocationsDisplayName">
         <source>Azure supported locations</source>
-        <target state="new">Azure supported locations</target>
+        <target state="translated">Azure 지원 위치</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyTargetResourceIdDisplayName">
         <source>Azure target resource ID</source>
-        <target state="new">Azure target resource ID</target>
+        <target state="translated">Azure 대상 리소스 ID</target>
         <note />
       </trans-unit>
       <trans-unit id="ForgetStateCommandConfirmation">
         <source>This clears the cached Azure deployment state for this resource and resets its provisioning snapshot.</source>
-        <target state="new">This clears the cached Azure deployment state for this resource and resets its provisioning snapshot.</target>
+        <target state="translated">이 작업은 이 리소스의 캐시된 Azure 배포 상태를 지우고 프로비전 스냅샷을 다시 설정합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ForgetStateCommandDescription">
         <source>Clears the cached Azure deployment state for this resource so it can be provisioned again using the current Azure context.</source>
-        <target state="new">Clears the cached Azure deployment state for this resource so it can be provisioned again using the current Azure context.</target>
+        <target state="translated">현재 Azure 컨텍스트를 사용하여 재프로비전할 수 있도록 이 리소스에 대해 캐시된 Azure 배포 상태를 지웁니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ForgetStateCommandName">
         <source>Forget state</source>
-        <target state="new">Forget state</target>
+        <target state="translated">상태 무시</target>
         <note />
       </trans-unit>
       <trans-unit id="ForgetStateCommandSuccess">
         <source>Azure resource provisioning state reset.</source>
-        <target state="new">Azure resource provisioning state reset.</target>
+        <target state="translated">Azure 리소스 프로비전 상태가 다시 설정되었습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="GetAzureResourceCommandDescription">
         <source>Returns cached deployment state and live Azure existence information for this resource.</source>
-        <target state="new">Returns cached deployment state and live Azure existence information for this resource.</target>
+        <target state="translated">이 리소스에 대해 캐시된 배포 상태와 라이브 Azure 존재 정보를 반환합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="GetAzureResourceCommandName">
         <source>Get Azure resource</source>
-        <target state="new">Get Azure resource</target>
+        <target state="translated">Azure 리소스 가져오기</target>
         <note />
       </trans-unit>
       <trans-unit id="GetAzureResourceCommandSuccess">
         <source>Azure resource information retrieved.</source>
-        <target state="new">Azure resource information retrieved.</target>
+        <target state="translated">Azure 리소스 정보를 검색했습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="InputsMessage">
         <source>Select the Azure tenant, subscription, resource group, and location Aspire should use for provisioning.
 
 To learn more, see the [Azure provisioning docs](https://aka.ms/aspire/azure/provisioning).</source>
-        <target state="needs-review-translation">모델에는 Azure 구독이 필요한 Azure 리소스가 포함되어 있습니다.
+        <target state="translated">Aspire가 프로비전에 사용할 Azure 테넌트, 구독, 리소스 그룹 및 위치를 선택하세요.
 
 자세한 내용은 [Azure provisioning docs](https://aka.ms/aspire/azure/provisioning)를 참조하세요.</target>
         <note>Contains markdown</note>
       </trans-unit>
       <trans-unit id="InputsPrimaryButtonText">
         <source>Save</source>
-        <target state="new">Save</target>
+        <target state="translated">저장</target>
         <note />
       </trans-unit>
       <trans-unit id="InputsSecondaryButtonText">
         <source>Cancel</source>
-        <target state="new">Cancel</target>
+        <target state="translated">취소</target>
         <note />
       </trans-unit>
       <trans-unit id="InputsTitle">
         <source>Configure Azure context</source>
-        <target state="needs-review-translation">Azure 프로비전</target>
+        <target state="translated">Azure 컨텍스트 구성</target>
         <note />
       </trans-unit>
       <trans-unit id="LocationDialogTitle">
@@ -338,7 +338,7 @@ To learn more, see the [Azure provisioning docs](https://aka.ms/aspire/azure/pro
       </trans-unit>
       <trans-unit id="NotificationPrimaryButtonText">
         <source>Configure</source>
-        <target state="needs-review-translation">값 입력</target>
+        <target state="translated">구성</target>
         <note />
       </trans-unit>
       <trans-unit id="NotificationTitle">
@@ -348,157 +348,157 @@ To learn more, see the [Azure provisioning docs](https://aka.ms/aspire/azure/pro
       </trans-unit>
       <trans-unit id="OperationAlreadyRunningOrQueued">
         <source>Azure operation '{0}' is already running or queued for the same resource scope. Wait for it to finish or run '{2}' before starting '{1}'.</source>
-        <target state="new">Azure operation '{0}' is already running or queued for the same resource scope. Wait for it to finish or run '{2}' before starting '{1}'.</target>
+        <target state="translated">Azure 작업 '{0}'이(가) 동일한 리소스 범위에 대해 이미 실행 중이거나 큐에 대기 중입니다. '{1}'을(를) 시작하기 전에 '{2}'이 완료되거나 실행되기를 기다리세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhaseApplyingAzureContext">
         <source>Applying Azure context</source>
-        <target state="new">Applying Azure context</target>
+        <target state="translated">Azure 컨텍스트 적용하기</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhaseChangingAzureContext">
         <source>Changing Azure context</source>
-        <target state="new">Changing Azure context</target>
+        <target state="translated">Azure 컨텍스트 변경하기</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhaseChangingLocationToFormat">
         <source>Changing location to {0}</source>
-        <target state="new">Changing location to {0}</target>
+        <target state="translated">{0}(으)로 위치 변경하기</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhaseDeletingAzureResource">
         <source>Deleting Azure resource</source>
-        <target state="new">Deleting Azure resource</target>
+        <target state="translated">Azure 리소스 삭제하기</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhaseDeletingAzureResources">
         <source>Deleting Azure resources</source>
-        <target state="new">Deleting Azure resources</target>
+        <target state="translated">Azure 리소스 삭제하기</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhaseDeletingExistingAzureResourceBeforeChangingLocationFormat">
         <source>Deleting existing Azure resource before changing location to {0}</source>
-        <target state="new">Deleting existing Azure resource before changing location to {0}</target>
+        <target state="translated">위치를 {0}(으)로 변경하기 전에 기존 Azure 리소스 삭제하기</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhaseProvisioningAzureResources">
         <source>Provisioning Azure resources</source>
-        <target state="new">Provisioning Azure resources</target>
+        <target state="translated">Azure 리소스 프로비전하기</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhasePurgingDeletedKeyVault">
         <source>Purging deleted Key Vault</source>
-        <target state="new">Purging deleted Key Vault</target>
+        <target state="translated">삭제된 Key Vault 제거하기</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhasePurgingRecoverableKeyVaultFormat">
         <source>Purging recoverable Key Vault {0}</source>
-        <target state="new">Purging recoverable Key Vault {0}</target>
+        <target state="translated">복구 가능한 Key Vault {0}제거하기</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhaseReprovisioning">
         <source>Reprovisioning</source>
-        <target state="new">Reprovisioning</target>
+        <target state="translated">재프로비전하기</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhaseReprovisioningAzureResources">
         <source>Reprovisioning Azure resources</source>
-        <target state="new">Reprovisioning Azure resources</target>
+        <target state="translated">Azure 리소스 재프로비전하기</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhaseReprovisioningInLocationFormat">
         <source>Reprovisioning in {0}</source>
-        <target state="new">Reprovisioning in {0}</target>
+        <target state="translated">{0}에서 재프로비전</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhaseResettingProvisioningState">
         <source>Resetting provisioning state</source>
-        <target state="new">Resetting provisioning state</target>
+        <target state="translated">프로비전 상태 다시 설정하기</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPropertyNameDisplayName">
         <source>Azure operation</source>
-        <target state="new">Azure operation</target>
+        <target state="translated">Azure 작업</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPropertyPhaseDisplayName">
         <source>Azure operation phase</source>
-        <target state="new">Azure operation phase</target>
+        <target state="translated">Azure 작업 단계</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPropertyStartedAtDisplayName">
         <source>Azure operation started</source>
-        <target state="new">Azure operation started</target>
+        <target state="translated">Azure 작업이 시작됨</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPropertyStatusDisplayName">
         <source>Azure operation status</source>
-        <target state="new">Azure operation status</target>
+        <target state="translated">Azure 작업 상태</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPropertyTargetLocationDisplayName">
         <source>Azure operation target location</source>
-        <target state="new">Azure operation target location</target>
+        <target state="translated">Azure 작업 대상 위치</target>
         <note />
       </trans-unit>
       <trans-unit id="ReprovisionAllCommandConfirmation">
         <source>This clears the cached Azure deployment state for this AppHost and reprovisions all Azure resources again using the current Azure tenant, subscription, resource group, and location.</source>
-        <target state="new">This clears the cached Azure deployment state for this AppHost and reprovisions all Azure resources again using the current Azure tenant, subscription, resource group, and location.</target>
+        <target state="translated">이 작업은 이 AppHost의 캐시된 Azure 배포 상태를 지우고, 현재 Azure 테넌트, 구독, 리소스 그룹 및 위치를 사용하여 모든 Azure 리소스를 재프로비전합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ReprovisionAllCommandDescription">
         <source>Clears the cached Azure deployment state for this AppHost and provisions all Azure resources again using the current Azure context.</source>
-        <target state="new">Clears the cached Azure deployment state for this AppHost and provisions all Azure resources again using the current Azure context.</target>
+        <target state="translated">이 AppHost에 대해 캐시된 Azure 배포 상태를 지우고 현재 Azure 컨텍스트를 사용하여 모든 Azure 리소스를 프로비전합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ReprovisionAllCommandName">
         <source>Reprovision all</source>
-        <target state="new">Reprovision all</target>
+        <target state="translated">모두 재프로비전</target>
         <note />
       </trans-unit>
       <trans-unit id="ReprovisionAllCommandSuccess">
         <source>Azure reprovisioning completed.</source>
-        <target state="new">Azure reprovisioning completed.</target>
+        <target state="translated">Azure 재프로비전이 완료되었습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ReprovisionResourceCommandConfirmation">
         <source>This clears the cached Azure deployment state for this resource and reprovisions it again using the current Azure tenant, subscription, resource group, and location.</source>
-        <target state="new">This clears the cached Azure deployment state for this resource and reprovisions it again using the current Azure tenant, subscription, resource group, and location.</target>
+        <target state="translated">이 작업은 이 리소스에 대해 캐시된 Azure 배포 상태를 지우고, 현재 Azure 테넌트, 구독, 리소스 그룹 및 위치를 사용하여 재프로비전합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ReprovisionResourceCommandDescription">
         <source>Clears the cached Azure deployment state for this resource and provisions it again using the current Azure context.</source>
-        <target state="new">Clears the cached Azure deployment state for this resource and provisions it again using the current Azure context.</target>
+        <target state="translated">이 리소스의 캐시된 Azure 배포 상태를 지우고 현재 Azure 컨텍스트를 사용하여 재프로비전합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ReprovisionResourceCommandName">
         <source>Reprovision</source>
-        <target state="new">Reprovision</target>
+        <target state="translated">재프로비전</target>
         <note />
       </trans-unit>
       <trans-unit id="ReprovisionResourceCommandSuccess">
         <source>Azure resource reprovisioning completed.</source>
-        <target state="new">Azure resource reprovisioning completed.</target>
+        <target state="translated">Azure 리소스 재프로비전이 완료되었습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResetProvisioningStateCommandConfirmation">
         <source>This only clears the cached Azure tenant, subscription, resource group, location, and deployment state stored for this AppHost. Live Azure resources are not deleted and may be left orphaned. Do you want to continue?</source>
-        <target state="new">This only clears the cached Azure tenant, subscription, resource group, location, and deployment state stored for this AppHost. Live Azure resources are not deleted and may be left orphaned. Do you want to continue?</target>
+        <target state="translated">이 작업은 이 AppHost에 대해 저장된 캐시된 Azure 테넌트, 구독, 리소스 그룹, 위치 및 배포 상태만 지웁니다. 실제 Azure 리소스는 삭제되지 않으며, 고아 리소스로 남을 수 있습니다. 계속하시겠습니까?</target>
         <note />
       </trans-unit>
       <trans-unit id="ResetProvisioningStateCommandDescription">
         <source>Clears the cached Azure context and deployment state for this AppHost. This does not delete live Azure resources and may leave them orphaned.</source>
-        <target state="new">Clears the cached Azure context and deployment state for this AppHost. This does not delete live Azure resources and may leave them orphaned.</target>
+        <target state="translated">이 AppHost에 대해 캐시된 Azure 컨텍스트 및 배포 상태를 지웁니다. 이렇게 하면 라이브 Azure 리소스가 삭제되지 않고 고아 리소스로 남을 수 있습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResetProvisioningStateCommandName">
         <source>Reset provisioning state</source>
-        <target state="new">Reset provisioning state</target>
+        <target state="translated">프로비전 상태 다시 설정</target>
         <note />
       </trans-unit>
       <trans-unit id="ResetProvisioningStateCommandSuccess">
         <source>Azure provisioning state reset.</source>
-        <target state="new">Azure provisioning state reset.</target>
+        <target state="translated">Azure 프로비전 상태가 다시 설정되었습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceGroupDialogTitle">
@@ -523,102 +523,102 @@ To learn more, see the [Azure provisioning docs](https://aka.ms/aspire/azure/pro
       </trans-unit>
       <trans-unit id="ResourceStateAzureDeploymentCanceled">
         <source>Azure deployment canceled</source>
-        <target state="new">Azure deployment canceled</target>
+        <target state="translated">Azure 배포가 취소됨</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateAzureDeploymentFailed">
         <source>Azure deployment failed</source>
-        <target state="new">Azure deployment failed</target>
+        <target state="translated">Azure 배포 실패</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateCanceled">
         <source>Canceled</source>
-        <target state="new">Canceled</target>
+        <target state="translated">취소됨</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateCanceling">
         <source>Canceling</source>
-        <target state="new">Canceling</target>
+        <target state="translated">취소 중</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateChangingLocation">
         <source>Changing location</source>
-        <target state="new">Changing location</target>
+        <target state="translated">위치 변경 중</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateCompilingArmTemplate">
         <source>Compiling ARM template</source>
-        <target state="new">Compiling ARM template</target>
+        <target state="translated">ARM 템플릿 컴파일</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateCreatingArmDeployment">
         <source>Creating ARM Deployment</source>
-        <target state="new">Creating ARM Deployment</target>
+        <target state="translated">ARM 배포 만들기</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateDeleting">
         <source>Deleting</source>
-        <target state="new">Deleting</target>
+        <target state="translated">삭제</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateDrifted">
         <source>Drifted</source>
-        <target state="new">Drifted</target>
+        <target state="translated">드리프트됨</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateFailedToDelete">
         <source>Failed to Delete</source>
-        <target state="new">Failed to Delete</target>
+        <target state="translated">삭제하지 못함</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateFailedToProvision">
         <source>Failed to Provision</source>
-        <target state="new">Failed to Provision</target>
+        <target state="translated">프로비전 실패</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateMissingInAzure">
         <source>Missing in Azure</source>
-        <target state="new">Missing in Azure</target>
+        <target state="translated">Azure에서 누락됨</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateMissingSubscriptionConfiguration">
         <source>Missing subscription configuration</source>
-        <target state="new">Missing subscription configuration</target>
+        <target state="translated">구독 구성 누락</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateProvisioned">
         <source>Provisioned</source>
-        <target state="new">Provisioned</target>
+        <target state="translated">프로비전됨</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateProvisionedMultipleAzureResourcesFormat">
         <source>Provisioned {0} Azure resources</source>
-        <target state="new">Provisioned {0} Azure resources</target>
+        <target state="translated">프로비전된 {0} Azure 리소스</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateProvisioningMultipleAzureResourcesFormat">
         <source>Provisioning {0} Azure resources</source>
-        <target state="new">Provisioning {0} Azure resources</target>
+        <target state="translated">{0} Azure 리소스 프로비전 중</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateProvisioningPrefix">
         <source>Provisioning </source>
-        <target state="new">Provisioning </target>
+        <target state="translated">프로비전 </target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateProvisioningResourceFormat">
         <source>Provisioning {0}</source>
-        <target state="new">Provisioning {0}</target>
+        <target state="translated">{0} 프로비전 중</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateStarting">
         <source>Starting</source>
-        <target state="new">Starting</target>
+        <target state="translated">시작</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateWaitingForDeployment">
         <source>Waiting for Deployment</source>
-        <target state="new">Waiting for Deployment</target>
+        <target state="translated">배포 대기 중</target>
         <note />
       </trans-unit>
       <trans-unit id="SubscriptionDialogTitle">
@@ -668,17 +668,17 @@ To learn more, see the [Azure provisioning docs](https://aka.ms/aspire/azure/pro
       </trans-unit>
       <trans-unit id="TenantResourceSuffixDescription">
         <source>Optional. Appended to the names of tenant-wide resources created by this AppHost. Leave empty to use the names from AppHost code unchanged. Changing the suffix targets different resources; previous resources are not renamed or deleted.</source>
-        <target state="new">Optional. Appended to the names of tenant-wide resources created by this AppHost. Leave empty to use the names from AppHost code unchanged. Changing the suffix targets different resources; previous resources are not renamed or deleted.</target>
+        <target state="translated">선택 사항입니다. 이 AppHost에서 만든 테넌트 전체 리소스의 이름에 추가됩니다. AppHost 코드의 이름을 변경하지 않고 사용하려면 비워 두세요. 접미사를 변경하면 다른 리소스를 대상으로 합니다. 이전 리소스는 이름이 바뀌거나 삭제되지 않습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="TenantResourceSuffixLabel">
         <source>Tenant-scoped resource suffix</source>
-        <target state="new">Tenant-scoped resource suffix</target>
+        <target state="translated">테넌트 범위 리소스 접미사</target>
         <note />
       </trans-unit>
       <trans-unit id="TenantResourceSuffixSelectionMessage">
         <source>Add a suffix to tenant-wide resources created by this AppHost (optional).</source>
-        <target state="new">Add a suffix to tenant-wide resources created by this AppHost (optional).</target>
+        <target state="translated">이 AppHost에서 만든 테넌트 전체 리소스에 접미사를 추가합니다(선택 사항).</target>
         <note />
       </trans-unit>
       <trans-unit id="TenantSelectionMessage">

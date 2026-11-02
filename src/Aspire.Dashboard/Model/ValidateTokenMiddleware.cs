@@ -77,7 +77,7 @@ internal sealed class ValidateTokenMiddleware
         }
         else
         {
-            context.Response.Redirect(DashboardUrls.ResourcesUrl());
+            context.Response.Redirect(DashboardUrls.HomeUrl());
         }
     }
 

@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Net.Http.Json;
+using Aspire.Hosting.Dotnet;
 using Aspire.TestUtilities;
 using Aspire.Hosting.Tests.Utils;
 using Microsoft.Extensions.Configuration;
@@ -41,7 +42,7 @@ public class TestingFactoryTests(DistributedApplicationFixture<Projects.TestingA
     public void CanGetResources()
     {
         var appModel = _app.Services.GetRequiredService<DistributedApplicationModel>();
-        Assert.Contains(appModel.GetProjectResources(), p => p.Name == "myworker1");
+        Assert.Contains(appModel.Resources.OfType<DotnetProjectResource>(), p => p.Name == "myworker1");
     }
 
     [Fact]

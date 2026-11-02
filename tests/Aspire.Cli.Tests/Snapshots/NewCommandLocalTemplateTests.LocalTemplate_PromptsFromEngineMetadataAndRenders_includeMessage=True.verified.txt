@@ -1,0 +1,13 @@
+﻿{
+  Demo.cs:
+namespace Demo;
+// Welcome
+// Mode: worker
+// Features: web|worker
+// Id: Guid_1
+// Message included
+// Worker selected
+,
+  identity.txt: template,
+  worker-only.txt: Worker content
+}

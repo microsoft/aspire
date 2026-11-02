@@ -766,7 +766,7 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
     private sealed class SingleTemplateProvider(ITemplate template) : ITemplateProvider
     {
         public IEnumerable<ITemplate> GetTemplates() => [template];
-        public Task<IEnumerable<ITemplate>> GetTemplatesAsync(CancellationToken cancellationToken = default) =>
+        public Task<IEnumerable<ITemplate>> GetTemplatesAsync(TemplateSource? source, CancellationToken cancellationToken = default) =>
             Task.FromResult<IEnumerable<ITemplate>>([template]);
         public Task<IEnumerable<ITemplate>> GetInitTemplatesAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult<IEnumerable<ITemplate>>([template]);

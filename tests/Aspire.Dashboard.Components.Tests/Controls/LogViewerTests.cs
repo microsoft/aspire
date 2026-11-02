@@ -3,6 +3,8 @@
 
 using System.Globalization;
 using Aspire.Dashboard.Components.Tests.Shared;
+using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Utils;
 using Aspire.Shared.ConsoleLogs;
 using Bunit;
 using Microsoft.AspNetCore.Components.Web.Virtualization;
@@ -411,27 +413,30 @@ public class LogViewerTests : DashboardTestContext
     [Fact]
     public void LogViewer_FilterText_UsesDisplayedTimestampOnlyWhenVisible()
     {
-        SetupLogViewerServices();
+        var timeProvider = new TestTimeProvider();
+        SetupLogViewerServices(timeProvider);
 
         var logEntries = new LogEntries(maximumEntryCount: int.MaxValue) { BaseLineNumber = 1 };
+        var timestamp = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         logEntries.InsertSorted(LogEntry.Create(
-            timestamp: new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+            timestamp: timestamp,
             logMessage: "timestamped log",
             rawLogContent: "2024-01-01T00:00:00Z timestamped log",
             isErrorMessage: false,
             resourcePrefix: null));
+        var displayedTimestamp = FormatHelpers.FormatDateTime(timeProvider, timestamp);
 
         var cut = Render<LogViewer>(builder =>
         {
             builder.Add(p => p.LogEntries, logEntries);
-            builder.Add(p => p.FilterText, "2024-01-01T01:00:00");
+            builder.Add(p => p.FilterText, displayedTimestamp);
             builder.Add(p => p.ShowTimestamp, true);
         });
 
         cut.WaitForAssertion(() =>
         {
             var content = Assert.Single(cut.FindAll(".log-content"));
-            Assert.Contains("2024-01-01T01:00:00", content.TextContent);
+            Assert.Contains(displayedTimestamp, content.TextContent);
             Assert.Contains("timestamped log", content.TextContent);
         });
 
@@ -499,9 +504,9 @@ public class LogViewerTests : DashboardTestContext
         return string.Empty;
     }
 
-    private void SetupLogViewerServices()
+    private void SetupLogViewerServices(BrowserTimeProvider? timeProvider = null)
     {
-        FluentUISetupHelpers.AddCommonDashboardServices(this, browserTimeProvider: new TestTimeProvider());
+        FluentUISetupHelpers.AddCommonDashboardServices(this, browserTimeProvider: timeProvider ?? new TestTimeProvider());
         Services.AddLogging();
 
         JSInterop.SetupVoid("focusElement", _ => true);

@@ -8,6 +8,19 @@ Use these rules when authoring or reviewing tests in `tests/Infrastructure.Tests
 The goal is to catch incorrect infrastructure behavior, not to preserve its
 current implementation.
 
+## Choose the right test owner and entry point
+
+- When a regression belongs to a repository-internal tool, prefer coverage in
+  that tool's own test project over adding it to `Infrastructure.Tests`.
+- Do not add infrastructure tests for internal MSBuild target or project
+  implementation details, whether exercised through private targets or a public
+  build entry point. Product and artifact correctness checks belong in the
+  producing build or CI stage, as described below.
+- An exceptional MSBuild regression test needs a critical failure that existing
+  build or CI validation would not catch. Explain that gap and why a check in
+  the producing build is unsuitable; do not add a test just because the target
+  or project file changed.
+
 ## Test behavior, not source text
 
 - Start with the regression the test should catch. Exercise the real tool,
@@ -17,10 +30,12 @@ current implementation.
   testing it does not require launching its entire host.
   Copying a complete, unmodified production file into a fixture is valid when
   it runs through its normal entry point.
-- Never search YAML, Markdown, project files, or scripts for expected strings.
-  Checking that source contains a command, property, step name, or comment does
-  not prove that it works. Do not replace such checks with snapshots, regular
-  expressions, or parsed-value assertions that merely restate the implementation.
+- Assert behavior rather than searching YAML, Markdown, project files, or
+  scripts for expected strings. Parsing metadata to independently discover
+  consumers and compare them with production results is valid; checking a fixed
+  command, property, step name, or comment is not evidence that it works.
+  Snapshots, regular expressions, and parsed-value assertions do not change
+  that distinction.
 - Dependency and pinning policy checks belong to dedicated validation tooling
   or build validation, not assertions in infrastructure tests. This includes
   checks of GitHub Actions references.
@@ -35,9 +50,9 @@ current implementation.
   assertions on the source text that implements the behavior. Copying, printing,
   or serializing source/configuration does not make implementation-restating
   assertions behavioral.
-- Checked-in configuration is valid production input. For test selection, load
-  the real trigger map through the production selector and assert broad routing
-  expectations and deliberate exclusions, not configuration-list equality.
+- Checked-in configuration is valid production input. When testing selection,
+  read `.github/instructions/test-trigger-map.instructions.md` for the routing
+  contract, discovery-based checks, and representative regression coverage.
 - Configuration validity belongs to the consuming tool: malformed rules and
   unresolved explicit references should produce actionable diagnostics. Test
   that production validation with invalid inputs rather than duplicating it in
@@ -66,24 +81,25 @@ current implementation.
 
 ## Justify expensive build and publish tests
 
-Add tests that invoke expensive operations such as `dotnet build` or
-`dotnet publish` only when they provide meaningful regression coverage that
-justifies their cost. Identify the failure they would catch and why existing
-build validation or a cheaper behavioral test does not already cover it. Merely
-rerunning a build or publish and asserting success is not sufficient value when
-the same operation is already validated elsewhere. Use the smallest project and
-operation that exercise the behavior.
+Do not add infrastructure tests that repeat product builds or publishes to
+check artifact correctness. Put those checks in the producing build or CI stage.
+For an exceptional critical regression described above, or a test of an internal
+tool's behavior that genuinely requires a build, identify the failure and why
+existing validation or a cheaper behavioral test cannot catch it. Use the
+smallest project and operation that exercise the behavior.
 
 ## Put essential production checks in the build
 
-When a verification is important to producing a correct product, consider making
-it part of the build or packaging step that produces the result, rather than
-checking the implementation text in a test. Validate the actual result at the
-appropriate point and fail with an actionable diagnostic when it is incorrect.
-For example, a requirement on a release artifact should be checked against the
-produced artifact, not against the YAML or script intended to create it. Do not
-add a test solely to confirm that YAML passes a particular property; check that
-the resulting product has the required behavior or contents instead.
+Validation required to produce a correct product belongs in the build, packaging,
+or CI stage that produces the artifact, not in `Infrastructure.Tests`. Run the
+check as part of each applicable build or publish so correctness does not depend
+on a separate test run. Validate the actual result at the appropriate point and
+fail with an actionable diagnostic when it is incorrect.
+
+For example, check a release artifact's required contents or behavior against the
+produced artifact, not against the YAML, project properties, or script intended
+to create it. Invoking MSBuild from a test does not make that test the right
+place for production validation.
 
 ## Validate the product in the appropriate CI lane
 
@@ -94,7 +110,8 @@ those builds.
 The official Azure Pipelines build adds signing-specific behavior and does not
 run the general repository test suite, but does run dedicated validations,
 including basic template tests against produced packages. Reuse those lanes
-where applicable. Checks of unsigned GitHub CI outputs cannot establish
+where applicable; an `Infrastructure.Tests` assertion cannot protect a build
+that does not run that suite. Checks of unsigned GitHub CI outputs cannot establish
 signing-dependent correctness. Focused smoke checks of the actual post-signing
 outputs can add value in the official pipeline, for example by verifying that a
 produced executable starts or that a signed package can be consumed. Choose checks
@@ -106,10 +123,8 @@ configuration.
 - Search for existing helpers before adding new utilities. Reuse or extend
   `RepoRoot`, `TemporaryWorkspace`, `NodeCommand`, `PowerShellCommand`, and
   applicable shared test utilities.
-- For test-selection scenarios, use the production selector and existing
-  real-map helpers rather than traversing configuration with test-owned matching
-  logic. Include the production changed-file prefilter when the scenario depends
-  on files being filtered before selection.
+- For test-selection scenarios, reuse the production selector and existing
+  real-map helpers.
 - Put repeated repository-root, process, workspace, parsing, and harness logic
   in a shared location within `Infrastructure.Tests` instead of adding another
   file-local copy. Sharing within this project is sufficient; do not create a

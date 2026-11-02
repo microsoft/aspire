@@ -11,6 +11,7 @@ import os
 import base64
 import sys
 import json
+import copy
 import logging
 import secrets
 import signal
@@ -533,6 +534,38 @@ class _AspireJSONEncoder(json.JSONEncoder):
         return super().default(o)
 
 
+class _CallbackDto(dict[str, typing.Any]):
+    def __init__(self, value: dict[str, typing.Any]) -> None:
+        super().__init__(value)
+        self._original = copy.deepcopy(value)
+        self._assigned: set[str] = set()
+
+    def __setitem__(self, key: str, value: typing.Any) -> None:
+        super().__setitem__(key, value)
+        self._assigned.add(key)
+
+    def update(self, *args, **kwargs) -> None:
+        for key, value in dict(*args, **kwargs).items():
+            self[key] = value
+
+    def setdefault(self, key: str, default: typing.Any = None) -> typing.Any:
+        if key not in self:
+            self[key] = default
+        return self[key]
+
+    def __ior__(self, other):
+        self.update(other)
+        return self
+
+    def changes(self) -> dict[str, typing.Any]:
+        # Preserve nested dictionary/list mutations as well as explicit top-level
+        # assignments. Equality alone loses assignments equal to the original value.
+        return {
+            key: value for key, value in self.items()
+            if key in self._assigned or key not in self._original or value != self._original[key]
+        }
+
+
 class AspireClient:
     '''Client for connecting to the Aspire AppHost via socket/named pipe (synchronous with threads).'''
 
@@ -1052,19 +1085,26 @@ class AspireClient:
                             if parameter_type_ids is not None and i < len(parameter_type_ids)
                             else None
                         )
-                        arg_array.append(
-                            _wrap_if_handle(args[key], client, fallback_type_id=fallback_type_id)
-                        )
+                        value = _wrap_if_handle(args[key], client, fallback_type_id=fallback_type_id)
+                        if dto_writeback and isinstance(value, dict):
+                            value = _CallbackDto(value)
+                        arg_array.append(value)
                         i += 1
                     else:
                         break
 
                 if arg_array:
                     result = callback(*arg_array)
-                    # Void DTO callbacks return mutated positional arguments, for example
-                    # {"p0": {"minCount": 2, "osSku": "AzureLinux"}}, rather than Python's None.
+                    # A no-op returns {"p0": {}}, while assigning even a default
+                    # value returns {"p0": {"columns": 132}}. Unchanged setters
+                    # must not run on the host just because the DTO was round-tripped.
                     # Opt in only for these callbacks so nullable callback results stay null.
-                    return args if dto_writeback else result
+                    if dto_writeback:
+                        return {
+                            f"p{index}": value.changes() if isinstance(value, _CallbackDto) else args[f"p{index}"]
+                            for index, value in enumerate(arg_array)
+                        }
+                    return result
 
             # No args or null
             if args is None:

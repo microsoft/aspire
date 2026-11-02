@@ -4,7 +4,7 @@
   "description": "用於建立空白 Aspire 應用程式的專案範本。",
   "symbols/Framework/description": "專案的目標 Framework。",
   "symbols/Framework/choices/net10.0/description": "目標 net10.0",
-  "symbols/Framework/choices/net11.0/description": "Target net11.0",
+  "symbols/Framework/choices/net11.0/description": " 目標 net11.0",
   "symbols/AspireVersion/description": "要使用的 Aspire 版本。",
   "symbols/AspireVersion/displayName": "Aspire 版本",
   "symbols/AspireVersion/choices/!!REPLACE_WITH_LATEST_MAJOR_MINOR_VERSION!!/displayName": "!!REPLACE_WITH_LATEST_MAJOR_MINOR_VERSION!!",

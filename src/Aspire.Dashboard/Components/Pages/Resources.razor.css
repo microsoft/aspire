@@ -1,3 +1,8 @@
+﻿/* Parameters and graph are full-width views. Keep content off the window edge. */
+.page-content-container {
+    padding-inline: 12px;
+}
+
 ::deep .unread-logs-errors-link {
     display: inline-flex;
     flex: 0 0 auto;
@@ -78,54 +83,12 @@
         "foot";
 }
 
-::deep .resource-tabs {
+::deep .resource-views {
     grid-area: main;
     display: grid;
-    grid-template-areas:
-        "resources-tab-header"
-        "resources-tab-content";
-    grid-template-rows: auto 1fr;
+    grid-template-areas: "resources-view-content";
+    grid-template-rows: 1fr;
     overflow: hidden;
-}
-
-::deep .resources-tab-header {
-    width: max-content;
-    max-width: 100%;
-    min-width: 0;
-}
-
-/* FluentTabs keeps its horizontal tab list at max-content width. Constrain the host so
-   focus can scroll the selected tab into view when space is limited above ultra-low width. */
-::deep .resources-tab-header[orientation="horizontal"] {
-    overflow-x: auto;
-    overflow-y: hidden;
-}
-
-/* On desktop the tabs row also hosts the filter controls on the right. The filter toolbar wraps
-    its controls when its share of the row becomes too narrow. */
-::deep .resource-tabs-header-row {
-    grid-area: resources-tab-header;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: var(--spacingHorizontalSNudge);
-    min-width: 0;
-    padding-top: 0.5rem;
-    padding-left: var(--layout-left-padding);
-    padding-right: var(--layout-right-padding);
-    container-type: inline-size;
-}
-
-/* Let the tabs take their content width and shrink/scroll (see the overflow rule above) instead
-   of pushing the toolbar off the row. */
-::deep .resource-tabs-header-row .resources-tab-header {
-    flex: 0 1 auto;
-}
-
-::deep .resource-tabs-toolbar {
-    flex: 1 1 auto;
-    justify-content: flex-end;
 }
 
 .resources-filter-popup-container {
@@ -190,23 +153,13 @@
     white-space: nowrap;
 }
 
-@container (max-width: 500px) {
-    ::deep .resource-tabs-toolbar {
-        min-width: 0;
-    }
-}
-
 ::deep .resources-grid-container {
     overflow: auto;
-    grid-area: resources-tab-content;
-}
-
-::deep .resource-tabs .resources-grid-container {
-    margin-top: 10px;
+    grid-area: resources-view-content;
 }
 
 ::deep .resource-graph-container {
-    grid-area: resources-tab-content;
+    grid-area: resources-view-content;
     position: relative; /* So graph buttons are position inside the container */
 }
 
@@ -354,14 +307,14 @@
 }
 
 ::deep .resource-menu-cog-background {
-    fill: var(--aspire-page-background);
-    stroke: var(--colorNeutralStroke1);
+    fill: var(--colorNeutralBackground1);
+    stroke: var(--colorNeutralStroke2);
     stroke-width: var(--strokeWidthThin);
 }
 
 ::deep .resource-menu-cog:hover .resource-menu-cog-background {
-    fill: var(--resource-graph-secondary-hover-background);
-    stroke: var(--aspire-button-hover-border);
+    fill: var(--colorNeutralBackground3);
+    stroke: var(--colorNeutralStroke1Hover);
 }
 
 ::deep .resource-menu-cog:focus-visible .resource-menu-cog-background {
@@ -370,7 +323,9 @@
 }
 
 ::deep .resource-menu-cog[aria-expanded="true"] .resource-menu-cog-background {
-    stroke: transparent;
+    fill: var(--colorBrandBackground2);
+    stroke: var(--colorBrandStroke1);
+    stroke-width: var(--strokeWidthThin);
 }
 
 ::deep .resource-menu-cog[aria-expanded="true"] {

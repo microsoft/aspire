@@ -8,6 +8,7 @@ using System.Text.Json.Nodes;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Diagnostics;
+using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Npm;
 using Aspire.Cli.Packaging;
@@ -25,6 +26,7 @@ using Aspire.TypeSystem;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Semver;
 using Spectre.Console;
@@ -37,18 +39,26 @@ public class GuestAppHostProjectTests : IDisposable
     private readonly TemporaryWorkspace _workspace;
     private readonly IConfiguration _configuration;
     private readonly ProfilingTelemetry _profilingTelemetry;
+    private readonly ILoggerFactory _loggerFactory;
+    private readonly List<FileLoggerProvider> _fileLoggerProviders = [];
 
     public GuestAppHostProjectTests(ITestOutputHelper outputHelper)
     {
         _workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         _configuration = new ConfigurationBuilder().Build();
         _profilingTelemetry = new ProfilingTelemetry(_configuration);
+        _loggerFactory = LoggerFactory.Create(builder => builder.SetMinimumLevel(LogLevel.Trace).AddXunit(outputHelper));
     }
 
     public void Dispose()
     {
+        foreach (var provider in _fileLoggerProviders)
+        {
+            provider.Dispose();
+        }
         _profilingTelemetry.Dispose();
         _workspace.Dispose();
+        _loggerFactory.Dispose();
         GC.SuppressFinalize(this);
     }
 
@@ -358,7 +368,7 @@ public class GuestAppHostProjectTests : IDisposable
             """,
             """
             @echo off
-            powershell.exe -NoLogo -NoProfile -NonInteractive -Command "$child = Start-Process -FilePath powershell.exe -ArgumentList '-NoProfile','-NonInteractive','-Command','Start-Sleep -Seconds 300' -PassThru; Set-Content child.pid $child.Id; Set-Content parent.pid $PID; Wait-Process -Id $child.Id"
+            powershell.exe -NoLogo -NoProfile -NonInteractive -Command "$child = Start-Process -FilePath powershell.exe -NoNewWindow -ArgumentList '-NoProfile','-NonInteractive','-Command','Start-Sleep -Seconds 300' -PassThru; Set-Content child.pid $child.Id; Set-Content parent.pid $PID; Wait-Process -Id $child.Id"
             """);
         using var installCts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         var installTask = CreateGuestAppHostProject().InstallIntegrationHostPackageAsync(
@@ -2584,6 +2594,8 @@ public class GuestAppHostProjectTests : IDisposable
         // ConsoleCancellationManager so the fixture doesn't register process-global OS signal handlers;
         // none of the tests here drive the launcher or AppHostServerSession paths that would fire it.
         var shutdownWindow = new TestGracefulShutdownWindow();
+        var fileLoggerProvider = new FileLoggerProvider(logFilePath, new TestStartupErrorWriter());
+        _fileLoggerProviders.Add(fileLoggerProvider);
 
         return new GuestAppHostProject(
             language: language,
@@ -2592,7 +2604,8 @@ public class GuestAppHostProjectTests : IDisposable
             appHostServerProjectFactory: appHostServerProjectFactory ?? new TestAppHostServerProjectFactory(),
             certificateService: new TestCertificateService(),
             runner: new TestDotNetCliRunner(),
-            processExecutionFactory: TestProcessExecutionFactory.CreateForCliGuardian(effectiveEnvironment),
+            processExecutionFactory: TestProcessExecutionFactory.CreateForCliGuardian(
+                effectiveEnvironment, _loggerFactory.CreateLogger<ProcessExecutionFactory>()),
             packagingService: new TestPackagingService(),
             configuration: effectiveConfiguration,
             features: new Features(effectiveConfiguration, NullLogger<Features>.Instance),
@@ -2606,7 +2619,7 @@ public class GuestAppHostProjectTests : IDisposable
                 },
                 effectiveEnvironment),
             logger: NullLogger<GuestAppHostProject>.Instance,
-            fileLoggerProvider: new FileLoggerProvider(logFilePath, new TestStartupErrorWriter()),
+            fileLoggerProvider: fileLoggerProvider,
             profilingTelemetry: _profilingTelemetry,
             gracefulShutdownSignaler: new NoOpGracefulSignaler(),
             shutdownService: shutdownWindow,

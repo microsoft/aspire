@@ -1,0 +1,1 @@
+﻿{"features":{"feature:name":true},"profiles":{"dev:local":{"environmentVariables":{"Logging:LogLevel:Default":"Debug"}}},"custom":{"literal:key":"preserved"},"docs":{"api:sitemapUrl":"https://example.test/sitemap.xml"}}
