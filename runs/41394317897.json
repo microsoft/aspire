@@ -1,0 +1,65 @@
+{
+  "run_id": 41394317897,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/41394317897",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-02T06:09:13Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 21561,
+    "title": "Only show 'Stopping Aspire' when canceling aspire run",
+    "author": "davidfowl",
+    "state": "closed",
+    "head_branch": "davidfowl/fix-17625-stopping-message",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/21561",
+    "merged_at": "2026-11-02T05:29:25Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "1d3c45f9a299c30d46fc3166148902d466043df2",
+    "failed_sha": "a8dff1cee6a428a0e5eff5dbdf7bf258f6cc32d0",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "a8dff1cee6a428a0e5eff5dbdf7bf258f6cc32d0",
+        "message": "Only show 'Stopping Aspire' when canceling aspire run (#21561) Co-authored-by: davidfowl <95136+davidfowl@users.noreply.github.com> Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com> Co-authored-by: James Newton-King <james@newtonking.com>",
+        "html_url": "https://github.com/microsoft/aspire/commit/a8dff1cee6a428a0e5eff5dbdf7bf258f6cc32d0",
+        "pull_request": {
+          "number": 21561,
+          "title": "Only show 'Stopping Aspire' when canceling aspire run",
+          "url": "https://github.com/microsoft/aspire/pull/21561",
+          "merged_at": "2026-11-02T05:29:25Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.MongoDB.Tests, Hosting.MongoDB, Hosting.MongoDB, tests/... / Hosting.MongoDB (ubuntu-latest)",
+      "id": 125112814478,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/41394317897/job/125112814478",
+      "classification": "flaky-test",
+      "reason": "MongoDB replica set resource failed to start/become healthy; same signature as prior MongoDB replica set flaky tests.",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.MongoDB.Tests.MongoDbReplicaSetFunctionalTests.VerifyMongoDBReplicaSetResource",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.MongoDB.Tests, Hosting.MongoDB, Hosting.MongoDB, tests/... / Hosting.MongoDB (ubuntu-latest)",
+      "error": "Aspire.Hosting.DistributedApplicationException : Stopped waiting for resource 'rs0' to become healthy because it failed to start.",
+      "stack_trace": "at Aspire.Hosting.ApplicationModel.ResourceNotificationService.WaitForResourceHealthyAsync(String resourceName, WaitBehavior waitBehavior, CancellationToken cancellationToken) in /_/src/Aspire.Hosting/ApplicationModel/ResourceNotificationService.cs:line 278\n   at Aspire.Hosting.ApplicationModel.ResourceNotificationService.WaitForResourceHealthyAsync(String resourceName, CancellationToken cancellationToken) in /_/src/Aspire.Hosting/ApplicationModel/ResourceNotificationService.cs:line 211\n   at Aspire.Hosting.MongoDB.Tests.MongoDbReplicaSetFunctionalTests.VerifyMongoDBReplicaSetResource() in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.MongoDB.Tests/ReplicaSet/MongoDbReplicaSetFunctionalTests.cs:line 59\n--- End of stack trace from previous location ---",
+      "standard_output": "| [2026-11-02T05:33:29] Aspire.Hosting.DistributedApplication Information: Aspire AppHost version: 17.0.0-ci\n| [2026-11-02T05:33:29] Aspire.Hosting.DistributedApplication Information: Distributed application starting.\n| [2026-11-02T05:33:29] Aspire.Hosting.DistributedApplication Information: Application host directory is: /home/runner/work/aspire/aspire/tests/Aspire.Hosting.TestUtilities\n| [2026-11-02T05:33:29] Aspire.Hosting.DeveloperCertificateService Debug: Developer certificate HTTPS/TLS termination support: True\n| [2026-11-02T05:33:29] Aspire.Hosting.Cli.CliOrphanDetector Debug: No CLI process ID configured. Orphan detection disabled.\n| [2026-11-02T05:33:29] Aspire.Hosting.Cli.BackchannelService Debug: Backchannel socket path was not specified.\n| [2026-11-02T05:33:29] Aspire.Hosting.Backchannel.AuxiliaryBackchannelService Debug: Starting auxiliary backchannel service on socket path: /home/runner/.aspire/cli/bch/KfshLkY6TmIhCo48Ocy.4125\n| [2026-11-02T05:33:29] Aspire.Hosting.Backchannel.AuxiliaryBackchannelService Debug: Auxiliary backchannel listening on /home/runner/.aspire/cli/bch/KfshLkY6TmIhCo48Ocy.4125\n| [2026-11-02T05:33:29] Aspire.Hosting.Devcontainers.Codespaces.CodespacesResourceUrlRewriterService Trace: Not running in Codespaces, skipping URL rewriting.\n| [2026-11-02T05:33:29] Aspire.Hosting.Dcp.DcpHost Debug: Prepared DCP TLS certificate files for thumbprint 53C1C5B3420132807B6B324A59543FACF2B2F21A.\n| [2026-11-02T05:33:29] Aspire.Hosting.FileSystemService Debug: Allocated temporary directory: /tmp/aspire-dcpy3eMCB\n| [2026-11-02T05:33:29] Aspire.Hosting.Dcp.DcpHost Information: Starting DCP with arguments: start-apiserver --monitor 4125 --detach --kubeconfig \"/tmp/aspire-dcpy3eMCB/kubeconfig\" --tls-cert-thumbprint \"53C1C5B3420132807B6B324A59543FACF2B2F21A\" --tls-cert-file \"/home/runner/.aspire/dev-certs/https/49CB29E8FECF6E6D631499F1C8BAB4C89C5CE6879572861A9FF8A21A752BBB47.crt\" --tls-key-file \"/home/runner/.aspire/dev-certs/https/49CB29E8FECF6E6D631499F1C8BAB4C89C5CE6879572861A9FF8A21A752BBB47.key\"\n| [2026-11-02T05:33:29] Aspire.Hosting.Dcp.DcpExecutor Debug: Preparing services. Ports randomized: True\n| [2026-11-02T05:33:29] Aspire.Hosting.ApplicationModel.ResourceNotificationService Trace: Version: 1 Resource mongo1/mongo1-nexjrswd update published: ResourceType = Container, CreationTimeStamp = (null), State = { Text = (null), Style = (null) }, IsHidden = False, HeathStatus = (null), ResourceReady = False, ExitCode = (null), Urls = {  }, EnvironmentVariables = {  }, Properties = {  }, HealthReports = { mongo1_check = (null) }, Commands = { start (Start) = Disabled stop (Stop) = Hidden restart (Restart) = Disabled }\n| [2026-11-02T05:33:29] Aspire.Hosting.ApplicationModel.ResourceNotificationService Trace: Version: 1 Resource rs0/rs0 update published: ResourceType = MongoDB Replica Set, CreationTimeStamp = 2026-11-02T05:33:29, State = { Text = Waiting, Style = (null) }, IsHidden = False, HeathStatus = (null), ResourceReady = False, ExitCode = (null), Urls = {  }, EnvironmentVariables = {  }, Properties = {  }, HealthReports = { rs0_check = (null) }, Commands = {  }\n| [2026-11-02T05:33:29] Aspire.Hosting.ApplicationModel.ResourceNotificationService Debug: Waiting for resource 'rs0' to match predicate.\n| [2026-11-02T05:33:29] Aspire.Hosting.ApplicationModel.ResourceNotificationService Trace: Version: 2 Resource rs0/rs0 update published: ResourceType = MongoDB Replica Set, CreationTimeStamp = 2026-11-02T05:33:29, State = { Text = Waiting, Style = (null) }, IsHidden = False, HeathStatus = (null), ResourceReady = False, ExitCode = (null), Urls = {  }, EnvironmentVariables = {  }, Properties = { resource.waitingFor = mongo1-nexjrswd }, HealthReports = { rs0_check = (null) }, Commands = {  }\n| [2026-11-02T05:33:29] Aspire.Hosting.Dcp.DcpExecutor Debug: Watching over DCP Endpoint resources.\n| [2026-11-02T05:33:29] Aspire.Hosting.Dcp.DcpExecutor Debug: Watching over DCP Service resources.\n| [2026-11-02T05:33:29] Aspire.Ho",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Container startup health failure matching prior MongoDB replica set flakiness; unrelated to CLI change."
+    }
+  ],
+  "causes": [
+    "aspire-hosting-mongodb-verifyreplicasetresource-flaky"
+  ]
+}
