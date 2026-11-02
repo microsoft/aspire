@@ -127,7 +127,9 @@ public static class TestResourceBuilderExtensions
             {
                 throw new IOException($"The testing output path for resource '{resourceName}' already exists in '{runOutputPath}'.");
             }
-            SocketPermissionHelper.CreateDirectory(resourceOutputPath, repairExisting: false);
+            // The reservation and existence check establish a new, owned directory.
+            // Reuse the shared directory helper to restore owner access removed by umask.
+            SocketPermissionHelper.CreateDirectory(resourceOutputPath, repairExisting: true);
         }
         finally
         {

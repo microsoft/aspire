@@ -11,6 +11,7 @@ using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Aspire.Shared;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.DotNet.RemoteExecutor;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using TestResult = Aspire.Hosting.ApplicationModel.TestResult;
@@ -463,6 +464,45 @@ public class TestingCollectorTests(ITestOutputHelper outputHelper)
             Assert.Equal(mode, File.GetUnixFileMode(first.OutputPath!));
             Assert.Equal(mode, File.GetUnixFileMode(second.OutputPath!));
         }
+    }
+
+    [Theory]
+    [InlineData("0100")]
+    [InlineData("0700")]
+    public void RestrictiveUmaskStillCreatesAccessibleOwnerOnlyResourceDirectories(string umask)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var runPath = Path.Combine(workspace.WorkspaceRoot.FullName, "test-output");
+        SocketPermissionHelper.CreateDirectory(runPath, repairExisting: false);
+        var launcher = Path.Combine(workspace.WorkspaceRoot.FullName, "with-umask");
+        File.WriteAllText(launcher, $"#!/bin/sh\numask {umask}\nexec \"$ASPIRE_TEST_CHILD_EXECUTABLE\" \"$@\"\n");
+        File.SetUnixFileMode(launcher, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+
+        // Change umask only in a child so parallel tests keep their process-wide permissions.
+        using var invocation = RemoteExecutor.Invoke(static runPath =>
+        {
+            using var builder = TestDistributedApplicationBuilder.Create();
+            builder.Configuration[KnownConfigNames.TestOutputPath] = runPath;
+            var resource = builder.AddResource(new ContainerResource("tests")).WithTesting();
+            var annotation = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
+
+            Assert.Equal(Path.Combine(runPath, "tests"), annotation.OutputPath);
+            if (!OperatingSystem.IsWindows())
+            {
+                Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute,
+                    File.GetUnixFileMode(annotation.OutputPath!));
+            }
+            Assert.Empty(Directory.GetFileSystemEntries(annotation.OutputPath!));
+        }, runPath, new RemoteInvokeOptions { Start = false });
+        var startInfo = invocation.Process.StartInfo;
+        startInfo.Environment["ASPIRE_TEST_CHILD_EXECUTABLE"] = startInfo.FileName;
+        startInfo.FileName = launcher;
+        invocation.Process.Start();
     }
 
     [Theory]

@@ -74,7 +74,10 @@ internal sealed class TestRunReporter
             {
                 throw new IOException($"The test output directory '{outputPath}' already exists.");
             }
-            CreatePrivateDirectory(outputPath, repairExisting: false, executionContext);
+            // Only a new, reserved path reaches this call. Reuse DirectoryHelper through
+            // SocketPermissionHelper to restore owner access removed by umask; later writes
+            // still validate the existing directory without repairing its permissions.
+            CreatePrivateDirectory(outputPath, repairExisting: true, executionContext);
         }
         finally
         {

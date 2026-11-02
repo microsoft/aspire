@@ -13,6 +13,7 @@ using Aspire.Cli.Testing;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
+using Microsoft.DotNet.RemoteExecutor;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using Spectre.Console;
@@ -38,6 +39,60 @@ public class TestRunReporterTests(ITestOutputHelper outputHelper)
         Assert.Null(summary["cliExitCode"]);
         Assert.Empty(summary["resources"]!.AsArray());
         Assert.Equal(["summary.json"], Directory.GetFiles(reporter.OutputPath).Select(Path.GetFileName));
+    }
+
+    [Theory]
+    [InlineData("0100")]
+    [InlineData("0700")]
+    public void RestrictiveUmaskStillCreatesAccessibleOwnerOnlyArtifacts(string umask)
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Unix umask does not apply on Windows.");
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var context = CreateContext(workspace);
+        Directory.CreateDirectory(context.AspireHomeDirectory.FullName);
+        var launcher = ProcessTestHelpers.CreateScript(workspace.WorkspaceRoot, "with-umask",
+            $"umask {umask}\nexec \"$ASPIRE_TEST_CHILD_EXECUTABLE\" \"$@\"", "");
+
+        // Change umask only in a child so parallel tests keep their process-wide permissions.
+        using var invocation = RemoteExecutor.Invoke(static directory =>
+        {
+            var context = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(directory));
+            var reporter = CreateReporter(context);
+
+            AssertPrivateDirectory(Path.GetDirectoryName(reporter.OutputPath)!);
+            AssertPrivateDirectory(reporter.OutputPath);
+            AssertPrivateFile(reporter.SummaryPath);
+            Assert.Equal("running", JsonNode.Parse(File.ReadAllText(reporter.SummaryPath))!["status"]!.GetValue<string>());
+
+            reporter.Complete(CommandResult.Success());
+
+            AssertPrivateFile(reporter.SummaryPath);
+            Assert.Equal("passed", JsonNode.Parse(File.ReadAllText(reporter.SummaryPath))!["status"]!.GetValue<string>());
+        }, workspace.Path, new RemoteInvokeOptions { Start = false });
+        var startInfo = invocation.Process.StartInfo;
+        startInfo.Environment["ASPIRE_TEST_CHILD_EXECUTABLE"] = startInfo.FileName;
+        startInfo.FileName = launcher;
+        invocation.Process.Start();
+    }
+
+    [Fact]
+    public void ExistingRunDirectoryPermissionsAreNotRepairedDuringPersistence()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var reporter = CreateReporter(CreateContext(workspace));
+        var mode = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute | UnixFileMode.GroupRead;
+        File.SetUnixFileMode(reporter.OutputPath, mode);
+
+        Assert.Throws<IOException>(() => reporter.Complete(CommandResult.Success()));
+
+        Assert.Equal(mode, File.GetUnixFileMode(reporter.OutputPath));
+        Assert.Equal("running", JsonNode.Parse(File.ReadAllText(reporter.SummaryPath))!["status"]!.GetValue<string>());
     }
 
     [Fact]
