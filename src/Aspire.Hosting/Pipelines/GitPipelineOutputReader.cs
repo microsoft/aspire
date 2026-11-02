@@ -270,6 +270,8 @@ internal sealed class GitPipelineOutputReader(string repositoryRoot, IProcessRun
     private static bool TryParseObjectId(ReadOnlySpan<char> id, out ReadOnlyMemory<byte> hash)
     {
         hash = default;
+        // Full object IDs use 40 hexadecimal digits for SHA-1 or 64 for SHA-256.
+        // https://github.com/git/git/blob/v2.56.0/Documentation/technical/hash-function-transition.adoc
         if (id.Length is not (40 or 64) || id.IndexOfAnyExcept(s_hexDigits) >= 0)
         {
             return false;
@@ -341,6 +343,8 @@ internal sealed class GitPipelineOutputReader(string repositoryRoot, IProcessRun
     internal sealed record IndexEntry(string Mode, ReadOnlyMemory<byte> Hash, char Stage, char Tag, string Path)
     {
         internal bool IsReusable => Tag == 'H';
+        // Git index modes: 100644 regular non-executable, 100755 regular executable, 160000 gitlink (submodule).
+        // https://github.com/git/git/blob/v2.56.0/Documentation/gitformat-index.adoc
         internal bool IsRegularFile => Mode is "100644" or "100755";
         internal bool IsGitLink => Mode == "160000";
         internal bool IsMerged => Stage == '0';
