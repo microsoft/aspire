@@ -59,7 +59,7 @@ suite('Node Debugger Deno AppHost inspector attach (js-debug)', function () {
             pendingStartCancellations.add(disposable);
             return { dispose: () => pendingStartCancellations.delete(disposable) };
         },
-        trackPendingResourceCleanup: () => { },
+        trackPendingResourceCleanup: (_name: string, cleanup: () => Promise<void>) => { void cleanup().catch(() => { }); },
     } as unknown as AspireDebugSession;
 
     suiteSetup(async () => {
@@ -297,8 +297,7 @@ suite('Node Debugger Deno AppHost inspector attach (js-debug)', function () {
         assert.strictEqual(await started, false);
     });
 
-    test('stops a pending inspector attach when the owning Aspire session stops', async () => {
-        const name = 'owning-session-stopped';
+    function createOwningSession(): AspireDebugSession {
         const parentSession = {
             id: 'owning-aspire-session',
             type: 'aspire',
@@ -312,12 +311,17 @@ suite('Node Debugger Deno AppHost inspector attach (js-debug)', function () {
         // The synthetic parent is not a real VS Code session; every other stop goes to VS Code.
         sinon.stub(vscode.debug, 'stopDebugging').callsFake(session =>
             session?.id === parentSession.id ? Promise.resolve() : stopDebugging(session));
-        const owningSession = new AspireDebugSession(
+        return new AspireDebugSession(
             parentSession as unknown as vscode.DebugSession,
             {} as any,
             {} as any,
             { isDebugConfigEnvironmentLoggingEnabled: () => false } as any,
             () => { });
+    }
+
+    test('stops a pending inspector attach when the owning Aspire session stops', async () => {
+        const name = 'owning-session-stopped';
+        const owningSession = createOwningSession();
         const debugConfig = await createAppHostAttachConfiguration(name, undefined, owningSession);
         const fixtureStarted = waitForFixture();
 
@@ -339,5 +343,23 @@ suite('Node Debugger Deno AppHost inspector attach (js-debug)', function () {
         assert.ok(fixture.isClosed(), 'The owning session finished stopping while the Deno AppHost was still running');
         assert.ok(!fixture.lines.includes('attached'));
         assert.strictEqual(await started, false);
+    });
+
+    test('stops the owning Aspire session promptly after a launch that never spawned the Deno AppHost', async () => {
+        const name = 'missing-executable';
+        const owningSession = createOwningSession();
+        const debugConfig = await createAppHostAttachConfiguration(name, undefined, owningSession);
+        debugConfig.runtimeExecutable = path.join(tempDir, 'missing-deno');
+        const launchResponse = captureLaunchResponse(name);
+
+        const pendingStart = owningSession.beginPendingDebugSessionStart(name);
+        // VS Code reports the missing executable in an error dialog, which the test host refuses by rejecting.
+        const started = await vscode.debug.startDebugging(undefined, debugConfig).then(result => result, () => false);
+        pendingStart.dispose();
+        assert.strictEqual(started, false);
+        assert.strictEqual((await launchResponse).success, false);
+
+        // There is no runtime to wait for, so cleanup must not hold shutdown until its stop budget times out.
+        await owningSession.stopDebugging();
     });
 });

@@ -12,7 +12,7 @@ suite('Node Debugger Tests', () => {
     const fakeAspireDebugSession = {
         registerResourceCleanup: (disposable: vscode.Disposable) => resourceCleanups.push(disposable),
         registerPendingStartCancellation: () => ({ dispose: () => { } }),
-        trackPendingResourceCleanup: () => { },
+        trackPendingResourceCleanup: (_name: string, cleanup: () => Promise<void>) => { void cleanup().catch(() => { }); },
     } as unknown as AspireDebugSession;
 
     teardown(() => {
@@ -263,6 +263,41 @@ suite('Node Debugger Tests', () => {
 
         assert.deepStrictEqual(killed, [21]);
         assert.deepStrictEqual(result, { stopped: [], running: [21] });
+    });
+
+    test('does not wait for a Deno AppHost once the launch can no longer spawn one', async () => {
+        const argument = '--inspect-wait=127.0.0.1:1234';
+        const clock = createFakeClock();
+        let spawnSettled = false;
+        const result = await stopInspectorWaitingProcesses(argument, createListing([[]], argument), clock, {
+            launcherPid: 10,
+            kill: () => { },
+            isSpawnSettled: () => spawnSettled,
+        });
+        // Still waiting while js-debug could spawn it: the whole settle window.
+        assert.deepStrictEqual(result, { stopped: [], running: [] });
+        assert.strictEqual(clock.now(), inspectorWaitingProcessSettleTimeoutMs);
+
+        // After js-debug answered the launch request (for example a missing executable), one listing is enough.
+        spawnSettled = true;
+        const settledClock = createFakeClock();
+        assert.deepStrictEqual(
+            await stopInspectorWaitingProcesses(argument, createListing([[]], argument), settledClock, { launcherPid: 10, kill: () => { }, isSpawnSettled: () => spawnSettled }),
+            { stopped: [], running: [] });
+        assert.deepStrictEqual(settledClock.sleeps, []);
+    });
+
+    test('a retried cleanup stops a Deno AppHost an earlier attempt could not confirm', async () => {
+        const argument = '--inspect-wait=127.0.0.1:1234';
+        const killed: number[] = [];
+        // The shim is gone and deno.exe is no longer under the extension host; only the earlier attempt knows it.
+        const result = await stopInspectorWaitingProcesses(argument, createShimListing([
+            { shim: false, deno: true },
+            { shim: false, deno: false },
+        ], argument), createFakeClock(), { launcherPid: 10, kill: pid => killed.push(pid), knownProcessIds: [21], isSpawnSettled: () => true });
+
+        assert.deepStrictEqual(killed, [21]);
+        assert.deepStrictEqual(result, { stopped: [21], running: [] });
     });
 
     // A Windows listing where a deno.cmd shim (pid 20, a child of the extension host, pid 10) started deno.exe (pid 21).

@@ -139,14 +139,24 @@ export interface InspectorWaitingProcessStopResult {
  * a later listing no longer shows any, so a runtime that js-debug spawns just after cancellation is still
  * found and a stop is only reported once it is observed. Each listing also checks the processes already
  * signalled and their descendants, so a deno.exe left behind by a stopped deno.cmd shim is still found.
+ * Once `isSpawnSettled` reports that the runtime can no longer be spawned, an empty listing ends the search.
  */
 export async function stopInspectorWaitingProcesses(
     inspectorArgument: string,
     query: LaunchedChildProcessQuery,
     clock: LaunchedChildProcessClock = systemLaunchedChildProcessClock,
-    options: { readonly launcherPid?: number; readonly settleTimeoutMs?: number; readonly kill?: (pid: number) => void } = {},
+    options: {
+        readonly launcherPid?: number;
+        readonly settleTimeoutMs?: number;
+        readonly kill?: (pid: number) => void;
+        /** Processes an earlier attempt signalled but could not confirm exited. */
+        readonly knownProcessIds?: readonly number[];
+        /** Returns true once nothing can spawn the runtime any more, so an empty listing means there is none. */
+        readonly isSpawnSettled?: () => boolean;
+    } = {},
 ): Promise<InspectorWaitingProcessStopResult> {
     const kill = options.kill ?? ((pid: number) => process.kill(pid));
+    const knownProcessIds = options.knownProcessIds ?? [];
     const deadline = clock.now() + (options.settleTimeoutMs ?? inspectorWaitingProcessSettleTimeoutMs);
     const signalled = new Set<number>();
     let running: number[] = [];
@@ -154,14 +164,14 @@ export async function stopInspectorWaitingProcesses(
 
     while (true) {
         try {
-            running = await findInspectorWaitingProcessIds(inspectorArgument, query, options.launcherPid ?? process.pid, [...signalled]);
+            running = await findInspectorWaitingProcessIds(inspectorArgument, query, options.launcherPid ?? process.pid, [...knownProcessIds, ...signalled]);
         }
         catch {
             // Without a listing nothing can be confirmed; anything already signalled is still unconfirmed.
             running = [...signalled];
         }
 
-        if (signalled.size > 0 && running.length === 0) {
+        if (running.length === 0 && (signalled.size > 0 || options.isSpawnSettled?.() === true)) {
             break;
         }
 
@@ -229,10 +239,19 @@ export function registerDenoAppHostInspectorCleanup(
     let rootSession: vscode.DebugSession | undefined;
     let launchRequestedAt: number | undefined;
     let launchSucceeded = false;
+    // js-debug spawns the runtime while it handles the launch request, so once it has answered (or the
+    // adapter has exited) a runtime that is not listed was never started.
+    let launchFinished = false;
+    let unconfirmedProcessIds: readonly number[] = [];
     let pendingStartCancelled = false;
     let cleanedUp = false;
-    const disposables: vscode.Disposable[] = [];
-    const dispose = () => disposables.splice(0).forEach(disposable => disposable.dispose());
+    let pendingStartCancellation: vscode.Disposable | undefined;
+    let trackerFactory: vscode.Disposable | undefined;
+    // The tracker stays registered after cleanup starts: cleanup still needs to see the launch response.
+    const dispose = () => {
+        pendingStartCancellation?.dispose();
+        trackerFactory?.dispose();
+    };
 
     const stopRootSession = (session: vscode.DebugSession) => {
         Promise.resolve(vscode.debug.stopDebugging(session)).catch(error => {
@@ -241,46 +260,57 @@ export function registerDenoAppHostInspectorCleanup(
     };
 
     const stopUnattachedRuntime = () => {
-        dispose();
+        pendingStartCancellation?.dispose();
+        if (!rootSession) {
+            trackerFactory?.dispose();
+        }
+
         if (cleanedUp || !rootSession || launchSucceeded) {
             return;
         }
 
         cleanedUp = true;
         extensionLogOutputChannel.info(`Stopping the Deno AppHost that was waiting for a debugger at ${inspectorAddress}.`);
-        const cleanup = stopInspectorWaitingProcesses(inspectorArgument, query, clock).then(({ stopped, running }) => {
-            if (stopped.length > 0) {
-                extensionLogOutputChannel.info(`Stopped Deno AppHost process ${stopped.join(', ')} that never attached to the debugger.`);
-            }
+        const runCleanup = () => {
+            const cleanup = stopInspectorWaitingProcesses(inspectorArgument, query, clock, {
+                knownProcessIds: unconfirmedProcessIds,
+                isSpawnSettled: () => launchFinished,
+            }).then(({ stopped, running }) => {
+                unconfirmedProcessIds = running;
+                if (stopped.length > 0) {
+                    extensionLogOutputChannel.info(`Stopped Deno AppHost process ${stopped.join(', ')} that never attached to the debugger.`);
+                }
 
-            if (running.length > 0) {
-                throw new Error(`Deno AppHost process ${running.join(', ')} waiting for a debugger at ${inspectorAddress} was still running after cleanup.`);
-            }
+                if (running.length > 0) {
+                    throw new Error(`Deno AppHost process ${running.join(', ')} waiting for a debugger at ${inspectorAddress} was still running after cleanup.`);
+                }
 
-            if (stopped.length === 0) {
-                extensionLogOutputChannel.info(`No Deno AppHost process waiting for a debugger at ${inspectorAddress} was found.`);
-            }
-        });
-        void cleanup.catch(error => {
-            extensionLogOutputChannel.warn(`Failed to stop the Deno AppHost waiting for a debugger at ${inspectorAddress}: ${error instanceof Error ? error.message : error}`);
-        });
+                if (stopped.length === 0) {
+                    extensionLogOutputChannel.info(`No Deno AppHost process waiting for a debugger at ${inspectorAddress} was found.`);
+                }
+            });
+            void cleanup.catch(error => {
+                extensionLogOutputChannel.warn(`Failed to stop the Deno AppHost waiting for a debugger at ${inspectorAddress}: ${error instanceof Error ? error.message : error}`);
+            });
+            return cleanup;
+        };
         // The owning session's shutdown waits for the runtime to exit, so a workspace deletion or restart
-        // that follows it does not race the still-running process.
-        launchOptions.debugSession.trackPendingResourceCleanup(rootSession.name, cleanup);
+        // that follows it does not race the still-running process. A failed cleanup runs again on the next shutdown.
+        launchOptions.debugSession.trackPendingResourceCleanup(rootSession.name, runCleanup);
     };
 
-    disposables.push(launchOptions.debugSession.registerPendingStartCancellation({
+    pendingStartCancellation = launchOptions.debugSession.registerPendingStartCancellation({
         dispose: () => {
             pendingStartCancelled = true;
             if (rootSession) {
                 stopRootSession(rootSession);
             }
         }
-    }));
+    });
 
     // Use the adapter's own messages rather than onDidTerminateDebugSession: VS Code does not report a
     // session whose launch request failed as terminated.
-    disposables.push(vscode.debug.registerDebugAdapterTrackerFactory('pwa-node', {
+    trackerFactory = vscode.debug.registerDebugAdapterTrackerFactory('pwa-node', {
         createDebugAdapterTracker: session => {
             if (rootSession || !isRootSession(session)) {
                 return undefined;
@@ -304,6 +334,7 @@ export function registerDenoAppHostInspectorCleanup(
                         return;
                     }
 
+                    launchFinished = true;
                     if (message.success === true) {
                         launchSucceeded = true;
                         dispose();
@@ -321,9 +352,13 @@ export function registerDenoAppHostInspectorCleanup(
                     stopUnattachedRuntime();
                 },
                 onWillStopSession: stopUnattachedRuntime,
+                onExit: () => {
+                    launchFinished = true;
+                    dispose();
+                },
             };
         }
-    }));
+    });
     launchOptions.debugSession.registerResourceCleanup({ dispose: stopUnattachedRuntime });
 }
 

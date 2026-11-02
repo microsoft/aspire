@@ -3575,7 +3575,7 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
             { isDebugConfigEnvironmentLoggingEnabled: () => false } as any,
             () => { });
         let finishCleanup!: () => void;
-        aspireDebugSession.trackPendingResourceCleanup('deno', new Promise<void>(resolve => { finishCleanup = resolve; }));
+        aspireDebugSession.trackPendingResourceCleanup('deno', () => new Promise<void>(resolve => { finishCleanup = resolve; }));
 
         let stopped = false;
         const shutdown = aspireDebugSession.stopDebugging().then(() => { stopped = true; });
@@ -3587,7 +3587,7 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         assert.strictEqual(stopped, true);
     });
 
-    test('stopDebugging reports resource cleanup that could not confirm the process exited', async () => {
+    test('stopDebugging keeps reporting and retrying resource cleanup until the process is confirmed gone', async () => {
         sinon.stub(vscode.debug, 'stopDebugging').resolves();
         const aspireDebugSession = new AspireDebugSession(
             createParentDebugSessionForCleanup() as unknown as vscode.DebugSession,
@@ -3595,12 +3595,21 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
             {} as any,
             { isDebugConfigEnvironmentLoggingEnabled: () => false } as any,
             () => { });
-        let failCleanup!: (error: Error) => void;
-        aspireDebugSession.trackPendingResourceCleanup('deno', new Promise<void>((_, reject) => { failCleanup = reject; }));
+        let runtimeAlive = true;
+        const cleanup = sinon.stub().callsFake(() => runtimeAlive
+            ? Promise.reject(new Error('Deno AppHost process 21 was still running after cleanup.'))
+            : Promise.resolve());
+        aspireDebugSession.trackPendingResourceCleanup('deno', cleanup);
+        await new Promise(resolve => setImmediate(resolve));
 
-        const shutdown = aspireDebugSession.stopDebugging();
-        failCleanup(new Error('Deno AppHost process 21 was still running after cleanup.'));
-        await assert.rejects(shutdown, /Deno AppHost process 21 was still running after cleanup\./);
+        // Two consecutive stops while the runtime stays alive: each runs the cleanup again and reports it.
+        await assert.rejects(aspireDebugSession.stopDebugging(), /Deno AppHost process 21 was still running after cleanup\./);
+        await assert.rejects(aspireDebugSession.stopDebugging(), /Deno AppHost process 21 was still running after cleanup\./);
+        assert.strictEqual(cleanup.callCount, 3);
+
+        runtimeAlive = false;
+        await aspireDebugSession.stopDebugging();
+        assert.strictEqual(cleanup.callCount, 4);
     });
 
     test('stopDebugging cancels pending launch work before awaiting its completion', async () => {
