@@ -56,6 +56,10 @@
     background: var(--aspire-control-background);
 }
 
+.overview-card[hidden] {
+    display: none;
+}
+
 /* Spans are computed per card from its content (see OverviewCardLayout) and passed in as custom properties. */
 .overview-grid > .overview-card {
     grid-column: span var(--overview-span, 12);
