@@ -269,6 +269,7 @@ internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, ILog
         probe.FileName = executable;
         probe.ArgumentList.Clear();
         probe.ArgumentList.Add("-V");
+        var stopwatch = Stopwatch.StartNew();
         var result = await ProcessCaptureRunner.RunAsync<string?>(
             probe, TimeSpan.FromSeconds(5),
             async (process, token) =>
@@ -280,6 +281,8 @@ internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, ILog
                 return (await stdout + await stderr).Trim();
             },
             () => null, NullLogger.Instance, cancellationToken);
+        logger.LogDebug("OpenSSH verification completed after {Elapsed}; exit code {ExitCode}, failure {Failure}, cancelled {Cancelled}.",
+            stopwatch.Elapsed, result.ExitCode, result.FailureKind, result.Cancelled);
         cancellationToken.ThrowIfCancellationRequested();
         return !result.Cancelled && result.FailureKind is null && result.ExitCode == 0
             && result.Capture?.StartsWith("OpenSSH_", StringComparison.Ordinal) is true ? executable : null;
