@@ -1,12 +1,20 @@
 import * as assert from 'assert';
+import * as vscode from 'vscode';
 import { getSupportedCapabilities } from '../capabilities';
 import { AspireDebugSession } from '../debugger/AspireDebugSession';
-import { getAppHostInspectorAttachTimeoutMs, nodeDebuggerExtension } from '../debugger/languages/node';
+import { denoAppHostInspectorAttachTimeoutMs, hasCommandLineArgument, nodeDebuggerExtension } from '../debugger/languages/node';
 import { launchMethodDirect, launchMethodPackageManager } from '../debugger/languages/javascriptRuntime';
 import { AspireResourceExtendedDebugConfiguration, NodeLaunchConfiguration } from '../dcp/types';
 
 suite('Node Debugger Tests', () => {
-    const fakeAspireDebugSession = {} as AspireDebugSession;
+    const resourceCleanups: vscode.Disposable[] = [];
+    const fakeAspireDebugSession = {
+        registerResourceCleanup: (disposable: vscode.Disposable) => resourceCleanups.push(disposable)
+    } as unknown as AspireDebugSession;
+
+    teardown(() => {
+        resourceCleanups.splice(0).forEach(disposable => disposable.dispose());
+    });
 
     test('advertises versioned Deno AppHost debugging support', () => {
         assert.ok(getSupportedCapabilities().includes('deno.v1'));
@@ -100,52 +108,59 @@ suite('Node Debugger Tests', () => {
         assert.strictEqual(debugConfig.runtimeExecutable, 'deno');
         assert.deepStrictEqual(debugConfig.runtimeArgs, ['run', `--inspect-wait=127.0.0.1:${inspectorPort}`, '-A', '--unstable-sloppy-imports', '/workspace/app/apphost.mts']);
         // js-debug's 10s default attach timeout expired on slow Windows runners and left Deno blocked
-        // in --inspect-wait; the attach must be allowed the CLI's AppHost startup budget, which is the
-        // 24h debug budget unless ASPIRE_CLI_START_TIMEOUT is configured.
-        assert.strictEqual(debugConfig.timeout, getAppHostInspectorAttachTimeoutMs(undefined, process.env));
-        assert.ok((debugConfig.timeout as number) > 10000);
+        // in --inspect-wait. The attach gets a bounded 120s budget that is independent of the CLI's
+        // 24h debug startup budget.
+        assert.strictEqual(debugConfig.timeout, denoAppHostInspectorAttachTimeoutMs);
+        assert.strictEqual(denoAppHostInspectorAttachTimeoutMs, 120000);
     });
 
-    test('waits for the Deno AppHost inspector as long as the launch configuration AppHost startup timeout', async () => {
+    test('preserves an explicitly configured debugger timeout for the Deno AppHost inspector attach', async () => {
         const launchConfig: NodeLaunchConfiguration = {
             type: 'node',
             runtime_executable: 'deno',
             working_directory: '/workspace/app'
         };
-        const debugConfig = createDebugConfig();
-        // The root launch configuration env reaches the CLI, not the AppHost child configuration.
-        const debugSession = { configuration: { env: { ASPIRE_CLI_START_TIMEOUT: '300' } } } as unknown as AspireDebugSession;
+        const debugConfig = { ...createDebugConfig(), timeout: 300000 };
 
         await nodeDebuggerExtension.createDebugSessionConfigurationCallback!(
             launchConfig,
             ['run', '-A', '/workspace/app/apphost.mts'],
             [],
-            { debug: true, runId: '1', debugSessionId: '1', isApphost: true, debugSession },
+            { debug: true, runId: '1', debugSessionId: '1', isApphost: true, debugSession: fakeAspireDebugSession },
             debugConfig);
 
         assert.strictEqual(debugConfig.timeout, 300000);
     });
 
-    test('computes the Deno AppHost inspector attach timeout from the CLI startup timeout', () => {
-        // Debug sessions give the CLI a 24h startup budget unless one is configured.
-        assert.strictEqual(getAppHostInspectorAttachTimeoutMs(undefined, undefined, 'linux'), 86400000);
-        assert.strictEqual(getAppHostInspectorAttachTimeoutMs({}, {}, 'linux'), 86400000);
-        assert.strictEqual(getAppHostInspectorAttachTimeoutMs(undefined, { ASPIRE_CLI_START_TIMEOUT: '' }, 'linux'), 86400000);
-        assert.strictEqual(getAppHostInspectorAttachTimeoutMs(undefined, { ASPIRE_CLI_START_TIMEOUT: '300' }, 'linux'), 300000);
-        assert.strictEqual(getAppHostInspectorAttachTimeoutMs({ ASPIRE_CLI_START_TIMEOUT: ' 45 ' }, { ASPIRE_CLI_START_TIMEOUT: '300' }, 'linux'), 45000);
-        assert.strictEqual(getAppHostInspectorAttachTimeoutMs({ ASPIRE_CLI_START_TIMEOUT: 600 }, undefined, 'linux'), 600000);
-        // Values the CLI rejects (including an explicitly empty launch value) fall back to its default
-        // rather than producing a zero/NaN timeout, which js-debug would treat as "never time out" or an immediate failure.
-        assert.strictEqual(getAppHostInspectorAttachTimeoutMs({ ASPIRE_CLI_START_TIMEOUT: '' }, { ASPIRE_CLI_START_TIMEOUT: '300' }, 'linux'), 120000);
-        assert.strictEqual(getAppHostInspectorAttachTimeoutMs({ ASPIRE_CLI_START_TIMEOUT: '0' }, undefined, 'linux'), 120000);
-        assert.strictEqual(getAppHostInspectorAttachTimeoutMs({ ASPIRE_CLI_START_TIMEOUT: '-5' }, undefined, 'linux'), 120000);
-        assert.strictEqual(getAppHostInspectorAttachTimeoutMs({ ASPIRE_CLI_START_TIMEOUT: 'abc' }, undefined, 'linux'), 120000);
+    test('does not change the debugger timeout for non-Deno package manager launches', async () => {
+        const launchConfig: NodeLaunchConfiguration = {
+            type: 'node',
+            runtime_executable: 'npm',
+            working_directory: '/workspace/app'
+        };
+        const debugConfig = createDebugConfig();
+
+        await nodeDebuggerExtension.createDebugSessionConfigurationCallback!(
+            launchConfig,
+            ['run', 'dev'],
+            [],
+            { debug: true, runId: '1', debugSessionId: '1', isApphost: true, debugSession: fakeAspireDebugSession },
+            debugConfig);
+
+        assert.strictEqual(debugConfig.timeout, undefined);
     });
 
-    test('resolves the Deno AppHost inspector attach timeout case-insensitively on Windows only', () => {
-        assert.strictEqual(getAppHostInspectorAttachTimeoutMs(undefined, { aspire_cli_start_timeout: '300' }, 'win32'), 300000);
-        assert.strictEqual(getAppHostInspectorAttachTimeoutMs({ Aspire_Cli_Start_Timeout: '45' }, { ASPIRE_CLI_START_TIMEOUT: '300' }, 'win32'), 45000);
-        assert.strictEqual(getAppHostInspectorAttachTimeoutMs(undefined, { aspire_cli_start_timeout: '300' }, 'linux'), 86400000);
+    test('identifies the runtime waiting for the Deno AppHost inspector by its exact inspector argument', () => {
+        const argument = '--inspect-wait=127.0.0.1:1234';
+        const linuxProcess = (args: string[]) => ({ pid: 2, parentPid: 1, executable: '/usr/bin/deno', command: args.join(' '), commandLineArguments: args });
+        const windowsProcess = (command: string) => ({ pid: 2, parentPid: 1, executable: 'C:\\deno\\deno.exe', command });
+
+        assert.strictEqual(hasCommandLineArgument(linuxProcess(['deno', 'run', argument, 'apphost.mts']), argument), true);
+        assert.strictEqual(hasCommandLineArgument(linuxProcess(['deno', 'run', `${argument}5`, 'apphost.mts']), argument), false);
+        assert.strictEqual(hasCommandLineArgument(windowsProcess(`"C:\\deno\\deno.exe" run ${argument} apphost.mts`), argument), true);
+        assert.strictEqual(hasCommandLineArgument(windowsProcess(`"C:\\deno\\deno.exe" run "${argument}"`), argument), true);
+        assert.strictEqual(hasCommandLineArgument(windowsProcess(`"C:\\deno\\deno.exe" run ${argument}5 apphost.mts`), argument), false);
+        assert.strictEqual(hasCommandLineArgument(windowsProcess(`"C:\\deno\\deno.exe" run x${argument} apphost.mts`), argument), false);
     });
 
     test('does not open the Deno inspector when running an AppHost without debugging', async () => {

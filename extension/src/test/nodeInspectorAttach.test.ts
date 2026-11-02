@@ -1,0 +1,230 @@
+import * as assert from 'assert';
+import * as fs from 'fs';
+import * as net from 'net';
+import * as os from 'os';
+import * as path from 'path';
+import * as vscode from 'vscode';
+import { AspireDebugSession } from '../debugger/AspireDebugSession';
+import { denoAppHostInspectorAttachTimeoutMs, nodeDebuggerExtension } from '../debugger/languages/node';
+import { AspireResourceExtendedDebugConfiguration, NodeLaunchConfiguration } from '../dcp/types';
+
+// Stands in for a Deno AppHost started with --inspect-wait: it opens its inspector only when the test
+// tells it to, then blocks until a debugger attaches. It reports progress over a control socket so the
+// test can synchronize on real events instead of sleeping.
+const inspectorFixture = `
+const inspector = require('inspector');
+const net = require('net');
+const controlPort = Number(process.argv[2]);
+const inspectorPort = Number(/:(\\d+)$/.exec(process.argv[3])[1]);
+const control = net.connect(controlPort, '127.0.0.1', () => control.write('spawned ' + process.pid + '\\n'));
+control.setEncoding('utf8');
+control.on('data', data => {
+    if (data.includes('open-inspector')) {
+        inspector.open(inspectorPort, '127.0.0.1', true);
+        control.end('attached\\n');
+    }
+});
+`;
+
+interface FixtureProcess {
+    pid: number;
+    socket: net.Socket;
+    lines: string[];
+    // Before it reports "attached" the fixture never closes its control socket, so closure then means the process exited.
+    closed: Promise<void>;
+    waitForLine(line: string): Promise<void>;
+}
+
+// Drives VS Code's built-in js-debug with the attach configuration produced for a Deno AppHost, so the
+// inspector readiness timeout is exercised by the same adapter that enforces it in production.
+suite('Node Debugger Deno AppHost inspector attach (js-debug)', function () {
+    this.timeout(60000);
+
+    let tempDir: string;
+    let fixturePath: string;
+    let controlServer: net.Server;
+    let controlPort: number;
+    let nextFixture: ((fixture: FixtureProcess) => void) | undefined;
+    const disposables: vscode.Disposable[] = [];
+    const resourceCleanups: vscode.Disposable[] = [];
+    const aspireDebugSession = {
+        registerResourceCleanup: (disposable: vscode.Disposable) => resourceCleanups.push(disposable)
+    } as unknown as AspireDebugSession;
+
+    suiteSetup(async () => {
+        tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-inspector-attach-'));
+        fixturePath = path.join(tempDir, 'inspector-fixture.js');
+        fs.writeFileSync(fixturePath, inspectorFixture);
+
+        controlServer = net.createServer(socket => {
+            socket.setEncoding('utf8');
+            const lines: string[] = [];
+            const waiters: { line: string; resolve: () => void }[] = [];
+            const closed = new Promise<void>(resolve => socket.once('close', () => resolve()));
+            let buffer = '';
+            let fixture: FixtureProcess | undefined;
+            socket.on('data', (data: string) => {
+                buffer += data;
+                let newline: number;
+                while ((newline = buffer.indexOf('\n')) >= 0) {
+                    const line = buffer.slice(0, newline);
+                    buffer = buffer.slice(newline + 1);
+                    lines.push(line);
+                    for (const waiter of waiters.filter(w => w.line === line)) {
+                        waiter.resolve();
+                    }
+
+                    if (!fixture && line.startsWith('spawned ')) {
+                        fixture = {
+                            pid: Number(line.slice('spawned '.length)),
+                            socket,
+                            lines,
+                            closed,
+                            waitForLine: (expected: string) => lines.includes(expected)
+                                ? Promise.resolve()
+                                : new Promise<void>(resolve => waiters.push({ line: expected, resolve })),
+                        };
+                        nextFixture?.(fixture);
+                    }
+                }
+            });
+            socket.on('error', () => { /* the fixture may be killed mid-write */ });
+        });
+        await new Promise<void>(resolve => controlServer.listen(0, '127.0.0.1', resolve));
+        controlPort = (controlServer.address() as net.AddressInfo).port;
+    });
+
+    suiteTeardown(async () => {
+        await new Promise<void>(resolve => controlServer.close(() => resolve()));
+        fs.rmSync(tempDir, { recursive: true, force: true });
+    });
+
+    teardown(async () => {
+        nextFixture = undefined;
+        disposables.splice(0).forEach(d => d.dispose());
+        await vscode.debug.stopDebugging();
+        resourceCleanups.splice(0).forEach(d => d.dispose());
+    });
+
+    async function createAppHostAttachConfiguration(name: string, configuredTimeout?: number): Promise<AspireResourceExtendedDebugConfiguration> {
+        const launchConfig: NodeLaunchConfiguration = { type: 'node', runtime_executable: 'deno', working_directory: tempDir };
+        const debugConfig: AspireResourceExtendedDebugConfiguration = {
+            runId: name,
+            debugSessionId: name,
+            type: 'node',
+            name,
+            request: 'launch',
+            ...(configuredTimeout === undefined ? {} : { timeout: configuredTimeout }),
+        };
+
+        await nodeDebuggerExtension.createDebugSessionConfigurationCallback!(
+            launchConfig,
+            ['run', '-A', path.join(tempDir, 'apphost.mts')],
+            [],
+            { debug: true, runId: name, debugSessionId: name, isApphost: true, debugSession: aspireDebugSession },
+            debugConfig);
+
+        // Keep js-debug's attach settings and the runtime's --inspect-wait argument from the Deno AppHost
+        // configuration, but run the controllable fixture instead of deno so the test decides when (or
+        // whether) the inspector becomes ready.
+        const inspectorArgument = debugConfig.runtimeArgs.find((arg: string) => arg.startsWith('--inspect-wait='));
+        assert.strictEqual(inspectorArgument, `--inspect-wait=127.0.0.1:${debugConfig.attachSimplePort}`);
+        debugConfig.runtimeExecutable = 'node';
+        debugConfig.runtimeArgs = [fixturePath, String(controlPort), inspectorArgument];
+        return debugConfig;
+    }
+
+    function waitForFixture(): Promise<FixtureProcess> {
+        return new Promise(resolve => { nextFixture = resolve; });
+    }
+
+    // js-debug reports launch failures as a DAP error response whose user-facing text is in body.error.format.
+    function captureLaunchResponse(name: string): Promise<{ success: boolean; error?: string }> {
+        return new Promise(resolve => {
+            disposables.push(vscode.debug.registerDebugAdapterTrackerFactory('pwa-node', {
+                createDebugAdapterTracker: session => session.configuration.name !== name ? undefined : {
+                    onDidSendMessage: (message: { type?: string; command?: string; success?: boolean; message?: string; body?: { error?: { format?: string } } }) => {
+                        if (message.type === 'response' && message.command === 'launch') {
+                            resolve({ success: message.success === true, error: message.body?.error?.format ?? message.message });
+                        }
+                    }
+                }
+            }));
+        });
+    }
+
+    // onDidStartDebugSession only fires once launch succeeds, so take the root session from its adapter tracker.
+    function waitForRootSession(name: string): Promise<vscode.DebugSession> {
+        return new Promise(resolve => {
+            disposables.push(vscode.debug.registerDebugAdapterTrackerFactory('pwa-node', {
+                createDebugAdapterTracker: session => {
+                    if (session.configuration.name === name && !session.configuration.__pendingTargetId) {
+                        resolve(session);
+                    }
+                    return undefined;
+                }
+            }));
+        });
+    }
+
+    test('attaches once a delayed inspector becomes ready', async () => {
+        const name = 'delayed-inspector';
+        const debugConfig = await createAppHostAttachConfiguration(name);
+        assert.strictEqual(debugConfig.timeout, denoAppHostInspectorAttachTimeoutMs);
+        const fixtureStarted = waitForFixture();
+        const launchResponse = captureLaunchResponse(name);
+
+        const started = vscode.debug.startDebugging(undefined, debugConfig);
+        const fixture = await fixtureStarted;
+
+        // js-debug is now polling a port that is not listening yet; open the inspector late.
+        fixture.socket.write('open-inspector\n');
+        await fixture.waitForLine('attached');
+
+        assert.strictEqual(await started, true);
+        assert.strictEqual((await launchResponse).success, true);
+        await fixture.closed;
+    });
+
+    test('fails with a clear error and stops the process when the inspector never becomes ready', async () => {
+        const name = 'never-ready-inspector';
+        // A short explicitly configured timeout stands in for the 120s default so the bounded failure
+        // is observable within the test timeout.
+        const debugConfig = await createAppHostAttachConfiguration(name, 2000);
+        assert.strictEqual(debugConfig.timeout, 2000);
+        const fixtureStarted = waitForFixture();
+        const launchResponse = captureLaunchResponse(name);
+        const startedAt = Date.now();
+
+        const started = vscode.debug.startDebugging(undefined, debugConfig);
+        const fixture = await fixtureStarted;
+
+        const response = await launchResponse;
+        assert.strictEqual(response.success, false);
+        assert.ok(response.error?.includes(`127.0.0.1:${debugConfig.attachSimplePort}`),
+            `Expected the attach failure to name the inspector address, got: ${response.error}`);
+        assert.ok(Date.now() - startedAt >= 2000, 'js-debug gave up before the configured inspector timeout');
+
+        await fixture.closed;
+        assert.ok(!fixture.lines.includes('attached'));
+        assert.strictEqual(await started, false);
+    });
+
+    test('stops a pending inspector attach when the debug session is cancelled', async () => {
+        const name = 'cancelled-inspector';
+        const debugConfig = await createAppHostAttachConfiguration(name);
+        assert.strictEqual(debugConfig.timeout, denoAppHostInspectorAttachTimeoutMs);
+        const fixtureStarted = waitForFixture();
+        const rootSession = waitForRootSession(name);
+
+        const started = vscode.debug.startDebugging(undefined, debugConfig);
+        const [session, fixture] = await Promise.all([rootSession, fixtureStarted]);
+
+        // js-debug is still polling the inspector port, well inside the 120s attach timeout.
+        await vscode.debug.stopDebugging(session);
+
+        await fixture.closed;
+        assert.ok(!fixture.lines.includes('attached'));
+        assert.strictEqual(await started, false);
+    });
+});

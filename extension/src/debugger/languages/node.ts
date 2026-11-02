@@ -1,10 +1,11 @@
 import * as net from "net";
 import * as path from "path";
-import { AspireResourceExtendedDebugConfiguration, ExecutableLaunchConfiguration, JavaScriptRuntimeLaunchConfiguration, isJavaScriptRuntimeLaunchConfiguration } from "../../dcp/types";
-import { denoAppHostRunCommandMissing, denoInspectorAddressUnavailable, nodeDisplayName, nodeLabel, invalidLaunchConfiguration } from "../../loc/strings";
-import { debugCliStartTimeoutSeconds, EnvironmentVariables, getEnvironmentForChildProcess } from "../../utils/environment";
+import * as vscode from "vscode";
+import { AspireResourceExtendedDebugConfiguration, ExecutableLaunchConfiguration, JavaScriptRuntimeLaunchConfiguration, LaunchOptions, isJavaScriptRuntimeLaunchConfiguration } from "../../dcp/types";
+import { denoAppHostInspectorNotReady, denoAppHostRunCommandMissing, denoInspectorAddressUnavailable, nodeDisplayName, nodeLabel, invalidLaunchConfiguration } from "../../loc/strings";
 import { extensionLogOutputChannel } from "../../utils/logging";
 import { ResourceDebuggerExtension } from "../debuggerExtensions";
+import { LaunchedChildProcess, LaunchedChildProcessResolver, SystemLaunchedChildProcessQuery } from "../launchedChildProcessDiscovery";
 import { getJavaScriptRuntimeDisplayName, getJavaScriptRuntimeTargetPath, jsRuntimeBaseFileTypes, launchMethodDirect, launchMethodPackageManager, resolveJavaScriptLaunchMethod } from "./javascriptRuntime";
 
 function asNodeConfig(launchConfig: ExecutableLaunchConfiguration): JavaScriptRuntimeLaunchConfiguration {
@@ -25,46 +26,115 @@ function isDenoRuntimeExecutable(runtimeExecutable: string | undefined): boolean
     return path.basename(runtimeExecutable, extension).toLowerCase() === 'deno';
 }
 
-// Mirrors the CLI's default AppHost startup budget (WaitCommand.DefaultTimeoutSeconds).
-const defaultAppHostStartupTimeoutSeconds = 120;
+/**
+ * js-debug starts its attachSimplePort timeout before it spawns the runtime, and its 10-second default
+ * can expire before a Deno AppHost opens its inspector on a slow machine, leaving Deno blocked in
+ * --inspect-wait. Wait longer, but keep the wait bounded and separate from the CLI's debug startup
+ * budget: that budget covers breakpoints after the debugger attaches, not an inspector that never opens.
+ */
+export const denoAppHostInspectorAttachTimeoutMs = 120_000;
 
-type EnvironmentRecord = { [key: string]: unknown } | undefined;
+// An explicitly configured debugger timeout (for example from the `debuggers` launch configuration
+// overrides) is the user's choice and is preserved.
+export function getAppHostInspectorAttachTimeoutMs(configuredTimeout: unknown): number {
+    return typeof configuredTimeout === 'number' ? configuredTimeout : denoAppHostInspectorAttachTimeoutMs;
+}
 
-function findEnvironmentValue(env: EnvironmentRecord, name: string, platform: NodeJS.Platform): string | undefined {
-    if (!env) {
-        return undefined;
+// The runtime is already running when cleanup starts, so a short search is enough to find it.
+const inspectorWaitingProcessResolver = new LaunchedChildProcessResolver(new SystemLaunchedChildProcessQuery(), undefined, { timeoutMs: 5_000 });
+
+export function hasCommandLineArgument(candidate: LaunchedChildProcess, argument: string): boolean {
+    if (candidate.commandLineArguments) {
+        return candidate.commandLineArguments.includes(argument);
     }
 
-    // Windows environment variable names are case-insensitive, matching how the CLI process resolves them.
-    const key = env[name] !== undefined || platform !== 'win32'
-        ? name
-        : Object.keys(env).find(k => k.toUpperCase() === name.toUpperCase());
-    const value = key === undefined ? undefined : env[key];
-    return value === undefined || value === null ? undefined : String(value);
+    // Windows reports a single command line string, e.g. `"C:\deno.exe" run --inspect-wait=127.0.0.1:1234 apphost.mts`.
+    const index = candidate.command.indexOf(argument);
+    const end = index + argument.length;
+    return index >= 0 &&
+        (index === 0 || /[\s"]/.test(candidate.command[index - 1])) &&
+        (end === candidate.command.length || /[\s"]/.test(candidate.command[end]));
 }
 
 /**
- * js-debug gives up on attachSimplePort after its 10-second default `timeout`, which starts before
- * it spawns the runtime. A Deno AppHost blocked in --inspect-wait cannot start until js-debug
- * attaches, so an early give-up leaves Deno waiting forever while the CLI keeps waiting for the
- * AppHost. Keep polling for the inspector for as long as the CLI waits for the AppHost to start.
- *
- * The CLI's ASPIRE_CLI_START_TIMEOUT is resolved the same way the extension builds the CLI spawn
- * environment: the root launch configuration's env wins over the inherited extension host
- * environment, and debug sessions otherwise get the long debug startup budget.
+ * js-debug only takes ownership of the runtime after it attaches to the inspector. If the inspector never
+ * becomes ready (the attach times out) or the session is stopped while js-debug is still waiting, js-debug
+ * fails the launch but leaves the runtime blocked in --inspect-wait. Stop that runtime, which is identified
+ * by its unique inspector argument among the extension host's descendants.
  */
-export function getAppHostInspectorAttachTimeoutMs(
-    launchConfigurationEnv: EnvironmentRecord,
-    inheritedEnv: EnvironmentRecord,
-    platform: NodeJS.Platform = process.platform): number {
-    const name = EnvironmentVariables.ASPIRE_CLI_START_TIMEOUT;
-    const inheritedTimeout = findEnvironmentValue(inheritedEnv, name, platform);
-    const configuredTimeout = (findEnvironmentValue(launchConfigurationEnv, name, platform)
-        ?? (inheritedTimeout ? inheritedTimeout : debugCliStartTimeoutSeconds)).trim();
-    const timeoutSeconds = /^\d+$/.test(configuredTimeout) && Number(configuredTimeout) > 0
-        ? Number(configuredTimeout)
-        : defaultAppHostStartupTimeoutSeconds;
-    return timeoutSeconds * 1000;
+export function registerDenoAppHostInspectorCleanup(
+    inspectorArgument: string,
+    inspectorAddress: string,
+    timeoutMs: number,
+    launchOptions: LaunchOptions,
+    resolver: LaunchedChildProcessResolver = inspectorWaitingProcessResolver): void {
+    const isRootSession = (session: vscode.DebugSession) =>
+        session.configuration.runId === launchOptions.runId &&
+        session.configuration.debugSessionId === launchOptions.debugSessionId &&
+        session.configuration.__pendingTargetId === undefined;
+
+    let launchResponse: { success: boolean } | undefined;
+    let sessionStarted = false;
+    let cleanedUp = false;
+    const disposables: vscode.Disposable[] = [];
+    const dispose = () => disposables.splice(0).forEach(disposable => disposable.dispose());
+
+    const stopUnattachedRuntime = () => {
+        dispose();
+        if (cleanedUp || !sessionStarted || launchResponse?.success === true) {
+            return;
+        }
+
+        cleanedUp = true;
+        if (launchResponse) {
+            extensionLogOutputChannel.error(denoAppHostInspectorNotReady(inspectorAddress, Math.round(timeoutMs / 1000)));
+        }
+        else {
+            extensionLogOutputChannel.info(`Stopping the Deno AppHost that was still waiting for a debugger at ${inspectorAddress}.`);
+        }
+
+        void resolver.resolveProcessId(process.pid, {
+            isLauncher: () => true,
+            isCandidate: candidate => hasCommandLineArgument(candidate, inspectorArgument),
+        }).then(pid => {
+            try {
+                process.kill(pid);
+                extensionLogOutputChannel.info(`Stopped Deno AppHost process ${pid} that never attached to the debugger.`);
+            }
+            catch (error) {
+                extensionLogOutputChannel.warn(`Failed to stop Deno AppHost process ${pid}: ${error}`);
+            }
+        }, () => {
+            extensionLogOutputChannel.info(`No Deno AppHost process waiting for a debugger at ${inspectorAddress} remained to stop.`);
+        });
+    };
+
+    // Use the adapter's own messages rather than onDidTerminateDebugSession: VS Code does not report a
+    // session whose launch request failed as terminated.
+    disposables.push(vscode.debug.registerDebugAdapterTrackerFactory('pwa-node', {
+        createDebugAdapterTracker: session => {
+            if (!isRootSession(session)) {
+                return undefined;
+            }
+
+            sessionStarted = true;
+            return {
+                onDidSendMessage: (message: { type?: string; command?: string; success?: boolean }) => {
+                    if (message.type === 'response' && message.command === 'launch') {
+                        launchResponse = { success: message.success === true };
+                        if (launchResponse.success) {
+                            dispose();
+                        }
+                        else {
+                            stopUnattachedRuntime();
+                        }
+                    }
+                },
+                onWillStopSession: stopUnattachedRuntime,
+            };
+        }
+    }));
+    launchOptions.debugSession.registerResourceCleanup({ dispose: stopUnattachedRuntime });
 }
 
 async function getAvailableLoopbackPort(): Promise<number> {
@@ -122,11 +192,11 @@ export const nodeDebuggerExtension: ResourceDebuggerExtension = {
                 // Deno does not load js-debug's Node bootloader. Open its native inspector and tell
                 // js-debug to attach directly, matching the official Deno VS Code provider.
                 const inspectorPort = await getAvailableLoopbackPort();
-                runtimeArgs.splice(runArgumentIndex + 1, 0, `--inspect-wait=127.0.0.1:${inspectorPort}`);
+                const inspectorArgument = `--inspect-wait=127.0.0.1:${inspectorPort}`;
+                runtimeArgs.splice(runArgumentIndex + 1, 0, inspectorArgument);
                 debugConfiguration.attachSimplePort = inspectorPort;
-                debugConfiguration.timeout = getAppHostInspectorAttachTimeoutMs(
-                    launchOptions.debugSession?.configuration?.env,
-                    getEnvironmentForChildProcess());
+                debugConfiguration.timeout = getAppHostInspectorAttachTimeoutMs(debugConfiguration.timeout);
+                registerDenoAppHostInspectorCleanup(inspectorArgument, `127.0.0.1:${inspectorPort}`, debugConfiguration.timeout, launchOptions);
             }
 
             debugConfiguration.runtimeArgs = runtimeArgs;
