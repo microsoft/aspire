@@ -5,6 +5,7 @@
     <PackageReference Remove="Aspire.Hosting.AppHost" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.AppHost" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Dotnet" />
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.Python" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(IsAspireHost)' == 'true'">
