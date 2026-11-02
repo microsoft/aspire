@@ -115,8 +115,9 @@ public static partial class ContainerRuntimeLogPatterns
 
     // WSLc surfaces registry errors directly, without Docker's daemon or Podman's copy wrapper:
     // Get "https://does.not.exist.internal/v2/": dial tcp: lookup ...: no such host
-    // Match registry DNS failures, not authentication errors or the generic "Error code: E_FAIL".
-    [GeneratedRegex(@"(?:Get|Head) ""https?://[^""\s]+/v2/[^""]*"": dial tcp:.*: no such host")]
+    // Head "https://cgr.dev/v2/.../manifests/1.24.6": unauthorized: {"errors":[...]}
+    // Require a registry request and its failure, not the generic "Error code: E_FAIL".
+    [GeneratedRegex(@"(?:Get|Head) ""https?://[^""\s]+/v2/[^""]*"": (?:dial tcp:.*: no such host|unauthorized:)")]
     private static partial Regex WslcImagePullFailureRegex();
 
     // WSLc's BuildKit renderer emits "[builder 1/4] FROM ..." rather than Docker's

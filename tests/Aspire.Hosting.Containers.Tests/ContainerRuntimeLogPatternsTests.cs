@@ -25,6 +25,7 @@ public class ContainerRuntimeLogPatternsTests
     // Podman 5.x, which lacked the outer "unable to copy from source" wrapper.
     [InlineData("2026-07-30T22:57:47.7100000Z Error: initializing source docker://does.not.exist.internal/does-not-exist:latest: pinging container registry does.not.exist.internal: no such host")]
     [InlineData(@"2026-11-01T12:14:20.6140000Z Get ""https://does.not.exist.internal/v2/"": dial tcp: lookup does.not.exist.internal on 10.1.0.1:53: no such host")]
+    [InlineData(@"2026-11-01T12:13:24.5780000Z Head ""https://cgr.dev/v2/mattermost.com/go-msft-fips/manifests/1.24.6"": unauthorized: {""errors"":[{""code"":""UNAUTHORIZED"",""message"":""Authentication required""}]}")]
     public void IsImagePullFailure_MatchesRuntimeFailureOutput(string line)
     {
         Assert.True(ContainerRuntimeLogPatterns.IsImagePullFailure(line));
@@ -40,7 +41,6 @@ public class ContainerRuntimeLogPatternsTests
     [InlineData("2026-07-31T17:40:30.9610000Z Error: container exited with code 1")]
     // A docker:// reference on its own is not a failure.
     [InlineData("2026-07-31T17:40:30.9610000Z Resolved docker://docker.io/library/redis:8.6")]
-    [InlineData(@"2026-11-01T12:13:24.5780000Z Head ""https://cgr.dev/v2/mattermost.com/go-msft-fips/manifests/1.24.6"": unauthorized: {""errors"":[{""code"":""UNAUTHORIZED"",""message"":""Authentication required""}]}")]
     [InlineData("2026-11-01T12:13:24.5780000Z Error code: E_FAIL")]
     [InlineData("2026-11-01T12:14:03.0190000Z Option name was not recognized for the current command: '--illegal'")]
     [InlineData("2026-11-01T18:54:59.2990000Z Option name was not recognised for the current command: '--illegal'")]
