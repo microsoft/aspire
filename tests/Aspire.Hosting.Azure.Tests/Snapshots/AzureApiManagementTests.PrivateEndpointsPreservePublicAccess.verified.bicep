@@ -44,9 +44,30 @@ output id string = vnet.id
 
 output name string = vnet.name
 
+// Resource: apim-identity
+@description('The location for the resource(s) to be deployed.')
+param location string = resourceGroup().location
+
+resource apim_identity 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' = {
+  name: take('apim_identity-${uniqueString(resourceGroup().id)}', 128)
+  location: location
+}
+
+output id string = apim_identity.id
+
+output clientId string = apim_identity.properties.clientId
+
+output principalId string = apim_identity.properties.principalId
+
+output principalName string = apim_identity.name
+
+output name string = apim_identity.name
+
 // Resource: apim
 @description('The location for the resource(s) to be deployed.')
 param location string = resourceGroup().location
+
+param apim_identity_outputs_id string
 
 resource apim 'Microsoft.ApiManagement/service@2025-03-01-preview' = {
   name: take('apim${uniqueString(resourceGroup().id)}', 24)
@@ -61,7 +82,10 @@ resource apim 'Microsoft.ApiManagement/service@2025-03-01-preview' = {
     capacity: 1
   }
   identity: {
-    type: 'SystemAssigned'
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${apim_identity_outputs_id}': { }
+    }
   }
   tags: {
     'aspire-resource-name': 'apim'
@@ -73,8 +97,6 @@ output gatewayUrl string = apim.properties.gatewayUrl
 output name string = apim.name
 
 output id string = apim.id
-
-output principalId string = apim.identity.principalId
 
 // Resource: privatelink-azure-api-net
 @description('The location for the resource(s) to be deployed.')

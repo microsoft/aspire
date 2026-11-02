@@ -11,6 +11,7 @@ const secretParameter = await builder.addParameter("upstream-key", { secret: tru
 
 const apim = await builder.addAzureApiManagement("apim", {
     publisherEmail: "api-owners@example.com",
+    publisherName: "Contoso APIs",
 });
 
 const foundry = await builder.addFoundry("foundry");
@@ -90,11 +91,13 @@ const integrationSubnet = await vnet.addSubnet("apim-integration-subnet", "10.0.
 const injectionSubnet = await vnet.addSubnet("apim-injection-subnet", "10.0.1.0/24");
 const integratedApim = await builder.addAzureApiManagement("integrated-apim", {
     publisherEmail: "api-owners@example.com",
+    publisherName: "Contoso APIs",
     sku: AzureApiManagementSku.StandardV2,
 });
 await integratedApim.withVirtualNetworkIntegration(integrationSubnet);
 const injectedApim = await builder.addAzureApiManagement("injected-apim", {
     publisherEmail: "api-owners@example.com",
+    publisherName: "Contoso APIs",
     sku: AzureApiManagementSku.PremiumV2,
 });
 await injectedApim.withVirtualNetworkInjection(injectionSubnet);

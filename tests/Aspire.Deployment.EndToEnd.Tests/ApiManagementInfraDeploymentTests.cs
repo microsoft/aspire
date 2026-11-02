@@ -111,7 +111,7 @@ builder.Build().Run();
             output.WriteLine($"Modified apphost.cs with API Management infrastructure:\n{content}");
 
             await auto.TypeAsync(
-                $"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName}");
+                $"unset ASPIRE_PLAYGROUND && export AZURE__SUBSCRIPTIONID=\"{subscriptionId}\" && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName}");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter);
 

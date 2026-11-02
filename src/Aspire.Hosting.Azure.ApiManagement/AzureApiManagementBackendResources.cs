@@ -38,8 +38,6 @@ public class AzureApiManagementBackendResource(
     /// Gets the parent API Management service.
     /// </summary>
     public AzureApiManagementResource Parent { get; } = parent;
-
-    internal List<AzureApiManagementBackendRoleAssignment> RoleAssignments { get; } = [];
 }
 
 /// <summary>
@@ -178,7 +176,3 @@ internal sealed record AzureApiManagementBackendPoolMember(
     AzureApiManagementBackendResource Backend,
     int Priority,
     int Weight);
-
-internal sealed record AzureApiManagementBackendRoleAssignment(
-    AzureProvisioningResource Target,
-    object Role);

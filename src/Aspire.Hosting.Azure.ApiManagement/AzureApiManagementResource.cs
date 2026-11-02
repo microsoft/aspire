@@ -1,9 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics;
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Azure.ApiManagement.Provisioning;
+using Azure.Provisioning.ApiManagement;
 using Azure.Provisioning.Primitives;
 
 namespace Aspire.Hosting.Azure;
@@ -91,17 +90,21 @@ public class AzureApiManagementResource(
     public BicepOutputReference GatewayUrl => new("gatewayUrl", this);
 
     /// <summary>
-    /// Gets the managed identity principal ID output reference.
+    /// Gets the user-assigned managed identity used for backend authentication and Key Vault access.
+    /// </summary>
+    /// <remarks>
+    /// When adopting an existing API Management service, attach this identity to the service outside Aspire.
+    /// The identity can also be configured as an existing Azure resource.
+    /// </remarks>
+    [AspireExport]
+    public AzureUserAssignedIdentityResource Identity { get; } =
+        new(AzureApiManagementExtensions.CreateBoundedIdentifier($"{name}-identity", 64));
+
+    /// <summary>
+    /// Gets the user-assigned managed identity principal ID output reference.
     /// </summary>
     [AspireExportIgnore(Reason = "Bicep output references are not projected to polyglot AppHosts.")]
-    public BicepOutputReference PrincipalId
-    {
-        get
-        {
-            RequiresSystemAssignedIdentity = true;
-            return new("principalId", this);
-        }
-    }
+    public BicepOutputReference PrincipalId => Identity.PrincipalId;
 
     /// <summary>
     /// Gets the complete service-level policy document, when one has been configured.
@@ -118,14 +121,6 @@ public class AzureApiManagementResource(
     /// </summary>
     internal AzureApiManagementVirtualNetworkConfiguration? VirtualNetworkConfiguration { get; set; }
 
-    internal AzureUserAssignedIdentityResource? KeyVaultIdentity { get; set; }
-
-    internal List<BicepOutputReference> KeyVaultRoleAssignmentDependencies { get; } = [];
-
-    internal bool ExistingSystemAssignedIdentityConfirmed { get; set; }
-
-    internal bool RequiresSystemAssignedIdentity { get; set; }
-
     /// <summary>
     /// Adds an inbound policy statement.
     /// </summary>
@@ -136,7 +131,7 @@ public class AzureApiManagementResource(
     {
         var bicepIdentifier = this.GetBicepIdentifier();
         var existingService = infrastructure.GetProvisionableResources()
-            .OfType<ApiManagementServiceProvisioningResource>()
+            .OfType<ApiManagementService>()
             .SingleOrDefault(resource => resource.BicepIdentifier == bicepIdentifier);
 
         if (existingService is not null)
@@ -144,25 +139,12 @@ public class AzureApiManagementResource(
             return existingService;
         }
 
-        ApiManagementServiceProvisioningResource service;
-        if (this.IsExisting())
+        var service = ApiManagementService.FromExisting(bicepIdentifier, "2025-03-01-preview");
+        if (!TryApplyExistingResourceAnnotation(this, infrastructure, service))
         {
-            service = CreateExistingOrNewProvisionableResource(
-                infrastructure,
-                static (identifier, name) =>
-                {
-                    var existing = ApiManagementServiceProvisioningResource.FromExisting(identifier);
-                    existing.Name = name;
-                    return existing;
-                },
-                static _ => throw new UnreachableException());
-        }
-        else
-        {
-            service = ApiManagementServiceProvisioningResource.FromExisting(bicepIdentifier);
             service.Name = NameOutputReference.AsProvisioningParameter(infrastructure);
-            infrastructure.Add(service);
         }
+        infrastructure.Add(service);
 
         return service;
     }

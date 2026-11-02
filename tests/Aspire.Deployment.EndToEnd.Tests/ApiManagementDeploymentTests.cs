@@ -125,7 +125,7 @@ builder.Build().Run();
             await auto.WaitForSuccessPromptAsync(counter);
 
             await auto.TypeAsync(
-                $"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName}");
+                $"unset ASPIRE_PLAYGROUND && export AZURE__SUBSCRIPTIONID=\"{subscriptionId}\" && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName}");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter);
 

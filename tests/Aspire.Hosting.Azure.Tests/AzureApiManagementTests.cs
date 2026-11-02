@@ -4,14 +4,15 @@
 #pragma warning disable ASPIREAZURE003
 #pragma warning disable ASPIRECOMPUTE002
 #pragma warning disable ASPIREPIPELINES001
+#pragma warning disable AZPROVISION001
 
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Azure.ApiManagement.Provisioning;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
+using Azure.Provisioning;
+using Azure.Provisioning.ApiManagement;
 using Azure.Provisioning.Network;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging.Abstractions;
 using static Aspire.Hosting.Utils.AzureManifestUtils;
 
 namespace Aspire.Hosting.Azure.Tests;
@@ -36,6 +37,8 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         Assert.Equal("gatewayUrl", apim.Resource.GatewayUrl.Name);
         Assert.Equal("id", apim.Resource.Id.Name);
         Assert.Equal("principalId", apim.Resource.PrincipalId.Name);
+        Assert.Same(apim.Resource.Identity, apim.Resource.PrincipalId.Resource);
+        Assert.Contains(apim.Resource.Identity, apim.Resource.References);
     }
 
     [Fact]
@@ -970,7 +973,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         apim.ConfigureInfrastructure(infrastructure =>
         {
             importedDocument = infrastructure.GetProvisionableResources()
-                .OfType<ApiManagementApiProvisioningResource>().Single().Value.Value;
+                .OfType<ApiManagementApi>().Single().Value.Value;
         });
 
         using var app = builder.Build();
@@ -1016,7 +1019,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         apim.ConfigureInfrastructure(infrastructure =>
         {
             var policy = infrastructure.GetProvisionableResources()
-                .OfType<ApiManagementApiPolicyProvisioningResource>()
+                .OfType<ApiPolicy>()
                 .Single(resource => resource.BicepIdentifier == "_apim_apiPolicy_catalog_api");
             dependencies = policy.DependsOn.Select(resource => resource.BicepIdentifier).ToArray();
         });
@@ -1687,8 +1690,12 @@ public class AzureApiManagementTests(ITestOutputHelper output)
 
         Assert.Contains("openai.outputs.endpoint", manifestJson);
         Assert.Contains("openai/deployments/chat", manifestJson);
-        Assert.Single(bicep.Split("Microsoft.Authorization/roleAssignments@", StringSplitOptions.None).Skip(1));
-        Assert.Contains("5e0bd9bd-7b93-4f28-af87-19fc36ad61bd", bicep);
+        var roles = Assert.Single(builder.Resources.OfType<AzureRoleAssignmentResource>());
+        Assert.Same(apim.Resource.Identity, roles.IdentityResource);
+        var (_, rolesBicep) = await GetManifestWithBicep(roles, skipPreparer: true);
+        Assert.Single(rolesBicep.Split("Microsoft.Authorization/roleAssignments@", StringSplitOptions.None).Skip(1));
+        Assert.Contains("5e0bd9bd-7b93-4f28-af87-19fc36ad61bd", rolesBicep);
+        await Verify(bicep, "bicep");
     }
 
     [Theory]
@@ -1724,13 +1731,12 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
         var roleAssignments = Assert.Single(
             model.Resources.OfType<AzureRoleAssignmentResource>(),
-            resource => resource.Name == "apim-roles-openai");
+            resource => resource.Name == "apim-identity-roles-openai");
         Assert.Same(account.Resource, roleAssignments.TargetAzureResource);
         Assert.Equal("ai-resources", roleAssignments.Scope!.ResourceGroup);
-        Assert.Contains(apim.Resource, roleAssignments.References);
-        Assert.Contains(
-            roleAssignments.Annotations.OfType<ResourceRelationshipAnnotation>(),
-            relationship => relationship.Resource == apim.Resource && relationship.Type == "Parent");
+        Assert.Same(apim.Resource.Identity, roleAssignments.OwnerResource);
+        Assert.Same(apim.Resource.Identity, roleAssignments.IdentityResource);
+        Assert.Contains(roleAssignments, apim.Resource.References);
 
         var (_, apimBicep) = await GetManifestWithBicep(apim.Resource);
         var (rolesManifest, rolesBicep) = await GetManifestWithBicep(roleAssignments, skipPreparer: true);
@@ -1740,11 +1746,45 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         Assert.Contains("resource openai", rolesBicep);
         Assert.DoesNotContain("scope: resourceGroup('ai-resources')", rolesBicep);
         Assert.Contains("ai-resources", rolesManifest.ToJsonString());
-        Assert.Contains("apim.outputs.principalId", rolesManifest.ToJsonString());
+        Assert.Contains("apim-identity.outputs.principalId", rolesManifest.ToJsonString());
     }
 
     [Fact]
-    public async Task BackendRoleAssignmentDiscoveryUsesResourceMetadataInsteadOfGeneratedName()
+    public async Task UserAssignedIdentityPermissionsCoverBackendsAndKeyVault()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var openai = builder.AddAzureOpenAI("openai");
+        var openaiDeployment = openai.AddDeployment("chat", "gpt-5-mini", "2025-08-07");
+        var foundry = builder.AddFoundry("foundry");
+        var foundryDeployment = foundry.AddDeployment("foundry-chat", "gpt-5-mini", "2025-08-07", "OpenAI");
+        var blobs = builder.AddAzureStorage("storage").AddBlobs("blobs");
+        var vault = builder.AddAzureKeyVault("vault");
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
+        });
+        apim.AddAzureOpenAIBackend("openai-backend", openaiDeployment);
+        apim.AddFoundryBackend("foundry-backend", foundryDeployment);
+        apim.AddBlobStorageBackend("blob-backend", blobs);
+        apim.WithCustomDomain("api.contoso.example", vault.GetSecret("gateway-certificate"));
+        apim.AddKeyVaultNamedValue("upstream-secret", vault.GetSecret("upstream-secret"));
+        apim.AddKeyVaultNamedValue("another-secret", vault.GetSecret("another-secret"));
+
+        await VerifyAllAzureBicep(builder);
+
+        Assert.Same(apim.Resource.Identity, Assert.Single(builder.Resources.OfType<AzureUserAssignedIdentityResource>()));
+        var roles = builder.Resources.OfType<AzureRoleAssignmentResource>().ToArray();
+        Assert.Equal(4, roles.Length);
+        Assert.All(roles, role =>
+        {
+            Assert.Same(apim.Resource.Identity, role.IdentityResource);
+            Assert.Contains(role, apim.Resource.References);
+        });
+    }
+
+    [Fact]
+    public async Task BackendRolesArePreparedByStandardAzureResourcePreparer()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var account = builder.AddAzureOpenAI("openai")
@@ -1756,17 +1796,16 @@ public class AzureApiManagementTests(ITestOutputHelper output)
             PublisherName = "Contoso APIs",
         });
         apim.AddAzureOpenAIBackend("openai-backend", deployment);
-        var roleAssignments = new AzureRoleAssignmentResource("custom-roles", account.Resource, null, null, _ => { });
-        roleAssignments.References.Add(apim.Resource);
-        builder.AddResource(roleAssignments);
-
         using var app = builder.Build();
         await ExecuteBeforeStartHooksAsync(app, default);
 
-        Assert.Same(
-            roleAssignments,
-            Assert.Single(builder.Resources.OfType<AzureRoleAssignmentResource>(),
-                resource => resource.TargetAzureResource == account.Resource && resource.References.Contains(apim.Resource)));
+        var roles = Assert.Single(builder.Resources.OfType<AzureRoleAssignmentResource>());
+        Assert.Same(account.Resource, roles.TargetAzureResource);
+        Assert.Same(apim.Resource.Identity, roles.IdentityResource);
+        Assert.Same(apim.Resource.Identity, roles.OwnerResource);
+        Assert.Contains(roles, apim.Resource.References);
+        var (manifest, bicep) = await GetManifestWithBicep(roles, skipPreparer: true);
+        await Verify(new { Manifest = manifest.ToJsonString(), Bicep = bicep });
     }
 
     [Theory]
@@ -1783,8 +1822,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
             PublisherEmail = "api-owners@example.com",
             PublisherName = "Contoso APIs",
             Sku = AzureApiManagementSku.Developer,
-        }).PublishAsExisting("shared-apim", resourceGroup: overrideScope ? null : "gateway-resources")
-            .WithExistingSystemAssignedIdentity();
+        }).PublishAsExisting("shared-apim", resourceGroup: overrideScope ? null : "gateway-resources");
         if (overrideScope)
         {
             apim.Resource.Scope = new AzureBicepResourceScope("gateway-resources");
@@ -1799,13 +1837,11 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
         var roleAssignments = Assert.Single(
             model.Resources.OfType<AzureRoleAssignmentResource>(),
-            resource => resource.Name == "apim-roles-openai");
+            resource => resource.Name == "apim-identity-roles-openai");
         Assert.Null(roleAssignments.Scope);
         Assert.Same(account.Resource, roleAssignments.TargetAzureResource);
-        Assert.Contains(apim.Resource, roleAssignments.References);
-        Assert.Contains(
-            roleAssignments.Annotations.OfType<ResourceRelationshipAnnotation>(),
-            relationship => relationship.Resource == apim.Resource && relationship.Type == "Parent");
+        Assert.Same(apim.Resource.Identity, roleAssignments.IdentityResource);
+        Assert.Contains(roleAssignments, apim.Resource.References);
 
         var (_, apimBicep) = await GetManifestWithBicep(apim.Resource);
         var (rolesManifest, rolesBicep) = await GetManifestWithBicep(roleAssignments, skipPreparer: true);
@@ -1813,11 +1849,11 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         Assert.DoesNotContain("Microsoft.Authorization/roleAssignments@", apimBicep);
         Assert.Contains("Microsoft.Authorization/roleAssignments@", rolesBicep);
         Assert.DoesNotContain("\"scope\"", rolesManifest.ToJsonString());
-        Assert.Contains("apim.outputs.principalId", rolesManifest.ToJsonString());
+        Assert.Contains("apim-identity.outputs.principalId", rolesManifest.ToJsonString());
     }
 
     [Fact]
-    public async Task SameScopeExistingAzureOpenAIBackendKeepsInlineRoleAssignment()
+    public async Task SameScopeExistingAzureOpenAIBackendUsesStandardRoleAssignmentModule()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var account = builder.AddAzureOpenAI("openai")
@@ -1837,10 +1873,11 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
         var (_, apimBicep) = await GetManifestWithBicep(apim.Resource);
 
-        Assert.DoesNotContain(
-            model.Resources.OfType<AzureRoleAssignmentResource>(),
-            resource => resource.Name == "apim-roles-openai");
-        Assert.Contains("Microsoft.Authorization/roleAssignments@", apimBicep);
+        var roles = Assert.Single(model.Resources.OfType<AzureRoleAssignmentResource>());
+        Assert.Same(apim.Resource.Identity, roles.IdentityResource);
+        Assert.Null(roles.Scope);
+        var (_, rolesBicep) = await GetManifestWithBicep(roles, skipPreparer: true);
+        await Verify(new { ApiManagement = apimBicep, Roles = rolesBicep });
     }
 
     [Theory]
@@ -1870,11 +1907,11 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
         var identity = Assert.Single(
             model.Resources.OfType<AzureUserAssignedIdentityResource>(),
-            resource => resource.Name == "apim-kv-identity");
+            resource => resource.Name == "apim-identity");
         var roleAssignments = Assert.Single(
             model.Resources.OfType<AzureRoleAssignmentResource>(),
-            resource => resource.Name == "apim-kv-identity-roles-vault");
-        Assert.Same(identity, apim.Resource.KeyVaultIdentity);
+            resource => resource.Name == "apim-identity-roles-vault");
+        Assert.Same(identity, apim.Resource.Identity);
         Assert.Same(vault.Resource, roleAssignments.TargetAzureResource);
         Assert.Equal("security-resources", roleAssignments.Scope!.ResourceGroup);
         Assert.Contains(identity, apim.Resource.References);
@@ -1882,26 +1919,22 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         Assert.Contains(
             identity.Annotations.OfType<ResourceRelationshipAnnotation>(),
             relationship => relationship.Resource == apim.Resource && relationship.Type == "Parent");
-        Assert.Contains(
-            roleAssignments.Annotations.OfType<ResourceRelationshipAnnotation>(),
-            relationship => relationship.Resource == apim.Resource && relationship.Type == "Parent");
+        Assert.Same(identity, roleAssignments.IdentityResource);
 
         var (_, apimBicep) = await GetManifestWithBicep(apim.Resource);
         var (rolesManifest, rolesBicep) = await GetManifestWithBicep(roleAssignments, skipPreparer: true);
 
         Assert.DoesNotContain("resource _apim_keyVaultIdentity_", apimBicep);
         Assert.DoesNotContain("Microsoft.Authorization/roleAssignments@", apimBicep);
-        Assert.Contains("param _apim_keyVaultIdentityId_apim string", apimBicep);
+        Assert.Contains("param apim_identity_outputs_id string", apimBicep);
         Assert.Equal(2, rolesBicep.Split("Microsoft.Authorization/roleAssignments@", StringSplitOptions.None).Length - 1);
         Assert.DoesNotContain("scope: resourceGroup('security-resources')", rolesBicep);
         Assert.Contains("security-resources", rolesManifest.ToJsonString());
-        Assert.Contains("apim-kv-identity.outputs.principalId", rolesManifest.ToJsonString());
-        Assert.Contains("output completed string = 'completed'", rolesBicep);
-        Assert.Contains("param _apim_keyVaultRoleAssignmentDependency0_apim string", apimBicep);
+        Assert.Contains("apim-identity.outputs.principalId", rolesManifest.ToJsonString());
     }
 
     [Fact]
-    public async Task MultipleApiManagementServicesUseSingleRoleAssignmentPreparationStep()
+    public async Task MultipleApiManagementServicesUseIndependentStandardIdentities()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var account = builder.AddAzureOpenAI("openai")
@@ -1924,39 +1957,18 @@ public class AzureApiManagementTests(ITestOutputHelper output)
 
         using var app = builder.Build();
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
-        var pipelineContext = new PipelineContext(
-            model, builder.ExecutionContext, app.Services, NullLogger.Instance, TestContext.Current.CancellationToken);
-        var steps = new List<PipelineStep>();
-        foreach (var apim in services)
-        {
-            foreach (var annotation in apim.Resource.Annotations.OfType<PipelineStepAnnotation>())
-            {
-                steps.AddRange(await annotation.CreateStepsAsync(new PipelineStepFactoryContext
-                {
-                    PipelineContext = pipelineContext,
-                    Resource = apim.Resource,
-                }));
-            }
-        }
-
-        var preparationStep = Assert.Single(
-            steps, step => step.Name.StartsWith("prepare-api-management-role-assignments", StringComparison.Ordinal));
-        Assert.Contains(AzureEnvironmentResource.PrepareResourcesStepName, preparationStep.RequiredBySteps);
-
         await ExecuteBeforeStartHooksAsync(app, default);
 
         Assert.Equal(
             [
-                "apim-0-kv-identity-roles-vault",
-                "apim-0-roles-openai",
-                "apim-1-kv-identity-roles-vault",
-                "apim-1-roles-openai",
-                "openai-roles",
-                "vault-roles",
+                "apim-0-identity-roles-openai",
+                "apim-0-identity-roles-vault",
+                "apim-1-identity-roles-openai",
+                "apim-1-identity-roles-vault",
             ],
             model.Resources.OfType<AzureRoleAssignmentResource>().Select(resource => resource.Name).Order());
         Assert.Equal(
-            ["apim-0-kv-identity", "apim-1-kv-identity"],
+            ["apim-0-identity", "apim-1-identity"],
             model.Resources.OfType<AzureUserAssignedIdentityResource>().Select(resource => resource.Name).Order());
     }
 
@@ -1985,13 +1997,11 @@ public class AzureApiManagementTests(ITestOutputHelper output)
             mainBicepPath,
             TestContext.Current.CancellationToken);
 
-        Assert.Matches(
-            @"_apim_keyVaultRoleAssignmentDependency0_apim:\s+\S+\.outputs\.completed",
-            mainBicep);
+        await Verify(mainBicep, "bicep");
     }
 
     [Fact]
-    public async Task SameScopeExistingKeyVaultKeepsInlineIdentityAndRoleAssignment()
+    public async Task SameScopeExistingKeyVaultUsesStandardIdentityAndRoleAssignments()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var vault = builder.AddAzureKeyVault("vault")
@@ -2009,12 +2019,12 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
         var (_, apimBicep) = await GetManifestWithBicep(apim.Resource);
 
-        Assert.Null(apim.Resource.KeyVaultIdentity);
-        Assert.DoesNotContain(
-            model.Resources.OfType<AzureUserAssignedIdentityResource>(),
-            resource => resource.Name == "apim-kv-identity");
-        Assert.Contains("resource _apim_keyVaultIdentity_", apimBicep);
-        Assert.Contains("Microsoft.Authorization/roleAssignments@", apimBicep);
+        Assert.Same(apim.Resource.Identity, Assert.Single(model.Resources.OfType<AzureUserAssignedIdentityResource>()));
+        var roles = Assert.Single(model.Resources.OfType<AzureRoleAssignmentResource>());
+        Assert.Same(apim.Resource.Identity, roles.IdentityResource);
+        Assert.Contains(roles, apim.Resource.References);
+        var (_, rolesBicep) = await GetManifestWithBicep(roles, skipPreparer: true);
+        await Verify(new { ApiManagement = apimBicep, Roles = rolesBicep });
     }
 
     [Fact]
@@ -2032,7 +2042,8 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         using var app = builder.Build();
         await ExecuteBeforeStartHooksAsync(app, default);
 
-        Assert.Null(apim.Resource.KeyVaultIdentity);
+        var (_, bicep) = await GetManifestWithBicep(apim.Resource);
+        await Verify(bicep, "bicep");
     }
 
     [Fact]
@@ -2056,7 +2067,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
         var roleAssignments = Assert.Single(
             model.Resources.OfType<AzureRoleAssignmentResource>(),
-            resource => resource.Name == "apim-kv-identity-roles-shared-vault");
+            resource => resource.Name == "apim-identity-roles-shared-vault");
         var (_, apimBicep) = await GetManifestWithBicep(apim.Resource);
         var (_, rolesBicep) = await GetManifestWithBicep(roleAssignments, skipPreparer: true);
 
@@ -2149,6 +2160,95 @@ public class AzureApiManagementTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task ProvisioningCanBeCustomizedWithSdkResources()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
+        }).ConfigureInfrastructure(infrastructure =>
+        {
+            var service = infrastructure.GetProvisionableResources().OfType<ApiManagementService>().Single();
+            service.NotificationSenderEmail = "notifications@example.com";
+        });
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var (_, bicep) = await GetManifestWithBicep(apim.Resource);
+
+        await Verify(bicep, "bicep");
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task AddAsExistingResourceUsesApiManagementAnnotationInConsumerModule(
+        bool existingConsumer,
+        bool overrideScope)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var existingName = builder.AddParameter("apim-name");
+        var existingResourceGroup = builder.AddParameter("apim-resource-group");
+        var existingSubscription = builder.AddParameter("apim-subscription");
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
+            Sku = AzureApiManagementSku.Developer,
+        }).AsExistingInResourceGroup(existingName, existingResourceGroup, existingSubscription);
+        if (overrideScope)
+        {
+            apim.Resource.Scope = new AzureBicepResourceScope("override-gateway-rg", "override-gateway-subscription");
+        }
+
+        var consumer = builder.AddAzureInfrastructure("consumer", infrastructure =>
+        {
+            var service = Assert.IsType<ApiManagementService>(apim.Resource.AddAsExistingResource(infrastructure));
+            Assert.Same(service, apim.Resource.AddAsExistingResource(infrastructure));
+            infrastructure.Add(new ProvisioningOutput("gatewayUrl", typeof(string))
+            {
+                Value = service.GatewayUri,
+            });
+        });
+        if (existingConsumer)
+        {
+            consumer.AsExistingInResourceGroup("consumer-name", "consumer-rg", "consumer-subscription");
+        }
+
+        var (_, bicep) = await GetManifestWithBicep(consumer.Resource, skipPreparer: true);
+
+        await Verify(bicep, "bicep").UseParameters(existingConsumer, overrideScope);
+    }
+
+    [Fact]
+    public async Task AddAsExistingResourceUsesNameOutputForNewService()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
+        });
+        var consumer = builder.AddAzureInfrastructure("consumer", infrastructure =>
+        {
+            var service = Assert.IsType<ApiManagementService>(apim.Resource.AddAsExistingResource(infrastructure));
+            Assert.Same(service, apim.Resource.AddAsExistingResource(infrastructure));
+            infrastructure.Add(new ProvisioningOutput("gatewayUrl", typeof(string))
+            {
+                Value = service.GatewayUri,
+            });
+        });
+
+        var (_, bicep) = await GetManifestWithBicep(consumer.Resource, skipPreparer: true);
+
+        await Verify(bicep, "bicep");
+    }
+
+    [Fact]
     public async Task ExistingApiManagementResourceCanProvisionManagedChildren()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -2175,7 +2275,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public async Task ExistingApiManagementRequiresSystemIdentityConfirmationForManagedIdentityBackend()
+    public async Task ExistingApiManagementUsesUserAssignedIdentityWithoutMutatingService()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var apim = builder.AddAzureApiManagement("apim", new()
@@ -2194,13 +2294,14 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         apim.AddApi("catalog-api", "catalog").WithBackend(backend);
 
         using var app = builder.Build();
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => ExecuteBeforeStartHooksAsync(app, default));
+        await ExecuteBeforeStartHooksAsync(app, default);
 
-        Assert.Contains(nameof(AzureApiManagementExtensions.WithExistingSystemAssignedIdentity), exception.Message);
+        var (_, bicep) = await GetManifestWithBicep(apim.Resource);
+        await Verify(bicep, "bicep");
     }
 
     [Fact]
-    public async Task ExistingApiManagementCanUseConfirmedSystemIdentity()
+    public async Task ExistingApiManagementCanUseExistingUserAssignedIdentityAndKeyVaultNamedValues()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var apim = builder.AddAzureApiManagement("apim", new()
@@ -2208,8 +2309,12 @@ public class AzureApiManagementTests(ITestOutputHelper output)
             PublisherEmail = "api-owners@example.com",
             PublisherName = "Contoso APIs",
             Sku = AzureApiManagementSku.Developer,
-        }).PublishAsExisting("existing-apim", resourceGroup: null)
-            .WithExistingSystemAssignedIdentity();
+        }).PublishAsExisting("existing-apim", resourceGroup: null);
+        builder.CreateResourceBuilder(apim.Resource.Identity)
+            .PublishAsExisting("shared-identity", resourceGroup: "identity-resources");
+        var vault = builder.AddAzureKeyVault("vault")
+            .PublishAsExisting("shared-vault", resourceGroup: "security-resources");
+        apim.AddKeyVaultNamedValue("upstream-secret", vault.GetSecret("upstream-secret"));
         var backend = apim.AddBackend(
             "catalog-backend",
             ReferenceExpression.Create($"https://example.com"),
@@ -2219,12 +2324,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
             });
         apim.AddApi("catalog-api", "catalog").WithBackend(backend);
 
-        using var app = builder.Build();
-        await ExecuteBeforeStartHooksAsync(app, default);
-
-        var (_, bicep) = await GetManifestWithBicep(apim.Resource);
-
-        Assert.Contains("output principalId string = apim.identity.principalId", bicep);
+        await VerifyAllAzureBicep(builder);
     }
 
     [Fact]
@@ -2331,9 +2431,15 @@ public class AzureApiManagementTests(ITestOutputHelper output)
 
         Assert.Contains("storage-primary.outputs.blobEndpoint", manifestJson);
         Assert.Contains("storage-secondary.outputs.blobEndpoint", manifestJson);
-        Assert.Contains("authentication-managed-identity resource=\"https://storage.azure.com/\"", bicep);
-        Assert.Contains("2a2b9908-6ea1-4ae2-8e65-a410df84e7d1", bicep);
-        Assert.Equal(2, bicep.Split("Microsoft.Authorization/roleAssignments@", StringSplitOptions.None).Length - 1);
+        Assert.Contains("authentication-managed-identity resource=\"https://storage.azure.com/\" client-id=", bicep);
+        var roles = builder.Resources.OfType<AzureRoleAssignmentResource>().ToArray();
+        Assert.Equal(2, roles.Length);
+        foreach (var role in roles)
+        {
+            Assert.Same(apim.Resource.Identity, role.IdentityResource);
+            var (_, roleBicep) = await GetManifestWithBicep(role, skipPreparer: true);
+            Assert.Contains("2a2b9908-6ea1-4ae2-8e65-a410df84e7d1", roleBicep);
+        }
     }
 
     [Fact]

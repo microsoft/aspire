@@ -1,6 +1,8 @@
 ﻿@description('The location for the resource(s) to be deployed.')
 param location string = resourceGroup().location
 
+param apim_identity_outputs_id string
+
 param _apim_backendUrl_catalog_backend string
 
 resource apim 'Microsoft.ApiManagement/service@2025-03-01-preview' = {
@@ -16,7 +18,10 @@ resource apim 'Microsoft.ApiManagement/service@2025-03-01-preview' = {
     capacity: 1
   }
   identity: {
-    type: 'SystemAssigned'
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${apim_identity_outputs_id}': { }
+    }
   }
   tags: {
     'aspire-resource-name': 'apim'
@@ -27,13 +32,13 @@ resource catalog_backend 'Microsoft.ApiManagement/service/backends@2024-05-01' =
   name: 'catalog-backend'
   properties: {
     protocol: 'http'
-    url: _apim_backendUrl_catalog_backend
     title: 'catalog-backend'
-    type: 'Single'
     tls: {
       validateCertificateChain: true
       validateCertificateName: true
     }
+    type: 'Single'
+    url: _apim_backendUrl_catalog_backend
   }
   parent: apim
 }
@@ -41,14 +46,14 @@ resource catalog_backend 'Microsoft.ApiManagement/service/backends@2024-05-01' =
 resource catalog_api 'Microsoft.ApiManagement/service/apis@2024-05-01' = {
   name: 'catalog-api'
   properties: {
-    displayName: 'catalog-api'
-    path: 'catalog'
-    subscriptionRequired: true
     type: 'http'
+    displayName: 'catalog-api'
+    format: 'openapi+json'
+    subscriptionRequired: true
+    path: 'catalog'
     protocols: [
       'https'
     ]
-    format: 'openapi+json'
     value: '{"openapi":"3.0.1","info":{"title":"Catalog","version":"v1"},"paths":{}}'
   }
   parent: apim
@@ -59,7 +64,6 @@ resource get_product 'Microsoft.ApiManagement/service/apis/operations@2024-05-01
   properties: {
     displayName: 'get-product'
     method: 'GET'
-    urlTemplate: '/products/{id}'
     templateParameters: [
       {
         name: 'id'
@@ -67,6 +71,7 @@ resource get_product 'Microsoft.ApiManagement/service/apis/operations@2024-05-01
         required: true
       }
     ]
+    urlTemplate: '/products/{id}'
   }
   parent: catalog_api
 }
@@ -107,10 +112,10 @@ resource _apim_apiPolicy_catalog_api 'Microsoft.ApiManagement/service/apis/polic
 resource other_api 'Microsoft.ApiManagement/service/apis@2024-05-01' = {
   name: 'other-api'
   properties: {
-    displayName: 'other-api'
-    path: 'other'
-    subscriptionRequired: true
     type: 'http'
+    displayName: 'other-api'
+    subscriptionRequired: true
+    path: 'other'
     protocols: [
       'https'
     ]
@@ -133,7 +138,6 @@ resource _apim_proxyDELETEOperation_other_api 'Microsoft.ApiManagement/service/a
   properties: {
     displayName: 'Proxy DELETE'
     method: 'DELETE'
-    urlTemplate: '/{*path}'
     templateParameters: [
       {
         name: 'path'
@@ -141,6 +145,7 @@ resource _apim_proxyDELETEOperation_other_api 'Microsoft.ApiManagement/service/a
         required: true
       }
     ]
+    urlTemplate: '/{*path}'
   }
   parent: other_api
 }
@@ -160,7 +165,6 @@ resource _apim_proxyGETOperation_other_api 'Microsoft.ApiManagement/service/apis
   properties: {
     displayName: 'Proxy GET'
     method: 'GET'
-    urlTemplate: '/{*path}'
     templateParameters: [
       {
         name: 'path'
@@ -168,6 +172,7 @@ resource _apim_proxyGETOperation_other_api 'Microsoft.ApiManagement/service/apis
         required: true
       }
     ]
+    urlTemplate: '/{*path}'
   }
   parent: other_api
 }
@@ -187,7 +192,6 @@ resource _apim_proxyHEADOperation_other_api 'Microsoft.ApiManagement/service/api
   properties: {
     displayName: 'Proxy HEAD'
     method: 'HEAD'
-    urlTemplate: '/{*path}'
     templateParameters: [
       {
         name: 'path'
@@ -195,6 +199,7 @@ resource _apim_proxyHEADOperation_other_api 'Microsoft.ApiManagement/service/api
         required: true
       }
     ]
+    urlTemplate: '/{*path}'
   }
   parent: other_api
 }
@@ -214,7 +219,6 @@ resource _apim_proxyOPTIONSOperation_other_api 'Microsoft.ApiManagement/service/
   properties: {
     displayName: 'Proxy OPTIONS'
     method: 'OPTIONS'
-    urlTemplate: '/{*path}'
     templateParameters: [
       {
         name: 'path'
@@ -222,6 +226,7 @@ resource _apim_proxyOPTIONSOperation_other_api 'Microsoft.ApiManagement/service/
         required: true
       }
     ]
+    urlTemplate: '/{*path}'
   }
   parent: other_api
 }
@@ -241,7 +246,6 @@ resource _apim_proxyPATCHOperation_other_api 'Microsoft.ApiManagement/service/ap
   properties: {
     displayName: 'Proxy PATCH'
     method: 'PATCH'
-    urlTemplate: '/{*path}'
     templateParameters: [
       {
         name: 'path'
@@ -249,6 +253,7 @@ resource _apim_proxyPATCHOperation_other_api 'Microsoft.ApiManagement/service/ap
         required: true
       }
     ]
+    urlTemplate: '/{*path}'
   }
   parent: other_api
 }
@@ -268,7 +273,6 @@ resource _apim_proxyPOSTOperation_other_api 'Microsoft.ApiManagement/service/api
   properties: {
     displayName: 'Proxy POST'
     method: 'POST'
-    urlTemplate: '/{*path}'
     templateParameters: [
       {
         name: 'path'
@@ -276,6 +280,7 @@ resource _apim_proxyPOSTOperation_other_api 'Microsoft.ApiManagement/service/api
         required: true
       }
     ]
+    urlTemplate: '/{*path}'
   }
   parent: other_api
 }
@@ -295,7 +300,6 @@ resource _apim_proxyPUTOperation_other_api 'Microsoft.ApiManagement/service/apis
   properties: {
     displayName: 'Proxy PUT'
     method: 'PUT'
-    urlTemplate: '/{*path}'
     templateParameters: [
       {
         name: 'path'
@@ -303,6 +307,7 @@ resource _apim_proxyPUTOperation_other_api 'Microsoft.ApiManagement/service/apis
         required: true
       }
     ]
+    urlTemplate: '/{*path}'
   }
   parent: other_api
 }
@@ -322,7 +327,6 @@ resource _apim_proxyTRACEOperation_other_api 'Microsoft.ApiManagement/service/ap
   properties: {
     displayName: 'Proxy TRACE'
     method: 'TRACE'
-    urlTemplate: '/{*path}'
     templateParameters: [
       {
         name: 'path'
@@ -330,6 +334,7 @@ resource _apim_proxyTRACEOperation_other_api 'Microsoft.ApiManagement/service/ap
         required: true
       }
     ]
+    urlTemplate: '/{*path}'
   }
   parent: other_api
 }
@@ -378,5 +383,3 @@ output gatewayUrl string = apim.properties.gatewayUrl
 output name string = apim.name
 
 output id string = apim.id
-
-output principalId string = apim.identity.principalId

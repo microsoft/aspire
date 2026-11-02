@@ -1,13 +1,13 @@
 ﻿@description('The location for the resource(s) to be deployed.')
 param location string = resourceGroup().location
 
+param apim_identity_outputs_id string
+
 param _apim_backendUrl_chat_primary_backend string
 
 param _apim_backendUrl_chat_secondary_backend string
 
-param foundry_primary_outputs_name string
-
-param foundry_secondary_outputs_name string
+param apim_identity_outputs_clientid string
 
 resource apim 'Microsoft.ApiManagement/service@2025-03-01-preview' = {
   name: take('apim${uniqueString(resourceGroup().id)}', 24)
@@ -22,7 +22,10 @@ resource apim 'Microsoft.ApiManagement/service@2025-03-01-preview' = {
     capacity: 1
   }
   identity: {
-    type: 'SystemAssigned'
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${apim_identity_outputs_id}': { }
+    }
   }
   tags: {
     'aspire-resource-name': 'apim'
@@ -32,14 +35,6 @@ resource apim 'Microsoft.ApiManagement/service@2025-03-01-preview' = {
 resource chat_primary_backend 'Microsoft.ApiManagement/service/backends@2024-05-01' = {
   name: 'chat-primary-backend'
   properties: {
-    protocol: 'http'
-    url: _apim_backendUrl_chat_primary_backend
-    title: 'chat-primary-backend'
-    type: 'Single'
-    tls: {
-      validateCertificateChain: true
-      validateCertificateName: true
-    }
     circuitBreaker: {
       rules: [
         {
@@ -59,6 +54,14 @@ resource chat_primary_backend 'Microsoft.ApiManagement/service/backends@2024-05-
         }
       ]
     }
+    protocol: 'http'
+    title: 'chat-primary-backend'
+    tls: {
+      validateCertificateChain: true
+      validateCertificateName: true
+    }
+    type: 'Single'
+    url: _apim_backendUrl_chat_primary_backend
   }
   parent: apim
 }
@@ -66,14 +69,6 @@ resource chat_primary_backend 'Microsoft.ApiManagement/service/backends@2024-05-
 resource chat_secondary_backend 'Microsoft.ApiManagement/service/backends@2024-05-01' = {
   name: 'chat-secondary-backend'
   properties: {
-    protocol: 'http'
-    url: _apim_backendUrl_chat_secondary_backend
-    title: 'chat-secondary-backend'
-    type: 'Single'
-    tls: {
-      validateCertificateChain: true
-      validateCertificateName: true
-    }
     circuitBreaker: {
       rules: [
         {
@@ -93,6 +88,14 @@ resource chat_secondary_backend 'Microsoft.ApiManagement/service/backends@2024-0
         }
       ]
     }
+    protocol: 'http'
+    title: 'chat-secondary-backend'
+    tls: {
+      validateCertificateChain: true
+      validateCertificateName: true
+    }
+    type: 'Single'
+    url: _apim_backendUrl_chat_secondary_backend
   }
   parent: apim
 }
@@ -100,22 +103,22 @@ resource chat_secondary_backend 'Microsoft.ApiManagement/service/backends@2024-0
 resource openai_pool 'Microsoft.ApiManagement/service/backends@2024-05-01' = {
   name: 'openai-pool'
   properties: {
-    title: 'openai-pool'
-    type: 'Pool'
     pool: {
       services: [
         {
           id: chat_primary_backend.id
-          priority: 1
           weight: 3
+          priority: 1
         }
         {
           id: chat_secondary_backend.id
-          priority: 2
           weight: 1
+          priority: 2
         }
       ]
     }
+    title: 'openai-pool'
+    type: 'Pool'
   }
   parent: apim
   dependsOn: [
@@ -124,41 +127,13 @@ resource openai_pool 'Microsoft.ApiManagement/service/backends@2024-05-01' = {
   ]
 }
 
-resource foundry_primary 'Microsoft.CognitiveServices/accounts@2025-09-01' existing = {
-  name: foundry_primary_outputs_name
-}
-
-resource foundry_primary_CognitiveServicesUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(foundry_primary.id, apim.id, subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'a97b65f3-24c7-4388-baec-2e87135dc908'))
-  properties: {
-    principalId: apim.identity.principalId
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'a97b65f3-24c7-4388-baec-2e87135dc908')
-    principalType: 'ServicePrincipal'
-  }
-  scope: foundry_primary
-}
-
-resource foundry_secondary 'Microsoft.CognitiveServices/accounts@2025-09-01' existing = {
-  name: foundry_secondary_outputs_name
-}
-
-resource foundry_secondary_CognitiveServicesUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(foundry_secondary.id, apim.id, subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'a97b65f3-24c7-4388-baec-2e87135dc908'))
-  properties: {
-    principalId: apim.identity.principalId
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'a97b65f3-24c7-4388-baec-2e87135dc908')
-    principalType: 'ServicePrincipal'
-  }
-  scope: foundry_secondary
-}
-
 resource openai_api 'Microsoft.ApiManagement/service/apis@2024-05-01' = {
   name: 'openai-api'
   properties: {
-    displayName: 'openai-api'
-    path: 'openai'
-    subscriptionRequired: true
     type: 'http'
+    displayName: 'openai-api'
+    subscriptionRequired: true
+    path: 'openai'
     protocols: [
       'https'
     ]
@@ -181,7 +156,6 @@ resource _apim_proxyDELETEOperation_openai_api 'Microsoft.ApiManagement/service/
   properties: {
     displayName: 'Proxy DELETE'
     method: 'DELETE'
-    urlTemplate: '/{*path}'
     templateParameters: [
       {
         name: 'path'
@@ -189,6 +163,7 @@ resource _apim_proxyDELETEOperation_openai_api 'Microsoft.ApiManagement/service/
         required: true
       }
     ]
+    urlTemplate: '/{*path}'
   }
   parent: openai_api
 }
@@ -208,7 +183,6 @@ resource _apim_proxyGETOperation_openai_api 'Microsoft.ApiManagement/service/api
   properties: {
     displayName: 'Proxy GET'
     method: 'GET'
-    urlTemplate: '/{*path}'
     templateParameters: [
       {
         name: 'path'
@@ -216,6 +190,7 @@ resource _apim_proxyGETOperation_openai_api 'Microsoft.ApiManagement/service/api
         required: true
       }
     ]
+    urlTemplate: '/{*path}'
   }
   parent: openai_api
 }
@@ -235,7 +210,6 @@ resource _apim_proxyHEADOperation_openai_api 'Microsoft.ApiManagement/service/ap
   properties: {
     displayName: 'Proxy HEAD'
     method: 'HEAD'
-    urlTemplate: '/{*path}'
     templateParameters: [
       {
         name: 'path'
@@ -243,6 +217,7 @@ resource _apim_proxyHEADOperation_openai_api 'Microsoft.ApiManagement/service/ap
         required: true
       }
     ]
+    urlTemplate: '/{*path}'
   }
   parent: openai_api
 }
@@ -262,7 +237,6 @@ resource _apim_proxyOPTIONSOperation_openai_api 'Microsoft.ApiManagement/service
   properties: {
     displayName: 'Proxy OPTIONS'
     method: 'OPTIONS'
-    urlTemplate: '/{*path}'
     templateParameters: [
       {
         name: 'path'
@@ -270,6 +244,7 @@ resource _apim_proxyOPTIONSOperation_openai_api 'Microsoft.ApiManagement/service
         required: true
       }
     ]
+    urlTemplate: '/{*path}'
   }
   parent: openai_api
 }
@@ -289,7 +264,6 @@ resource _apim_proxyPATCHOperation_openai_api 'Microsoft.ApiManagement/service/a
   properties: {
     displayName: 'Proxy PATCH'
     method: 'PATCH'
-    urlTemplate: '/{*path}'
     templateParameters: [
       {
         name: 'path'
@@ -297,6 +271,7 @@ resource _apim_proxyPATCHOperation_openai_api 'Microsoft.ApiManagement/service/a
         required: true
       }
     ]
+    urlTemplate: '/{*path}'
   }
   parent: openai_api
 }
@@ -316,7 +291,6 @@ resource _apim_proxyPOSTOperation_openai_api 'Microsoft.ApiManagement/service/ap
   properties: {
     displayName: 'Proxy POST'
     method: 'POST'
-    urlTemplate: '/{*path}'
     templateParameters: [
       {
         name: 'path'
@@ -324,6 +298,7 @@ resource _apim_proxyPOSTOperation_openai_api 'Microsoft.ApiManagement/service/ap
         required: true
       }
     ]
+    urlTemplate: '/{*path}'
   }
   parent: openai_api
 }
@@ -343,7 +318,6 @@ resource _apim_proxyPUTOperation_openai_api 'Microsoft.ApiManagement/service/api
   properties: {
     displayName: 'Proxy PUT'
     method: 'PUT'
-    urlTemplate: '/{*path}'
     templateParameters: [
       {
         name: 'path'
@@ -351,6 +325,7 @@ resource _apim_proxyPUTOperation_openai_api 'Microsoft.ApiManagement/service/api
         required: true
       }
     ]
+    urlTemplate: '/{*path}'
   }
   parent: openai_api
 }
@@ -370,7 +345,6 @@ resource _apim_proxyTRACEOperation_openai_api 'Microsoft.ApiManagement/service/a
   properties: {
     displayName: 'Proxy TRACE'
     method: 'TRACE'
-    urlTemplate: '/{*path}'
     templateParameters: [
       {
         name: 'path'
@@ -378,6 +352,7 @@ resource _apim_proxyTRACEOperation_openai_api 'Microsoft.ApiManagement/service/a
         required: true
       }
     ]
+    urlTemplate: '/{*path}'
   }
   parent: openai_api
 }
@@ -396,7 +371,7 @@ resource _apim_apiPolicy_openai_api 'Microsoft.ApiManagement/service/apis/polici
   name: 'policy'
   properties: {
     format: 'rawxml'
-    value: '<policies>\n  <inbound>\n    <base />\n    <authentication-managed-identity resource="https://cognitiveservices.azure.com" />\n    <set-backend-service backend-id="openai-pool" />\n  </inbound>\n  <backend><base /></backend>\n  <outbound><base /></outbound>\n  <on-error><base /></on-error>\n</policies>'
+    value: '<policies>\n  <inbound>\n    <base />\n    <authentication-managed-identity resource="https://cognitiveservices.azure.com" client-id="${apim_identity_outputs_clientid}" />\n    <set-backend-service backend-id="openai-pool" />\n  </inbound>\n  <backend><base /></backend>\n  <outbound><base /></outbound>\n  <on-error><base /></on-error>\n</policies>'
   }
   parent: openai_api
   dependsOn: [
@@ -426,5 +401,3 @@ output gatewayUrl string = apim.properties.gatewayUrl
 output name string = apim.name
 
 output id string = apim.id
-
-output principalId string = apim.identity.principalId

@@ -13,10 +13,10 @@ using System.Xml;
 using System.Xml.Linq;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
-using Aspire.Hosting.Azure.ApiManagement.Provisioning;
 using Aspire.Hosting.Foundry;
 using Aspire.Hosting.Pipelines;
 using Azure.Provisioning;
+using Azure.Provisioning.ApiManagement;
 using Azure.Provisioning.ApplicationInsights;
 using Azure.Provisioning.Authorization;
 using Azure.Provisioning.CognitiveServices;
@@ -27,6 +27,8 @@ using Azure.Provisioning.Primitives;
 using Azure.Provisioning.Resources;
 using Azure.Provisioning.Roles;
 using Azure.Provisioning.Storage;
+using Microsoft.Extensions.DependencyInjection;
+using SubscriptionState = Azure.Provisioning.ApiManagement.SubscriptionState;
 
 namespace Aspire.Hosting;
 
@@ -112,29 +114,12 @@ public static class AzureApiManagementExtensions
         }
 
         builder.AddAzureProvisioning();
+        builder.Services.Configure<AzureProvisioningOptions>(provisioning => provisioning.SupportsTargetedRoleAssignments = true);
+        builder.AddResource(resource.Identity).WithParentRelationship(resource);
+        resource.References.Add(resource.Identity);
 
         return builder.AddResource(resource)
-            .WithIconName("GlobeShield")
-            .WithRoleAssignmentPreparation();
-    }
-
-    /// <summary>
-    /// Confirms that an existing API Management service has a system-assigned managed identity.
-    /// </summary>
-    /// <param name="builder">The Azure API Management resource builder.</param>
-    /// <returns>The resource builder.</returns>
-    /// <remarks>
-    /// This method does not modify the existing service. Call it when Aspire-managed backends use managed-identity
-    /// authentication or require role assignments that target the existing service's system-assigned identity.
-    /// </remarks>
-    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> is null.</exception>
-    [AspireExport]
-    public static IResourceBuilder<AzureApiManagementResource> WithExistingSystemAssignedIdentity(
-        this IResourceBuilder<AzureApiManagementResource> builder)
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-        builder.Resource.ExistingSystemAssignedIdentityConfirmed = true;
-        return builder;
+            .WithIconName("GlobeShield");
     }
 
     /// <summary>
@@ -537,8 +522,11 @@ public static class AzureApiManagementExtensions
         string[]? tags = null)
     {
         ArgumentNullException.ThrowIfNull(value);
-        return AddNamedValueCore(builder, name, value, secret: true, displayName, namedValueName, tags)
+        var namedValue = AddNamedValueCore(builder, name, value, secret: true, displayName, namedValueName, tags)
             .WithRelationship(value.Resource, "Secret");
+        ConfigureKeyVaultAccess(builder.Resource, value, KeyVaultBuiltInRole.KeyVaultSecretsUser);
+
+        return namedValue;
     }
 
     /// <summary>
@@ -788,6 +776,7 @@ public static class AzureApiManagementExtensions
             type,
             defaultSslBinding,
             negotiateClientCertificate));
+        ConfigureKeyVaultAccess(builder.Resource, certificate, KeyVaultBuiltInRole.KeyVaultCertificateUser);
 
         return builder.WithRelationship(certificate.Resource, "Certificate");
     }
@@ -881,9 +870,10 @@ public static class AzureApiManagementExtensions
             ReferenceExpression.Create($"{deployment.Resource.Parent.Endpoint}"),
             deployment.Resource.DeploymentName,
             backendName);
-        backend.Resource.RoleAssignments.Add(new(
-            deployment.Resource.Parent,
-            CognitiveServicesBuiltInRole.CognitiveServicesOpenAIUser));
+        builder.ApplicationBuilder.CreateResourceBuilder(builder.Resource.Identity)
+            .WithRoleAssignments(
+                builder.ApplicationBuilder.CreateResourceBuilder(deployment.Resource.Parent),
+                CognitiveServicesBuiltInRole.CognitiveServicesOpenAIUser);
 
         return backend.WithRelationship(deployment.Resource, "Backend");
     }
@@ -913,9 +903,10 @@ public static class AzureApiManagementExtensions
             ReferenceExpression.Create($"{deployment.Resource.Parent.Endpoint}"),
             deployment.Resource.DeploymentName,
             backendName);
-        backend.Resource.RoleAssignments.Add(new(
-            deployment.Resource.Parent,
-            CognitiveServicesBuiltInRole.CognitiveServicesUser));
+        builder.ApplicationBuilder.CreateResourceBuilder(builder.Resource.Identity)
+            .WithRoleAssignments(
+                builder.ApplicationBuilder.CreateResourceBuilder(deployment.Resource.Parent),
+                CognitiveServicesBuiltInRole.CognitiveServicesUser);
 
         return backend.WithRelationship(deployment.Resource, "Backend");
     }
@@ -940,9 +931,10 @@ public static class AzureApiManagementExtensions
                 ManagedIdentityResource = "https://storage.azure.com/",
             },
             backendName);
-        backend.Resource.RoleAssignments.Add(new(
-            blobs.Resource.Parent,
-            StorageBuiltInRole.StorageBlobDataReader));
+        builder.ApplicationBuilder.CreateResourceBuilder(builder.Resource.Identity)
+            .WithRoleAssignments(
+                builder.ApplicationBuilder.CreateResourceBuilder(blobs.Resource.Parent),
+                StorageBuiltInRole.StorageBlobDataReader);
 
         return backend.WithRelationship(blobs.Resource, "Backend");
     }
@@ -1565,22 +1557,6 @@ public static class AzureApiManagementExtensions
         var hasExplicitExistingScope =
             azureResource.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existingAnnotation) &&
             (existingAnnotation.ResourceGroup is not null || existingAnnotation.Subscription is not null);
-        var requiresSystemAssignedIdentity =
-            azureResource.RequiresSystemAssignedIdentity ||
-            azureResource.Backends.Any(backend =>
-                backend.Options.ManagedIdentityResource is not null ||
-                backend.RoleAssignments.Count > 0);
-
-        for (var index = 0; index < azureResource.KeyVaultRoleAssignmentDependencies.Count; index++)
-        {
-            var dependency = azureResource.KeyVaultRoleAssignmentDependencies[index];
-            // This parameter is intentionally unused inside the APIM module. Passing the role module's
-            // output makes the dependency Bicep-visible, so APIM reads Key Vault only after RBAC exists.
-            _ = dependency.AsProvisioningParameter(
-                infrastructure,
-                CreateGeneratedBicepIdentifier($"keyVaultRoleAssignmentDependency{index}", azureResource.Name));
-        }
-
         var hasPrivateEndpoint = azureResource.HasAnnotationOfType<PrivateEndpointTargetAnnotation>();
 
         if (hasPrivateEndpoint)
@@ -1615,22 +1591,6 @@ public static class AzureApiManagementExtensions
         }
 
         if (isExisting &&
-            azureResource.NamedValues.Any(namedValue => namedValue.Value is IAzureKeyVaultSecretReference))
-        {
-            throw new InvalidOperationException(
-                $"Existing API Management resource '{azureResource.Name}' cannot attach the managed identity required by Key Vault named values.");
-        }
-
-        if (isExisting &&
-            requiresSystemAssignedIdentity &&
-            !azureResource.ExistingSystemAssignedIdentityConfirmed)
-        {
-            throw new InvalidOperationException(
-                $"Existing API Management resource '{azureResource.Name}' must have a system-assigned managed identity. " +
-                $"Call {nameof(WithExistingSystemAssignedIdentity)} to confirm its configuration.");
-        }
-
-        if (isExisting &&
             hasExplicitExistingScope &&
             (azureResource.Diagnostic is not null ||
              azureResource.Apis.Any(api => api.Diagnostic is not null)))
@@ -1641,101 +1601,78 @@ public static class AzureApiManagementExtensions
         }
 
         var service = isExisting
-            ? (ApiManagementServiceProvisioningResource)azureResource.AddAsExistingResource(infrastructure)
-            : new ApiManagementServiceProvisioningResource(infrastructure.AspireResource.GetBicepIdentifier())
+            ? AzureProvisioningResource.CreateExistingOrNewProvisionableResource(
+                infrastructure,
+                static (identifier, name) =>
+                {
+                    var existing = ApiManagementService.FromExisting(identifier, "2025-03-01-preview");
+                    existing.Name = name;
+                    return existing;
+                },
+                static _ => throw new UnreachableException())
+            // Premium v2 injection requires this preview ARM version, even though the SDK defaults to 2024-05-01.
+            // https://learn.microsoft.com/azure/api-management/inject-vnet-v2
+            : new ApiManagementService(infrastructure.AspireResource.GetBicepIdentifier(), "2025-03-01-preview")
             {
                 PublisherEmail = azureResource.Options.PublisherEmail,
                 PublisherName = azureResource.Options.PublisherName,
-                SkuName = GetProvisioningSku(azureResource.Options.Sku),
-                SkuCapacity = azureResource.Options.Capacity,
+                Sku = new ApiManagementServiceSkuProperties
+                {
+                    Name = GetProvisioningSku(azureResource.Options.Sku),
+                    Capacity = azureResource.Options.Capacity,
+                },
                 Identity = new ManagedServiceIdentity
                 {
-                    ManagedServiceIdentityType = ManagedServiceIdentityType.SystemAssigned,
+                    ManagedServiceIdentityType = ManagedServiceIdentityType.UserAssigned,
+                    UserAssignedIdentities =
+                    {
+                        [BicepFunction.Interpolate($"{azureResource.Identity.Id.AsProvisioningParameter(infrastructure)}").Compile().ToString()] =
+                            new UserAssignedIdentityDetails(),
+                    },
                 },
-                VirtualNetworkType = "None",
+                VirtualNetworkType = VirtualNetworkType.None,
                 Tags =
                 {
                     { "aspire-resource-name", azureResource.Name },
                 },
             };
 
-        UserAssignedIdentity? inlineKeyVaultIdentity = null;
-        UserAssignedIdentity? keyVaultRoleAssignmentIdentity = null;
-        BicepValue<string>? keyVaultIdentityClientId = null;
-        if (!isExisting &&
-            (azureResource.CustomDomains.Count > 0 ||
-            azureResource.NamedValues.Any(namedValue => namedValue.Value is IAzureKeyVaultSecretReference))
-           )
-        {
-            if (azureResource.KeyVaultIdentity is { } standaloneKeyVaultIdentity)
-            {
-                var identityId = standaloneKeyVaultIdentity.Id.AsProvisioningParameter(
-                    infrastructure,
-                    CreateGeneratedBicepIdentifier("keyVaultIdentityId", azureResource.Name));
-                keyVaultIdentityClientId = standaloneKeyVaultIdentity.ClientId.AsProvisioningParameter(
-                    infrastructure,
-                    CreateGeneratedBicepIdentifier("keyVaultIdentityClientId", azureResource.Name));
-                service.Identity.ManagedServiceIdentityType = ManagedServiceIdentityType.SystemAssignedUserAssigned;
-                service.Identity.UserAssignedIdentities[
-                    BicepFunction.Interpolate($"{identityId}").Compile().ToString()] = new UserAssignedIdentityDetails();
-                keyVaultRoleAssignmentIdentity =
-                    (UserAssignedIdentity)standaloneKeyVaultIdentity.AddAsExistingResource(infrastructure);
-            }
-            else
-            {
-                inlineKeyVaultIdentity = new UserAssignedIdentity(
-                    CreateGeneratedBicepIdentifier("keyVaultIdentity", azureResource.Name))
-                {
-                    Name = BicepFunction.Take(
-                        BicepFunction.Interpolate($"apim-kv-{azureResource.Name}-{BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id)}"),
-                        128),
-                };
-                infrastructure.Add(inlineKeyVaultIdentity);
-
-                keyVaultIdentityClientId = inlineKeyVaultIdentity.ClientId;
-                service.Identity.ManagedServiceIdentityType = ManagedServiceIdentityType.SystemAssignedUserAssigned;
-                service.Identity.UserAssignedIdentities[
-                    BicepFunction.Interpolate($"{inlineKeyVaultIdentity.Id}").Compile().ToString()] = new UserAssignedIdentityDetails();
-                keyVaultRoleAssignmentIdentity = inlineKeyVaultIdentity;
-            }
-        }
-
         if (azureResource.VirtualNetworkConfiguration is { } virtualNetwork)
         {
             service.VirtualNetworkType = virtualNetwork.Mode switch
             {
-                AzureApiManagementVirtualNetworkMode.External => "External",
-                AzureApiManagementVirtualNetworkMode.Internal => "Internal",
+                AzureApiManagementVirtualNetworkMode.External => VirtualNetworkType.External,
+                AzureApiManagementVirtualNetworkMode.Internal => VirtualNetworkType.Internal,
                 _ => throw new UnreachableException(),
             };
-            service.SubnetResourceId = virtualNetwork.Subnet.Id.AsProvisioningParameter(infrastructure);
+            service.VirtualNetworkConfiguration = new VirtualNetworkConfiguration
+            {
+                SubnetResourceId = virtualNetwork.Subnet.Id.AsProvisioningParameter(infrastructure),
+            };
         }
 
         var keyVaultRoleAssignments = new Dictionary<string, RoleAssignment>(StringComparer.Ordinal);
         foreach (var customDomain in azureResource.CustomDomains)
         {
-            Debug.Assert(keyVaultIdentityClientId is not null);
             var secret = customDomain.Certificate.AsKeyVaultSecret(infrastructure);
-            if (keyVaultRoleAssignmentIdentity is not null &&
-                (inlineKeyVaultIdentity is not null ||
-                 customDomain.Certificate.Resource is not AzureProvisioningResource))
+            if (customDomain.Certificate.Resource is not AzureProvisioningResource)
             {
                 var roleAssignment = AddKeyVaultRoleAssignment(
                     infrastructure,
                     customDomain.Certificate,
-                    keyVaultRoleAssignmentIdentity,
+                    (UserAssignedIdentity)azureResource.Identity.AddAsExistingResource(infrastructure),
                     KeyVaultBuiltInRole.KeyVaultCertificateUser,
                     keyVaultRoleAssignments);
                 service.DependsOn.Add(roleAssignment);
             }
-            service.HostnameConfigurations.Add(new ApiManagementHostnameConfigurationProvisioningModel
+            service.HostnameConfigurations.Add(new HostnameConfiguration
             {
-                Type = GetProvisioningHostnameType(customDomain.Type),
+                HostnameType = GetProvisioningHostnameType(customDomain.Type),
                 HostName = customDomain.Hostname,
-                KeyVaultId = CreateVersionlessSecretUri(secret),
-                IdentityClientId = keyVaultIdentityClientId,
-                DefaultSslBinding = customDomain.DefaultSslBinding,
-                NegotiateClientCertificate = customDomain.NegotiateClientCertificate,
+                KeyVaultSecretUri = new BicepValue<Uri>(CreateVersionlessSecretUri(secret).Compile()),
+                IdentityClientId = azureResource.Identity.ClientId.AsProvisioningParameter(infrastructure),
+                IsDefaultSslBindingEnabled = customDomain.DefaultSslBinding,
+                IsClientCertificateNegotiationEnabled = customDomain.NegotiateClientCertificate,
             });
         }
 
@@ -1748,18 +1685,14 @@ public static class AzureApiManagementExtensions
             infrastructure,
             azureResource,
             service,
-            inlineKeyVaultIdentity,
-            keyVaultRoleAssignmentIdentity,
-            keyVaultIdentityClientId,
             keyVaultRoleAssignments);
         var policyFragments = AddPolicyFragments(infrastructure, azureResource, service, namedValues);
         AddServicePolicy(infrastructure, azureResource, service, policyFragments, namedValues);
 
         var provisionedBackends = AddBackends(infrastructure, azureResource, service);
         var provisionedBackendPools = AddBackendPools(infrastructure, azureResource, service, provisionedBackends);
-        AddBackendRoleAssignments(infrastructure, azureResource, service);
 
-        var provisionedApis = new Dictionary<AzureApiManagementApiResource, ApiManagementApiProvisioningResource>();
+        var provisionedApis = new Dictionary<AzureApiManagementApiResource, ApiManagementApi>();
         foreach (var apiResource in azureResource.Apis)
         {
             provisionedApis.Add(
@@ -1789,21 +1722,14 @@ public static class AzureApiManagementExtensions
         {
             Value = service.Id,
         });
-        if (!isExisting || azureResource.ExistingSystemAssignedIdentityConfirmed)
-        {
-            infrastructure.Add(new ProvisioningOutput("principalId", typeof(string))
-            {
-                Value = service.Identity.PrincipalId,
-            });
-        }
     }
 
     private static void AddServicePolicy(
         AzureResourceInfrastructure infrastructure,
         AzureApiManagementResource azureResource,
-        ApiManagementServiceProvisioningResource service,
-        IReadOnlyList<ApiManagementPolicyFragmentProvisioningResource> policyFragments,
-        IReadOnlyList<ApiManagementNamedValueProvisioningResource> namedValues)
+        ApiManagementService service,
+        IReadOnlyList<PolicyFragmentContract> policyFragments,
+        IReadOnlyList<ApiManagementNamedValue> namedValues)
     {
         var policyXml = azureResource.PolicyXml ??
             CreatePolicyDocument(azureResource.InboundPolicyStatements, inheritParentPolicy: false);
@@ -1813,12 +1739,12 @@ public static class AzureApiManagementExtensions
             return;
         }
 
-        var policy = new ApiManagementServicePolicyProvisioningResource(
+        var policy = new ApiManagementPolicy(
             CreateGeneratedBicepIdentifier("servicePolicy", service.BicepIdentifier))
         {
             Parent = service,
             Name = "policy",
-            Format = "rawxml",
+            Format = PolicyContentFormat.RawXml,
             Value = policyXml!,
         };
         foreach (var policyFragment in policyFragments)
@@ -1832,21 +1758,21 @@ public static class AzureApiManagementExtensions
         infrastructure.Add(policy);
     }
 
-    private static IReadOnlyList<ApiManagementPolicyFragmentProvisioningResource> AddPolicyFragments(
+    private static IReadOnlyList<PolicyFragmentContract> AddPolicyFragments(
         AzureResourceInfrastructure infrastructure,
         AzureApiManagementResource azureResource,
-        ApiManagementServiceProvisioningResource service,
-        IReadOnlyList<ApiManagementNamedValueProvisioningResource> namedValues)
+        ApiManagementService service,
+        IReadOnlyList<ApiManagementNamedValue> namedValues)
     {
-        var provisionedFragments = new List<ApiManagementPolicyFragmentProvisioningResource>();
+        var provisionedFragments = new List<PolicyFragmentContract>();
         foreach (var fragmentResource in azureResource.PolicyFragments)
         {
-            var fragment = new ApiManagementPolicyFragmentProvisioningResource(
+            var fragment = new PolicyFragmentContract(
                 Infrastructure.NormalizeBicepIdentifier(fragmentResource.Name))
             {
                 Parent = service,
                 Name = fragmentResource.FragmentName,
-                Format = "rawxml",
+                Format = PolicyFragmentContentFormat.Rawxml,
                 Value = CreatePolicyFragmentDocument(fragmentResource.Value),
             };
             if (fragmentResource.Description is not null)
@@ -1865,25 +1791,22 @@ public static class AzureApiManagementExtensions
         return provisionedFragments;
     }
 
-    private static IReadOnlyList<ApiManagementNamedValueProvisioningResource> AddNamedValues(
+    private static IReadOnlyList<ApiManagementNamedValue> AddNamedValues(
         AzureResourceInfrastructure infrastructure,
         AzureApiManagementResource azureResource,
-        ApiManagementServiceProvisioningResource service,
-        UserAssignedIdentity? inlineKeyVaultIdentity,
-        UserAssignedIdentity? keyVaultRoleAssignmentIdentity,
-        BicepValue<string>? keyVaultIdentityClientId,
+        ApiManagementService service,
         Dictionary<string, RoleAssignment> keyVaultRoleAssignments)
     {
-        var provisionedNamedValues = new List<ApiManagementNamedValueProvisioningResource>();
+        var provisionedNamedValues = new List<ApiManagementNamedValue>();
         foreach (var namedValueResource in azureResource.NamedValues)
         {
-            var namedValue = new ApiManagementNamedValueProvisioningResource(
+            var namedValue = new ApiManagementNamedValue(
                 Infrastructure.NormalizeBicepIdentifier(namedValueResource.Name))
             {
                 Parent = service,
                 Name = namedValueResource.NamedValueName,
                 DisplayName = namedValueResource.DisplayName,
-                Secret = namedValueResource.Secret,
+                IsSecret = namedValueResource.Secret,
             };
             foreach (var tag in namedValueResource.Tags)
             {
@@ -1892,21 +1815,18 @@ public static class AzureApiManagementExtensions
 
             if (namedValueResource.Value is IAzureKeyVaultSecretReference secretReference)
             {
-                Debug.Assert(keyVaultIdentityClientId is not null);
                 var secret = secretReference.AsKeyVaultSecret(infrastructure);
-                namedValue.KeyVault = new ApiManagementKeyVaultNamedValueProvisioningModel
+                namedValue.KeyVault = new KeyVaultContractCreateProperties
                 {
                     SecretIdentifier = CreateVersionlessSecretUri(secret),
-                    IdentityClientId = keyVaultIdentityClientId,
+                    IdentityClientId = azureResource.Identity.ClientId.AsProvisioningParameter(infrastructure),
                 };
-                if (keyVaultRoleAssignmentIdentity is not null &&
-                    (inlineKeyVaultIdentity is not null ||
-                     secretReference.Resource is not AzureProvisioningResource))
+                if (secretReference.Resource is not AzureProvisioningResource)
                 {
                     var roleAssignment = AddKeyVaultRoleAssignment(
                         infrastructure,
                         secretReference,
-                        keyVaultRoleAssignmentIdentity,
+                        (UserAssignedIdentity)azureResource.Identity.AddAsExistingResource(infrastructure),
                         KeyVaultBuiltInRole.KeyVaultSecretsUser,
                         keyVaultRoleAssignments);
                     namedValue.DependsOn.Add(roleAssignment);
@@ -1934,23 +1854,23 @@ public static class AzureApiManagementExtensions
     private static void AddProducts(
         AzureResourceInfrastructure infrastructure,
         AzureApiManagementResource azureResource,
-        ApiManagementServiceProvisioningResource service,
-        IReadOnlyDictionary<AzureApiManagementApiResource, ApiManagementApiProvisioningResource> provisionedApis)
+        ApiManagementService service,
+        IReadOnlyDictionary<AzureApiManagementApiResource, ApiManagementApi> provisionedApis)
     {
         foreach (var productResource in azureResource.Products)
         {
             var productIdentifier = Infrastructure.NormalizeBicepIdentifier(productResource.Name);
-            var product = new ApiManagementProductProvisioningResource(productIdentifier)
+            var product = new ApiManagementProduct(productIdentifier)
             {
                 Parent = service,
                 Name = productResource.ProductName,
                 DisplayName = productResource.DisplayName,
-                SubscriptionRequired = productResource.Options.SubscriptionRequired,
-                ApprovalRequired = productResource.Options.ApprovalRequired,
+                IsSubscriptionRequired = productResource.Options.SubscriptionRequired,
+                IsApprovalRequired = productResource.Options.ApprovalRequired,
                 State = productResource.Options.State switch
                 {
-                    AzureApiManagementProductState.NotPublished => "notPublished",
-                    AzureApiManagementProductState.Published => "published",
+                    AzureApiManagementProductState.NotPublished => ApiManagementProductState.NotPublished,
+                    AzureApiManagementProductState.Published => ApiManagementProductState.Published,
                     _ => throw new UnreachableException(),
                 },
             };
@@ -1970,11 +1890,12 @@ public static class AzureApiManagementExtensions
 
             foreach (var apiResource in productResource.Apis)
             {
-                var productApi = new ApiManagementProductApiProvisioningResource(
+                var productApi = new ServiceProductApiLink(
                     CreateGeneratedBicepIdentifier("productApi", productResource.Name, apiResource.Name))
                 {
                     Parent = product,
-                    Name = apiResource.ApiName,
+                    Name = CreateBoundedIdentifier(apiResource.ApiName, 80),
+                    ApiId = new BicepValue<string>(provisionedApis[apiResource].Id.Compile()),
                 };
                 productApi.DependsOn.Add(provisionedApis[apiResource]);
                 infrastructure.Add(productApi);
@@ -1982,21 +1903,21 @@ public static class AzureApiManagementExtensions
 
             foreach (var subscriptionResource in productResource.Subscriptions)
             {
-                var subscription = new ApiManagementSubscriptionProvisioningResource(
+                var subscription = new ApiManagementSubscription(
                     Infrastructure.NormalizeBicepIdentifier(subscriptionResource.Name))
                 {
                     Parent = service,
                     Name = subscriptionResource.SubscriptionName,
                     DisplayName = subscriptionResource.DisplayName,
-                    Scope = product.Id,
+                    Scope = new BicepValue<string>(product.Id.Compile()),
                     State = subscriptionResource.Options.State switch
                     {
-                        AzureApiManagementSubscriptionState.Active => "active",
-                        AzureApiManagementSubscriptionState.Suspended => "suspended",
-                        AzureApiManagementSubscriptionState.Submitted => "submitted",
-                        AzureApiManagementSubscriptionState.Rejected => "rejected",
-                        AzureApiManagementSubscriptionState.Expired => "expired",
-                        AzureApiManagementSubscriptionState.Cancelled => "cancelled",
+                        AzureApiManagementSubscriptionState.Active => SubscriptionState.Active,
+                        AzureApiManagementSubscriptionState.Suspended => SubscriptionState.Suspended,
+                        AzureApiManagementSubscriptionState.Submitted => SubscriptionState.Submitted,
+                        AzureApiManagementSubscriptionState.Rejected => SubscriptionState.Rejected,
+                        AzureApiManagementSubscriptionState.Expired => SubscriptionState.Expired,
+                        AzureApiManagementSubscriptionState.Cancelled => SubscriptionState.Cancelled,
                         _ => throw new UnreachableException(),
                     },
                     AllowTracing = subscriptionResource.Options.AllowTracing,
@@ -2009,8 +1930,8 @@ public static class AzureApiManagementExtensions
     private static void AddDiagnostics(
         AzureResourceInfrastructure infrastructure,
         AzureApiManagementResource azureResource,
-        ApiManagementServiceProvisioningResource service,
-        IReadOnlyDictionary<AzureApiManagementApiResource, ApiManagementApiProvisioningResource> provisionedApis)
+        ApiManagementService service,
+        IReadOnlyDictionary<AzureApiManagementApiResource, ApiManagementApi> provisionedApis)
     {
         var configuredDiagnostics = azureResource.Apis
             .Where(api => api.Diagnostic is not null)
@@ -2023,7 +1944,7 @@ public static class AzureApiManagementExtensions
             return;
         }
 
-        var loggers = new Dictionary<AzureApplicationInsightsResource, ApiManagementLoggerProvisioningResource>();
+        var loggers = new Dictionary<AzureApplicationInsightsResource, ApiManagementLogger>();
         foreach (var diagnostic in configuredDiagnostics)
         {
             if (loggers.ContainsKey(diagnostic.ApplicationInsights))
@@ -2032,12 +1953,12 @@ public static class AzureApiManagementExtensions
             }
 
             var applicationInsights = (ApplicationInsightsComponent)diagnostic.ApplicationInsights.AddAsExistingResource(infrastructure);
-            var logger = new ApiManagementLoggerProvisioningResource(
+            var logger = new ApiManagementLogger(
                 CreateGeneratedBicepIdentifier("logger", diagnostic.ApplicationInsights.Name))
             {
                 Parent = service,
                 Name = CreateBoundedIdentifier($"{diagnostic.ApplicationInsights.Name}-application-insights", 256),
-                LoggerType = "applicationInsights",
+                LoggerType = LoggerType.ApplicationInsights,
                 ResourceId = applicationInsights.Id,
                 IsBuffered = true,
                 Credentials =
@@ -2073,58 +1994,74 @@ public static class AzureApiManagementExtensions
         }
     }
 
-    private static ApiManagementServiceDiagnosticProvisioningResource CreateServiceDiagnostic(
-        ApiManagementServiceProvisioningResource service,
-        ApiManagementLoggerProvisioningResource logger,
+    private static ApiManagementDiagnostic CreateServiceDiagnostic(
+        ApiManagementService service,
+        ApiManagementLogger logger,
         AzureApiManagementDiagnosticOptions options)
     {
-        var diagnostic = new ApiManagementServiceDiagnosticProvisioningResource(
+        var diagnostic = new ApiManagementDiagnostic(
             CreateGeneratedBicepIdentifier("serviceDiagnostic", service.BicepIdentifier))
         {
             Parent = service,
             Name = "applicationinsights",
-            LoggerId = logger.Id,
-            AlwaysLog = "allErrors",
-            Sampling = new ApiManagementSamplingProvisioningModel
+            LoggerId = new BicepValue<string>(logger.Id.Compile()),
+            AlwaysLog = AlwaysLog.AllErrors,
+            Sampling = new SamplingSettings
             {
-                SamplingType = "fixed",
+                SamplingType = SamplingType.Fixed,
                 Percentage = options.SamplingPercentage,
             },
-            HttpCorrelationProtocol = "W3C",
-            LogClientIp = options.LogClientIp,
+            HttpCorrelationProtocol = HttpCorrelationProtocol.W3C,
+            IsLogClientIPEnabled = options.LogClientIp,
             Verbosity = GetProvisioningVerbosity(options.Verbosity),
-            OperationNameFormat = "Name",
+            OperationNameFormat = OperationNameFormat.Name,
             Metrics = true,
         };
         diagnostic.DependsOn.Add(logger);
         return diagnostic;
     }
 
-    private static ApiManagementApiDiagnosticProvisioningResource CreateApiDiagnostic(
-        ApiManagementApiProvisioningResource api,
-        ApiManagementLoggerProvisioningResource logger,
+    private static ApiDiagnostic CreateApiDiagnostic(
+        ApiManagementApi api,
+        ApiManagementLogger logger,
         AzureApiManagementDiagnosticOptions options)
     {
-        var diagnostic = new ApiManagementApiDiagnosticProvisioningResource(
+        var diagnostic = new ApiDiagnostic(
             CreateGeneratedBicepIdentifier("apiDiagnostic", api.BicepIdentifier))
         {
             Parent = api,
             Name = "applicationinsights",
-            LoggerId = logger.Id,
-            AlwaysLog = "allErrors",
-            Sampling = new ApiManagementSamplingProvisioningModel
+            LoggerId = new BicepValue<string>(logger.Id.Compile()),
+            AlwaysLog = AlwaysLog.AllErrors,
+            Sampling = new SamplingSettings
             {
-                SamplingType = "fixed",
+                SamplingType = SamplingType.Fixed,
                 Percentage = options.SamplingPercentage,
             },
-            HttpCorrelationProtocol = "W3C",
-            LogClientIp = options.LogClientIp,
+            HttpCorrelationProtocol = HttpCorrelationProtocol.W3C,
+            IsLogClientIPEnabled = options.LogClientIp,
             Verbosity = GetProvisioningVerbosity(options.Verbosity),
-            OperationNameFormat = "Name",
+            OperationNameFormat = OperationNameFormat.Name,
             Metrics = true,
         };
         diagnostic.DependsOn.Add(logger);
         return diagnostic;
+    }
+
+    private static void ConfigureKeyVaultAccess(
+        AzureApiManagementResource apiManagement,
+        IAzureKeyVaultSecretReference secret,
+        KeyVaultBuiltInRole role)
+    {
+        if (secret.Resource is AzureProvisioningResource target)
+        {
+            apiManagement.Identity.Annotations.Add(new RoleAssignmentAnnotation(
+                target,
+                new HashSet<RoleDefinition>
+                {
+                    new(role.ToString(), KeyVaultBuiltInRole.GetBuiltInRoleName(role)),
+                }));
+        }
     }
 
     private static RoleAssignment AddKeyVaultRoleAssignment(
@@ -2172,28 +2109,28 @@ public static class AzureApiManagementExtensions
         return BicepFunction.Interpolate($"{vault.Properties.VaultUri}secrets/{secret.Name}");
     }
 
-    private static ApiManagementApiProvisioningResource AddApi(
+    private static ApiManagementApi AddApi(
         AzureResourceInfrastructure infrastructure,
         AzureApiManagementApiResource apiResource,
-        ApiManagementServiceProvisioningResource service,
-        IReadOnlyDictionary<AzureApiManagementBackendResource, ApiManagementBackendProvisioningResource> provisionedBackends,
-        IReadOnlyDictionary<AzureApiManagementBackendPoolResource, ApiManagementBackendProvisioningResource> provisionedBackendPools,
-        IReadOnlyList<ApiManagementPolicyFragmentProvisioningResource> policyFragments,
-        IReadOnlyList<ApiManagementNamedValueProvisioningResource> namedValues)
+        ApiManagementService service,
+        IReadOnlyDictionary<AzureApiManagementBackendResource, ApiManagementBackend> provisionedBackends,
+        IReadOnlyDictionary<AzureApiManagementBackendPoolResource, ApiManagementBackend> provisionedBackendPools,
+        IReadOnlyList<PolicyFragmentContract> policyFragments,
+        IReadOnlyList<ApiManagementNamedValue> namedValues)
     {
         var apiIdentifier = Infrastructure.NormalizeBicepIdentifier(apiResource.Name);
-        var api = new ApiManagementApiProvisioningResource(
+        var api = new ApiManagementApi(
             apiIdentifier)
         {
             Parent = service,
             Name = apiResource.ApiName,
             DisplayName = apiResource.DisplayName,
             Path = apiResource.Path,
-            SubscriptionRequired = apiResource.SubscriptionRequired,
-            Type = "http",
+            IsSubscriptionRequired = apiResource.SubscriptionRequired,
+            ApiType = ApiType.Http,
             Protocols =
             {
-                "https",
+                ApiOperationInvokableProtocol.Https,
             },
         };
 
@@ -2257,7 +2194,7 @@ public static class AzureApiManagementExtensions
             foreach (var method in s_proxyOperationMethods)
             {
                 // The wildcard matches descendants but not the API suffix itself (for example /api).
-                var rootOperation = new ApiManagementOperationProvisioningResource(
+                var rootOperation = new ApiOperation(
                     CreateGeneratedBicepIdentifier($"proxy{method}RootOperation", apiIdentifier))
                 {
                     Parent = api,
@@ -2269,7 +2206,7 @@ public static class AzureApiManagementExtensions
                 infrastructure.Add(rootOperation);
                 operationDependencies.Add(rootOperation);
 
-                var catchAllOperation = new ApiManagementOperationProvisioningResource(
+                var catchAllOperation = new ApiOperation(
                     CreateGeneratedBicepIdentifier($"proxy{method}Operation", apiIdentifier))
                 {
                     Parent = api,
@@ -2278,11 +2215,11 @@ public static class AzureApiManagementExtensions
                     Method = method,
                     UriTemplate = "/{*path}",
                 };
-                catchAllOperation.TemplateParameters.Add(new ApiManagementParameterProvisioningModel
+                catchAllOperation.TemplateParameters.Add(new ParameterContract
                 {
                     Name = "path",
-                    Type = "string",
-                    Required = true,
+                    ParameterContractType = "string",
+                    IsRequired = true,
                 });
                 infrastructure.Add(catchAllOperation);
                 operationDependencies.Add(catchAllOperation);
@@ -2298,14 +2235,17 @@ public static class AzureApiManagementExtensions
             CreatePolicyDocument(
                 apiResource.InboundPolicyStatements,
                 backendIdentifier,
-                managedIdentityResource: managedIdentityResource);
+                managedIdentityResource: managedIdentityResource,
+                managedIdentityClientId: managedIdentityResource is not null
+                    ? apiResource.Parent.Identity.ClientId.AsProvisioningParameter(infrastructure)
+                    : (BicepValue<string>?)null);
 
-        var policy = new ApiManagementApiPolicyProvisioningResource(
+        var policy = new ApiPolicy(
             CreateGeneratedBicepIdentifier("apiPolicy", apiIdentifier))
         {
             Parent = api,
             Name = "policy",
-            Format = "rawxml",
+            Format = PolicyContentFormat.RawXml,
             Value = policyXml!,
         };
         policy.DependsOn.Add(backend);
@@ -2328,12 +2268,12 @@ public static class AzureApiManagementExtensions
         return api;
     }
 
-    private static (string Identifier, ApiManagementBackendProvisioningResource Backend, string? ManagedIdentityResource)
+    private static (string Identifier, ApiManagementBackend Backend, string? ManagedIdentityResource)
         AddComputeBackend(
             AzureResourceInfrastructure infrastructure,
             AzureApiManagementApiResource apiResource,
-            ApiManagementApiProvisioningResource api,
-            ApiManagementServiceProvisioningResource service,
+            ApiManagementApi api,
+            ApiManagementService service,
             string apiIdentifier)
     {
         Debug.Assert(apiResource.Target is not null);
@@ -2399,16 +2339,19 @@ public static class AzureApiManagementExtensions
                 importedServiceUrl)
             : computeBackendUrl;
 
-        var backend = new ApiManagementBackendProvisioningResource(backendIdentifier)
+        var backend = new ApiManagementBackend(backendIdentifier)
         {
             Parent = service,
             Name = backendName,
-            Protocol = "http",
-            Uri = backendUrl,
+            Protocol = BackendProtocol.Http,
+            Uri = new BicepValue<Uri>(backendUrl.Compile()),
             Title = apiResource.DisplayName,
-            Type = "Single",
-            ValidateCertificateChain = true,
-            ValidateCertificateName = true,
+            TypePropertiesType = BackendType.Single,
+            Tls = new BackendTlsProperties
+            {
+                ShouldValidateCertificateChain = true,
+                ShouldValidateCertificateName = true,
+            },
         };
         infrastructure.Add(backend);
 
@@ -2456,31 +2399,34 @@ public static class AzureApiManagementExtensions
         return ReferenceExpression.Create($"{endpointExpression}{source.Path}");
     }
 
-    private static Dictionary<AzureApiManagementBackendResource, ApiManagementBackendProvisioningResource> AddBackends(
+    private static Dictionary<AzureApiManagementBackendResource, ApiManagementBackend> AddBackends(
         AzureResourceInfrastructure infrastructure,
         AzureApiManagementResource azureResource,
-        ApiManagementServiceProvisioningResource service)
+        ApiManagementService service)
     {
-        var provisionedBackends = new Dictionary<AzureApiManagementBackendResource, ApiManagementBackendProvisioningResource>();
+        var provisionedBackends = new Dictionary<AzureApiManagementBackendResource, ApiManagementBackend>();
         foreach (var backendResource in azureResource.Backends)
         {
             var backendIdentifier = Infrastructure.NormalizeBicepIdentifier(backendResource.Name);
-            var backend = new ApiManagementBackendProvisioningResource(backendIdentifier)
+            var backend = new ApiManagementBackend(backendIdentifier)
             {
                 Parent = service,
                 Name = backendResource.BackendName,
                 Protocol = GetProvisioningBackendProtocol(backendResource.Options.Protocol),
-                Uri = backendResource.UriExpression.AsProvisioningParameter(
+                Uri = new BicepValue<Uri>(backendResource.UriExpression.AsProvisioningParameter(
                     infrastructure,
-                    CreateGeneratedBicepIdentifier("backendUrl", backendIdentifier)),
+                    CreateGeneratedBicepIdentifier("backendUrl", backendIdentifier)).Value.Compile()),
                 Title = backendResource.Options.Title ?? backendResource.Name,
-                Type = "Single",
-                ValidateCertificateChain = backendResource.Options.ValidateCertificateChain,
-                ValidateCertificateName = backendResource.Options.ValidateCertificateName,
+                TypePropertiesType = BackendType.Single,
+                Tls = new BackendTlsProperties
+                {
+                    ShouldValidateCertificateChain = backendResource.Options.ValidateCertificateChain,
+                    ShouldValidateCertificateName = backendResource.Options.ValidateCertificateName,
+                },
             };
             if (backendResource.Options.CircuitBreaker is { } circuitBreaker)
             {
-                backend.CircuitBreaker = CreateCircuitBreaker(circuitBreaker);
+                backend.CircuitBreakerRules.Add(CreateCircuitBreakerRule(circuitBreaker));
             }
             infrastructure.Add(backend);
             provisionedBackends.Add(backendResource, backend);
@@ -2512,13 +2458,13 @@ public static class AzureApiManagementExtensions
         }
     }
 
-    private static Dictionary<AzureApiManagementBackendPoolResource, ApiManagementBackendProvisioningResource> AddBackendPools(
+    private static Dictionary<AzureApiManagementBackendPoolResource, ApiManagementBackend> AddBackendPools(
         AzureResourceInfrastructure infrastructure,
         AzureApiManagementResource azureResource,
-        ApiManagementServiceProvisioningResource service,
-        IReadOnlyDictionary<AzureApiManagementBackendResource, ApiManagementBackendProvisioningResource> provisionedBackends)
+        ApiManagementService service,
+        IReadOnlyDictionary<AzureApiManagementBackendResource, ApiManagementBackend> provisionedBackends)
     {
-        var provisionedPools = new Dictionary<AzureApiManagementBackendPoolResource, ApiManagementBackendProvisioningResource>();
+        var provisionedPools = new Dictionary<AzureApiManagementBackendPoolResource, ApiManagementBackend>();
         foreach (var poolResource in azureResource.BackendPools)
         {
             if (poolResource.Backends.Count == 0)
@@ -2528,19 +2474,18 @@ public static class AzureApiManagementExtensions
             }
 
             var poolIdentifier = Infrastructure.NormalizeBicepIdentifier(poolResource.Name);
-            var pool = new ApiManagementBackendProvisioningResource(poolIdentifier)
+            var pool = new ApiManagementBackend(poolIdentifier)
             {
                 Parent = service,
                 Name = poolResource.BackendPoolName,
                 Title = poolResource.DisplayName,
-                Type = "Pool",
-                Pool = new ApiManagementBackendPoolProvisioningModel(),
+                TypePropertiesType = BackendType.Pool,
             };
 
             foreach (var member in poolResource.Backends)
             {
                 var backend = provisionedBackends[member.Backend];
-                pool.Pool.Services.Add(new ApiManagementBackendPoolMemberProvisioningModel
+                pool.PoolServices.Add(new BackendPoolItem
                 {
                     Id = backend.Id,
                     Priority = member.Priority,
@@ -2556,67 +2501,11 @@ public static class AzureApiManagementExtensions
         return provisionedPools;
     }
 
-    private static void AddBackendRoleAssignments(
-        AzureResourceInfrastructure infrastructure,
-        AzureApiManagementResource azureResource,
-        ApiManagementServiceProvisioningResource service)
-    {
-        var addedAssignments = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var assignment in azureResource.Backends.SelectMany(backend => backend.RoleAssignments))
-        {
-            if (AzureApiManagementRoleAssignmentPreparer.RequiresExternalRoleAssignment(
-                azureResource,
-                assignment.Target))
-            {
-                // Assignments involving an explicit scope are emitted by the final-model preparer so
-                // neither side is incorrectly resolved relative to the other module's deployment scope.
-                continue;
-            }
-
-            var key = $"{assignment.Target.Name}:{assignment.Role}";
-            if (!addedAssignments.Add(key))
-            {
-                continue;
-            }
-
-            RoleAssignment roleAssignment;
-            switch (assignment.Role)
-            {
-                case CognitiveServicesBuiltInRole cognitiveServicesRole:
-                    var cognitiveServicesAccount =
-                        (CognitiveServicesAccount)assignment.Target.AddAsExistingResource(infrastructure);
-                    roleAssignment = cognitiveServicesAccount.CreateRoleAssignment(
-                        cognitiveServicesRole,
-                        RoleManagementPrincipalType.ServicePrincipal,
-                        service.Identity.PrincipalId);
-                    roleAssignment.Name = BicepFunction.CreateGuid(
-                        cognitiveServicesAccount.Id,
-                        service.Id,
-                        roleAssignment.RoleDefinitionId);
-                    break;
-                case StorageBuiltInRole storageRole:
-                    var storageAccount = (StorageAccount)assignment.Target.AddAsExistingResource(infrastructure);
-                    roleAssignment = storageAccount.CreateRoleAssignment(
-                        storageRole,
-                        RoleManagementPrincipalType.ServicePrincipal,
-                        service.Identity.PrincipalId);
-                    roleAssignment.Name = BicepFunction.CreateGuid(
-                        storageAccount.Id,
-                        service.Id,
-                        roleAssignment.RoleDefinitionId);
-                    break;
-                default:
-                    throw new UnreachableException();
-            }
-            infrastructure.Add(roleAssignment);
-        }
-    }
-
-    private static (string Identifier, ApiManagementBackendProvisioningResource Backend, string? ManagedIdentityResource)
+    private static (string Identifier, ApiManagementBackend Backend, string? ManagedIdentityResource)
         ResolveApiManagementBackend(
             AzureApiManagementApiResource apiResource,
-            IReadOnlyDictionary<AzureApiManagementBackendResource, ApiManagementBackendProvisioningResource> provisionedBackends,
-            IReadOnlyDictionary<AzureApiManagementBackendPoolResource, ApiManagementBackendProvisioningResource> provisionedBackendPools)
+            IReadOnlyDictionary<AzureApiManagementBackendResource, ApiManagementBackend> provisionedBackends,
+            IReadOnlyDictionary<AzureApiManagementBackendPoolResource, ApiManagementBackend> provisionedBackendPools)
     {
         return apiResource.Backend switch
         {
@@ -2630,49 +2519,44 @@ public static class AzureApiManagementExtensions
         };
     }
 
-    private static ApiManagementCircuitBreakerProvisioningModel CreateCircuitBreaker(
+    private static CircuitBreakerRule CreateCircuitBreakerRule(
         AzureApiManagementCircuitBreakerOptions options)
     {
-        var rule = new ApiManagementCircuitBreakerRuleProvisioningModel
+        var rule = new CircuitBreakerRule
         {
             Name = options.Name,
-            FailureCondition = new ApiManagementCircuitBreakerFailureConditionProvisioningModel
+            FailureCondition = new CircuitBreakerFailureCondition
             {
                 Count = options.FailureCount,
-                Interval = XmlConvert.ToString(TimeSpan.FromSeconds(options.FailureIntervalSeconds)),
+                // Azure.Provisioning serializes TimeSpan literals as "00:00:30", but APIM requires ISO 8601.
+                // https://learn.microsoft.com/azure/templates/microsoft.apimanagement/service/backends#circuitbreakerfailurecondition
+                Interval = new StringLiteralExpression(XmlConvert.ToString(TimeSpan.FromSeconds(options.FailureIntervalSeconds))),
             },
-            TripDuration = XmlConvert.ToString(TimeSpan.FromSeconds(options.TripDurationSeconds)),
+            TripDuration = new StringLiteralExpression(XmlConvert.ToString(TimeSpan.FromSeconds(options.TripDurationSeconds))),
             AcceptRetryAfter = options.AcceptRetryAfter,
-        };
-        var circuitBreaker = new ApiManagementCircuitBreakerProvisioningModel
-        {
-            Rules =
-            {
-                rule,
-            },
         };
 
         foreach (var range in options.StatusCodeRanges)
         {
-            rule.FailureCondition.StatusCodeRanges.Add(new ApiManagementStatusCodeRangeProvisioningModel
+            rule.FailureCondition.StatusCodeRanges.Add(new FailureStatusCodeRange
             {
-                Minimum = range.Minimum,
-                Maximum = range.Maximum,
+                Min = range.Minimum,
+                Max = range.Maximum,
             });
         }
 
-        return circuitBreaker;
+        return rule;
     }
 
     private static ProvisionableResource AddOperation(
         AzureResourceInfrastructure infrastructure,
         AzureApiManagementOperationResource operationResource,
-        ApiManagementApiProvisioningResource api,
-        IReadOnlyList<ApiManagementPolicyFragmentProvisioningResource> policyFragments,
-        IReadOnlyList<ApiManagementNamedValueProvisioningResource> namedValues)
+        ApiManagementApi api,
+        IReadOnlyList<PolicyFragmentContract> policyFragments,
+        IReadOnlyList<ApiManagementNamedValue> namedValues)
     {
         var operationIdentifier = Infrastructure.NormalizeBicepIdentifier(operationResource.Name);
-        var operation = new ApiManagementOperationProvisioningResource(
+        var operation = new ApiOperation(
             operationIdentifier)
         {
             Parent = api,
@@ -2684,11 +2568,11 @@ public static class AzureApiManagementExtensions
 
         foreach (var parameterName in GetTemplateParameterNames(operationResource.UrlTemplate))
         {
-            operation.TemplateParameters.Add(new ApiManagementParameterProvisioningModel
+            operation.TemplateParameters.Add(new ParameterContract
             {
                 Name = parameterName,
-                Type = "string",
-                Required = true,
+                ParameterContractType = "string",
+                IsRequired = true,
             });
         }
 
@@ -2702,12 +2586,12 @@ public static class AzureApiManagementExtensions
             return operation;
         }
 
-        var policy = new ApiManagementOperationPolicyProvisioningResource(
+        var policy = new ApiOperationPolicy(
             CreateGeneratedBicepIdentifier("operationPolicy", operationIdentifier))
         {
             Parent = operation,
             Name = "policy",
-            Format = "rawxml",
+            Format = PolicyContentFormat.RawXml,
             Value = policyXml,
         };
         foreach (var policyFragment in policyFragments)
@@ -2800,32 +2684,32 @@ public static class AzureApiManagementExtensions
         return builder.ToString();
     }
 
-    private static string GetProvisioningHostnameType(AzureApiManagementHostnameType type) =>
+    private static HostnameType GetProvisioningHostnameType(AzureApiManagementHostnameType type) =>
         type switch
         {
-            AzureApiManagementHostnameType.ConfigurationApi => "ConfigurationApi",
-            AzureApiManagementHostnameType.DeveloperPortal => "DeveloperPortal",
-            AzureApiManagementHostnameType.Portal => "Portal",
-            AzureApiManagementHostnameType.Proxy => "Proxy",
-            AzureApiManagementHostnameType.Management => "Management",
-            AzureApiManagementHostnameType.Scm => "Scm",
+            AzureApiManagementHostnameType.ConfigurationApi => HostnameType.ConfigurationApi,
+            AzureApiManagementHostnameType.DeveloperPortal => HostnameType.DeveloperPortal,
+            AzureApiManagementHostnameType.Portal => HostnameType.Portal,
+            AzureApiManagementHostnameType.Proxy => HostnameType.Proxy,
+            AzureApiManagementHostnameType.Management => HostnameType.Management,
+            AzureApiManagementHostnameType.Scm => HostnameType.Scm,
             _ => throw new UnreachableException(),
         };
 
-    private static string GetProvisioningVerbosity(AzureApiManagementDiagnosticVerbosity verbosity) =>
+    private static TraceVerbosityLevel GetProvisioningVerbosity(AzureApiManagementDiagnosticVerbosity verbosity) =>
         verbosity switch
         {
-            AzureApiManagementDiagnosticVerbosity.Error => "error",
-            AzureApiManagementDiagnosticVerbosity.Information => "information",
-            AzureApiManagementDiagnosticVerbosity.Verbose => "verbose",
+            AzureApiManagementDiagnosticVerbosity.Error => TraceVerbosityLevel.Error,
+            AzureApiManagementDiagnosticVerbosity.Information => TraceVerbosityLevel.Information,
+            AzureApiManagementDiagnosticVerbosity.Verbose => TraceVerbosityLevel.Verbose,
             _ => throw new UnreachableException(),
         };
 
-    private static string GetProvisioningBackendProtocol(AzureApiManagementBackendProtocol protocol) =>
+    private static BackendProtocol GetProvisioningBackendProtocol(AzureApiManagementBackendProtocol protocol) =>
         protocol switch
         {
-            AzureApiManagementBackendProtocol.Http => "http",
-            AzureApiManagementBackendProtocol.Soap => "soap",
+            AzureApiManagementBackendProtocol.Http => BackendProtocol.Http,
+            AzureApiManagementBackendProtocol.Soap => BackendProtocol.Soap,
             _ => throw new UnreachableException(),
         };
 
@@ -2949,11 +2833,12 @@ public static class AzureApiManagementExtensions
         }
     }
 
-    private static string? CreatePolicyDocument(
+    private static BicepValue<string>? CreatePolicyDocument(
         IReadOnlyList<string> inboundStatements,
         string? backendIdentifier = null,
         bool inheritParentPolicy = true,
-        string? managedIdentityResource = null)
+        string? managedIdentityResource = null,
+        BicepValue<string>? managedIdentityClientId = null)
     {
         if (backendIdentifier is null && inboundStatements.Count == 0)
         {
@@ -2968,11 +2853,18 @@ public static class AzureApiManagementExtensions
             builder.Append("    <base />\n");
         }
 
+        string? prefix = null;
         if (managedIdentityResource is not null)
         {
+            Debug.Assert(managedIdentityClientId is not null);
+            // APIM defaults to its system identity unless client-id selects the attached UAMI.
+            // https://learn.microsoft.com/azure/api-management/authentication-managed-identity-policy
             builder.Append("    <authentication-managed-identity ")
                 .Append(new XAttribute("resource", managedIdentityResource))
-                .Append(" />\n");
+                .Append(" client-id=\"");
+            prefix = builder.ToString();
+            builder.Clear();
+            builder.Append("\" />\n");
         }
 
         if (backendIdentifier is not null)
@@ -3007,7 +2899,9 @@ public static class AzureApiManagementExtensions
         }
         builder.Append("</policies>");
 
-        return builder.ToString();
+        return prefix is null
+            ? new BicepValue<string>(builder.ToString())
+            : BicepFunction.Interpolate($"{prefix}{managedIdentityClientId}{builder.ToString()}");
     }
 
     private static IEnumerable<string> GetTemplateParameterNames(string uriTemplate)
@@ -3236,15 +3130,15 @@ public static class AzureApiManagementExtensions
         };
     }
 
-    private static string GetOpenApiImportFormat(AzureApiManagementOpenApiFormat format, bool isLink) =>
+    private static ContentFormat GetOpenApiImportFormat(AzureApiManagementOpenApiFormat format, bool isLink) =>
         (format, isLink) switch
         {
-            (AzureApiManagementOpenApiFormat.OpenApi, false) => "openapi",
-            (AzureApiManagementOpenApiFormat.OpenApi, true) => "openapi-link",
-            (AzureApiManagementOpenApiFormat.OpenApiJson, false) => "openapi+json",
-            (AzureApiManagementOpenApiFormat.OpenApiJson, true) => "openapi+json-link",
-            (AzureApiManagementOpenApiFormat.SwaggerJson, false) => "swagger-json",
-            (AzureApiManagementOpenApiFormat.SwaggerJson, true) => "swagger-link-json",
+            (AzureApiManagementOpenApiFormat.OpenApi, false) => ContentFormat.OpenApi,
+            (AzureApiManagementOpenApiFormat.OpenApi, true) => ContentFormat.OpenApiLink,
+            (AzureApiManagementOpenApiFormat.OpenApiJson, false) => ContentFormat.OpenApiJson,
+            (AzureApiManagementOpenApiFormat.OpenApiJson, true) => ContentFormat.OpenApiJsonLink,
+            (AzureApiManagementOpenApiFormat.SwaggerJson, false) => ContentFormat.SwaggerJson,
+            (AzureApiManagementOpenApiFormat.SwaggerJson, true) => ContentFormat.SwaggerLinkJson,
             _ => throw new UnreachableException(),
         };
 
@@ -3444,17 +3338,19 @@ public static class AzureApiManagementExtensions
         }
     }
 
-    private static string GetProvisioningSku(AzureApiManagementSku sku) =>
+    private static BicepValue<ApiManagementServiceSkuType> GetProvisioningSku(AzureApiManagementSku sku) =>
         sku switch
         {
-            AzureApiManagementSku.Consumption => "Consumption",
-            AzureApiManagementSku.Developer => "Developer",
-            AzureApiManagementSku.Basic => "Basic",
-            AzureApiManagementSku.BasicV2 => "BasicV2",
-            AzureApiManagementSku.Standard => "Standard",
-            AzureApiManagementSku.StandardV2 => "StandardV2",
-            AzureApiManagementSku.Premium => "Premium",
-            AzureApiManagementSku.PremiumV2 => "PremiumV2",
+            AzureApiManagementSku.Consumption => ApiManagementServiceSkuType.Consumption,
+            AzureApiManagementSku.Developer => ApiManagementServiceSkuType.Developer,
+            AzureApiManagementSku.Basic => ApiManagementServiceSkuType.Basic,
+            AzureApiManagementSku.BasicV2 => ApiManagementServiceSkuType.BasicV2,
+            AzureApiManagementSku.Standard => ApiManagementServiceSkuType.Standard,
+            AzureApiManagementSku.StandardV2 => ApiManagementServiceSkuType.StandardV2,
+            AzureApiManagementSku.Premium => ApiManagementServiceSkuType.Premium,
+            // The published SDK enum predates PremiumV2; emit the ARM value without duplicating its SKU model.
+            // https://learn.microsoft.com/azure/templates/microsoft.apimanagement/2025-03-01-preview/service#apimanagementserviceskuproperties
+            AzureApiManagementSku.PremiumV2 => new StringLiteralExpression("PremiumV2"),
             _ => throw new UnreachableException(),
         };
 }

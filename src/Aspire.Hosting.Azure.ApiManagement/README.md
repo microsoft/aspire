@@ -90,17 +90,18 @@ var apim = builder.AddAzureApiManagement("apim", new()
 apim.AddApi("catalog-api", catalog, "catalog");
 ```
 
-Aspire treats the existing service itself as read-only. It can manage declared APIs, operations, backends, pools, policies, fragments, products, subscriptions, named values, and diagnostics, but it rejects service-level virtual-network, private-endpoint, custom-domain, and managed-identity mutations.
+Aspire treats the existing service itself as read-only. It can manage declared APIs, operations, backends, pools, policies, fragments, products, subscriptions, named values, and diagnostics, but it rejects service-level virtual-network and custom-domain mutations. It does not change the service's managed identities.
 
 Set `Sku` explicitly to the adopted service's actual pricing tier, even for Developer. Aspire requires this metadata to validate SKU-dependent children such as circuit breakers and OpenAI backends; it does not query or change the existing service's SKU. The Developer default applies only to new services.
 
-When managed backends authenticate with the existing service's system identity, confirm that the identity is already enabled:
+APIM uses a user-assigned managed identity for backend authentication and Key Vault access. Aspire creates this identity as a separate resource and grants its permissions through the standard Azure role-assignment pipeline. For an existing APIM service, attach the identity to the service outside Aspire before deploying managed-identity policies or Key Vault-backed named values. To use an identity already attached to the service, adopt it as an existing resource:
 
 ```csharp
-apim.WithExistingSystemAssignedIdentity();
+builder.CreateResourceBuilder(apim.Resource.Identity)
+    .PublishAsExisting("shared-apim-identity", resourceGroup: "shared-infrastructure");
 ```
 
-This confirmation does not modify the service. Aspire creates separate role-assignment modules whenever API Management or a backend or Key Vault target uses an explicitly scoped existing Azure resource in another resource group or subscription. Diagnostics configured on an existing APIM service still require the service and Application Insights resource to be in the same deployment resource group.
+Aspire uses the same identity and role-assignment path for new and existing APIM services. Role-assignment modules deploy at the target resource's scope, including other resource groups or subscriptions. Diagnostics configured on an existing APIM service still require the service and Application Insights resource to be in the same deployment resource group.
 
 ## Backends and backend pools
 
@@ -130,7 +131,7 @@ apim.AddOpenAIApi("openai-api", path: "openai")
 
 The generated APIM backend pool uses weighted routing between healthy members at the same priority. A lower priority number is preferred; members at the next priority are used when every member in a preferred group has an open circuit. Each backend has a circuit breaker that opens on HTTP 429 and honors the Azure OpenAI `Retry-After` response header.
 
-The API authenticates with the APIM system-assigned managed identity. Aspire grants that identity the Cognitive Services OpenAI User role on Azure OpenAI accounts and the Cognitive Services User role on Foundry accounts. The deploying principal needs `Microsoft.Authorization/roleAssignments/write` permission on those accounts, such as through the User Access Administrator or Owner role. Backend URLs include each physical deployment name, so a request such as:
+The API authenticates with APIM's user-assigned managed identity, selected explicitly by `client-id` in the generated policy. Aspire grants that identity the Cognitive Services OpenAI User role on Azure OpenAI accounts and the Cognitive Services User role on Foundry accounts. The deploying principal needs `Microsoft.Authorization/roleAssignments/write` permission on those accounts, such as through the User Access Administrator or Owner role. Backend URLs include each physical deployment name, so a request such as:
 
 ```text
 POST https://<gateway>.azure-api.net/openai/chat/completions?api-version=<version>
@@ -187,7 +188,7 @@ apim.AddApi("custom-api", path: "custom")
     .WithBackend(backend);
 ```
 
-Generic backends do not infer Azure role assignments because the required role is service-specific. Configure those permissions on the target resource separately when using managed identity.
+Generic backends do not infer Azure role assignments because the required role is service-specific. Configure permissions for `apim.Resource.Identity` on the target resource when using managed identity.
 
 The same generic backend and pool APIs are available in TypeScript:
 
@@ -270,6 +271,12 @@ apim.AddProduct("catalog-product", "Catalog", new()
 
 API Management generates the primary and secondary subscription keys. Aspire intentionally does not expose those keys as ordinary deployment outputs because they are secrets.
 
+Product membership is provisioned using the SDK's `ServiceProductApiLink` resource (`Microsoft.ApiManagement/service/products/apiLinks`), which references the API's full resource ID.
+
+## Customize provisioning
+
+Use `ConfigureInfrastructure` to customize the generated resources through the types in `Azure.Provisioning.ApiManagement`, such as `ApiManagementService`, `ApiManagementApi`, and `ApiManagementBackend`.
+
 ## Named values
 
 Named values can contain a non-secret literal, a secret Aspire parameter, or a Key Vault secret reference:
@@ -287,7 +294,7 @@ apim.AddKeyVaultNamedValue(
     displayName: "SharedSecret");
 ```
 
-Key Vault references stay late-bound and use versionless secret URIs so APIM can refresh rotated values. Aspire creates a user-assigned identity before the APIM service, grants it the Key Vault Secrets User role, and configures APIM to use that identity. This avoids the first-deployment dependency cycle that occurs when a new APIM service tries to use its not-yet-created system identity.
+Key Vault references stay late-bound and use versionless secret URIs so APIM can refresh rotated values. Aspire grants APIM's user-assigned identity the Key Vault Secrets User role through the standard Azure role-assignment pipeline. The APIM deployment waits for those role assignments before consuming secrets. Custom `IAzureKeyVaultResource` implementations that are not Azure provisioning resources retain inline role assignments.
 
 ## Application Insights diagnostics
 
@@ -325,7 +332,7 @@ apim.WithCustomDomain(
     defaultSslBinding: true);
 ```
 
-The certificate secret URI is versionless so APIM can automatically refresh renewed certificates. Aspire creates a user-assigned identity before the APIM service, grants it the Key Vault Certificate User role, and configures the hostname to use that identity. The Consumption SKU supports one custom domain for the gateway endpoint only. Key Vaults that require APIM's system identity through the trusted-services firewall exception need a staged deployment and are not currently supported by this API.
+The certificate secret URI is versionless so APIM can automatically refresh renewed certificates. Aspire grants APIM's user-assigned identity the Key Vault Certificate User role and configures the hostname to use that identity. The Consumption SKU supports one custom domain for the gateway endpoint only. Key Vaults that require APIM's system identity through the trusted-services firewall exception are not supported by this API.
 
 ## TypeScript service configuration
 

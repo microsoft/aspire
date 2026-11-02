@@ -1,6 +1,8 @@
 ﻿@description('The location for the resource(s) to be deployed.')
 param location string = resourceGroup().location
 
+param apim_identity_outputs_id string
+
 param _apim_openApiUrl_catalog_api string
 
 param _apim_computeBackendUrl_catalog_api string
@@ -18,7 +20,10 @@ resource apim 'Microsoft.ApiManagement/service@2025-03-01-preview' = {
     capacity: 1
   }
   identity: {
-    type: 'SystemAssigned'
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${apim_identity_outputs_id}': { }
+    }
   }
   tags: {
     'aspire-resource-name': 'apim'
@@ -28,14 +33,14 @@ resource apim 'Microsoft.ApiManagement/service@2025-03-01-preview' = {
 resource catalog_api 'Microsoft.ApiManagement/service/apis@2024-05-01' = {
   name: 'catalog-api'
   properties: {
-    displayName: 'catalog-api'
-    path: 'catalog'
-    subscriptionRequired: true
     type: 'http'
+    displayName: 'catalog-api'
+    format: 'openapi+json-link'
+    subscriptionRequired: true
+    path: 'catalog'
     protocols: [
       'https'
     ]
-    format: 'openapi+json-link'
     value: _apim_openApiUrl_catalog_api
   }
   parent: apim
@@ -45,13 +50,13 @@ resource _apim_computeBackend_catalog_api 'Microsoft.ApiManagement/service/backe
   name: 'catalog_apiBackend'
   properties: {
     protocol: 'http'
-    url: empty(catalog_api.properties.?serviceUrl) ? _apim_computeBackendUrl_catalog_api : catalog_api.properties.?serviceUrl
     title: 'catalog-api'
-    type: 'Single'
     tls: {
       validateCertificateChain: true
       validateCertificateName: true
     }
+    type: 'Single'
+    url: empty(catalog_api.properties.?serviceUrl) ? _apim_computeBackendUrl_catalog_api : catalog_api.properties.?serviceUrl
   }
   parent: apim
 }
@@ -73,5 +78,3 @@ output gatewayUrl string = apim.properties.gatewayUrl
 output name string = apim.name
 
 output id string = apim.id
-
-output principalId string = apim.identity.principalId
