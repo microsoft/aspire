@@ -5,7 +5,7 @@ import { AspireResourceExtendedDebugConfiguration, ExecutableLaunchConfiguration
 import { denoAppHostInspectorNotReady, denoAppHostRunCommandMissing, denoInspectorAddressUnavailable, nodeDisplayName, nodeLabel, invalidLaunchConfiguration } from "../../loc/strings";
 import { extensionLogOutputChannel } from "../../utils/logging";
 import { ResourceDebuggerExtension } from "../debuggerExtensions";
-import { LaunchedChildProcess, LaunchedChildProcessResolver, SystemLaunchedChildProcessQuery } from "../launchedChildProcessDiscovery";
+import { LaunchedChildProcess, LaunchedChildProcessQuery, SystemLaunchedChildProcessQuery, findDescendantProcessIds } from "../launchedChildProcessDiscovery";
 import { getJavaScriptRuntimeDisplayName, getJavaScriptRuntimeTargetPath, jsRuntimeBaseFileTypes, launchMethodDirect, launchMethodPackageManager, resolveJavaScriptLaunchMethod } from "./javascriptRuntime";
 
 function asNodeConfig(launchConfig: ExecutableLaunchConfiguration): JavaScriptRuntimeLaunchConfiguration {
@@ -40,8 +40,8 @@ export function getAppHostInspectorAttachTimeoutMs(configuredTimeout: unknown): 
     return typeof configuredTimeout === 'number' ? configuredTimeout : denoAppHostInspectorAttachTimeoutMs;
 }
 
-// The runtime is already running when cleanup starts, so a short search is enough to find it.
-const inspectorWaitingProcessResolver = new LaunchedChildProcessResolver(new SystemLaunchedChildProcessQuery(), undefined, { timeoutMs: 5_000 });
+// Bounds the process lookup, which runs PowerShell CIM queries on Windows.
+const inspectorWaitingProcessQueryTimeoutMs = 30_000;
 
 export function hasCommandLineArgument(candidate: LaunchedChildProcess, argument: string): boolean {
     if (candidate.commandLineArguments) {
@@ -57,6 +57,30 @@ export function hasCommandLineArgument(candidate: LaunchedChildProcess, argument
 }
 
 /**
+ * Finds the extension host's descendants that were started with the given inspector argument. The runtime is
+ * already running when this is called, so a single listing is enough. Every match is returned because a
+ * Windows .cmd shim (for example an npm-installed deno.cmd) leaves both cmd.exe and deno.exe with the argument.
+ */
+export async function findInspectorWaitingProcessIds(
+    inspectorArgument: string,
+    query: LaunchedChildProcessQuery,
+    launcherPid: number = process.pid): Promise<number[]> {
+    const processes = await query.listProcesses(undefined, inspectorWaitingProcessQueryTimeoutMs);
+    const matches: number[] = [];
+    for (const pid of findDescendantProcessIds(launcherPid, false, processes) ?? []) {
+        const listed = processes.find(candidate => candidate.pid === pid);
+        const candidate = query.canTrustListedProcessIdentity === true || !query.getProcess
+            ? listed
+            : await query.getProcess(pid, undefined, inspectorWaitingProcessQueryTimeoutMs).catch(() => undefined);
+        if (candidate && hasCommandLineArgument(candidate, inspectorArgument)) {
+            matches.push(pid);
+        }
+    }
+
+    return matches;
+}
+
+/**
  * js-debug only takes ownership of the runtime after it attaches to the inspector. If the inspector never
  * becomes ready (the attach times out) or the session is stopped while js-debug is still waiting, js-debug
  * fails the launch but leaves the runtime blocked in --inspect-wait. Stop that runtime, which is identified
@@ -67,7 +91,7 @@ export function registerDenoAppHostInspectorCleanup(
     inspectorAddress: string,
     timeoutMs: number,
     launchOptions: LaunchOptions,
-    resolver: LaunchedChildProcessResolver = inspectorWaitingProcessResolver): void {
+    query: LaunchedChildProcessQuery = new SystemLaunchedChildProcessQuery()): void {
     const isRootSession = (session: vscode.DebugSession) =>
         session.configuration.runId === launchOptions.runId &&
         session.configuration.debugSessionId === launchOptions.debugSessionId &&
@@ -93,19 +117,22 @@ export function registerDenoAppHostInspectorCleanup(
             extensionLogOutputChannel.info(`Stopping the Deno AppHost that was still waiting for a debugger at ${inspectorAddress}.`);
         }
 
-        void resolver.resolveProcessId(process.pid, {
-            isLauncher: () => true,
-            isCandidate: candidate => hasCommandLineArgument(candidate, inspectorArgument),
-        }).then(pid => {
-            try {
-                process.kill(pid);
-                extensionLogOutputChannel.info(`Stopped Deno AppHost process ${pid} that never attached to the debugger.`);
+        void findInspectorWaitingProcessIds(inspectorArgument, query).then(pids => {
+            if (pids.length === 0) {
+                extensionLogOutputChannel.info(`No Deno AppHost process waiting for a debugger at ${inspectorAddress} remained to stop.`);
             }
-            catch (error) {
-                extensionLogOutputChannel.warn(`Failed to stop Deno AppHost process ${pid}: ${error}`);
+
+            for (const pid of pids) {
+                try {
+                    process.kill(pid);
+                    extensionLogOutputChannel.info(`Stopped Deno AppHost process ${pid} that never attached to the debugger.`);
+                }
+                catch (error) {
+                    extensionLogOutputChannel.warn(`Failed to stop Deno AppHost process ${pid}: ${error}`);
+                }
             }
-        }, () => {
-            extensionLogOutputChannel.info(`No Deno AppHost process waiting for a debugger at ${inspectorAddress} remained to stop.`);
+        }, error => {
+            extensionLogOutputChannel.warn(`Failed to find the Deno AppHost process waiting for a debugger at ${inspectorAddress}: ${error}`);
         });
     };
 

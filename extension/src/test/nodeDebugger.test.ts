@@ -2,7 +2,8 @@ import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { getSupportedCapabilities } from '../capabilities';
 import { AspireDebugSession } from '../debugger/AspireDebugSession';
-import { denoAppHostInspectorAttachTimeoutMs, hasCommandLineArgument, nodeDebuggerExtension } from '../debugger/languages/node';
+import { denoAppHostInspectorAttachTimeoutMs, findInspectorWaitingProcessIds, hasCommandLineArgument, nodeDebuggerExtension } from '../debugger/languages/node';
+import { LaunchedChildProcess } from '../debugger/launchedChildProcessDiscovery';
 import { launchMethodDirect, launchMethodPackageManager } from '../debugger/languages/javascriptRuntime';
 import { AspireResourceExtendedDebugConfiguration, NodeLaunchConfiguration } from '../dcp/types';
 
@@ -161,6 +162,34 @@ suite('Node Debugger Tests', () => {
         assert.strictEqual(hasCommandLineArgument(windowsProcess(`"C:\\deno\\deno.exe" run "${argument}"`), argument), true);
         assert.strictEqual(hasCommandLineArgument(windowsProcess(`"C:\\deno\\deno.exe" run ${argument}5 apphost.mts`), argument), false);
         assert.strictEqual(hasCommandLineArgument(windowsProcess(`"C:\\deno\\deno.exe" run x${argument} apphost.mts`), argument), false);
+    });
+
+    test('finds every extension host descendant waiting on the Deno AppHost inspector argument', async () => {
+        const argument = '--inspect-wait=127.0.0.1:1234';
+        const windowsProcess = (pid: number, parentPid: number, command: string): LaunchedChildProcess =>
+            ({ pid, parentPid, executable: command.split(' ')[0], command });
+        const windowsProcesses = [
+            windowsProcess(10, 1, 'Code.exe --type=extensionHost'),
+            // A deno.cmd shim leaves the argument on both cmd.exe and the deno.exe it starts.
+            windowsProcess(20, 10, `C:\Windows\system32\cmd.exe /d /s /c ""C:\npm\deno.cmd" run ${argument} apphost.mts"`),
+            windowsProcess(21, 20, `"C:\npm\node_modules\deno\deno.exe" run ${argument} apphost.mts`),
+            windowsProcess(30, 10, `"C:\deno\deno.exe" run --inspect-wait=127.0.0.1:12345 other.mts`),
+            windowsProcess(40, 1, `"C:\deno\deno.exe" run ${argument} unrelated.mts`),
+        ];
+
+        assert.deepStrictEqual(
+            await findInspectorWaitingProcessIds(argument, { canTrustListedProcessIdentity: true, listProcesses: async () => windowsProcesses }, 10),
+            [20, 21]);
+
+        // POSIX listings only carry the process tree, so each descendant's command line is read separately.
+        const posixArguments = new Map<number, string[]>([[11, ['deno', 'run', argument, 'apphost.mts']], [12, ['node', 'server.js']]]);
+        const posixProcesses = [10, 11, 12].map(pid => ({ pid, parentPid: pid === 10 ? 1 : 10, executable: '', command: '' }));
+        assert.deepStrictEqual(
+            await findInspectorWaitingProcessIds(argument, {
+                listProcesses: async () => posixProcesses,
+                getProcess: async pid => ({ pid, parentPid: 10, executable: '', command: '', commandLineArguments: posixArguments.get(pid) }),
+            }, 10),
+            [11]);
     });
 
     test('does not open the Deno inspector when running an AppHost without debugging', async () => {

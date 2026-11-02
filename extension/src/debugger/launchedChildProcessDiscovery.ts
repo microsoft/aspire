@@ -667,7 +667,7 @@ function awaitProcessDetails<T>(
     });
 }
 
-function findDescendantProcessIds(
+export function findDescendantProcessIds(
     launcherPid: number,
     requiresDirectChild: boolean,
     processes: readonly LaunchedChildProcess[],
