@@ -91,6 +91,13 @@ Declare JUnit and Surefire in the POM; Aspire does not install a test framework.
 The [CLI testing playground](../../playground/AspireCliTesting/java-tests/pom.xml) is a
 complete JUnit Jupiter 5.12.2 / Surefire 3.5.3 example requiring JDK 17 or later.
 
+The preview CLI command is disabled by default. Opt in for each invocation without
+changing saved user configuration:
+
+```bash
+features__testCommandEnabled=true aspire test --apphost apphost.cs
+```
+
 **C#**
 
 ```csharp
