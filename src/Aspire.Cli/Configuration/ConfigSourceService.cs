@@ -149,33 +149,18 @@ internal sealed class ConfigSourceService(
     internal async Task<ConfigSource?> ResolveAndAcquireConfigSourceAsync(
         ParseResult parseResult, bool allowInteractiveInput, CancellationToken cancellationToken)
     {
-        var repository = environment.GetEnvironmentVariable(CliConfigNames.InitSourceUrl);
-        var explicitSource = repository is not null;
-        if (!explicitSource)
+        var candidate = await ResolveCandidateAsync(cancellationToken);
+        if (candidate.Source is not { } source)
         {
-            var detection = await detector.IsInternalMicrosoftMachineAsync(cancellationToken);
-            if (!detection.IsInternalMicrosoft || detection.Outcome != InternalMicrosoftDetectorOutcome.Detected)
+            if (parseResult.GetValue(s_useSourceOption) is true)
             {
-                if (parseResult.GetValue(s_useSourceOption) is true)
-                {
-                    throw new ConfigSourceException(string.Format(CultureInfo.CurrentCulture,
-                        ConfigSourceStrings.NoCandidate, CliConfigNames.InitSourceUrl));
-                }
-                return null;
+                throw new ConfigSourceException(string.Format(CultureInfo.CurrentCulture,
+                    ConfigSourceStrings.NoCandidate, CliConfigNames.InitSourceUrl));
             }
-            repository = MicrosoftRepository;
+            return null;
         }
 
-        var source = new ConfigSource
-        {
-            Repository = repository!,
-            Path = GetConfigSourcePath(explicitSource),
-            Ref = explicitSource ? environment.GetEnvironmentVariable(CliConfigNames.InitSourceRef) : null
-        };
-        source.Validate();
-        interaction.DisplayMessage(KnownEmojis.Information, string.Format(CultureInfo.CurrentCulture, ConfigSourceStrings.Candidate,
-            source.Repository, source.Path, source.Ref ?? ConfigSourceStrings.DefaultBranch,
-            explicitSource ? CliConfigNames.InitSourceUrl : ConfigSourceStrings.EmployeeOrigin));
+        interaction.DisplayMessage(KnownEmojis.Information, DescribeCandidate(source, candidate.IsExplicit));
 
         var accepted = parseResult.GetValue(s_useSourceOption);
         if (accepted is null)
@@ -199,6 +184,37 @@ internal sealed class ConfigSourceService(
         await AcquireAsync(source, force: false, allowInteractiveInput, cancellationToken);
         return source;
     }
+
+    internal async Task<(ConfigSource? Source, bool IsExplicit, string? DetectionOutcome)> ResolveCandidateAsync(CancellationToken cancellationToken)
+    {
+        var repository = environment.GetEnvironmentVariable(CliConfigNames.InitSourceUrl);
+        var explicitSource = repository is not null;
+        string? detectionOutcome = null;
+        if (!explicitSource)
+        {
+            var detection = await detector.IsInternalMicrosoftMachineAsync(cancellationToken);
+            detectionOutcome = detection.Outcome;
+            if (!detection.IsInternalMicrosoft || detection.Outcome != InternalMicrosoftDetectorOutcome.Detected)
+            {
+                return (null, false, detectionOutcome);
+            }
+            repository = MicrosoftRepository;
+        }
+
+        var source = new ConfigSource
+        {
+            Repository = repository!,
+            Path = GetConfigSourcePath(explicitSource),
+            Ref = explicitSource ? environment.GetEnvironmentVariable(CliConfigNames.InitSourceRef) : null
+        };
+        source.Validate();
+        return (source, explicitSource, detectionOutcome);
+    }
+
+    internal static string DescribeCandidate(ConfigSource source, bool isExplicit) =>
+        string.Format(CultureInfo.CurrentCulture, ConfigSourceStrings.Candidate,
+            source.Repository, source.Path, source.Ref ?? ConfigSourceStrings.DefaultBranch,
+            isExplicit ? CliConfigNames.InitSourceUrl : ConfigSourceStrings.EmployeeOrigin);
 
     public async Task<ConfigSource?> SelectForInitializationAsync(
         DirectoryInfo projectDirectory, ParseResult parseResult, CancellationToken cancellationToken)
