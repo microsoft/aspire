@@ -53,7 +53,7 @@ resource apim 'Microsoft.ApiManagement/service@2025-03-01-preview' = {
   location: location
   properties: {
     publisherEmail: 'api-owners@example.com'
-    publisherName: 'Aspire'
+    publisherName: 'Contoso APIs'
     virtualNetworkType: 'None'
   }
   sku: {

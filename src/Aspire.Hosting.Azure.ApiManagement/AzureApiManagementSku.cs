@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics.CodeAnalysis;
-
 namespace Aspire.Hosting.Azure;
 
 /// <summary>
@@ -13,7 +11,6 @@ namespace Aspire.Hosting.Azure;
 /// and multi-region deployment. See
 /// <see href="https://learn.microsoft.com/azure/api-management/api-management-features">API Management tier features</see>.
 /// </remarks>
-[Experimental("ASPIREAPIM001", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
 public enum AzureApiManagementSku
 {
     /// <summary>

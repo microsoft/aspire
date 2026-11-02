@@ -54,6 +54,7 @@ public static class AzureApiManagementExtensions
     /// var apim = builder.AddAzureApiManagement("apim", new()
     /// {
     ///     PublisherEmail = "api-owners@example.com",
+    ///     PublisherName = "Contoso APIs",
     ///     Sku = AzureApiManagementSku.StandardV2,
     /// });
     /// </code>

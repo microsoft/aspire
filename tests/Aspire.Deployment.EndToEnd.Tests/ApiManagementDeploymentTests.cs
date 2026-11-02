@@ -82,7 +82,7 @@ public sealed class ApiManagementDeploymentTests(ITestOutputHelper output)
             content = content.Replace(
                 "builder.Build().Run();",
                 """
-#pragma warning disable ASPIREAZURE003, ASPIREAPIM001
+#pragma warning disable ASPIREAZURE003
 
 var vnet = builder.AddAzureVirtualNetwork("vnet");
 var containerAppsSubnet = vnet.AddSubnet("container-apps-subnet", "10.0.0.0/23");
@@ -102,6 +102,7 @@ apiService
 var apim = builder.AddAzureApiManagement("apim", new()
 {
     PublisherEmail = "api-owners@example.com",
+    PublisherName = "Contoso APIs",
     Sku = AzureApiManagementSku.Developer,
 }).WithClassicVirtualNetwork(
     apiManagementSubnet,
@@ -113,7 +114,7 @@ apim.AddApi(
     path: "api",
     subscriptionRequired: false);
 
-#pragma warning restore ASPIREAZURE003, ASPIREAPIM001
+#pragma warning restore ASPIREAZURE003
 
 builder.Build().Run();
 """);

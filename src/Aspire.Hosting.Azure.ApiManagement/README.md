@@ -29,6 +29,7 @@ var catalog = builder.AddProject<Projects.Catalog>("catalog")
 var apim = builder.AddAzureApiManagement("apim", new()
 {
     PublisherEmail = "api-owners@example.com",
+    PublisherName = "Contoso APIs",
 });
 
 apim.AddApi("catalog-api", catalog, "catalog");
@@ -42,6 +43,7 @@ const catalog = await builder.addNodeApp("catalog", "../catalog", "server.js")
 
 const apim = await builder.addAzureApiManagement("apim", {
     publisherEmail: "api-owners@example.com",
+    publisherName: "Contoso APIs",
 });
 
 await apim.addApi("catalog-api", catalog, "catalog");
@@ -81,6 +83,7 @@ Adopt an existing service while letting Aspire manage the APIs and other child r
 var apim = builder.AddAzureApiManagement("apim", new()
 {
     PublisherEmail = "api-owners@example.com",
+    PublisherName = "Contoso APIs",
     Sku = AzureApiManagementSku.Premium,
 }).PublishAsExisting("shared-apim", resourceGroup: "shared-infrastructure");
 
@@ -333,6 +336,7 @@ const insights = await builder.addAzureApplicationInsights("insights");
 const vault = await builder.addAzureKeyVault("vault");
 const apim = await builder.addAzureApiManagement("apim", {
     publisherEmail: "api-owners@example.com",
+    publisherName: "Contoso APIs",
 });
 
 const fragment = await apim.addPolicyFragment(
@@ -384,6 +388,7 @@ Premium v2 injection provides private inbound and outbound access and automatica
 var apim = builder.AddAzureApiManagement("apim", new()
 {
     PublisherEmail = "api-owners@example.com",
+    PublisherName = "Contoso APIs",
     Sku = AzureApiManagementSku.PremiumV2,
 });
 

@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.ApiManagement.Provisioning;
 using Azure.Provisioning.Primitives;
@@ -20,7 +19,6 @@ namespace Aspire.Hosting.Azure;
 /// <param name="options">The API Management service options.</param>
 /// <param name="configureInfrastructure">The callback that configures Azure infrastructure.</param>
 [AspireExport]
-[Experimental("ASPIREAPIM001", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
 public class AzureApiManagementResource(
     string name,
     AzureApiManagementOptions options,

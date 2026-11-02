@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 
 namespace Aspire.Hosting.Azure;
@@ -11,7 +10,6 @@ namespace Aspire.Hosting.Azure;
 /// Represents an Azure API Management product.
 /// </summary>
 [DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, ProductName = {ProductName}")]
-[Experimental("ASPIREAPIM001", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
 public class AzureApiManagementProductResource(
     string name,
     string productName,
@@ -49,7 +47,6 @@ public class AzureApiManagementProductResource(
 /// Represents an Azure API Management subscription scoped to a product.
 /// </summary>
 [DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, SubscriptionName = {SubscriptionName}")]
-[Experimental("ASPIREAPIM001", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
 public class AzureApiManagementSubscriptionResource(
     string name,
     string subscriptionName,
@@ -83,7 +80,6 @@ public class AzureApiManagementSubscriptionResource(
 /// Represents an Azure API Management named value.
 /// </summary>
 [DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, NamedValueName = {NamedValueName}")]
-[Experimental("ASPIREAPIM001", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
 public class AzureApiManagementNamedValueResource(
     string name,
     string namedValueName,
@@ -126,7 +122,6 @@ public class AzureApiManagementNamedValueResource(
 /// Represents a reusable Azure API Management policy fragment.
 /// </summary>
 [DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, FragmentName = {FragmentName}")]
-[Experimental("ASPIREAPIM001", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
 public class AzureApiManagementPolicyFragmentResource(
     string name,
     string fragmentName,
@@ -160,7 +155,6 @@ public class AzureApiManagementPolicyFragmentResource(
 /// Configures an Azure API Management product.
 /// </summary>
 [AspireDto]
-[Experimental("ASPIREAPIM001", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
 public sealed class AzureApiManagementProductOptions
 {
     /// <summary>
@@ -198,7 +192,6 @@ public sealed class AzureApiManagementProductOptions
 /// Configures an Azure API Management subscription.
 /// </summary>
 [AspireDto]
-[Experimental("ASPIREAPIM001", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
 public sealed class AzureApiManagementSubscriptionOptions
 {
     /// <summary>
@@ -216,7 +209,6 @@ public sealed class AzureApiManagementSubscriptionOptions
 /// Configures an Azure API Management Application Insights diagnostic.
 /// </summary>
 [AspireDto]
-[Experimental("ASPIREAPIM001", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
 public sealed class AzureApiManagementDiagnosticOptions
 {
     /// <summary>
@@ -238,7 +230,6 @@ public sealed class AzureApiManagementDiagnosticOptions
 /// <summary>
 /// Specifies the publication state of an API Management product.
 /// </summary>
-[Experimental("ASPIREAPIM001", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
 public enum AzureApiManagementProductState
 {
     /// <summary>
@@ -255,7 +246,6 @@ public enum AzureApiManagementProductState
 /// <summary>
 /// Specifies the state of an API Management subscription.
 /// </summary>
-[Experimental("ASPIREAPIM001", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
 public enum AzureApiManagementSubscriptionState
 {
     /// <summary>
@@ -292,7 +282,6 @@ public enum AzureApiManagementSubscriptionState
 /// <summary>
 /// Specifies an Azure API Management custom-hostname endpoint.
 /// </summary>
-[Experimental("ASPIREAPIM001", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
 public enum AzureApiManagementHostnameType
 {
     /// <summary>
@@ -329,7 +318,6 @@ public enum AzureApiManagementHostnameType
 /// <summary>
 /// Specifies the verbosity of an API Management diagnostic.
 /// </summary>
-[Experimental("ASPIREAPIM001", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
 public enum AzureApiManagementDiagnosticVerbosity
 {
     /// <summary>

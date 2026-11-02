@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 
 namespace Aspire.Hosting.Azure;
@@ -12,7 +11,6 @@ namespace Aspire.Hosting.Azure;
 /// </summary>
 [AspireExport]
 [DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, BackendName = {BackendName}")]
-[Experimental("ASPIREAPIM001", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
 public class AzureApiManagementBackendResource(
     string name,
     string backendName,
@@ -49,7 +47,6 @@ public class AzureApiManagementBackendResource(
 /// </summary>
 [AspireExport]
 [DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, BackendPoolName = {BackendPoolName}")]
-[Experimental("ASPIREAPIM001", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
 public class AzureApiManagementBackendPoolResource(
     string name,
     string backendPoolName,
@@ -79,7 +76,6 @@ public class AzureApiManagementBackendPoolResource(
 /// Configures an Azure API Management backend.
 /// </summary>
 [AspireDto]
-[Experimental("ASPIREAPIM001", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
 public sealed class AzureApiManagementBackendOptions
 {
     /// <summary>
@@ -121,7 +117,6 @@ public sealed class AzureApiManagementBackendOptions
 /// Configures a circuit breaker for an Azure API Management backend.
 /// </summary>
 [AspireDto]
-[Experimental("ASPIREAPIM001", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
 public sealed class AzureApiManagementCircuitBreakerOptions
 {
     /// <summary>
@@ -161,13 +156,11 @@ public sealed class AzureApiManagementCircuitBreakerOptions
 /// <param name="Minimum">The lowest status code in the range.</param>
 /// <param name="Maximum">The highest status code in the range.</param>
 [AspireDto]
-[Experimental("ASPIREAPIM001", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
 public sealed record AzureApiManagementStatusCodeRange(int Minimum, int Maximum);
 
 /// <summary>
 /// Specifies the protocol used to communicate with an API Management backend.
 /// </summary>
-[Experimental("ASPIREAPIM001", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
 public enum AzureApiManagementBackendProtocol
 {
     /// <summary>

@@ -1,15 +1,12 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics.CodeAnalysis;
-
 namespace Aspire.Hosting.Azure;
 
 /// <summary>
 /// Configures an Azure API Management service.
 /// </summary>
 [AspireDto]
-[Experimental("ASPIREAPIM001", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
 public sealed class AzureApiManagementOptions
 {
     private int? _capacity;
@@ -23,7 +20,7 @@ public sealed class AzureApiManagementOptions
     /// <summary>
     /// Gets the publisher name shown by API Management.
     /// </summary>
-    public string PublisherName { get; init; } = "Aspire";
+    public required string PublisherName { get; init; }
 
     /// <summary>
     /// Gets the API Management pricing tier.

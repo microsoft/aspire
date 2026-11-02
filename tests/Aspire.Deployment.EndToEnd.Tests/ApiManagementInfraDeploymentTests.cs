@@ -76,8 +76,6 @@ public sealed class ApiManagementInfraDeploymentTests(ITestOutputHelper output)
             content = content.Replace(
                 "builder.Build().Run();",
                 """
-#pragma warning disable ASPIREAPIM001
-
 var apim = builder.AddAzureApiManagement("apim", new()
 {
     PublisherEmail = "api-owners@example.com",
@@ -105,8 +103,6 @@ catalogApi.AddOperation(
 apim.AddProduct("catalog-product", "Catalog")
     .WithApi(catalogApi)
     .AddSubscription("catalog-client", "Catalog client");
-
-#pragma warning restore ASPIREAPIM001
 
 builder.Build().Run();
 """);

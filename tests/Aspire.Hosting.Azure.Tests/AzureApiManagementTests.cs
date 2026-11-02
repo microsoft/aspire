@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREAPIM001
 #pragma warning disable ASPIREAZURE003
 #pragma warning disable ASPIRECOMPUTE002
 #pragma warning disable ASPIREPIPELINES001
@@ -27,9 +26,11 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
         });
 
         Assert.Equal("apim", apim.Resource.Name);
+        Assert.Equal("Contoso APIs", apim.Resource.Options.PublisherName);
         Assert.Equal(AzureApiManagementSku.Developer, apim.Resource.Options.Sku);
         Assert.Equal(1, apim.Resource.Options.Capacity);
         Assert.Equal("gatewayUrl", apim.Resource.GatewayUrl.Name);
@@ -47,6 +48,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
         });
 
         var api = apim.AddApi("catalog-api", backend, "catalog");
@@ -89,6 +91,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
             builder.AddAzureApiManagement("apim", new()
             {
                 PublisherEmail = "api-owners@example.com",
+                PublisherName = "Contoso APIs",
                 Sku = sku,
                 Capacity = capacity,
             }));
@@ -104,10 +107,28 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
             Sku = AzureApiManagementSku.Consumption,
         });
 
         Assert.Equal(0, apim.Resource.Options.Capacity);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public void AddAzureApiManagementRejectsMissingPublisherName(string? publisherName)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var exception = Assert.ThrowsAny<ArgumentException>(() =>
+            builder.AddAzureApiManagement("apim", new()
+            {
+                PublisherEmail = "api-owners@example.com",
+                PublisherName = publisherName!,
+            }));
+
+        Assert.Equal("options.PublisherName", exception.ParamName);
     }
 
     [Fact]
@@ -119,6 +140,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
             builder.AddAzureApiManagement("email-apim", new()
             {
                 PublisherEmail = new string('a', 101),
+                PublisherName = "Contoso APIs",
             }));
         var nameException = Assert.Throws<ArgumentException>(() =>
             builder.AddAzureApiManagement("name-apim", new()
@@ -141,6 +163,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
         });
 
         var api = apim.AddApi("catalog-api", backend, "/catalog/", "Catalog", subscriptionRequired: true);
@@ -166,6 +189,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
         });
 
         var api = apim.AddApi("catalog-api", backend, "catalog", apiName: "physical-api");
@@ -190,6 +214,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
         });
 
         var longApiName = new string('a', 256);
@@ -212,6 +237,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
         });
         var api = apim.AddApi("catalog-api", backend, "catalog");
 
@@ -239,6 +265,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
         });
         apim.AddApi("catalog-api", backend, "/catalog/", apiName: "physical-api");
 
@@ -264,6 +291,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
         });
         apim.AddBackend("declared-backend", ReferenceExpression.Create($"https://example.com"), backendName: "catalog_apiBackend");
         apim.AddApi("catalog-api", target, "catalog");
@@ -284,6 +312,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
         });
         var api = apim.AddApi("catalog-api", backend, "catalog");
         api.AddOperation("get-product", "GET", "/products/{id}", operationName: "physical-operation");
@@ -312,7 +341,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
     public void OperationRoutesRejectEquivalentSignatures(string first, string second)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        var apim = builder.AddAzureApiManagement("apim", new() { PublisherEmail = "api-owners@example.com" });
+        var apim = builder.AddAzureApiManagement("apim", new() { PublisherEmail = "api-owners@example.com", PublisherName = "Contoso APIs" });
         var api = apim.AddApi("catalog-api", "catalog");
         api.AddOperation("first", "GET", first);
         var resourceCount = builder.Resources.Count;
@@ -331,7 +360,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
     public async Task OperationRoutesRejectGeneratedProxyConflicts(string method, string template)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        var apim = builder.AddAzureApiManagement("apim", new() { PublisherEmail = "api-owners@example.com" });
+        var apim = builder.AddAzureApiManagement("apim", new() { PublisherEmail = "api-owners@example.com", PublisherName = "Contoso APIs" });
         var backend = apim.AddBackend("backend", ReferenceExpression.Create($"https://example.com"));
         var api = apim.AddApi("catalog-api", "catalog").WithBackend(backend);
         api.AddOperation("custom", method, template);
@@ -354,7 +383,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var documentPath = Path.Combine(temporaryWorkspace.Path, "catalog.json");
         File.WriteAllText(documentPath, """{"openapi":"3.0.1","info":{"title":"Catalog","version":"v1"},"paths":{}}""");
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        var apim = builder.AddAzureApiManagement("apim", new() { PublisherEmail = "api-owners@example.com" });
+        var apim = builder.AddAzureApiManagement("apim", new() { PublisherEmail = "api-owners@example.com", PublisherName = "Contoso APIs" });
         var backend = apim.AddBackend("backend", ReferenceExpression.Create($"https://example.com"));
         var api = apim.AddApi("catalog-api", "catalog").WithBackend(backend);
         api.AddOperation("custom", method, template);
@@ -372,7 +401,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
     public void OperationRoutesAllowDifferentMethodsLiteralsAndApis()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        var apim = builder.AddAzureApiManagement("apim", new() { PublisherEmail = "api-owners@example.com" });
+        var apim = builder.AddAzureApiManagement("apim", new() { PublisherEmail = "api-owners@example.com", PublisherName = "Contoso APIs" });
         var api = apim.AddApi("catalog-api", "catalog");
         api.AddOperation("get-product", "GET", "/products/{id}");
         api.AddOperation("post-product", "POST", "/products/{id}");
@@ -390,7 +419,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var documentPath = Path.Combine(temporaryWorkspace.Path, "catalog.json");
         File.WriteAllText(documentPath, """{"openapi":"3.0.1","info":{"title":"Catalog","version":"v1"},"paths":{}}""");
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        var apim = builder.AddAzureApiManagement("apim", new() { PublisherEmail = "api-owners@example.com" });
+        var apim = builder.AddAzureApiManagement("apim", new() { PublisherEmail = "api-owners@example.com", PublisherName = "Contoso APIs" });
         var api = apim.AddApi("catalog-api", "catalog").WithOpenApiDocument(documentPath);
         api.AddOperation("root", "GET", "/");
         api.AddOperation("wildcard", "GET", "/{*path}");
@@ -408,6 +437,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
         });
         var api = apim.AddApi("catalog-api", backend, "catalog");
         var operation = api.AddOperation("get-products", "get", "/products");
@@ -432,6 +462,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
         });
 
         var target = Assert.IsAssignableFrom<IAzurePrivateEndpointTarget>(apim.Resource);
@@ -449,6 +480,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
             Sku = AzureApiManagementSku.StandardV2,
         });
 
@@ -466,6 +498,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
         });
 
         Assert.Throws<InvalidOperationException>(() =>
@@ -482,6 +515,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
         });
         firstPrivateEndpointSubnet.AddPrivateEndpoint(apim);
         secondPrivateEndpointSubnet.AddPrivateEndpoint(apim);
@@ -508,6 +542,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
             Sku = AzureApiManagementSku.Consumption,
             Capacity = 0,
         });
@@ -528,6 +563,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
             Sku = AzureApiManagementSku.Developer,
         }).PublishAsExisting("existing-apim", resourceGroup: null);
         var privateEndpoint = subnet.AddPrivateEndpoint(apim);
@@ -550,6 +586,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
             Sku = AzureApiManagementSku.PremiumV2,
         }).WithVirtualNetworkInjection(injectionSubnet);
         privateEndpointSubnet.AddPrivateEndpoint(apim);
@@ -569,6 +606,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
             Sku = AzureApiManagementSku.StandardV2,
         }).WithVirtualNetworkIntegration(subnet);
 
@@ -595,6 +633,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
             Sku = AzureApiManagementSku.PremiumV2,
         }).WithVirtualNetworkInjection(subnet);
 
@@ -624,6 +663,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
             Sku = sku,
         });
 
@@ -652,6 +692,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
             Sku = injection ? AzureApiManagementSku.PremiumV2 : AzureApiManagementSku.StandardV2,
         });
 
@@ -684,6 +725,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
             Sku = injection ? AzureApiManagementSku.PremiumV2 : AzureApiManagementSku.StandardV2,
         });
 
@@ -713,6 +755,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
             Sku = AzureApiManagementSku.StandardV2,
         }).WithVirtualNetworkIntegration(subnet);
         var firstRule = subnet.Resource.NetworkSecurityGroup!.SecurityRules[0];
@@ -734,6 +777,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
             Sku = AzureApiManagementSku.StandardV2,
         });
 
@@ -751,11 +795,13 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         builder.AddAzureApiManagement("first-apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
             Sku = AzureApiManagementSku.StandardV2,
         }).WithVirtualNetworkIntegration(subnet);
         var second = builder.AddAzureApiManagement("second-apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
             Sku = AzureApiManagementSku.StandardV2,
         });
 
@@ -773,10 +819,12 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         builder.AddAzureApiManagement("classic-apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
         }).WithClassicVirtualNetwork(subnet, AzureApiManagementVirtualNetworkMode.External);
         var second = builder.AddAzureApiManagement("v2-apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
             Sku = AzureApiManagementSku.StandardV2,
         });
 
@@ -836,6 +884,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
         });
         var backend = apim.AddBackend("catalog-backend", ReferenceExpression.Create($"https://example.com"));
         apim.AddApi("catalog-api", "catalog")
@@ -866,7 +915,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         }
 
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
-        var apim = builder.AddAzureApiManagement("apim", new() { PublisherEmail = "api-owners@example.com" });
+        var apim = builder.AddAzureApiManagement("apim", new() { PublisherEmail = "api-owners@example.com", PublisherName = "Contoso APIs" });
         var api = apim.AddApi("catalog-api", "catalog").WithOpenApiDocument(documentPath);
         api.AddOperation("root", "GET", "/");
 
@@ -889,7 +938,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
             File.WriteAllText(documentPath, " ");
         }
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        var apim = builder.AddAzureApiManagement("apim", new() { PublisherEmail = "api-owners@example.com" });
+        var apim = builder.AddAzureApiManagement("apim", new() { PublisherEmail = "api-owners@example.com", PublisherName = "Contoso APIs" });
         var backend = apim.AddBackend("backend", ReferenceExpression.Create($"https://example.com"));
         apim.AddApi("catalog-api", "catalog").WithBackend(backend).WithOpenApiDocument(documentPath);
 
@@ -912,7 +961,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         using var workspace = TemporaryWorkspace.Create(output);
         var documentPath = Path.Combine(workspace.Path, "generated.json");
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        var apim = builder.AddAzureApiManagement("apim", new() { PublisherEmail = "api-owners@example.com" });
+        var apim = builder.AddAzureApiManagement("apim", new() { PublisherEmail = "api-owners@example.com", PublisherName = "Contoso APIs" });
         var backend = apim.AddBackend("backend", ReferenceExpression.Create($"https://example.com"));
         apim.AddApi("catalog-api", "catalog").WithBackend(backend).WithOpenApiDocument(documentPath);
         const string document = """{"openapi":"3.0.1","info":{"title":"Catalog","version":"v1"},"paths":{}}""";
@@ -946,6 +995,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
         });
         var backend = apim.AddBackend("catalog-backend", ReferenceExpression.Create($"https://example.com"));
         var api = apim.AddApi("catalog-api", "catalog").WithBackend(backend);
@@ -1003,6 +1053,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
         });
         apim.AddApi("catalog-api", backend, "catalog")
             .WithOpenApiEndpoint("/openapi/v1.json");
@@ -1043,6 +1094,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
         });
         apim.AddApi("catalog-api", backend, "catalog")
             .WithOpenApiEndpoint()
@@ -1090,6 +1142,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
             Sku = AzureApiManagementSku.Premium,
         }).WithClassicVirtualNetwork(apimSubnet, AzureApiManagementVirtualNetworkMode.External);
         apim.AddApi("catalog-api", backend, "catalog")
@@ -1182,6 +1235,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
         });
         var catalogApi = apim.AddApi("catalog-api", backend, "catalog");
         var productCatalogApi = apim.AddApi("product-catalog-api", backend, "product-catalog");
@@ -1213,10 +1267,12 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
         });
         var otherApim = builder.AddAzureApiManagement("other-apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
         });
         var api = apim.AddApi("catalog-api", backend, "catalog");
         var otherApi = otherApim.AddApi("other-api", backend, "other");
@@ -1259,6 +1315,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
         });
         apim.AddNamedValue("first-value", "value", displayName: "shared-name");
 
@@ -1280,7 +1337,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var vault = builder.AddAzureKeyVault("vault");
-        var apim = builder.AddAzureApiManagement("apim", new() { PublisherEmail = "api-owners@example.com" });
+        var apim = builder.AddAzureApiManagement("apim", new() { PublisherEmail = "api-owners@example.com", PublisherName = "Contoso APIs" });
 
         var exception = Assert.Throws<ArgumentException>(() => apim.WithCustomDomain(hostname, vault.GetSecret("certificate")));
 
@@ -1297,7 +1354,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var vault = builder.AddAzureKeyVault("vault");
-        var apim = builder.AddAzureApiManagement("apim", new() { PublisherEmail = "api-owners@example.com" });
+        var apim = builder.AddAzureApiManagement("apim", new() { PublisherEmail = "api-owners@example.com", PublisherName = "Contoso APIs" });
 
         apim.WithCustomDomain(hostname, vault.GetSecret("certificate"));
 
@@ -1312,6 +1369,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
             Sku = AzureApiManagementSku.Consumption,
             Capacity = 0,
         });
@@ -1339,6 +1397,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
             Sku = sku,
         });
 
@@ -1367,6 +1426,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
             Sku = sku,
         });
         apim.WithCustomDomain("api.contoso.example", vault.GetSecret("certificate"));
@@ -1388,6 +1448,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
             Sku = sku,
         });
 
@@ -1410,6 +1471,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
             Sku = AzureApiManagementSku.Developer,
         });
         apim.WithCustomDomain(
@@ -1433,6 +1495,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
         });
 
         var exception = Assert.Throws<ArgumentException>(() =>
@@ -1464,6 +1527,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
             Sku = AzureApiManagementSku.Premium,
         }).WithClassicVirtualNetwork(apimSubnet, AzureApiManagementVirtualNetworkMode.External);
         apim.AddApi("catalog-api", backend, "catalog");
@@ -1488,6 +1552,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
         });
         apim.AddApi("catalog-api", backend, "catalog");
 
@@ -1507,6 +1572,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
             Sku = AzureApiManagementSku.Premium,
             Capacity = 2,
         }).WithClassicVirtualNetwork(subnet, AzureApiManagementVirtualNetworkMode.Internal);
@@ -1530,6 +1596,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
             Sku = AzureApiManagementSku.StandardV2,
         });
         var primaryBackend = apim.AddFoundryBackend("chat-primary-backend", primary);
@@ -1558,6 +1625,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
             Sku = AzureApiManagementSku.Consumption,
             Capacity = 0,
         });
@@ -1582,6 +1650,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
         });
 
         var backend = apim.AddFoundryBackend("chat-backend", model);
@@ -1602,6 +1671,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
         });
         var backend = apim.AddAzureOpenAIBackend("openai-backend", deployment);
         apim.AddOpenAIApi("chat-api", "chat")
@@ -1641,6 +1711,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
         });
         var chatBackend = apim.AddAzureOpenAIBackend("chat-backend", deployment);
         var responsesBackend = apim.AddAzureOpenAIBackend("responses-backend", deployment);
@@ -1682,6 +1753,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
         });
         apim.AddAzureOpenAIBackend("openai-backend", deployment);
         var roleAssignments = new AzureRoleAssignmentResource("custom-roles", account.Resource, null, null, _ => { });
@@ -1709,6 +1781,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
             Sku = AzureApiManagementSku.Developer,
         }).PublishAsExisting("shared-apim", resourceGroup: overrideScope ? null : "gateway-resources")
             .WithExistingSystemAssignedIdentity();
@@ -1753,6 +1826,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
         });
         var backend = apim.AddAzureOpenAIBackend("openai-backend", deployment);
         apim.AddOpenAIApi("chat-api", "chat").WithBackend(backend);
@@ -1785,6 +1859,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
         });
         apim.WithCustomDomain("api.contoso.example", vault.GetSecret("gateway-certificate"));
         apim.AddKeyVaultNamedValue("upstream-secret", vault.GetSecret("upstream-secret"));
@@ -1840,6 +1915,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
             var apim = builder.AddAzureApiManagement($"apim-{index}", new()
             {
                 PublisherEmail = "api-owners@example.com",
+                PublisherName = "Contoso APIs",
             });
             apim.AddAzureOpenAIBackend($"openai-backend-{index}", deployment);
             apim.AddKeyVaultNamedValue($"upstream-secret-{index}", vault.GetSecret("upstream-secret"));
@@ -1896,6 +1972,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
         });
         apim.AddKeyVaultNamedValue("upstream-secret", vault.GetSecret("upstream-secret"));
 
@@ -1922,6 +1999,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
         });
         apim.AddKeyVaultNamedValue("upstream-secret", vault.GetSecret("upstream-secret"));
 
@@ -1947,6 +2025,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
         });
         apim.AddKeyVaultNamedValue("upstream-secret", vault.Resource.GetSecret("upstream-secret"));
 
@@ -1966,6 +2045,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
         });
         apim.AddKeyVaultNamedValue("shared-secret", crossScopeVault.GetSecret("shared-secret"));
         apim.AddKeyVaultNamedValue("custom-secret", customVault.Resource.GetSecret("custom-secret"));
@@ -1996,6 +2076,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
         }).WithInboundPolicy("<set-header name=\"x-test\" exists-action=\"override\"><value>true</value></set-header>");
         var api = apim.AddApi("apimPolicy", backend, "catalog")
             .WithInboundPolicy("<set-header name=\"x-api\" exists-action=\"override\"><value>true</value></set-header>");
@@ -2029,7 +2110,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
     public async Task ExistingApiManagementRequiresExplicitSkuRegardlessOfCallOrder(bool adoptFirst)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        var apim = builder.AddAzureApiManagement("apim", new() { PublisherEmail = "api-owners@example.com" });
+        var apim = builder.AddAzureApiManagement("apim", new() { PublisherEmail = "api-owners@example.com", PublisherName = "Contoso APIs" });
         if (adoptFirst)
         {
             apim.PublishAsExisting("shared-apim", resourceGroup: null);
@@ -2056,6 +2137,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
             Sku = AzureApiManagementSku.Consumption,
         }).PublishAsExisting("shared-apim", resourceGroup: null);
         var deployment = builder.AddAzureOpenAI("openai").AddDeployment("chat", "gpt-5-mini", "2025-08-07");
@@ -2073,6 +2155,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
             Sku = AzureApiManagementSku.Developer,
         }).PublishAsExisting("existing-apim", resourceGroup: "shared-infrastructure");
         var backend = apim.AddBackend("catalog-backend", ReferenceExpression.Create($"https://example.com"));
@@ -2098,6 +2181,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
             Sku = AzureApiManagementSku.Developer,
         }).PublishAsExisting("existing-apim", resourceGroup: null);
         var backend = apim.AddBackend(
@@ -2122,6 +2206,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
             Sku = AzureApiManagementSku.Developer,
         }).PublishAsExisting("existing-apim", resourceGroup: null)
             .WithExistingSystemAssignedIdentity();
@@ -2150,6 +2235,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
             Sku = AzureApiManagementSku.Developer,
         }).PublishAsExisting("existing-apim", resourceGroup: "shared-infrastructure")
             .WithApplicationInsights(insights);
@@ -2178,6 +2264,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
             Sku = AzureApiManagementSku.Premium,
         }).WithClassicVirtualNetwork(apimSubnet, AzureApiManagementVirtualNetworkMode.External);
         apim.AddApi("catalog-api", backend, "catalog");
@@ -2209,6 +2296,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
         });
         var exception = Assert.Throws<InvalidOperationException>(() => apim.AddFoundryBackend("embedding-backend", model));
 
@@ -2224,6 +2312,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
         });
         var primaryBackend = apim.AddBlobStorageBackend("blob-primary-backend", primary);
         var secondaryBackend = apim.AddBlobStorageBackend("blob-secondary-backend", secondary);
@@ -2254,6 +2343,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
         });
         var backend = apim.AddBackend(
             "custom-backend",
@@ -2296,6 +2386,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
         });
         var storageBackend = apim.AddBackend(
             "storage",
@@ -2325,6 +2416,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
         });
 
         var invalidTitle = Assert.Throws<ArgumentException>(() => apim.AddBackend(
