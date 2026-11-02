@@ -207,7 +207,7 @@ collector harvests finalized JUnit even after its process exits nonzero.
 Exercise the independent Go failure without changing foundation, MSTest or pytest:
 
 ```bash
-GO_PLAYGROUND_FAIL=true \
+features__testCommandEnabled=true GO_PLAYGROUND_FAIL=true \
 dotnet run --project src/Aspire.Cli/Aspire.Cli.csproj --no-launch-profile -- \
   test --apphost playground/AspireCliTesting/apphost.cs --isolated \
   --timeout-seconds 120 --format json --non-interactive

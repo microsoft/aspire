@@ -68,7 +68,14 @@ builder.AddGoTest("api-tests", "../go-api")
     .WaitFor(api);
 ```
 
-Run with `aspire test`. During testing the command is `go test -json -count=1 ./...`;
+The preview CLI command is disabled by default. Enable it for the invocation
+without changing saved configuration:
+
+```bash
+features__testCommandEnabled=true aspire test
+```
+
+During testing the command is `go test -json -count=1 ./...`;
 ordinary `aspire run` invokes `go test ./...` without result collection. Set
 `packagePatterns` for specific packages or workspace modules; `./...` does not traverse
 nested modules automatically. Add build/test flags with `WithArgs`, and put any
