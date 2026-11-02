@@ -8,6 +8,7 @@ using Spectre.Console;
 
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Commands.Sdk;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
@@ -232,6 +233,7 @@ internal sealed class RootCommand : BaseRootCommand
         IBundleService bundleService,
         IInteractionService interactionService,
         IAnsiConsole ansiConsole,
+        IFeatures features,
         CliExecutionContext executionContext)
         : base(RootCommandStrings.Description)
     {
@@ -266,7 +268,10 @@ internal sealed class RootCommand : BaseRootCommand
         Subcommands.Add(newCommand);
         Subcommands.Add(initCommand);
         Subcommands.Add(runCommand);
-        Subcommands.Add(testCommand);
+        if (features.IsFeatureEnabled(KnownFeatures.TestCommandEnabled, defaultValue: false))
+        {
+            Subcommands.Add(testCommand);
+        }
         Subcommands.Add(stopCommand);
         Subcommands.Add(startCommand);
         Subcommands.Add(waitCommand);

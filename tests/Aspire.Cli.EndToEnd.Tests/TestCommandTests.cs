@@ -51,7 +51,8 @@ public sealed class TestCommandTests(ITestOutputHelper output)
         // accessible for fixture writes, then harden this container's own Aspire home
         // and runtime-created files before allocating private test artifacts.
         await auto.RunCommandAsync("umask 077 && chmod 700 \"$HOME/.aspire\"", counter);
-        await auto.RunCommandAsync("cd TestingApp && aspire restore --non-interactive", counter, TimeSpan.FromMinutes(3));
+        await auto.RunCommandAsync("cd TestingApp && aspire config set features.testCommandEnabled true", counter);
+        await auto.RunCommandAsync("aspire restore --non-interactive", counter, TimeSpan.FromMinutes(3));
         if (typeScript)
         {
             await auto.RunCommandAsync("npm run build", counter, TimeSpan.FromMinutes(2));

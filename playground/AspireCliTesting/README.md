@@ -8,12 +8,14 @@ foundation scenario.
 ## Run from the repository root
 
 Set up the repository SDK with `./restore.sh` if it has not already been restored.
-Use that SDK for both the CLI and its child processes:
+Use that SDK for both the CLI and its child processes. The preview command is
+disabled by default; enable it before running the AppHost:
 
 ```bash
 export DOTNET_ROOT="$PWD/.dotnet"
 export PATH="$DOTNET_ROOT:$PATH"
 
+./run-aspire.sh config set features.testCommandEnabled true
 ./run-aspire.sh test --apphost playground/AspireCliTesting/apphost.cs --isolated
 ```
 

@@ -858,7 +858,8 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
     public async Task HelpIsRegistered()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper).BuildServiceProvider();
+        using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper,
+            options => options.EnabledFeatures = [KnownFeatures.TestCommandEnabled]).BuildServiceProvider();
 
         Assert.Equal(0, await provider.GetRequiredService<RootCommand>().Parse("test --help").InvokeAsync().DefaultTimeout());
     }
@@ -1457,7 +1458,7 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
 
         return CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
-            options.EnabledFeatures = [KnownFeatures.DefaultWatchEnabled];
+            options.EnabledFeatures = [KnownFeatures.DefaultWatchEnabled, KnownFeatures.TestCommandEnabled];
             options.ProjectLocatorFactory = _ => new TestProjectLocator
             {
                 UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
