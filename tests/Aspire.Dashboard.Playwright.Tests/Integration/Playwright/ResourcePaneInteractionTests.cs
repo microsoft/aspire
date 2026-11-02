@@ -117,10 +117,11 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Dashboard
     }
 
     [Theory]
-    [InlineData(1280)]
-    [InlineData(640)]
+    [InlineData(1280, false)]
+    [InlineData(1280, true)]
+    [InlineData(640, false)]
     [OuterloopTest("Resource-intensive Playwright browser test")]
-    public async Task SelectAll_VisibleLabelAndKeyboardActivationRestoreAllResources(int viewportWidth)
+    public async Task SelectAll_VisibleLabelAndKeyboardActivationRestoreAllResources(int viewportWidth, bool minimumPaneWidth)
     {
         await RunTestAsync(async page =>
         {
@@ -132,9 +133,23 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Dashboard
                 await page.Locator(".resource-pane-open-button").ClickAsync();
             }
 
+            if (minimumPaneWidth)
+            {
+                var resizer = page.GetByRole(AriaRole.Separator, new() { Name = Resources.Layout.ResourcePaneResize });
+                await resizer.FocusAsync();
+                await page.Keyboard.PressAsync("Home");
+                await Assertions.Expect(resizer).ToHaveAttributeAsync("aria-valuenow", "200");
+            }
+
             var selectAll = page.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.ResourcePaneSelectAll, Exact = true });
             await Assertions.Expect(selectAll).ToHaveTextAsync(Resources.Layout.ResourcePaneSelectAll);
             await Assertions.Expect(selectAll).ToBeInViewportAsync(new() { Ratio = 1 });
+            var paneBounds = await page.Locator(".resource-pane").BoundingBoxAsync();
+            var actionBounds = await selectAll.BoundingBoxAsync();
+            Assert.NotNull(paneBounds);
+            Assert.NotNull(actionBounds);
+            Assert.InRange(actionBounds.X, paneBounds.X, paneBounds.X + paneBounds.Width);
+            Assert.InRange(actionBounds.X + actionBounds.Width, paneBounds.X, paneBounds.X + paneBounds.Width);
             Assert.Null(await selectAll.GetAttributeAsync("aria-pressed"));
             await selectAll.FocusAsync();
             await page.Keyboard.PressAsync("Enter");

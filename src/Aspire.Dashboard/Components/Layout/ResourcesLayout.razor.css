@@ -439,6 +439,7 @@
    changes their width (which would change which labels fit), and the divider marks where the scrolling begins. */
 .resource-pane-kinds {
     display: flex;
+    flex-wrap: wrap;
     flex: 0 0 auto;
     align-items: center;
     justify-content: space-between;
