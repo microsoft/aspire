@@ -57,7 +57,7 @@ internal static class MsTestTrxReport
         {
             context.PublishResult(result);
         }
-        if (report.Failed && report.Results.All(result => result.Outcome != TestOutcome.Failed))
+        if (report.Failed && report.Results.All(result => result.Outcome is TestOutcome.Passed or TestOutcome.Skipped))
         {
             throw new InvalidDataException("The TRX run failed without an individual failed test. Inspect the raw report and resource logs.");
         }
@@ -157,6 +157,15 @@ internal static class MsTestTrxReport
             {
                 "Passed" => TestOutcome.Passed,
                 "Failed" => TestOutcome.Failed,
+                "Error" => TestOutcome.Error,
+                "Timeout" => TestOutcome.TimedOut,
+                "Inconclusive" => TestOutcome.Inconclusive,
+                // TRX Aborted means framework-aborted execution, not a skipped test.
+                // https://github.com/microsoft/vstest/blob/main/src/Microsoft.TestPlatform.Extensions.TrxLogger/ObjectModel/TestOutcome.cs
+                "Aborted" => TestOutcome.Cancelled,
+                // MTP serializes Skipped as NotExecuted. Do not reinterpret it from
+                // a run-level abort, or infer a per-test category from error messages.
+                // https://github.com/microsoft/testfx/blob/v4.4.0/src/Platform/Microsoft.Testing.Extensions.TrxReport/TrxReportEngine.Results.cs
                 "NotExecuted" => TestOutcome.Skipped,
                 var unknown => throw new InvalidDataException($"Unsupported MSTest TRX outcome '{unknown}'.")
             };
@@ -195,21 +204,40 @@ internal static class MsTestTrxReport
     {
         var summary = RequiredElement(root, "ResultSummary");
         var outcome = RequiredAttribute(summary, "outcome");
-        if (outcome is not ("Completed" or "Passed" or "Failed"))
+        if (outcome is not ("Completed" or "Passed" or "Failed" or "Error" or "Timeout" or "Aborted" or "Inconclusive"))
         {
             throw new InvalidDataException($"Unsupported TRX run outcome '{outcome}'.");
         }
         var counters = RequiredElement(summary, "Counters");
         var failed = ReadCount(counters, "failed");
         var timedOut = ReadCount(counters, "timeout");
+        var explicitlyTimedOut = results.Count(result => result.Outcome == TestOutcome.TimedOut);
+        // MTP 2.4 writes Timeout nodes as outcome="Failed" but increments @timeout.
+        // Reconcile those counts without assigning a timeout to an unidentified Failed row.
+        // Explicit TRX outcome="Timeout" rows must still be counted as timeouts.
+        // https://github.com/microsoft/testfx/blob/v4.4.0/src/Platform/Microsoft.Testing.Extensions.TrxReport/TrxReportEngine.Results.cs
         if (ReadCount(counters, "total") != results.Count ||
             ReadCount(counters, "passed") != results.Count(result => result.Outcome == TestOutcome.Passed) ||
             ReadCount(counters, "notExecuted") != results.Count(result => result.Outcome == TestOutcome.Skipped) ||
-            (long)failed + timedOut != results.Count(result => result.Outcome == TestOutcome.Failed))
+            (long)failed + timedOut != results.Count(result => result.Outcome == TestOutcome.Failed) + explicitlyTimedOut ||
+            timedOut < explicitlyTimedOut)
         {
             throw new InvalidDataException("The TRX summary counters do not match the collected test results.");
         }
-        foreach (var counter in new[] { "error", "aborted", "inconclusive", "notRunnable", "disconnected", "warning", "inProgress", "pending" })
+        foreach (var (counter, resultOutcome) in new[]
+        {
+            ("error", TestOutcome.Error),
+            ("aborted", TestOutcome.Cancelled),
+            ("inconclusive", TestOutcome.Inconclusive)
+        })
+        {
+            var count = counters.Attribute(counter) is null ? 0 : ReadCount(counters, counter);
+            if (count != results.Count(result => result.Outcome == resultOutcome))
+            {
+                throw new InvalidDataException($"The TRX '{counter}' counter does not match the collected test results.");
+            }
+        }
+        foreach (var counter in new[] { "notRunnable", "disconnected", "warning", "inProgress", "pending", "completed", "passedButRunAborted" })
         {
             if (counters.Attribute(counter) is not null && ReadCount(counters, counter) != 0)
             {
@@ -217,7 +245,7 @@ internal static class MsTestTrxReport
             }
         }
 
-        return outcome == "Failed";
+        return outcome is not ("Completed" or "Passed");
     }
 
     private static int ReadCount(XElement element, string name)
