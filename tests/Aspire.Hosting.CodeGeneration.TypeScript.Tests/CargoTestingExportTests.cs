@@ -3,6 +3,7 @@
 
 using System.Text.RegularExpressions;
 using Aspire.Hosting.RemoteHost;
+using Aspire.TypeSystem;
 
 #pragma warning disable ASPIRETESTING001
 
@@ -21,6 +22,21 @@ public class CargoTestingExportTests
         Assert.NotEmpty(executable);
         var method = Regex.Match(executable, @"(?m)^    withCargoTesting\([^\r\n]*;").Value;
         Assert.NotEmpty(method);
-        await Verify(new { Method = method });
+        var contextMethod = Regex.Match(code, @"(?m)^    testingContext\(\): TestingContextPromise;").Value;
+        Assert.NotEmpty(contextMethod);
+        var contextGetter = Assert.Single(scan.Capabilities, c =>
+            c.CapabilityId == "Aspire.Hosting.ApplicationModel/ResourceTestingContext.testingContext");
+        var rootOutputGetter = Assert.Single(scan.Capabilities, c =>
+            c.CapabilityId == "Aspire.Hosting.ApplicationModel/TestingContext.outputPath");
+        Assert.Equal(AtsCapabilityKind.PropertyGetter, contextGetter.CapabilityKind);
+        Assert.Equal("Aspire.Hosting/Aspire.Hosting.ApplicationModel.TestingContext", contextGetter.ReturnType!.TypeId);
+        Assert.Equal(AtsCapabilityKind.PropertyGetter, rootOutputGetter.CapabilityKind);
+        await Verify(new
+        {
+            Method = method,
+            Context = contextMethod,
+            ContextGetter = contextGetter.CapabilityId,
+            RootOutputGetter = rootOutputGetter.CapabilityId
+        });
     }
 }
