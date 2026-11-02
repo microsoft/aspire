@@ -3,6 +3,7 @@
 
 using System.Text;
 using System.Xml;
+using Aspire.Hosting.ApplicationModel;
 using TestResult = Aspire.Hosting.ApplicationModel.TestResult;
 
 #pragma warning disable ASPIRETESTING001 // Tests the experimental pytest results.
@@ -32,6 +33,8 @@ public class PytestJunitReportTests
             </testsuite></testsuites>
             """);
 
+        Assert.Equal(new[] { TestOutcome.Passed, TestOutcome.Failed, TestOutcome.Skipped, TestOutcome.Skipped, TestOutcome.Error },
+            results.Select(result => result.Outcome));
         await Verify(results);
     }
 
@@ -46,6 +49,8 @@ public class PytestJunitReportTests
             </testsuite>
             """);
 
+        Assert.Equal(new[] { TestOutcome.Failed, TestOutcome.Error, TestOutcome.Skipped, TestOutcome.Error },
+            results.Select(result => result.Outcome));
         await Verify(results);
     }
 
@@ -60,6 +65,8 @@ public class PytestJunitReportTests
     [InlineData("<testsuite tests='1' failures='0' errors='0' skipped='0'><testcase name='test' time='-1' /></testsuite>")]
     [InlineData("<testsuite tests='1' failures='0' errors='0' skipped='0'><testcase name='test' time='1e30' /></testsuite>")]
     [InlineData("<testsuite tests='1' failures='0' errors='0' skipped='0'><testcase name='test'><rerun /></testcase></testsuite>")]
+    [InlineData("<testsuite tests='1' failures='0' errors='0' skipped='0'><testcase name='test'><cancelled /></testcase></testsuite>")]
+    [InlineData("<testsuite tests='1' failures='0' errors='0' skipped='0'><testcase name='test'><timeout /></testcase></testsuite>")]
     [InlineData("<testsuite tests='1' failures='0' errors='0' skipped='0'><testsuite /></testsuite>")]
     public async Task InvalidReportsFailExplicitly(string xml)
     {
@@ -75,6 +82,7 @@ public class PytestJunitReportTests
             </testsuite>
             """);
 
+        Assert.Equal(TestOutcome.Error, Assert.Single(results).Outcome);
         await Verify(results);
     }
 
@@ -93,6 +101,19 @@ public class PytestJunitReportTests
         cancellation.Cancel();
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes("<testsuite />"));
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => PytestJunitReport.ReadAsync(stream, cancellation.Token));
+    }
+
+    [Fact]
+    public async Task DiagnosticTextDoesNotInventTimeoutCancellationOrInconclusiveOutcomes()
+    {
+        var results = await ReadAsync("""
+            <testsuite tests="2" failures="1" errors="1" skipped="0">
+              <testcase name="assertion"><failure message="cancelled timeout inconclusive" /></testcase>
+              <testcase name="fixture"><error message="TimeoutError: operation cancelled" /></testcase>
+            </testsuite>
+            """);
+
+        Assert.Equal(new[] { TestOutcome.Failed, TestOutcome.Error }, results.Select(result => result.Outcome));
     }
 
     [Fact]
