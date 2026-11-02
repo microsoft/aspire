@@ -332,32 +332,36 @@ var callerIdentity = builder.AddAzureUserAssignedIdentity("caller-identity");
 var caller = builder.AddDotnetProject("worker", "../Worker/Worker.csproj")
     .WithAzureUserAssignedIdentity(callerIdentity);
 
-var entraApi = builder.AddEntraIdApplication("entra-api")
+var apiRegistration = builder.AddEntraIdApplication("entra-api")
     .WithApplicationIdUri()
     .WithAppRole(new EntraIdAppRole("Orders.Read", "Read orders", "Read orders.", ["Application"]))
     .PublishWithAppRoleAssignment(callerIdentity, "Orders.Read");
 
-var api = builder.AddDotnetProject("api", "../Api/Api.csproj").WithReference(entraApi);
+var api = builder.AddDotnetProject("api", "../Api/Api.csproj")
+    .WithReference(apiRegistration);
 
 // Alternatively, pass the workload instead of callerIdentity.
-entraApi.PublishWithAppRoleAssignment(caller, "Orders.Read");
+apiRegistration.PublishWithAppRoleAssignment(caller, "Orders.Read");
 ```
 
 **TypeScript**
 
 ```typescript
 const caller = await builder.addContainer("worker", "my-worker-image");
-const entraApi = await builder.addEntraIdApplication("entra-api")
+const apiRegistration = await builder.addEntraIdApplication("entra-api")
     .withApplicationIdUri()
     .withAppRole("Orders.Read", "Read orders", "Read orders.", {
         allowedMemberTypes: ["Application"],
     })
     .publishWithAppRoleAssignment(caller, ["Orders.Read"]);
+
+const api = await builder.addContainer("api", "my-api-image")
+    .withReference(apiRegistration);
 ```
 
 Assignments apply **only during publish/deploy**, not local run. The workload overload uses its attached UAMI or lets a supported Azure deployment environment create one.
 
-Configure the caller to use its UAMI and request a token for the API's application ID URI plus `/.default` (by default, `api://{apiClientId}/.default`). Reference `entraApi` from the API workload, not the caller: its settings identify the API registration. Pass the API URL and target application ID URI separately to the caller.
+Configure the caller to use its UAMI and request a token for the API's application ID URI plus `/.default` (by default, `api://{apiClientId}/.default`). Reference `apiRegistration` from the API workload, not the caller: its settings identify the API registration. Pass the API URL and target application ID URI separately to the caller.
 
 The API must validate tokens and require the assigned role on protected routes. An unassigned identity can receive a token without roles, so authentication alone does not grant access.
 

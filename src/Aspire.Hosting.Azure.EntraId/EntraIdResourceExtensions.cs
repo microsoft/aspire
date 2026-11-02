@@ -1986,10 +1986,12 @@ public static class EntraIdResourceExtensions
     /// <example>
     /// <code lang="csharp">
     /// var identity = builder.AddAzureUserAssignedIdentity("worker-identity");
-    /// var api = builder.AddEntraIdApplication("orders-api")
+    /// var apiRegistration = builder.AddEntraIdApplication("orders-api")
     ///     .WithApplicationIdUri()
     ///     .WithAppRole(new EntraIdAppRole("Orders.Read", "Read orders", "Read orders.", ["Application"]))
     ///     .PublishWithAppRoleAssignment(identity, "Orders.Read");
+    /// var api = builder.AddDotnetProject("api", "../Api/Api.csproj")
+    ///     .WithReference(apiRegistration);
     /// </code>
     /// </example>
     [AspireExportIgnore(Reason = "The publishWithAppRoleAssignment export accepts an identity or compute resource using a union.")]
@@ -2024,7 +2026,13 @@ public static class EntraIdResourceExtensions
     /// <example>
     /// <code lang="csharp">
     /// var worker = builder.AddDotnetProject("worker", "../Worker/Worker.csproj");
-    /// api.PublishWithAppRoleAssignment(worker, "Orders.Read");
+    /// var apiRegistration = builder.AddEntraIdApplication("orders-api")
+    ///     .WithApplicationIdUri()
+    ///     .WithAppRole(new EntraIdAppRole("Orders.Read", "Read orders", "Read orders.", ["Application"]));
+    /// var api = builder.AddDotnetProject("api", "../Api/Api.csproj")
+    ///     .WithReference(apiRegistration);
+    ///
+    /// apiRegistration.PublishWithAppRoleAssignment(worker, "Orders.Read");
     /// </code>
     /// </example>
     [AspireExportIgnore(Reason = "The publishWithAppRoleAssignment export accepts an identity or compute resource using a union.")]
