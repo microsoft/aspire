@@ -1,10 +1,13 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+extern alias HostingDotnet;
+
 #pragma warning disable ASPIREEXTENSION001, ASPIREPROJECTS001
 
 using System.IO.Compression;
 using System.Reflection;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
 using Aspire.Hosting.ApplicationModel;
@@ -24,6 +27,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using PathNormalizer = HostingDotnet::Aspire.Hosting.Utils.PathNormalizer;
 
 namespace Aspire.Hosting.Dotnet.Tests;
 
@@ -398,21 +402,32 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData("11.0.100-rc.2.26504.105", false)]
-    [InlineData("11.0.100-rtm.26473.104", true)]
+    [InlineData("11.0.100-rc.2.26504.105", false, "original")]
+    [InlineData("11.0.100-rc.2.26504.105", false, "case")]
+    [InlineData("11.0.100-rc.2.26504.105", false, "normalization")]
+    [InlineData("11.0.100-rc.2.26504.105", false, "symlink")]
+    [InlineData("11.0.100-rtm.26473.104", true, "original")]
+    [InlineData("11.0.100-rtm.26473.104", true, "case")]
+    [InlineData("11.0.100-rtm.26473.104", true, "normalization")]
+    [InlineData("11.0.100-rtm.26473.104", true, "symlink")]
     public async Task FileOnlyModelCreatesDirectCoordinatedBuild(
         string sdkVersion,
-        bool supportsFileBasedMultiThreadedBuild)
+        bool supportsFileBasedMultiThreadedBuild,
+        string pathAlias)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var workspaceRoot = PathNormalizer.ResolvePathCasing(workspace.Path);
+        var appDirectory = Directory.CreateDirectory(Path.Combine(workspaceRoot, "Caf\u00e9")).FullName;
+        var filePath = Path.Combine(appDirectory, "worker.cs");
+        File.WriteAllText(filePath, "System.Console.WriteLine(\"Hello\");");
+        var suppliedPath = CreateFileAppPathAlias(filePath, pathAlias);
+        var expectedPath = PathNormalizer.ResolvePathCasing(suppliedPath);
         using var builder = TestDistributedApplicationBuilder.Create(
-            options => options.ProjectDirectory = workspace.Path,
+            options => options.ProjectDirectory = workspaceRoot,
             outputHelper);
         UseDotnetSdkVersion(builder, sdkVersion);
-        var filePath = Path.Combine(workspace.Path, "worker.cs");
-        File.WriteAllText(filePath, "System.Console.WriteLine(\"Hello\");");
 
-        var file = builder.AddDotnetProject("worker", filePath, options => options.ExcludeLaunchProfile = true);
+        var file = builder.AddDotnetProject("worker", suppliedPath, options => options.ExcludeLaunchProfile = true);
         var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
         var rebuilder = Assert.Single(builder.Resources.OfType<ProjectRebuilderResource>());
         AssertBuildDependency(file.Resource, buildResource);
@@ -420,9 +435,12 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
 
         await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
 
-        Assert.Equal([NormalizeProjectPath(filePath)], buildResource.ProjectPaths);
+        Assert.Equal([expectedPath], buildResource.ProjectPaths);
+        Assert.Equal(expectedPath, Assert.Single(file.Resource.Annotations.OfType<DotnetProjectMetadata>()).ProjectPath);
+        Assert.Equal(Path.GetDirectoryName(expectedPath), file.Resource.WorkingDirectory);
+        Assert.Equal(Path.GetDirectoryName(expectedPath), rebuilder.WorkingDirectory);
         Assert.Equal(
-            filePath,
+            expectedPath,
             await buildResource.GetBuildTargetPathAsync(
                 NullLogger.Instance,
                 TestContext.Current.CancellationToken));
@@ -433,7 +451,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             new BeforeResourceStartedEvent(buildResource, app.Services),
             TestContext.Current.CancellationToken);
         var buildArgs = await ArgumentEvaluator.GetArgumentListAsync(buildResource, app.Services);
-        var expectedBuildArgs = new List<string> { "build", filePath };
+        var expectedBuildArgs = new List<string> { "build", expectedPath };
         if (supportsFileBasedMultiThreadedBuild)
         {
             expectedBuildArgs.Add("-mt");
@@ -453,7 +471,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             new BeforeResourceStartedEvent(rebuilder, app.Services),
             TestContext.Current.CancellationToken);
         var rebuildArgs = await ArgumentEvaluator.GetArgumentListAsync(rebuilder, app.Services);
-        var expectedRebuildArgs = new List<string> { "build", filePath };
+        var expectedRebuildArgs = new List<string> { "build", expectedPath };
         if (supportsFileBasedMultiThreadedBuild)
         {
             expectedRebuildArgs.Add("-mt");
@@ -463,10 +481,36 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         Assert.Equal(expectedRebuildArgs, rebuildArgs);
 
         var fileArgs = await ArgumentEvaluator.GetArgumentListAsync(file.Resource, app.Services);
-        var expectedFileArgs = new List<string> { "run", "--file", filePath, "--no-build" };
+        var expectedFileArgs = new List<string> { "run", "--file", expectedPath, "--no-build" };
         AddExpectedConfiguration(builder, expectedFileArgs);
         expectedFileArgs.Add("--no-launch-profile");
         Assert.Equal(expectedFileArgs, fileArgs);
+    }
+
+    [Theory]
+    [InlineData(DistributedApplicationOperation.Run)]
+    [InlineData(DistributedApplicationOperation.Publish)]
+    public void FileAppMetadataPreservesInputPathWithoutCoordination(DistributedApplicationOperation operation)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var workspaceRoot = PathNormalizer.ResolvePathCasing(workspace.Path);
+        var appDirectory = Directory.CreateDirectory(Path.Combine(workspaceRoot, "Caf\u00e9")).FullName;
+        var filePath = Path.Combine(appDirectory, "worker.cs");
+        File.WriteAllText(filePath, "System.Console.WriteLine(\"Hello\");");
+        var suppliedPath = CreateFileAppPathAlias(filePath, "case");
+        using var builder = TestDistributedApplicationBuilder.Create(operation, outputHelper);
+        if (operation == DistributedApplicationOperation.Run)
+        {
+            builder.Configuration["DEBUG_SESSION_PORT"] = "localhost:12345";
+        }
+
+        var file = builder.AddDotnetProject("worker", suppliedPath, options => options.ExcludeLaunchProfile = true);
+        var metadata = Assert.Single(file.Resource.Annotations.OfType<DotnetProjectMetadata>());
+
+        Assert.Equal(suppliedPath, metadata.ProjectPath);
+        Assert.Equal(Path.GetDirectoryName(suppliedPath), file.Resource.WorkingDirectory);
+        Assert.False(metadata.SuppressBuild);
+        Assert.Empty(builder.Resources.OfType<DotnetProjectBuildResource>());
     }
 
     [Theory]
@@ -631,21 +675,28 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         Assert.Equal(2, File.ReadAllLines(GetBuildCountPath(sharedProject)).Length);
     }
 
-    [Fact]
+    [Theory]
+    [InlineData("original")]
+    [InlineData("case")]
+    [InlineData("normalization")]
+    [InlineData("symlink")]
     [RequiresTools(["dotnet"])]
-    public async Task FileAppRebuildCommandBuildsEditedSourceAndRestartsResource()
+    public async Task FileAppRebuildCommandBuildsEditedSourceAndRestartsResource(string pathAlias)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var appPath = Path.Combine(workspace.Path, "worker.cs");
-        var sentinelPath = Path.Combine(workspace.Path, "worker-ran.txt");
+        var workspaceRoot = PathNormalizer.ResolvePathCasing(workspace.Path);
+        var appDirectory = Directory.CreateDirectory(Path.Combine(workspaceRoot, "Caf\u00e9")).FullName;
+        var appPath = Path.Combine(appDirectory, "worker.cs");
+        var sentinelPath = Path.Combine(workspaceRoot, "worker-ran.txt");
         WriteFileApp("initial");
+        var suppliedPath = CreateFileAppPathAlias(appPath, pathAlias);
 
         using var builder = TestDistributedApplicationBuilder.Create(
-            options => options.ProjectDirectory = workspace.Path,
+            options => options.ProjectDirectory = workspaceRoot,
             outputHelper).WithResourceCleanUp(true);
         var resource = builder.AddDotnetProject(
                 "worker",
-                appPath,
+                suppliedPath,
                 options => options.ExcludeLaunchProfile = true)
             .WithEnvironment("SENTINEL_PATH", sentinelPath);
         await using var app = builder.Build();
@@ -1056,17 +1107,18 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
     public void CaseVariantProjectPathsFollowFilesystemIdentity(bool addCaseVariantFirst)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var workspaceRoot = PathNormalizer.ResolvePathCasing(workspace.Path);
         using var buildResource = new DotnetProjectBuildResource(
             DotnetProjectBuildCoordinator.BuildResourceName,
-            workspace.Path,
-            Path.Combine(workspace.Path, "obj", ".aspire", "build"),
+            workspaceRoot,
+            Path.Combine(workspaceRoot, "obj", ".aspire", "build"),
             TimeProvider.System);
-        var projectPath = CreateProject(workspace.Path, "Service", "App.csproj");
-        var caseVariantPath = Path.Combine(workspace.Path, "service", "app.CSPROJ");
+        var projectPath = CreateProject(workspaceRoot, "Service", "App.csproj");
+        var caseVariantPath = Path.Combine(workspaceRoot, "service", "app.CSPROJ");
         var caseInsensitive = File.Exists(caseVariantPath);
         if (!caseInsensitive)
         {
-            CreateProject(workspace.Path, "service", "app.CSPROJ");
+            CreateProject(workspaceRoot, "service", "app.CSPROJ");
         }
 
         var firstPath = addCaseVariantFirst ? caseVariantPath : projectPath;
@@ -1434,23 +1486,29 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         // MSBuild sees that spelling alongside the on-disk spelling (https://github.com/microsoft/aspire/issues/21621).
         Assert.SkipUnless(
             OperatingSystem.IsWindows() || OperatingSystem.IsMacOS(),
-            "Alternate path casing only names the same directory on case-insensitive file systems.");
+            "Path casing resolution is only supported on Windows and macOS.");
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var appHostDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "AppHost")).FullName;
-        var projectPath = CreateProject(workspace.Path, "Api", "Api.csproj");
+        var workspaceRoot = PathNormalizer.ResolvePathCasing(workspace.Path);
+        var appHostDirectory = Directory.CreateDirectory(Path.Combine(workspaceRoot, "AppHost")).FullName;
+        var projectPath = CreateProject(workspaceRoot, "Api", "Api.csproj");
         var buildDirectory = Path.Combine(appHostDirectory, "obj", ".aspire", "build");
+        var caseVariantAppHostDirectory = ChangeCasing(appHostDirectory);
+        var caseVariantProjectPath = ChangeCasing(projectPath);
+        Assert.SkipUnless(
+            Directory.Exists(caseVariantAppHostDirectory) && File.Exists(caseVariantProjectPath),
+            "The test requires case-insensitive lookup of the AppHost directory and project file.");
 
         using var buildResource = new DotnetProjectBuildResource(
             "build",
-            ChangeCasing(appHostDirectory),
+            caseVariantAppHostDirectory,
             ChangeCasing(buildDirectory),
             TimeProvider.System);
         Assert.Equal(appHostDirectory, buildResource.WorkingDirectory);
         Assert.Equal(buildDirectory, buildResource.BuildDirectory);
 
         buildResource.ConfigureTraversalBuild(
-            [ChangeCasing(projectPath)],
-            ChangeCasing(appHostDirectory),
+            [caseVariantProjectPath],
+            caseVariantAppHostDirectory,
             buildConfiguration: null,
             restoreProjectsIndividually: false);
         Assert.Equal(projectPath, Assert.Single(buildResource.ProjectPaths));
@@ -1463,10 +1521,10 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
 
         string ChangeCasing(string path)
         {
-            var relativePath = Path.GetRelativePath(workspace.Path, path)
+            var relativePath = Path.GetRelativePath(workspaceRoot, path)
                 .Replace("AppHost", "aPPhOST", StringComparison.Ordinal)
                 .Replace("Api", "aPI", StringComparison.Ordinal);
-            var changedPath = Path.Combine(workspace.Path, relativePath);
+            var changedPath = Path.Combine(workspaceRoot, relativePath);
             return OperatingSystem.IsWindows()
                 ? char.ToLowerInvariant(changedPath[0]) + changedPath[1..]
                 : changedPath;
@@ -4534,6 +4592,52 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             System.IO.File.WriteAllText(args[0], Shared.SharedValue.Value);
             """);
         return appPath;
+    }
+
+    private static string CreateFileAppPathAlias(string filePath, string pathAlias)
+    {
+        var directory = Path.GetDirectoryName(filePath)!;
+        string aliasPath;
+        if (pathAlias == "symlink")
+        {
+            var linkDirectory = Path.Combine(Path.GetDirectoryName(directory)!, "FileAppAlias");
+            try
+            {
+                Directory.CreateSymbolicLink(linkDirectory, directory);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                Assert.Skip($"Cannot create symbolic links in this environment: {ex.Message}");
+            }
+
+            aliasPath = Path.Combine(linkDirectory, Path.GetFileName(filePath));
+        }
+        else
+        {
+            if (pathAlias is "case" or "normalization")
+            {
+                Assert.SkipUnless(
+                    OperatingSystem.IsWindows() || OperatingSystem.IsMacOS(),
+                    "Path spelling resolution is only supported on Windows and macOS.");
+            }
+
+            var composedPath = filePath.Normalize(NormalizationForm.FormC);
+            aliasPath = pathAlias switch
+            {
+                "original" => filePath,
+                "case" => Path.Combine(
+                    Path.GetDirectoryName(directory)!,
+                    Path.GetFileName(directory).ToUpperInvariant(),
+                    Path.GetFileName(filePath)),
+                "normalization" => composedPath.Equals(filePath, StringComparison.Ordinal)
+                    ? filePath.Normalize(NormalizationForm.FormD)
+                    : composedPath,
+                _ => throw new ArgumentOutOfRangeException(nameof(pathAlias), pathAlias, "Unknown path alias."),
+            };
+        }
+
+        Assert.SkipUnless(File.Exists(aliasPath), $"The filesystem does not support the '{pathAlias}' file-app alias.");
+        return aliasPath;
     }
 
     private static string GetBuildCountPath(string projectPath) =>

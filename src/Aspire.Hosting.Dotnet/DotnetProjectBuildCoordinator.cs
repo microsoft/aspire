@@ -54,6 +54,10 @@ internal static partial class DotnetProjectBuildCoordinator
             }
             else
             {
+                // The SDK folds case, but not Unicode normalization, in file-app cache keys:
+                // https://github.com/dotnet/dotnet/blob/820230c386/src/sdk/src/Cli/Microsoft.DotNet.FileBasedPrograms/Sha256Hasher.cs#L27-L28
+                // Keep the direct build, launch, and rebuilder on the same path spelling.
+                projectMetadata.SetProjectPath(DotnetProjectBuildResource.ResolveBuildPathCasing(projectMetadata.ProjectPath));
                 state.EnsureBuildResource(projectMetadata.BuildConfiguration);
             }
         }
