@@ -130,12 +130,14 @@ Only Passed and Skipped are non-failing;
 Inconclusive, Error, Timed out and Cancelled results fail their resource group
 even when the process exits successfully. A published Timed out or Cancelled
 test is not a CLI timeout or cancellation and does not change the command lifetime.
-The page updates during collection and replays finalized results on a late connection or reload while
-`aspire test --keep-alive` is running. The previous dashboard has a Testing
-navigation entry with the same table.
+The page updates during collection and replays finalized results on a late connection
+or reload while `features__testCommandEnabled=true aspire test --keep-alive` is
+running. The previous dashboard has a Testing navigation entry with the same table.
 
 During ordinary `aspire run`, collectors are not activated; annotated resources
 still appear with one resource-outcome row based on their actual execution state.
+The preview flag gates CLI command registration, not dashboard categorization or
+hosting metadata, so ordinary runs do not need it to show Testing resources.
 The dashboard does not start tests or change execution behavior. To exercise a
 failure in the resource-only fallback, prefix the testing command with
 `RUST_PLAYGROUND_FAIL=true`. `MSTEST_PLAYGROUND_FAIL`, `PYTEST_PLAYGROUND_FAIL`,
