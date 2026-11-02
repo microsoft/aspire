@@ -234,6 +234,14 @@ public partial class GitCommandRunnerTests
 
     [Fact]
     [RequiresTools(["git", "ssh"])]
+    public async Task ConfigureUnattendedSsh_VerifiesOpenSshUnderConcurrentStartup()
+    {
+        await Task.WhenAll(Enumerable.Range(0, 16).Select(_ =>
+            ConfigureUnattendedSsh_VerifiesOpenSshAndAppliesBatchModeAfterUrlRewrites(false, "GIT_SSH_COMMAND")));
+    }
+
+    [Fact]
+    [RequiresTools(["git", "ssh"])]
     public async Task ConfigureUnattendedSsh_RelativePathEntriesUseGitDirectoryBeforeAbsoluteFallback()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

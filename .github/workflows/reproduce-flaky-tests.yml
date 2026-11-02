@@ -28,7 +28,7 @@ env:
   #   --filter-method "*.TestMethodName"
   #   --filter-class "*.TestClassName"
   #   --filter-method "*.Test1" --filter-method "*.Test2"
-  TEST_FILTER: '--filter-method "*.ConfigureUnattendedSsh_VerifiesOpenSshAndAppliesBatchModeAfterUrlRewrites" --filter-not-trait "outerloop=true" --show-live-output on'
+  TEST_FILTER: '--filter-method "*.ConfigureUnattendedSsh_VerifiesOpenSshUnderConcurrentStartup" --filter-not-trait "outerloop=true" --output Detailed'
 
   # Target operating systems (comma-separated)
   # Options: ubuntu-latest, windows-latest, macos-latest
@@ -36,10 +36,10 @@ env:
 
   # Number of parallel runners per OS
   # Total jobs = RUNNERS_PER_OS × number of OSes (must be ≤ 256)
-  RUNNERS_PER_OS: "5"
+  RUNNERS_PER_OS: "3"
 
   # Number of test iterations each runner executes
-  ITERATIONS_PER_RUNNER: "10"
+  ITERATIONS_PER_RUNNER: "3"
 
 jobs:
 
