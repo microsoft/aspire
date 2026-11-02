@@ -20,6 +20,7 @@ public class ContainerRuntimeResolverTests
         var services = new ServiceCollection();
         services.AddKeyedSingleton<IContainerRuntime, FakeContainerRuntime>("docker");
         services.AddKeyedSingleton<IContainerRuntime, FakeContainerRuntime>("podman");
+        services.AddKeyedSingleton<IContainerRuntime, FakeContainerRuntime>("wslc");
         var sp = serviceProvider ?? services.BuildServiceProvider();
 
         var dcpOptions = Options.Create(new DcpOptions { ContainerRuntime = configuredRuntime });
@@ -53,6 +54,8 @@ public class ContainerRuntimeResolverTests
     [InlineData("podman")]
     [InlineData("PODMAN")]
     [InlineData("Docker")]
+    [InlineData("wslc")]
+    [InlineData("WSLc")]
     public async Task ResolveAsync_ConfiguredRuntime_ReturnsKeyedService(string configuredRuntime)
     {
         var resolver = CreateResolver(configuredRuntime);

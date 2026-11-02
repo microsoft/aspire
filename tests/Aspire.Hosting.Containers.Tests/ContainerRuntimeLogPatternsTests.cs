@@ -24,6 +24,8 @@ public class ContainerRuntimeLogPatternsTests
     [InlineData("2026-07-31T17:40:30.9610000Z Error: unable to copy from source docker://cgr.dev/mattermost.com/go-msft-fips:1.24.6: initializing source docker://cgr.dev/mattermost.com/go-msft-fips:1.24.6: fetching manifest 1.24.6 in cgr.dev/mattermost.com/go-msft-fips: unable to retrieve auth token: invalid username/password: unauthorized: Authentication required")]
     // Podman 5.x, which lacked the outer "unable to copy from source" wrapper.
     [InlineData("2026-07-30T22:57:47.7100000Z Error: initializing source docker://does.not.exist.internal/does-not-exist:latest: pinging container registry does.not.exist.internal: no such host")]
+    [InlineData(@"2026-11-01T12:14:20.6140000Z Get ""https://does.not.exist.internal/v2/"": dial tcp: lookup does.not.exist.internal on 10.1.0.1:53: no such host")]
+    [InlineData(@"2026-11-01T12:13:24.5780000Z Head ""https://cgr.dev/v2/mattermost.com/go-msft-fips/manifests/1.24.6"": unauthorized: {""errors"":[{""code"":""UNAUTHORIZED"",""message"":""Authentication required""}]}")]
     public void IsImagePullFailure_MatchesRuntimeFailureOutput(string line)
     {
         Assert.True(ContainerRuntimeLogPatterns.IsImagePullFailure(line));
@@ -39,6 +41,9 @@ public class ContainerRuntimeLogPatternsTests
     [InlineData("2026-07-31T17:40:30.9610000Z Error: container exited with code 1")]
     // A docker:// reference on its own is not a failure.
     [InlineData("2026-07-31T17:40:30.9610000Z Resolved docker://docker.io/library/redis:8.6")]
+    [InlineData("2026-11-01T12:13:24.5780000Z Error code: E_FAIL")]
+    [InlineData("2026-11-01T12:14:03.0190000Z Option name was not recognized for the current command: '--illegal'")]
+    [InlineData("2026-11-01T18:54:59.2990000Z Option name was not recognised for the current command: '--illegal'")]
     public void IsImagePullFailure_DoesNotMatchUnrelatedOutput(string line)
     {
         Assert.False(ContainerRuntimeLogPatterns.IsImagePullFailure(line));
@@ -52,6 +57,8 @@ public class ContainerRuntimeLogPatternsTests
     [InlineData(@"2026-07-31T17:41:39.0250000Z [2/2] STEP 6/6: LABEL ""com.microsoft.developer.usvc-dev.build""=""0.25.9""")]
     // Podman/Buildah, single-stage build has no stage prefix.
     [InlineData("2026-07-31T17:41:35.2070000Z STEP 1/3: FROM alpine")]
+    [InlineData("2026-11-01T12:13:24.8430000Z [builder 1/4] FROM mcr.microsoft.com/cbl-mariner/base/nginx:1.22")]
+    [InlineData("2026-11-01T12:13:31.5290000Z [builder 3/4] RUN echo 804d0265-36ca-4f5b-9a59-2313ca8efd37 > /usr/share/nginx/html/cachebuster.txt")]
     public void IsBuildProgress_MatchesRuntimeBuildOutput(string line)
     {
         Assert.True(ContainerRuntimeLogPatterns.IsBuildProgress(line));
@@ -64,8 +71,22 @@ public class ContainerRuntimeLogPatternsTests
     // Buildah output that is not a step line.
     [InlineData("2026-07-31T17:41:39.0360000Z Successfully tagged localhost/testcontainer:50a50dfc")]
     [InlineData("2026-07-31T17:41:35.2070000Z Getting image source signatures")]
+    [InlineData("2026-11-01T12:13:24.8440000Z [builder] resolve mcr.microsoft.com/cbl-mariner/base/nginx:1.22")]
     public void IsBuildProgress_DoesNotMatchUnrelatedOutput(string line)
     {
         Assert.False(ContainerRuntimeLogPatterns.IsBuildProgress(line));
+    }
+
+    [Theory]
+    [InlineData("2026-11-01T12:14:03.0190000Z unknown flag: --illegal", true)]
+    [InlineData("2026-11-01T12:14:03.0190000Z Option name was not recognized for the current command: '--illegal'", true)]
+    [InlineData("2026-11-01T18:54:59.2990000Z Option name was not recognised for the current command: '--illegal'", true)]
+    [InlineData("2026-11-01T12:14:03.0190000Z unknown flag: --other", false)]
+    [InlineData("2026-11-01T12:14:03.0190000Z Option name was not recognized for the current command: '--other'", false)]
+    [InlineData("2026-11-01T18:54:59.2990000Z Option name was not recognised for the current command: '--other'", false)]
+    [InlineData("2026-11-01T12:14:03.0190000Z Usage: wslc container create --illegal", false)]
+    public void IsInvalidOptionFailure_MatchesOnlyTheRejectedOption(string line, bool expected)
+    {
+        Assert.Equal(expected, ContainerRuntimeLogPatterns.IsInvalidOptionFailure(line, "--illegal"));
     }
 }

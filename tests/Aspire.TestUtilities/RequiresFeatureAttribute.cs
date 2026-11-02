@@ -28,10 +28,12 @@ public class RequiresFeatureAttribute(TestFeature feature) : Attribute, ITraitAt
     }
 
     // Logic from RequiresSSLCertificateAttribute
-    // Always supported on linux (local and CI), but only local otherwise
+    // GitHub Actions installs and trusts a development certificate on Linux and Windows.
     private static bool IsSslCertificateSupported()
     {
-        return OperatingSystem.IsLinux() || !PlatformDetection.IsRunningOnCI;
+        return OperatingSystem.IsLinux()
+            || (OperatingSystem.IsWindows() && PlatformDetection.IsRunningOnGithubActions)
+            || !PlatformDetection.IsRunningOnCI;
     }
 
     // Logic from RequiresPlaywrightAttribute
@@ -90,22 +92,24 @@ public class RequiresFeatureAttribute(TestFeature feature) : Attribute, ITraitAt
     // would let those tests skip silently, which is not desirable.
     //
     // scenarios:
-    // - Windows: assume installed only for *local* runs as containers aren't supported on CI yet
-    //                - https://github.com/microsoft/aspire/issues/4291
+    // - Windows GitHub Actions: WSLc is installed and verified by run-tests.yml.
+    // - Other Windows CI: containers are not available.
     // - Linux - Local, or CI: always assume that a container runtime is installed
     //
     // Locally there is no such expectation, so probe PATH instead: a developer machine may have Podman
-    // only, Docker only, or neither, and tests should skip rather than fail against a runtime that is
+    // only, Docker only, WSLc only, or none, and tests should skip rather than fail against a runtime that is
     // not installed. Only PATH is inspected (no process is spawned) because trait attributes are
     // evaluated during discovery, once per test.
     internal static bool IsContainerRuntimeSupported()
     {
         if (PlatformDetection.IsRunningOnCI)
         {
-            return OperatingSystem.IsLinux(); // non-linux on CI does not support containers
+            return OperatingSystem.IsLinux()
+                || (OperatingSystem.IsWindows() && PlatformDetection.IsRunningOnGithubActions);
         }
 
-        return IsOnPath(KnownContainerRuntimes.Docker) || IsOnPath(KnownContainerRuntimes.Podman);
+        return IsOnPath(KnownContainerRuntimes.Docker) || IsOnPath(KnownContainerRuntimes.Podman)
+            || (OperatingSystem.IsWindows() && IsOnPath(KnownContainerRuntimes.Wslc));
     }
 
     // Same CI expectation as IsContainerRuntimeSupported, but locally requires Docker itself. Used by
@@ -120,6 +124,15 @@ public class RequiresFeatureAttribute(TestFeature feature) : Attribute, ITraitAt
         return IsOnPath(KnownContainerRuntimes.Docker);
     }
 
+    private static bool IsContainerComposeSupported()
+    {
+        // Windows CI provides WSLc, which cannot execute Compose. Preserve the existing
+        // Docker/Podman expectation elsewhere without gating unrelated image-build tests.
+        return PlatformDetection.IsRunningOnCI
+            ? OperatingSystem.IsLinux()
+            : IsOnPath(KnownContainerRuntimes.Docker) || IsOnPath(KnownContainerRuntimes.Podman);
+    }
+
     // Testcontainers needs a Docker-compatible API *endpoint*, not just a CLI on PATH: it speaks HTTP to
     // the engine rather than shelling out. A Podman-only host does not always have one — Testcontainers
     // 4.8.1 cannot use Podman's Windows named pipe, and on Linux Podman is daemonless unless
@@ -127,6 +140,13 @@ public class RequiresFeatureAttribute(TestFeature feature) : Attribute, ITraitAt
     // would run them straight into DockerUnavailableException instead of skipping them.
     private static bool IsTestcontainersSupported()
     {
+        // Windows WSLc runners do not provide a Docker API endpoint. Do not initialize
+        // Testcontainers configuration just because DCP can run containers there.
+        if (PlatformDetection.IsRunningOnCI && !IsDockerSupported())
+        {
+            return false;
+        }
+
         if (!IsContainerRuntimeSupported())
         {
             return false;
@@ -138,7 +158,7 @@ public class RequiresFeatureAttribute(TestFeature feature) : Attribute, ITraitAt
 
         if (PlatformDetection.IsRunningOnCI)
         {
-            return true; // CI always has Docker where it has a container runtime at all.
+            return true;
         }
 
         // A Docker install always exposes the socket or named pipe Testcontainers probes by default, so
@@ -161,8 +181,8 @@ public class RequiresFeatureAttribute(TestFeature feature) : Attribute, ITraitAt
             return !PlatformDetection.IsRunningFromAzdo;
         }
 
-        // buildx ships with modern Docker installations, so presence of either CLI is enough locally.
-        return IsOnPath(KnownContainerRuntimes.Docker) || IsOnPath(KnownContainerRuntimes.Podman);
+        // buildx ships with modern Docker installations; Podman and WSLc build natively.
+        return IsContainerRuntimeSupported();
     }
 
     private static bool IsOnPath(string executable)
@@ -202,6 +222,10 @@ public class RequiresFeatureAttribute(TestFeature feature) : Attribute, ITraitAt
             return false;
         }
         if ((feature & TestFeature.Testcontainers) == TestFeature.Testcontainers && !IsTestcontainersSupported())
+        {
+            return false;
+        }
+        if ((feature & TestFeature.ContainerCompose) == TestFeature.ContainerCompose && !IsContainerComposeSupported())
         {
             return false;
         }

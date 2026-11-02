@@ -191,7 +191,7 @@ public class MongoDbFunctionalTests(ITestOutputHelper testOutputHelper)
 
     [Theory]
     [InlineData(true)]
-    [InlineData(false)]
+    [InlineData(false, Skip = "https://github.com/microsoft/WSL/issues/42129", SkipType = typeof(PlatformDetection), SkipWhen = nameof(PlatformDetection.IsWindows))]
     [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task WithDataShouldPersistStateBetweenUsages(bool useVolume)
     {

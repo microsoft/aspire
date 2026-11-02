@@ -932,6 +932,11 @@ internal sealed class ResourceContainerImageManager(
             return "Podman";
         }
 
+        if (string.Equals(containerRuntime.Name, KnownContainerRuntimes.Wslc, StringComparison.OrdinalIgnoreCase))
+        {
+            return "Wslc";
+        }
+
         return null;
     }
 

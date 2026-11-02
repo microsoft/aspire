@@ -9,8 +9,7 @@
     <IsTestProject>true</IsTestProject>
     <IncludeTestUtilities>false</IncludeTestUtilities>
 
-    <!-- Only run on Linux; no docker support on Windows yet -->
-    <RunOnGithubActionsWindows>false</RunOnGithubActionsWindows>
+    <RunOnGithubActionsWindows>true</RunOnGithubActionsWindows>
     <RunOnAzdoCIWindows>false</RunOnAzdoCIWindows>
     <RunOnAzdoHelixWindows>false</RunOnAzdoHelixWindows>
 

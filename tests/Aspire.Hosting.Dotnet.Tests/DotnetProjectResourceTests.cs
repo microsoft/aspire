@@ -344,8 +344,7 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
             null,
             cancellation.Token);
         var processRunner = app.Services.GetRequiredService<IProcessRunner>();
-        var originalImageId = await RunContainerRuntimeAsync(
-            processRunner, runtime, ["image", "inspect", "--format", "{{.Id}}", imageReference], cancellation.Token);
+        var originalImageId = await GetContainerImageIdAsync(processRunner, runtime, imageReference, cancellation.Token);
         Assert.NotEmpty(originalImageId);
 
         // Keep an owned alias so loading the archive cannot leave the sentinel image untagged.
@@ -355,17 +354,18 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
 
         await imageBuilder.BuildImageAsync(resource.Resource, cancellation.Token);
 
-        var preservedImageId = await RunContainerRuntimeAsync(
-            processRunner, runtime, ["image", "inspect", "--format", "{{.Id}}", imageReference], cancellation.Token);
+        var preservedImageId = await GetContainerImageIdAsync(processRunner, runtime, imageReference, cancellation.Token);
         Assert.Equal(originalImageId, preservedImageId);
         Assert.Equal([imageReference], TestContainerImageArchive.ReadDockerImageReferences(archivePath));
 
         await RunContainerRuntimeAsync(processRunner, runtime, ["image", "load", "--input", archivePath], cancellation.Token);
-        var loadedImageId = await RunContainerRuntimeAsync(
-            processRunner, runtime, ["image", "inspect", "--format", "{{.Id}}", imageReference], cancellation.Token);
+        var loadedImageId = await GetContainerImageIdAsync(processRunner, runtime, imageReference, cancellation.Token);
         Assert.NotEqual(originalImageId, loadedImageId);
+        var runArguments = runtime.Name == "WSLc"
+            ? new[] { "run", "--rm", imageReference }
+            : ["run", "--rm", "--platform", "linux/amd64", imageReference];
         var containerOutput = await RunContainerRuntimeAsync(
-            processRunner, runtime, ["run", "--rm", "--platform", "linux/amd64", imageReference], cancellation.Token);
+            processRunner, runtime, runArguments, cancellation.Token);
         Assert.Equal(marker, containerOutput);
     }
 
@@ -1154,10 +1154,29 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
             var logger = app.Services.GetRequiredService<ILogger<DotnetProjectResourceTests>>();
             await using var imageCleanup = new TemporaryContainerImage(runtime, imageReference, logger);
             await RunContainerRuntimeAsync(processRunner, runtime, ["image", "load", "--input", archivePath], cancellation.Token);
+            // WSLc runs the platform encoded in the archive and has no run --platform option.
+            var arguments = runtime.Name == "WSLc"
+                ? new[] { "run", "--rm", imageReference }
+                : ["run", "--rm", "--platform", "linux/amd64", imageReference];
             var containerOutput = await RunContainerRuntimeAsync(
-                processRunner, runtime, ["run", "--rm", "--platform", "linux/amd64", imageReference], cancellation.Token);
+                processRunner, runtime, arguments, cancellation.Token);
             Assert.Equal("project", containerOutput);
         }
+    }
+
+    private static async Task<string> GetContainerImageIdAsync(
+        IProcessRunner processRunner,
+        IContainerRuntime runtime,
+        string imageReference,
+        CancellationToken cancellationToken)
+    {
+        var output = await RunContainerRuntimeAsync(
+            processRunner, runtime, ["image", "inspect", imageReference], cancellationToken);
+        using var document = JsonDocument.Parse(output);
+        var imageId = Assert.Single(document.RootElement.EnumerateArray()).GetProperty("Id").GetString();
+        Assert.NotNull(imageId);
+
+        return imageId;
     }
 
     private static async Task<string> RunContainerRuntimeAsync(
@@ -1170,6 +1189,7 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
         {
             "Docker" => "docker",
             "Podman" => "podman",
+            "WSLc" => "wslc",
             _ => throw new InvalidOperationException($"Unexpected container runtime '{runtime.Name}'.")
         };
         var (pendingResult, process) = processRunner.Run(new ProcessSpec(executable)

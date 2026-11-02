@@ -179,7 +179,7 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
             (operatingSystem, architecture) => FindManifest(output, operatingSystem, architecture));
     }
 
-    private static bool TryParseImageConfig(string output, [NotNullWhen(true)] out ContainerImageConfig? config)
+    protected static bool TryParseImageConfig(string output, [NotNullWhen(true)] out ContainerImageConfig? config)
     {
         config = null;
 
