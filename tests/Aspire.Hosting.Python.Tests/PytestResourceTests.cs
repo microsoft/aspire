@@ -7,6 +7,7 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using TestResult = Aspire.Hosting.ApplicationModel.TestResult;
 
 #pragma warning disable ASPIRETESTING001 // Tests the experimental pytest integration.
 
@@ -56,26 +57,34 @@ public class PytestResourceTests(ITestOutputHelper outputHelper)
         Assert.Same(api.Resource, Assert.Single(resource.Resource.Annotations.OfType<WaitAnnotation>()).Resource);
         Assert.Same(ManifestPublishingCallbackAnnotation.Ignore,
             Assert.Single(resource.Resource.Annotations.OfType<ManifestPublishingCallbackAnnotation>()));
-        var options = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>()).Options!;
-        Assert.Equal(testing, options.IsTestRun);
+        var annotation = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
+        Assert.NotNull(annotation.Collector);
         await using var app = builder.Build();
         await BeforeStartAsync(builder, app);
         var arguments = await ArgumentEvaluator.GetArgumentListAsync(resource.Resource, app.Services);
         var expected = new List<string> { "-k", "a or b" };
         if (testing)
         {
-            Assert.True(Directory.Exists(options.OutputPath));
-            expected.Add("--junitxml=" + Path.Combine(options.OutputPath!, "pytest.xml"));
+            Assert.True(Directory.Exists(annotation.OutputPath));
+            Assert.Equal(Path.Combine(builder.Configuration["ASPIRE_TEST_OUTPUT_PATH"]!, "tests"), annotation.OutputPath);
+            var reportPath = Assert.Single(arguments, arg => arg.StartsWith("--junitxml=", StringComparison.Ordinal))["--junitxml=".Length..];
+            var reportDirectory = Path.GetDirectoryName(reportPath)!;
+            Assert.True(Directory.Exists(reportDirectory));
+            Assert.NotEqual(annotation.OutputPath, reportDirectory);
+            Assert.Empty(Directory.GetFileSystemEntries(reportDirectory));
+            expected.Add("--junitxml=" + reportPath);
             if (!OperatingSystem.IsWindows())
             {
                 Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute,
-                    File.GetUnixFileMode(options.OutputPath!));
+                    File.GetUnixFileMode(annotation.OutputPath!));
+                Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute,
+                    File.GetUnixFileMode(reportDirectory));
             }
         }
         else
         {
-            Assert.Null(options.OutputPath);
-            Assert.Null(options.RunContext);
+            Assert.Null(annotation.OutputPath);
+            Assert.Null(annotation.RunContext);
         }
         expected.AddRange(["--", "tests with spaces"]);
         Assert.Equal(expected, arguments);
@@ -153,6 +162,77 @@ public class PytestResourceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task RuntimeCollectorCanStartBeforeRunnerConfigurationAndStagesOnlyAfterCompletion()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+        builder.Configuration["ASPIRE_TEST_OUTPUT_PATH"] = Path.Combine(workspace.Path, "reports");
+        var resource = builder.AddPytest("tests", workspace.Path);
+        var annotation = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
+        var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var published = new List<TestResult>();
+        var context = new ResourceTestingContext(annotation.RunContext!, "tests", annotation.OutputPath!,
+            published.Add, completion.Task, TestContext.Current.CancellationToken);
+        var collection = annotation.Collector!(context);
+        Assert.False(collection.IsCompleted);
+        await using var app = builder.Build();
+        await BeforeStartAsync(builder, app);
+        var arguments = await ArgumentEvaluator.GetArgumentListAsync(resource.Resource, app.Services);
+        var reportPath = Assert.Single(arguments)["--junitxml=".Length..];
+        const string report = """
+            <testsuite tests="1" failures="0" errors="0" skipped="0"><testcase name="example" /></testsuite>
+            """;
+        await File.WriteAllTextAsync(reportPath, report, TestContext.Current.CancellationToken);
+        Assert.Empty(Directory.GetFiles(context.OutputPath));
+        completion.SetResult(false);
+        await collection.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        Assert.Equal(TestOutcome.Passed, Assert.Single(published).Outcome);
+        Assert.Equal(report, await File.ReadAllTextAsync(Path.Combine(context.OutputPath, "pytest.xml"),
+            TestContext.Current.CancellationToken));
+        await app.DisposeAsync();
+        Assert.False(Directory.Exists(Path.GetDirectoryName(reportPath)));
+        Assert.True(File.Exists(Path.Combine(context.OutputPath, "pytest.xml")));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ReplacingCollectorPreservesFreshRunnerConfigurationAndDisposalCleansIt(bool markerOnly)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+        builder.Configuration["ASPIRE_TEST_OUTPUT_PATH"] = Path.Combine(workspace.Path, "reports");
+        var first = builder.AddPytest("first", workspace.Path);
+        var original = Assert.Single(first.Resource.Annotations.OfType<TestingAnnotation>());
+        var invoked = false;
+        first.WithTesting(markerOnly ? null : _ =>
+        {
+            invoked = true;
+            return Task.CompletedTask;
+        });
+        var replacement = Assert.Single(first.Resource.Annotations.OfType<TestingAnnotation>());
+        Assert.Same(original.RunContext, replacement.RunContext);
+        Assert.Equal(original.OutputPath, replacement.OutputPath);
+        Assert.Equal(markerOnly, replacement.Collector is null);
+        var second = builder.AddPytest("second", workspace.Path);
+        Assert.False(invoked);
+        await using var app = builder.Build();
+        await BeforeStartAsync(builder, app);
+        var directories = new List<string>();
+        foreach (var resource in new[] { first, second })
+        {
+            var arguments = await ArgumentEvaluator.GetArgumentListAsync(resource.Resource, app.Services);
+            var reportPath = Assert.Single(arguments)["--junitxml=".Length..];
+            var directory = Path.GetDirectoryName(reportPath)!;
+            Assert.Empty(Directory.GetFileSystemEntries(directory));
+            directories.Add(directory);
+        }
+        Assert.NotEqual(directories[0], directories[1]);
+        await app.DisposeAsync();
+        Assert.All(directories, directory => Assert.False(Directory.Exists(directory)));
+    }
+
+    [Fact]
     public void InvalidInputsAreRejectedBeforeRegistration()
     {
         using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
@@ -175,9 +255,9 @@ public class PytestResourceTests(ITestOutputHelper outputHelper)
         var publishedResource = Assert.Single(builder.Resources);
         Assert.Equal("tests", publishedResource.Name);
         Assert.True(publishedResource.IsExcludedFromPublish());
-        var options = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>()).Options!;
-        Assert.False(options.IsTestRun);
-        Assert.Null(options.OutputPath);
+        var annotation = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
+        Assert.Null(annotation.OutputPath);
+        Assert.Null(annotation.RunContext);
         await using var app = builder.Build();
         var manifest = await ManifestUtils.GetManifestForModel(app.Services.GetRequiredService<DistributedApplicationModel>(), workspace.Path);
 

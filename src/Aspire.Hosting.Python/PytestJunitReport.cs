@@ -17,7 +17,7 @@ internal static class PytestJunitReport
 {
     internal const string FileName = "pytest.xml";
 
-    internal static async Task CollectAsync(ResourceTestingContext context)
+    internal static async Task CollectAsync(ResourceTestingContext context, string reportDirectory)
     {
         // Process failure does not preclude a useful report. Only Aspire cancellation interrupts harvesting.
         await context.WaitForCompletionAsync().ConfigureAwait(false);
@@ -33,7 +33,11 @@ internal static class PytestJunitReport
                 break;
             }
         }
-        var path = Path.Combine(context.OutputPath, FileName);
+        if ((File.GetAttributes(reportDirectory) & FileAttributes.ReparsePoint) != 0)
+        {
+            throw new InvalidDataException("The pytest runner report directory must not be a symbolic link or reparse point.");
+        }
+        var path = Path.Combine(reportDirectory, FileName);
         if (!File.Exists(path))
         {
             throw new FileNotFoundException("Pytest did not produce pytest.xml. Declare pytest in the selected " +
@@ -43,6 +47,21 @@ internal static class PytestJunitReport
         {
             throw new InvalidDataException("The pytest report must not be a symbolic link or reparse point.");
         }
+        // Copy only the fresh invocation's canonical report, never a path from XML or a
+        // recursively discovered report. CreateNew rejects stale output and destination links.
+        var destination = Path.Combine(context.OutputPath, FileName);
+        var input = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read,
+            4096, FileOptions.Asynchronous | FileOptions.SequentialScan);
+        await using (input.ConfigureAwait(false))
+        {
+            var output = new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.None,
+                4096, FileOptions.Asynchronous);
+            await using (output.ConfigureAwait(false))
+            {
+                await input.CopyToAsync(output, context.CancellationToken).ConfigureAwait(false);
+            }
+        }
+        path = destination;
         var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read,
             bufferSize: 4096, FileOptions.Asynchronous | FileOptions.SequentialScan);
         await using var _ = stream.ConfigureAwait(false);
@@ -126,7 +145,7 @@ internal static class PytestJunitReport
                     else if (outcome?.Name == "error")
                     {
                         errors++;
-                        status = TestOutcome.Failed;
+                        status = TestOutcome.Error;
                     }
                     else if (outcome?.Name == "skipped")
                     {
