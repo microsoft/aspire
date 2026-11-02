@@ -148,19 +148,58 @@ public class TestRunCoordinatorTests
         Assert.Equal("Test resource 'tests' has no runnable replicas.", exception.Message);
     }
 
-    [Fact]
-    public async Task RapidCompletionDuringSubscriptionIsNotLost()
+    [Theory]
+    [InlineData(0, true)]
+    [InlineData(1, false)]
+    public async Task CompletionDuringNotificationReplayIsNotLost(int exitCode, bool passed)
     {
         var first = TestResource("first");
         var second = TestResource("second");
         using var notifications = ResourceNotificationServiceTestHelpers.Create();
-        var publishing = Task.WhenAll(
-            notifications.PublishUpdateAsync(first, s => s with { State = KnownResourceStates.Exited, ExitCode = 0 }),
-            notifications.PublishUpdateAsync(second, s => s with { State = KnownResourceStates.Exited, ExitCode = 0 }));
-        var coordinator = CreateCoordinator(notifications, first, second);
+        await notifications.PublishUpdateAsync(first, s => s with { State = KnownResourceStates.Running });
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        using var resumeReplay = new ManualResetEventSlim();
+        var replayStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        Assert.True(await coordinator.WaitForCompletionAsync(TestContext.Current.CancellationToken).DefaultTimeout());
-        await publishing;
+        // Pause the notification service's real replay inside its predicate, before it
+        // can read live updates. Publishing now detects a subscribe-after-replay gap,
+        // unlike publishing tasks that have already completed before starting the wait.
+        var replayWait = Task.Run(() => notifications.WaitForResourceAsync(first.Name, item =>
+        {
+            if (item.Snapshot.State?.Text == KnownResourceStates.Running)
+            {
+                replayStarted.TrySetResult();
+                resumeReplay.Wait(cancellation.Token);
+            }
+
+            return item.Snapshot.ExitCode is not null;
+        }, cancellation.Token), cancellation.Token);
+
+        using var coordinator = CreateCoordinator(notifications, first, second);
+        try
+        {
+            await replayStarted.Task.DefaultTimeout();
+            var completion = coordinator.WaitForCompletionAsync(cancellation.Token);
+            await notifications.PublishUpdateAsync(first, s => s with { State = KnownResourceStates.Exited, ExitCode = exitCode });
+            Assert.False(completion.IsCompleted);
+            await notifications.PublishUpdateAsync(second, s => s with { State = KnownResourceStates.Exited, ExitCode = 0 });
+            resumeReplay.Set();
+
+            Assert.Equal(exitCode, (await replayWait.DefaultTimeout()).Snapshot.ExitCode);
+            Assert.Equal(passed, await completion.DefaultTimeout());
+        }
+        finally
+        {
+            resumeReplay.Set();
+            await cancellation.CancelAsync();
+            try
+            {
+                await replayWait.DefaultTimeout();
+            }
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+            {
+            }
+        }
     }
 
     [Fact]
