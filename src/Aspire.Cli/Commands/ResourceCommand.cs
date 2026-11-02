@@ -281,8 +281,9 @@ internal sealed class ResourceCommand : BaseCommand
         return ordered;
     }
 
-    // Prompts read from the terminal, so they can't be answered when stdin is redirected. The host environment
-    // accounts for the VS Code extension, which answers prompts over its backchannel.
+    // Prompts read from and render to the terminal, so they can't be answered when stdin is redirected or seen when
+    // stdout/stderr is redirected. The host environment accounts for the VS Code extension, which answers prompts
+    // over its backchannel.
     private bool CanPromptForCommandInputs() =>
         _hostEnvironment.SupportsInteractiveInput && !_hostEnvironment.IsPromptInputRedirected && !_hostEnvironment.IsPromptOutputRedirected;
 

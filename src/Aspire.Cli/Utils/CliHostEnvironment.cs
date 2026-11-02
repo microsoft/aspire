@@ -34,8 +34,8 @@ internal interface ICliHostEnvironment
     bool IsPromptInputRedirected => false;
 
     /// <summary>
-    /// Gets whether prompts would be rendered to redirected standard output (e.g., piped or written to a file)
-    /// instead of a terminal or the VS Code extension.
+    /// Gets whether prompts would be rendered to redirected standard output or standard error (e.g., piped or written
+    /// to a file) instead of a terminal or the VS Code extension.
     /// </summary>
     bool IsPromptOutputRedirected => false;
 }
@@ -86,8 +86,8 @@ internal sealed class CliHostEnvironment : ICliHostEnvironment
     public bool IsPromptInputRedirected { get; }
 
     /// <summary>
-    /// Gets whether prompts would be rendered to redirected standard output (e.g., piped or written to a file)
-    /// instead of a terminal or the VS Code extension.
+    /// Gets whether prompts would be rendered to redirected standard output or standard error (e.g., piped or written
+    /// to a file) instead of a terminal or the VS Code extension.
     /// </summary>
     public bool IsPromptOutputRedirected { get; }
 
@@ -102,11 +102,17 @@ internal sealed class CliHostEnvironment : ICliHostEnvironment
     }
 
     internal CliHostEnvironment(IConfiguration configuration, bool nonInteractive, bool isOutputRedirected, bool isInputRedirected)
+        : this(configuration, nonInteractive, isOutputRedirected, isInputRedirected, Console.IsErrorRedirected)
+    {
+    }
+
+    internal CliHostEnvironment(IConfiguration configuration, bool nonInteractive, bool isOutputRedirected, bool isInputRedirected, bool isErrorRedirected)
     {
         // The VS Code extension answers prompts over its backchannel, so redirected stdio doesn't matter there.
+        // Prompts may be rendered to stdout or stderr, so either being redirected hides them.
         var extensionPromptEnabled = IsExtensionPromptEnabled(configuration);
         IsPromptInputRedirected = isInputRedirected && !extensionPromptEnabled;
-        IsPromptOutputRedirected = isOutputRedirected && !extensionPromptEnabled;
+        IsPromptOutputRedirected = (isOutputRedirected || isErrorRedirected) && !extensionPromptEnabled;
 
         // If --non-interactive is explicitly set, disable interactive input and output.
         // ANSI support is still determined from the host configuration so explicit
