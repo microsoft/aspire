@@ -158,6 +158,34 @@ public class TestOutputCaptureTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task CallerLocalWaitCancellationDoesNotCancelSharedCapture()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var cancellation = new CancellationTokenSource();
+        var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var calls = 0;
+        var context = new ResourceTestingContext(new TestRunContext(workspace.Path), "tests", workspace.Path,
+            _ => Assert.Fail(), completion.Task, TestContext.Current.CancellationToken)
+        {
+            CaptureOutputCallback = (_, token) =>
+            {
+                token.ThrowIfCancellationRequested();
+                Interlocked.Increment(ref calls);
+                return Task.CompletedTask;
+            }
+        };
+        var capture = context.CaptureOutputAsync();
+        var localWait = context.WaitForCompletionAsync(cancellation.Token);
+        cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => localWait);
+        Assert.False(capture.IsCompleted);
+        completion.SetResult(false);
+        await capture.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        Assert.Same(capture, context.CaptureOutputAsync());
+        Assert.Equal(1, calls);
+    }
+
+    [Fact]
     public async Task CancellationDuringCompletionDoesNotCreateArtifacts()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

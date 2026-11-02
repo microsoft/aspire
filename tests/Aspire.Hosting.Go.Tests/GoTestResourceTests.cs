@@ -69,9 +69,13 @@ public class GoTestResourceTests(ITestOutputHelper outputHelper)
         }
         expected.AddRange(["-tags=integration", "-run=TestAPI", "./api", "./other", "-args", "custom value"]);
         Assert.Equal(expected, await ArgumentEvaluator.GetArgumentListAsync(resource.Resource, services));
-        var options = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>()).Options!;
-        Assert.Equal(testing, options.IsTestRun);
-        Assert.Equal(testing, options.OutputPath is not null);
+        var annotation = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
+        Assert.NotNull(annotation.Collector);
+        Assert.Equal(testing, annotation.OutputPath is not null);
+        if (testing)
+        {
+            Assert.Equal(Path.Combine(workspace.Path, "output", "tests"), annotation.OutputPath);
+        }
     }
 
     [Theory]
@@ -194,6 +198,33 @@ public class GoTestResourceTests(ITestOutputHelper outputHelper)
         await Assert.ThrowsAsync<DistributedApplicationException>(() => builder.Eventing.PublishAsync(
             new BeforeStartEvent(app.Services, new DistributedApplicationModel(builder.Resources)),
             TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task ReplacingOrClearingCollectorPreservesContextPathAndRunnerConfiguration()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+        builder.Configuration["ASPIRE_TEST_OUTPUT_PATH"] = Path.Combine(workspace.Path, "output");
+        var resource = builder.AddGoTest("tests", workspace.Path);
+        var original = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
+        Func<ResourceTestingContext, Task> replacement = _ => throw new InvalidOperationException("Runtime only.");
+        resource.WithTesting(replacement);
+        var replaced = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
+        Assert.Same(replacement, replaced.Collector);
+        Assert.Same(original.RunContext, replaced.RunContext);
+        Assert.Equal(original.OutputPath, replaced.OutputPath);
+        resource.WithTesting();
+        var marker = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
+        Assert.Null(marker.Collector);
+        Assert.Same(original.RunContext, marker.RunContext);
+        Assert.Equal(original.OutputPath, marker.OutputPath);
+        await using var app = builder.Build();
+        await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services,
+            new DistributedApplicationModel(builder.Resources)), TestContext.Current.CancellationToken);
+        Assert.Equal(["test", "-json", "-count=1", "./..."],
+            await ArgumentEvaluator.GetArgumentListAsync(resource.Resource, app.Services));
+        Assert.Empty(Directory.GetFiles(marker.OutputPath!));
     }
 
     [Fact]
