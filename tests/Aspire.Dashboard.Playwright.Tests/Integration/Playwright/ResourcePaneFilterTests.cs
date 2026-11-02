@@ -1,0 +1,190 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Tests.Integration.Playwright.Infrastructure;
+using Aspire.TestUtilities;
+using Aspire.Tests.Shared.DashboardModel;
+using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Playwright;
+using Xunit;
+
+namespace Aspire.Dashboard.Tests.Integration.Playwright;
+
+[RequiresFeature(TestFeature.Playwright)]
+public sealed class ResourcePaneFilterTests : PlaywrightTestsBase<DashboardServerFixture>
+{
+    public ResourcePaneFilterTests(DashboardServerFixture dashboardServerFixture)
+        : base(dashboardServerFixture)
+    {
+    }
+
+    [Theory]
+    [InlineData(390, 844)]
+    [InlineData(768, 1024)]
+    [InlineData(1440, 900)]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task Filter_ContainsActionsAndPreservesSelection(int width, int height)
+    {
+        await RunTestAsync(async page =>
+        {
+            await page.SetViewportSizeAsync(width, height);
+            await OpenResourcePaneAsync(page);
+            var trigger = page.GetByRole(AriaRole.Button, new() { Name = Resources.ControlsStrings.ChartContainerFiltersHeader, Exact = true });
+            await trigger.ClickAsync();
+            var filter = page.GetByRole(AriaRole.Group, new() { Name = Resources.ControlsStrings.ChartContainerFiltersHeader, Exact = true });
+            await Assertions.Expect(filter).ToBeVisibleAsync();
+            await AssertContainedAsync(page, filter);
+
+            var initial = await filter.BoundingBoxAsync();
+            Assert.NotNull(initial);
+            var project = filter.GetByRole(AriaRole.Checkbox, new() { Name = KnownResourceTypes.Project, Exact = true });
+            await project.UncheckAsync();
+            await Assertions.Expect(project).Not.ToBeCheckedAsync();
+            await Assertions.Expect(page.Locator(".resource-pane .resource-row")).ToHaveCountAsync(0);
+            var reset = filter.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.ResourcePaneFilterReset, Exact = true });
+            var done = filter.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.ResourcePaneFilterDone, Exact = true });
+            await Assertions.Expect(reset).ToBeEnabledAsync();
+            await done.ClickAsync();
+            await Assertions.Expect(filter).ToBeHiddenAsync();
+            await Assertions.Expect(trigger).ToHaveAttributeAsync("aria-expanded", "false");
+            Assert.False(await page.EvaluateAsync<bool>("() => !!document.activeElement?.closest('.resource-filter')"));
+
+            await trigger.ClickAsync();
+            await Assertions.Expect(project).Not.ToBeCheckedAsync();
+            await reset.ClickAsync();
+            await Assertions.Expect(page.Locator(".resource-pane .resource-row")).ToHaveCountAsync(1);
+            await Assertions.Expect(reset).ToBeDisabledAsync();
+
+            foreach (var header in new[] { Resources.Resources.ResourcesResourceTypesHeader, Resources.Resources.ResourcesResourceStatesHeader })
+            {
+                await filter.GetByRole(AriaRole.Button, new() { Name = header, Exact = true }).ClickAsync();
+            }
+            await AsyncTestHelpers.AssertIsTrueRetryAsync(async () => (await filter.BoundingBoxAsync())!.Height < initial.Height,
+                "Collapsing sections should shrink the filter instead of retaining a full-height panel.");
+            await AssertContainedAsync(page, filter);
+            await done.ClickAsync();
+            await Assertions.Expect(filter).ToBeHiddenAsync();
+            await Assertions.Expect(trigger).ToHaveAttributeAsync("aria-expanded", "false");
+            Assert.False(await page.EvaluateAsync<bool>("() => !!document.activeElement?.closest('.resource-filter')"));
+
+            await trigger.ClickAsync();
+            await Assertions.Expect(filter).ToBeVisibleAsync();
+            await page.Keyboard.PressAsync("Escape");
+            await Assertions.Expect(filter).ToBeHiddenAsync();
+            await Assertions.Expect(trigger).ToBeFocusedAsync();
+
+            await trigger.ClickAsync();
+            await Assertions.Expect(filter).ToBeVisibleAsync();
+            await page.Locator(".resource-pane-search").ClickAsync();
+            await Assertions.Expect(filter).ToBeHiddenAsync();
+            await Assertions.Expect(page.Locator("h1.resource-title")).ToHaveTextAsync("TestResource");
+            Assert.EndsWith("/resources/TestResource", page.Url, StringComparison.Ordinal);
+        });
+    }
+
+    internal static async Task OpenResourcePaneAsync(IPage page, string resourceName = "TestResource")
+    {
+        await page.GotoAsync($"/resources/{resourceName}");
+        var title = page.Locator("h1.resource-title");
+        await Assertions.Expect(title).ToHaveTextAsync(resourceName);
+        if (page.ViewportSize!.Width <= 768)
+        {
+            await title.GetByRole(AriaRole.Button, new() { Name = resourceName, Exact = true }).ClickAsync();
+        }
+    }
+
+    internal static async Task AssertContainedAsync(IPage page, ILocator filter)
+    {
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(async () =>
+        {
+            var viewport = page.ViewportSize!;
+            foreach (var element in new[]
+            {
+                page.Locator(".resource-filter-popover").Locator("[part='dialog']"),
+                filter,
+                filter.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.ResourcePaneFilterReset, Exact = true }),
+                filter.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.ResourcePaneFilterDone, Exact = true })
+            })
+            {
+                var bounds = await element.BoundingBoxAsync();
+                if (bounds is null || bounds.X < 0 || bounds.Y < 0 ||
+                    bounds.X + bounds.Width > viewport.Width || bounds.Y + bounds.Height > viewport.Height)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }, "The filter and both footer actions must fit inside the viewport, not just the document scroll width.");
+    }
+}
+
+[RequiresFeature(TestFeature.Playwright)]
+public sealed class ResourcePaneLongFilterTests : PlaywrightTestsBase<ResourcePaneLongFilterTests.ManyResourceTypesFixture>
+{
+    public ResourcePaneLongFilterTests(ManyResourceTypesFixture dashboardServerFixture)
+        : base(dashboardServerFixture)
+    {
+    }
+
+    [Theory]
+    [InlineData(390, 844)]
+    [InlineData(768, 1024)]
+    [InlineData(1440, 900)]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task Filter_LongContentScrollsWithActionsVisibleAndResizes(int width, int height)
+    {
+        await RunTestAsync(async page =>
+        {
+            await page.SetViewportSizeAsync(width, height);
+            await ResourcePaneFilterTests.OpenResourcePaneAsync(page, "resource-00");
+            var trigger = page.GetByRole(AriaRole.Button, new() { Name = Resources.ControlsStrings.ChartContainerFiltersHeader, Exact = true });
+            await trigger.ClickAsync();
+            var filter = page.GetByRole(AriaRole.Group, new() { Name = Resources.ControlsStrings.ChartContainerFiltersHeader, Exact = true });
+            await Assertions.Expect(filter).ToBeVisibleAsync();
+            await ResourcePaneFilterTests.AssertContainedAsync(page, filter);
+
+            var body = filter.Locator(".resource-filter-body");
+            Assert.True(await body.EvaluateAsync<bool>("e => e.scrollHeight > e.clientHeight"));
+            await body.HoverAsync();
+            await page.Mouse.WheelAsync(0, 1500);
+            await AsyncTestHelpers.AssertIsTrueRetryAsync(async () => await body.EvaluateAsync<bool>("e => e.scrollTop > 0"),
+                "The long list should scroll independently of the footer.");
+            var lastType = filter.GetByRole(AriaRole.Checkbox, new() { Name = "Type 23", Exact = true });
+            await lastType.UncheckAsync();
+            await Assertions.Expect(lastType).Not.ToBeCheckedAsync();
+            await Assertions.Expect(page.Locator(".resource-pane .resource-row")).ToHaveCountAsync(23);
+            await ResourcePaneFilterTests.AssertContainedAsync(page, filter);
+            await filter.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.ResourcePaneFilterReset, Exact = true }).ClickAsync();
+            await Assertions.Expect(page.Locator(".resource-pane .resource-row")).ToHaveCountAsync(24);
+            await Assertions.Expect(filter.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.ResourcePaneFilterReset, Exact = true })).ToBeDisabledAsync();
+
+            foreach (var viewport in new[] { (Width: 1440, Height: 900), (Width: 768, Height: 1024), (Width: 390, Height: 844) })
+            {
+                await page.SetViewportSizeAsync(viewport.Width, viewport.Height);
+                // Crossing the drawer breakpoint can close the popover as its anchor is re-rendered.
+                await AsyncTestHelpers.AssertIsTrueRetryAsync(async () => await trigger.IsVisibleAsync(),
+                    "The resource pane should remain accessible after resizing.");
+                if (!await filter.IsVisibleAsync())
+                {
+                    await trigger.ClickAsync();
+                }
+                await ResourcePaneFilterTests.AssertContainedAsync(page, filter);
+            }
+
+            await filter.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.ResourcePaneFilterDone, Exact = true }).ClickAsync();
+            await Assertions.Expect(filter).ToBeHiddenAsync();
+            await Assertions.Expect(trigger).ToHaveAttributeAsync("aria-expanded", "false");
+            await Assertions.Expect(page.Locator("h1.resource-title")).ToHaveTextAsync("resource-00");
+            Assert.EndsWith("/resources/resource-00", page.Url, StringComparison.Ordinal);
+        });
+    }
+
+    public sealed class ManyResourceTypesFixture : DashboardServerFixture
+    {
+        protected override IReadOnlyList<ResourceViewModel>? Resources => Enumerable.Range(0, 24)
+            .Select(i => ModelTestHelpers.CreateResource(resourceName: $"resource-{i:00}", resourceType: $"Type {i:00}", state: KnownResourceState.Running))
+            .ToList();
+    }
+}
