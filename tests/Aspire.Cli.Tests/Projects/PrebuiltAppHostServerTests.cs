@@ -264,7 +264,8 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             NullLogger<NuGetClient>.Instance);
         var nuGetService = new BundleNuGetService(
             NullLogger<BundleNuGetService>.Instance,
-            nuGetClient)
+            nuGetClient,
+            new TestConfigurationService { SettingsFilePath = Path.Combine(workspace.Path, "global.json") })
         {
             SourceIdentityKeyFactory = static () => s_sourceIdentityKey
         };
@@ -2276,7 +2277,8 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         nuGetClient ??= CreateIsolatedNuGetClient();
         var nugetService = new BundleNuGetService(
             NullLogger<BundleNuGetService>.Instance,
-            nuGetClient)
+            nuGetClient,
+            new TestConfigurationService { SettingsFilePath = Path.Combine(workspace.Path, "global.json") })
         {
             SourceIdentityKeyFactory = static () => s_sourceIdentityKey
         };

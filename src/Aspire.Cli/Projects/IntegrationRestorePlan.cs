@@ -114,6 +114,7 @@ internal sealed class IntegrationRestorePlanResolver(
             workloadId,
             restoreSources.PackageSourceMappings,
             restrictToSelectedSources: false,
+            overrideIntegrationSources: !string.IsNullOrWhiteSpace(packageSourceOverride),
             restoreSources.PackageScopedAppendSource,
             restoreSources.HasAuthoritativeAspirePolicy,
             cancellationToken);

@@ -179,7 +179,7 @@ public class DotNetAppHostNuGetConfigMergerTests
         var originalDisabled = XDocument.Load(target.FullName).Root!.Element("disabledPackageSources")!.ToString();
         var service = NuGetTestHelper.CreateService();
         var configuration = service.BuildAppHostConfiguration(
-            directory, "test", [new("Aspire*", source)], TestContext.Current.CancellationToken);
+            directory, "test", [new("Aspire*", source)], overrideIntegrationSources: false, TestContext.Current.CancellationToken);
         Assert.Equal(clearsDisabledLocally, Assert.Single(configuration.ConfigSources).IsEnabled);
         var merger = new DotNetAppHostNuGetConfigMerger(service);
 
@@ -1616,7 +1616,7 @@ public class DotNetAppHostNuGetConfigMergerTests
         var original = await File.ReadAllBytesAsync(target.FullName);
         var service = NuGetTestHelper.CreateService();
         var configuration = service.BuildAppHostConfiguration(
-            workspace.WorkspaceRoot, "test", [new("Aspire*", source)], TestContext.Current.CancellationToken);
+            workspace.WorkspaceRoot, "test", [new("Aspire*", source)], overrideIntegrationSources: false, TestContext.Current.CancellationToken);
         Assert.True(configuration.HasSourcePolicyChanges);
         var merger = new DotNetAppHostNuGetConfigMerger(service);
 
@@ -1813,6 +1813,7 @@ public class DotNetAppHostNuGetConfigMergerTests
         {
             var configuration = service.BuildAppHostConfiguration(
                 workspace.WorkspaceRoot, "apphost-0123456789abcdef", [new("Aspire*", source)],
+                overrideIntegrationSources: false,
                 cancellationToken: TestContext.Current.CancellationToken);
             using var projection = await service.CreateConfigurationPreviewAsync(
                 workspace.WorkspaceRoot, configuration, globalPackagesFolder: null, TestContext.Current.CancellationToken);

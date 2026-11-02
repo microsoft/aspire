@@ -83,13 +83,16 @@ internal static class DotNetAppHostNuGetConfigBuilder
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToArray();
             var obsoletePatterns = patterns.Where(pattern =>
+                (!source.IsIntegrationSource || selectedMappings.Count > 0 && selectedPatterns.Any(selectedPattern =>
+                    PackageSourceOverrideMappings.IsExactPackagePattern(selectedPattern) &&
+                    PackageSourceOverrideMappings.CompetesWithAuthoritativePattern(pattern, selectedPattern))) &&
                 (selectedMappings.Count == 0 && pattern == PackageMapping.AllPackages ||
                  selectedPatterns.Any(selectedPattern =>
                      PackageSourceOverrideMappings.CompetesWithAuthoritativePattern(pattern, selectedPattern))) &&
                 !mappings.Any(selected =>
                     string.Equals(selected.SourceKey, source.Name, StringComparison.OrdinalIgnoreCase) &&
                     selected.Patterns.Contains(pattern, StringComparer.OrdinalIgnoreCase))).ToArray();
-            if (!selectedKeys.Contains(source.Name) &&
+            if (!source.IsIntegrationSource && !selectedKeys.Contains(source.Name) &&
                 patterns.Except(obsoletePatterns, StringComparer.OrdinalIgnoreCase)
                     .All(static pattern => pattern == PackageMapping.AllPackages))
             {

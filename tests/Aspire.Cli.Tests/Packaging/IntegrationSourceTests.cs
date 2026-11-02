@@ -27,6 +27,68 @@ public class IntegrationSourceTests(ITestOutputHelper output)
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void GetConfiguredSources_IncludesDisabledFeedsAndMergesSelectedAppSettings(bool enabled)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(output);
+        var app = workspace.CreateDirectory("app");
+        var global = new FileInfo(Path.Combine(workspace.Path, "global.json"));
+        File.WriteAllText(global.FullName, """
+            {"integrationSources":{
+              "team":{"source":"https://example.com/old","patterns":["Acme.*"]},
+              "global":{"source":"https://example.com/global"}
+            }}
+            """);
+        File.WriteAllText(Path.Combine(workspace.Path, AspireConfigFile.FileName), """
+            {"integrationSources":{"unselected":{"source":"https://example.com/unselected"}}}
+            """);
+        File.WriteAllText(Path.Combine(app.FullName, AspireConfigFile.FileName), $$"""
+            {"integrationSources":{
+              "default":{},
+              "TEAM":{"source":"https://example.com/team","enabled":{{enabled.ToString().ToLowerInvariant()}}},
+              "duplicate":{"source":"https://EXAMPLE.com/team"},
+              "local":{"source":"./packages","enabled":false},
+              "disabled":{"enabled":false}
+            }
+            }
+            """);
+
+        var sources = IntegrationSourceConfiguration.GetConfiguredSources(app, global);
+
+        Assert.Equal(
+            new[] { "https://example.com/global", "https://example.com/team", Path.Combine(app.FullName, "packages") }
+                .Select(NuGetSourceIdentity.Normalize).Order(StringComparer.Ordinal),
+            sources.Select(NuGetSourceIdentity.Normalize).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void GetConfiguredSources_DefaultDoesNotProtectAmbientFeeds()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(output);
+        var global = new FileInfo(Path.Combine(workspace.Path, "global.json"));
+        File.WriteAllText(Path.Combine(workspace.Path, AspireConfigFile.FileName), """
+            {"integrationSources":{"default":{}}}
+            """);
+
+        Assert.Empty(IntegrationSourceConfiguration.GetConfiguredSources(workspace.WorkspaceRoot, global));
+    }
+
+    [Theory]
+    [InlineData("""{"integrationSources":"invalid"}""")]
+    [InlineData("""{"integrationSources":{"team":"invalid"}}""")]
+    [InlineData("""{"integrationSources":{"team":{"source":""}}}""")]
+    [InlineData("""{"integrationSources":{"team":{"source":"ftp://example.com/feed","enabled":false}}}""")]
+    public void GetConfiguredSources_RejectsInvalidConfiguration(string json)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(output);
+        File.WriteAllText(Path.Combine(workspace.Path, AspireConfigFile.FileName), json);
+
+        Assert.Throws<InvalidOperationException>(() => IntegrationSourceConfiguration.GetConfiguredSources(
+            workspace.WorkspaceRoot, new FileInfo(Path.Combine(workspace.Path, "global.json"))));
+    }
+
+    [Theory]
     [InlineData("""{"integrationSources":"invalid"}""")]
     [InlineData("""{"integrationSources":{"team":"invalid"}}""")]
     [InlineData("""{"integrationSources":{"team":{}}}""")]

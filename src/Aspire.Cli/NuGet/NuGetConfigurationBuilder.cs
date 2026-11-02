@@ -22,7 +22,7 @@ internal static class NuGetConfigurationBuilder
         // Shared .NET feeds are identified by their CLI aliases, including aliases left
         // behind when an AppHost moves and its path-derived workload identifier changes.
         var channelSourceKeys = settings.Sources
-            .Where(source => !preservedSourceIdentities.Contains(source.Identity) &&
+            .Where(source => !source.IsIntegrationSource && !preservedSourceIdentities.Contains(source.Identity) &&
                 IsCliManagedSource(source, workloadId))
             .Select(static source => source.Name)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -256,6 +256,7 @@ internal static class NuGetConfigurationBuilder
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var retiredSourceKeys = settings.Sources
             .Where(source =>
+                !source.IsIntegrationSource &&
                 !selectedKeysForPolicy.Contains(source.Name) &&
                 !packageSourceMappings.Any(mapping =>
                     string.Equals(mapping.SourceKey, source.Name, StringComparison.OrdinalIgnoreCase) &&
@@ -363,12 +364,24 @@ internal static class NuGetConfigurationBuilder
             .Where(static mapping => mapping.PackageFilter != PackageMapping.AllPackages)
             .Select(static mapping => mapping.Source)
             .ToHashSet(PackageSourceIdentity.Comparer);
-        foreach (var patterns in patternsBySourceKey.Values)
+        foreach (var (sourceKey, patterns) in patternsBySourceKey)
         {
+            var isIntegrationSource = ambientSources.Any(source =>
+                source.IsIntegrationSource && string.Equals(source.Name, sourceKey, StringComparison.OrdinalIgnoreCase));
+            // Channel changes must not take integration packages away from configured feeds.
+            // An exact package selection can still move that package to a different source.
             patterns.RemoveAll(pattern => authoritativePatterns.Any(
-                authoritativePattern => PackageSourceOverrideMappings.CompetesWithAuthoritativePattern(
-                    pattern,
-                    authoritativePattern)));
+                authoritativePattern =>
+                    (!isIntegrationSource || PackageSourceOverrideMappings.IsExactPackagePattern(authoritativePattern)) &&
+                    PackageSourceOverrideMappings.CompetesWithAuthoritativePattern(pattern, authoritativePattern)));
+            if (isIntegrationSource && ambientMappings.Count == 0)
+            {
+                foreach (var pattern in authoritativePatterns.Where(static pattern =>
+                    !PackageSourceOverrideMappings.IsExactPackagePattern(pattern)))
+                {
+                    AddPattern(patternsBySourceKey, sourceKey, pattern);
+                }
+            }
         }
 
         foreach (var mapping in selectedMappings)

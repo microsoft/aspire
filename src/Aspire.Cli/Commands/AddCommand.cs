@@ -388,6 +388,7 @@ internal sealed class AddCommand : BaseCommand
                     effectiveAppHostProjectFile.Directory!,
                     "integration-add",
                     [new PackageMapping(selectedNuGetPackage.Package.Id, integrationSource)],
+                    overrideIntegrationSources: false,
                     cancellationToken);
                 await new DotNetAppHostNuGetConfigMerger(_nugetService).CreateOrUpdateAsync(
                     effectiveAppHostProjectFile.Directory!,

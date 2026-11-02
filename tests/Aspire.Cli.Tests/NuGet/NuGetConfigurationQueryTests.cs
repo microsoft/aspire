@@ -140,6 +140,7 @@ public class NuGetConfigurationQueryTests(ITestOutputHelper outputHelper)
         var service = CreateService();
         var configuration = service.BuildAppHostConfiguration(
             appHostDirectory, "test", [new PackageMapping("Aspire*", newHive)],
+            overrideIntegrationSources: false,
             cancellationToken: TestContext.Current.CancellationToken);
         using var preview = await service.CreateConfigurationPreviewAsync(
             appHostDirectory, configuration, globalPackagesFolder: null, TestContext.Current.CancellationToken);
@@ -196,6 +197,7 @@ public class NuGetConfigurationQueryTests(ITestOutputHelper outputHelper)
         var service = CreateService();
         var configuration = service.BuildAppHostConfiguration(
             directory, "test", [new PackageMapping("Aspire*", "https://new.example/v3/index.json")],
+            overrideIntegrationSources: false,
             cancellationToken: TestContext.Current.CancellationToken);
         using var preview = await service.CreateConfigurationPreviewAsync(
             directory, configuration, globalPackagesFolder: null, TestContext.Current.CancellationToken);
@@ -305,7 +307,8 @@ public class NuGetConfigurationQueryTests(ITestOutputHelper outputHelper)
             NullLogger<NuGetClient>.Instance);
         var bundleNuGetService = new BundleNuGetService(
             NullLogger<BundleNuGetService>.Instance,
-            nuGetClient);
+            nuGetClient,
+            new TestConfigurationService());
         return bundleNuGetService;
     }
 }

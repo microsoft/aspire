@@ -61,6 +61,35 @@ internal sealed class IntegrationSourceConfiguration
         return Resolve(configuration, directory);
     }
 
+    internal static IReadOnlyList<string> GetConfiguredSources(DirectoryInfo directory, FileInfo globalSettingsFile)
+    {
+        using var configuration = new ConfigurationManager();
+        configuration.AddEnvironmentVariables();
+        ConfigurationHelper.RegisterSettingsFiles(configuration, directory, globalSettingsFile, persistNormalization: false);
+
+        // Disabling discovery does not release feeds that installed packages may still need.
+        var section = configuration.GetSection(SectionName);
+        if (section.Value is not null)
+        {
+            throw InvalidConfiguration(SectionName);
+        }
+
+        var sources = new List<string>();
+        foreach (var entry in section.GetChildren())
+        {
+            if (!IsIdentifier(entry.Key) || entry.Value is not null)
+            {
+                throw InvalidConfiguration($"{SectionName}.{entry.Key}");
+            }
+            if (entry["source"] is { } source)
+            {
+                sources.Add(ResolveSource(source, $"{SectionName}.{entry.Key}.source", directory));
+            }
+        }
+
+        return sources.Distinct(PackageSourceIdentity.Comparer).ToArray();
+    }
+
     internal static IReadOnlyList<IntegrationSourceConfiguration> Resolve(IConfiguration configuration, DirectoryInfo directory)
     {
         var section = configuration.GetSection(SectionName);
@@ -92,11 +121,7 @@ internal sealed class IntegrationSourceConfiguration
                 sources.Add(new IntegrationSourceConfiguration());
                 continue;
             }
-            if (string.IsNullOrWhiteSpace(source) || PackageSourceOverrideMappings.HasCredentialMaterial(source) ||
-                Uri.TryCreate(source, UriKind.Absolute, out var uri) && !uri.IsFile && uri.Scheme is not ("https" or "http"))
-            {
-                throw InvalidConfiguration($"{key}.source");
-            }
+            var resolvedSource = ResolveSource(source, $"{key}.source", directory);
             if (!settings.GetChildren().Any(child => child.Key.Equals("patterns", StringComparison.OrdinalIgnoreCase)))
             {
                 patterns = ["*"];
@@ -111,7 +136,7 @@ internal sealed class IntegrationSourceConfiguration
             sources.Add(new IntegrationSourceConfiguration
             {
                 Name = name,
-                Source = PackageSourceOverrideMappings.ResolveForWorkingDirectory(source, directory),
+                Source = resolvedSource,
                 Patterns = patterns.Select(pattern => pattern!).Distinct(StringComparer.OrdinalIgnoreCase).ToArray()
             });
         }
@@ -132,6 +157,17 @@ internal sealed class IntegrationSourceConfiguration
 
     private static bool IsIdentifier(string value)
         => value.Length > 0 && value.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '-' or '_');
+
+    private static string ResolveSource(string? source, string key, DirectoryInfo directory)
+    {
+        if (string.IsNullOrWhiteSpace(source) || PackageSourceOverrideMappings.HasCredentialMaterial(source) ||
+            Uri.TryCreate(source, UriKind.Absolute, out var uri) && !uri.IsFile && uri.Scheme is not ("https" or "http"))
+        {
+            throw InvalidConfiguration(key);
+        }
+
+        return PackageSourceOverrideMappings.ResolveForWorkingDirectory(source, directory);
+    }
 
     private static bool IsPattern(string pattern)
         => pattern == "*" || IsIdentifier(pattern.EndsWith('*') ? pattern[..^1] : pattern);

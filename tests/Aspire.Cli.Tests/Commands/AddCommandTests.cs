@@ -26,6 +26,94 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public async Task AddCommandPreservesConfiguredFeedsAcrossSequentialIntegrationAdds(bool hasMappings)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.Path, "apphost.ts"));
+        File.WriteAllText(appHostFile.FullName, string.Empty);
+        File.WriteAllText(Path.Combine(workspace.Path, AspireConfigFile.FileName), """
+            {"integrationSources":{
+              "default":{"enabled":false},
+              "team":{"source":"https://example.com/team","patterns":["Contoso.*"]},
+              "other":{"source":"https://example.com/other","patterns":["Fabrikam.*"]}
+            }}
+            """);
+        File.WriteAllText(Path.Combine(workspace.Path, "nuget.config"), $$"""
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="sdk" value="https://example.com/sdk" />
+                <add key="public" value="https://example.com/public" />
+              </packageSources>
+              {{(hasMappings ? """
+              <packageSourceMapping>
+                <clear />
+                <packageSource key="sdk"><package pattern="Aspire*" /></packageSource>
+                <packageSource key="public"><package pattern="*" /></packageSource>
+              </packageSourceMapping>
+              """ : "")}}
+            </configuration>
+            """);
+        var cache = new FakeNuGetPackageCache
+        {
+            GetPackagesAsyncCallback = (_, query, filter, _, _, _, _) =>
+            {
+                var (id, source) = query switch
+                {
+                    "Contoso." => ("Contoso.Hosting.One", "https://example.com/team"),
+                    "Fabrikam." => ("Fabrikam.Hosting.Two", "https://example.com/other"),
+                    _ => throw new InvalidOperationException($"Unexpected integration query: {query}")
+                };
+                Assert.True(filter!(id));
+                return Task.FromResult<IEnumerable<NuGetPackage>>(
+                    [new() { Id = id, Version = "1.0.0", Source = source }]);
+            }
+        };
+        var added = new List<string>();
+        var factory = new TestTypeScriptStarterProjectFactory((_, _, _) => Task.FromResult(true));
+        factory.Project.AddPackageAsyncCallback = (context, _) =>
+        {
+            added.Add(context.PackageId);
+            return Task.FromResult(true);
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+            options.NuGetClientFactory = _ => NuGetTestHelper.CreateClient();
+        });
+        services.AddSingleton<Aspire.Cli.NuGet.INuGetPackageCache>(cache);
+        services.AddSingleton<IAppHostProjectFactory>(factory);
+        using var provider = services.BuildServiceProvider();
+        var configurations = new XElement("configurations");
+
+        foreach (var id in new[] { "Contoso.Hosting.One", "Fabrikam.Hosting.Two" })
+        {
+            var exitCode = await provider.GetRequiredService<AddCommand>()
+                .Parse($"add {id} --apphost \"{appHostFile.FullName}\" --version 1.0.0").InvokeAsync().DefaultTimeout();
+
+            Assert.Equal(CliExitCodes.Success, exitCode);
+            var expectedSources = new List<string> { "https://example.com/sdk", "https://example.com/public", "https://example.com/team" };
+            if (added.Count == 2)
+            {
+                expectedSources.Add("https://example.com/other");
+            }
+            foreach (var packageId in added)
+            {
+                Assert.Equal(hasMappings
+                        ? [packageId == "Contoso.Hosting.One" ? "https://example.com/team" : "https://example.com/other"]
+                        : expectedSources.Order(StringComparer.Ordinal).ToArray(),
+                    NuGetTestHelper.GetEligiblePackageSources(workspace.Path, packageId));
+            }
+            configurations.Add(new XElement(id, XDocument.Load(Path.Combine(workspace.Path, "nuget.config")).Root));
+        }
+
+        Assert.Equal(["Contoso.Hosting.One", "Fabrikam.Hosting.Two"], added);
+        await Verify(configurations.ToString(), "xml").UseParameters(hasMappings);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public async Task AddCommandUsesConfiguredIntegrationSourceForDiscoveryVersionsAndRestore(bool specifyVersion)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

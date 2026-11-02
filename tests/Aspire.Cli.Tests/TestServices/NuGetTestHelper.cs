@@ -39,7 +39,8 @@ internal static class NuGetTestHelper
     }
 
     public static BundleNuGetService CreateService(IMachineWideSettings? machineWideSettings = null)
-        => new(NullLogger<BundleNuGetService>.Instance, CreateClient(machineWideSettings));
+        => new(NullLogger<BundleNuGetService>.Instance, CreateClient(machineWideSettings),
+            new TestConfigurationService());
 
     public static NuGetClient CreateClient(IMachineWideSettings? machineWideSettings = null)
         => new(new TestFeatures(), new TestEnvironment(), NullLogger<NuGetClient>.Instance)

@@ -523,7 +523,8 @@ public class NativeAppHostServerProjectTests(ITestOutputHelper outputHelper)
     private static AppHostServerProjectFactory CreateFactory(TestEnvironment environment, IBundleService bundle,
         TestProcessExecutionFactory processes)
         => new(new TestDotNetCliRunner(), MockPackagingServiceFactory.Create(), bundle,
-            new BundleNuGetService(NullLogger<BundleNuGetService>.Instance, new FakeNuGetClient()),
+            new BundleNuGetService(NullLogger<BundleNuGetService>.Instance, new FakeNuGetClient(),
+                new TestConfigurationService()),
             new TestDotNetSdkInstaller(), TestExecutionContextFactory.CreateTestContext(), environment,
             processes, NullLoggerFactory.Instance);
 }
