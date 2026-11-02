@@ -198,11 +198,20 @@ public partial class NewCommandLocalTemplateTests
         var result = Assert.Single(await provider.GetRequiredService<ConfiguredTemplateSourceService>().SearchAsync("", default));
 
         Assert.Equal("working", result.SourceName);
-        var warning = Assert.Single(interaction.DisplayedMessages);
-        Assert.Equal(KnownEmojis.Warning, warning.Emoji);
-        Assert.Equal(string.Format(CultureInfo.CurrentCulture,
-            NewCommandStrings.TemplateSourceSearchFailed, "broken", NewCommandStrings.TemplateRepositoryPathInvalid),
-            warning.Message);
+        Assert.Collection(interaction.DisplayedMessages,
+            warning =>
+            {
+                Assert.Equal(KnownEmojis.Warning, warning.Emoji);
+                Assert.Equal(SharedCommandStrings.SourceTrustWarning, warning.Message);
+                Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
+            },
+            warning =>
+            {
+                Assert.Equal(KnownEmojis.Warning, warning.Emoji);
+                Assert.Equal(string.Format(CultureInfo.CurrentCulture,
+                    NewCommandStrings.TemplateSourceSearchFailed, "broken", NewCommandStrings.TemplateRepositoryPathInvalid),
+                    warning.Message);
+            });
         Assert.Single(GetGitFetches(git));
         Assert.Empty(Directory.GetFileSystemEntries(
             Path.Combine(provider.GetRequiredService<CliExecutionContext>().CacheDirectory.FullName, "git")));
