@@ -64,7 +64,7 @@ internal sealed class AspireConfigFile
     public string? Schema { get; set; }
 
     [JsonPropertyName(ConfigSource.SectionName)]
-    [Description("The Git repository, configuration path, optional branch or commit, and version last applied to this app.")]
+    [Description("The Git repository, configuration path, optional branch or commit, and version last applied to this app, or an explicit opt-out.")]
     [LocalAspireJsonConfigurationProperty]
     public ConfigSource? ConfigSource { get; set; }
 

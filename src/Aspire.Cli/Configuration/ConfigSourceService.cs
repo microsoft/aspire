@@ -193,7 +193,7 @@ internal sealed class ConfigSourceService(
         }
         if (!accepted.Value)
         {
-            return null;
+            return new ConfigSource { OptOut = true };
         }
 
         await AcquireAsync(source, force: false, allowInteractiveInput, cancellationToken);
@@ -218,8 +218,53 @@ internal sealed class ConfigSourceService(
     public async Task MaterializeAsync(ConfigSource source, DirectoryInfo projectDirectory, CancellationToken cancellationToken)
     {
         EnsureSameProject(projectDirectory);
+        await ApplySourceAsync(source, Path.Combine(projectDirectory.FullName, AspireConfigFile.FileName), cancellationToken);
+    }
+
+    public async Task SelectForUpdateAsync(DirectoryInfo projectDirectory, ParseResult parseResult, CancellationToken cancellationToken)
+    {
+        EnsureSameProject(projectDirectory);
+        var path = ConfigurationHelper.FindNearestConfigFilePath(projectDirectory)
+            ?? Path.Combine(projectDirectory.FullName, AspireConfigFile.FileName);
+        var configuration = await ReadProjectConfigurationAsync(path, cancellationToken);
+        if (configuration is not null && TryGetValue(configuration, [ConfigSource.SectionName], out _))
+        {
+            return;
+        }
+
+        // Updating packages must not introduce a new consent requirement for unattended runs.
+        // --yes authorizes package updates, not adoption of organization configuration.
+        if (!hostEnvironment.SupportsInteractiveInput && parseResult.GetValue(s_useSourceOption) is null)
+        {
+            return;
+        }
+
+        var source = await ResolveAndAcquireConfigSourceAsync(parseResult, cancellationToken);
+        if (source is not null)
+        {
+            await ApplySourceAsync(source, path, cancellationToken);
+        }
+    }
+
+    private async Task ApplySourceAsync(ConfigSource source, string path, CancellationToken cancellationToken)
+    {
+        if (source.OptOut)
+        {
+            using var configLock = await ConfigurationHelper.TryAcquireWorkspaceConfigLockAsync(
+                executionContext, new FileInfo(path), logger, cancellationToken)
+                ?? throw new ConfigSourceException(ConfigSourceStrings.ConfigLockFailed);
+            var configuration = await ReadConfigurationFileAsync(path, cancellationToken) ?? new JsonObject();
+            if (ReadBinding(configuration) is { OptOut: false })
+            {
+                throw new ConfigSourceException(ConfigSourceStrings.BindingChanged);
+            }
+            configuration[GetKey(configuration, ConfigSource.SectionName)] = new JsonObject { ["optOut"] = true };
+            await ConfigurationHelper.WriteSettingsFileAtomicallyAsync(path, configuration, cancellationToken);
+            return;
+        }
+
         var snapshot = await AcquireAsync(source, force: false, cancellationToken);
-        await ApplySnapshotAsync(source, snapshot, Path.Combine(projectDirectory.FullName, AspireConfigFile.FileName), cancellationToken);
+        await ApplySnapshotAsync(source, snapshot, path, cancellationToken);
     }
 
     internal async Task<JsonObject> GetTemplateSourcesAsync(CancellationToken cancellationToken)
@@ -243,6 +288,11 @@ internal sealed class ConfigSourceService(
 
     internal async Task<JsonObject> GetTemplateSourcesAsync(ConfigSource source, CancellationToken cancellationToken)
     {
+        if (source.OptOut)
+        {
+            return new JsonObject();
+        }
+
         var snapshot = await AcquireAsync(source, force: false, cancellationToken);
         var sources = new JsonObject();
         foreach (var (key, value) in snapshot.Configuration)
@@ -289,7 +339,6 @@ internal sealed class ConfigSourceService(
             throw new ConfigSourceException(ConfigSourceStrings.BindingChanged);
         }
         var previous = configuration.ToJsonString();
-        ConfigurationHelper.NormalizeSettings(configuration);
         foreach (var setting in s_allowedSettings)
         {
             if (TryGetValue(snapshot.Configuration, setting, out var value))
@@ -365,7 +414,7 @@ internal sealed class ConfigSourceService(
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var source = await ReadBindingAsync(configPath, cancellationToken);
-                if (source is null)
+                if (source is null || source.OptOut)
                 {
                     continue;
                 }
@@ -431,11 +480,19 @@ internal sealed class ConfigSourceService(
 
     private static async Task<JsonObject?> ReadConfigurationFileAsync(string path, CancellationToken cancellationToken)
     {
-        return File.Exists(path)
-            ? JsonNode.Parse(await File.ReadAllTextAsync(path, cancellationToken),
-                documentOptions: ConfigurationHelper.ParseOptions) as JsonObject
-                ?? throw new ConfigSourceException(string.Format(CultureInfo.CurrentCulture, ErrorStrings.ConfigurationFileMustBeJsonObject, path))
-            : null;
+        if (!File.Exists(path))
+        {
+            return null;
+        }
+
+        var configuration = JsonNode.Parse(await File.ReadAllTextAsync(path, cancellationToken),
+            documentOptions: ConfigurationHelper.ParseOptions) as JsonObject
+            ?? throw new ConfigSourceException(string.Format(CultureInfo.CurrentCulture, ErrorStrings.ConfigurationFileMustBeJsonObject, path));
+        // Normalize before binding lookups so legacy keys such as {"configSource:optOut":true}
+        // are honored by both read-only checks and write-time binding guards.
+        ConfigurationHelper.NormalizeSettings(configuration);
+
+        return configuration;
     }
 
     private static ConfigSource? ReadBinding(JsonObject? config)
@@ -453,6 +510,10 @@ internal sealed class ConfigSourceService(
         {
             var source = sourceProperty.Value?.Deserialize(JsonSourceGenerationContext.Default.ConfigSource)
                 ?? throw new ConfigSourceException(ConfigSourceStrings.InvalidBinding);
+            if (source.OptOut)
+            {
+                return source;
+            }
             if (source.Repository is null || source.Path is null)
             {
                 throw new ConfigSourceException(ConfigSourceStrings.InvalidBinding);
