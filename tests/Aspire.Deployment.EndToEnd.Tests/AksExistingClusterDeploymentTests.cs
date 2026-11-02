@@ -117,8 +117,9 @@ public sealed class AksExistingClusterDeploymentTests(ITestOutputHelper output)
                     > "$BOOTSTRAP_DIR/cluster-after.json"
                 diff -u "$BOOTSTRAP_DIR/cluster-before.json" "$BOOTSTRAP_DIR/cluster-after.json"
                 test "$(az aks list --subscription "$TEST_SUBSCRIPTION" --resource-group "$DEPLOY_RG" --query 'length(@)' -o tsv)" = 0
-                READER_PRINCIPAL=$(az deployment group show --subscription "$TEST_SUBSCRIPTION" --resource-group "$DEPLOY_RG" \
-                    --name cluster-reader --query properties.outputs.principalId.value -o tsv)
+                # Publish deployments are named cluster-reader-<Unix timestamp>.
+                READER_PRINCIPAL=$(az deployment group list --subscription "$TEST_SUBSCRIPTION" --resource-group "$DEPLOY_RG" \
+                    --query "[?starts_with(name, 'cluster-reader-')].properties.outputs.principalId.value | [0]" -o tsv)
                 test -n "$READER_PRINCIPAL"
                 az role assignment list --subscription "$TEST_SUBSCRIPTION" --scope "$Parameters__aksResourceId" \
                     --query "[?principalId=='$READER_PRINCIPAL' && roleDefinitionName=='Reader']" -o json \
