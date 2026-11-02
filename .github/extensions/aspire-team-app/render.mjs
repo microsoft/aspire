@@ -3083,7 +3083,9 @@ function accountsView() {
   const activeCount = accts.filter((a) => a.active).length;
   const rows = accts.length
     ? '<div class="acct-list">' + accts.map((a) => accountCard(a, false)).join("") + "</div>"
-    : '<p class="acct-intro">No GitHub credentials detected. Run <code>gh auth login</code> and rescan.</p>';
+    : state.githubDiscoveryError
+      ? '<p class="acct-intro">' + esc(state.githubDiscoveryError) + "</p>"
+      : '<p class="acct-intro">No GitHub credentials detected. Run <code>gh auth login</code> and rescan.</p>';
   return '<div class="page">' +
     '<div class="page-head" style="display:flex;align-items:flex-end;gap:10px">' +
       '<div><h2>GitHub accounts</h2><p>Enable any number of accounts. Their results interleave across all tabs, and each account watches its own repositories.</p></div>' +
@@ -3132,10 +3134,12 @@ function authPicker() {
   const accts = state.accounts || [];
   const picker = accts.length
     ? '<div class="acct-list" style="text-align:left;margin-top:18px">' + accts.map((a) => accountCard(a, true)).join("") + "</div>"
-    : '<span class="cmd">gh auth login</span>';
+    : state.githubDiscoveryError
+      ? '<button class="rescan-btn" id="rescan-btn" type="button">' + ICONS.refresh + "Rescan</button>"
+      : '<span class="cmd">gh auth login</span>';
   return '<div class="page" style="max-width:560px">' +
     '<div class="state" style="padding-top:32px"><div class="ico">' + ICONS.users + "</div>" +
-    "<h2>Enable a GitHub account</h2><p>" + esc(state.message) + "</p></div>" +
+    "<h2>" + (state.githubDiscoveryError ? "GitHub credentials unavailable" : "Enable a GitHub account") + "</h2><p>" + esc(state.message) + "</p></div>" +
     picker +
   "</div>";
 }

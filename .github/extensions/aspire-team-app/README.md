@@ -110,7 +110,8 @@ only normalized pipeline coordinates and branch preferences; it never stores tok
 or other credentials. GitHub and Azure DevOps sources are loaded independently, so
 an unavailable provider does not hide results from the other provider.
 GitHub CLI discovery failures appear in Health's error bar without blocking
-configured Azure pipelines; GitHub-only modes still report the discovery failure.
+configured Azure pipelines. GitHub-only modes show an unauthenticated dashboard
+with the discovery diagnostic while keeping Health and Settings accessible.
 
 When a configured Azure pipeline builds a watched GitHub repository directly, provider
 metadata links both sources into one repository group. Azure Repos mirrors do not expose

@@ -55,7 +55,7 @@ export function createCliRunner(name, label, {
     try {
       ({ stdout } = await run(shell, lookupArgs, options));
     } catch (error) {
-      if ((error.code === 1 || (isFish && error.code === 127)) && !error.stdout?.trim()) {
+      if ((error.code === 1 || error.code === 127) && !error.stdout?.trim()) {
         throw discoveryError(name, "missing", `${label} was not found on PATH or by the login shell. Install ${name} or make it available to your login shell.`);
       }
       throw discoveryError(name, "lookup_failed", `Unable to locate ${label} through the login shell. Check your shell startup configuration.`);

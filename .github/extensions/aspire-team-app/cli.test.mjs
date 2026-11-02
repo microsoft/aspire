@@ -183,14 +183,30 @@ test("Fish discovery binds the executable name through argv for both CLIs", asyn
   }
 });
 
-test("missing commands in Fish produce a CLI-specific missing error", async () => {
+test("empty-output status 1 and 127 identify missing commands in POSIX shells and Fish", async () => {
+  for (const name of ["gh", "az"]) {
+    for (const shell of ["/bin/sh", "/bin/dash", "/bin/zsh", "/usr/bin/fish"]) {
+      for (const code of [1, 127]) {
+        const runner = createCliRunner(name, "CLI", {
+          platform: "linux",
+          run: async (command) => {
+            throw Object.assign(new Error("missing"), { code: command === name ? "ENOENT" : code, stdout: "\n" });
+          },
+        });
+        await assert.rejects(runner(name, [], { env: { SHELL: shell } }), { code: `${name}_cli_missing` });
+      }
+    }
+  }
+});
+
+test("failed command lookups with output retain shell configuration diagnostics", async () => {
   for (const code of [1, 127]) {
     const runner = createCliRunner("az", "Azure CLI", {
       platform: "linux",
       run: async (command) => {
-        throw Object.assign(new Error("missing"), { code: command === "az" ? "ENOENT" : code, stdout: "" });
+        throw Object.assign(new Error("lookup failed"), { code: command === "az" ? "ENOENT" : code, stdout: "startup output" });
       },
     });
-    await assert.rejects(runner("az", [], { env: { SHELL: "/usr/bin/fish" } }), { code: "az_cli_missing" });
+    await assert.rejects(runner("az", [], { env: { SHELL: "/bin/sh" } }), { code: "az_cli_lookup_failed" });
   }
 });

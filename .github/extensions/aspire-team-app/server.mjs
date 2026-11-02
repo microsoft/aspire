@@ -224,11 +224,11 @@ async function computeDashboard({ progress = true, background = false } = {}) {
   try {
     auth = await resolveAuth(prefs);
   } catch (error) {
-    if (!healthMode || !["gh_cli_missing", "gh_cli_lookup_failed", "gh_cli_discovery_failed"].includes(error.code)) {
+    if (!["gh_cli_missing", "gh_cli_lookup_failed", "gh_cli_discovery_failed"].includes(error.code)) {
       throw error;
     }
-    // Azure-only Health does not require GitHub credentials. Keep the discovery
-    // failure visible in the dashboard's error bar without blocking Azure sources.
+    // Discovery failures must leave navigation available so Azure-only users can
+    // reach Health and Settings. Preserve the diagnostic without claiming GitHub access.
     githubDiscoveryError = error.message;
     auth = { accounts: [], tokenById: new Map() };
   }
@@ -243,13 +243,15 @@ async function computeDashboard({ progress = true, background = false } = {}) {
     const anyActive = auth.accounts.some((a) => a.active);
     dashboard = {
       authenticated: false,
-      message: !anyDetected
+      mode: prefs.mode,
+      message: githubDiscoveryError ?? (!anyDetected
         ? "No GitHub credentials detected. Run `gh auth login` so the canvas can read your review queue."
         : anyActive
           ? "The active GitHub account can't read its watched repositories. Adjust its repos or enable another account below."
-          : "No account is active. Enable an account in the Accounts tab to load your review queue.",
+          : "No account is active. Enable an account in the Accounts tab to load your review queue."),
       accounts: auth.accounts,
       activeAccounts: [],
+      errors: [],
     };
   } else {
     dashboard = healthMode
@@ -268,6 +270,7 @@ async function computeDashboard({ progress = true, background = false } = {}) {
           onProgress: stream && progress ? broadcastProgress : undefined,
         });
   }
+  dashboard.githubDiscoveryError = githubDiscoveryError;
   if (githubDiscoveryError) {
     dashboard.errors.push(`GitHub account discovery: ${githubDiscoveryError}`);
   }

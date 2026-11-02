@@ -163,23 +163,31 @@ test("Health source order persists and reorders the cached dashboard", async (t)
   assert.deepEqual(JSON.parse(await readFile(preferencesPath, "utf8")).healthOrder.slice(0, 2), [second.id, first.id]);
 });
 
-test("GitHub-only modes retain discovery errors after a Health load", async (t) => {
-  await resetTestHome({ mode: "health" });
+test("a fresh unauthenticated dashboard preserves diagnostics and navigation to Health", async (t) => {
+  await resetTestHome();
   const server = await import(`./server.mjs?test=health-auth-error-${Date.now()}`);
   const entry = await server.startInstance("health-auth-error-test", () => {});
   t.after(() => server.stopInstance("health-auth-error-test"));
 
-  const healthResponse = await fetch(new URL("api/state", entry.url));
-  assert.equal(healthResponse.status, 200);
-  const health = await healthResponse.json();
-  assert.deepEqual(health.dashboard.accounts, []);
-  assert.deepEqual(health.dashboard.errors, [
+  const initialResponse = await fetch(new URL("api/state", entry.url));
+  assert.equal(initialResponse.status, 200);
+  const initial = await initialResponse.json();
+  assert.equal(initial.dashboard.authenticated, false);
+  assert.equal(initial.dashboard.mode, "review");
+  assert.equal(initial.dashboard.message, githubDiscoveryMessage);
+  assert.deepEqual(initial.dashboard.accounts, []);
+  assert.deepEqual(initial.dashboard.errors, [
     `GitHub account discovery: ${githubDiscoveryMessage}`,
   ]);
-  for (const mode of ["review", "issues", "ship"]) {
+  for (const mode of ["health", "review", "issues", "ship"]) {
     const response = await postJson(entry.url, "api/mode", { mode });
-    assert.equal(response.status, 500);
-    assert.equal((await response.json()).error, githubDiscoveryMessage);
+    assert.equal(response.status, 200);
+    const result = await response.json();
+    assert.equal(result.dashboard.mode, mode);
+    assert.equal(result.dashboard.authenticated, false);
+    assert.equal(result.dashboard.githubDiscoveryError, githubDiscoveryMessage);
+    assert.deepEqual(result.dashboard.errors, [`GitHub account discovery: ${githubDiscoveryMessage}`]);
+    if (mode !== "health") assert.equal(result.dashboard.message, githubDiscoveryMessage);
   }
 });
 
