@@ -235,7 +235,12 @@ public sealed class AzureEntraIdAppRoleDeploymentTests(ITestOutputHelper output)
                 deployment.Client, deployment.Credential,
                 $"{resourceGroup}/providers/Microsoft.App/containerApps/{name}?api-version=2026-03-02-preview", cancellationToken);
             Assert.NotNull(containerApp);
-            var identity = Assert.Single(containerApp.RootElement.GetProperty("identity").GetProperty("userAssignedIdentities").EnumerateObject()).Value;
+            var container = Assert.Single(containerApp.RootElement.GetProperty("properties").GetProperty("template").GetProperty("containers").EnumerateArray());
+            var clientId = Assert.Single(container.GetProperty("env").EnumerateArray(),
+                variable => variable.GetProperty("name").GetString() == "AZURE_CLIENT_ID").GetProperty("value").GetString();
+            // ACA also attaches the environment's registry-pull identity. Select the workload identity used for tokens.
+            var identity = Assert.Single(containerApp.RootElement.GetProperty("identity").GetProperty("userAssignedIdentities").EnumerateObject(),
+                identity => identity.Value.GetProperty("clientId").GetString() == clientId).Value;
             var identityPrincipalId = identity.GetProperty("principalId").GetGuid();
             var matching = assignments.GetProperty("value").EnumerateArray()
                 .Where(a => a.GetProperty("principalId").GetGuid() == identityPrincipalId).ToArray();
