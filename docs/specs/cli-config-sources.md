@@ -131,6 +131,19 @@ aspire update --yes --non-interactive --use-config-source false
 
 These options affect only initial adoption; an existing binding or opt-out remains authoritative. Adoption failure leaves the existing configuration unchanged and fails the command rather than silently continuing with another source. `aspire update --config-source` remains a refresh-only operation and never discovers or adopts a source.
 
+### Diagnose source availability
+
+`aspire doctor` reports the machine's candidate configuration source using the same environment-variable and employee-detection precedence. When a candidate exists, it shows the repository, configuration path, selected ref or default-branch behavior, and discovery origin. This reports availability, not verified Git access.
+
+For project context, doctor uses the same shallow discovery as its AppHost-version check: an AppHost configured in the working directory, or one unambiguous AppHost in that directory. It does not recursively select an AppHost or prompt between multiple candidates. If an AppHost is identified, doctor inspects its nearest local configuration:
+
+- **Saved binding:** show the saved repository, path, ref, and applied version. A binding that differs from the machine candidate is valid and does not produce an adoption warning.
+- **Explicit opt-out:** report the intentional opt-out without a warning or adoption suggestion.
+- **No choice recorded, candidate available:** emit a non-blocking warning suggesting `aspire update` to accept or decline the source.
+- **No candidate and no saved choice:** do not emit a project adoption warning.
+
+Outside an identified AppHost, only machine source availability is reported. Invalid candidate settings or an unreadable/invalid project binding produce diagnostic warnings. Doctor does not prompt for source consent, acquire Git configuration, check remote versions, or change configuration or source-tracking snapshots.
+
 ### Acquire using Git
 
 Use the user's Git installation and normal credential helpers or SSH authentication. Do not introduce a separate login flow or reuse credentials from employee detection.
