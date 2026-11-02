@@ -203,6 +203,26 @@ repository session. It discovers stored `gh` accounts independently of tokens
 injected by the Copilot app, and an expired account on another host does not hide
 healthy accounts. The `gh` executable must be on the app's `PATH`; sign in with
 `gh auth login` only if no usable credentials are available.
+PR and Health agent-action buttons are disabled when the host does not provide an
+active session working directory, including sidebar-only canvases. Hover or focus
+the disabled action group to see why and how to enable it: open the canvas from a
+session in the relevant repository. This applies to **new session** actions too:
+the extension requests those through the owning conversation's agent, not a
+direct project/session-creation API. Browsing, refresh, and settings remain available.
+
+To preview this behavior from a normal repository session, open a fresh canvas
+instance with the following input:
+
+```json
+{
+  "previewSidebar": true
+}
+```
+
+The override disables agent actions only for that instance, including server-side
+dispatch. It is preserved when the canvas is rehydrated, does not change saved
+preferences, and cannot enable actions in a sidebar-only canvas.
+
 Older GitHub CLI versions without JSON authentication status use a text-status
 fallback that retains accounts reported on either output stream.
 
