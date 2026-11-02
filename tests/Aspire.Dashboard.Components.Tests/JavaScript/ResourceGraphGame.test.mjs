@@ -7,12 +7,15 @@ import {
     enemyPoints,
     attachResourceGraphGame,
     buildFormation,
+    computeWorldSize,
     firewallCollision,
     createFirewall,
     damageFirewall,
     detectCircleGesture,
     eraseFirewall,
     extraLives,
+    isButtonTarget,
+    isLaunchKey,
     marchInterval,
     MAX_ENEMIES,
     padScore,
@@ -189,4 +192,40 @@ test("attaching is a no-op without a rendered graph", () => {
     attachResourceGraphGame(graph);
     attachResourceGraphGame(graph);
     assert.deepEqual(listeners, ["pointermove", "pointerleave"]);
+});
+
+test("the largest formation fits and has room to move in any graph shape", () => {
+    const formation = buildFormation(MAX_ENEMIES, 1);
+    // SPRITE is 12, SPACING_X and SPACING_Y are 18, the formation starts at y=28 and at most 20 lower on later waves, the
+    // firewalls start 49 above the bottom edge.
+    const formationWidth = ((formation.columns - 1) * 18) + 12;
+    const formationBottom = 28 + 20 + ((formation.rows - 1) * 18) + 14;
+
+    for (const [width, height] of [[940, 300], [360, 600], [1800, 900], [300, 200], [2400, 180]]) {
+        const world = computeWorldSize(width, height);
+        assert.ok(world.width - formationWidth >= 40, `${width}x${height}: no room to march in ${world.width}`);
+        assert.ok(world.height - 49 - formationBottom >= 36, `${width}x${height}: no room to descend in ${world.height}`);
+        // Same scale on both axes: the sprites aren't stretched.
+        assert.ok(Math.abs((width / world.width) - (height / world.height)) < 0.05, `${width}x${height}: distorted`);
+    }
+});
+
+test("a large graph keeps big pixels", () => {
+    assert.deepEqual(computeWorldSize(1680, 1200), { width: 420, height: 300 });
+});
+
+test("the launch key only applies to the graph itself", () => {
+    const closest = (selector) => (selector.includes("button") ? {} : null);
+    assert.equal(isLaunchKey({ key: "o", target: {} }), true);
+    assert.equal(isLaunchKey({ key: "O", target: {} }), true);
+    assert.equal(isLaunchKey({ key: "x", target: {} }), false);
+    assert.equal(isLaunchKey({ key: "o", repeat: true, target: {} }), false);
+    assert.equal(isLaunchKey({ key: "o", ctrlKey: true, target: {} }), false);
+    assert.equal(isLaunchKey({ key: "o", target: { closest } }), false);
+});
+
+test("Enter and Space stay with a focused button", () => {
+    assert.equal(isButtonTarget({ closest: () => ({}) }), true);
+    assert.equal(isButtonTarget({ closest: () => null }), false);
+    assert.equal(isButtonTarget(null), false);
 });

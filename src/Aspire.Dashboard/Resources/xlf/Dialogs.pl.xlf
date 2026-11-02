@@ -704,8 +704,8 @@ Więcej informacji o używaniu agentów AI z pulpitem nawigacyjnym, w tym o konf
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGameDescription">
-        <source>In the resource graph, draw two circles with the mouse over empty space to play Aspire Outage, a game starring your resources. Press Esc to return to the graph.</source>
-        <target state="new">In the resource graph, draw two circles with the mouse over empty space to play Aspire Outage, a game starring your resources. Press Esc to return to the graph.</target>
+        <source>In the resource graph, draw two circles with the mouse over empty space, or focus the graph and press O, to play Aspire Outage, a game starring your resources. Press Esc to return to the graph.</source>
+        <target state="new">In the resource graph, draw two circles with the mouse over empty space, or focus the graph and press O, to play Aspire Outage, a game starring your resources. Press Esc to return to the graph.</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGameTitle">

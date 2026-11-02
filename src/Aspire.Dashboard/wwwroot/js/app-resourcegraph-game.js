@@ -28,6 +28,10 @@ const SPRITE = 12;
 const SPACING_X = 18;
 const SPACING_Y = 18;
 const HUD_HEIGHT = 14;
+// The largest formation (11 columns, 6 rows) needs 192x108 units. These leave it room to march sideways and several rows
+// to descend before reaching the ship, whatever the shape of the graph.
+const MIN_WORLD_WIDTH = 240;
+const MIN_WORLD_HEIGHT = 250;
 const BACKGROUND_ALPHA = 0.94;
 
 // Morph timings in milliseconds. Reduced motion replaces the flight with a short cross-fade.
@@ -153,6 +157,35 @@ export function buildFormation(resourceCount, wave) {
     }
 
     return { columns, rows, slots };
+}
+
+/**
+ * Sizes the virtual playfield for a graph of the given size, in CSS pixels. Small or very wide and short graphs get
+ * smaller pixels rather than a playfield the formation doesn't fit in. Both axes share one scale so the playfield fills
+ * the graph without distorting the sprites.
+ */
+export function computeWorldSize(rectWidth, rectHeight) {
+    const preferred = clamp(Math.round(rectWidth / 420), 2, 4);
+    const pixelScale = Math.min(preferred, rectWidth / MIN_WORLD_WIDTH, rectHeight / MIN_WORLD_HEIGHT) || 1;
+    return {
+        width: Math.max(MIN_WORLD_WIDTH, Math.floor(rectWidth / pixelScale)),
+        height: Math.max(MIN_WORLD_HEIGHT, Math.floor(rectHeight / pixelScale)),
+    };
+}
+
+/**
+ * Whether a key press on the focused graph starts the game: the keyboard counterpart of the circle gesture. Keys typed
+ * in a control inside the graph, such as the zoom buttons, stay with that control.
+ */
+export function isLaunchKey(event) {
+    return (event.key === 'o' || event.key === 'O') &&
+        !event.repeat && !event.ctrlKey && !event.metaKey && !event.altKey &&
+        !event.target?.closest?.('a, button, input, textarea, select, [contenteditable=""], [contenteditable="true"]');
+}
+
+/** Whether Enter and Space on this target should activate a focused button instead of playing the game. */
+export function isButtonTarget(target) {
+    return typeof target?.closest === 'function' && target.closest('button') !== null;
 }
 
 /** The top third of the formation is worth 40 points, the middle 25 and the bottom 15. */
@@ -828,9 +861,9 @@ class ResourceGraphGame {
         this.closed = false;
 
         const rect = container.getBoundingClientRect();
-        const pixelScale = clamp(Math.round(rect.width / 420), 2, 4);
-        this.width = Math.max(160, Math.floor(rect.width / pixelScale));
-        this.height = Math.max(160, Math.floor(rect.height / pixelScale));
+        const world = computeWorldSize(rect.width, rect.height);
+        this.width = world.width;
+        this.height = world.height;
 
         // Read the graph before hiding it: positions, icons and colors come from the rendered nodes.
         this.roster = collectRoster(container);
@@ -1032,6 +1065,11 @@ class ResourceGraphGame {
                 break;
             case ' ':
             case 'Enter':
+                // Keyboard users tab to Sound and Exit: those buttons keep their native activation. Clicking them gives
+                // focus back to the game, so this doesn't take Space away from firing.
+                if (isButtonTarget(event.target)) {
+                    return;
+                }
                 this.sound.unlock();
                 if (!event.repeat) {
                     this.keys.fire = event.key === ' ';
@@ -1080,8 +1118,7 @@ class ResourceGraphGame {
             default:
                 return;
         }
-        if (this.ownsKeyboard(event)) {
-            // Prevents Space from also activating a focused overlay button on key up.
+        if (this.ownsKeyboard(event) && !isButtonTarget(event.target)) {
             event.preventDefault();
             event.stopImmediatePropagation();
         }
@@ -1304,6 +1341,8 @@ class ResourceGraphGame {
             return;
         }
         this.closed = true;
+        // Leaving the page or switching layout closes the game without going through quit() or gameOver().
+        this.recordBestScore();
         cancelAnimationFrame(this.frameHandle);
         this.removeListeners();
         this.sound.dispose();
@@ -2161,8 +2200,19 @@ export function attachResourceGraphGame(graph) {
         points = [];
     };
 
+    // The gesture needs a mouse, so the focused graph also takes a key. The container outlives this SVG when the graph is
+    // rendered again, hence the check. stopPropagation keeps the key from reaching the dashboard's global shortcuts.
+    const onKeyDown = (event) => {
+        if (!activeGame && svg.isConnected && isLaunchKey(event)) {
+            event.preventDefault();
+            event.stopPropagation();
+            launchGame(graph, svg);
+        }
+    };
+
     svg.addEventListener('pointermove', onPointerMove, { passive: true });
     svg.addEventListener('pointerleave', onPointerLeave, { passive: true });
+    svg.closest?.('.resource-graph-container')?.addEventListener('keydown', onKeyDown);
 }
 
 function launchGame(graph, svg) {

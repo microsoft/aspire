@@ -792,7 +792,7 @@
     <value>Aspire Outage</value>
   </data>
   <data name="HelpDialogGameDescription" xml:space="preserve">
-    <value>In the resource graph, draw two circles with the mouse over empty space to play Aspire Outage, a game starring your resources. Press Esc to return to the graph.</value>
+    <value>In the resource graph, draw two circles with the mouse over empty space, or focus the graph and press O, to play Aspire Outage, a game starring your resources. Press Esc to return to the graph.</value>
   </data>
   <data name="AIAgentsDialogStandaloneDescription" xml:space="preserve">
     <value>Aspire gives AI coding agents deep observability into your app using the same information visible in the dashboard. Agents use telemetry to diagnose issues faster and verify fixes with confidence. 🚀
