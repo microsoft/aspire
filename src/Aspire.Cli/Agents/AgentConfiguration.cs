@@ -4,6 +4,7 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Aspire.Shared;
@@ -17,7 +18,7 @@ internal sealed class AgentConfiguration
 
     public static async Task<IReadOnlyList<AgentTargetResult>> ApplyRemoteAsync(
         IEnumerable<IAgentClient> clients, DirectoryInfo workspaceRoot, AgentConfigurationScope scope,
-        CancellationToken cancellationToken)
+        IReadOnlyList<SkillSource> sources, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var results = new List<AgentTargetResult>();
@@ -33,7 +34,7 @@ internal sealed class AgentConfiguration
                 var root = original?.DeepClone().AsObject() ?? new JsonObject();
                 foreach (var client in targets)
                 {
-                    await client.UpdateIntegrationConfigAsync(root, workspaceRoot, scope, edit, cancellationToken);
+                    await client.UpdateIntegrationConfigAsync(root, workspaceRoot, scope, edit, sources, cancellationToken);
                 }
 
                 if (JsonNode.DeepEquals(original ?? new JsonObject(), root))
@@ -68,9 +69,8 @@ internal sealed class AgentConfiguration
         return root.AsObject();
     }
 
-    public static JsonObject? ReadObject(string path, CancellationToken cancellationToken)
+    public static JsonObject? ReadObject(string path)
     {
-        cancellationToken.ThrowIfCancellationRequested();
         FileStream stream;
         try
         {
