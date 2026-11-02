@@ -278,6 +278,53 @@ public class ResourceOverviewEmptyPanelsTests : DashboardTestContext
     }
 
     [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Terminal_DockTransitionsPackOnlyRenderedOverviewCards(bool hideEmpty)
+    {
+        TerminalSetupHelpers.SetupTerminalView(this);
+        TerminalSetupHelpers.SetupTerminalWindows(this);
+        SetupOverview(new TestDashboardClient(isEnabled: true,
+            initialResources: [TerminalSetupHelpers.CreateTerminalResource("test", autoFit: true)],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var cut = RenderOverview(s_viewport);
+        await SelectPanelsAsync(cut, hideEmpty);
+        var dock = Services.GetRequiredService<TerminalDockState>();
+
+        await cut.InvokeAsync(() => dock.Update(isVisible: true, resourceName: "test"));
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Empty(cut.FindAll(".overview-terminal-card"));
+            Assert.Empty(cut.FindAll("[aria-labelledby='overview-console-title']"));
+            Assert.Equal(
+                hideEmpty ? "--overview-span: 5; --overview-span-md: 6; --overview-card-height: 260px;"
+                    : "--overview-span: 3; --overview-span-md: 6; --overview-card-height: 260px;",
+                cut.Find("[aria-labelledby='overview-status-title']").GetAttribute("style"));
+            Assert.Equal(
+                hideEmpty ? "--overview-span: 7; --overview-span-md: 6; --overview-card-height: 340px;"
+                    : "--overview-span: 6; --overview-span-md: 6; --overview-card-height: 340px;",
+                cut.Find("[aria-labelledby='overview-properties-title']").GetAttribute("style"));
+            if (!hideEmpty)
+            {
+                Assert.Equal("--overview-span: 6; --overview-span-md: 6; --overview-card-height: 300px;",
+                    cut.Find("[aria-labelledby='overview-logs-title']").GetAttribute("style"));
+            }
+        });
+
+        await cut.InvokeAsync(() => dock.Update(isVisible: false, resourceName: null));
+
+        cut.WaitForAssertion(() =>
+        {
+            var terminal = Assert.Single(cut.FindAll(".overview-terminal-card"));
+            Assert.Equal(
+                hideEmpty ? "--overview-span: 8; --overview-span-md: 12; --overview-card-height: 300px;"
+                    : "--overview-span: 7; --overview-span-md: 12; --overview-card-height: 300px;",
+                terminal.GetAttribute("style"));
+        });
+    }
+
+    [Theory]
     [InlineData(null, KnownResourceTypes.Project)]
     [InlineData("test", KnownResourceTypes.Parameter)]
     public void SummaryAndParameter_DoNotOfferPanelChoices(string? resourceName, string resourceType)

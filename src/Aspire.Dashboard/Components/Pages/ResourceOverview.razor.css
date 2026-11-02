@@ -80,14 +80,15 @@
     min-height: var(--overview-card-height, 300px);
 }
 
-.overview-grid > .overview-card:not(.overview-tags-card) > :not(.overview-card-header) {
+/* Child-component roots lack this component's scope attribute, so anchor it on the card. */
+.overview-grid > .overview-card:not(.overview-tags-card) ::deep > :not(.overview-card-header) {
     flex-shrink: 1;
     min-height: 0;
     overflow: auto;
 }
 
 /* Cap the scrollable content, not the card, so different card limits don't leave uneven row bottoms. */
-.overview-grid > .overview-card:not(.overview-tags-card):not(.overview-terminal-card) > :not(.overview-card-header) {
+.overview-grid > .overview-card:not(.overview-tags-card):not(.overview-terminal-card) ::deep > :not(.overview-card-header) {
     max-height: var(--overview-card-height, none);
 }
 
