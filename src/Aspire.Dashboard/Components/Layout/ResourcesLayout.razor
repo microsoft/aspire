@@ -622,7 +622,7 @@
             <span class="resource-header-icon">
                 <FluentIcon Width="20px"
                             Color="Color.Custom"
-                            CustomColor="@ColorGenerator.Instance.GetColorVariableByKey(selectedName)"
+                            CustomColor="@ColorGenerator.Instance.GetColorVariableByKey(GetResourceTargetName(selected))"
                             Value="@ResourceIconHelpers.GetIconForResource(IconResolver, selected, IconSize.Size20)" />
                 <PersistentContainerBadge Resource="@selected" />
             </span>
@@ -827,7 +827,7 @@
                 <span class="resource-row-icon">
                     <FluentIcon Width="@(IsSpacious ? "20px" : "16px")"
                                 Color="Color.Custom"
-                                CustomColor="@ColorGenerator.Instance.GetColorVariableByKey(resourceName)"
+                                CustomColor="@ColorGenerator.Instance.GetColorVariableByKey(resourceTargetName)"
                                 Value="@ResourceIconHelpers.GetIconForResource(IconResolver, resource, IsSpacious ? IconSize.Size20 : IconSize.Size16)" />
                     <PersistentContainerBadge Resource="@resource" />
                 </span>

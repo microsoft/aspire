@@ -15,18 +15,35 @@ public sealed partial class ResourceOverview
 {
     private const int DetailsPreviewCount = 10;
 
-    // The status card already displays these properties, and the header displays the resource name.
+    // The status card already displays these properties, and the header displays the friendly resource name.
     private static readonly HashSet<string> s_statusCardPropertyNames = new(StringComparers.ResourcePropertyName)
     {
-        KnownProperties.Resource.DisplayName,
+        KnownProperties.Resource.ResourceDisplayName,
         KnownProperties.Resource.State,
         KnownProperties.Resource.HealthState,
-        KnownProperties.Resource.Type,
+        KnownProperties.Resource.ResourceTypeDisplayName,
         KnownProperties.Resource.StartTime,
         KnownProperties.Resource.StopTime,
         KnownProperties.Resource.ExitCode,
         KnownProperties.Resource.Source,
     };
+
+    // The header and status card show the friendly labels. The technical name and type are only redundant when
+    // no custom label replaces them, so keep them in the properties otherwise.
+    private static bool IsDisplayedOutsideProperties(ResourceViewModel resource, string propertyName)
+    {
+        if (string.Equals(propertyName, KnownProperties.Resource.DisplayName, StringComparisons.ResourcePropertyName))
+        {
+            return resource.ResourceDisplayName == resource.DisplayName;
+        }
+
+        if (string.Equals(propertyName, KnownProperties.Resource.Type, StringComparisons.ResourcePropertyName))
+        {
+            return resource.ResourceTypeDisplayName == resource.ResourceType;
+        }
+
+        return s_statusCardPropertyNames.Contains(propertyName);
+    }
 
     private readonly List<DisplayedResourcePropertyViewModel> _properties = new();
     private readonly MaskState _propertiesMask = new();
@@ -71,7 +88,7 @@ public sealed partial class ResourceOverview
 
         foreach (var property in resource.Properties.Values)
         {
-            if (s_statusCardPropertyNames.Contains(property.Name) || !HasValue(property.Value))
+            if (IsDisplayedOutsideProperties(resource, property.Name) || !HasValue(property.Value))
             {
                 continue;
             }

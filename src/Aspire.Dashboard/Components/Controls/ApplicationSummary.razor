@@ -149,7 +149,7 @@
                          @key="@resource.Name">
                     <header class="resource-card-header">
                         <span class="resource-card-title" data-tooltip="@GetResourceName(resource)">
-                            <ResourceNameDisplay Resource="resource" FilterText="" FormatName="GetResourceName" ShowHiddenIndicator="false" />
+                            <ResourceNameDisplay Resource="resource" FilterText="" FormatName="GetResourceName" GetColorKey="GetResourceTargetName" ShowHiddenIndicator="false" />
                         </span>
                         <span class="resource-card-type">@resource.GetResourceTypeDisplayName(Loc)</span>
                     </header>
@@ -325,7 +325,7 @@
                             <tr @key="resource.Name">
                                 <td>
                                     <a class="home-table-resource" href="@DashboardUrls.ResourceOverviewUrl(GetResourceTargetName(resource))">
-                                        <ResourceNameDisplay Resource="resource" FilterText="" FormatName="GetResourceName" ShowHiddenIndicator="true" />
+                                        <ResourceNameDisplay Resource="resource" FilterText="" FormatName="GetResourceName" GetColorKey="GetResourceTargetName" ShowHiddenIndicator="true" />
                                     </a>
                                 </td>
                                 <td><StateColumnDisplay Resource="@resource" UnviewedErrorCounts="@_unviewedErrorCounts" /></td>

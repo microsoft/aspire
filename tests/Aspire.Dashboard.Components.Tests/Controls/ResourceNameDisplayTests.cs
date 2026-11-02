@@ -35,6 +35,7 @@ public class ResourceNameDisplayTests : DashboardTestContext
         var cut = Render<ResourceNameDisplay>(p => p
             .Add(p => p.Resource, resource)
             .Add(p => p.FormatName, r => r.DisplayName)
+            .Add(p => p.GetColorKey, r => r.DisplayName)
             .Add(p => p.FilterText, "")
             .Add(p => p.ShowHiddenIndicator, false));
 

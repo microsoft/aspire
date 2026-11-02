@@ -696,7 +696,7 @@ internal sealed class DashboardClient : IDashboardClient
                 if (changes is not null)
                 {
                     var resolvedNames = _resourceByName.Values
-                        .Select(r => ResourceViewModel.GetResourceName(r, _resourceByName));
+                        .Select(r => ResourceViewModel.GetResourceTargetName(r, _resourceByName));
                     ColorGenerator.Instance.ResolveAll(resolvedNames);
 
                     // Capture subscribers atomically with the model transition. A subscriber added after this

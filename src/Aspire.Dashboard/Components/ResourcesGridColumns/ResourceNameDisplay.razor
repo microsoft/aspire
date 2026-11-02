@@ -10,7 +10,7 @@
     RenderFragment resourceIcon = @<FluentIcon Width="16px"
                     Class="resource-icon"
                     Color="Color.Custom"
-                    CustomColor="@ColorGenerator.Instance.GetColorVariableByKey(FormatName(Resource))"
+                    CustomColor="@ColorGenerator.Instance.GetColorVariableByKey(GetColorKey(Resource))"
                     Value="@ResourceIconHelpers.GetIconForResource(IconResolver, Resource, IconSize.Size16)" />;
 }
 
@@ -50,6 +50,10 @@
 
     [Parameter, EditorRequired]
     public required Func<ResourceViewModel, string> FormatName { get; set; }
+
+    // Colors are keyed by the target name so a resource matches its telemetry, whatever label it displays.
+    [Parameter, EditorRequired]
+    public required Func<ResourceViewModel, string> GetColorKey { get; set; }
 
     [Parameter, EditorRequired]
     public required string FilterText { get; set; }

@@ -340,6 +340,8 @@ public partial class ManageDataDialog : IAsyncDisposable
 
     private string GetResourceName(ResourceViewModel resource) => ResourceViewModel.GetResourceName(resource, _resourceByName);
 
+    private string GetResourceTargetName(ResourceViewModel resource) => ResourceViewModel.GetResourceTargetName(resource, _resourceByName);
+
     private string GetOtlpResourceName(OtlpResource resource) => OtlpHelpers.GetResourceName(resource, TelemetryRepository.GetResources());
 
     private string GetHeaderSelectionLabel() => Loc[nameof(Resources.Dialogs.ManageDataAllDataCheckboxLabel)];

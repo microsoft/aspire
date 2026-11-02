@@ -199,7 +199,7 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
                 [_resource.ResourceDisplayName == _resource.DisplayName ? KnownProperties.Resource.DisplayName : KnownProperties.Resource.ResourceDisplayName] = new ComponentMetadata
                 {
                     Type = typeof(ResourceNameValue),
-                    Parameters = { ["Resource"] = _resource, ["FormatName"] = new Func<ResourceViewModel, string>(FormatName) }
+                    Parameters = { ["Resource"] = _resource, ["GetColorKey"] = new Func<ResourceViewModel, string>(GetColorKey) }
                 },
                 [KnownProperties.Resource.HealthState] = new ComponentMetadata
                 {
@@ -444,9 +444,9 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
         }
     }
 
-    private string FormatName(ResourceViewModel resource)
+    private string GetColorKey(ResourceViewModel resource)
     {
-        return ResourceViewModel.GetResourceName(resource, ResourceByName);
+        return ResourceViewModel.GetResourceTargetName(resource, ResourceByName);
     }
 
     public Task OnViewRelationshipAsync(ResourceDetailRelationshipViewModel relationship)

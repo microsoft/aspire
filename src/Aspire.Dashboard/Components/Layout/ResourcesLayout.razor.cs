@@ -1405,6 +1405,9 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     }
 
     internal string GetResourceName(ResourceViewModel resource) => ResourceViewModel.GetResourceName(resource, _resourceByName);
+
+    // Friendly labels are presentation only and TryGetResourceByName can't resolve them. Selections, URLs and
+    // color keys must use this name so they match the routes and the names reported by telemetry.
     internal string GetResourceTargetName(ResourceViewModel resource) => ResourceViewModel.GetResourceTargetName(resource, _resourceByName);
 
     private string GetResourceTypeLabel(ResourceViewModel resource) => resource.GetResourceTypeDisplayName(ResourcesLoc);

@@ -763,7 +763,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         // Resource details are displayed by the resources view. Only parameters are displayed in this page's details panel.
         if (!resource.IsParameter && PageViewModel.SelectedViewKind is ResourceViewKind.Graph or ResourceViewKind.Parameters)
         {
-            NavigationManager.NavigateTo(DashboardUrls.ResourceOverviewUrl(ResourceViewModel.GetResourceTargetName(resource, _resourceByName)));
+            NavigationManager.NavigateTo(DashboardUrls.ResourceOverviewUrl(GetResourceTargetName(resource)));
             return;
         }
 
@@ -833,6 +833,8 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     }
 
     private string GetResourceName(ResourceViewModel resource) => ResourceViewModel.GetResourceName(resource, _resourceByName);
+
+    private string GetResourceTargetName(ResourceViewModel resource) => ResourceViewModel.GetResourceTargetName(resource, _resourceByName);
 
     private bool HasMultipleReplicas(ResourceViewModel resource)
     {

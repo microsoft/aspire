@@ -62,7 +62,6 @@
     }
     else
     {
-        var resourceName = GetResourceName(resource);
         var resourceTargetName = GetResourceTargetName(resource);
         var stateViewModel = ResourceStateViewModel.GetStateViewModel(resource, ColumnsLoc);
         // Internal URLs are listed after the URLs a user can browse to.
@@ -145,7 +144,7 @@
                         <dd>@healthStatus.Humanize()</dd>
                     }
                     <dt>@Loc[nameof(Dashboard.Resources.Resources.ResourcesTypeColumnHeader)]</dt>
-                    <dd>@resource.ResourceType</dd>
+                    <dd>@resource.ResourceTypeDisplayName</dd>
                     @if (resource.IsPersistentContainer)
                     {
                         <dt>@Loc[nameof(Dashboard.Resources.Resources.ResourcesDetailsContainerLifetimeProperty)]</dt>
@@ -520,7 +519,7 @@
                 }
                 else
                 {
-                    <ResourceRelationshipGraph Resource="@(new RelationshipGraphNode(resourceName, resource.ResourceType, Url: null))"
+                    <ResourceRelationshipGraph Resource="@(new RelationshipGraphNode(GetResourceName(resource), resource.ResourceTypeDisplayName, Url: null, ColorKey: resourceTargetName))"
                                                Incoming="@GetGraphNodes(relatedResources, incoming: true)"
                                                Outgoing="@GetGraphNodes(relatedResources, incoming: false)" />
                 }
@@ -893,7 +892,7 @@
                 <div class="overview-selection-card-header">
                     <FluentIcon Width="20px"
                                 Color="Color.Custom"
-                                CustomColor="@ColorGenerator.Instance.GetColorVariableByKey(resourceName)"
+                                CustomColor="@ColorGenerator.Instance.GetColorVariableByKey(resourceTargetName)"
                                 Value="@ResourceIconHelpers.GetIconForResource(IconResolver, resource, IconSize.Size20)" />
                     <a class="overview-selection-card-title" href="@DashboardUrls.ResourceOverviewUrl(resourceTargetName)" data-tooltip="@resourceName">@resourceName</a>
                     <span class="overview-state @ResourcesLayout.GetStateClass(resource)">

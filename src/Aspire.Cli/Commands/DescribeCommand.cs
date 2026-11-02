@@ -193,7 +193,8 @@ internal sealed class DescribeCommand : BaseCommand
         // Pre-resolve colors for all resource names so that assignment is
         // deterministic regardless of which resources are displayed.
         var allSnapshots = resourceWatcher.GetAllResources();
-        _resourceColorMap.ResolveAll(allSnapshots.Select(s => ResourceSnapshotMapper.GetResourceName(s, allSnapshots)));
+        // Colors use the target name, like `aspire logs` and the dashboard, so friendly labels don't change them.
+        _resourceColorMap.ResolveAll(allSnapshots.Select(s => ResourceSnapshotMapper.GetResourceTargetName(s, allSnapshots)));
 
         if (follow)
         {
@@ -416,7 +417,7 @@ internal sealed class DescribeCommand : BaseCommand
                 nameMarkup = displayName.EscapeMarkup();
             }
 
-            table.AddRow(ColorResourceName(displayName, nameMarkup), type, stateText, healthText, endpoints);
+            table.AddRow(ColorResourceName(ResourceSnapshotMapper.GetResourceTargetName(snapshot, snapshots), nameMarkup), type, stateText, healthText, endpoints);
         }
 
         InteractionService.DisplayRenderable(table);
@@ -430,7 +431,7 @@ internal sealed class DescribeCommand : BaseCommand
             .Select(e => (e.Url, DisplayName: e.DisplayProperties?.DisplayName ?? ""))
             .ToArray();
 
-        return new ResourceDisplayState(displayName, snapshot.State, snapshot.HealthStatus, endpoints);
+        return new ResourceDisplayState(displayName, ResourceSnapshotMapper.GetResourceTargetName(snapshot, allResources), snapshot.State, snapshot.HealthStatus, endpoints);
     }
 
     private void DisplayResourceUpdate(ResourceDisplayState state)
@@ -441,7 +442,7 @@ internal sealed class DescribeCommand : BaseCommand
             ? $" - {string.Join(", ", state.Endpoints.Select(e => FormatEndpointUrl(e.Url, e.DisplayName)))}"
             : "";
 
-        InteractionService.DisplayMarkupLine($"{ColorResourceName(state.DisplayName, $"[[{state.DisplayName.EscapeMarkup()}]]")} {stateText}{healthText}{endpointsStr}");
+        InteractionService.DisplayMarkupLine($"{ColorResourceName(state.ColorKey, $"[[{state.DisplayName.EscapeMarkup()}]]")} {stateText}{healthText}{endpointsStr}");
     }
 
     private string ColorResourceName(string name, string displayMarkup) =>
@@ -496,9 +497,10 @@ internal sealed class DescribeCommand : BaseCommand
     /// <summary>
     /// Represents the display state of a resource for deduplication during watch mode.
     /// </summary>
-    private sealed class ResourceDisplayState(string displayName, string? state, string? healthStatus, (string Url, string DisplayName)[] endpoints) : IEquatable<ResourceDisplayState>
+    private sealed class ResourceDisplayState(string displayName, string colorKey, string? state, string? healthStatus, (string Url, string DisplayName)[] endpoints) : IEquatable<ResourceDisplayState>
     {
         public string DisplayName { get; } = displayName;
+        public string ColorKey { get; } = colorKey;
         public string? State { get; } = state;
         public string? HealthStatus { get; } = healthStatus;
         public (string Url, string DisplayName)[] Endpoints { get; } = endpoints;
@@ -506,6 +508,7 @@ internal sealed class DescribeCommand : BaseCommand
         public bool Equals(ResourceDisplayState? other) =>
             other is not null &&
             DisplayName == other.DisplayName &&
+            ColorKey == other.ColorKey &&
             State == other.State &&
             HealthStatus == other.HealthStatus &&
             Endpoints.AsSpan().SequenceEqual(other.Endpoints);

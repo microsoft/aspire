@@ -663,8 +663,8 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
             .Where(r => r.IsIncoming == incoming)
             .Select(r =>
             {
-                var name = GetResourceName(r.Resource);
-                return new RelationshipGraphNode(name, r.Type, DashboardUrls.ResourceOverviewUrl(GetResourceTargetName(r.Resource)));
+                var targetName = GetResourceTargetName(r.Resource);
+                return new RelationshipGraphNode(GetResourceName(r.Resource), r.Type, DashboardUrls.ResourceOverviewUrl(targetName), targetName);
             })
             .ToList();
 
