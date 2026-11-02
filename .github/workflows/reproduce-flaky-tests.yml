@@ -39,7 +39,7 @@ env:
   RUNNERS_PER_OS: "5"
 
   # Number of test iterations each runner executes
-  ITERATIONS_PER_RUNNER: "5"
+  ITERATIONS_PER_RUNNER: "10"
 
   ASPIRE_E2E_CLI_ARCHIVE_DIR: ${{ github.workspace }}/cli-archives
   GITHUB_PR_NUMBER: "21654"
