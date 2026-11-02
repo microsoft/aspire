@@ -6,7 +6,6 @@
   },
   {
     Name: test_api.test_value[2],
-    Outcome: Failed,
     Duration: 00:00:00.2500000,
     Message:
 failure:  assert 1 == 2
@@ -28,7 +27,7 @@ skip reason
   },
   {
     Name: test_collection.py,
-    Outcome: Failed,
+    Outcome: Error,
     Duration: 00:00:00,
     Message:
 error:  collection failure
