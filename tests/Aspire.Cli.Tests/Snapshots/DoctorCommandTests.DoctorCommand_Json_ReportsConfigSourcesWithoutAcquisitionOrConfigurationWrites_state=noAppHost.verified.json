@@ -1,0 +1,34 @@
+﻿{
+  "checks": [
+    {
+      "category": "environment",
+      "name": "config-source",
+      "status": "pass",
+      "message": "A configuration source is available on this machine.",
+      "details": "Configuration source: https://machine.example/configuration\nConfiguration file: teams/platform.json\nConfiguration ref: config-preview\nSource origin: ASPIRE_INIT_SOURCE_URL",
+      "metadata": {
+        "repository": "https://machine.example/configuration",
+        "path": "teams/platform.json",
+        "ref": "config-preview",
+        "available": true,
+        "origin": "ASPIRE_INIT_SOURCE_URL"
+      }
+    }
+  ],
+  "summary": {
+    "passed": 1,
+    "warnings": 0,
+    "failed": 0
+  },
+  "installations": [
+    {
+      "path": "/test/aspire",
+      "canonicalPath": "/test/aspire",
+      "version": "13.0.0",
+      "channel": "stable",
+      "route": "script",
+      "pathStatus": "active",
+      "status": "ok"
+    }
+  ]
+}

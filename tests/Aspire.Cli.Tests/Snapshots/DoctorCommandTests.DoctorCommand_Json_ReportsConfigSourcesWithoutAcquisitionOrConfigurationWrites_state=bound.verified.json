@@ -1,0 +1,50 @@
+﻿{
+  "checks": [
+    {
+      "category": "environment",
+      "name": "config-source",
+      "status": "pass",
+      "message": "A configuration source is available on this machine.",
+      "details": "Configuration source: https://machine.example/configuration\nConfiguration file: teams/platform.json\nConfiguration ref: config-preview\nSource origin: ASPIRE_INIT_SOURCE_URL",
+      "metadata": {
+        "repository": "https://machine.example/configuration",
+        "path": "teams/platform.json",
+        "ref": "config-preview",
+        "available": true,
+        "origin": "ASPIRE_INIT_SOURCE_URL"
+      }
+    },
+    {
+      "category": "apphost",
+      "name": "apphost-config-source",
+      "status": "pass",
+      "message": "AppHost uses a saved configuration source.",
+      "details": "AppHost: {workspace}/AppHost/apphost.cs\nSettings file: {workspace}/aspire.config.json\nConfiguration source: https://saved.example/configuration\nConfiguration file: saved.json\nConfiguration ref: saved-branch\nApplied version: saved-version",
+      "metadata": {
+        "repository": "https://saved.example/configuration",
+        "path": "saved.json",
+        "ref": "saved-branch",
+        "appliedVersion": "saved-version",
+        "appHostPath": "{workspace}/AppHost/apphost.cs",
+        "settingsFile": "{workspace}/aspire.config.json",
+        "state": "bound"
+      }
+    }
+  ],
+  "summary": {
+    "passed": 2,
+    "warnings": 0,
+    "failed": 0
+  },
+  "installations": [
+    {
+      "path": "/test/aspire",
+      "canonicalPath": "/test/aspire",
+      "version": "13.0.0",
+      "channel": "stable",
+      "route": "script",
+      "pathStatus": "active",
+      "status": "ok"
+    }
+  ]
+}

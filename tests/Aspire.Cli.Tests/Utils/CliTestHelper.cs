@@ -257,6 +257,7 @@ internal static class CliTestHelper
         services.AddSingleton(options.AppHostProjectFactory);
 
         services.AddSingleton<IEnvironmentCheck, AspireVersionCheck>();
+        services.AddSingleton<IEnvironmentCheck, ConfigSourceCheck>();
         services.AddSingleton<IEnvironmentCheck, OperatingSystemCheck>();
         services.AddSingleton<IEnvironmentCheck, WslEnvironmentCheck>();
         services.AddSingleton<IEnvironmentCheck, DotNetSdkCheck>();

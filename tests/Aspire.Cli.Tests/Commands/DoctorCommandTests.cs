@@ -3,6 +3,8 @@
 
 using System.Text.Json;
 using Aspire.Cli.Acquisition;
+using Aspire.Cli.Configuration;
+using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Tests.Agents;
@@ -10,6 +12,7 @@ using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Aspire.Cli.Utils.EnvironmentChecker;
+using Aspire.Shared.Telemetry;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.AspNetCore.InternalTesting;
@@ -19,6 +22,93 @@ namespace Aspire.Cli.Tests.Commands;
 
 public class DoctorCommandTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData("unconfigured")]
+    [InlineData("bound")]
+    [InlineData("optedOut")]
+    [InlineData("noAppHost")]
+    public async Task DoctorCommand_Json_ReportsConfigSourcesWithoutAcquisitionOrConfigurationWrites(string state)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var project = workspace.CreateDirectory("AppHost");
+        var appHost = new FileInfo(Path.Combine(project.FullName, "apphost.cs"));
+        await File.WriteAllTextAsync(appHost.FullName, "#:sdk Aspire.AppHost.Sdk");
+        var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
+        var configuration = state switch
+        {
+            "bound" => """{"appHost":{"path":"AppHost/apphost.cs"},"configSource":{"repository":"https://saved.example/configuration","path":"saved.json","ref":"saved-branch","appliedVersion":"saved-version"}}""",
+            "optedOut" => """{"appHost":{"path":"AppHost/apphost.cs"},"configSource":{"optOut":true}}""",
+            "noAppHost" => """{"custom":"keep"}""",
+            _ => """{"appHost":{"path":"AppHost/apphost.cs"},"custom":"keep"}"""
+        };
+        await File.WriteAllTextAsync(path, configuration);
+        var git = new TestConfigSourceRepository();
+        var interaction = new TestInteractionService();
+        interaction.SetupCancellationResponse();
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var services = CreateDoctorVersionServiceCollection(workspace, outputHelper, options =>
+        {
+            options.OutputTextWriter = outputWriter;
+            options.InteractionServiceFactory = _ => interaction;
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+        });
+        services.RemoveAll<IEnvironmentCheck>();
+        services.AddSingleton<IEnvironmentCheck, ConfigSourceCheck>();
+        services.AddSingleton<IGitClient>(git);
+        services.AddSingleton<IEnvironment>(new TestEnvironment(new Dictionary<string, string?>
+        {
+            [CliConfigNames.InitSourceUrl] = "https://machine.example/configuration",
+            [CliConfigNames.InitSourcePath] = "teams/platform.json",
+            [CliConfigNames.InitSourceRef] = "config-preview"
+        }));
+        using var provider = services.BuildServiceProvider();
+
+        var exitCode = await provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>()
+            .Parse("doctor --format json").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var json = Assert.Single(interaction.DisplayedRawText).Text;
+        using var document = JsonDocument.Parse(json);
+        var checks = document.RootElement.GetProperty("checks");
+        Assert.Equal(state == "noAppHost" ? 1 : 2, checks.GetArrayLength());
+        Assert.Equal(state == "unconfigured" ? 1 : 0, document.RootElement.GetProperty("summary").GetProperty("warnings").GetInt32());
+        Assert.Equal(configuration, await File.ReadAllTextAsync(path));
+        Assert.False(File.Exists(Path.Combine(project.FullName, AspireConfigFile.FileName)));
+        Assert.Equal(0, git.Calls);
+        Assert.Equal(0, git.CheckCalls);
+        Assert.Empty(interaction.DisplayedMessages);
+        Assert.Empty(interaction.DisplayedErrors);
+        Assert.False(Directory.Exists(Path.Combine(provider.GetRequiredService<CliExecutionContext>().AspireHomeDirectory.FullName, "configsources")));
+        await Verify(json, "json").AddScrubber(text => text
+            .Replace(JsonEncodedText.Encode(workspace.Path).ToString(), "{workspace}")
+            .Replace("\\\\", "/")
+            .Replace("\\r\\n", "\\n"));
+    }
+
+    [Theory]
+    [InlineData(InternalMicrosoftDetectorOutcome.NotDetected)]
+    [InlineData(InternalMicrosoftDetectorOutcome.Failed)]
+    [InlineData(InternalMicrosoftDetectorOutcome.TimedOut)]
+    public async Task DoctorCommand_Json_DistinguishesInconclusiveConfigSourceDetection(string outcome)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interaction = new TestInteractionService();
+        var services = CreateDoctorVersionServiceCollection(workspace, outputHelper,
+            options => options.InteractionServiceFactory = _ => interaction);
+        services.RemoveAll<IEnvironmentCheck>();
+        services.AddSingleton<IEnvironmentCheck, ConfigSourceCheck>();
+        services.AddSingleton<IEnvironment>(new TestEnvironment());
+        services.AddSingleton<IInternalMicrosoftDetector>(new TestConfigSourceDetector { Outcome = outcome });
+        using var provider = services.BuildServiceProvider();
+
+        var exitCode = await provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>()
+            .Parse("doctor --format json").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var json = Assert.Single(interaction.DisplayedRawText).Text;
+        await Verify(json, "json");
+    }
+
     [Fact]
     public async Task DoctorCommand_Help_Works()
     {

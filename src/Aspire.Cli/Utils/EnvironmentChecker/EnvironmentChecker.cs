@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json.Nodes;
+using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Microsoft.Extensions.Logging;
 
@@ -38,6 +39,30 @@ internal sealed class EnvironmentChecker : IEnvironmentChecker
         _checkTimeout = checkTimeout;
         _totalTimeout = totalTimeout;
         _timeProvider = timeProvider ?? TimeProvider.System;
+    }
+
+    internal static async Task<IReadOnlyList<FileInfo>> ResolveAppHostFilesAsync(
+        IProjectLocator projectLocator, DirectoryInfo workingDirectory, ILogger logger, CancellationToken cancellationToken)
+    {
+        // Doctor project diagnostics are intentionally shallow and never prompt for a
+        // selection. Honor a configured AppHost or one unambiguous current-directory candidate.
+        var configuredAppHost = await projectLocator.GetAppHostFromSettingsAsync(workingDirectory, searchParentDirectories: false, cancellationToken);
+        if (configuredAppHost is not null)
+        {
+            return [configuredAppHost];
+        }
+
+        var candidates = await projectLocator.FindAppHostProjectFilesAsync(
+            workingDirectory, AppHostDiscoveryScope.ExplicitDirectory, maxDepth: 0, cancellationToken);
+        if (candidates.Count > 1)
+        {
+            logger.LogDebug(
+                "Found multiple AppHost candidates in {WorkingDirectory}; skipping project diagnostics because no AppHost is configured.",
+                workingDirectory.FullName);
+            return [];
+        }
+
+        return candidates;
     }
 
     /// <inheritdoc />

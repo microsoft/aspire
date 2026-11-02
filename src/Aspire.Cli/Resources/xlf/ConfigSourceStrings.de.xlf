@@ -22,6 +22,17 @@
         <target state="new">The saved configuration source changed while fetching. No source settings were applied. Retry using the saved source binding.</target>
         <note />
       </trans-unit>
+      <trans-unit id="Candidate">
+        <source>Configuration source: {0}
+Configuration file: {1}
+Configuration ref: {2}
+Source origin: {3}</source>
+        <target state="new">Configuration source: {0}
+Configuration file: {1}
+Configuration ref: {2}
+Source origin: {3}</target>
+        <note>{0} is the Git repository address, {1} is the repository-relative configuration file path, {2} is the branch name, commit SHA, or default-branch label, and {3} is the source origin (an environment variable name or Microsoft employee default).</note>
+      </trans-unit>
       <trans-unit id="CheckFailed">
         <source>The configuration source update check failed: {0} Continuing with the saved configuration.</source>
         <target state="new">The configuration source update check failed: {0} Continuing with the saved configuration.</target>
@@ -50,6 +61,64 @@
       <trans-unit id="DefaultBranch">
         <source>default branch</source>
         <target state="new">default branch</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DoctorAdoptFix">
+        <source>Run 'aspire update' to choose whether this AppHost should use the available configuration source.</source>
+        <target state="new">Run 'aspire update' to choose whether this AppHost should use the available configuration source.</target>
+        <note>Do not translate "aspire update".</note>
+      </trans-unit>
+      <trans-unit id="DoctorAvailable">
+        <source>A configuration source is available on this machine.</source>
+        <target state="new">A configuration source is available on this machine.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DoctorBindingDetails">
+        <source>Configuration source: {0}
+Configuration file: {1}
+Configuration ref: {2}
+Applied version: {3}</source>
+        <target state="new">Configuration source: {0}
+Configuration file: {1}
+Configuration ref: {2}
+Applied version: {3}</target>
+        <note>{0} is the Git repository address, {1} is the repository-relative configuration path, {2} is the selected ref or default-branch label, and {3} is the version last applied.</note>
+      </trans-unit>
+      <trans-unit id="DoctorBound">
+        <source>AppHost uses a saved configuration source.</source>
+        <target state="new">AppHost uses a saved configuration source.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DoctorCandidateFailed">
+        <source>The machine configuration source could not be resolved.</source>
+        <target state="new">The machine configuration source could not be resolved.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DoctorOptOut">
+        <source>AppHost has explicitly opted out of configuration sources.</source>
+        <target state="new">AppHost has explicitly opted out of configuration sources.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DoctorProjectDetails">
+        <source>AppHost: {0}
+Settings file: {1}</source>
+        <target state="new">AppHost: {0}
+Settings file: {1}</target>
+        <note>{0} is the AppHost file path and {1} is its settings file path.</note>
+      </trans-unit>
+      <trans-unit id="DoctorProjectFailed">
+        <source>The AppHost configuration source could not be inspected.</source>
+        <target state="new">The AppHost configuration source could not be inspected.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DoctorUnavailable">
+        <source>No configuration source is available on this machine.</source>
+        <target state="new">No configuration source is available on this machine.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DoctorUnbound">
+        <source>A configuration source is available, but this AppHost has not selected a configuration source.</source>
+        <target state="new">A configuration source is available, but this AppHost has not selected a configuration source.</target>
         <note />
       </trans-unit>
       <trans-unit id="EmployeeOrigin">

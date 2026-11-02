@@ -213,6 +213,19 @@ one source supplies choices. Directly before those pickers, the shared trust war
 is shown if templates are not all built-in or integrations come from a feed other
 than nuget.org.
 
+### Diagnose source availability
+
+`aspire doctor` reports the machine's candidate configuration source using the same environment-variable and employee-detection precedence. When a candidate exists, it shows the repository, configuration path, selected ref or default-branch behavior, and discovery origin. This reports availability, not verified Git access.
+
+For project context, doctor uses the same shallow discovery as its AppHost-version check: an AppHost configured in the working directory, or one unambiguous AppHost in that directory. It does not recursively select an AppHost or prompt between multiple candidates. If an AppHost is identified, doctor inspects its nearest local configuration:
+
+- **Saved binding:** show the saved repository, path, ref, and applied version. A binding that differs from the machine candidate is valid and does not produce an adoption warning.
+- **Explicit opt-out:** report the intentional opt-out without a warning or adoption suggestion.
+- **No choice recorded, candidate available:** emit a non-blocking warning suggesting `aspire update` to accept or decline the source.
+- **No candidate and no saved choice:** do not emit a project adoption warning.
+
+Outside an identified AppHost, only machine source availability is reported. Invalid candidate settings, failed or timed-out employee detection, or an unreadable/invalid project binding produce diagnostic warnings. Inconclusive employee detection does not report that no source exists: JSON metadata includes `detectionOutcome` (`failed` or `timed_out`) and omits `available` because availability is unknown. Saved project bindings and explicit opt-outs are still reported, without an adoption suggestion. Doctor does not prompt for source consent, acquire Git configuration, check remote versions, or change configuration or source-tracking snapshots.
+
 ### Acquire using Git
 
 Use the user's Git installation and normal credential helpers or SSH authentication. Do not introduce a separate login flow or reuse credentials from employee detection.

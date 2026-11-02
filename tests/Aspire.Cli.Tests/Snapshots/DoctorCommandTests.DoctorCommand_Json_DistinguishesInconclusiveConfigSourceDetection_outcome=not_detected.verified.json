@@ -1,0 +1,29 @@
+﻿{
+  "checks": [
+    {
+      "category": "environment",
+      "name": "config-source",
+      "status": "pass",
+      "message": "No configuration source is available on this machine.",
+      "metadata": {
+        "available": false
+      }
+    }
+  ],
+  "summary": {
+    "passed": 1,
+    "warnings": 0,
+    "failed": 0
+  },
+  "installations": [
+    {
+      "path": "/test/aspire",
+      "canonicalPath": "/test/aspire",
+      "version": "13.0.0",
+      "channel": "stable",
+      "route": "script",
+      "pathStatus": "active",
+      "status": "ok"
+    }
+  ]
+}
