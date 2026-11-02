@@ -4,107 +4,107 @@
     <body>
       <trans-unit id="DiscoveringSessions">
         <source>Discovering terminal sessions...</source>
-        <target state="new">Discovering terminal sessions...</target>
+        <target state="translated">ターミナル セッションを検出しています...</target>
         <note />
       </trans-unit>
       <trans-unit id="InstanceTerminalUnavailable">
         <source>Cannot resolve the terminal endpoint for instance '{0}' because its replica metadata is missing, invalid, or unavailable. Use 'aspire ps' or 'aspire describe' to check the current resource instances.</source>
-        <target state="new">Cannot resolve the terminal endpoint for instance '{0}' because its replica metadata is missing, invalid, or unavailable. Use 'aspire ps' or 'aspire describe' to check the current resource instances.</target>
+        <target state="translated">レプリカ メタデータが見つからないか、無効であるか、利用できないため、インスタンス '{0}' のターミナル エンドポイントを解決できません。'aspire ps' または 'aspire describe' を使用して、現在のリソース インスタンスを確認してください。</target>
         <note />
       </trans-unit>
       <trans-unit id="LookingUpResource">
         <source>Looking up resource...</source>
-        <target state="new">Looking up resource...</target>
+        <target state="translated">リソースを検索しています...</target>
         <note />
       </trans-unit>
       <trans-unit id="ReplicaNotFound">
         <source>Replica index {0} is not available for resource '{1}'. Available indices: {2}.</source>
-        <target state="new">Replica index {0} is not available for resource '{1}'. Available indices: {2}.</target>
+        <target state="translated">レプリカ インデックス {0} は、リソース '{1}' では使用できません。使用可能なインデックス: {2}。</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceAmbiguous">
         <source>Resource '{0}' matches multiple instances. Specify an exact instance ID. Available instance IDs: {1}.</source>
-        <target state="new">Resource '{0}' matches multiple instances. Specify an exact instance ID. Available instance IDs: {1}.</target>
+        <target state="translated">リソース '{0}' が複数のインスタンスと一致します。正確なインスタンス ID を指定してください。使用可能なインスタンス ID: {1}。</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
         <source>The resource display name for a singleton, or the exact resource instance ID for a replica. Use 'aspire ps' or 'aspire describe' to discover instance IDs.</source>
-        <target state="new">The resource display name for a singleton, or the exact resource instance ID for a replica. Use 'aspire ps' or 'aspire describe' to discover instance IDs.</target>
+        <target state="translated">シングルトンのリソース表示名、またはレプリカの正確なリソース インスタンス ID。'aspire ps' または 'aspire describe' を使用して、インスタンス ID を検出します。</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceInstanceRequired">
         <source>Resource '{0}' has multiple terminal instances. Specify an exact instance ID from 'aspire ps' or 'aspire describe'.</source>
-        <target state="new">Resource '{0}' has multiple terminal instances. Specify an exact instance ID from 'aspire ps' or 'aspire describe'.</target>
+        <target state="translated">リソース '{0}' に複数のターミナル インスタンスがあります。'aspire ps' または 'aspire describe' の正確なインスタンス ID を指定してください。</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceNotFound">
         <source>Resource '{0}' was not found.</source>
-        <target state="new">Resource '{0}' was not found.</target>
+        <target state="translated">リソース '{0}' が見つかりませんでした。</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceRequired">
         <source>A resource name is required.</source>
-        <target state="new">A resource name is required.</target>
+        <target state="translated">リソース名が必要です。</target>
         <note />
       </trans-unit>
       <trans-unit id="TapeConnectionClosed">
         <source>The terminal connection closed before tape playback completed.</source>
-        <target state="new">The terminal connection closed before tape playback completed.</target>
+        <target state="translated">テープの再生が完了する前に、ターミナル接続が閉じられました。</target>
         <note />
       </trans-unit>
       <trans-unit id="TapeDescription">
         <source>Run VHS tape scripts against resource terminals.</source>
-        <target state="new">Run VHS tape scripts against resource terminals.</target>
+        <target state="translated">リソース ターミナルに対して VHS テープ スクリプトを実行します。</target>
         <note />
       </trans-unit>
       <trans-unit id="TapeFileDescription">
         <source>The path to the VHS .tape file to play.</source>
-        <target state="new">The path to the VHS .tape file to play.</target>
+        <target state="translated">再生する VHS .tape ファイルへのパス。</target>
         <note />
       </trans-unit>
       <trans-unit id="TapeFileReadFailed">
         <source>Could not read tape file '{0}': {1}</source>
-        <target state="new">Could not read tape file '{0}': {1}</target>
+        <target state="translated">テープ ファイル '{0}': {1} を読み取ることができませんでした</target>
         <note />
       </trans-unit>
       <trans-unit id="TapePlayDescription">
         <source>Play a VHS tape against a running resource terminal and print its final screen.</source>
-        <target state="new">Play a VHS tape against a running resource terminal and print its final screen.</target>
+        <target state="translated">実行中のリソース ターミナルに対して VHS テープを再生し、最後の画面を印刷します。</target>
         <note />
       </trans-unit>
       <trans-unit id="TapePlaybackFailed">
         <source>Tape playback failed: {0}</source>
-        <target state="new">Tape playback failed: {0}</target>
+        <target state="translated">テープの再生に失敗しました: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="TapeSelectAppHostAction">
         <source>play a terminal tape</source>
-        <target state="new">play a terminal tape</target>
+        <target state="translated">ターミナル テープを再生する</target>
         <note />
       </trans-unit>
       <trans-unit id="TapeTimeout">
         <source>Terminal tape playback did not finish within {0} seconds.</source>
-        <target state="new">Terminal tape playback did not finish within {0} seconds.</target>
+        <target state="translated">ターミナル テープの再生が {0} 秒以内に完了しませんでした。</target>
         <note />
       </trans-unit>
       <trans-unit id="TapeTimeoutDescription">
         <source>Maximum time in seconds to connect and play the tape. Defaults to 120 seconds.</source>
-        <target state="new">Maximum time in seconds to connect and play the tape. Defaults to 120 seconds.</target>
+        <target state="translated">テープを接続して再生する最大時間 (秒)。既定値は 120 秒です。</target>
         <note />
       </trans-unit>
       <trans-unit id="TapeTimeoutInvalid">
         <source>The timeout must be between 1 and {0} seconds.</source>
-        <target state="new">The timeout must be between 1 and {0} seconds.</target>
+        <target state="translated">タイムアウトは 1 秒から {0} 秒の間でなければなりません。</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalIncompatible">
         <source>The connected AppHost does not support 'aspire terminal'. Update Aspire.Hosting to 13.4 or later.</source>
-        <target state="new">The connected AppHost does not support 'aspire terminal'. Update Aspire.Hosting to 13.4 or later.</target>
+        <target state="translated">接続されている AppHost は 'aspire terminal' をサポートしていません。Aspire.Hosting を 13.4 以降に更新してください。</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalUnavailable">
         <source>Resource '{0}' is not available for terminal attachment. Make sure the resource was registered with '.WithTerminal()' and that the terminal host has started.</source>
-        <target state="new">Resource '{0}' is not available for terminal attachment. Make sure the resource was registered with '.WithTerminal()' and that the terminal host has started.</target>
+        <target state="translated">リソース '{0}' はターミナルのアタッチには使用できません。リソースが '.WithTerminal()'、およびターミナル ホストが開始されていることを確認してください。</target>
         <note />
       </trans-unit>
     </body>

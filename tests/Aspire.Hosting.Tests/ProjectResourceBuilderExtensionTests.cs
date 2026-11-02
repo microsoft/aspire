@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource defaults and fluent return contracts.
 #pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
 #pragma warning disable ASPIRECERTIFICATES001
 #pragma warning disable ASPIREPROJECTS001 // WithProjectDefaults is experimental.
@@ -545,3 +546,4 @@ public class ProjectResourceBuilderExtensionTests
         public string ProjectPath => "override.csproj";
     }
 }
+#pragma warning restore CS0618

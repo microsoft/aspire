@@ -4,77 +4,77 @@
     <body>
       <trans-unit id="BrowserLogsAmbiguousProfile">
         <source>Browser profile '{0}' matched multiple Chromium profiles under '{1}'. Specify the profile directory name instead.</source>
-        <target state="new">Browser profile '{0}' matched multiple Chromium profiles under '{1}'. Specify the profile directory name instead.</target>
+        <target state="translated">Das Browserprofil „{0}“ stimmt mit mehreren Chromium-Profilen unter „{1}“ überein. Geben Sie stattdessen den Namen des Profilverzeichnisses an.</target>
         <note>{0} is the requested browser profile, {1} is the browser user data directory path</note>
       </trans-unit>
       <trans-unit id="BrowserLogsAppHostPathShaNotAvailable">
         <source>Cannot resolve the isolated browser user data directory because the AppHost path identifier is not available. Use '{0}' user data mode or run from a configured AppHost.</source>
-        <target state="new">Cannot resolve the isolated browser user data directory because the AppHost path identifier is not available. Use '{0}' user data mode or run from a configured AppHost.</target>
+        <target state="translated">Das isolierte Browserbenutzerdatenverzeichnis kann nicht aufgelöst werden, da der AppHost-Pfadbezeichner nicht verfügbar ist. Verwenden Sie den Benutzerdatenmodus „{0}“, oder führen Sie die Anwendung von einem konfigurierten AppHost aus.</target>
         <note>{0} is the user data mode that does not require an AppHost path identifier</note>
       </trans-unit>
       <trans-unit id="BrowserLogsDefaultProfileName">
         <source>(default)</source>
-        <target state="new">(default)</target>
+        <target state="translated">(Standard)</target>
         <note />
       </trans-unit>
       <trans-unit id="BrowserLogsEmptyBrowserConfiguration">
         <source>Tracked browser configuration resolved an empty browser value.</source>
-        <target state="new">Tracked browser configuration resolved an empty browser value.</target>
+        <target state="translated">Die nachverfolgte Browserkonfiguration hat einen leeren Browserwert ergeben.</target>
         <note />
       </trans-unit>
       <trans-unit id="BrowserLogsEmptyProfileConfiguration">
         <source>Tracked browser configuration resolved an empty profile value.</source>
-        <target state="new">Tracked browser configuration resolved an empty profile value.</target>
+        <target state="translated">Die nachverfolgte Browserkonfiguration hat einen leeren Profilwert ergeben.</target>
         <note />
       </trans-unit>
       <trans-unit id="BrowserLogsEndpointNotAllocated">
         <source>Endpoint '{0}' for resource '{1}' has not been allocated yet.</source>
-        <target state="new">Endpoint '{0}' for resource '{1}' has not been allocated yet.</target>
+        <target state="translated">Der Endpunkt '{0}' für die Ressource '{1}' wurde noch nicht zugeordnet.</target>
         <note>{0} is the endpoint name, {1} is the Aspire resource name</note>
       </trans-unit>
       <trans-unit id="BrowserLogsInvalidProfileMetadata">
         <source>Chromium profile metadata in '{0}' is invalid while resolving browser profile '{1}'.</source>
-        <target state="new">Chromium profile metadata in '{0}' is invalid while resolving browser profile '{1}'.</target>
+        <target state="translated">Chromium Profilmetadaten in '{0}' sind beim Auflösen der Browserprofil-'{1}' ungültig.</target>
         <note>{0} is the Chromium Local State file path, {1} is the requested browser profile</note>
       </trans-unit>
       <trans-unit id="BrowserLogsInvalidUserDataModeConfiguration">
         <source>Tracked browser configuration value '{0}' is not a valid '{1}'. Expected '{2}' or '{3}'.</source>
-        <target state="new">Tracked browser configuration value '{0}' is not a valid '{1}'. Expected '{2}' or '{3}'.</target>
+        <target state="translated">Der nachverfolgte Browserkonfigurationswert „{0}“ ist kein gültiger Wert für „{1}“. Erwartet werden „{2}“ oder „{3}“.</target>
         <note>{0} is the configured user data mode value, {1} is the user data mode configuration key, {2} and {3} are valid user data mode values</note>
       </trans-unit>
       <trans-unit id="BrowserLogsProfileNotFound">
         <source>Browser profile '{0}' was not found under '{1}'. Specify the profile directory name (for example 'Default' or 'Profile 1') or a browser profile name from Chromium's profile metadata.</source>
-        <target state="new">Browser profile '{0}' was not found under '{1}'. Specify the profile directory name (for example 'Default' or 'Profile 1') or a browser profile name from Chromium's profile metadata.</target>
+        <target state="translated">Das Browserprofil '{0}' wurde unter '{1}' nicht gefunden. Geben Sie den Profilverzeichnisnamen (z. B. "Standard" oder "Profil 1") oder einen Browserprofilnamen aus den Profilmetadaten von Chromium an.</target>
         <note>{0} is the requested browser profile, {1} is the browser user data directory path</note>
       </trans-unit>
       <trans-unit id="BrowserLogsProfileRequiresSharedUserDataMode">
         <source>Tracked browser configuration set '{0}' to '{1}' while '{2}' is '{3}'. Profiles can only be selected when '{2}' is '{4}'.</source>
-        <target state="new">Tracked browser configuration set '{0}' to '{1}' while '{2}' is '{3}'. Profiles can only be selected when '{2}' is '{4}'.</target>
+        <target state="translated">Die nachverfolgte Browserkonfiguration hat „{0}“ auf „{1}“ gesetzt, während „{2}“ auf „{3}“ gesetzt ist. Profile können nur ausgewählt werden, wenn „{2}“ auf „{4}“ gesetzt ist.</target>
         <note>{0} is the profile configuration key, {1} is the configured profile value, {2} is the user data mode configuration key, {3} is the configured user data mode, {4} is the required user data mode</note>
       </trans-unit>
       <trans-unit id="BrowserLogsResourceMissingHttpEndpoint">
         <source>Resource '{0}' does not have an HTTP or HTTPS endpoint. Browser logs require an endpoint to navigate to.</source>
-        <target state="new">Resource '{0}' does not have an HTTP or HTTPS endpoint. Browser logs require an endpoint to navigate to.</target>
+        <target state="translated">Die Ressource '{0}' verfügt über keinen HTTP- oder HTTPS-Endpunkt. Browserprotokolle erfordern einen Endpunkt, zu dem navigiert werden kann.</target>
         <note>{0} is the Aspire resource name</note>
       </trans-unit>
       <trans-unit id="BrowserLogsTrackedBrowserProfileConflict">
         <source>A tracked browser is already running for user data directory '{0}' with profile '{1}'. The requested profile is '{2}'. Close the existing tracked browser session or use isolated user data mode.</source>
-        <target state="new">A tracked browser is already running for user data directory '{0}' with profile '{1}'. The requested profile is '{2}'. Close the existing tracked browser session or use isolated user data mode.</target>
+        <target state="translated">Für das Benutzerdatenverzeichnis '{0}' mit dem Profil '{1}' wird bereits ein nachverfolgter Browser ausgeführt. Das angeforderte Profil ist '{2}'. Schließen Sie die vorhandene nachverfolgte Browsersitzung, oder verwenden Sie den isolierten Benutzerdatenmodus.</target>
         <note>{0} is the browser user data directory path, {1} is the profile used by the running browser, {2} is the requested profile</note>
       </trans-unit>
       <trans-unit id="BrowserLogsUnableToLocateBrowser">
         <source>Unable to locate browser '{0}'. Specify an installed Chromium-based browser or an explicit executable path.</source>
-        <target state="new">Unable to locate browser '{0}'. Specify an installed Chromium-based browser or an explicit executable path.</target>
+        <target state="translated">Der Browser „{0}“ konnte nicht gefunden werden. Geben Sie einen installierten Chromium-basierten Browser oder einen expliziten Pfad zur ausführbaren Datei an.</target>
         <note>{0} is the configured browser name or executable path</note>
       </trans-unit>
       <trans-unit id="BrowserLogsUnableToReadProfileMetadata">
         <source>Unable to read Chromium profile metadata from '{0}' while resolving browser profile '{1}'.</source>
-        <target state="new">Unable to read Chromium profile metadata from '{0}' while resolving browser profile '{1}'.</target>
+        <target state="translated">Beim Auflösen der Browserprofil-'{1}' können Chromium Profilmetadaten nicht aus '{0}' gelesen werden.</target>
         <note>{0} is the Chromium Local State file path, {1} is the requested browser profile</note>
       </trans-unit>
       <trans-unit id="BrowserLogsUserDataDirectoryNotFound">
         <source>Browser user data directory '{0}' was not found.</source>
-        <target state="new">Browser user data directory '{0}' was not found.</target>
+        <target state="translated">Das Browserbenutzerdatenverzeichnis „{0}“ wurde nicht gefunden.</target>
         <note>{0} is the browser user data directory path</note>
       </trans-unit>
     </body>

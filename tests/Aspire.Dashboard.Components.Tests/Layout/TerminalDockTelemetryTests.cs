@@ -3,7 +3,6 @@
 
 using System.Threading.Channels;
 using Aspire.Dashboard.Components.Layout;
-using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Telemetry;

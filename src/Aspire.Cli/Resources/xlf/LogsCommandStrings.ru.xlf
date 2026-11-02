@@ -4,27 +4,27 @@
     <body>
       <trans-unit id="Description">
         <source>Display logs from resources in a running AppHost</source>
-        <target state="needs-review-translation">Отображать журналы ресурсов в запущенном хосте приложений Aspire.</target>
+        <target state="translated">Показывать журналы ресурсов в работающем хосте приложений</target>
         <note />
       </trans-unit>
       <trans-unit id="FollowOptionDescription">
         <source>Stream logs in real-time as they are written</source>
-        <target state="needs-review-translation">Потоковая передача журналов в реальном времени по мере их записи.</target>
+        <target state="translated">Вести потоковую передачу журналов в реальном времени по мере их записи</target>
         <note />
       </trans-unit>
       <trans-unit id="IncludeHiddenOptionDescription">
         <source>Include hidden resources in the output</source>
-        <target state="new">Include hidden resources in the output</target>
+        <target state="translated">Включить скрытые ресурсы в выходные данные</target>
         <note />
       </trans-unit>
       <trans-unit id="JsonOptionDescription">
         <source>Output format (Table or Json)</source>
-        <target state="needs-review-translation">Вывод журналов в формате JSON (NDJSON).</target>
+        <target state="translated">Формат вывода (таблица или JSON)</target>
         <note />
       </trans-unit>
       <trans-unit id="NoLogsFound">
         <source>No logs found.</source>
-        <target state="new">No logs found.</target>
+        <target state="translated">Журналы не найдены.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoResourcesFound">
@@ -34,7 +34,7 @@
       </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
         <source>The name of the resource to get logs for. If not specified, logs from all resources are shown.</source>
-        <target state="needs-review-translation">Имя ресурса, для которого нужно получить журналы. Если не указано, отображаются журналы из всех ресурсов.</target>
+        <target state="translated">Имя ресурса, для которого нужно получить журналы. Если не указано, отображаются журналы из всех ресурсов.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceNotFound">
@@ -49,7 +49,7 @@
       </trans-unit>
       <trans-unit id="SearchOptionDescription">
         <source>Full-text search to filter log content. See https://aka.ms/aspire/cli-search for more details</source>
-        <target state="new">Full-text search to filter log content. See https://aka.ms/aspire/cli-search for more details</target>
+        <target state="translated">Полнотекстовый поиск для фильтрации содержимого журнала. Подробные сведения см. на странице https://aka.ms/aspire/cli-search</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAppHostAction">
@@ -64,7 +64,7 @@
       </trans-unit>
       <trans-unit id="TailOptionDescription">
         <source>Number of lines to show from the end of logs (default: all)</source>
-        <target state="needs-review-translation">Количество строк, отображаемых с конца журналов (по умолчанию: все).</target>
+        <target state="translated">Количество строк с конца журналов, которые надо показывать (по умолчанию: все)</target>
         <note />
       </trans-unit>
       <trans-unit id="TailRequiresResource">
@@ -74,7 +74,7 @@
       </trans-unit>
       <trans-unit id="TimestampsOptionDescription">
         <source>Show timestamps for each log line</source>
-        <target state="new">Show timestamps for each log line</target>
+        <target state="translated">Показывать метки времени для каждой строки журнала</target>
         <note />
       </trans-unit>
       <trans-unit id="GettingLogs">

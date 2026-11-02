@@ -1,4 +1,4 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Model;
@@ -21,7 +21,7 @@ public partial class AspireMenu : FluentComponentBase
     private bool _refreshMenuAfterRender;
     private bool _reopenInProgress;
     private bool? _appliedOpen;
-    private string? _pendingSecondaryActionFocusId;
+    private string? _pendingFocusId;
     private int _cursorLeft;
     private int _cursorTop;
 
@@ -43,10 +43,11 @@ public partial class AspireMenu : FluentComponentBase
     public EventCallback<bool> OpenChanged { get; set; }
 
     /// <summary>
-    /// Raised after a menu item's secondary action completes so the owner can regenerate the menu items.
+    /// Raised after an in-place item action (a secondary action or a checkbox toggle) completes while the
+    /// menu stays open, so the owner can regenerate the menu items.
     /// </summary>
     [Parameter]
-    public EventCallback OnSecondaryActionComplete { get; set; }
+    public EventCallback OnItemsChanged { get; set; }
 
     [Parameter]
     public required IReadOnlyList<MenuButtonItem> Items { get; set; }
@@ -96,7 +97,10 @@ public partial class AspireMenu : FluentComponentBase
 
             if (_menu is not null)
             {
-                if (Open)
+                // Open can change while the popover is opened or closed below, e.g. when an item is chosen as the menu
+                // opens. Record the state that was applied, and apply the latest one after it.
+                var open = Open;
+                if (open)
                 {
                     // Trigger identifies either the button anchor or the cursor anchor. The parameterless
                     // path leaves placement to Fluent's CSS anchor positioning and viewport fallbacks.
@@ -112,13 +116,18 @@ public partial class AspireMenu : FluentComponentBase
                     await _menu.CloseMenuAsync();
                 }
 
-                _appliedOpen = Open;
+                _appliedOpen = open;
+                if (Open != open)
+                {
+                    _refreshMenuAfterRender = true;
+                    StateHasChanged();
+                }
             }
         }
 
-        if (_pendingSecondaryActionFocusId is { } focusId)
+        if (_pendingFocusId is { } focusId)
         {
-            _pendingSecondaryActionFocusId = null;
+            _pendingFocusId = null;
             if (Open)
             {
                 // Reopening the menu can focus its first item, so restore the action after it opens.
@@ -157,6 +166,13 @@ public partial class AspireMenu : FluentComponentBase
 
     private async Task HandleItemActivatedAsync(MenuButtonItem item)
     {
+        // An item can report one choice through more than one event, e.g. a radio option's change and then its click.
+        // The first activation closes the menu, so later ones are ignored.
+        if (!Open)
+        {
+            return;
+        }
+
         await SetOpenAsync(false);
 
         if (RestoreFocusOnItemClick && !string.IsNullOrEmpty(Anchor))
@@ -179,10 +195,26 @@ public partial class AspireMenu : FluentComponentBase
             await onSecondaryActionClick();
         }
 
-        _pendingSecondaryActionFocusId = $"{item.Id}-secondary-action";
-        if (OnSecondaryActionComplete.HasDelegate)
+        _pendingFocusId = $"{item.Id}-secondary-action";
+        if (OnItemsChanged.HasDelegate)
         {
-            await OnSecondaryActionComplete.InvokeAsync();
+            await OnItemsChanged.InvokeAsync();
+        }
+    }
+
+    private async Task HandleItemToggledAsync((MenuButtonItem Item, bool IsChecked) args)
+    {
+        if (args.Item.OnCheckedChanged is { } onCheckedChanged)
+        {
+            await onCheckedChanged(args.IsChecked);
+        }
+
+        // Toggling can change other items (e.g. an "All" item), so regenerate them. Refreshing reopens the
+        // menu, which can move focus to its first item, so return focus to the toggled item afterwards.
+        _pendingFocusId = args.Item.Id;
+        if (OnItemsChanged.HasDelegate)
+        {
+            await OnItemsChanged.InvokeAsync();
         }
     }
 

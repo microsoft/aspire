@@ -6,6 +6,7 @@ using System.Diagnostics;
 using Aspire.Cli.Projects;
 using Aspire.TestUtilities;
 using Aspire.TypeSystem;
+using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Cli.Tests.Projects;
 
@@ -650,8 +651,8 @@ public class JavaAppHostToolchainResolverTests(ITestOutputHelper outputHelper)
         using var process = Process.Start(startInfo) ?? throw new InvalidOperationException($"Failed to start '{command.Command}'.");
         var standardOutput = process.StandardOutput.ReadToEndAsync();
         var standardError = process.StandardError.ReadToEndAsync();
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
-        timeout.CancelAfter(TimeSpan.FromMinutes(10));
+        using var timeoutSource = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(milliseconds: 600_000);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken, timeoutSource.Token);
 
         try
         {

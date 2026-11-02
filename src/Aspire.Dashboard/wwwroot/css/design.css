@@ -38,6 +38,18 @@
     src: url("../fonts/poppins/latin-700-normal.woff2") format("woff2");
 }
 
+.card-header-icon {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    background: var(--colorBrandBackground2);
+    color: var(--colorBrandForeground2);
+}
+
 :root {
     color-scheme: light;
     --aspire-font-sans: "Geist", "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
@@ -258,7 +270,7 @@
     --datagrid-hover-color: var(--colorNeutralBackground1);
     --datagrid-border-color: #363241;
     --colorNeutralForeground1: #ffffff;
-    --colorNeutralForeground3: #8c8894;
+    --colorNeutralForeground3: #96929e;
     --colorNeutralForegroundOnBrand: #000000;
     --colorNeutralStroke1: #494553;
     --colorNeutralStroke2: #494553;
@@ -291,11 +303,11 @@
     --aspire-dropdown-option-selected-background: #44404e;
     --aspire-dropdown-option-selected-hover-background: #3f3c4a;
     --accent-button-background: var(--colorBrandBackground);
-    --accent-button-foreground: color-mix(in srgb, #512bd4 85%, #000000);
+    --accent-button-foreground: #211047;
     --accent-button-hover-background: color-mix(in srgb, var(--colorBrandBackground) 90%, #000000);
-    --accent-button-hover-foreground: color-mix(in srgb, #512bd4 65%, #000000);
+    --accent-button-hover-foreground: #211047;
     --accent-button-pressed-background: color-mix(in srgb, var(--colorBrandBackground) 85%, #000000);
-    --accent-button-pressed-foreground: color-mix(in srgb, #512bd4 55%, #000000);
+    --accent-button-pressed-foreground: #211047;
 
     --log-critical: #493634;
     --log-error: #493634;

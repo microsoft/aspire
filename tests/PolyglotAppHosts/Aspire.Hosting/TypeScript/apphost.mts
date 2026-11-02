@@ -30,6 +30,11 @@ const processCommandStdinScriptPath = fileURLToPath(new URL("./process-command-s
 
 // addContainer (pre-existing)
 const container = await builder.addContainer("mycontainer", "nginx");
+await container.withTags(["Backend", "API"]);
+await container.withTags(["Service"]);
+await container.withTrait("Owner", "Finance");
+await container.withTrait("Owner", "Platform");
+await container.withDashboardPosition(-10);
 await container.withOtlpExporter({ protocol: OtlpProtocol.HttpJson });
 const taggedContainer = await builder.addContainer("mytaggedcontainer", {
     image: "nginx",

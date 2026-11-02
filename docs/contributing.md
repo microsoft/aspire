@@ -227,6 +227,10 @@ cd playground/rust
 
 On Windows, use `..\..\run-aspire.cmd` instead. Use [`localhive`](#creating-a-local-aspire-build-with-localhive) when you need to validate the complete locally built product, including packages and the bundle payload.
 
+To debug the CLI in VS Code, install the Microsoft C# extension, open the repository root, and select **Debug Aspire CLI** in **Run and Debug**. Set a breakpoint and press <kbd>F5</kbd>. The launch configuration builds the CLI in Debug mode and runs the managed assembly in the integrated terminal so interactive prompts work.
+
+The configuration defaults to `--help`. Edit `args` in [`.vscode/launch.json`](../.vscode/launch.json) to pass a command and its options as separate array entries. For app-specific commands such as `run`, also set `cwd` to the directory containing your AppHost. Follow the [VS Code setup instructions](#using-vs-code) if the repository SDK is not available.
+
 ### Generating local NuGet packages
 
 If you only need package outputs, it can be useful to generate the NuGet packages in a local folder and use it as a package source from a separate Aspire-based project or solution. If you want to validate a complete locally-built Aspire product, including the CLI, templates, package hive, and bundle payload, use [`localhive`](#creating-a-local-aspire-build-with-localhive) instead.

@@ -14,6 +14,27 @@ fi
 echo "Aspire CLI version:"
 aspire --version
 
+# Compile integration fixtures without starting them: some model cloud resources that must
+# never be provisioned by SDK validation.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -d "/workspace/tests/PolyglotAppHosts" ]; then
+    VALIDATION_ROOT="/workspace/tests/PolyglotAppHosts"
+else
+    VALIDATION_ROOT="$SCRIPT_DIR/../../../tests/PolyglotAppHosts"
+fi
+if [ ! -d "$VALIDATION_ROOT" ]; then
+    echo "ERROR: Cannot find tests/PolyglotAppHosts directory" >&2
+    exit 1
+fi
+while IFS= read -r app_dir; do
+    echo "=== Rust SDK fixture: $(basename "$(dirname "$app_dir")") ==="
+    (
+        cd "$app_dir"
+        aspire restore --non-interactive --apphost apphost.rs
+        cargo check
+    )
+done < <(find "$VALIDATION_ROOT" -mindepth 2 -maxdepth 2 -type d -name Rust | sort)
+
 # Create project directory
 WORK_DIR=$(mktemp -d)
 echo "Working directory: $WORK_DIR"

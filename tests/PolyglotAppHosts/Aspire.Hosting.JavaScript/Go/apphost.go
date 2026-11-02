@@ -9,7 +9,7 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	nodeApp := builder.AddNodeApp("node-app", "./node-app", "server.js")
@@ -40,7 +40,7 @@ func main() {
 	_, _ = nodeApp.Command()
 	_, _ = nodeApp.WorkingDirectory()
 	if err = nodeApp.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	javaScriptApp := builder.AddJavaScriptApp("javascript-app", "./javascript-app", &aspire.AddJavaScriptAppOptions{
@@ -51,7 +51,7 @@ func main() {
 	_, _ = javaScriptApp.Command()
 	_, _ = javaScriptApp.WorkingDirectory()
 	if err = javaScriptApp.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	viteApp := builder.AddViteApp("vite-app", "./vite-app", &aspire.AddViteAppOptions{
@@ -72,7 +72,7 @@ func main() {
 	_, _ = viteApp.Command()
 	_, _ = viteApp.WorkingDirectory()
 	if err = viteApp.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	denoNodeModulesDirMode := aspire.DenoNodeModulesDirModeAuto
@@ -108,14 +108,14 @@ func main() {
 	denoApp.WithDenoScriptArgs([]string{"--port", "8000"})
 	denoApp.WithDenoRuntimeArgs([]string{"--quiet"})
 	if err = denoApp.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	if err := app.Run(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 }

@@ -3276,6 +3276,40 @@ public class AtsJavaCodeGeneratorTests
     }
 
     [Fact]
+    public async Task GeneratedTerminalDto_RoundTripsCallbackWireNames()
+    {
+        using var workspace = await CreateJavaProbeWorkspaceAsync(
+            CreateContextFromBothAssemblies(),
+            "aspire/TerminalOptions.java");
+        workspace.WriteSource(
+            "aspire/TerminalOptionsProbe.java",
+            """
+            package aspire;
+
+            import java.util.Map;
+
+            public class TerminalOptionsProbe {
+                public static void main(String[] args) {
+                    var options = TerminalOptions.fromMap(Map.of("columns", 132, "rows", 50));
+                    if (options.getColumns() != 132 || options.getRows() != 50) {
+                        throw new IllegalStateException("unexpected default dimensions");
+                    }
+                    options.setColumns(200);
+                    var result = Map.of("p0", options.toMap());
+                    if (!result.equals(Map.of("p0", Map.of("columns", 200.0, "rows", 50.0)))) {
+                        throw new IllegalStateException("unexpected callback result: " + result);
+                    }
+                    System.out.println("OK");
+                }
+            }
+            """);
+        await workspace.CompileAsync();
+        var run = await workspace.RunClassAsync("aspire.TerminalOptionsProbe", TimeSpan.FromSeconds(6));
+        Assert.False(run.TimedOut);
+        Assert.True(run.ExitCode == 0, $"Java terminal DTO probe failed:{Environment.NewLine}{run.StdOut}{run.StdErr}");
+    }
+
+    [Fact]
     public async Task GeneratedDtoCallbacks_VoidCallbackReturnsMutatedPositionalArguments()
     {
         var contextType = new AtsTypeRef { TypeId = "Tests/MutableContext", Category = AtsTypeCategory.Dto };

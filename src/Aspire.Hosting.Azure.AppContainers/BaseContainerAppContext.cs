@@ -279,6 +279,13 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
             return (AllocateParameter(output, secretType: secretType), secretType);
         }
 
+#pragma warning disable ASPIREAZURE003 // IBicepOutputReferenceProvider is experimental.
+        if (value is IBicepOutputReferenceProvider outputProvider && outputProvider.GetOutputReference() is { } providedOutput)
+        {
+            return ProcessValue(providedOutput, secretType, parent);
+        }
+#pragma warning restore ASPIREAZURE003
+
 #pragma warning disable CS0618 // Type or member is obsolete
         if (value is BicepSecretOutputReference)
         {

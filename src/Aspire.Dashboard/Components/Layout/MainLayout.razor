@@ -1,125 +1,121 @@
-@using Aspire.Dashboard.Components.CustomIcons
+﻿@using Aspire.Dashboard.Components.CustomIcons
+@using Aspire.Dashboard.Components.Dialogs
 @using Aspire.Dashboard.Components.Interactions
 @using Aspire.Dashboard.Resources
+@using Microsoft.AspNetCore.Components.Sections
 @inject IStringLocalizer<Dialogs> DialogsLoc
+@inject IStringLocalizer<TerminalStrings> TerminalLoc
 @inherits LayoutComponentBase
 
-<div class="layout @(_isNavMenuExpanded ? "nav-expanded" : "nav-collapsed") @(!RunSelection.SelectedRun.IsCurrent ? "historical-run" : null)" style="@(_isNavMenuOpen ? "overflow: hidden;" : string.Empty)">
+<div class="layout @(!RunSelection.SelectedRun.IsCurrent ? "historical-run" : null)" style="@(_isNavMenuOpen ? "overflow: hidden;" : string.Empty)">
     @if (ViewportInformation.IsDesktop)
     {
-        @* Full-width top header. The Aspire logo leads the header so the logo, app name, and page
-           title form a single brand lockup pinned to the top-left. Because the header spans both grid
-           columns (it is no longer confined to the column beside the rail), the lockup keeps a fixed
-           left edge when the nav rail below collapses/expands instead of shifting with the rail width. *@
+        @* Full-width top header with the brand lockup (logo + app name) and app-wide actions. The dashboard's main
+           views are switched from the icon rail below the logo. *@
         <header>
             <div class="brand-logo-container">
-                <a href="/" class="logo"
-                              title="@Loc[nameof(Layout.MainLayoutAspire)]"
+                <a href="/" class="logo" @onclick="GoToAllResourcesAsync" @onclick:preventDefault="true"
+                              data-tooltip="@Loc[nameof(Layout.MainLayoutAspire)]"
                               aria-label="@Loc[nameof(Layout.MainLayoutAspire)]">
                     <AspireLogo />
                 </a>
             </div>
-            <a href="/" class="application-name">
+            <a href="/" class="application-name" data-tooltip="@DashboardClient.ApplicationName" data-tooltip-positioning="after" @onclick="GoToAllResourcesAsync" @onclick:preventDefault="true">
                 <ApplicationName/>
             </a>
-            <div class="page-title-slot">
-                <SectionOutlet SectionName="@DashboardUIHelpers.PageTitleTopBarSection" />
+            <div class="header-context">
+                <SectionOutlet SectionName="@HeaderContextSectionName" />
             </div>
-            <div class="flex-filler"></div>
-            @if (RunStore.SupportsRunSelection)
+            @if (RunStore.SupportsRunSelection && UseRunMenu)
+            {
+                <DashboardRunMenu SelectedRunId="@RunSelection.SelectedRun.RunId"
+                                  SelectedRunIsCurrent="@RunSelection.SelectedRun.IsCurrent"
+                                  SelectedRunStartedAtUtc="@RunSelection.SelectedRun.StartedAtUtc"
+                                  SelectedRunIdChanged="@SwitchDashboardRunAsync" />
+            }
+            else if (RunStore.SupportsRunSelection)
             {
                 var selectedRun = RunSelection.SelectedRun;
-                <DashboardRunSelect SelectedRunId="@selectedRun.RunId"
+                <DashboardRunSelect ButtonId="@RunSelectButtonId"
                                     SelectedRunIsCurrent="@selectedRun.IsCurrent"
                                     SelectedRunStartedAtUtc="@selectedRun.StartedAtUtc"
-                                    SelectedRunIdChanged="@SwitchDashboardRunAsync" />
+                                    OnClick="@LaunchRecordingsAsync" />
+                @if (!selectedRun.IsCurrent)
+                {
+                    <DashboardRunPill SelectedRunStartedAtUtc="@selectedRun.StartedAtUtc"
+                                      OnClick="@LaunchRecordingsAsync" />
+                }
             }
-            <a class="header-button"
-                          href="https://aka.ms/aspire/repo" target="_blank" rel="noreferrer noopener"
-                          title="@Loc[nameof(Layout.MainLayoutAspireRepoLink)]" aria-label="@Loc[nameof(Layout.MainLayoutAspireRepoLink)]">
-                <FluentIcon Value="@(new AspireIcons.Size24.GitHub())" Color="Color.Default"/>
-            </a>
-            <FluentButton Class="header-button"
-                          Id="@HelpButtonId"
-                          Appearance="ButtonAppearance.Default" OnClick="@(() => LaunchHelpAsync(HelpButtonId))"
-                          Title="@Loc[nameof(Layout.MainLayoutAspireDashboardHelpLink)]" aria-label="@Loc[nameof(Layout.MainLayoutAspireDashboardHelpLink)]">
-                <FluentIcon Value="@(new Icons.Regular.Size24.QuestionCircle())" Color="Color.Default"/>
-            </FluentButton>
-            @if (Options.CurrentValue.UI.DisableAgentHelp != true)
+            @if (_navigationAvailability.HasResourceTerminals)
             {
                 <FluentButton Class="header-button"
-                              Appearance="ButtonAppearance.Default" OnClick="@LaunchAIAgentsAsync"
-                              Title="@Loc[nameof(Layout.MainLayoutLaunchAIAgents)]" aria-label="@Loc[nameof(Layout.MainLayoutLaunchAIAgents)]">
-                    <FluentIcon Value="@(new Icons.Regular.Size24.BotSparkle())" Color="Color.Default"/>
+                              Appearance="ButtonAppearance.Default"
+                              OnClick="ToggleTerminalDockAsync"
+                              data-tooltip="@TerminalLoc[nameof(TerminalStrings.MainLayoutToggleTerminalDock)]"
+                              aria-label="@TerminalLoc[nameof(TerminalStrings.MainLayoutToggleTerminalDock)]"
+                              aria-keyshortcuts="`">
+                    <FluentIcon Value="@(new Icons.Regular.Size20.WindowConsole())" Width="22px" Color="Color.Default" />
                 </FluentButton>
             }
+            <FluentButton Class="header-button"
+                          Id="@HelpButtonId"
+                          Appearance="ButtonAppearance.Default" OnClick="@(() => LaunchHelpAsync(HelpButtonId, HelpDialogTab.Documentation))"
+                          data-tooltip="@Loc[nameof(Layout.MainLayoutHelp)]" aria-label="@Loc[nameof(Layout.MainLayoutHelp)]"
+                          aria-haspopup="dialog" aria-keyshortcuts="?">
+                <FluentIcon Value="@(new Icons.Regular.Size24.QuestionCircle())" Color="Color.Default"/>
+            </FluentButton>
             <NotificationsHeaderButton OnClick="@LaunchNotificationsAsync" />
             <FluentButton Class="header-button"
                           Id="@SettingsButtonId"
                           Appearance="ButtonAppearance.Default" OnClick="@(() => LaunchSettingsAsync(SettingsButtonId))"
-                          Title="@Loc[nameof(Layout.MainLayoutLaunchSettings)]" aria-label="@Loc[nameof(Layout.MainLayoutLaunchSettings)]">
+                          data-tooltip="@Loc[nameof(Layout.MainLayoutLaunchSettings)]" aria-label="@Loc[nameof(Layout.MainLayoutLaunchSettings)]">
                 <FluentIcon Value="@(new Icons.Regular.Size24.Settings())" Color="Color.Default"/>
             </FluentButton>
             <UserProfile/>
         </header>
-
-        @* The nav rail is a flex column so DesktopNavMenu fills the available space while the collapse/expand
-           toggle stays pinned to the bottom, matching the common sidebar pattern. Toggle state/persistence
-           still lives in MainLayout. *@
-        <div class="desktop-nav-rail">
-            <DesktopNavMenu HasResourceTerminals="@_hasResourceTerminals"/>
-            <FluentButton Class="nav-toggle-button nav-toggle-bottom"
-                          Appearance="ButtonAppearance.Default" OnClick="@ToggleNavMenuExpandedAsync"
-                          Title="@(_isNavMenuExpanded ? Loc[nameof(Layout.NavMenuToggleCollapse)] : Loc[nameof(Layout.NavMenuToggleExpand)])"
-                          aria-label="@(_isNavMenuExpanded ? Loc[nameof(Layout.NavMenuToggleCollapse)] : Loc[nameof(Layout.NavMenuToggleExpand)])">
-                <span class="nav-toggle-content">
-                    @* The glyph mirrors the action the toggle performs so it reads as a real collapse/expand
-                       control rather than a static hamburger: when the rail is expanded, show the "contract"
-                       panel icon (arrow pointing into the panel = collapse); when collapsed, show the "expand"
-                       panel icon (arrow pointing out = expand). This stays in sync with the dynamic Title/aria-label.
-                       No visible text label: the icon plus the dynamic Title/aria-label carry the meaning, and a
-                       written "Collapse sidebar" beside it read as redundant chrome (review feedback). *@
-                    <FluentIcon Value="@(_isNavMenuExpanded
-                        ? new Icons.Regular.Size24.PanelLeftContract()
-                        : (Icon)new Icons.Regular.Size24.PanelLeftExpand())" Color="Color.Default"/>
-                </span>
-            </FluentButton>
-        </div>
     }
     else
     {
         <div class="aspire-icon">
-            <a href="/" class="logo"
-                          title="@Loc[nameof(Layout.MainLayoutAspire)]"
+            <a href="/" class="logo" @onclick="GoToAllResourcesAsync" @onclick:preventDefault="true"
+                          data-tooltip="@Loc[nameof(Layout.MainLayoutAspire)]"
                           aria-label="@Loc[nameof(Layout.MainLayoutAspire)]">
                 <AspireLogo />
             </a>
         </div>
         <header>
-            <a href="/" class="application-name">
+            <a href="/" class="application-name" data-tooltip="@DashboardClient.ApplicationName" data-tooltip-positioning="after" @onclick="GoToAllResourcesAsync" @onclick:preventDefault="true">
                 <ApplicationName/>
             </a>
             <div class="flex-filler"></div>
-            @if (RunStore.SupportsRunSelection)
+            @if (RunStore.SupportsRunSelection && UseRunMenu)
+            {
+                <DashboardRunMenu SelectedRunId="@RunSelection.SelectedRun.RunId"
+                                  SelectedRunIsCurrent="@RunSelection.SelectedRun.IsCurrent"
+                                  SelectedRunStartedAtUtc="@RunSelection.SelectedRun.StartedAtUtc"
+                                  SelectedRunIdChanged="@SwitchDashboardRunAsync" />
+            }
+            else if (RunStore.SupportsRunSelection)
             {
                 var selectedRun = RunSelection.SelectedRun;
-                <DashboardRunSelect SelectedRunId="@selectedRun.RunId"
+                <DashboardRunSelect ButtonId="@RunSelectButtonId"
                                     SelectedRunIsCurrent="@selectedRun.IsCurrent"
                                     SelectedRunStartedAtUtc="@selectedRun.StartedAtUtc"
-                                    SelectedRunIdChanged="@SwitchDashboardRunAsync" />
+                                    OnClick="@LaunchRecordingsAsync" />
             }
             <UserProfile/>
             <FluentButton
                 IconEnd="@(_isNavMenuOpen ? new Icons.Regular.Size20.Dismiss() : new Icons.Regular.Size20.Navigation())"
                 Id="@NavigationButtonId"
-                Title="@(DialogsLoc[nameof(Dialogs.HelpDialogCategoryNavigation)])"
+                data-tooltip="@(DialogsLoc[nameof(Dialogs.HelpDialogCategoryNavigation)])"
+                aria-label="@(DialogsLoc[nameof(Dialogs.HelpDialogCategoryNavigation)])"
                 Appearance="ButtonAppearance.Transparent"
                 OnClick="@(() => _isNavMenuOpen = !_isNavMenuOpen)"
                 Class="navigation-button aspire-icon-button"/>
         </header>
 
         <MobileNavMenu
-            HasResourceTerminals="@_hasResourceTerminals"
+            HasResourceTerminals="@_navigationAvailability.HasResourceTerminals"
             IsNavMenuOpen="_isNavMenuOpen"
             CloseNavMenu="@CloseMobileNavMenu"
             LaunchHelpAsync="@LaunchHelpAsync"
@@ -152,13 +148,13 @@
     {
         @* Removing the dock cancels its selected-run subscription and shortcut. Returning to the live run starts a
            new subscription rather than reusing the stream chosen for a previous selection. *@
-        <TerminalDock @key="RunSelection.SelectedRun.RunId" />
+        <TerminalDock @ref="_terminalDock" @key="RunSelection.SelectedRun.RunId" />
     }
     <ResourceServiceConnectionProvider />
     @if (IsTerminalDockEnabled)
     {
-        <ResourceTerminalsAvailabilityProvider @key="(typeof(ResourceTerminalsAvailabilityProvider), RunSelection.SelectedRun.RunId)"
-                                               AvailabilityChanged="@(available => _hasResourceTerminals = available)" />
+        <NavigationAvailabilityProvider @key="(typeof(NavigationAvailabilityProvider), RunSelection.SelectedRun.RunId)"
+                                        AvailabilityChanged="@(availability => _navigationAvailability = availability)" />
     }
     <div id="blazor-error-ui">
         @Loc[nameof(Layout.MainLayoutUnhandledErrorMessage)]

@@ -90,6 +90,10 @@ ms.date: {date}
 - **Group related features**: Combine similar functionality into unified sections
 - **Use descriptive headings**: Make it easy to scan and find specific improvements
 - **Include migration guidance**: Always show how to update existing code for breaking changes
+- **Use current project hosting APIs**: Ordinary .NET examples use `AddDotnetProject` from the
+  `Aspire.Hosting.Dotnet` AppHost integration with an actual AppHost-relative path. Link the
+  [canonical migration guide](../../../docs/migrate-from-addproject.md) for typed helpers and
+  exceptions rather than rewriting historical release notes or unrelated Foundry APIs.
 
 ## Emoji Usage Guidelines
 
@@ -123,7 +127,7 @@ var aiFoundry = builder.AddFoundry("ai-foundry");
 var gptDeployment = aiFoundry.AddDeployment("gpt-4", "gpt-4", "1106", "OpenAI");
 
 // Reference in your projects
-builder.AddProject<Projects.ChatApi>("chat-api")
+builder.AddDotnetProject("chat-api", "../ChatApi/ChatApi.csproj")
     .WithReference(gptDeployment);
 
 await builder.Build().RunAsync();

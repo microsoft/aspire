@@ -10,6 +10,45 @@ namespace Aspire.Cli.Tests.Commands;
 public class SettingsSchemaBuilderTests
 {
     [Fact]
+    public void BuildConfigFileSchema_HonorsConditionalJsonIgnore()
+    {
+        var schema = SettingsSchemaBuilder.BuildConfigFileSchema(excludeLocalOnly: false);
+
+        Assert.Equal(
+            ["appHost", "certificates", "channel", "configSource", "containerTunnel", "docs", "features",
+                "packages", "profiles", "sdk", "skillSources", "templateSources"],
+            schema.Properties.Select(property => property.Name));
+        var configSource = Assert.Single(schema.Properties, property => property.Name == "configSource");
+        Assert.NotNull(configSource.SubProperties);
+        Assert.Equal(
+            ["optOut", "repository", "path", "ref", "appliedVersion"],
+            configSource.SubProperties.Select(property => property.Name));
+        var optOut = Assert.Single(configSource.SubProperties, property => property.Name == "optOut");
+        Assert.Equal("boolean", optOut.Type);
+        Assert.False(optOut.Required);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void BuildSchema_IncludesNamedSkillSources(bool global)
+    {
+        foreach (var schema in new[]
+        {
+            SettingsSchemaBuilder.BuildSchema(excludeLocalOnly: global),
+            SettingsSchemaBuilder.BuildConfigFileSchema(excludeLocalOnly: global)
+        })
+        {
+            var skillSources = Assert.Single(schema.Properties, property => property.Name == "skillSources");
+            Assert.Equal("object", skillSources.AdditionalPropertiesType);
+            Assert.Equal(
+                ["enabled", "repository", "marketplace", "plugins", "ref", "openCodeV1Catalog", "openCodeV2Catalog"],
+                skillSources.SubProperties!.Select(property => property.Name));
+            Assert.Equal("array", Assert.Single(skillSources.SubProperties!, property => property.Name == "plugins").Type);
+        }
+    }
+
+    [Fact]
     public void BuildSchema_DoesNotIncludeDocsSourceProperties()
     {
         var schema = SettingsSchemaBuilder.BuildSchema(excludeLocalOnly: false);

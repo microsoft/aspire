@@ -7,7 +7,7 @@ Use this integration to model, configure, and orchestrate an Azure Kubernetes Se
 ### Prerequisites
 
 - An Azure subscription - [create one for free](https://azure.microsoft.com/free/)
-- [Helm](https://helm.sh/docs/intro/install/) **v4.2.0 or later** on your `PATH`.
+- [Helm](https://helm.sh/docs/intro/install/) **v4.0.0 or later** on your `PATH`.
 
 Aspire shells out to `helm upgrade --install` to deploy the generated chart and any `AddHelmChart(...)` releases, and validates the Helm version up front so missing or older installs produce a clear actionable error instead of cryptic flag failures.
 
@@ -17,6 +17,7 @@ From your AppHost directory, add the `Aspire.Hosting.Azure.Kubernetes` integrati
 
 ```bash
 aspire add Aspire.Hosting.Azure.Kubernetes
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Usage example
@@ -28,7 +29,7 @@ In the AppHost, add an AKS environment and deploy services to it:
 ```csharp
 var aks = builder.AddAzureKubernetesEnvironment("aks");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
     .WithComputeEnvironment(aks);
 ```
 

@@ -22,6 +22,7 @@ export type ResolvedDashboardLaunchBehavior = {
 };
 
 const dashboardLaunchIdConfigKey = '__aspireDashboardLaunchId';
+const dashboardDebugBrowserStartTimeoutMs = 30000;
 const preOptInDefaultDashboardBrowser: DashboardLaunchBehavior = 'integratedBrowser';
 
 export function normalizeDashboardLaunchBehavior(value: unknown): DashboardLaunchBehavior | undefined {
@@ -304,6 +305,14 @@ function createDashboardDebugConfiguration(
 
   if (debugType === 'pwa-chrome' || debugType === 'pwa-msedge') {
     debugConfig.pauseForSourceMap = false;
+    // Allow startup contention beyond js-debug's 10-second default for Chromium's initial page
+    // target. Automatic Dashboard launches run in the background without delaying AppHost startup;
+    // explicit handoffs await the browser launch.
+    debugConfig.timeout = dashboardDebugBrowserStartTimeoutMs;
+    // Allow untrusted localhost development certificates without bypassing checks for other hosts.
+    // This affects page navigation, not debugger attachment; a started debug session does not
+    // establish that the Dashboard page loaded.
+    debugConfig.runtimeArgs = ['--allow-insecure-localhost'];
   }
   else {
     // Firefox requires a webRoot even though the Dashboard sources are not local.
@@ -381,9 +390,13 @@ export class DashboardLauncher implements vscode.Disposable {
   /**
    * Dashboard browsers are optional UI children. Give their launch/stop a smaller share of the
    * shutdown budget so a wedged browser adapter cannot starve AppHost and parent teardown.
+   * The five-second allowance fits inside the six-second resource phase while leaving the
+   * AppHost and parent reserve untouched.
    */
-  private static readonly _dashboardStopTimeoutMs = 2000;
-  private static readonly _dashboardLateStartListenerTimeoutMs = 30000;
+  private static readonly _dashboardStopTimeoutMs = 5000;
+  // Keep the listener beyond js-debug's launch timeout so shutdown can still adopt and stop a
+  // browser whose start event races the launch request settling.
+  private static readonly _dashboardLateStartListenerTimeoutMs = dashboardDebugBrowserStartTimeoutMs + 5000;
 
   private readonly _host: DashboardLauncherHost;
 
@@ -686,6 +699,13 @@ export class DashboardLauncher implements vscode.Disposable {
 
   async stopDashboardWithinBudget(shutdownDeadline: number): Promise<void> {
     const deadline = Math.min(shutdownDeadline, Date.now() + DashboardLauncher._dashboardStopTimeoutMs);
+    // A start event can already have supplied a browser while its launch request is still pending.
+    // Give that browser the stop budget now rather than spending it all on launch completion.
+    const stopping = Promise.allSettled([this._host.stopWithinBudget(
+      () => this.closeDashboard(),
+      this._dashboardDebugSessions.values().next().value?.session.name ?? aspireDashboard,
+      deadline,
+      () => this.resetDashboardStopAttempts())]);
 
     while (this._pendingDashboardDebugSessionStarts.size > 0) {
       const pendingStarts = [...this._pendingDashboardDebugSessionStarts];
@@ -707,6 +727,10 @@ export class DashboardLauncher implements vscode.Disposable {
       }
     }
 
+    // The final sweep reconciles eager failures with sessions still tracked. It still issues stops
+    // if launch draining exhausts the shared deadline, but cannot extend the wait: optional browser
+    // cleanup must preserve the AppHost/parent shutdown budget.
+    await stopping;
     await this._host.stopWithinBudget(
       () => this.closeDashboard(),
       this._dashboardDebugSessions.values().next().value?.session.name ?? aspireDashboard,
@@ -748,6 +772,9 @@ export class DashboardLauncher implements vscode.Disposable {
     }
 
     const stopRequest = startStop(() => vscode.debug.stopDebugging(tracked.session));
+    // A completed VS Code stop request is sufficient; do not require a second notification
+    // round trip. Natural termination also completes shutdown when the request never settles.
+    // https://code.visualstudio.com/api/references/vscode-api#debug.stopDebugging
     const attempt = Promise.race([stopRequest, tracked.terminationPromise]).then(
       () => {
         this.clearDashboardDebugSession(tracked.session);

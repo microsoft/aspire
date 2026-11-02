@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Packaging;
+using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Templating;
 using Aspire.Cli.Tests.Mcp;
@@ -10,6 +11,8 @@ using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging.Abstractions;
 using System.Globalization;
+using System.Text;
+using System.Text.RegularExpressions;
 using System.Xml.Linq;
 
 namespace Aspire.Cli.Tests.Templating;
@@ -22,6 +25,222 @@ namespace Aspire.Cli.Tests.Templating;
 /// </summary>
 public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CreateNuGetConfig_RefusesAmbientChannelFeed(bool builtInScaffolding)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var output = workspace.CreateDirectory("output");
+        var ambientPath = Path.Combine(workspace.Path, "nuget.config");
+        const string source = "https://selected.example/v3/index.json";
+        const string ambient = """
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="company" value="https://selected.example/v3/index.json" />
+              </packageSources>
+              <packageSourceMapping>
+                <packageSource key="company"><package pattern="Private.*" /></packageSource>
+              </packageSourceMapping>
+            </configuration>
+            """;
+        await File.WriteAllTextAsync(ambientPath, ambient);
+        var channel = PackageChannel.CreateExplicitChannel(
+            "daily", PackageChannelQuality.Both, [new PackageMapping("Aspire*", source)],
+            new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
+        var service = CreateService(executionContext: workspace.CreateExecutionContext());
+
+        await Assert.ThrowsAsync<ProjectUpdaterException>(() => builtInScaffolding
+            ? service.PromptToCreateNuGetConfigAsync(channel, output.FullName, TestContext.Current.CancellationToken)
+            : service.CreateNuGetConfigIfMissingAsync(channel, output.FullName, TestContext.Current.CancellationToken));
+
+        Assert.Equal(ambient, await File.ReadAllTextAsync(ambientPath));
+        Assert.Empty(output.EnumerateFiles());
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task CreateNuGetConfig_PersistsOnlySelectedMappings(bool hasAmbientMappings, bool builtInScaffolding)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var output = workspace.CreateDirectory("output");
+        var ambientPath = Path.Combine(workspace.Path, "nuget.config");
+        var ambient = $$"""
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="azure-default" value="https://private.example/v3/index.json" />
+                <add key="company-public" value="https://api.nuget.org/v3/index.json" />
+              </packageSources>
+              <disabledPackageSources>
+                <add key="company-public" value="true" />
+              </disabledPackageSources>
+              {{(hasAmbientMappings ? """
+              <packageSourceMapping>
+                <packageSource key="azure-default">
+                  <package pattern="*" />
+                  <package pattern="Aspire.Hosting.Redis" />
+                </packageSource>
+              </packageSourceMapping>
+              """ : "")}}
+            </configuration>
+            """;
+        await File.WriteAllTextAsync(ambientPath, ambient);
+        const string selectedSource = "https://selected.example/v3/index.json";
+        var channel = PackageChannel.CreateExplicitChannel(
+            "daily", PackageChannelQuality.Both,
+            [new PackageMapping("Aspire*", selectedSource), new PackageMapping("*", PackageSources.NuGetOrg)],
+            new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
+        var service = CreateService(executionContext: workspace.CreateExecutionContext());
+
+        if (builtInScaffolding)
+        {
+            await service.PromptToCreateNuGetConfigAsync(channel, output.FullName, CancellationToken.None);
+        }
+        else
+        {
+            await service.CreateNuGetConfigIfMissingAsync(channel, output.FullName, CancellationToken.None);
+        }
+
+        Assert.Equal(ambient, await File.ReadAllTextAsync(ambientPath));
+        Assert.Equal(
+            hasAmbientMappings ? ["https://private.example/v3/index.json"] : ["https://private.example/v3/index.json", selectedSource],
+            NuGetTestHelper.GetEligiblePackageSources(output.FullName, "Aspire.Hosting.Redis"));
+        await Verify(await File.ReadAllTextAsync(Path.Combine(output.FullName, "nuget.config")))
+            .UseParameters(hasAmbientMappings, builtInScaffolding)
+            .ScrubLinesWithReplace(line => Regex.Replace(line, "aspire-apphost-[a-f0-9]{16}", "aspire-apphost-source"));
+    }
+
+    [Theory]
+    [InlineData("stable", "https://api.nuget.org/v3/index.json", false, false)]
+    [InlineData("preview", "https://api.nuget.org/v3/index.json", true, false)]
+    [InlineData("stable", "https://enterprise.example/v3/index.json", false, true)]
+    [InlineData("stable", "packages", false, true)]
+    [InlineData("daily", "https://daily.example/v3/index.json", true, true)]
+    [InlineData("staging", "https://staging.example/v3/index.json", true, true)]
+    [InlineData("pr-12345", "packages", true, true)]
+    [InlineData("local", "packages", true, true)]
+    public async Task TemplateEngineAndBuiltInScaffolding_UseIndependentCreationPolicies(
+        string channelName, string source, bool builtInCreatesConfig, bool templateEngineCreatesConfig)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        if (source == "packages")
+        {
+            source = workspace.CreateDirectory(source).FullName;
+        }
+        var builtInOutput = workspace.CreateDirectory("built-in");
+        var templateEngineOutput = workspace.CreateDirectory("template-engine");
+        var channel = PackageChannel.CreateExplicitChannel(
+            channelName, PackageChannelQuality.Both,
+            [new PackageMapping("Aspire*", source)],
+            new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
+        var service = CreateService(executionContext: workspace.CreateExecutionContext());
+
+        await service.PromptToCreateNuGetConfigAsync(channel, builtInOutput.FullName, CancellationToken.None);
+        await service.CreateNuGetConfigIfMissingAsync(channel, templateEngineOutput.FullName, CancellationToken.None);
+
+        Assert.Equal(builtInCreatesConfig, File.Exists(Path.Combine(builtInOutput.FullName, "nuget.config")));
+        Assert.Equal(templateEngineCreatesConfig, File.Exists(Path.Combine(templateEngineOutput.FullName, "nuget.config")));
+        var expectedSources = new[] { source, PackageSources.NuGetOrg }.Distinct(PackageSourceIdentity.Comparer).Order(StringComparer.Ordinal);
+        if (builtInCreatesConfig)
+        {
+            Assert.Equal(expectedSources, NuGetTestHelper.GetEligiblePackageSources(builtInOutput.FullName, "Aspire.Hosting"),
+                PackageSourceIdentity.Comparer);
+        }
+        if (templateEngineCreatesConfig)
+        {
+            Assert.Equal(expectedSources, NuGetTestHelper.GetEligiblePackageSources(templateEngineOutput.FullName, "Aspire.Hosting"),
+                PackageSourceIdentity.Comparer);
+        }
+    }
+
+    [Theory]
+    [InlineData("stable", "nuget.config")]
+    [InlineData("daily", "NuGet.Config")]
+    [InlineData("staging", "NuGet.config")]
+    [InlineData("pr-12345", "NUGET.CONFIG")]
+    public async Task CreateNuGetConfigIfMissingAsync_PreservesTemplateConfigBytes(string channelName, string fileName)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var output = workspace.CreateDirectory("output");
+        var path = Path.Combine(output.FullName, fileName);
+        byte[] original =
+        [
+            0xef, 0xbb, 0xbf,
+            .. Encoding.UTF8.GetBytes(
+                "<configuration>\r\n  <!-- Template-owned formatting and routing -->\r\n" +
+                "  <packageSources><clear /><add key=\"private\" value=\"https://enterprise.example/v3/index.json\" /></packageSources>\r\n" +
+                "</configuration>\r\n")
+        ];
+        await File.WriteAllBytesAsync(path, original);
+        var channel = PackageChannel.CreateExplicitChannel(
+            channelName, PackageChannelQuality.Stable,
+            [new PackageMapping("Aspire*", "https://daily.example/v3/index.json")],
+            new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance,
+            configureGlobalPackagesFolder: true);
+        var service = CreateService();
+
+        await service.CreateNuGetConfigIfMissingAsync(channel, output.FullName, CancellationToken.None);
+        await service.CreateNuGetConfigIfMissingAsync(channel, output.FullName, CancellationToken.None);
+
+        Assert.Equal(original, await File.ReadAllBytesAsync(path));
+        Assert.Equal([fileName], Directory.GetFiles(output.FullName).Select(Path.GetFileName));
+    }
+
+    [Fact]
+    public async Task CreateNuGetConfigIfMissingAsync_PreservesInheritedAndNestedConfigs()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var output = workspace.CreateDirectory("output");
+        var nested = output.CreateSubdirectory("nested");
+        const string inheritedConfig = """
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="public" value="https://api.nuget.org/v3/index.json" />
+                <add key="enterprise" value="https://enterprise.example/v3/index.json" />
+              </packageSources>
+              <packageSourceMapping>
+                <clear />
+                <packageSource key="public"><package pattern="*" /></packageSource>
+                <packageSource key="enterprise"><package pattern="Company.*" /></packageSource>
+              </packageSourceMapping>
+            </configuration>
+            """;
+        const string nestedConfig = """
+            <configuration>
+              <packageSources><clear /><add key="nested" value="https://nested.example/v3/index.json" /></packageSources>
+              <packageSourceMapping><clear /><packageSource key="nested"><package pattern="*" /></packageSource></packageSourceMapping>
+            </configuration>
+            """;
+        var inheritedPath = Path.Combine(workspace.Path, "nuget.config");
+        var nestedPath = Path.Combine(nested.FullName, "nuget.config");
+        await File.WriteAllTextAsync(inheritedPath, inheritedConfig);
+        await File.WriteAllTextAsync(nestedPath, nestedConfig);
+        var channel = PackageChannel.CreateExplicitChannel(
+            "daily", PackageChannelQuality.Prerelease,
+            [new PackageMapping("Aspire*", "https://daily.example/v3/index.json")],
+            new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
+        var service = CreateService();
+
+        await service.CreateNuGetConfigIfMissingAsync(channel, output.FullName, CancellationToken.None);
+        var generated = await File.ReadAllBytesAsync(Path.Combine(output.FullName, "nuget.config"));
+        await service.CreateNuGetConfigIfMissingAsync(channel, output.FullName, CancellationToken.None);
+
+        Assert.Equal(generated, await File.ReadAllBytesAsync(Path.Combine(output.FullName, "nuget.config")));
+        Assert.Equal(inheritedConfig, await File.ReadAllTextAsync(inheritedPath));
+        Assert.Equal(nestedConfig, await File.ReadAllTextAsync(nestedPath));
+        Assert.Equal(["https://daily.example/v3/index.json"], NuGetTestHelper.GetEligiblePackageSources(output.FullName, "Aspire.Hosting"));
+        Assert.Equal(["https://enterprise.example/v3/index.json"], NuGetTestHelper.GetEligiblePackageSources(output.FullName, "Company.Library"));
+        Assert.Equal(["https://nested.example/v3/index.json"], NuGetTestHelper.GetEligiblePackageSources(nested.FullName, "Aspire.Hosting"));
+        await Verify(await File.ReadAllTextAsync(Path.Combine(output.FullName, "nuget.config")))
+            .ScrubLinesWithReplace(line => Regex.Replace(line, "aspire-apphost-[a-f0-9]{16}", "aspire-apphost-source"));
+    }
+
     [Fact]
     public async Task CreateNuGetConfigForSourceOverrideAsync_PreservesAmbientPolicyAndAuthentication()
     {
@@ -77,6 +296,12 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
         const string channelAspireSource = "https://example.invalid/aspire";
         const string communitySource = "https://example.invalid/community";
         const string fallbackSource = "https://example.invalid/fallback";
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "nuget.config"), """
+            <configuration>
+              <packageSources><clear /><add key="ambient" value="https://ambient.example/v3/index.json" /></packageSources>
+              <packageSourceMapping><packageSource key="ambient"><package pattern="Private.*" /></packageSource></packageSourceMapping>
+            </configuration>
+            """);
 
         var packagingService = new TestPackagingService
         {
@@ -96,14 +321,13 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
             }
         };
         var service = CreateService(packagingService: packagingService);
-        var dependencySources = NuGetTestHelper.GetEligiblePackageSources(outputDirectory.FullName, "Example.Dependency");
-
         Assert.True(await service.CreateNuGetConfigForSourceOverrideAsync(sourceOverride, channelName: "daily", outputDirectory.FullName, CancellationToken.None));
 
         var doc = XDocument.Load(Path.Combine(outputDirectory.FullName, "nuget.config"));
         Assert.Equal(["Aspire*"], GetPackagePatternsForSource(doc, sourceOverride));
         Assert.Equal(["CommunityToolkit*"], GetPackagePatternsForSource(doc, communitySource));
-        Assert.Equal(dependencySources, NuGetTestHelper.GetEligiblePackageSources(outputDirectory.FullName, "Example.Dependency"));
+        Assert.Empty(NuGetTestHelper.GetEligiblePackageSources(outputDirectory.FullName, "Example.Dependency"));
+        Assert.Equal(2, doc.Root!.Element("packageSources")!.Elements("add").Count());
         Assert.Empty(GetPackagePatternsForSource(doc, channelAspireSource));
         Assert.Empty(GetPackagePatternsForSource(doc, PackageSources.NuGetOrg));
     }
@@ -1142,7 +1366,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
             .ToArray();
         Assert.Equal(["https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json"], sources);
         Assert.Equal(
-            ["https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json"],
+            [PackageSources.NuGetOrg, "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json"],
             NuGetTestHelper.GetEligiblePackageSources(outputDir.FullName, "Aspire.Hosting"));
     }
 
@@ -1228,7 +1452,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
     public async Task ConfigureDotNetAppHostNuGetConfigAsync_StableChannel_RespectsExistingConfig(bool hasExistingConfig)
     {
         // The "without prompt" path is used by aspire init. When the channel does not
-        // require a project-level nuget.config (e.g. stable → nuget.org only):
+        // require a project-level nuget.config (stable uses ambient sources):
         //   - No existing config → skip creation entirely (return false)
         //   - Existing config → update it to clean up stale feeds (return true)
         // See: https://github.com/microsoft/aspire/issues/18124
@@ -1256,7 +1480,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
                 var stableCh = PackageChannel.CreateExplicitChannel(
                     "stable",
                     PackageChannelQuality.Stable,
-                    [new PackageMapping("*", "https://api.nuget.org/v3/index.json")],
+                    mappings: null,
                     new FakeNuGetPackageCache(),
                     features: new TestFeatures(), NullLogger.Instance);
                 return Task.FromResult<IEnumerable<PackageChannel>>([stableCh]);
@@ -1274,19 +1498,69 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
             Assert.True(result);
             Assert.True(File.Exists(configPath));
             var doc = XDocument.Load(configPath);
-            var sources = doc.Root!.Element("packageSources")!.Elements("add")
-                .Select(e => (string)e.Attribute("value")!)
-                .ToArray();
-            Assert.Equal(["https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json"], sources);
+            Assert.Null(doc.Root!.Element("packageSources"));
+            Assert.Null(doc.Root.Element("packageSourceMapping"));
             Assert.Equal(
                 [PackageSources.NuGetOrg],
                 NuGetTestHelper.GetEligiblePackageSources(outputDir.FullName, "Aspire.Hosting"));
+            Assert.Equal(
+                [PackageSources.NuGetOrg],
+                NuGetTestHelper.GetEligiblePackageSources(outputDir.FullName, "Example.Dependency"));
         }
         else
         {
             Assert.False(result);
             Assert.False(File.Exists(configPath));
         }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ConfigureDotNetAppHostNuGetConfigAsync_StableChannel_PreservesAmbientPolicy(bool hasMappings)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputDir = workspace.CreateDirectory("output");
+        var configPath = Path.Combine(outputDir.FullName, "nuget.config");
+        var original = $$"""
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="company" value="https://company.example/v3/index.json" />
+              </packageSources>
+              {{(hasMappings ? """
+              <packageSourceMapping>
+                <packageSource key="company">
+                  <package pattern="Company.*" />
+                  <package pattern="Aspire.Hosting.Redis" />
+                </packageSource>
+              </packageSourceMapping>
+              """ : "")}}
+            </configuration>
+            """;
+        await File.WriteAllTextAsync(configPath, original);
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>(
+            [
+                PackageChannel.CreateExplicitChannel(
+                    PackageChannelNames.Stable, PackageChannelQuality.Stable,
+                    [new PackageMapping("*", PackageSources.NuGetOrg)],
+                    new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance)
+            ])
+        };
+        var service = CreateService(packagingService: packagingService);
+
+        await service.ConfigureDotNetAppHostNuGetConfigAsync(
+            PackageChannelNames.Stable, outputDir.FullName, TestContext.Current.CancellationToken);
+
+        Assert.Equal(original, await File.ReadAllTextAsync(configPath));
+        Assert.Equal(
+            ["https://company.example/v3/index.json"],
+            NuGetTestHelper.GetEligiblePackageSources(outputDir.FullName, "Aspire.Hosting.Redis"));
+        Assert.Equal(
+            ["https://company.example/v3/index.json"],
+            NuGetTestHelper.GetEligiblePackageSources(outputDir.FullName, "Company.Package"));
     }
 
     private static TemplateNuGetConfigService CreateService(

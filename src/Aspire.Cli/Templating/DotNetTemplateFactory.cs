@@ -63,8 +63,13 @@ internal class DotNetTemplateFactory(
         return GetTemplatesCore(showAllTemplates);
     }
 
-    public async Task<IEnumerable<ITemplate>> GetTemplatesAsync(CancellationToken cancellationToken = default)
+    public async Task<IEnumerable<ITemplate>> GetTemplatesAsync(TemplateSource? source, CancellationToken cancellationToken = default)
     {
+        if (source is not null)
+        {
+            return [];
+        }
+
         if (!await IsDotNetSdkAvailableAsync(cancellationToken))
         {
             return [];

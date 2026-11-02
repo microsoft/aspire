@@ -399,6 +399,20 @@ public class AzureStorageExtensionsTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task ResourceNamesMatchingServiceIdentifiersBicepValid()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(output);
+        var storage = builder.AddAzureStorage("queues");
+
+        var blob = storage.AddBlobContainer(name: "blobs", blobContainerName: "plantdata");
+        var queue = storage.AddQueue(name: "myqueue", queueName: "my-queue");
+
+        var manifest = await AzureManifestUtils.GetManifestWithBicep(storage.Resource);
+
+        await Verify(manifest.BicepText, extension: "bicep");
+    }
+
+    [Fact]
     public async Task AddAzureStorageEmulator()
     {
         using var builder = TestDistributedApplicationBuilder.Create(output);

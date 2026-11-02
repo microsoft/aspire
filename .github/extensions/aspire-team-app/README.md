@@ -198,6 +198,24 @@ install_extension url: https://github.com/IEvangelist/canvas-marketplace/tree/ma
 
 Once loaded, open it from chat, or via `open_canvas` with `canvasId: "aspire-team-app"`.
 
+The standalone canvas can also run from the top-level sidebar without an Aspire
+repository session. It discovers stored `gh` accounts independently of tokens
+injected by the Copilot app, and an expired account on another host does not hide
+healthy accounts. The `gh` executable must be on the app's `PATH`; sign in with
+`gh auth login` only if no usable credentials are available.
+Older GitHub CLI versions without JSON authentication status use a text-status
+fallback that retains accounts reported on either output stream.
+
+On Windows, sidebar providers can omit `APPDATA`, causing `gh` to miss its saved
+logins. If discovery finds no accounts and no explicit configuration location is
+set, the canvas resolves the Windows application-data known folder and retries
+using that location for both account discovery and token retrieval. Existing
+`APPDATA`, `GH_CONFIG_DIR`, and `XDG_CONFIG_HOME` settings are preserved.
+If that lookup fails, environment and Copilot credentials are still tried; the
+lookup error is surfaced if none authenticate. Windows token variable names are
+handled case-insensitively. `GH_ENTERPRISE_TOKEN` and `GITHUB_ENTERPRISE_TOKEN`
+are also supported when `GH_HOST` names an enterprise host.
+
 ## Notes
 
 - Notifications are **in-canvas + live in-session** (SSE). A canvas iframe is not a

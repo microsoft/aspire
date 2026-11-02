@@ -585,9 +585,19 @@ public class ResourceNotificationService : IDisposable
                     WaitType.WaitForCompletion => WaitUntilCompletionAsync(resource, waitAnnotation.Resource, waitAnnotation.ExitCode, cancellationToken, OnDependencyReadyAsync),
                     WaitType.WaitUntilStarted => WaitUntilStartedAsync(resource, waitAnnotation.Resource, waitAnnotation.WaitBehavior ?? DefaultWaitBehavior, cancellationToken, OnDependencyReadyAsync),
                     _ => throw new DistributedApplicationException($"Unexpected wait type: {waitAnnotation.WaitType}")
-                });
+                })
+                .ToArray();
 
-            await Task.WhenAll(pendingDependencies).ConfigureAwait(false);
+            var allDependencies = Task.WhenAll(pendingDependencies);
+            try
+            {
+                await allDependencies.ConfigureAwait(false);
+            }
+            catch (Exception) when (GetDependencyFailures(allDependencies) is { Length: > 1 } failures)
+            {
+                // Awaiting Task.WhenAll only rethrows the first failure, so report every failed dependency.
+                throw new AggregateException($"Resource '{resource.Name}' failed waiting for {failures.Length} dependencies.", failures);
+            }
 
             var clearRemainingDependencies = false;
             await pendingDependencyLock.WaitAsync(CancellationToken.None).ConfigureAwait(false);
@@ -622,6 +632,9 @@ public class ResourceNotificationService : IDisposable
             throw;
         }
     }
+
+    private static Exception[] GetDependencyFailures(Task allDependencies) =>
+        allDependencies.Exception?.InnerExceptions.Where(static ex => ex is not OperationCanceledException).ToArray() ?? [];
 
     private Task PublishWaitingForDependenciesAsync(IResource resource, IEnumerable<string> dependencyNames)
     {

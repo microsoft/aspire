@@ -27,6 +27,70 @@ namespace Aspire.Dashboard.Components.Tests.Controls;
 
 public class TextVisualizerDialogTests : DashboardTestContext
 {
+    [Theory]
+    [InlineData(DashboardUIHelpers.PlaintextFormat)]
+    [InlineData(DashboardUIHelpers.JsonFormat)]
+    [InlineData(DashboardUIHelpers.SqlFormat)]
+    public async Task Render_TextVisualizerDialog_WordWrapTogglePreservesContentAndFormatAsync(string format)
+    {
+        const string text = """{"query":"SELECT 1"}""";
+        var getCut = SetUpDialog(out var dialogService);
+        var content = new TextVisualizerDialogViewModel(text, "Text", false, FixedFormat: format);
+        await dialogService.ShowDialogAsync<TextVisualizerDialog>(content, new DialogParameters());
+        var cut = getCut();
+        var formattedText = cut.FindComponent<TextVisualizer>().Instance.ViewModel.FormattedText;
+        Assert.False(cut.FindComponent<TextVisualizer>().Instance.NoWrap);
+        Assert.Equal("true", cut.Find(".text-visualizer-word-wrap").GetAttribute("aria-pressed"));
+
+        cut.Find(".text-visualizer-word-wrap").Click();
+        Assert.True(cut.FindComponent<TextVisualizer>().Instance.NoWrap);
+        Assert.Equal("false", cut.Find(".text-visualizer-word-wrap").GetAttribute("aria-pressed"));
+        Assert.Single(cut.FindAll(".log-container.text-visualizer-no-wrap"));
+        Assert.Equal(formattedText.ReplaceLineEndings("\n"), cut.Find("[data-copybutton='true']").GetAttribute("data-text"));
+
+        cut.FindComponent<TextVisualizerDialog>().Render(parameters => parameters.Add(p => p.Content, content));
+        Assert.True(cut.FindComponent<TextVisualizer>().Instance.NoWrap);
+        Assert.Equal(format, cut.FindComponent<TextVisualizer>().Instance.ViewModel.FormatKind);
+
+        cut.Find(".text-visualizer-word-wrap").Click();
+        Assert.False(cut.FindComponent<TextVisualizer>().Instance.NoWrap);
+        Assert.Equal("true", cut.Find(".text-visualizer-word-wrap").GetAttribute("aria-pressed"));
+        Assert.Equal(formattedText, cut.FindComponent<TextVisualizer>().Instance.ViewModel.FormattedText);
+    }
+
+    [Fact]
+    public async Task Render_TextVisualizerDialog_MaskedSecretHidesWordWrapAsync()
+    {
+        var getCut = SetUpDialog(out var dialogService);
+        await dialogService.ShowDialogAsync<TextVisualizerDialog>(
+            new TextVisualizerDialogViewModel("Text", "Text", ContainsSecret: true), new DialogParameters());
+        var cut = getCut();
+
+        Assert.Empty(cut.FindAll(".text-visualizer-word-wrap"));
+    }
+
+    [Fact]
+    public async Task Render_TextVisualizerDialog_MarkdownSupportsWordWrapAsync()
+    {
+        const string markdown = "**Markdown** with a long paragraph.";
+        var getCut = SetUpDialog(out var dialogService);
+        await dialogService.ShowDialogAsync<TextVisualizerDialog>(
+            new TextVisualizerDialogViewModel(markdown, "Text", false, FixedFormat: DashboardUIHelpers.MarkdownFormat), new DialogParameters());
+        var cut = getCut();
+
+        Assert.Equal("true", cut.Find(".text-visualizer-word-wrap").GetAttribute("aria-pressed"));
+        Assert.Equal(["markdown-content"], cut.Find(".markdown-content").ClassList);
+        cut.Find(".text-visualizer-word-wrap").Click();
+        Assert.Equal("false", cut.Find(".text-visualizer-word-wrap").GetAttribute("aria-pressed"));
+        Assert.Single(cut.FindAll(".markdown-content.markdown-content-no-wrap"));
+        Assert.Equal("Markdown", cut.Find(".markdown-content strong").TextContent);
+        Assert.Equal(markdown, cut.Find(".text-visualizer-copy").GetAttribute("data-text"));
+
+        cut.Find(".text-visualizer-word-wrap").Click();
+        Assert.Equal("true", cut.Find(".text-visualizer-word-wrap").GetAttribute("aria-pressed"));
+        Assert.Equal(["markdown-content"], cut.Find(".markdown-content").ClassList);
+    }
+
     [Fact]
     public async Task Render_TextVisualizerDialog_MarkdownDescription_IsOptionalAndDisplayedAboveContentAsync()
     {
@@ -99,9 +163,18 @@ public class TextVisualizerDialogTests : DashboardTestContext
         Assert.Equal(DashboardUIHelpers.JsonFormat, instance.TextVisualizerViewModel.FormatKind);
         Assert.Equal([DashboardUIHelpers.JsonFormat, DashboardUIHelpers.PlaintextFormat], instance.EnabledOptions.ToImmutableSortedSet());
         Assert.Single(cut.FindAll("fluent-dialog-body [slot='title']"));
-        Assert.Single(cut.FindAll("fluent-dialog-body [slot='title'] svg"));
+        Assert.Single(cut.FindAll("fluent-dialog-body [slot='title'] .dialog-title-grid > svg"));
         Assert.Single(cut.FindAll("fluent-dialog-body [slot='title'] .dialog-format"));
-        Assert.Single(cut.FindAll("fluent-dialog-body [slot='action'] .button-container"));
+        var toolbar = cut.Find("fluent-dialog-body [slot='title'] .dialog-format");
+        Assert.Equal(["text-visualizer-format", "text-visualizer-word-wrap", "text-visualizer-copy"],
+            toolbar.Children.Select(element => element.ClassList.Single(name => name.StartsWith("text-visualizer-", StringComparison.Ordinal))));
+        var copyButton = cut.Find(".text-visualizer-copy");
+        Assert.Equal(string.Empty, copyButton.TextContent.Trim());
+        Assert.Equal("2000", copyButton.GetAttribute("data-copy-duration"));
+        Assert.Equal(Aspire.Dashboard.Resources.ControlsStrings.GridValueCopyToClipboard, copyButton.GetAttribute("aria-label"));
+        Assert.Single(copyButton.QuerySelectorAll(".copy-icon"));
+        Assert.Single(copyButton.QuerySelectorAll(".checkmark-icon"));
+        Assert.Empty(cut.FindAll("fluent-dialog-body [slot='action'] .button-container"));
         Assert.Empty(cut.FindAll(".text-visualizer-container .button-container"));
         Assert.Empty(cut.FindAll("header"));
     }
@@ -416,7 +489,7 @@ public class TextVisualizerDialogTests : DashboardTestContext
         download.SetVoidResult();
 
         var downloadButton = Assert.Single(cut.FindComponents<FluentButton>(),
-            button => button.Instance.Title == Aspire.Dashboard.Resources.ControlsStrings.Download);
+            button => button.Find("fluent-button").GetAttribute("data-tooltip") == Aspire.Dashboard.Resources.ControlsStrings.Download);
         await downloadButton.InvokeAsync(downloadButton.Instance.OnClick.InvokeAsync);
 
         Assert.Equal("resources.mmd", Assert.Single(download.Invocations).Arguments[0]);
@@ -581,7 +654,7 @@ public class TextVisualizerDialogTests : DashboardTestContext
         FluentUISetupHelpers.SetupDialogInfrastructure(this, themeManager: themeManager, localStorage: localStorage);
 
         var module = JSInterop.SetupModule("/Components/Controls/TextVisualizer.razor.js");
-        module.SetupVoid();
+        module.SetupVoid().SetVoidResult();
         JSInterop.SetupModule("/Components/Controls/MarkdownRenderer.razor.js")
             .SetupVoid("highlightCodeBlocks", _ => true).SetVoidResult();
 

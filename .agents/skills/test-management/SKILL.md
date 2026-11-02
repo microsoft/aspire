@@ -57,13 +57,10 @@ grep -r "public.*void.*TestMethodName\|public.*async.*Task.*TestMethodName" test
 Once located, determine the fully-qualified name (Namespace.Type.Method) by examining the file structure.
 
 Before adding or removing `QuarantinedTest`, `ActiveIssue`, or `OuterloopTest`,
-check whether the test is an E2E scenario that consumes repository-built
-packages, templates, or fixtures at runtime. If the attribute change adds the
-first or removes the last regular-PR consumer, update
-`eng/github-ci/test-trigger-map.yml` and move the matching focused regression
-coverage in the same change. Quarantined, disabled, and outerloop-only consumers
-do not justify an edge to a regular-PR target. `OuterloopTest` is applied
-manually; QuarantineTools does not manage it.
+read `.github/instructions/test-trigger-map.instructions.md` when the test
+consumes repository-built packages, templates, or fixtures at runtime, and
+audit whether its routing needs to change. `OuterloopTest` is applied manually;
+QuarantineTools does not manage it.
 
 ### 3. Run QuarantineTools for Each Test
 

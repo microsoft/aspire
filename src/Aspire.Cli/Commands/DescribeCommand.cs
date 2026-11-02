@@ -101,6 +101,10 @@ internal sealed class DescribeCommand : BaseCommand
     {
         Hidden = true
     };
+    private static readonly Option<int?> s_appHostPidOption = new("--apphost-pid")
+    {
+        Hidden = true
+    };
 
     public DescribeCommand(
         AppHostConnectionResolver connectionResolver,
@@ -120,6 +124,21 @@ internal sealed class DescribeCommand : BaseCommand
         Options.Add(s_formatOption);
         Options.Add(s_includeHiddenOption);
         Options.Add(s_includeDisabledCommandsOption);
+        Options.Add(s_appHostPidOption);
+        Validators.Add(result =>
+        {
+            var appHostPid = result.GetValue(s_appHostPidOption);
+            if (appHostPid is <= 0)
+            {
+                result.AddError("--apphost-pid must be a positive process ID.");
+            }
+            else if (appHostPid is not null &&
+                result.GetValue(s_appHostOption.InnerOption) is null &&
+                result.GetValue(s_appHostOption.LegacyOption) is null)
+            {
+                result.AddError("--apphost-pid requires --apphost.");
+            }
+        });
     }
 
     protected override bool IsMachineReadableFormatRequested(ParseResult parseResult) =>
@@ -135,6 +154,7 @@ internal sealed class DescribeCommand : BaseCommand
         var format = parseResult.GetValue(s_formatOption);
         var includeHidden = parseResult.GetValue(s_includeHiddenOption);
         var includeDisabledCommands = parseResult.GetValue(s_includeDisabledCommandsOption);
+        var appHostPid = parseResult.GetValue(s_appHostPidOption);
 
         if (follow && format == ResourceOutputFormat.Mermaid)
         {
@@ -146,7 +166,8 @@ internal sealed class DescribeCommand : BaseCommand
             SharedCommandStrings.ScanningForRunningAppHosts,
             string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.SelectAppHost, DescribeCommandStrings.SelectAppHostAction),
             SharedCommandStrings.AppHostNotRunning,
-            cancellationToken);
+            cancellationToken,
+            appHostPid: appHostPid);
 
         if (!result.Success)
         {
