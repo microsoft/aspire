@@ -28,7 +28,7 @@ env:
   #   --filter-method "*.TestMethodName"
   #   --filter-class "*.TestClassName"
   #   --filter-method "*.Test1" --filter-method "*.Test2"
-  TEST_FILTER: '--filter-method "*.ConfigureUnattendedSsh_VerifiesOpenSshAndAppliesBatchModeAfterUrlRewrites" --filter-not-trait "outerloop=true"'
+  TEST_FILTER: '--filter-method "*.ConfigureUnattendedSsh_VerifiesOpenSshAndAppliesBatchModeAfterUrlRewrites" --filter-not-trait "outerloop=true" --show-live-output on'
 
   # Target operating systems (comma-separated)
   # Options: ubuntu-latest, windows-latest, macos-latest
@@ -39,7 +39,7 @@ env:
   RUNNERS_PER_OS: "5"
 
   # Number of test iterations each runner executes
-  ITERATIONS_PER_RUNNER: "5"
+  ITERATIONS_PER_RUNNER: "10"
 
 jobs:
 
