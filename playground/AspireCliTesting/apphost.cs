@@ -53,6 +53,12 @@ try
         });
     });
 
+    builder.AddMsTest("mstest-tests", "mstest-tests/Playground.MSTest.csproj")
+        .WithEnvironment("MSTEST_SERVICE_URL", serviceEndpoint)
+        .WithEnvironment("MSTEST_PLAYGROUND_FAIL",
+            Environment.GetEnvironmentVariable("MSTEST_PLAYGROUND_FAIL") ?? "false")
+        .WaitFor(service);
+
     builder.Build().Run();
 }
 finally

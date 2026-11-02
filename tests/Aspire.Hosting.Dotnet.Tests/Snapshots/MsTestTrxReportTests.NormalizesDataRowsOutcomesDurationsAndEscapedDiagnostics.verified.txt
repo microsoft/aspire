@@ -1,0 +1,27 @@
+﻿[
+  {
+    Name: Example.Tests.data row (1 & 2),
+    Outcome: Passed,
+    Duration: 00:00:01.2345678
+  },
+  {
+    Name: Example.Tests.data row (1 & 2),
+    Outcome: Failed,
+    Duration: 00:00:01.2345678,
+    Message:
+expected <value> & got "other"
+at Example.Tests.DataRow()
+test output
+test error
+  },
+  {
+    Name: Example.Tests.data row (1 & 2),
+    Outcome: Skipped,
+    Message: skip reason
+  },
+  {
+    Name: Example.Tests.data row (1 & 2),
+    Outcome: Passed,
+    Duration: 00:00:01.2345678
+  }
+]
