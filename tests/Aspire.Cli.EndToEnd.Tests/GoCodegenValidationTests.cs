@@ -8,11 +8,52 @@ using Xunit;
 namespace Aspire.Cli.EndToEnd.Tests;
 
 /// <summary>
-/// End-to-end tests that validate <c>aspire restore</c> for Go AppHosts by creating a
-/// Go AppHost with multiple integrations and verifying the generated Go SDK files.
+/// End-to-end tests that validate Go AppHost initialization and restore, including
+/// compilation and vetting of the generated Go SDK.
 /// </summary>
 public sealed class GoCodegenValidationTests(ITestOutputHelper output)
 {
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public async Task NonInteractiveInitGeneratesBindingsThatBuildAndVet()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        using var workspace = TemporaryWorkspace.Create(output);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, variant: CliE2ETestHelpers.DockerfileVariant.PolyglotGo, workspace: workspace);
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+        await auto.EnableExperimentalGoSupportAsync(counter);
+
+        await auto.RunCommandAsync(
+            "aspire init --language go --non-interactive --suppress-agent-init",
+            counter,
+            TimeSpan.FromMinutes(3));
+
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.go");
+        Assert.True(File.Exists(appHostPath), $"Expected Go AppHost at {appHostPath}");
+        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "go.mod")));
+
+        await auto.AspireAddPackageAsync("Aspire.Hosting.Redis", counter);
+        await auto.RunCommandAsync("aspire restore --non-interactive", counter, TimeSpan.FromMinutes(3));
+
+        GoAppHostTestHelpers.InsertBeforeBuild(appHostPath, """builder.AddRedis("cache")""");
+
+        // Go's ./... traversal excludes hidden directories and nested modules, so
+        // validate the generated SDK separately from its consuming AppHost.
+        await auto.RunCommandAsync("go build -buildvcs=false ./...", counter, TimeSpan.FromMinutes(3));
+        await auto.RunCommandAsync("go vet ./...", counter, TimeSpan.FromMinutes(3));
+        await auto.RunCommandAsync(
+            "cd .aspire/modules && go build -buildvcs=false ./... && go vet ./...",
+            counter,
+            TimeSpan.FromMinutes(3));
+    }
+
     [Fact]
     [CaptureWorkspaceOnFailure]
     public async Task RestoreGeneratesSdkFiles()
