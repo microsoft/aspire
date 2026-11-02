@@ -421,7 +421,7 @@ public class TestingCollectorTests(ITestOutputHelper outputHelper)
         });
         var replacement = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
         Assert.NotSame(original, replacement);
-        Assert.Same(original.RunContext, replacement.RunContext);
+        Assert.Same(original.TestingContext, replacement.TestingContext);
 
         using var notifications = ResourceNotificationServiceTestHelpers.Create();
         using var coordinator = CreateCoordinator(builder, notifications);
