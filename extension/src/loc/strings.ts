@@ -349,6 +349,7 @@ export const appHostLifecycleLaunchProfileNotSupported = vscode.l10n.t('The sele
 export const appHostLifecycleLaunchProfileCapabilityCouldNotBeVerified = vscode.l10n.t('The selected Aspire CLI launch profile capability could not be verified.');
 export const appHostLifecycleInvalidLaunchProfile = vscode.l10n.t('an invalid launch profile');
 export const appHostLifecycleLaunchProfileRequiresRun = vscode.l10n.t('Launch profiles are only supported for the run command.');
+export const appHostLifecycleDisableLaunchProfileNotSupported = vscode.l10n.t('Without the C# extension, disableLaunchProfile has no effect: the Aspire CLI still applies the default AppHost launch profile. Install or enable the C# extension to disable launch profiles.');
 export const appHostLifecycleLaunchAlreadyClaimed = vscode.l10n.t('This Aspire AppHost is already starting or running. The new debug session was cancelled so only one AppHost runs.');
 export const editorAssistanceOpenDashboardInvocationMessage = (appHostPath: string) => vscode.l10n.t('Opening Aspire Dashboard for {0}...', appHostPath);
 export const editorAssistanceOpenOutputConfirmationTitle = vscode.l10n.t('Open the VS Code Output panel and select the Aspire Extension output channel');

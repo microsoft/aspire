@@ -182,14 +182,14 @@ builder.Build().Run();
         fs.mkdirSync(path.dirname(launchJsonPath), { recursive: true });
         writeFileWithRetry(launchJsonPath, JSON.stringify({
             version: '0.2.0',
-            configurations: ['h1', 'h2'].map(profile => ({
+            configurations: [{
                 type: 'aspire',
                 request: 'launch',
-                name: `Nested ${profile}`,
+                name: 'Nested h2',
                 program: appHostProjectPath,
                 dashboardBrowser: 'none',
-                debuggers: { apphost: { launchProfile: profile } },
-            })),
+                debuggers: { apphost: { launchProfile: 'h2' } },
+            }],
         }, undefined, 2));
 
         const status = await executeE2eControlCommand({
