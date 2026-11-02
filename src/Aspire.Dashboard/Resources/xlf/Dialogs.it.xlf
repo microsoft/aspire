@@ -703,6 +703,16 @@ Per altre informazioni sull'uso degli agenti basati sull'IA con la dashboard, in
         <target state="new">Documentation</target>
         <note />
       </trans-unit>
+      <trans-unit id="HelpDialogGameDescription">
+        <source>In the resource graph, draw two circles with the mouse over empty space to play Aspire Outage, a game starring your resources. Press Esc to return to the graph.</source>
+        <target state="new">In the resource graph, draw two circles with the mouse over empty space to play Aspire Outage, a game starring your resources. Press Esc to return to the graph.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HelpDialogGameTitle">
+        <source>Aspire Outage</source>
+        <target state="new">Aspire Outage</target>
+        <note />
+      </trans-unit>
       <trans-unit id="HelpDialogGetHelpLinkText">
         <source>Go to aspire.dev documentation</source>
         <target state="translated">Vai alla documentazione di aspire.dev</target>
