@@ -124,11 +124,16 @@ public partial class TestingResults : ComponentBase, IAsyncDisposable
         "passed" => nameof(Resources.Layout.TestingPassed),
         "failed" => nameof(Resources.Layout.TestingFailed),
         "skipped" => nameof(Resources.Layout.TestingSkipped),
+        "inconclusive" => nameof(Resources.Layout.TestingInconclusive),
+        "error" => nameof(Resources.Layout.TestingError),
+        "timedOut" => nameof(Resources.Layout.TestingTimedOut),
         "running" => nameof(Resources.Layout.TestingRunning),
         "pending" => nameof(Resources.Layout.TestingPending),
         "cancelled" => nameof(Resources.Layout.TestingCancelled),
         _ => nameof(Resources.Layout.TestingUnknown)
     }];
+
+    private static string StatusClass(string outcome) => TestingResultRow.IsFailure(outcome) ? "testing-status-failed" : string.Empty;
 
     private string Duration(double? duration) => duration is { } milliseconds
         ? string.Format(CultureInfo.CurrentCulture, Loc[nameof(Resources.Layout.TestingMilliseconds)], milliseconds)

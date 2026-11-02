@@ -5,7 +5,12 @@ using Google.Protobuf.WellKnownTypes;
 
 namespace Aspire.Dashboard.Model;
 
-internal sealed record TestingResultRow(string Name, string Outcome, double? DurationMilliseconds, string? Message);
+internal sealed record TestingResultRow(string Name, string Outcome, double? DurationMilliseconds, string? Message)
+{
+    public static bool IsFailure(string outcome) => outcome is "failed" or "inconclusive" or "error" or "timedOut" or "cancelled";
+
+    public static bool IsKnownOutcome(string outcome) => outcome is "passed" or "skipped" || IsFailure(outcome);
+}
 
 internal sealed record TestingResourceGroup(string ResourceName, string Outcome, string? CollectionStatus, string? Error, IReadOnlyList<TestingResultRow> Results, bool HasInvalidData)
 {
@@ -28,7 +33,7 @@ internal sealed record TestingResourceGroup(string ResourceName, string Outcome,
                 resourceOutcome is not ("pending" or "passed" or "failed") ||
                 !snapshot.Fields.TryGetValue("results", out var results) || results.KindCase != Value.KindOneofCase.ListValue ||
                 rows.Any(r => string.IsNullOrEmpty(r.Name) || r.Outcome == "unknown"));
-        var outcome = resourceOutcome == "failed" || replicas.Any(IsFailed) || rows.Any(r => r.Outcome == "failed") || collectionStatus == "failed"
+        var outcome = resourceOutcome == "failed" || replicas.Any(IsFailed) || rows.Any(r => TestingResultRow.IsFailure(r.Outcome)) || collectionStatus == "failed"
             ? "failed"
             : collectionStatus == "cancelled" ? "cancelled"
             : collectionStatus == "running" ? "running"
@@ -71,7 +76,7 @@ internal sealed record TestingResourceGroup(string ResourceName, string Outcome,
             var fields = v.StructValue;
             var outcome = GetString(fields, "outcome");
             return new TestingResultRow(GetString(fields, "name") ?? string.Empty,
-                outcome is "passed" or "failed" or "skipped" ? outcome : "unknown",
+                outcome is not null && TestingResultRow.IsKnownOutcome(outcome) ? outcome : "unknown",
                 fields.Fields.TryGetValue("durationMilliseconds", out var duration) && duration.HasNumberValue ? duration.NumberValue : null,
                 GetString(fields, "message"));
         }).ToList();

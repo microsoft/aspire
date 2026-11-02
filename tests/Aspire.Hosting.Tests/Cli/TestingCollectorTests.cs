@@ -401,28 +401,27 @@ public class TestingCollectorTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task ReplacementOptionsRetainDashboardResultsAndTagsAcrossFreshSnapshots(bool markerOnly)
+    public async Task ReplacementCallbackRetainsDashboardResultsAndTagsAcrossFreshSnapshots(bool markerOnly)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = CreateBuilder(workspace);
         var originalCollectorCalled = false;
-        var resource = builder.AddResource(new ContainerResource("tests")).WithTags("Backend").WithTesting(options =>
-            options.CollectResults(context =>
-            {
-                originalCollectorCalled = true;
-                context.PublishResult(new TestResult { Name = "original", Outcome = TestOutcome.Failed });
-                return Task.CompletedTask;
-            }));
+        var resource = builder.AddResource(new ContainerResource("tests")).WithTags("Backend").WithTesting(context =>
+        {
+            originalCollectorCalled = true;
+            context.PublishResult(new TestResult { Name = "original", Outcome = TestOutcome.Failed });
+            return Task.CompletedTask;
+        });
         var original = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
-        resource.WithTesting(markerOnly ? null : options => options.CollectResults(async context =>
+        resource.WithTesting(markerOnly ? null : async context =>
         {
             await context.WaitForCompletionAsync();
-            Assert.Equal(original.Options!.OutputPath, context.OutputPath);
+            Assert.Equal(original.OutputPath, context.OutputPath);
             context.PublishResult(new TestResult { Name = "replacement", Outcome = TestOutcome.Passed });
-        }));
+        });
         var replacement = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
         Assert.NotSame(original, replacement);
-        Assert.Same(original.Options!.RunContext, replacement.Options!.RunContext);
+        Assert.Same(original.RunContext, replacement.RunContext);
 
         using var notifications = ResourceNotificationServiceTestHelpers.Create();
         using var coordinator = CreateCoordinator(builder, notifications);
@@ -444,6 +443,33 @@ public class TestingCollectorTests(ITestOutputHelper outputHelper)
                 Assert.Single(properties, p => p.Name == KnownProperties.Resource.TraitPrefix + KnownResourceTraits.DashboardTag).Value));
         }
         var results = replacement.DashboardResults.Clone();
+        results.StructValue.Fields.Remove("revision");
+        await Verify(results.ToString(), "json");
+    }
+
+    [Fact]
+    public async Task AllPublishedOutcomesRetainExactWireValuesInDashboardSnapshots()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = CreateBuilder(workspace);
+        var resource = builder.AddResource(new ContainerResource("tests")).WithTesting(async context =>
+        {
+            await context.WaitForCompletionAsync();
+            foreach (var outcome in Enum.GetValues<TestOutcome>())
+            {
+                context.PublishResult(new TestResult { Name = outcome.ToString(), Outcome = outcome });
+            }
+        });
+        using var notifications = ResourceNotificationServiceTestHelpers.Create();
+        using var coordinator = CreateCoordinator(builder, notifications);
+        var completion = coordinator.WaitForCompletionAsync(TestContext.Current.CancellationToken);
+        await notifications.PublishUpdateAsync(resource.Resource, s => s with { State = KnownResourceStates.Finished, ExitCode = 0 });
+        Assert.False(await completion.DefaultTimeout());
+        var annotation = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
+        var fresh = ResourceTraitSnapshotProperties.AddTraitProperties(resource.Resource, []);
+        Assert.Same(annotation.DashboardResults,
+            Assert.Single(fresh, p => p.Name == KnownProperties.Resource.TestingResults).Value);
+        var results = annotation.DashboardResults!.Clone();
         results.StructValue.Fields.Remove("revision");
         await Verify(results.ToString(), "json");
     }

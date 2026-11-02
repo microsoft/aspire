@@ -17,6 +17,54 @@ namespace Aspire.Dashboard.Components.Tests.Controls;
 [UseCulture("en-US")]
 public class TestingResultsTests : DashboardTestContext
 {
+    [Theory]
+    [InlineData("passed", "Passed", false)]
+    [InlineData("failed", "Failed", true)]
+    [InlineData("skipped", "Skipped", false)]
+    [InlineData("inconclusive", "Inconclusive", true)]
+    [InlineData("error", "Error", true)]
+    [InlineData("timedOut", "Timed out", true)]
+    [InlineData("cancelled", "Cancelled", true)]
+    public void LiveTerminalOutcomesRetainSpecificLabelsAndFailureAfterReplay(string outcome, string label, bool isFailure)
+    {
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var resources = new List<ResourceViewModel> { TestResource("tests", "tests", KnownResourceState.Running) };
+        ResourceSetupHelpers.SetupResourcesPage(this, new ViewportInformation(true, false, false),
+            new TestDashboardClient(isEnabled: true, initialResources: resources,
+                resourceChannelProvider: () => channel));
+        var cut = Render<TestingResults>();
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".testing-fallback")));
+        var snapshot = Value.ForStruct(new Struct
+        {
+            Fields =
+            {
+                ["revision"] = Value.ForNumber(3), ["resourceOutcome"] = Value.ForString("passed"),
+                ["collectionStatus"] = Value.ForString("completed"),
+                ["results"] = Value.ForList(Value.ForStruct(new Struct
+                {
+                    Fields = { ["name"] = Value.ForString("outcome fixture"), ["outcome"] = Value.ForString(outcome) }
+                }))
+            }
+        });
+        channel.Writer.TryWrite([new(ResourceViewModelChangeType.Upsert, TestResource("tests", "tests", KnownResourceState.Finished, snapshot))]);
+        cut.WaitForAssertion(() => AssertOutcome(cut));
+        cut.Dispose();
+        resources[0] = TestResource("tests", "tests", KnownResourceState.Finished, snapshot);
+        var replay = Render<TestingResults>(p => p.Add(c => c.ResourceName, "tests"));
+        replay.WaitForAssertion(() => AssertOutcome(replay));
+
+        void AssertOutcome(IRenderedComponent<TestingResults> component)
+        {
+            Assert.Equal($"tests {(isFailure ? "Failed" : "Passed")}", component.Find("h2").TextContent.Trim());
+            var cells = component.FindAll("[role='row']").Skip(1).Single().QuerySelectorAll("[role='gridcell']");
+            Assert.Equal("outcome fixture", cells[0].TextContent.Trim());
+            Assert.Equal(label, cells[1].TextContent.Trim());
+            Assert.Equal(isFailure ? 1 : 0, component.FindAll("p[role='status']").Count);
+            Assert.Empty(component.FindAll("[role='alert']"));
+            Assert.Empty(component.FindAll(".testing-fallback"));
+        }
+    }
+
     [Fact]
     public void LiveUpdatesGroupReplicasAndShowOneResourceOnlyRow()
     {

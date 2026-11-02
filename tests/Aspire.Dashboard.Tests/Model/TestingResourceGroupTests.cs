@@ -11,6 +11,24 @@ namespace Aspire.Dashboard.Tests.Model;
 public class TestingResourceGroupTests
 {
     [Theory]
+    [InlineData("passed", "passed")]
+    [InlineData("failed", "failed")]
+    [InlineData("skipped", "passed")]
+    [InlineData("inconclusive", "failed")]
+    [InlineData("error", "failed")]
+    [InlineData("timedOut", "failed")]
+    [InlineData("cancelled", "failed")]
+    public void EveryPublishedOutcomeIsPreservedAndAggregated(string outcome, string expected)
+    {
+        var snapshot = Snapshot(3, "passed", "completed", Result("passing test", "passed"), Result("test", outcome));
+        var group = TestingResourceGroup.Create([Resource("tests-1", snapshot)]);
+        Assert.False(group.HasInvalidData);
+        Assert.Equal(expected, group.Outcome);
+        Assert.Equal(["passed", outcome], group.Results.Select(r => r.Outcome));
+        Assert.Equal(expected == "failed", TestingResultRow.IsFailure(outcome));
+    }
+
+    [Theory]
     [InlineData(KnownResourceState.Starting, null, "pending")]
     [InlineData(KnownResourceState.Running, null, "running")]
     [InlineData(KnownResourceState.Finished, null, "unknown")]
@@ -59,10 +77,14 @@ public class TestingResourceGroupTests
         Assert.Equal(["pass", "failure"], group.Results.Select(r => r.Name));
     }
 
-    [Fact]
-    public void MalformedResultsAreVisibleAsUnknown()
+    [Theory]
+    [InlineData("not a result")]
+    [InlineData("timedout")]
+    [InlineData("unsupported")]
+    public void MalformedResultsAreVisibleAsUnknown(string outcome)
     {
-        var snapshot = Snapshot(1, "passed", "completed", Value.ForString("not a result"));
+        var snapshot = Snapshot(1, "passed", "completed",
+            outcome == "not a result" ? Value.ForString(outcome) : Result("fixture", outcome));
         var group = TestingResourceGroup.Create([Resource("tests-1", snapshot)]);
         Assert.True(group.HasInvalidData);
         Assert.Equal("unknown", group.Outcome);

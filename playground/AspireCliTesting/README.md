@@ -123,8 +123,13 @@ Select **Testing**, alongside **Metrics**, to view published test outcomes group
 by resource. Foundation, MSTest, pytest and Go publish individual results; Cargo
 publishes no individual outcomes and is represented by one resource-outcome row.
 Passing individual results do not hide execution or collector failures, and a
-pending or unknown resource is not reported as passed. The page updates during
-collection and replays finalized results on a late connection or reload while
+pending or unknown resource is not reported as passed. The page shows distinct
+Passed, Failed, Skipped, Inconclusive, Error, Timed out and Cancelled test statuses.
+Only Passed and Skipped are non-failing;
+Inconclusive, Error, Timed out and Cancelled results fail their resource group
+even when the process exits successfully. A published Timed out or Cancelled
+test is not a CLI timeout or cancellation and does not change the command lifetime.
+The page updates during collection and replays finalized results on a late connection or reload while
 `aspire test --keep-alive` is running. The previous dashboard has a Testing
 navigation entry with the same table.
 

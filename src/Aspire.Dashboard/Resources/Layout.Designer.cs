@@ -1087,6 +1087,33 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Inconclusive.
+        /// </summary>
+        public static string TestingInconclusive {
+            get {
+                return ResourceManager.GetString("TestingInconclusive", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Error.
+        /// </summary>
+        public static string TestingError {
+            get {
+                return ResourceManager.GetString("TestingError", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Timed out.
+        /// </summary>
+        public static string TestingTimedOut {
+            get {
+                return ResourceManager.GetString("TestingTimedOut", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Running.
         /// </summary>
         public static string TestingRunning {

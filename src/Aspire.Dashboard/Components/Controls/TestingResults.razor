@@ -19,7 +19,7 @@
     @foreach (var group in Groups)
     {
         <section class="testing-group" aria-label="@group.ResourceName" @key="group.ResourceName">
-            <h2>@group.ResourceName <span class="testing-group-outcome">@Status(group.Outcome)</span></h2>
+            <h2>@group.ResourceName <span class="testing-group-outcome @StatusClass(group.Outcome)">@Status(group.Outcome)</span></h2>
             @if (group.Error is { } error)
             {
                 <p role="alert">@error</p>
@@ -42,7 +42,9 @@
                         <span class="testing-fallback">@Loc[nameof(Layout.TestingResourceOutcome)]</span>
                     }
                 </TemplateColumn>
-                <TemplateColumn Title="@Loc[nameof(Layout.TestingStatus)]" Context="row">@Status(row.Outcome)</TemplateColumn>
+                <TemplateColumn Title="@Loc[nameof(Layout.TestingStatus)]" Context="row">
+                    <span class="@StatusClass(row.Outcome)">@Status(row.Outcome)</span>
+                </TemplateColumn>
                 <TemplateColumn Title="@Loc[nameof(Layout.TestingDuration)]" Context="row">@Duration(row.DurationMilliseconds)</TemplateColumn>
                 <PropertyColumn Title="@Loc[nameof(Layout.TestingMessage)]" Property="@(row => row.Message)" />
             </FluentDataGrid>

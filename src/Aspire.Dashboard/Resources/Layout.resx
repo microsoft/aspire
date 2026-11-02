@@ -426,6 +426,15 @@
   <data name="TestingSkipped" xml:space="preserve">
     <value>Skipped</value>
   </data>
+  <data name="TestingInconclusive" xml:space="preserve">
+    <value>Inconclusive</value>
+  </data>
+  <data name="TestingError" xml:space="preserve">
+    <value>Error</value>
+  </data>
+  <data name="TestingTimedOut" xml:space="preserve">
+    <value>Timed out</value>
+  </data>
   <data name="TestingRunning" xml:space="preserve">
     <value>Running</value>
   </data>

@@ -592,6 +592,11 @@
         <target state="new">Duration</target>
         <note />
       </trans-unit>
+      <trans-unit id="TestingError">
+        <source>Error</source>
+        <target state="new">Error</target>
+        <note />
+      </trans-unit>
       <trans-unit id="TestingFailed">
         <source>Failed</source>
         <target state="new">Failed</target>
@@ -600,6 +605,11 @@
       <trans-unit id="TestingFailureSummary">
         <source>Test results, resource execution or collection failed. Passing individual tests do not override this outcome.</source>
         <target state="new">Test results, resource execution or collection failed. Passing individual tests do not override this outcome.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TestingInconclusive">
+        <source>Inconclusive</source>
+        <target state="new">Inconclusive</target>
         <note />
       </trans-unit>
       <trans-unit id="TestingInvalidData">
@@ -660,6 +670,11 @@
       <trans-unit id="TestingSubscriptionFailed">
         <source>Unable to load testing resources. Results may be incomplete.</source>
         <target state="new">Unable to load testing resources. Results may be incomplete.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TestingTimedOut">
+        <source>Timed out</source>
+        <target state="new">Timed out</target>
         <note />
       </trans-unit>
       <trans-unit id="TestingUnknown">
