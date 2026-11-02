@@ -10,6 +10,8 @@ using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
+#pragma warning disable ASPIREPIPELINES005 // Tests opt into the experimental output diffing API.
+
 namespace Aspire.Hosting.Tests.Pipelines;
 
 public sealed class PipelineOutputStrategyTests(ITestOutputHelper output)
@@ -21,7 +23,7 @@ public sealed class PipelineOutputStrategyTests(ITestOutputHelper output)
         var path = Path.Combine(workspace.Path, "artifact.txt");
         File.WriteAllText(path, "line\n");
         var runner = new PipelineOutputTestProcessRunner(_ => throw new InvalidOperationException("Git must not run"));
-        var differ = new SnapshotPipelineOutputDiffer(new(), runner, Options.Create(new PipelineOutputDiffOptions { UseGit = false }));
+        var differ = new SnapshotPipelineOutputDiffer(new(), runner, Options.Create(new PipelineOutputDiffOptions { Mode = PipelineOutputDiffMode.FileSystem }));
         await differ.CaptureBeforeAsync(workspace.Path, TestContext.Current.CancellationToken);
         File.WriteAllText(path, "line\r\n");
         await differ.CaptureAfterAsync(workspace.Path, TestContext.Current.CancellationToken);
@@ -43,7 +45,7 @@ public sealed class PipelineOutputStrategyTests(ITestOutputHelper output)
         File.WriteAllText(metadata, "metadata");
         Assert.True(File.Exists(metadata));
         var runner = new PipelineOutputTestProcessRunner(_ => throw new InvalidOperationException("Git must not run"));
-        var options = new PipelineOutputDiffOptions { UseGit = false };
+        var options = new PipelineOutputDiffOptions { Mode = PipelineOutputDiffMode.FileSystem };
         Assert.Empty(options.Rules);
         var differ = new SnapshotPipelineOutputDiffer(new(), runner, Options.Create(options));
 
@@ -71,7 +73,7 @@ public sealed class PipelineOutputStrategyTests(ITestOutputHelper output)
     public async Task RequiredGitRejectsUnavailableExecutableOrWorktree(bool missingExecutable)
     {
         using var workspace = TemporaryWorkspace.Create(output);
-        var options = new PipelineOutputDiffOptions { UseGit = true };
+        var options = new PipelineOutputDiffOptions { Mode = PipelineOutputDiffMode.Git };
         var runner = new PipelineOutputTestProcessRunner(_ => missingExecutable
             ? throw new Win32Exception(2)
             : new(128, "", "unavailable in any language"));
@@ -99,16 +101,16 @@ public sealed class PipelineOutputStrategyTests(ITestOutputHelper output)
     }
 
     [Theory]
-    [InlineData(null)]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task BothMissingCapturesStayEmptyWithoutDiscovery(bool? useGit)
+    [InlineData(PipelineOutputDiffMode.Auto)]
+    [InlineData(PipelineOutputDiffMode.FileSystem)]
+    [InlineData(PipelineOutputDiffMode.Git)]
+    public async Task BothMissingCapturesStayEmptyWithoutDiscovery(PipelineOutputDiffMode mode)
     {
         using var workspace = TemporaryWorkspace.Create(output);
         var missing = Path.Combine(workspace.Path, "missing");
         Assert.False(Directory.Exists(missing));
         var runner = new PipelineOutputTestProcessRunner(_ => throw new InvalidOperationException("Missing roots must not probe Git"));
-        var differ = new SnapshotPipelineOutputDiffer(new(), runner, Options.Create(new PipelineOutputDiffOptions { UseGit = useGit }));
+        var differ = new SnapshotPipelineOutputDiffer(new(), runner, Options.Create(new PipelineOutputDiffOptions { Mode = mode }));
         await differ.CaptureBeforeAsync(missing, TestContext.Current.CancellationToken);
         await differ.CaptureAfterAsync(missing, TestContext.Current.CancellationToken);
         Assert.Empty(await differ.CompareAsync(TestContext.Current.CancellationToken));
@@ -116,18 +118,18 @@ public sealed class PipelineOutputStrategyTests(ITestOutputHelper output)
     }
 
     [Theory]
-    [InlineData(null)]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task MissingBaselineReportsSelectedGeneratedFileAsAdded(bool? useGit)
+    [InlineData(PipelineOutputDiffMode.Auto)]
+    [InlineData(PipelineOutputDiffMode.FileSystem)]
+    [InlineData(PipelineOutputDiffMode.Git)]
+    public async Task MissingBaselineReportsSelectedGeneratedFileAsAdded(PipelineOutputDiffMode mode)
     {
         using var workspace = TemporaryWorkspace.Create(output);
         var directory = Path.Combine(workspace.Path, "missing");
         Assert.False(Directory.Exists(directory));
         var runner = new PipelineOutputTestProcessRunner(args => args.Contains("rev-parse")
-            ? useGit is true ? new(0, "true\n\n", "") : new(128, "", "unavailable")
+            ? mode is PipelineOutputDiffMode.Git ? new(0, "true\n\n", "") : new(128, "", "unavailable")
             : new(0, args.Contains("--others") ? "artifact.txt\0" : args.Contains("hash-object") ? new string('a', 40) + "\n" : "", ""));
-        var differ = new SnapshotPipelineOutputDiffer(new(), runner, Options.Create(new PipelineOutputDiffOptions { UseGit = useGit }));
+        var differ = new SnapshotPipelineOutputDiffer(new(), runner, Options.Create(new PipelineOutputDiffOptions { Mode = mode }));
         await differ.CaptureBeforeAsync(directory, TestContext.Current.CancellationToken);
         Assert.Empty(runner.Calls);
         Directory.CreateDirectory(directory);
@@ -137,7 +139,7 @@ public sealed class PipelineOutputStrategyTests(ITestOutputHelper output)
         var change = Assert.Single(await differ.CompareAsync(TestContext.Current.CancellationToken));
         Assert.Equal(PipelineOutputChangeKind.Added, change.Kind);
         Assert.Equal(Path.GetRelativePath(directory, path), change.Path);
-        Assert.Equal(useGit is false ? 0 : 1, runner.Calls.Count(args => args.Contains("rev-parse")));
+        Assert.Equal(mode is PipelineOutputDiffMode.FileSystem ? 0 : 1, runner.Calls.Count(args => args.Contains("rev-parse")));
     }
 
     [Theory]
@@ -608,19 +610,19 @@ public sealed class PipelineOutputStrategyTests(ITestOutputHelper output)
     }
 
     [Theory]
-    [InlineData(false, false, false)]
-    [InlineData(true, false, false)]
-    [InlineData(false, true, false)]
-    [InlineData(true, true, false)]
-    [InlineData(false, false, true)]
-    [InlineData(true, false, true)]
-    [InlineData(false, true, true)]
-    [InlineData(true, true, true)]
-    [InlineData(false, false, null)]
-    [InlineData(true, false, null)]
-    [InlineData(false, true, null)]
-    [InlineData(true, true, null)]
-    public async Task ExplicitCallbacksOwnContentAndFailuresInsideWorktree(bool throughDi, bool throwing, bool? useGit)
+    [InlineData(false, false, PipelineOutputDiffMode.FileSystem)]
+    [InlineData(true, false, PipelineOutputDiffMode.FileSystem)]
+    [InlineData(false, true, PipelineOutputDiffMode.FileSystem)]
+    [InlineData(true, true, PipelineOutputDiffMode.FileSystem)]
+    [InlineData(false, false, PipelineOutputDiffMode.Git)]
+    [InlineData(true, false, PipelineOutputDiffMode.Git)]
+    [InlineData(false, true, PipelineOutputDiffMode.Git)]
+    [InlineData(true, true, PipelineOutputDiffMode.Git)]
+    [InlineData(false, false, PipelineOutputDiffMode.Auto)]
+    [InlineData(true, false, PipelineOutputDiffMode.Auto)]
+    [InlineData(false, true, PipelineOutputDiffMode.Auto)]
+    [InlineData(true, true, PipelineOutputDiffMode.Auto)]
+    public async Task ExplicitCallbacksOwnContentAndFailuresInsideWorktree(bool throughDi, bool throwing, PipelineOutputDiffMode mode)
     {
         using var workspace = TemporaryWorkspace.Create(output);
         await PipelineOutputGitTestHelper.RunAsync(workspace.Path, "init", "--object-format=sha1");
@@ -652,9 +654,10 @@ public sealed class PipelineOutputStrategyTests(ITestOutputHelper output)
         var snapshotter = new PipelineOutputSnapshotter(hasher);
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: root, step: "publish-and-diff");
         builder.Services.AddSingleton<IPipelineOutputFileHasher>(hasher);
-        builder.Services.Configure<PipelineOutputDiffOptions>(options => options.UseGit = useGit);
+        builder.WithOutputDiffing();
+        builder.Services.Configure<PipelineOutputDiffOptions>(options => options.Mode = mode);
         using var app = builder.Build();
-        var differ = throughDi ? app.Services.GetRequiredService<IPipelineOutputDiffer>() : new SnapshotPipelineOutputDiffer(snapshotter, new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions { UseGit = useGit }));
+        var differ = throughDi ? app.Services.GetRequiredService<IPipelineOutputDiffer>() : new SnapshotPipelineOutputDiffer(snapshotter, new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions { Mode = mode }));
         if (throwing)
         {
             var rawFailure = await Assert.ThrowsAsync<IOException>(() => snapshotter.CaptureAsync(root, TestContext.Current.CancellationToken));
@@ -686,3 +689,5 @@ public sealed class PipelineOutputStrategyTests(ITestOutputHelper output)
         Assert.All(streams, stream => Assert.False(stream.CanRead));
     }
 }
+
+#pragma warning restore ASPIREPIPELINES005

@@ -640,9 +640,6 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _innerBuilder.Services.AddSingleton<PipelineActivityReporter>();
         _innerBuilder.Services.AddSingleton<IPipelineActivityReporter, PipelineActivityReporter>(sp => sp.GetRequiredService<PipelineActivityReporter>());
         _innerBuilder.Services.AddSingleton<IPipelineOutputService, PipelineOutputService>();
-        _innerBuilder.Services.TryAddSingleton<PipelineOutputSnapshotter>();
-        _innerBuilder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<PipelineOutputDiffOptions>, PipelineOutputDiffOptionsValidator>());
-        _innerBuilder.Services.TryAddTransient<IPipelineOutputDiffer, SnapshotPipelineOutputDiffer>();
         _innerBuilder.Services.AddSingleton(Pipeline);
 
         // Configure pipeline logging options
@@ -866,7 +863,6 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
         // Configure PipelineOptions from the Pipeline section
         _innerBuilder.Services.Configure<PipelineOptions>(_innerBuilder.Configuration.GetSection("Pipeline"));
-        _innerBuilder.Services.Configure<PipelineOutputDiffOptions>(_innerBuilder.Configuration.GetSection("Pipeline:OutputDiff"));
 
         // Handle backward compatibility for --publisher manifest to support `azd` scenarios
         var publisher = _innerBuilder.Configuration["Publishing:Publisher"];

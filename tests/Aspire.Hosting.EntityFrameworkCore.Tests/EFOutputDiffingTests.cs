@@ -9,6 +9,8 @@ using Aspire.Tests.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
+#pragma warning disable ASPIREPIPELINES005 // Tests opt into the experimental output diffing API.
+
 namespace Aspire.Hosting.EntityFrameworkCore.Tests;
 
 public class EFOutputDiffingTests(ITestOutputHelper output)
@@ -37,7 +39,7 @@ public class EFOutputDiffingTests(ITestOutputHelper output)
                 migration.PublishAsMigrationBundle(targetRuntime: "linux-x64", publishContainer: true);
             }
         }
-        builder.Pipeline.WithOutputDiffing();
+        builder.WithOutputDiffing();
         IReadOnlyList<PipelineStep> graph = [];
         builder.Pipeline.AddStep("inspect", _ => Task.CompletedTask);
         builder.Pipeline.AddPipelineConfiguration(context =>
@@ -107,7 +109,7 @@ public class EFOutputDiffingTests(ITestOutputHelper output)
             }
         };
         migration.Resource.ToolResource = tool.Resource;
-        builder.Pipeline.WithOutputDiffing();
+        builder.WithOutputDiffing();
         using var app = builder.Build();
         Assert.Equal("old migration", await File.ReadAllTextAsync(artifact, TestContext.Current.CancellationToken));
 
@@ -131,3 +133,5 @@ public class EFOutputDiffingTests(ITestOutputHelper output)
             app.Services.GetRequiredService<DistributedApplicationExecutionContext>(), app.Services,
             NullLogger.Instance, TestContext.Current.CancellationToken));
 }
+
+#pragma warning restore ASPIREPIPELINES005

@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
 using IOPath = System.IO.Path;
 
 namespace Aspire.Hosting.Pipelines;
@@ -8,6 +9,7 @@ namespace Aspire.Hosting.Pipelines;
 /// <summary>
 /// Describes a changed output file.
 /// </summary>
+[Experimental("ASPIREPIPELINES005", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class PipelineOutputChange
 {
     /// <summary>
@@ -41,6 +43,7 @@ public sealed class PipelineOutputChange
 /// <summary>
 /// Specifies how an output file changed between captures.
 /// </summary>
+[Experimental("ASPIREPIPELINES005", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public enum PipelineOutputChangeKind
 {
     /// <summary>

@@ -6,6 +6,8 @@ using System.IO.Hashing;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
 
+#pragma warning disable ASPIREPIPELINES005 // Tests opt into the experimental output diffing API.
+
 namespace Aspire.Hosting.Tests.Pipelines;
 
 [Trait("Partition", "4")]
@@ -690,3 +692,5 @@ public sealed class PipelineOutputSnapshotterTests(ITestOutputHelper output) : I
         Assert.Equal(path, change.Path);
     }
 }
+
+#pragma warning restore ASPIREPIPELINES005

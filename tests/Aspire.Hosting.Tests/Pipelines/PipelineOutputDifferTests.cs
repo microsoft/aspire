@@ -6,6 +6,8 @@ using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Options;
 
+#pragma warning disable ASPIREPIPELINES005 // Tests opt into the experimental output diffing API.
+
 namespace Aspire.Hosting.Tests.Pipelines;
 
 [Trait("Partition", "4")]
@@ -87,3 +89,5 @@ public sealed class PipelineOutputDifferTests : IDisposable
 
     public void Dispose() => _fileSystem.Dispose();
 }
+
+#pragma warning restore ASPIREPIPELINES005

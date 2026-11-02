@@ -6,6 +6,8 @@ using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Pipelines;
 using Microsoft.Extensions.Options;
 
+#pragma warning disable ASPIREPIPELINES005 // Tests opt into the experimental output diffing API.
+
 namespace Aspire.Hosting.Tests.Pipelines;
 
 public sealed class PipelineOutputGitFingerprintTests(ITestOutputHelper output)
@@ -36,7 +38,7 @@ public sealed class PipelineOutputGitFingerprintTests(ITestOutputHelper output)
         var index = File.ReadAllBytes(Path.Combine(workspace.Path, ".git", "index"));
         var objects = ReadObjects(workspace.Path);
         var beforeOid = await PipelineOutputGitTestHelper.RunAsync(workspace.Path, "--no-optional-locks", "hash-object", "--", "output/model.txt");
-        var differ = new SnapshotPipelineOutputDiffer(new(), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions { UseGit = useGit }));
+        var differ = new SnapshotPipelineOutputDiffer(new(), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions { Mode = useGit ? PipelineOutputDiffMode.Git : PipelineOutputDiffMode.FileSystem }));
         await differ.CaptureBeforeAsync(root, TestContext.Current.CancellationToken);
 
         File.WriteAllText(path, after);
@@ -617,3 +619,5 @@ public sealed class PipelineOutputGitFingerprintTests(ITestOutputHelper output)
         }
     }
 }
+
+#pragma warning restore ASPIREPIPELINES005

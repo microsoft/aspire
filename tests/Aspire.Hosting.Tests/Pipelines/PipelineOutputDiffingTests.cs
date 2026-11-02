@@ -9,11 +9,74 @@ using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+
+#pragma warning disable ASPIREPIPELINES005 // Tests opt into the experimental output diffing API.
 
 namespace Aspire.Hosting.Tests.Pipelines;
 
 public class PipelineOutputDiffingTests(ITestOutputHelper output)
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void DiffServicesAndConfigurationAreOptIn(bool enabled)
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path);
+        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Pipeline:OutputDiff:Mode"] = "FileSystem",
+            ["Pipeline:OutputDiff:Rules:0:Action"] = "Include",
+            ["Pipeline:OutputDiff:Rules:0:Pattern"] = "generated/**"
+        });
+        if (enabled)
+        {
+            builder.WithOutputDiffing();
+        }
+        using var app = builder.Build();
+        var differ = app.Services.GetService<IPipelineOutputDiffer>();
+        var options = app.Services.GetRequiredService<IOptions<PipelineOutputDiffOptions>>().Value;
+
+        if (enabled)
+        {
+            Assert.IsType<SnapshotPipelineOutputDiffer>(differ);
+            Assert.Equal(PipelineOutputDiffMode.FileSystem, options.Mode);
+            Assert.Equal("generated/**", Assert.Single(options.Rules).Pattern);
+        }
+        else
+        {
+            Assert.Null(differ);
+            Assert.Equal(PipelineOutputDiffMode.Auto, options.Mode);
+            Assert.Empty(options.Rules);
+        }
+    }
+
+    [Fact]
+    public void MultipleChecksBindConfigurationOnceAndPreserveConfigureCallbacks()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path);
+        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Pipeline:OutputDiff:Mode"] = "Git",
+            ["Pipeline:OutputDiff:Rules:0:Action"] = "Include",
+            ["Pipeline:OutputDiff:Rules:0:Pattern"] = "generated/**"
+        });
+        builder.WithOutputDiffing();
+        builder.Services.Configure<PipelineOutputDiffOptions>(options =>
+        {
+            options.Mode = PipelineOutputDiffMode.FileSystem;
+            options.Rules[0].Pattern = "artifacts/**";
+        });
+        builder.WithOutputDiffing(diffStepName: "second-check");
+        using var app = builder.Build();
+        var options = app.Services.GetRequiredService<IOptions<PipelineOutputDiffOptions>>().Value;
+
+        Assert.Equal(PipelineOutputDiffMode.FileSystem, options.Mode);
+        Assert.Equal("artifacts/**", Assert.Single(options.Rules).Pattern);
+    }
+
     [Theory]
     [InlineData(false, false)]
     [InlineData(true, false)]
@@ -28,7 +91,7 @@ public class PipelineOutputDiffingTests(ITestOutputHelper output)
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path, step: "publish-and-diff");
         builder.Services.Configure<PipelineOutputDiffOptions>(options =>
         {
-            options.UseGit = false;
+            options.Mode = PipelineOutputDiffMode.FileSystem;
             options.Rules.Add(new() { Action = "Include", Pattern = "generated/**" });
         });
         builder.Services.PostConfigure<PipelineOutputDiffOptions>(options =>
@@ -48,7 +111,7 @@ public class PipelineOutputDiffingTests(ITestOutputHelper output)
             return XxHash3.Hash(Encoding.UTF8.GetBytes(content.ReplaceLineEndings("\n") + readOnly));
         });
         builder.Services.AddSingleton<IPipelineOutputFileHasher>(hasher);
-        builder.Pipeline.WithOutputDiffing();
+        builder.WithOutputDiffing();
         builder.Pipeline.WithFinalAction(WellKnownPipelineSteps.Publish, async _ =>
         {
             await File.WriteAllTextAsync(artifact, changeContent ? "services: [other]\n" : "services: [api]\n", TestContext.Current.CancellationToken);
@@ -122,8 +185,8 @@ public class PipelineOutputDiffingTests(ITestOutputHelper output)
         }
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path, step: "publish-and-diff");
         builder.Services.AddSingleton<IPipelineOutputFileHasher, ByteOutputFileHasher>();
-        builder.Services.Configure<PipelineOutputDiffOptions>(options => options.UseGit = false);
-        builder.Pipeline.WithOutputDiffing();
+        builder.Services.Configure<PipelineOutputDiffOptions>(options => options.Mode = PipelineOutputDiffMode.FileSystem);
+        builder.WithOutputDiffing();
         builder.Pipeline.WithFinalAction(WellKnownPipelineSteps.Publish, _ =>
             File.WriteAllBytesAsync(artifact, generated, TestContext.Current.CancellationToken));
         using var app = builder.Build();
@@ -162,7 +225,7 @@ public class PipelineOutputDiffingTests(ITestOutputHelper output)
             Assert.Equal(new[] { "before" }, differ.Phases);
             return File.WriteAllTextAsync(artifact, "written after baseline", TestContext.Current.CancellationToken);
         }, requiredBy: WellKnownPipelineSteps.Publish);
-        builder.Pipeline.WithOutputDiffing();
+        builder.WithOutputDiffing();
         using var app = builder.Build();
         Assert.Empty(differ.Phases);
         Assert.False(File.Exists(artifact));
@@ -189,7 +252,7 @@ public class PipelineOutputDiffingTests(ITestOutputHelper output)
         Func<PipelineStepContext, Task> action = _ => File.WriteAllTextAsync(artifact, "factory action", TestContext.Current.CancellationToken);
         if (useFactory)
         {
-            builder.Pipeline.WithOutputDiffing(() => new PipelineStep
+            builder.WithOutputDiffing(() => new PipelineStep
             {
                 Name = "custom-check",
                 Description = "Check custom output",
@@ -202,7 +265,7 @@ public class PipelineOutputDiffingTests(ITestOutputHelper output)
         }
         else
         {
-            builder.Pipeline.WithOutputDiffing("custom-target", "custom-check", "Check custom output");
+            builder.WithOutputDiffing("custom-target", "custom-check", "Check custom output");
             builder.Pipeline.WithFinalAction("custom-target", action);
             builder.Pipeline.AddStep("select-check", _ => Task.CompletedTask, dependsOn: "custom-check", requiredBy: "check-alias");
         }
@@ -241,7 +304,7 @@ public class PipelineOutputDiffingTests(ITestOutputHelper output)
         builder.Services.AddTransient<IPipelineOutputDiffer>(_ => throw new InvalidOperationException("differ resolved"));
         builder.Services.AddSingleton<PipelineOutputSnapshotter>(_ => throw new InvalidOperationException("snapshotter resolved"));
         builder.Services.AddSingleton<IPipelineOutputService>(_ => throw new InvalidOperationException("output resolved"));
-        builder.Pipeline.WithOutputDiffing();
+        builder.WithOutputDiffing();
         using var app = builder.Build();
         var pipeline = Assert.IsType<DistributedApplicationPipeline>(app.Services.GetRequiredService<IDistributedApplicationPipeline>());
         var context = new PipelineContext(app.Services.GetRequiredService<DistributedApplicationModel>(),
@@ -262,7 +325,7 @@ public class PipelineOutputDiffingTests(ITestOutputHelper output)
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path, step: "publish-and-diff");
         var differ = new RecordingDiffer(artifact);
         builder.Services.AddSingleton<IPipelineOutputDiffer>(differ);
-        builder.Pipeline.WithOutputDiffing();
+        builder.WithOutputDiffing();
         builder.AddResource(new OutputResource("late-writer"))
             .WithPipelineStepFactory(_ => new PipelineStep
             {
@@ -300,7 +363,7 @@ public class PipelineOutputDiffingTests(ITestOutputHelper output)
         builder.Services.AddSingleton<PipelineOutputSnapshotter>(_ => throw new InvalidOperationException("snapshotter resolved"));
         builder.Services.AddSingleton<IPipelineOutputService>(_ => throw new InvalidOperationException("output resolved"));
         AddArtifactWriter(builder.Pipeline);
-        builder.Pipeline.WithOutputDiffing();
+        builder.WithOutputDiffing();
         var artifact = Path.Combine(workspace.Path, "ordinary.txt");
         builder.Pipeline.WithFinalAction(WellKnownPipelineSteps.Publish, _ => File.WriteAllTextAsync(artifact, "ordinary output", TestContext.Current.CancellationToken));
         using var app = builder.Build();
@@ -327,7 +390,7 @@ public class PipelineOutputDiffingTests(ITestOutputHelper output)
         Assert.Contains("tracked.tmp", await PipelineOutputGitTestHelper.RunAsync(workspace.Path, "diff", "--name-only"));
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path, step: "publish-and-diff");
         AddArtifactWriter(builder.Pipeline);
-        builder.Pipeline.WithOutputDiffing();
+        builder.WithOutputDiffing();
         builder.Pipeline.WithFinalAction(WellKnownPipelineSteps.Publish, async _ =>
         {
             Assert.False(Directory.Exists(Path.Combine(workspace.Path, "src", "Api", "bin")));
@@ -378,7 +441,7 @@ public class PipelineOutputDiffingTests(ITestOutputHelper output)
         await PipelineOutputGitTestHelper.RunAsync(workspace.Path, "add", "--", ".gitignore", "src", "generated");
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path, step: "publish-and-diff");
         AddArtifactWriter(builder.Pipeline);
-        builder.Pipeline.WithOutputDiffing();
+        builder.WithOutputDiffing();
         var generationCalls = 0;
         builder.Pipeline.WithFinalAction(WellKnownPipelineSteps.Publish, async _ =>
         {
@@ -429,10 +492,11 @@ public class PipelineOutputDiffingTests(ITestOutputHelper output)
         }
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path, step: "publish-and-diff");
         builder.Configuration.AddJsonStream(new MemoryStream(Encoding.UTF8.GetBytes("""
-            {"Pipeline":{"OutputDiff":{"UseGit":false,"Rules":[
+            {"Pipeline":{"OutputDiff":{"Mode":"FileSystem","Rules":[
               {"Action":"Include","Pattern":"src/**"}
             ]}}}
             """)));
+        builder.WithOutputDiffing();
         if (configuration == "json")
         {
             builder.Configuration.AddJsonStream(new MemoryStream(Encoding.UTF8.GetBytes("""
@@ -458,7 +522,6 @@ public class PipelineOutputDiffingTests(ITestOutputHelper output)
             builder.Services.PostConfigure<PipelineOutputDiffOptions>(options => options.Rules.Add(new() { Action = "Exclude", Pattern = "**/*.tmp" }));
         }
         AddArtifactWriter(builder.Pipeline);
-        builder.Pipeline.WithOutputDiffing();
         builder.Pipeline.WithFinalAction(WellKnownPipelineSteps.Publish, async _ =>
         {
             await File.WriteAllTextAsync(source, "new", TestContext.Current.CancellationToken);
@@ -489,9 +552,10 @@ public class PipelineOutputDiffingTests(ITestOutputHelper output)
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task ConfiguredIncludeOfIgnoredArtifactRequiresGitOptOut(bool useGit)
+    [InlineData(PipelineOutputDiffMode.Auto)]
+    [InlineData(PipelineOutputDiffMode.Git)]
+    [InlineData(PipelineOutputDiffMode.FileSystem)]
+    public async Task ConfiguredIncludeOfIgnoredArtifactRequiresGitOptOut(PipelineOutputDiffMode mode)
     {
         using var workspace = TemporaryWorkspace.Create(output);
         var artifact = Path.Combine(workspace.CreateDirectory("generated").FullName, "deployment.yaml");
@@ -503,17 +567,17 @@ public class PipelineOutputDiffingTests(ITestOutputHelper output)
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path, step: "publish-and-diff");
         builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
-            ["Pipeline:OutputDiff:UseGit"] = useGit.ToString(),
+            ["Pipeline:OutputDiff:Mode"] = mode.ToString(),
             ["Pipeline:OutputDiff:Rules:0:Action"] = "Include",
             ["Pipeline:OutputDiff:Rules:0:Pattern"] = "generated/**"
         });
         AddArtifactWriter(builder.Pipeline);
-        builder.Pipeline.WithOutputDiffing();
+        builder.WithOutputDiffing();
         builder.Pipeline.WithFinalAction(WellKnownPipelineSteps.Publish, _ => File.WriteAllTextAsync(artifact, "new", TestContext.Current.CancellationToken));
         using var app = builder.Build();
         Assert.Equal("old", await File.ReadAllTextAsync(artifact, TestContext.Current.CancellationToken));
 
-        if (useGit)
+        if (mode is PipelineOutputDiffMode.Auto or PipelineOutputDiffMode.Git)
         {
             await ExecuteAsync(app);
         }
@@ -548,12 +612,12 @@ public class PipelineOutputDiffingTests(ITestOutputHelper output)
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path, step: "publish-and-diff");
         builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
-            ["Pipeline:OutputDiff:UseGit"] = "false",
+            ["Pipeline:OutputDiff:Mode"] = "FileSystem",
             ["Pipeline:OutputDiff:Rules:0:Action"] = "Include",
             ["Pipeline:OutputDiff:Rules:0:Pattern"] = "generated/**"
         });
         AddArtifactWriter(builder.Pipeline);
-        builder.Pipeline.WithOutputDiffing();
+        builder.WithOutputDiffing();
         builder.Pipeline.WithFinalAction(WellKnownPipelineSteps.Publish, _ => File.WriteAllTextAsync(artifact, after, TestContext.Current.CancellationToken));
         using var app = builder.Build();
         Assert.Equal(before, await File.ReadAllTextAsync(artifact, TestContext.Current.CancellationToken));
@@ -583,7 +647,7 @@ public class PipelineOutputDiffingTests(ITestOutputHelper output)
         builder.Services.AddSingleton<IPipelineOutputDiffer>(differ);
         builder.Services.AddSingleton<PipelineOutputSnapshotter>(_ => throw new InvalidOperationException("Native snapshotter resolved by replacement policy."));
         AddArtifactWriter(builder.Pipeline);
-        builder.Pipeline.WithOutputDiffing();
+        builder.WithOutputDiffing();
         using var app = builder.Build();
         Assert.Empty(differ.Phases);
         Assert.False(Directory.Exists(Path.Combine(workspace.Path, ".git")));
@@ -608,7 +672,7 @@ public class PipelineOutputDiffingTests(ITestOutputHelper output)
         var provider = new CountingOutputService(global, external);
         builder.Services.AddSingleton<IPipelineOutputService>(provider);
         AddArtifactWriter(builder.Pipeline);
-        builder.Pipeline.WithOutputDiffing();
+        builder.WithOutputDiffing();
         builder.Pipeline.WithFinalAction(WellKnownPipelineSteps.Publish, _ => File.WriteAllTextAsync(artifact, "new", TestContext.Current.CancellationToken));
         using var app = builder.Build();
         Assert.Equal("old", await File.ReadAllTextAsync(artifact, TestContext.Current.CancellationToken));
@@ -631,7 +695,7 @@ public class PipelineOutputDiffingTests(ITestOutputHelper output)
         await File.WriteAllTextAsync(removed, "remove me", TestContext.Current.CancellationToken);
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path, step: "publish-and-diff");
         AddArtifactWriter(builder.Pipeline);
-        builder.Pipeline.WithOutputDiffing();
+        builder.WithOutputDiffing();
         builder.Pipeline.WithFinalAction(WellKnownPipelineSteps.Publish, async _ =>
         {
             await File.WriteAllTextAsync(changed, "after", TestContext.Current.CancellationToken);
@@ -673,7 +737,7 @@ public class PipelineOutputDiffingTests(ITestOutputHelper output)
         });
         builder.Services.AddSingleton<PipelineOutputSnapshotter>(_ => throw new InvalidOperationException("Native engine must not resolve for a replacement."));
         AddArtifactWriter(builder.Pipeline);
-        builder.Pipeline.WithOutputDiffing();
+        builder.WithOutputDiffing();
         using var app = builder.Build();
         Assert.Empty(instances);
 
@@ -712,13 +776,13 @@ public class PipelineOutputDiffingTests(ITestOutputHelper output)
             return differ;
         });
         AddArtifactWriter(builder.Pipeline);
-        builder.Pipeline.WithOutputDiffing(() => new PipelineStep
+        builder.WithOutputDiffing(() => new PipelineStep
         {
             Name = "first-check",
             Action = _ => Task.CompletedTask,
             DependsOnSteps = [WellKnownPipelineSteps.Publish]
         });
-        builder.Pipeline.WithOutputDiffing(() => new PipelineStep
+        builder.WithOutputDiffing(() => new PipelineStep
         {
             Name = "second-check",
             Action = _ => Task.CompletedTask,
@@ -750,7 +814,7 @@ public class PipelineOutputDiffingTests(ITestOutputHelper output)
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path, step: "publish-and-diff");
         var differ = new RecordingDiffer(artifact) { FailBefore = failBaseline };
         builder.Services.AddSingleton<IPipelineOutputDiffer>(differ);
-        builder.Pipeline.WithOutputDiffing();
+        builder.WithOutputDiffing();
         builder.Pipeline.AddStep("writer", async _ =>
         {
             await File.WriteAllTextAsync(artifact, "target entered", TestContext.Current.CancellationToken);
@@ -786,7 +850,7 @@ public class PipelineOutputDiffingTests(ITestOutputHelper output)
             Assert.Equal(new[] { "before" }, differ.Phases);
             return File.WriteAllTextAsync(artifact, "custom output", TestContext.Current.CancellationToken);
         });
-        builder.Pipeline.WithOutputDiffing("custom-target", "custom-check");
+        builder.WithOutputDiffing("custom-target", "custom-check");
         using var app = builder.Build();
         Assert.False(File.Exists(artifact));
         Assert.Empty(differ.Phases);
@@ -807,7 +871,7 @@ public class PipelineOutputDiffingTests(ITestOutputHelper output)
         cancellation.Cancel();
         var differ = new RecordingDiffer(artifact) { BeforeCancellation = cancellation.Token };
         builder.Services.AddSingleton<IPipelineOutputDiffer>(differ);
-        builder.Pipeline.WithOutputDiffing();
+        builder.WithOutputDiffing();
         builder.Pipeline.AddStep("writer", _ => File.WriteAllTextAsync(artifact, "unexpected", TestContext.Current.CancellationToken),
             dependsOn: WellKnownPipelineSteps.PublishPrereq, requiredBy: WellKnownPipelineSteps.Publish);
         using var app = builder.Build();
@@ -833,12 +897,12 @@ public class PipelineOutputDiffingTests(ITestOutputHelper output)
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path, step: "publish-and-diff");
         builder.Services.Configure<PipelineOutputDiffOptions>(options =>
         {
-            options.UseGit = false;
+            options.Mode = PipelineOutputDiffMode.FileSystem;
             options.Rules.Add(new() { Action = "Include", Pattern = "**/*" });
             options.Rules.Add(new() { Action = "Exclude", Pattern = "*.tmp" });
         });
         AddArtifactWriter(builder.Pipeline);
-        builder.Pipeline.WithOutputDiffing();
+        builder.WithOutputDiffing();
         builder.Pipeline.WithFinalAction(WellKnownPipelineSteps.Publish, async context =>
         {
             var options = context.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<PipelineOutputDiffOptions>>().Value;
@@ -850,7 +914,7 @@ public class PipelineOutputDiffingTests(ITestOutputHelper output)
             rule.Pattern = "**/*";
             options.Rules.Clear();
             options.Rules.Add(new() { Action = "Exclude", Pattern = "included.txt" });
-            options.UseGit = true;
+            options.Mode = PipelineOutputDiffMode.Git;
             await File.WriteAllTextAsync(included, "new", TestContext.Current.CancellationToken);
             await File.WriteAllTextAsync(excluded, "new", TestContext.Current.CancellationToken);
         });
@@ -879,7 +943,7 @@ public class PipelineOutputDiffingTests(ITestOutputHelper output)
         builder.Services.AddSingleton<PipelineOutputSnapshotter>(_ => throw new InvalidOperationException("Native snapshotter resolved by Git replacement."));
         builder.Services.AddTransient<IPipelineOutputDiffer>(_ => new GitDiffer(workspace.Path));
         AddArtifactWriter(builder.Pipeline);
-        builder.Pipeline.WithOutputDiffing();
+        builder.WithOutputDiffing();
         builder.Pipeline.WithFinalAction(WellKnownPipelineSteps.Publish, async _ =>
         {
             await File.WriteAllTextAsync(artifact, "new", TestContext.Current.CancellationToken);
@@ -1017,3 +1081,5 @@ public class PipelineOutputDiffingTests(ITestOutputHelper output)
         public void Dispose() => Disposed = true;
     }
 }
+
+#pragma warning restore ASPIREPIPELINES005

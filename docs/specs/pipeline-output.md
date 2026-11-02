@@ -55,11 +55,13 @@ Direct publisher contexts that receive a destination from their caller use that 
 
 ## Output diffing
 
+The output diffing APIs are experimental (`ASPIREPIPELINES005`).
+
 In CI, verify that checked-in deployment files are up to date with the current source. The check regenerates the files
 and fails if selected output differs, leaving regenerated files on disk for inspection. Output diffing is opt-in:
 
 ```csharp
-builder.Pipeline.WithOutputDiffing();
+builder.WithOutputDiffing();
 ```
 
 Run `aspire do <target>` to execute a comparison target and its dependencies. The default registration names the target
@@ -79,7 +81,7 @@ Inspection resolves the graph without capturing output.
 Choose the generation target, comparison name, and description:
 
 ```csharp
-builder.Pipeline.WithOutputDiffing(
+builder.WithOutputDiffing(
     targetStep: "generate",
     diffStepName: "check-generated-files",
     description: "Check generated deployment files");
@@ -89,7 +91,7 @@ When `diffStepName` is omitted, it defaults to the target name followed by `-and
 a complete `PipelineStep` for dependencies, tags, and an action:
 
 ```csharp
-builder.Pipeline.WithOutputDiffing(() => new PipelineStep
+builder.WithOutputDiffing(() => new PipelineStep
 {
     Name = "check-generated-files",
     DependsOnSteps = ["generate", "postprocess"],
@@ -130,7 +132,7 @@ ignores them:
 {
   "Pipeline": {
     "OutputDiff": {
-      "UseGit": false,
+      "Mode": "FileSystem",
       "Rules": [
         { "Action": "Include", "Pattern": "generated/**" },
         { "Action": "Exclude", "Pattern": "**/*.tmp" }
@@ -140,12 +142,13 @@ ignores them:
 }
 ```
 
-The same policy can be configured through host DI:
+Call `WithOutputDiffing()` before registering `Configure` callbacks so configuration binds first.
+`PostConfigure` callbacks run after all configuration callbacks:
 
 ```csharp
 builder.Services.Configure<PipelineOutputDiffOptions>(options =>
 {
-    options.UseGit = false;
+    options.Mode = PipelineOutputDiffMode.FileSystem;
     options.Rules.Add(new() { Action = "Include", Pattern = "generated/**" });
 });
 builder.Services.PostConfigure<PipelineOutputDiffOptions>(options =>
@@ -163,13 +166,13 @@ ordinal-ignore-case on Windows and ordinal elsewhere. Captures are not atomic.
 
 ### Git and hashes
 
-`UseGit` controls membership and built-in hashes:
+`PipelineOutputDiffOptions.Mode` controls membership and built-in hashes:
 
-| Value | Strategy |
-| ----- | -------- |
-| `null` (default) | Use native Git when the executable and a usable worktree are available; otherwise use filesystem membership and streaming XxHash3. |
-| `true` | Require Git and a usable worktree, with a clear failure when discovery cannot find them. |
-| `false` | Use filesystem membership and raw-byte XxHash3, including matching ignored files, with no engine Git invocations. |
+| Mode | Strategy |
+| ---- | -------- |
+| `Auto` (default) | Use native Git when the executable and a usable worktree are available; otherwise use filesystem membership and streaming XxHash3. |
+| `Git` | Require Git and a usable worktree, with a clear failure when discovery cannot find them. |
+| `FileSystem` | Use filesystem membership and raw-byte XxHash3, including matching ignored files, with no engine Git invocations. |
 
 Discovery waits until the output directory exists. Missing directories contribute empty captures. Once selected,
 the strategy is retained; errors and cancellation do not switch strategies.
@@ -205,34 +208,6 @@ builder.Services.AddTransient<IPipelineOutputDiffer, MyOutputDiffer>();
 The baseline resolves one differ from host DI and reuses it for `CaptureBeforeAsync(outputDirectory, ct)`,
 `CaptureAfterAsync(outputDirectory, ct)`, and `CompareAsync(ct)`. Custom changes preserve the relative reporting paths
 supplied by the differ.
-
-To customize content and metadata equivalence, register an `IPipelineOutputFileHasher` through ordinary host DI.
-For outputs containing only regular files, register a streaming byte hasher:
-
-```csharp
-using System.IO.Hashing;
-using Aspire.Hosting.Pipelines;
-
-builder.Services.AddSingleton<IPipelineOutputFileHasher, ByteOutputFileHasher>();
-
-sealed class ByteOutputFileHasher : IPipelineOutputFileHasher
-{
-    public async ValueTask<ReadOnlyMemory<byte>> HashAsync(FileSystemInfo entry, CancellationToken ct)
-    {
-        using var stream = File.OpenRead(entry.FullName);
-        var hash = new XxHash3();
-        await hash.AppendAsync(stream, ct);
-        return hash.GetCurrentHash();
-    }
-}
-```
-
-The `FileSystemInfo` lets an implementation choose which content and metadata define equivalence. See the
-[interface contract](../../src/Aspire.Hosting/Pipelines/IPipelineOutputFileHasher.cs) for leaf handling, concurrency, and I/O
-requirements. File selection is unchanged: when Git is selected, it supplies indexed and nonignored untracked paths
-available on the filesystem. The engine adds no automatic metadata comparison to custom hashes and copies each
-returned hash into the file snapshot. Hash equality and entry kind determine changes; implementation errors and
-cancellation propagate.
 
 See the [diffing integration](../../src/Aspire.Hosting/Pipelines/PipelineOutputDiffingExtensions.cs),
 [default differ](../../src/Aspire.Hosting/Pipelines/SnapshotPipelineOutputDiffer.cs),

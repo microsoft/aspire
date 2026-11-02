@@ -24,6 +24,7 @@ internal static class PipelineOutputRoot
 
     /// <summary>
     /// Tests whether a path is the directory itself or lies lexically within it.
+    /// Both inputs must be normalized absolute paths. Links are not resolved; this is not a filesystem security boundary.
     /// </summary>
     internal static bool IsWithinDirectory(string directory, string path) =>
         string.Equals(directory, path, PathComparison) ||

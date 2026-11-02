@@ -2642,6 +2642,21 @@ class DistributedApplicationBuilder:
         )
         return typing.cast(CSharpAppResource, result)
 
+    def with_output_diffing(self, *, target_step: str = "publish", diff_step_name: str | None = None, description: str | None = None) -> typing.Self:
+        """Adds an opt-in target that checks for stale generated pipeline output."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        if target_step is not None:
+            rpc_args['targetStep'] = target_step
+        if diff_step_name is not None:
+            rpc_args['diffStepName'] = diff_step_name
+        if description is not None:
+            rpc_args['description'] = description
+        self._client.invoke_capability(
+            'Aspire.Hosting/withOutputDiffing',
+            rpc_args
+        )
+        return self
+
     def get_config(self) -> AbstractConfiguration:
         """Gets the application configuration."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
@@ -2791,21 +2806,6 @@ class AbstractDistributedApplicationPipeline:
         rpc_args: dict[str, typing.Any] = {'pipeline': self._handle}
         result = self._client.invoke_capability(
             'Aspire.Hosting/disableBuildOnlyContainerValidation',
-            rpc_args,
-        )
-        return typing.cast(AbstractDistributedApplicationPipeline, result)
-
-    def with_output_diffing(self, *, target_step: str = "publish", diff_step_name: str | None = None, description: str | None = None) -> AbstractDistributedApplicationPipeline:
-        """Adds an opt-in target that checks for stale generated pipeline output."""
-        rpc_args: dict[str, typing.Any] = {'pipeline': self._handle}
-        if target_step is not None:
-            rpc_args['targetStep'] = target_step
-        if diff_step_name is not None:
-            rpc_args['diffStepName'] = diff_step_name
-        if description is not None:
-            rpc_args['description'] = description
-        result = self._client.invoke_capability(
-            'Aspire.Hosting/withOutputDiffing',
             rpc_args,
         )
         return typing.cast(AbstractDistributedApplicationPipeline, result)

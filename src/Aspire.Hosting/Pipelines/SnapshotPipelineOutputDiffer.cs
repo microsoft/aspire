@@ -5,6 +5,8 @@ using Aspire.Hosting.Dcp.Process;
 using Microsoft.Extensions.FileSystemGlobbing;
 using Microsoft.Extensions.Options;
 
+#pragma warning disable ASPIREPIPELINES005 // Internal consumer of the experimental output diffing API.
+
 namespace Aspire.Hosting.Pipelines;
 
 /// <summary>
@@ -14,7 +16,7 @@ internal sealed class SnapshotPipelineOutputDiffer : IPipelineOutputDiffer
 {
     private readonly PipelineOutputSnapshotter _snapshotter;
     private readonly IProcessRunner _processRunner;
-    private readonly bool? _useGit;
+    private readonly PipelineOutputDiffMode _mode;
     private readonly Matcher _matcher = new(PipelineOutputRoot.PathComparison, preserveFilterOrder: true);
     private string? _outputDirectory;
     private Func<string, CancellationToken, Task<IReadOnlyDictionary<string, PipelineOutputFileSnapshot>>>? _capture;
@@ -29,7 +31,7 @@ internal sealed class SnapshotPipelineOutputDiffer : IPipelineOutputDiffer
         _snapshotter = snapshotter;
         _processRunner = processRunner;
         var policy = options.Value;
-        _useGit = policy.UseGit;
+        _mode = policy.Mode;
         if (policy.Rules.Count == 0)
         {
             _matcher.AddInclude("**/*");
@@ -82,8 +84,10 @@ internal sealed class SnapshotPipelineOutputDiffer : IPipelineOutputDiffer
         }
         if (_capture is null)
         {
-            var git = _useGit is false ? null : await GitPipelineOutputReader.TryCreateAsync(directory, _processRunner, ct).ConfigureAwait(false);
-            if (git is null && _useGit is true)
+            var git = _mode is PipelineOutputDiffMode.Auto or PipelineOutputDiffMode.Git
+                ? await GitPipelineOutputReader.TryCreateAsync(directory, _processRunner, ct).ConfigureAwait(false)
+                : null;
+            if (git is null && _mode is PipelineOutputDiffMode.Git)
             {
                 throw new DistributedApplicationException($"Git is required to capture pipeline output, but the Git executable or a usable worktree is unavailable: {directory}");
             }
@@ -137,3 +141,5 @@ internal sealed class SnapshotPipelineOutputDiffer : IPipelineOutputDiffer
         return changes.AsReadOnly();
     }
 }
+
+#pragma warning restore ASPIREPIPELINES005

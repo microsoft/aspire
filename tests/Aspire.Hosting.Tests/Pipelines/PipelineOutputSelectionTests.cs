@@ -9,15 +9,17 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
+#pragma warning disable ASPIREPIPELINES005 // Tests opt into the experimental output diffing API.
+
 namespace Aspire.Hosting.Tests.Pipelines;
 
 public sealed class PipelineOutputSelectionTests(ITestOutputHelper output)
 {
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    [InlineData(null)]
-    public async Task OrderedRulesRestoreExcludedParentsBeforeGitFiltering(bool? useGit)
+    [InlineData(PipelineOutputDiffMode.FileSystem)]
+    [InlineData(PipelineOutputDiffMode.Git)]
+    [InlineData(PipelineOutputDiffMode.Auto)]
+    public async Task OrderedRulesRestoreExcludedParentsBeforeGitFiltering(PipelineOutputDiffMode mode)
     {
         using var workspace = TemporaryWorkspace.Create(output);
         await InitializeGitAsync(workspace.Path);
@@ -32,7 +34,7 @@ public sealed class PipelineOutputSelectionTests(ITestOutputHelper output)
         var basePaths = (await git.SelectFilesAsync(root, PipelineOutputGitTestHelper.AllFilesMatcher(), TestContext.Current.CancellationToken)).Select(entry => entry.File.FullName).ToArray();
         Assert.Contains(source, basePaths);
         Assert.DoesNotContain(model, basePaths);
-        var options = new PipelineOutputDiffOptions { UseGit = useGit };
+        var options = new PipelineOutputDiffOptions { Mode = mode };
         options.Rules.Add(new() { Action = "Include", Pattern = "**/*" });
         options.Rules.Add(new() { Action = "Exclude", Pattern = ".gitignore" });
         options.Rules.Add(new() { Action = "exclude", Pattern = "src/**" });
@@ -41,19 +43,19 @@ public sealed class PipelineOutputSelectionTests(ITestOutputHelper output)
 
         var selected = await SelectAsync(options, root);
 
-        Assert.Equal(useGit is not false ? new[] { readme } : new[] { readme, model }, selected.Order(PipelineOutputRoot.PathComparer));
+        Assert.Equal(mode is not PipelineOutputDiffMode.FileSystem ? new[] { readme } : new[] { readme, model }, selected.Order(PipelineOutputRoot.PathComparer));
         Assert.DoesNotContain(source, selected);
         Assert.DoesNotContain(temporary, selected);
     }
 
     [Theory]
-    [InlineData(false, false)]
-    [InlineData(false, true)]
-    [InlineData(true, false)]
-    [InlineData(true, true)]
-    [InlineData(false, null)]
-    [InlineData(true, null)]
-    public async Task ExplicitIncludesStillApplyGitToNewAndExistingIgnoredArtifacts(bool existsBefore, bool? useGit)
+    [InlineData(false, PipelineOutputDiffMode.FileSystem)]
+    [InlineData(false, PipelineOutputDiffMode.Git)]
+    [InlineData(true, PipelineOutputDiffMode.FileSystem)]
+    [InlineData(true, PipelineOutputDiffMode.Git)]
+    [InlineData(false, PipelineOutputDiffMode.Auto)]
+    [InlineData(true, PipelineOutputDiffMode.Auto)]
+    public async Task ExplicitIncludesStillApplyGitToNewAndExistingIgnoredArtifacts(bool existsBefore, PipelineOutputDiffMode mode)
     {
         using var workspace = TemporaryWorkspace.Create(output);
         await InitializeGitAsync(workspace.Path);
@@ -67,7 +69,7 @@ public sealed class PipelineOutputSelectionTests(ITestOutputHelper output)
         var git = Assert.IsType<GitPipelineOutputReader>(await GitPipelineOutputReader.TryCreateAsync(root, new DefaultProcessRunner(), TestContext.Current.CancellationToken));
         Assert.Empty(await git.SelectFilesAsync(root, PipelineOutputGitTestHelper.AllFilesMatcher(), TestContext.Current.CancellationToken));
         Assert.Equal(existsBefore, File.Exists(artifact));
-        var options = new PipelineOutputDiffOptions { UseGit = useGit };
+        var options = new PipelineOutputDiffOptions { Mode = mode };
         options.Rules.Add(new() { Action = "Include", Pattern = "artifacts/**/*.json" });
         var differ = new SnapshotPipelineOutputDiffer(new(), new DefaultProcessRunner(), Options.Create(options));
         await differ.CaptureBeforeAsync(root, TestContext.Current.CancellationToken);
@@ -76,7 +78,7 @@ public sealed class PipelineOutputSelectionTests(ITestOutputHelper output)
         await differ.CaptureAfterAsync(root, TestContext.Current.CancellationToken);
         var changes = await differ.CompareAsync(TestContext.Current.CancellationToken);
 
-        if (useGit is not false)
+        if (mode is not PipelineOutputDiffMode.FileSystem)
         {
             Assert.Empty(changes);
         }
@@ -89,20 +91,20 @@ public sealed class PipelineOutputSelectionTests(ITestOutputHelper output)
     }
 
     [Theory]
-    [InlineData(false, false)]
-    [InlineData(false, true)]
-    [InlineData(true, false)]
-    [InlineData(true, true)]
-    [InlineData(null, false)]
-    [InlineData(null, true)]
-    public async Task ConfiguredRulesReplaceImplicitIncludeAll(bool? useGit, bool includeJson)
+    [InlineData(PipelineOutputDiffMode.FileSystem, false)]
+    [InlineData(PipelineOutputDiffMode.FileSystem, true)]
+    [InlineData(PipelineOutputDiffMode.Git, false)]
+    [InlineData(PipelineOutputDiffMode.Git, true)]
+    [InlineData(PipelineOutputDiffMode.Auto, false)]
+    [InlineData(PipelineOutputDiffMode.Auto, true)]
+    public async Task ConfiguredRulesReplaceImplicitIncludeAll(PipelineOutputDiffMode mode, bool includeJson)
     {
         using var workspace = TemporaryWorkspace.Create(output);
         await InitializeGitAsync(workspace.Path);
         var root = workspace.CreateDirectory("output").FullName;
         var json = Write(root, "nested/model.json");
         Write(root, "source.cs");
-        var options = new PipelineOutputDiffOptions { UseGit = useGit };
+        var options = new PipelineOutputDiffOptions { Mode = mode };
         options.Rules.Add(includeJson
             ? new() { Action = "Include", Pattern = "**/*.json" }
             : new() { Action = "Exclude", Pattern = "**/*.tmp" });
@@ -113,25 +115,25 @@ public sealed class PipelineOutputSelectionTests(ITestOutputHelper output)
     }
 
     [Theory]
-    [InlineData(true)]
-    [InlineData(null)]
-    public async Task GitMembershipExcludesRepositoryMetadata(bool? useGit)
+    [InlineData(PipelineOutputDiffMode.Git)]
+    [InlineData(PipelineOutputDiffMode.Auto)]
+    public async Task GitMembershipExcludesRepositoryMetadata(PipelineOutputDiffMode mode)
     {
         using var workspace = TemporaryWorkspace.Create(output);
         await InitializeGitAsync(workspace.Path);
         var artifact = Write(workspace.Path, "artifact.txt");
         Assert.True(File.Exists(Path.Combine(workspace.Path, ".git", "HEAD")));
 
-        var selected = await SelectAsync(new() { UseGit = useGit }, workspace.Path);
+        var selected = await SelectAsync(new() { Mode = mode }, workspace.Path);
 
         Assert.Equal(new[] { artifact }, selected);
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    [InlineData(null)]
-    public async Task NoRulesSelectAllFilesBeforeOrdinaryGitMembership(bool? useGit)
+    [InlineData(PipelineOutputDiffMode.FileSystem)]
+    [InlineData(PipelineOutputDiffMode.Git)]
+    [InlineData(PipelineOutputDiffMode.Auto)]
+    public async Task NoRulesSelectAllFilesBeforeOrdinaryGitMembership(PipelineOutputDiffMode mode)
     {
         using var workspace = TemporaryWorkspace.Create(output);
         await InitializeGitAsync(workspace.Path);
@@ -142,12 +144,12 @@ public sealed class PipelineOutputSelectionTests(ITestOutputHelper output)
         var tracked = Write(root, "tracked.tmp");
         var ignored = Write(root, "cache.tmp");
         await PipelineOutputGitTestHelper.RunAsync(workspace.Path, "add", "-f", "--", "output/tracked.tmp");
-        var options = new PipelineOutputDiffOptions { UseGit = useGit };
+        var options = new PipelineOutputDiffOptions { Mode = mode };
         Assert.Empty(options.Rules);
 
         var selected = await SelectAsync(options, root);
 
-        Assert.Equal((useGit is not false ? new[] { json, source, tracked } : new[] { ignored, json, source, tracked }).Order(PipelineOutputRoot.PathComparer), selected.Order(PipelineOutputRoot.PathComparer));
+        Assert.Equal((mode is not PipelineOutputDiffMode.FileSystem ? new[] { json, source, tracked } : new[] { ignored, json, source, tracked }).Order(PipelineOutputRoot.PathComparer), selected.Order(PipelineOutputRoot.PathComparer));
     }
 
     [Theory]
@@ -169,7 +171,7 @@ public sealed class PipelineOutputSelectionTests(ITestOutputHelper output)
         Write(target, "model.json");
         await PipelineOutputGitTestHelper.CreateDirectoryLinkAsync(child, target, junction: OperatingSystem.IsWindows());
         Assert.True((File.GetAttributes(child) & FileAttributes.ReparsePoint) != 0);
-        var options = new PipelineOutputDiffOptions { UseGit = useGit };
+        var options = new PipelineOutputDiffOptions { Mode = useGit ? PipelineOutputDiffMode.Git : PipelineOutputDiffMode.FileSystem };
         options.Rules.Add(new() { Action = "Include", Pattern = includeLink ? "ignored/child" : "ignored/child/**" });
 
         var paths = await SelectAsync(options, root);
@@ -276,10 +278,10 @@ public sealed class PipelineOutputSelectionTests(ITestOutputHelper output)
         var artifact = Write(root, "model.json", "old");
         var git = Assert.IsType<GitPipelineOutputReader>(await GitPipelineOutputReader.TryCreateAsync(root, new DefaultProcessRunner(), TestContext.Current.CancellationToken));
         Assert.Empty(await git.SelectFilesAsync(root, PipelineOutputGitTestHelper.AllFilesMatcher(), TestContext.Current.CancellationToken));
-        var options = new PipelineOutputDiffOptions { UseGit = false };
+        var options = new PipelineOutputDiffOptions { Mode = PipelineOutputDiffMode.FileSystem };
         var differ = new SnapshotPipelineOutputDiffer(new(), new DefaultProcessRunner(), Options.Create(options));
         await differ.CaptureBeforeAsync(root, TestContext.Current.CancellationToken);
-        options.UseGit = true;
+        options.Mode = PipelineOutputDiffMode.Git;
         options.Rules.Add(new() { Action = "Exclude", Pattern = "**/*" });
 
         File.WriteAllText(artifact, "new");
@@ -311,9 +313,9 @@ public sealed class PipelineOutputSelectionTests(ITestOutputHelper output)
     }
 
     [Theory]
-    [InlineData(null)]
-    [InlineData(true)]
-    public async Task GitMetadataOutsideConfiguredWorktreeUsesNonWorktreePolicy(bool? useGit)
+    [InlineData(PipelineOutputDiffMode.Auto)]
+    [InlineData(PipelineOutputDiffMode.Git)]
+    public async Task GitMetadataOutsideConfiguredWorktreeUsesNonWorktreePolicy(PipelineOutputDiffMode mode)
     {
         using var workspace = TemporaryWorkspace.Create(output);
         var worktree = workspace.CreateDirectory("worktree").FullName;
@@ -334,12 +336,12 @@ public sealed class PipelineOutputSelectionTests(ITestOutputHelper output)
         output.WriteLine($"Git discovery stdout: {probe.StandardOutput.ReplaceLineEndings("\n").Replace("\n", "\\n")}");
         var artifact = Write(root, "artifact.txt", "before");
         Assert.Equal("before", File.ReadAllText(artifact));
-        var options = new PipelineOutputDiffOptions { UseGit = useGit };
+        var options = new PipelineOutputDiffOptions { Mode = mode };
         // Select only the artifact so Git administration changes cannot affect the diff.
         options.Rules.Add(new() { Action = "Include", Pattern = "artifact.txt" });
         var differ = new SnapshotPipelineOutputDiffer(new(), runner, Options.Create(options));
 
-        if (useGit is true)
+        if (mode is PipelineOutputDiffMode.Git)
         {
             var failure = await Assert.ThrowsAsync<DistributedApplicationException>(() => differ.CaptureBeforeAsync(root, TestContext.Current.CancellationToken));
             Assert.Equal($"Git is required to capture pipeline output, but the Git executable or a usable worktree is unavailable: {root}", failure.Message);
@@ -419,17 +421,50 @@ public sealed class PipelineOutputSelectionTests(ITestOutputHelper output)
             ]}}}
             """)));
         builder.Configuration.AddJsonStream(new MemoryStream(Encoding.UTF8.GetBytes("""
-            {"Pipeline":{"OutputDiff":{"UseGit":false,"Rules":[{"Action":"Exclude","Pattern":"**/*"}]}}}
+            {"Pipeline":{"OutputDiff":{"Mode":"FileSystem","Rules":[{"Action":"Exclude","Pattern":"**/*"}]}}}
             """)));
         builder.Services.PostConfigure<PipelineOutputDiffOptions>(options => options.Rules.Add(new() { Action = "Include", Pattern = "special.txt" }));
+        builder.WithOutputDiffing();
         using var app = builder.Build();
         var options = app.Services.GetRequiredService<IOptions<PipelineOutputDiffOptions>>().Value;
-        Assert.False(options.UseGit);
+        Assert.Equal(PipelineOutputDiffMode.FileSystem, options.Mode);
         Assert.Equal(new[] { "**/*", "src/artifacts/**", "**/*.tmp", "special.txt" }, options.Rules.Select(rule => rule.Pattern));
 
         var selected = await SelectAsync(options, workspace.Path);
 
         Assert.Equal(new[] { special, artifact }, selected.Order(PipelineOutputRoot.PathComparer));
+    }
+
+    [Theory]
+    [InlineData(-1, false)]
+    [InlineData(-1, true)]
+    [InlineData(3, false)]
+    [InlineData(3, true)]
+    [InlineData(int.MaxValue, false)]
+    [InlineData(int.MaxValue, true)]
+    public void UndefinedModesAreRejectedAtOptionsResolution(int value, bool throughConfiguration)
+    {
+        var mode = (PipelineOutputDiffMode)value;
+        Assert.False(Enum.IsDefined(mode));
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path);
+        if (throughConfiguration)
+        {
+            builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Pipeline:OutputDiff:Mode"] = value.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            });
+        }
+        else
+        {
+            builder.Services.Configure<PipelineOutputDiffOptions>(options => options.Mode = mode);
+        }
+        builder.WithOutputDiffing();
+        using var app = builder.Build();
+        var options = app.Services.GetRequiredService<IOptions<PipelineOutputDiffOptions>>();
+
+        var failure = Assert.Throws<OptionsValidationException>(() => options.Value);
+        Assert.Contains("mode", failure.Message);
     }
 
     [Theory]
@@ -452,7 +487,8 @@ public sealed class PipelineOutputSelectionTests(ITestOutputHelper output)
         using var workspace = TemporaryWorkspace.Create(output);
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path);
         builder.Configuration.AddJsonStream(new MemoryStream(Encoding.UTF8.GetBytes(
-            """{"Pipeline":{"OutputDiff":{"UseGit":false,"Rules":[""" + rule + "]}}}")));
+            """{"Pipeline":{"OutputDiff":{"Mode":"FileSystem","Rules":[""" + rule + "]}}}")));
+        builder.WithOutputDiffing();
         using var app = builder.Build();
         var options = app.Services.GetRequiredService<IOptions<PipelineOutputDiffOptions>>();
         Assert.Throws<OptionsValidationException>(() => options.Value);
@@ -464,7 +500,7 @@ public sealed class PipelineOutputSelectionTests(ITestOutputHelper output)
     {
         using var workspace = TemporaryWorkspace.Create(output);
         var path = Write(workspace.Path, "artifact.TMP");
-        var options = new PipelineOutputDiffOptions { UseGit = false };
+        var options = new PipelineOutputDiffOptions { Mode = PipelineOutputDiffMode.FileSystem };
         options.Rules.Add(new() { Action = "Include", Pattern = "**/*" });
         options.Rules.Add(new() { Action = "Exclude", Pattern = "**/*.tmp" });
         Assert.True(File.Exists(path));
@@ -486,7 +522,7 @@ public sealed class PipelineOutputSelectionTests(ITestOutputHelper output)
         Write(root, "artifact.txt");
         Directory.CreateSymbolicLink(link, root);
         Assert.True((File.GetAttributes(link) & FileAttributes.ReparsePoint) != 0);
-        var options = new PipelineOutputDiffOptions { UseGit = false };
+        var options = new PipelineOutputDiffOptions { Mode = PipelineOutputDiffMode.FileSystem };
         options.Rules.Add(new() { Action = "Exclude", Pattern = "**/*" });
         options.Rules.Add(new() { Action = "Include", Pattern = pattern });
 
@@ -875,3 +911,5 @@ public sealed class PipelineOutputSelectionTests(ITestOutputHelper output)
         return path;
     }
 }
+
+#pragma warning restore ASPIREPIPELINES005

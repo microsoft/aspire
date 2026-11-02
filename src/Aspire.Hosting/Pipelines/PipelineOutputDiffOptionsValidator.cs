@@ -3,6 +3,8 @@
 
 using Microsoft.Extensions.Options;
 
+#pragma warning disable ASPIREPIPELINES005 // Internal consumer of the experimental output diffing API.
+
 namespace Aspire.Hosting.Pipelines;
 
 /// <summary>
@@ -12,6 +14,10 @@ internal sealed class PipelineOutputDiffOptionsValidator : IValidateOptions<Pipe
 {
     public ValidateOptionsResult Validate(string? name, PipelineOutputDiffOptions options)
     {
+        if (!Enum.IsDefined(options.Mode))
+        {
+            return ValidateOptionsResult.Fail("Output diff mode must be Auto, Git, or FileSystem.");
+        }
         foreach (var rule in options.Rules)
         {
             if (rule is null || string.IsNullOrWhiteSpace(rule.Pattern) || rule.Pattern.Contains('\0') ||
@@ -30,3 +36,5 @@ internal sealed class PipelineOutputDiffOptionsValidator : IValidateOptions<Pipe
         return ValidateOptionsResult.Success;
     }
 }
+
+#pragma warning restore ASPIREPIPELINES005

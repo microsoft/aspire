@@ -15534,6 +15534,20 @@ type DistributedApplicationBuilder interface {
 	// by Aspire, enabling testability and consistent secret management.
 	UserSecretsManager() UserSecretsManager
 
+	// WithOutputDiffing adds an opt-in target that checks for stale generated
+	// pipeline output.
+	//
+	// Parameters:
+	//   - options: Optional parameters; see [WithOutputDiffingOptions].
+	//
+	// Returns: The [DistributedApplicationBuilder] for chaining.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithOutputDiffing(options ...*WithOutputDiffingOptions) DistributedApplicationBuilder
+
 	// Build invokes the build capability and returns the running application.
 	Build() (DistributedApplication, error)
 
@@ -16303,6 +16317,25 @@ func (s *distributedApplicationBuilder) UserSecretsManager() UserSecretsManager 
 	return &userSecretsManager{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
+// WithOutputDiffing adds an opt-in target that checks for stale generated
+// pipeline output.
+func (s *distributedApplicationBuilder) WithOutputDiffing(options ...*WithOutputDiffingOptions) DistributedApplicationBuilder {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithOutputDiffingOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withOutputDiffing", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // DistributedApplicationEventSubscription represents a subscription to an event
 // that is published during the lifecycle of the AppHost.
 type DistributedApplicationEventSubscription interface {
@@ -16667,15 +16700,6 @@ type DistributedApplicationPipeline interface {
 	// Returns: The distributed application pipeline for chaining.
 	DisableBuildOnlyContainerValidation() DistributedApplicationPipeline
 
-	// WithOutputDiffing adds an opt-in target that checks for stale generated
-	// pipeline output.
-	//
-	// Parameters:
-	//   - options: Optional parameters; see [WithOutputDiffingOptions].
-	//
-	// Returns: The pipeline for chaining.
-	WithOutputDiffing(options ...*WithOutputDiffingOptions) DistributedApplicationPipeline
-
 	// Err returns the first error recorded on this wrapper, or nil if the wrapper
 	// resolved successfully and no chained operation has failed.
 	Err() error
@@ -16749,25 +16773,6 @@ func (s *distributedApplicationPipeline) DisableBuildOnlyContainerValidation() D
 		"pipeline": s.handle.ToJSON(),
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/disableBuildOnlyContainerValidation", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithOutputDiffing adds an opt-in target that checks for stale generated
-// pipeline output.
-func (s *distributedApplicationPipeline) WithOutputDiffing(options ...*WithOutputDiffingOptions) DistributedApplicationPipeline {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"pipeline": s.handle.ToJSON(),
-	}
-	if len(options) > 0 {
-		merged := &WithOutputDiffingOptions{}
-		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
-		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withOutputDiffing", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 

@@ -7,6 +7,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
+#pragma warning disable ASPIREPIPELINES005 // Tests opt into the experimental output diffing API.
+
 namespace Aspire.Hosting.Tests.Pipelines;
 
 public class PipelineOutputDiffingLifetimeTests(ITestOutputHelper output)
@@ -38,7 +40,7 @@ public class PipelineOutputDiffingLifetimeTests(ITestOutputHelper output)
             instances.Add(differ);
             return differ;
         });
-        builder.Pipeline.WithOutputDiffing();
+        builder.WithOutputDiffing();
         builder.Pipeline.AddStep("lifetime-writer", context =>
         {
             writerCalls++;
@@ -120,7 +122,7 @@ public class PipelineOutputDiffingLifetimeTests(ITestOutputHelper output)
             instances.Add(differ);
             return differ;
         });
-        builder.Pipeline.WithOutputDiffing();
+        builder.WithOutputDiffing();
         using var app = builder.Build();
         var pipeline = Assert.IsType<DistributedApplicationPipeline>(app.Services.GetRequiredService<IDistributedApplicationPipeline>());
         var context = new PipelineContext(app.Services.GetRequiredService<DistributedApplicationModel>(),
@@ -188,3 +190,5 @@ public class PipelineOutputDiffingLifetimeTests(ITestOutputHelper output)
         public void Dispose() => Disposed = true;
     }
 }
+
+#pragma warning restore ASPIREPIPELINES005

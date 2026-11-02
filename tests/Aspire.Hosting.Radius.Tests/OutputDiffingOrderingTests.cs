@@ -7,6 +7,8 @@ using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
+#pragma warning disable ASPIREPIPELINES005 // Tests opt into the experimental output diffing API.
+
 namespace Aspire.Hosting.Radius.Tests;
 
 public class OutputDiffingOrderingTests
@@ -20,7 +22,7 @@ public class OutputDiffingOrderingTests
         builder.AddRadiusEnvironment("env");
         if (outputDiffing)
         {
-            builder.Pipeline.WithOutputDiffing();
+            builder.WithOutputDiffing();
         }
         IReadOnlyList<PipelineStep> graph = [];
         builder.Pipeline.AddStep("inspect", _ => Task.CompletedTask);
@@ -51,3 +53,5 @@ public class OutputDiffingOrderingTests
         }
     }
 }
+
+#pragma warning restore ASPIREPIPELINES005
