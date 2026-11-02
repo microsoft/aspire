@@ -142,7 +142,7 @@ For project context, doctor uses the same shallow discovery as its AppHost-versi
 - **No choice recorded, candidate available:** emit a non-blocking warning suggesting `aspire update` to accept or decline the source.
 - **No candidate and no saved choice:** do not emit a project adoption warning.
 
-Outside an identified AppHost, only machine source availability is reported. Invalid candidate settings or an unreadable/invalid project binding produce diagnostic warnings. Doctor does not prompt for source consent, acquire Git configuration, check remote versions, or change configuration or source-tracking snapshots.
+Outside an identified AppHost, only machine source availability is reported. Invalid candidate settings, failed or timed-out employee detection, or an unreadable/invalid project binding produce diagnostic warnings. Inconclusive employee detection does not report that no source exists: JSON metadata includes `detectionOutcome` (`failed` or `timed_out`) and omits `available` because availability is unknown. Saved project bindings and explicit opt-outs are still reported, without an adoption suggestion. Doctor does not prompt for source consent, acquire Git configuration, check remote versions, or change configuration or source-tracking snapshots.
 
 ### Acquire using Git
 

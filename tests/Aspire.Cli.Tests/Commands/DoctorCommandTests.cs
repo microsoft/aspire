@@ -11,6 +11,7 @@ using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Aspire.Cli.Utils.EnvironmentChecker;
+using Aspire.Shared.Telemetry;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.AspNetCore.InternalTesting;
@@ -81,6 +82,30 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
             .Replace(JsonEncodedText.Encode(workspace.Path).ToString(), "{workspace}")
             .Replace("\\\\", "/")
             .Replace("\\r\\n", "\\n"));
+    }
+
+    [Theory]
+    [InlineData(InternalMicrosoftDetectorOutcome.NotDetected)]
+    [InlineData(InternalMicrosoftDetectorOutcome.Failed)]
+    [InlineData(InternalMicrosoftDetectorOutcome.TimedOut)]
+    public async Task DoctorCommand_Json_DistinguishesInconclusiveConfigSourceDetection(string outcome)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interaction = new TestInteractionService();
+        var services = CreateDoctorVersionServiceCollection(workspace, outputHelper,
+            options => options.InteractionServiceFactory = _ => interaction);
+        services.RemoveAll<IEnvironmentCheck>();
+        services.AddSingleton<IEnvironmentCheck, ConfigSourceCheck>();
+        services.AddSingleton<IEnvironment>(new TestEnvironment());
+        services.AddSingleton<IInternalMicrosoftDetector>(new TestConfigSourceDetector { Outcome = outcome });
+        using var provider = services.BuildServiceProvider();
+
+        var exitCode = await provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>()
+            .Parse("doctor --format json").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var json = Assert.Single(interaction.DisplayedRawText).Text;
+        await Verify(json, "json");
     }
 
     [Fact]

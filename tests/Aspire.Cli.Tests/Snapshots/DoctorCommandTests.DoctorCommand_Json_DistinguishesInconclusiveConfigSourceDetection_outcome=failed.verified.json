@@ -1,0 +1,29 @@
+﻿{
+  "checks": [
+    {
+      "category": "environment",
+      "name": "config-source",
+      "status": "warning",
+      "message": "The machine configuration source could not be resolved.",
+      "metadata": {
+        "detectionOutcome": "failed"
+      }
+    }
+  ],
+  "summary": {
+    "passed": 0,
+    "warnings": 1,
+    "failed": 0
+  },
+  "installations": [
+    {
+      "path": "/test/aspire",
+      "canonicalPath": "/test/aspire",
+      "version": "13.0.0",
+      "channel": "stable",
+      "route": "script",
+      "pathStatus": "active",
+      "status": "ok"
+    }
+  ]
+}

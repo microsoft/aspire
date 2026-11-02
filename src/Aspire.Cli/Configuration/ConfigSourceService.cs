@@ -150,7 +150,7 @@ internal sealed class ConfigSourceService(
         ParseResult parseResult, bool allowInteractiveInput, CancellationToken cancellationToken)
     {
         var candidate = await ResolveCandidateAsync(cancellationToken);
-        if (candidate is null)
+        if (candidate.Source is not { } source)
         {
             if (parseResult.GetValue(s_useSourceOption) is true)
             {
@@ -160,8 +160,7 @@ internal sealed class ConfigSourceService(
             return null;
         }
 
-        var source = candidate.Value.Source;
-        interaction.DisplayMessage(KnownEmojis.Information, DescribeCandidate(source, candidate.Value.IsExplicit));
+        interaction.DisplayMessage(KnownEmojis.Information, DescribeCandidate(source, candidate.IsExplicit));
 
         var accepted = parseResult.GetValue(s_useSourceOption);
         if (accepted is null)
@@ -186,16 +185,18 @@ internal sealed class ConfigSourceService(
         return source;
     }
 
-    internal async Task<(ConfigSource Source, bool IsExplicit)?> ResolveCandidateAsync(CancellationToken cancellationToken)
+    internal async Task<(ConfigSource? Source, bool IsExplicit, string? DetectionOutcome)> ResolveCandidateAsync(CancellationToken cancellationToken)
     {
         var repository = environment.GetEnvironmentVariable(CliConfigNames.InitSourceUrl);
         var explicitSource = repository is not null;
+        string? detectionOutcome = null;
         if (!explicitSource)
         {
             var detection = await detector.IsInternalMicrosoftMachineAsync(cancellationToken);
+            detectionOutcome = detection.Outcome;
             if (!detection.IsInternalMicrosoft || detection.Outcome != InternalMicrosoftDetectorOutcome.Detected)
             {
-                return null;
+                return (null, false, detectionOutcome);
             }
             repository = MicrosoftRepository;
         }
@@ -207,7 +208,7 @@ internal sealed class ConfigSourceService(
             Ref = explicitSource ? environment.GetEnvironmentVariable(CliConfigNames.InitSourceRef) : null
         };
         source.Validate();
-        return (source, explicitSource);
+        return (source, explicitSource, detectionOutcome);
     }
 
     internal static string DescribeCandidate(ConfigSource source, bool isExplicit) =>

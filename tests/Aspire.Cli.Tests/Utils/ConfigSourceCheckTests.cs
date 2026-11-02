@@ -6,6 +6,7 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Utils.EnvironmentChecker;
+using Aspire.Shared.Telemetry;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Utils;
@@ -18,7 +19,11 @@ public class ConfigSourceCheckTests(ITestOutputHelper outputHelper)
     public async Task CheckAsync_ReportsCandidateWithoutAcquisition(bool explicitSource)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var detector = new TestConfigSourceDetector { IsInternal = true };
+        var detector = new TestConfigSourceDetector
+        {
+            IsInternal = true,
+            Outcome = explicitSource ? InternalMicrosoftDetectorOutcome.Failed : null
+        };
         var environment = new TestEnvironment(new Dictionary<string, string?>
         {
             [CliConfigNames.InitSourceUrl] = explicitSource ? "https://git.example/configuration" : null,
@@ -51,6 +56,73 @@ public class ConfigSourceCheckTests(ITestOutputHelper outputHelper)
         Assert.Empty(interaction.DisplayedMessages);
         Assert.False(File.Exists(Path.Combine(workspace.Path, AspireConfigFile.FileName)));
         Assert.False(Directory.Exists(Path.Combine(workspace.CreateExecutionContext().AspireHomeDirectory.FullName, "configsources")));
+    }
+
+    [Fact]
+    public async Task CheckAsync_ReportsConfirmedAbsence()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var sources = TestConfigSourceServices.Create(workspace.CreateExecutionContext());
+        var check = new ConfigSourceCheck(sources, new TestProjectLocator(), workspace.CreateExecutionContext(),
+            NullLogger<ConfigSourceCheck>.Instance);
+
+        var result = Assert.Single(await check.CheckAsync(TestContext.Current.CancellationToken));
+
+        Assert.Equal(ConfigSourceCheck.MachineCheckName, result.Name);
+        Assert.Equal(EnvironmentCheckStatus.Pass, result.Status);
+        Assert.Equal(ConfigSourceStrings.DoctorUnavailable, result.Message);
+        Assert.False(result.Metadata!["available"]!.GetValue<bool>());
+    }
+
+    [Theory]
+    [InlineData(InternalMicrosoftDetectorOutcome.Failed, "bound")]
+    [InlineData(InternalMicrosoftDetectorOutcome.Failed, "optedOut")]
+    [InlineData(InternalMicrosoftDetectorOutcome.Failed, "unconfigured")]
+    [InlineData(InternalMicrosoftDetectorOutcome.TimedOut, "bound")]
+    [InlineData(InternalMicrosoftDetectorOutcome.TimedOut, "optedOut")]
+    [InlineData(InternalMicrosoftDetectorOutcome.TimedOut, "unconfigured")]
+    public async Task CheckAsync_InconclusiveDetectionReportsWarningWithoutHidingSavedChoice(string outcome, string state)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHost = new FileInfo(Path.Combine(workspace.Path, "apphost.cs"));
+        var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
+        var configuration = state switch
+        {
+            "bound" => """{"configSource":{"repository":"https://saved.example/configuration","path":"saved.json"}}""",
+            "optedOut" => """{"configSource":{"optOut":true}}""",
+            _ => """{"custom":"keep"}"""
+        };
+        await File.WriteAllTextAsync(path, configuration);
+        var git = new TestConfigSourceRepository();
+        var interaction = new TestInteractionService();
+        using var sources = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git, interaction: interaction,
+            detector: new TestConfigSourceDetector { IsInternal = true, Outcome = outcome });
+        var locator = new TestProjectLocator { GetAppHostFromSettingsAsyncCallback = _ => Task.FromResult<FileInfo?>(appHost) };
+        var check = new ConfigSourceCheck(sources, locator, workspace.CreateExecutionContext(), NullLogger<ConfigSourceCheck>.Instance);
+
+        var results = await check.CheckAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(state == "unconfigured" ? 1 : 2, results.Count);
+        var machine = results[0];
+        Assert.Equal(ConfigSourceCheck.MachineCheckName, machine.Name);
+        Assert.Equal(EnvironmentCheckStatus.Warning, machine.Status);
+        Assert.Equal(ConfigSourceStrings.DoctorCandidateFailed, machine.Message);
+        Assert.Equal(outcome, machine.Metadata!["detectionOutcome"]!.GetValue<string>());
+        Assert.Null(machine.Metadata["available"]);
+        Assert.Null(machine.Fix);
+        if (state != "unconfigured")
+        {
+            var project = results[1];
+            Assert.Equal(ConfigSourceCheck.AppHostCheckName, project.Name);
+            Assert.Equal(EnvironmentCheckStatus.Pass, project.Status);
+            Assert.Equal(state == "bound" ? ConfigSourceStrings.DoctorBound : ConfigSourceStrings.DoctorOptOut, project.Message);
+            Assert.Equal(state, project.Metadata!["state"]!.GetValue<string>());
+            Assert.Null(project.Fix);
+        }
+        Assert.Equal(configuration, await File.ReadAllTextAsync(path));
+        Assert.Equal(0, git.Calls);
+        Assert.Equal(0, git.CheckCalls);
+        Assert.Empty(interaction.DisplayedMessages);
     }
 
     [Theory]

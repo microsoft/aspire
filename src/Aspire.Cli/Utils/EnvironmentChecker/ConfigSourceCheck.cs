@@ -7,6 +7,7 @@ using System.Text.Json.Nodes;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
+using Aspire.Shared.Telemetry;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Utils.EnvironmentChecker;
@@ -25,23 +26,33 @@ internal sealed class ConfigSourceCheck(
     public async Task<IReadOnlyList<EnvironmentCheckResult>> CheckAsync(CancellationToken cancellationToken = default)
     {
         var results = new List<EnvironmentCheckResult>();
-        (ConfigSource Source, bool IsExplicit)? candidate = null;
+        ConfigSource? candidate = null;
         try
         {
-            candidate = await configSources.ResolveCandidateAsync(cancellationToken);
-            var metadata = candidate is { } available ? CreateSourceMetadata(available.Source) : new JsonObject();
-            metadata["available"] = candidate is not null;
-            if (candidate is { } selected)
+            var resolution = await configSources.ResolveCandidateAsync(cancellationToken);
+            candidate = resolution.Source;
+            var inconclusive = resolution.DetectionOutcome is InternalMicrosoftDetectorOutcome.Failed or InternalMicrosoftDetectorOutcome.TimedOut;
+            var metadata = candidate is not null ? CreateSourceMetadata(candidate) : new JsonObject();
+            if (inconclusive)
             {
-                metadata["origin"] = selected.IsExplicit ? CliConfigNames.InitSourceUrl : "microsoftEmployee";
+                metadata["detectionOutcome"] = resolution.DetectionOutcome;
+            }
+            else
+            {
+                metadata["available"] = candidate is not null;
+            }
+            if (candidate is not null)
+            {
+                metadata["origin"] = resolution.IsExplicit ? CliConfigNames.InitSourceUrl : "microsoftEmployee";
             }
             results.Add(new EnvironmentCheckResult
             {
                 Category = EnvironmentCheckCategories.Environment,
                 Name = MachineCheckName,
-                Status = EnvironmentCheckStatus.Pass,
-                Message = candidate is null ? ConfigSourceStrings.DoctorUnavailable : ConfigSourceStrings.DoctorAvailable,
-                Details = candidate is { } source ? ConfigSourceService.DescribeCandidate(source.Source, source.IsExplicit) : null,
+                Status = inconclusive ? EnvironmentCheckStatus.Warning : EnvironmentCheckStatus.Pass,
+                Message = inconclusive ? ConfigSourceStrings.DoctorCandidateFailed
+                    : candidate is null ? ConfigSourceStrings.DoctorUnavailable : ConfigSourceStrings.DoctorAvailable,
+                Details = candidate is not null ? ConfigSourceService.DescribeCandidate(candidate, resolution.IsExplicit) : null,
                 Metadata = metadata
             });
         }
