@@ -208,7 +208,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
             timeout: TimeSpan.FromSeconds(30), description: "agent selection prompt");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Which skills and tools do you want to configure?", timeout: TimeSpan.FromSeconds(30));
-        await auto.WaitUntilTextAsync("aspire — Agent assets from microsoft/aspire-skills", timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitUntilTextAsync("aspire — Agent assets from configured skill sources", timeout: TimeSpan.FromSeconds(30));
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Which source do you want to use for Aspire?", timeout: TimeSpan.FromSeconds(30));
         await auto.EnterAsync();

@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using System.Text.Json;
+using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Git;
 using Aspire.Cli.Resources;
@@ -374,7 +375,7 @@ public class ConfigSourceServiceGitTests(ITestOutputHelper outputHelper) : IDisp
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var custom = new string('x', 70 * 1024) + "\u65e5\u672c\u8a9e";
         await CreateRepositoryAsync(workspace, path, """
-            {"DOCS":{"llmsTxtUrl":"https://example.com/llms.txt","API":{"custom":"preserved"}},"docs:api:sitemapUrl":"https://example.com/sitemap.xml",
+            {"SKILLSOURCES":{"first":{"repository":"example/first"},"SECOND":{"custom":"preserved"}},"skillSources:second:repository":"example/second",
             """ + "\"features\":{\"test\":true},\"custom\":\"" + custom + "\"}");
         var cache = workspace.CreateDirectory("cache");
         var client = CreateClient(interactive
@@ -390,10 +391,10 @@ public class ConfigSourceServiceGitTests(ITestOutputHelper outputHelper) : IDisp
         Assert.Equal((await RunGitOutputAsync(workspace.Path, ["rev-parse", $"HEAD:{path}"])).Trim(), version);
         Assert.True(configuration["features"]!["test"]!.GetValue<bool>());
         Assert.Equal(custom, configuration["custom"]!.GetValue<string>());
-        Assert.Equal("https://example.com/llms.txt", configuration["DOCS"]!["llmsTxtUrl"]!.GetValue<string>());
-        Assert.Equal("https://example.com/sitemap.xml", configuration["DOCS"]!["API"]!["sitemapUrl"]!.GetValue<string>());
-        Assert.Equal("preserved", configuration["DOCS"]!["API"]!["custom"]!.GetValue<string>());
-        Assert.Equal(["DOCS", "features", "custom"], configuration.Select(property => property.Key));
+        Assert.Equal("example/first", configuration["SKILLSOURCES"]!["first"]!["repository"]!.GetValue<string>());
+        Assert.Equal("example/second", configuration["SKILLSOURCES"]!["SECOND"]!["repository"]!.GetValue<string>());
+        Assert.Equal("preserved", configuration["SKILLSOURCES"]!["SECOND"]!["custom"]!.GetValue<string>());
+        Assert.Equal(["SKILLSOURCES", "features", "custom"], configuration.Select(property => property.Key));
         Assert.False(File.Exists(Path.Combine(cache.FullName, path)));
     }
 
@@ -402,7 +403,7 @@ public class ConfigSourceServiceGitTests(ITestOutputHelper outputHelper) : IDisp
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string path = "teams/platform.json";
-        await CreateRepositoryAsync(workspace, path, """{"docs":{"llmsTxtUrl":"https://docs.example/local/llms.txt"}}""");
+        await CreateRepositoryAsync(workspace, path, """{"skillSources":{"team":{"repository":"example/team"}}}""");
         var repository = workspace.CreateDirectory("local repository");
         await RunGitOutputAsync(workspace.Path, ["clone", "--", workspace.Path, repository.FullName]);
         var source = new ConfigSource { Repository = repository.FullName, Path = path };
@@ -413,7 +414,7 @@ public class ConfigSourceServiceGitTests(ITestOutputHelper outputHelper) : IDisp
         await service.MaterializeAsync(source, project, TestContext.Current.CancellationToken);
 
         var config = AspireConfigFile.Load(project.FullName)!;
-        Assert.Equal("https://docs.example/local/llms.txt", config.Docs!.LlmsTxtUrl);
+        Assert.Equal("example/team", Assert.Single(config.SkillSources!).Value.Repository);
         Assert.Equal(repository.FullName, config.ConfigSource!.Repository);
         Assert.Equal(path, config.ConfigSource.Path);
         Assert.Equal((await RunGitOutputAsync(repository.FullName, ["rev-parse", $"HEAD:{path}"])).Trim(),
@@ -421,15 +422,15 @@ public class ConfigSourceServiceGitTests(ITestOutputHelper outputHelper) : IDisp
     }
 
     [Theory]
-    [InlineData("""{"DOCS":{"llmsTxtUrl":"https://example.test/llms.txt"},"docs":{"api":{"sitemapUrl":"https://example.test/sitemap.xml"}}}""")]
-    [InlineData("""{"docs":{"api":{"sitemapUrl":"https://example.test/sitemap.xml"}},"DOCS":{"llmsTxtUrl":"https://example.test/llms.txt"}}""")]
-    [InlineData("""{"docs":{"llmsTxtUrl":"https://example.test/llms.txt","API":{"custom":"excluded"},"api":{"sitemapUrl":"https://example.test/sitemap.xml"}}}""")]
-    [InlineData("""{"DOCS":null,"docs":{"llmsTxtUrl":"https://example.test/llms.txt","api":{"sitemapUrl":"https://example.test/sitemap.xml"}}}""")]
-    [InlineData("""{"docs":{"llmsTxtUrl":"https://example.test/llms.txt","api":{"sitemapUrl":"https://example.test/sitemap.xml"}},"docs:llmsTxtUrl":"https://flat.example/llms.txt","docs:api:sitemapUrl":"https://flat.example/sitemap.xml"}""")]
-    [InlineData("""{"docs:llmsTxtUrl":"https://example.test/llms.txt","docs:api":{"sitemapUrl":"https://example.test/sitemap.xml","custom:key":"preserved"}}""")]
-    [InlineData("""{"DOCS":{"llmsTxtUrl":null,"API":{"SITEMAPURL":null}},"docs:api:sitemapUrl":"https://example.test/sitemap.xml","docs:llmsTxtUrl":"https://example.test/llms.txt"}""")]
-    [InlineData("""{"docs:llmsTxtUrl":"https://example.test/llms.txt","DOCS:LLMSTXTURL":"https://flat.example/llms.txt","docs:api:sitemapUrl":"https://example.test/sitemap.xml"}""")]
-    public async Task Materialize_ReadsAllowedLeavesAcrossCaseInsensitiveSections(string content)
+    [InlineData("""{"SKILLSOURCES":{"first":{"repository":"example/first"}},"skillSources":{"second":{"repository":"example/second"}}}""")]
+    [InlineData("""{"skillSources":{"second":{"repository":"example/second"}},"SKILLSOURCES":{"first":{"repository":"example/first"}}}""")]
+    [InlineData("""{"skillSources":{"first":{"repository":"example/first"},"SECOND":{"custom":"copied"},"second":{"repository":"example/second"}}}""")]
+    [InlineData("""{"SKILLSOURCES":null,"skillSources":{"first":{"repository":"example/first"},"second":{"repository":"example/second"}}}""")]
+    [InlineData("""{"skillSources":{"first":{"repository":"example/first"},"second":{"repository":"example/second"}},"skillSources:first:repository":"example/flat-first","skillSources:second:repository":"example/flat-second"}""")]
+    [InlineData("""{"skillSources:first:repository":"example/first","skillSources:second":{"repository":"example/second","custom:key":"preserved"}}""")]
+    [InlineData("""{"SKILLSOURCES":{"first":{"repository":null},"SECOND":{"REPOSITORY":null}},"skillSources:second:repository":"example/second","skillSources:first:repository":"example/first"}""")]
+    [InlineData("""{"skillSources:first:repository":"example/first","SKILLSOURCES:FIRST:REPOSITORY":"example/flat-first","skillSources:second:repository":"example/second"}""")]
+    public async Task Materialize_ReadsSkillSourcesAcrossCaseInsensitiveSections(string content)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await CreateRepositoryAsync(workspace, AspireConfigFile.FileName, content);
@@ -440,9 +441,11 @@ public class ConfigSourceServiceGitTests(ITestOutputHelper outputHelper) : IDisp
 
         await service.MaterializeAsync(source, project, TestContext.Current.CancellationToken);
 
-        var config = AspireConfigFile.Load(project.FullName)!;
-        Assert.Equal("https://example.test/llms.txt", config.Docs!.LlmsTxtUrl);
-        Assert.Equal("https://example.test/sitemap.xml", config.Docs.Api!.SitemapUrl);
+        using var configuration = new ConfigurationManager();
+        configuration.AddJsonFile(Path.Combine(project.FullName, AspireConfigFile.FileName));
+        var sources = SkillSource.Resolve(configuration);
+        Assert.Equal(["example/first", "example/second", "microsoft/aspire-skills"],
+            sources.Select(source => source.Repository).Order(StringComparer.Ordinal));
     }
 
     [Fact]
@@ -458,7 +461,7 @@ public class ConfigSourceServiceGitTests(ITestOutputHelper outputHelper) : IDisp
                 }
               },
               "custom": { "literal:key": "preserved" },
-              "docs": { "api:sitemapUrl": "https://example.test/sitemap.xml" }
+              "skillSources": { "team": { "repository": "example/team", "custom:key": "preserved" } }
             }
             """;
         await CreateRepositoryAsync(workspace, AspireConfigFile.FileName, content);
@@ -472,7 +475,7 @@ public class ConfigSourceServiceGitTests(ITestOutputHelper outputHelper) : IDisp
         Assert.Equal(new Dictionary<string, bool> { ["feature:name"] = true }, config.Features);
         Assert.Equal(new Dictionary<string, string> { ["Logging:LogLevel:Default"] = "Debug" },
             Assert.Single(config.Profiles!).Value.EnvironmentVariables);
-        Assert.Null(config.Docs!.Api);
+        Assert.Equal("example/team", Assert.Single(config.SkillSources!).Value.Repository);
         await Verify(configuration.ToJsonString(), "json");
     }
 
@@ -483,10 +486,10 @@ public class ConfigSourceServiceGitTests(ITestOutputHelper outputHelper) : IDisp
     [InlineData("""{"features":{"test":"not-a-boolean"}}""")]
     [InlineData("""{"features:test":"not-a-boolean"}""")]
     [InlineData("""{"features":{"test":true},"features":{"test":false}}""")]
-    [InlineData("""{"DOCS":{"llmsTxtUrl":"https://example.test/first"},"docs":{"LLMSTXTURL":"https://example.test/second"}}""")]
-    [InlineData("""{"docs":{"API":{"sitemapUrl":"https://example.test/first"},"api":{"SITEMAPURL":"https://example.test/second"}}}""")]
-    [InlineData("""{"docs":{"llmsTxtUrl":"https://example.test/first"},"DOCS":{"LLMSTXTURL":"https://example.test/second"},"docs:llmsTxtUrl":"https://example.test/flat"}""")]
-    [InlineData("""{"docs":{"api:sitemapUrl":"https://example.test/first"},"DOCS":{"API:SITEMAPURL":"https://example.test/second"}}""")]
+    [InlineData("""{"SKILLSOURCES":{"first":{"repository":"example/first"}},"skillSources":{"FIRST":{"repository":"example/second"}}}""")]
+    [InlineData("""{"skillSources":{"FIRST":{"repository":"example/first"},"first":{"REPOSITORY":"example/second"}}}""")]
+    [InlineData("""{"skillSources":{"first":{"repository":"example/first"}},"SKILLSOURCES":{"FIRST":{"REPOSITORY":"example/second"}},"skillSources:first:repository":"example/flat"}""")]
+    [InlineData("""{"skillSources":{"first:repository":"example/first"},"SKILLSOURCES":{"FIRST:REPOSITORY":"example/second"}}""")]
     [InlineData("""{"features":{"feature:name":true,"feature":{"name":false}}}""")]
     [InlineData("""{"configSource:repository":"https://example.com/nested"}""")]
     [InlineData("""{"configSource":{"repository":"https://example.com/nested","path":"config.json"}}""")]

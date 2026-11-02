@@ -313,7 +313,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Agent assets from microsoft/aspire-skills.
+        ///   Looks up a localized string similar to Agent assets from configured skill sources.
         /// </summary>
         internal static string InitCommand_AspireSkillChoice {
             get {
@@ -322,7 +322,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Source for Aspire agent assets from microsoft/aspire-skills: remote (plugin) or embedded (bundled skill files).
+        ///   Looks up a localized string similar to Source for Aspire agent assets: remote (configured plugins) or embedded (bundled skill files).
         /// </summary>
         internal static string InitCommand_AspireSourceOptionDescription {
             get {
@@ -349,8 +349,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Configured Aspire plugin:
-        ///  {0}.
+        ///   Looks up a localized string similar to Configured Aspire plugin:   {0}.
         /// </summary>
         internal static string InitCommand_ConfiguredTargets {
             get {
@@ -422,8 +421,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Failed to configure Aspire plugin:
-        ///  {0}.
+        ///   Looks up a localized string similar to Failed to configure Aspire plugin:   {0}.
         /// </summary>
         internal static string InitCommand_FailedTarget {
             get {
@@ -531,8 +529,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Local Aspire skill files may override plugin skills:
-        ///{0}.
+        ///   Looks up a localized string similar to Local Aspire skill files may override plugin skills: {0}.
         /// </summary>
         internal static string InitCommand_LocalSkillsConflict {
             get {
@@ -586,10 +583,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Use the Aspire plugin at your own risk.
-        ///Review the source before enabling it.
-        ///
-        ///Prefer skill files only? Choose Embedded, or install skills directly from {0}..
+        ///   Looks up a localized string similar to Use the Aspire plugin at your own risk. Review the source before enabling it.  Prefer skill files only? Choose Embedded, or install skills directly from {0}..
         /// </summary>
         internal static string InitCommand_PluginRiskWarning {
             get {

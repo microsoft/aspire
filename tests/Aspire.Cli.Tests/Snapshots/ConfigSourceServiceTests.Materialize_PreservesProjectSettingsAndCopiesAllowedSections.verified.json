@@ -11,13 +11,16 @@
     }
   },
   "docs": {
-    "llmsTxtUrl": "https://docs.example/llms.txt",
-    "custom": "local",
-    "api": {
-      "sitemapUrl": null
-    }
+    "llmsTxtUrl": "https://local.example/old",
+    "custom": "local"
   },
   "custom": "local",
+  "skillSources": {
+    "team": {
+      "repository": "example/team",
+      "custom": "copied"
+    }
+  },
   "configSource": {
     "repository": "https://git.example/organization/config",
     "path": "teams/platform.json",

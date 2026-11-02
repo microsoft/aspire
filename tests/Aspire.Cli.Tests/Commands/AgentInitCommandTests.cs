@@ -9,14 +9,17 @@ using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.DotNet;
 using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Npm;
+using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Agents;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Cli.Tests.Commands;
@@ -64,6 +67,136 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             root.Parse($"{command} --skills ").GetCompletions().Select(item => item.Label).Order(StringComparer.Ordinal));
         Assert.Equal(["embedded", "remote"],
             root.Parse($"{command} --aspire-source ").GetCompletions().Select(item => item.Label).Order(StringComparer.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AgentInit_UsesConfiguredOrSelectedAppHostSettings(bool configured)
+    {
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        var first = context.Project.CreateSubdirectory("first");
+        var selected = context.Project.CreateSubdirectory("selected");
+        var firstProject = new FileInfo(Path.Combine(first.FullName, "First.csproj"));
+        var selectedProject = new FileInfo(Path.Combine(selected.FullName, "Selected.csproj"));
+        await AgentConfigurationTestContext.WriteAsync(Path.Combine(selected.FullName, AspireConfigFile.FileName), """
+            {"skillSources":{"default":{"enabled":false},"team":{"repository":"example/selected","plugins":["deployment"]}}}
+            """);
+        var interaction = new TestInteractionService
+        {
+            PromptForSelectionCallback = (prompt, choices, _, _) =>
+            {
+                if (prompt == AgentCommandStrings.InitCommand_ConfigureAspireSourcePrompt)
+                {
+                    return "remote";
+                }
+
+                Assert.False(configured);
+                Assert.Equal(InteractionServiceStrings.SelectAppHostToUse, prompt);
+                Assert.Equal([firstProject, selectedProject], choices.Cast<FileInfo>());
+                return selectedProject;
+            }
+        };
+        var locator = new TestProjectLocator
+        {
+            GetAppHostFromSettingsAsyncCallback = _ => Task.FromResult<FileInfo?>(configured ? selectedProject : null),
+            FindAppHostProjectFilesAsyncCallback = (directory, scope, _, skipValidation) =>
+            {
+                Assert.False(configured);
+                Assert.True(skipValidation);
+                Assert.Equal(context.Project.FullName, directory.FullName);
+                Assert.Equal(AppHostDiscoveryScope.DefaultFiltered, scope);
+                return Task.FromResult<List<FileInfo>>([firstProject, selectedProject]);
+            }
+        };
+        using var provider = context.CreateServiceCollection(outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interaction;
+            options.ProjectLocatorFactory = _ => locator;
+        }).BuildServiceProvider();
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            "agent init --agents copilot --scope project --skills aspire --non-interactive");
+
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+        await Verify(await File.ReadAllTextAsync(
+            context.Copilot.GetIntegrationConfigPath(AgentConfigurationScope.Project, context.Project)), "json")
+            .UseParameters(configured);
+    }
+
+    [Fact]
+    public async Task AgentInit_WithoutAspireSkills_DoesNotDiscoverAppHost()
+    {
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        using var provider = context.CreateServiceCollection(outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator
+            {
+                GetAppHostFromSettingsAsyncCallback = _ => throw new InvalidOperationException("AppHost lookup is unnecessary without Aspire skills."),
+                FindAppHostProjectFilesAsyncCallback = (_, _, _, _) => throw new InvalidOperationException("AppHost discovery is unnecessary without Aspire skills.")
+            };
+        }).BuildServiceProvider();
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            "agent init --agents copilot --skills none --mcp=false --non-interactive");
+
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("9.0.302")]
+    public async Task AgentInit_UsesAppHostSettingsWithoutUsableSdk(string? highestDetectedVersion)
+    {
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        var appHostDirectory = context.Project.CreateSubdirectory("app");
+        await AgentConfigurationTestContext.WriteAsync(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <IsAspireHost>true</IsAspireHost>
+              </PropertyGroup>
+            </Project>
+            """);
+        await AgentConfigurationTestContext.WriteAsync(Path.Combine(context.Project.FullName, "web", "Web.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk.Web" />
+            """);
+        await AgentConfigurationTestContext.WriteAsync(Path.Combine(appHostDirectory.FullName, AspireConfigFile.FileName), """
+            {"skillSources":{"default":{"enabled":false},"team":{"repository":"example/selected","plugins":["deployment"]}}}
+            """);
+        var sdkChecks = 0;
+        using var provider = context.CreateServiceCollection(outputHelper, options =>
+        {
+            options.DotNetSdkInstallerFactory = _ => new TestDotNetSdkInstaller
+            {
+                CheckAsyncCallback = _ =>
+                {
+                    sdkChecks++;
+                    return (false, highestDetectedVersion, DotNetSdkInstaller.MinimumSdkVersion);
+                }
+            };
+        }).BuildServiceProvider();
+        var locator = Assert.IsType<ProjectLocator>(provider.GetRequiredService<IProjectLocator>());
+        Assert.IsType<DotNetAppHostProject>(provider.GetRequiredService<IAppHostProjectFactory>().GetProject(
+            new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"))));
+        Assert.Empty(await locator.FindAppHostProjectFilesAsync(
+            context.Project, AppHostDiscoveryScope.DefaultFiltered, CancellationToken.None).DefaultTimeout());
+        Assert.Equal(1, sdkChecks);
+        Assert.Empty(await locator.FindAppHostProjectFilesAsync(
+            context.Project, AppHostDiscoveryScope.DefaultFiltered, maxDepth: 0,
+            CancellationToken.None, skipValidation: true).DefaultTimeout());
+        var candidates = await locator.FindAppHostProjectFilesAsync(
+            context.Project, AppHostDiscoveryScope.DefaultFiltered, maxDepth: 1,
+            CancellationToken.None, skipValidation: true).DefaultTimeout();
+        Assert.Equal([Path.Combine(appHostDirectory.FullName, "AppHost.csproj")],
+            candidates.Select(candidate => candidate.FullName));
+        Assert.Equal(1, sdkChecks);
+
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            "agent init --agents copilot --scope project --skills aspire --aspire-source remote --non-interactive");
+
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+        Assert.Equal(1, sdkChecks);
+        await Verify(await File.ReadAllTextAsync(
+            context.Copilot.GetIntegrationConfigPath(AgentConfigurationScope.Project, context.Project)), "json")
+            .UseParameters(highestDetectedVersion);
     }
 
     [Theory]
@@ -131,6 +264,58 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(expectSourcePrompt, File.Exists(context.Copilot.GetIntegrationConfigPath(AgentConfigurationScope.Project, context.Project)));
         Assert.False(File.Exists(Path.Combine(context.Project.FullName, ".mcp.json")));
         Assert.Empty(context.Home.EnumerateFileSystemInfos());
+    }
+
+    [Theory]
+    [InlineData("copilot")]
+    [InlineData("claude")]
+    [InlineData("opencode")]
+    [InlineData("copilot,claude,opencode")]
+    public async Task AgentInit_WarnsAboutSelectedClientSourcesBeforeSourcePrompt(string agents)
+    {
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        await AgentConfigurationTestContext.WriteAsync(Path.Combine(context.Project.FullName, AspireConfigFile.FileName), """
+            {
+              "skillSources": {
+                "default": { "openCodeV1Catalog": "https://third-party.example/skills/" },
+                "team": {
+                  "repository": "example/team",
+                  "openCodeV1Catalog": "https://team.example/skills/",
+                  "openCodeV2Catalog": "https://team.example/skills/"
+                },
+                "pluginsOnly": { "repository": "example/plugins" },
+                "disabled": {
+                  "enabled": false,
+                  "repository": "example/disabled",
+                  "openCodeV1Catalog": "https://disabled.example/skills/"
+                }
+              }
+            }
+            """);
+        string[]? warningsBeforeSelection = null;
+        var interaction = new TestInteractionService();
+        interaction.PromptForSelectionCallback = (prompt, _, _, _) =>
+        {
+            Assert.Equal(AgentCommandStrings.InitCommand_ConfigureAspireSourcePrompt, prompt);
+            warningsBeforeSelection = interaction.DisplayedMessages
+                .Where(message => message.Emoji.Equals(KnownEmojis.Warning))
+                .Select(message => message.Message).ToArray();
+            return "remote";
+        };
+        using var provider = context.CreateServiceCollection(outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.InteractionServiceFactory = _ => interaction;
+        }).BuildServiceProvider();
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            $"agent init --agents {agents} --scope project --skills aspire");
+
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+        Assert.NotNull(warningsBeforeSelection);
+        Assert.Equal(warningsBeforeSelection, interaction.DisplayedMessages
+            .Where(message => message.Emoji.Equals(KnownEmojis.Warning))
+            .Select(message => message.Message));
+        await Verify(warningsBeforeSelection).UseParameters(agents);
     }
 
     [Theory]
@@ -579,7 +764,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         {
             Assert.True(File.Exists(client.GetIntegrationConfigPath(configurationScope, context.Project)));
             Assert.True(client.HasIntegrationRegistration(
-                context.Project, configurationScope, TestContext.Current.CancellationToken));
+                context.Project, configurationScope, context.Sources));
         }
         var skillsRoot = configurationScope is AgentConfigurationScope.Project ? context.Project : context.Home;
         Assert.False(Directory.Exists(Path.Combine(skillsRoot.FullName, ".agents", "skills")));
@@ -687,6 +872,77 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PromptAndChainAsync_RegistersSourcesFromSelectedAppConfiguration()
+    {
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        var app = context.Project.CreateSubdirectory("app");
+        await AgentConfigurationTestContext.WriteAsync(Path.Combine(app.FullName, "aspire.config.json"), """
+            {"skillSources":{"default":{"enabled":false},"team":{"repository":"example/team","plugins":["team"]}}}
+            """);
+        var interaction = new TestInteractionService();
+        var services = context.CreateServiceCollection(outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interaction;
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+        });
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<AgentInitCommand>();
+
+        var result = await command.PromptAndChainAsync(
+            interaction, CliExitCodes.Success, context.Project, app,
+            PromptBinding.CreateDefault(true),
+            PromptBinding.CreateDefault<string?>("copilot"),
+            PromptBinding.CreateDefault<string?>(CommonAgentApplicators.AspireSkillName),
+            PromptBinding.CreateDefault<string?>("remote"),
+            PromptBinding.CreateDefault(AgentConfigurationScope.Project),
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, result.ExitCode);
+        var config = await File.ReadAllTextAsync(context.Copilot.GetIntegrationConfigPath(AgentConfigurationScope.Project, context.Project));
+        await Verify(config, "json");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PromptAndChainAsync_UsesFreshSelectedAppAndGlobalSources(bool sameDirectory)
+    {
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        await AgentConfigurationTestContext.WriteAsync(Path.Combine(context.Project.FullName, "aspire.config.json"), """
+            {"skillSources":{"default":{"enabled":false},"old":{"repository":"example/old"}}}
+            """);
+        await AgentConfigurationTestContext.WriteAsync(Path.Combine(context.Project.FullName, ".aspire", "settings.global.json"), """
+            {"skillSources":{"shared":{"repository":"example/shared"},"team":{"repository":"example/global","plugins":["team"],"ref":"main"}}}
+            """);
+        var interaction = new TestInteractionService();
+        using var provider = context.CreateServiceCollection(outputHelper, options =>
+        {
+            options.WorkingDirectory = context.Project;
+            options.InteractionServiceFactory = _ => interaction;
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+        }).BuildServiceProvider();
+        Assert.Equal("example/old", provider.GetRequiredService<IConfiguration>()["skillSources:old:repository"]);
+        var app = sameDirectory ? context.Project : context.Project.CreateSubdirectory("app");
+        await AgentConfigurationTestContext.WriteAsync(Path.Combine(app.FullName, "aspire.config.json"), """
+            {"skillSources":{"default":{},"team":{"repository":"example/team"}}}
+            """);
+
+        var result = await provider.GetRequiredService<AgentInitCommand>().PromptAndChainAsync(
+            interaction, CliExitCodes.Success, context.Project, app,
+            PromptBinding.CreateDefault(true),
+            PromptBinding.CreateDefault<string?>("copilot"),
+            PromptBinding.CreateDefault<string?>(CommonAgentApplicators.AspireSkillName),
+            PromptBinding.CreateDefault<string?>("remote"),
+            PromptBinding.CreateDefault(AgentConfigurationScope.Project),
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, result.ExitCode);
+        await Verify(await File.ReadAllTextAsync(
+            context.Copilot.GetIntegrationConfigPath(AgentConfigurationScope.Project, context.Project)), "json")
+            .UseParameters(sameDirectory);
+    }
+
+    [Fact]
     public async Task PromptAndChainAsync_WithUnavailableAspireSkillsBundle_FailsExplicitly()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -711,6 +967,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         var result = await command.PromptAndChainAsync(
             interactionService,
             CliExitCodes.Success,
+            workspace.WorkspaceRoot,
             workspace.WorkspaceRoot,
             PromptBinding.CreateDefault(true),
             PromptBinding.CreateDefault<string?>(null),
@@ -745,6 +1002,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         var result = await command.PromptAndChainAsync(
             interactionService,
             CliExitCodes.Success,
+            workspace.WorkspaceRoot,
             workspace.WorkspaceRoot,
             PromptBinding.CreateDefault(true),
             PromptBinding.CreateDefault<string?>(null),
@@ -972,6 +1230,41 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal([global], Directory.GetFiles(context.Home.FullName, "*", SearchOption.AllDirectories));
     }
 
+    [Theory]
+    [InlineData("copilot", false)]
+    [InlineData("copilot", true)]
+    [InlineData("claude", false)]
+    [InlineData("claude", true)]
+    [InlineData("opencode", false)]
+    [InlineData("opencode", true)]
+    public async Task Embedded_DisabledSourceDoesNotHideActiveBuiltInRegistration(string clientId, bool global)
+    {
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        await AgentConfigurationTestContext.WriteAsync(Path.Combine(context.Project.FullName, "aspire.config.json"), """
+            {"skillSources":{"default":{"enabled":false}}}
+            """);
+        var client = context.Clients.Single(client => client.Id == clientId);
+        var scope = global ? AgentConfigurationScope.Global : AgentConfigurationScope.Project;
+        var path = client.GetIntegrationConfigPath(scope, context.Project);
+        var original = clientId == "opencode"
+            ? """{"skills":{"urls":["https://raw.githubusercontent.com/microsoft/aspire-skills/v0.0.4/opencode/v1/"]}}"""
+            : """{"enabledPlugins":{"aspire@aspire-skills":true}}""";
+        await AgentConfigurationTestContext.WriteAsync(path, original);
+        var interaction = new TestInteractionService();
+        using var provider = context.CreateServiceCollection(outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interaction;
+        }).BuildServiceProvider();
+
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            $"agent init --non-interactive --agents {clientId} --scope {(global ? "global" : "project")} --skills aspire --aspire-source embedded");
+
+        Assert.Equal(CliExitCodes.InvalidCommand, await result.InvokeAsync().DefaultTimeout());
+        Assert.Equal([AgentCommandStrings.InitCommand_RemoteSkillsConflict], interaction.DisplayedErrors);
+        Assert.Equal(original, await File.ReadAllTextAsync(path));
+        Assert.False(Directory.Exists(client.GetSkillBaseDirectory(scope, context.Project)));
+    }
+
     private static async Task<AspireSkillsBundle> CreateBundleAsync(DirectoryInfo workspaceRoot, params (string Name, string Description)[] skills)
     {
         var bundleDirectory = new DirectoryInfo(Path.Combine(workspaceRoot.FullName, $".test-aspire-skills-bundle-{Guid.NewGuid():N}"));
@@ -1136,12 +1429,15 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         var config = JsonNode.Parse(await File.ReadAllTextAsync(expectedPath))!.AsObject();
         Assert.Equal(client == "opencode" ? ["skills"] : new[] { "enabledPlugins", "extraKnownMarketplaces" }, config.Select(property => property.Key).Order());
         Assert.Empty(messages);
+        var sourceUrls = client == "opencode"
+            ? string.Join(", ", SkillSource.DefaultV1Catalog, SkillSource.DefaultV2Catalog)
+            : AspireSkillsRemoteConfiguration.RepositoryUrl;
         Assert.Collection(interaction.DisplayedMessages,
             message =>
             {
                 Assert.Equal(KnownEmojis.Warning, message.Emoji);
                 Assert.Equal(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_PluginRiskWarning,
-                    AspireSkillsRemoteConfiguration.RepositoryUrl), message.Message);
+                    sourceUrls), message.Message);
             },
             message =>
             {
