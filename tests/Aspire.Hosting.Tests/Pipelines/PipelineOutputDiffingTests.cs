@@ -35,18 +35,21 @@ public class PipelineOutputDiffingTests(ITestOutputHelper output)
             builder.WithOutputDiffing();
         }
         using var app = builder.Build();
-        var differ = app.Services.GetService<IPipelineOutputDiffer>();
+        var snapshotter = app.Services.GetService<IPipelineOutputSnapshotter<PipelineOutputSnapshot>>();
+        var comparer = app.Services.GetService<IPipelineOutputComparer<PipelineOutputSnapshot>>();
         var options = app.Services.GetRequiredService<IOptions<PipelineOutputDiffOptions>>().Value;
 
         if (enabled)
         {
-            Assert.IsType<SnapshotPipelineOutputDiffer>(differ);
+            Assert.IsType<NativePipelineOutputSnapshotter>(snapshotter);
+            Assert.IsType<PipelineOutputComparer>(comparer);
             Assert.Equal(PipelineOutputDiffMode.FileSystem, options.Mode);
             Assert.Equal("generated/**", Assert.Single(options.Rules).Pattern);
         }
         else
         {
-            Assert.Null(differ);
+            Assert.Null(snapshotter);
+            Assert.Null(comparer);
             Assert.Equal(PipelineOutputDiffMode.Auto, options.Mode);
             Assert.Empty(options.Rules);
         }
@@ -218,21 +221,21 @@ public class PipelineOutputDiffingTests(ITestOutputHelper output)
         using var workspace = TemporaryWorkspace.Create(output);
         var artifact = Path.Combine(workspace.Path, "early.txt");
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path, step: "publish-and-diff");
-        var differ = new RecordingDiffer(artifact);
-        builder.Services.AddSingleton<IPipelineOutputDiffer>(differ);
+        var snapshotter = new RecordingSnapshotter(artifact);
+        builder.Services.AddSingleton<IPipelineOutputSnapshotter<RecordingSnapshot>>(snapshotter);
         builder.Pipeline.AddStep("unordered-writer", _ =>
         {
-            Assert.Equal(new[] { "before" }, differ.Phases);
+            Assert.Equal(new[] { "before" }, snapshotter.Events);
             return File.WriteAllTextAsync(artifact, "written after baseline", TestContext.Current.CancellationToken);
         }, requiredBy: WellKnownPipelineSteps.Publish);
-        builder.WithOutputDiffing();
+        builder.WithOutputDiffing<RecordingSnapshot, RecordingSnapshotter, RecordingComparer>();
         using var app = builder.Build();
-        Assert.Empty(differ.Phases);
+        Assert.Empty(snapshotter.Events);
         Assert.False(File.Exists(artifact));
 
         await ExecuteAsync(app);
 
-        Assert.Equal(new[] { "before", "after", "compare" }, differ.Phases);
+        Assert.Equal(new[] { "before", "after", "compare" }, snapshotter.Events);
         Assert.Equal("written after baseline", await File.ReadAllTextAsync(artifact, TestContext.Current.CancellationToken));
     }
 
@@ -301,7 +304,8 @@ public class PipelineOutputDiffingTests(ITestOutputHelper output)
     {
         using var workspace = TemporaryWorkspace.Create(output);
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path, step: "publish-and-diff");
-        builder.Services.AddTransient<IPipelineOutputDiffer>(_ => throw new InvalidOperationException("differ resolved"));
+        builder.Services.AddTransient<IPipelineOutputSnapshotter<PipelineOutputSnapshot>>(_ => throw new InvalidOperationException("typed snapshotter resolved"));
+        builder.Services.AddTransient<IPipelineOutputComparer<PipelineOutputSnapshot>>(_ => throw new InvalidOperationException("comparer resolved"));
         builder.Services.AddSingleton<PipelineOutputSnapshotter>(_ => throw new InvalidOperationException("snapshotter resolved"));
         builder.Services.AddSingleton<IPipelineOutputService>(_ => throw new InvalidOperationException("output resolved"));
         builder.WithOutputDiffing();
@@ -323,16 +327,16 @@ public class PipelineOutputDiffingTests(ITestOutputHelper output)
         using var workspace = TemporaryWorkspace.Create(output);
         var artifact = Path.Combine(workspace.Path, "late.txt");
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path, step: "publish-and-diff");
-        var differ = new RecordingDiffer(artifact);
-        builder.Services.AddSingleton<IPipelineOutputDiffer>(differ);
-        builder.WithOutputDiffing();
+        var snapshotter = new RecordingSnapshotter(artifact);
+        builder.Services.AddSingleton<IPipelineOutputSnapshotter<RecordingSnapshot>>(snapshotter);
+        builder.WithOutputDiffing<RecordingSnapshot, RecordingSnapshotter, RecordingComparer>();
         builder.AddResource(new OutputResource("late-writer"))
             .WithPipelineStepFactory(_ => new PipelineStep
             {
                 Name = "late-writer",
                 Action = _ =>
                 {
-                    Assert.Equal(new[] { "before" }, differ.Phases);
+                    Assert.Equal(new[] { "before" }, snapshotter.Events);
                     return File.WriteAllTextAsync(artifact, "late output", TestContext.Current.CancellationToken);
                 },
                 DependsOnSteps = [WellKnownPipelineSteps.PublishPrereq]
@@ -345,12 +349,12 @@ public class PipelineOutputDiffingTests(ITestOutputHelper output)
                 writer.RequiredBy(WellKnownPipelineSteps.Publish);
             });
         using var app = builder.Build();
-        Assert.Empty(differ.Phases);
+        Assert.Empty(snapshotter.Events);
         Assert.False(File.Exists(artifact));
 
         await ExecuteAsync(app);
 
-        Assert.Equal(new[] { "before", "after", "compare" }, differ.Phases);
+        Assert.Equal(new[] { "before", "after", "compare" }, snapshotter.Events);
         Assert.Equal("late output", await File.ReadAllTextAsync(artifact, TestContext.Current.CancellationToken));
     }
 
@@ -359,7 +363,8 @@ public class PipelineOutputDiffingTests(ITestOutputHelper output)
     {
         using var workspace = TemporaryWorkspace.Create(output);
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path);
-        builder.Services.AddTransient<IPipelineOutputDiffer>(_ => throw new InvalidOperationException("differ resolved"));
+        builder.Services.AddTransient<IPipelineOutputSnapshotter<PipelineOutputSnapshot>>(_ => throw new InvalidOperationException("typed snapshotter resolved"));
+        builder.Services.AddTransient<IPipelineOutputComparer<PipelineOutputSnapshot>>(_ => throw new InvalidOperationException("comparer resolved"));
         builder.Services.AddSingleton<PipelineOutputSnapshotter>(_ => throw new InvalidOperationException("snapshotter resolved"));
         builder.Services.AddSingleton<IPipelineOutputService>(_ => throw new InvalidOperationException("output resolved"));
         AddArtifactWriter(builder.Pipeline);
@@ -632,7 +637,7 @@ public class PipelineOutputDiffingTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public async Task ReplacementDifferOwnsPolicyWithoutGitOrValidNativeOptions()
+    public async Task CustomProviderOwnsPolicyWithoutGitOrValidNativeOptions()
     {
         using var workspace = TemporaryWorkspace.Create(output);
         var artifact = Path.Combine(workspace.Path, "stable.txt");
@@ -643,19 +648,19 @@ public class PipelineOutputDiffingTests(ITestOutputHelper output)
             ["Pipeline:OutputDiff:Rules:0:Action"] = "CustomPolicy",
             ["Pipeline:OutputDiff:Rules:0:Pattern"] = "../outside-native-scope/**"
         });
-        var differ = new RecordingDiffer(artifact, reportUnchanged: true);
-        builder.Services.AddSingleton<IPipelineOutputDiffer>(differ);
+        var snapshotter = new RecordingSnapshotter(artifact, reportUnchanged: true);
+        builder.Services.AddSingleton<IPipelineOutputSnapshotter<RecordingSnapshot>>(snapshotter);
         builder.Services.AddSingleton<PipelineOutputSnapshotter>(_ => throw new InvalidOperationException("Native snapshotter resolved by replacement policy."));
         AddArtifactWriter(builder.Pipeline);
-        builder.WithOutputDiffing();
+        builder.WithOutputDiffing<RecordingSnapshot, RecordingSnapshotter, RecordingComparer>();
         using var app = builder.Build();
-        Assert.Empty(differ.Phases);
+        Assert.Empty(snapshotter.Events);
         Assert.False(Directory.Exists(Path.Combine(workspace.Path, ".git")));
 
         var failure = await Assert.ThrowsAsync<DistributedApplicationException>(() => ExecuteAsync(app));
 
         Assert.Equal("Pipeline output changed:" + Environment.NewLine + "  Changed: " + Path.GetRelativePath(workspace.Path, artifact), failure.Message);
-        Assert.Equal(new[] { "before", "after", "compare" }, differ.Phases);
+        Assert.Equal(new[] { "before", "after", "compare" }, snapshotter.Events);
         Assert.Equal("stable", await File.ReadAllTextAsync(artifact, TestContext.Current.CancellationToken));
     }
 
@@ -722,22 +727,22 @@ public class PipelineOutputDiffingTests(ITestOutputHelper output)
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task OneTransientInstanceOwnsAllPhasesAndIsDisposedOnlyByHost(bool reportUnchanged)
+    public async Task OneTransientSnapshotterOwnsBothCapturesAndIsDisposedOnlyByHost(bool reportUnchanged)
     {
         using var workspace = TemporaryWorkspace.Create(output);
         var artifact = Path.Combine(workspace.Path, "unchanged.txt");
         await File.WriteAllTextAsync(artifact, "stable", TestContext.Current.CancellationToken);
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path, step: "publish-and-diff");
-        var instances = new ConcurrentBag<RecordingDiffer>();
-        builder.Services.AddTransient<IPipelineOutputDiffer>(_ =>
+        var instances = new ConcurrentBag<RecordingSnapshotter>();
+        builder.Services.AddTransient<IPipelineOutputSnapshotter<RecordingSnapshot>>(_ =>
         {
-            var instance = new RecordingDiffer(artifact, reportUnchanged);
+            var instance = new RecordingSnapshotter(artifact, reportUnchanged);
             instances.Add(instance);
             return instance;
         });
         builder.Services.AddSingleton<PipelineOutputSnapshotter>(_ => throw new InvalidOperationException("Native engine must not resolve for a replacement."));
         AddArtifactWriter(builder.Pipeline);
-        builder.WithOutputDiffing();
+        builder.WithOutputDiffing<RecordingSnapshot, RecordingSnapshotter, RecordingComparer>();
         using var app = builder.Build();
         Assert.Empty(instances);
 
@@ -751,12 +756,12 @@ public class PipelineOutputDiffingTests(ITestOutputHelper output)
             await ExecuteAsync(app);
         }
 
-        var differ = Assert.Single(instances);
-        Assert.Equal(new[] { "before", "after", "compare" }, differ.Phases);
+        var snapshotter = Assert.Single(instances);
+        Assert.Equal(new[] { "before", "after", "compare" }, snapshotter.Events);
         Assert.Equal("stable", await File.ReadAllTextAsync(artifact, TestContext.Current.CancellationToken));
-        Assert.False(differ.Disposed);
+        Assert.False(snapshotter.Disposed);
         app.Dispose();
-        Assert.True(differ.Disposed);
+        Assert.True(snapshotter.Disposed);
     }
 
     [Theory]
@@ -768,21 +773,28 @@ public class PipelineOutputDiffingTests(ITestOutputHelper output)
         var artifact = Path.Combine(workspace.Path, "stable.txt");
         await File.WriteAllTextAsync(artifact, "stable", TestContext.Current.CancellationToken);
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path, step: selectBoth ? "both-checks" : "first-check");
-        var instances = new ConcurrentBag<RecordingDiffer>();
-        builder.Services.AddTransient<IPipelineOutputDiffer>(_ =>
+        var instances = new ConcurrentBag<RecordingSnapshotter>();
+        var comparers = new ConcurrentBag<RecordingComparer>();
+        builder.Services.AddTransient<IPipelineOutputSnapshotter<RecordingSnapshot>>(_ =>
         {
-            var differ = new RecordingDiffer(artifact);
-            instances.Add(differ);
-            return differ;
+            var snapshotter = new RecordingSnapshotter(artifact);
+            instances.Add(snapshotter);
+            return snapshotter;
+        });
+        builder.Services.AddTransient<IPipelineOutputComparer<RecordingSnapshot>>(_ =>
+        {
+            var comparer = new RecordingComparer();
+            comparers.Add(comparer);
+            return comparer;
         });
         AddArtifactWriter(builder.Pipeline);
-        builder.WithOutputDiffing(() => new PipelineStep
+        builder.WithOutputDiffing<RecordingSnapshot, RecordingSnapshotter, RecordingComparer>(() => new PipelineStep
         {
             Name = "first-check",
             Action = _ => Task.CompletedTask,
             DependsOnSteps = [WellKnownPipelineSteps.Publish]
         });
-        builder.WithOutputDiffing(() => new PipelineStep
+        builder.WithOutputDiffing<RecordingSnapshot, RecordingSnapshotter, RecordingComparer>(() => new PipelineStep
         {
             Name = "second-check",
             Action = _ => Task.CompletedTask,
@@ -791,30 +803,39 @@ public class PipelineOutputDiffingTests(ITestOutputHelper output)
         builder.Pipeline.AddStep("both-checks", _ => Task.CompletedTask, dependsOn: new[] { "first-check", "second-check" });
         using var app = builder.Build();
         Assert.Empty(instances);
+        Assert.Empty(comparers);
 
         await ExecuteAsync(app);
 
         Assert.Equal(selectBoth ? 2 : 1, instances.Count);
+        Assert.Equal(selectBoth ? 2 : 1, comparers.Count);
         if (selectBoth)
         {
             var selected = instances.ToArray();
+            var selectedComparers = comparers.ToArray();
             Assert.NotSame(selected[0], selected[1]);
+            Assert.NotSame(selectedComparers[0], selectedComparers[1]);
         }
-        Assert.All(instances, differ => Assert.Equal(new[] { "before", "after", "compare" }, differ.Phases));
+        Assert.All(instances, snapshotter => Assert.Equal(new[] { "before", "after", "compare" }, snapshotter.Events));
         Assert.Equal("stable", await File.ReadAllTextAsync(artifact, TestContext.Current.CancellationToken));
+        Assert.All(instances, snapshotter => Assert.False(snapshotter.Disposed));
+        Assert.All(comparers, comparer => Assert.False(comparer.Disposed));
+        app.Dispose();
+        Assert.All(instances, snapshotter => Assert.True(snapshotter.Disposed));
+        Assert.All(comparers, comparer => Assert.True(comparer.Disposed));
     }
 
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task FailedBaselineOrTargetPreventsLaterPhases(bool failBaseline)
+    public async Task FailedBaselineOrTargetPreventsLaterCapturesAndComparison(bool failBaseline)
     {
         using var workspace = TemporaryWorkspace.Create(output);
         var artifact = Path.Combine(workspace.Path, "result.txt");
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path, step: "publish-and-diff");
-        var differ = new RecordingDiffer(artifact) { FailBefore = failBaseline };
-        builder.Services.AddSingleton<IPipelineOutputDiffer>(differ);
-        builder.WithOutputDiffing();
+        var snapshotter = new RecordingSnapshotter(artifact) { FailBefore = failBaseline };
+        builder.Services.AddSingleton<IPipelineOutputSnapshotter<RecordingSnapshot>>(snapshotter);
+        builder.WithOutputDiffing<RecordingSnapshot, RecordingSnapshotter, RecordingComparer>();
         builder.Pipeline.AddStep("writer", async _ =>
         {
             await File.WriteAllTextAsync(artifact, "target entered", TestContext.Current.CancellationToken);
@@ -827,14 +848,14 @@ public class PipelineOutputDiffingTests(ITestOutputHelper output)
 
         Assert.True(failure is InvalidOperationException or AggregateException, failure.ToString());
         Assert.Contains(failBaseline ? "baseline failed" : "target failed", failure.ToString());
-        Assert.Equal(new[] { "before" }, differ.Phases);
+        Assert.Equal(new[] { "before" }, snapshotter.Events);
         Assert.Equal(!failBaseline, File.Exists(artifact));
         if (!failBaseline)
         {
             Assert.Equal("target entered", await File.ReadAllTextAsync(artifact, TestContext.Current.CancellationToken));
         }
         app.Dispose();
-        Assert.False(differ.Disposed); // An externally supplied instance is owned by its caller.
+        Assert.False(snapshotter.Disposed); // An externally supplied instance is owned by its caller.
     }
 
     [Fact]
@@ -843,35 +864,35 @@ public class PipelineOutputDiffingTests(ITestOutputHelper output)
         using var workspace = TemporaryWorkspace.Create(output);
         var artifact = Path.Combine(workspace.Path, "custom.txt");
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path, step: "custom-check");
-        var differ = new RecordingDiffer(artifact);
-        builder.Services.AddSingleton<IPipelineOutputDiffer>(differ);
+        var snapshotter = new RecordingSnapshotter(artifact);
+        builder.Services.AddSingleton<IPipelineOutputSnapshotter<RecordingSnapshot>>(snapshotter);
         builder.Pipeline.AddStep("custom-target", _ =>
         {
-            Assert.Equal(new[] { "before" }, differ.Phases);
+            Assert.Equal(new[] { "before" }, snapshotter.Events);
             return File.WriteAllTextAsync(artifact, "custom output", TestContext.Current.CancellationToken);
         });
-        builder.WithOutputDiffing("custom-target", "custom-check");
+        builder.WithOutputDiffing<RecordingSnapshot, RecordingSnapshotter, RecordingComparer>("custom-target", "custom-check");
         using var app = builder.Build();
         Assert.False(File.Exists(artifact));
-        Assert.Empty(differ.Phases);
+        Assert.Empty(snapshotter.Events);
 
         await ExecuteAsync(app);
 
-        Assert.Equal(new[] { "before", "after", "compare" }, differ.Phases);
+        Assert.Equal(new[] { "before", "after", "compare" }, snapshotter.Events);
         Assert.Equal("custom output", await File.ReadAllTextAsync(artifact, TestContext.Current.CancellationToken));
     }
 
     [Fact]
-    public async Task CancellationFromDifferStopsTheTarget()
+    public async Task CancellationFromSnapshotterStopsTheTarget()
     {
         using var workspace = TemporaryWorkspace.Create(output);
         var artifact = Path.Combine(workspace.Path, "cancelled.txt");
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path, step: "publish-and-diff");
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
-        var differ = new RecordingDiffer(artifact) { BeforeCancellation = cancellation.Token };
-        builder.Services.AddSingleton<IPipelineOutputDiffer>(differ);
-        builder.WithOutputDiffing();
+        var snapshotter = new RecordingSnapshotter(artifact) { BeforeCancellation = cancellation.Token };
+        builder.Services.AddSingleton<IPipelineOutputSnapshotter<RecordingSnapshot>>(snapshotter);
+        builder.WithOutputDiffing<RecordingSnapshot, RecordingSnapshotter, RecordingComparer>();
         builder.Pipeline.AddStep("writer", _ => File.WriteAllTextAsync(artifact, "unexpected", TestContext.Current.CancellationToken),
             dependsOn: WellKnownPipelineSteps.PublishPrereq, requiredBy: WellKnownPipelineSteps.Publish);
         using var app = builder.Build();
@@ -882,7 +903,7 @@ public class PipelineOutputDiffingTests(ITestOutputHelper output)
         IEnumerable<Exception> failures = failure is AggregateException aggregate ? aggregate.Flatten().InnerExceptions : [failure];
         Assert.Contains(failures, exception =>
             exception.InnerException is OperationCanceledException cancelled && cancelled.CancellationToken == cancellation.Token);
-        Assert.Equal(new[] { "before" }, differ.Phases);
+        Assert.Equal(new[] { "before" }, snapshotter.Events);
         Assert.False(File.Exists(artifact));
     }
 
@@ -941,9 +962,9 @@ public class PipelineOutputDiffingTests(ITestOutputHelper output)
         Assert.Empty(await PipelineOutputGitTestHelper.RunAsync(workspace.Path, "diff", "--name-only"));
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path, step: "publish-and-diff");
         builder.Services.AddSingleton<PipelineOutputSnapshotter>(_ => throw new InvalidOperationException("Native snapshotter resolved by Git replacement."));
-        builder.Services.AddTransient<IPipelineOutputDiffer>(_ => new GitDiffer(workspace.Path));
+        builder.Services.AddTransient<IPipelineOutputSnapshotter<GitSnapshot>>(_ => new GitSnapshotter(workspace.Path));
         AddArtifactWriter(builder.Pipeline);
-        builder.WithOutputDiffing();
+        builder.WithOutputDiffing<GitSnapshot, GitSnapshotter, GitComparer>();
         builder.Pipeline.WithFinalAction(WellKnownPipelineSteps.Publish, async _ =>
         {
             await File.WriteAllTextAsync(artifact, "new", TestContext.Current.CancellationToken);
@@ -965,6 +986,62 @@ public class PipelineOutputDiffingTests(ITestOutputHelper output)
         Assert.Equal("old", (await PipelineOutputGitTestHelper.RunAsync(workspace.Path, "show", ":tracked.txt")).Trim());
     }
 
+    [Fact]
+    public async Task DifferentSnapshotTypesUseIndependentProvidersAndFreshOutputDirectories()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        var relocated = workspace.CreateDirectory("relocated").FullName;
+        var artifact = Path.Combine(workspace.Path, "stable.txt");
+        await File.WriteAllTextAsync(artifact, "stable", TestContext.Current.CancellationToken);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path, step: "both-checks");
+        var snapshotter = new RecordingSnapshotter(artifact);
+        var directories = new DirectorySnapshotter();
+        var comparer = new DirectoryComparer(workspace.Path, relocated);
+        var provider = new CountingOutputService(workspace.Path, relocated);
+        builder.Services.AddSingleton<IPipelineOutputSnapshotter<RecordingSnapshot>>(snapshotter);
+        builder.Services.AddSingleton<IPipelineOutputSnapshotter<string>>(directories);
+        builder.Services.AddSingleton<IPipelineOutputComparer<string>>(comparer);
+        builder.Services.AddSingleton<IPipelineOutputService>(provider);
+        builder.WithOutputDiffing<RecordingSnapshot, RecordingSnapshotter, RecordingComparer>(diffStepName: "file-check");
+        var factoryCalls = 0;
+        builder.WithOutputDiffing<string, DirectorySnapshotter, DirectoryComparer>(() => new PipelineStep
+        {
+            Name = "directory-check",
+            Action = _ =>
+            {
+                Assert.Equal(new[] { workspace.Path }, directories.Directories);
+                Assert.Equal(0, comparer.Comparisons);
+                factoryCalls++;
+                return Task.CompletedTask;
+            },
+            DependsOnSteps = [WellKnownPipelineSteps.Publish]
+        });
+        builder.Pipeline.AddStep("relocate-output", _ =>
+        {
+            Assert.Equal(new[] { "before" }, snapshotter.Events);
+            Assert.Equal(new[] { workspace.Path }, directories.Directories);
+            provider.GlobalDirectory = relocated;
+            return Task.CompletedTask;
+        }, requiredBy: WellKnownPipelineSteps.Publish);
+        builder.Pipeline.AddStep("both-checks", _ => Task.CompletedTask, dependsOn: new[] { "file-check", "directory-check" });
+        using var app = builder.Build();
+        Assert.Empty(snapshotter.Events);
+        Assert.Empty(directories.Directories);
+        Assert.Equal(0, comparer.Comparisons);
+        Assert.Equal(0, factoryCalls);
+        Assert.NotEqual(workspace.Path, relocated);
+
+        await ExecuteAsync(app);
+
+        Assert.Equal(new[] { "before", "after", "compare" }, snapshotter.Events);
+        Assert.Equal(new[] { workspace.Path, relocated }, directories.Directories);
+        Assert.Equal(1, comparer.Comparisons);
+        Assert.Equal(1, factoryCalls);
+        Assert.Equal(4, provider.GlobalCalls);
+        Assert.Equal(0, provider.ResourceCalls);
+        Assert.Equal("stable", await File.ReadAllTextAsync(artifact, TestContext.Current.CancellationToken));
+    }
+
     private static void AddArtifactWriter(IDistributedApplicationPipeline pipeline) => pipeline.AddStep(
         "artifact-writer", _ => Task.CompletedTask,
         dependsOn: WellKnownPipelineSteps.PublishPrereq, requiredBy: WellKnownPipelineSteps.Publish);
@@ -976,19 +1053,12 @@ public class PipelineOutputDiffingTests(ITestOutputHelper output)
 
     private sealed class OutputResource(string name) : Resource(name);
 
-    // The index is the baseline; this replacement never enumerates or hashes native snapshots.
-    private sealed class GitDiffer(string directory) : IPipelineOutputDiffer
+    private sealed record GitSnapshot(string OutputDirectory, IReadOnlyList<PipelineOutputChange> Changes);
+
+    // Each capture reports working-tree changes against the index, rather than native file fingerprints.
+    private sealed class GitSnapshotter(string directory) : IPipelineOutputSnapshotter<GitSnapshot>
     {
-        private IReadOnlyList<PipelineOutputChange>? _changes;
-
-        public Task CaptureBeforeAsync(string outputDirectory, CancellationToken ct)
-        {
-            ct.ThrowIfCancellationRequested();
-            Assert.Equal(directory, outputDirectory);
-            return Task.CompletedTask;
-        }
-
-        public async Task CaptureAfterAsync(string outputDirectory, CancellationToken ct)
+        public async Task<GitSnapshot> CaptureAsync(string outputDirectory, CancellationToken ct)
         {
             ct.ThrowIfCancellationRequested();
             Assert.Equal(directory, outputDirectory);
@@ -1002,6 +1072,7 @@ public class PipelineOutputDiffingTests(ITestOutputHelper output)
                 (new[] { "ls-files", "--others", "--exclude-standard", "-z" }, PipelineOutputChangeKind.Added)
             })
             {
+                // Both commands emit paths separated by NUL, including names containing newlines.
                 foreach (var path in (await PipelineOutputGitTestHelper.RunAsync(directory, command)).Split('\0', StringSplitOptions.RemoveEmptyEntries))
                 {
                     if (Microsoft.Extensions.FileSystemGlobbing.MatcherExtensions.Match(exclusions, path).HasMatches)
@@ -1010,75 +1081,130 @@ public class PipelineOutputDiffingTests(ITestOutputHelper output)
                     }
                 }
             }
-            _changes = changes.AsReadOnly();
-        }
 
-        public Task<IReadOnlyList<PipelineOutputChange>> CompareAsync(CancellationToken ct)
+            return new GitSnapshot(outputDirectory, changes.AsReadOnly());
+        }
+    }
+
+    private sealed class GitComparer : IPipelineOutputComparer<GitSnapshot>
+    {
+        public Task<IReadOnlyList<PipelineOutputChange>> CompareAsync(GitSnapshot before, GitSnapshot after, CancellationToken ct)
         {
             ct.ThrowIfCancellationRequested();
-            return Task.FromResult(Assert.IsAssignableFrom<IReadOnlyList<PipelineOutputChange>>(_changes));
+            Assert.Equal(before.OutputDirectory, after.OutputDirectory);
+            // This policy uses the index as its baseline, not the earlier working-tree capture.
+            return Task.FromResult(after.Changes);
         }
     }
 
     private sealed class CountingOutputService(string globalDirectory, string resourceDirectory) : IPipelineOutputService
     {
-        public int GlobalCalls { get; private set; }
-        public int ResourceCalls { get; private set; }
+        private int _globalCalls;
+        private int _resourceCalls;
+        public int GlobalCalls => _globalCalls;
+        public int ResourceCalls => _resourceCalls;
+        public string GlobalDirectory { get; set; } = globalDirectory;
         public string GetOutputDirectory()
         {
-            GlobalCalls++;
-            return globalDirectory;
+            Interlocked.Increment(ref _globalCalls);
+            return GlobalDirectory;
         }
         public string GetOutputDirectory(IResource resource)
         {
-            ResourceCalls++;
+            Interlocked.Increment(ref _resourceCalls);
             return resourceDirectory;
         }
         public string GetTempDirectory() => throw new InvalidOperationException("No temporary lookup during diffing.");
         public string GetTempDirectory(IResource resource) => throw new InvalidOperationException("No temporary lookup during diffing.");
     }
 
-    private sealed class RecordingDiffer(string artifact, bool reportUnchanged = false) : IPipelineOutputDiffer, IDisposable
+    private sealed record RecordingSnapshot(RecordingSnapshotter Owner, string OutputDirectory, int Capture);
+
+    private sealed class RecordingSnapshotter(string artifact, bool reportUnchanged = false) : IPipelineOutputSnapshotter<RecordingSnapshot>, IDisposable
     {
-        public List<string> Phases { get; } = [];
+        public List<string> Events { get; } = [];
+        public string Artifact { get; } = artifact;
+        public bool ReportUnchanged { get; } = reportUnchanged;
         public bool FailBefore { get; init; }
         public CancellationToken BeforeCancellation { get; init; }
         public bool Disposed { get; private set; }
 
-        public Task CaptureBeforeAsync(string outputDirectory, CancellationToken ct)
+        public Task<RecordingSnapshot> CaptureAsync(string outputDirectory, CancellationToken ct)
         {
+            ct.ThrowIfCancellationRequested();
             Assert.False(Disposed);
-            Assert.Empty(Phases);
             Assert.NotEmpty(outputDirectory);
-            Phases.Add("before");
-            if (FailBefore)
+            Assert.InRange(Events.Count, 0, 1);
+            var first = Events.Count == 0;
+            Events.Add(first ? "before" : "after");
+            if (first)
             {
-                throw new IOException("baseline failed");
+                if (FailBefore)
+                {
+                    throw new IOException("baseline failed");
+                }
+                BeforeCancellation.ThrowIfCancellationRequested();
             }
-            BeforeCancellation.ThrowIfCancellationRequested();
-            return Task.CompletedTask;
-        }
+            else
+            {
+                Assert.True(File.Exists(Artifact));
+            }
 
-        public Task CaptureAfterAsync(string outputDirectory, CancellationToken ct)
-        {
-            Assert.False(Disposed);
-            Assert.Equal(new[] { "before" }, Phases);
-            Assert.NotEmpty(outputDirectory);
-            Assert.True(File.Exists(artifact));
-            Phases.Add("after");
-            return Task.CompletedTask;
-        }
-
-        public Task<IReadOnlyList<PipelineOutputChange>> CompareAsync(CancellationToken ct)
-        {
-            Assert.False(Disposed);
-            Assert.Equal(new[] { "before", "after" }, Phases);
-            Phases.Add("compare");
-            return Task.FromResult<IReadOnlyList<PipelineOutputChange>>(reportUnchanged
-                ? [new(PipelineOutputChangeKind.Changed, Path.GetFileName(artifact))] : []);
+            return Task.FromResult(new RecordingSnapshot(this, outputDirectory, Events.Count));
         }
 
         public void Dispose() => Disposed = true;
+    }
+
+    private sealed class RecordingComparer : IPipelineOutputComparer<RecordingSnapshot>, IDisposable
+    {
+        public bool Disposed { get; private set; }
+
+        public Task<IReadOnlyList<PipelineOutputChange>> CompareAsync(RecordingSnapshot before, RecordingSnapshot after, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            Assert.False(Disposed);
+            Assert.Same(before.Owner, after.Owner);
+            Assert.Equal(1, before.Capture);
+            Assert.Equal(2, after.Capture);
+            var snapshotter = before.Owner;
+            Assert.False(snapshotter.Disposed);
+            Assert.Equal(new[] { "before", "after" }, snapshotter.Events);
+            snapshotter.Events.Add("compare");
+
+            return Task.FromResult<IReadOnlyList<PipelineOutputChange>>(snapshotter.ReportUnchanged
+                ? [new(PipelineOutputChangeKind.Changed, Path.GetFileName(snapshotter.Artifact))] : []);
+        }
+
+        public void Dispose() => Disposed = true;
+    }
+
+    private sealed class DirectorySnapshotter : IPipelineOutputSnapshotter<string>
+    {
+        public List<string> Directories { get; } = [];
+
+        public Task<string> CaptureAsync(string outputDirectory, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            Directories.Add(outputDirectory);
+
+            return Task.FromResult(outputDirectory);
+        }
+    }
+
+    private sealed class DirectoryComparer(string beforeDirectory, string afterDirectory) : IPipelineOutputComparer<string>
+    {
+        public int Comparisons { get; private set; }
+
+        public Task<IReadOnlyList<PipelineOutputChange>> CompareAsync(string before, string after, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            Assert.Equal(beforeDirectory, before);
+            Assert.Equal(afterDirectory, after);
+            Comparisons++;
+
+            return Task.FromResult<IReadOnlyList<PipelineOutputChange>>([]);
+        }
     }
 }
 

@@ -199,18 +199,28 @@ Capture makes no Git storage writes. Files regenerated during a failed check rem
 Reported changes fail the check with a `DistributedApplicationException`. Paths are relative to the output directory
 and sorted by platform path order. Each report line is formatted as `Kind: path`.
 
-Register a custom `IPipelineOutputDiffer` through normal host DI to own coverage and comparison policy:
+Select a custom snapshot type and its capture and comparison implementations to own coverage and comparison policy:
 
 ```csharp
-builder.Services.AddTransient<IPipelineOutputDiffer, MyOutputDiffer>();
+builder.WithOutputDiffing<MyOutputSnapshot, MyOutputSnapshotter, MyOutputComparer>();
 ```
 
-The baseline resolves one differ from host DI and reuses it for `CaptureBeforeAsync(outputDirectory, ct)`,
-`CaptureAfterAsync(outputDirectory, ct)`, and `CompareAsync(ct)`. Custom changes preserve the relative reporting paths
-supplied by the differ.
+`MyOutputSnapshotter` implements `IPipelineOutputSnapshotter<MyOutputSnapshot>` and `MyOutputComparer` implements
+`IPipelineOutputComparer<MyOutputSnapshot>`. The generic constraints require both services to use the same snapshot type;
+no public snapshot base class or runtime representation cast is needed. Snapshots describe fixed captured output.
+`CaptureAsync(outputDirectory, ct)` returns a snapshot, and `CompareAsync(before, after, ct)` compares captured data without
+recapturing live output or changing either snapshot. Repeated comparison of the same snapshots produces the same changes.
+Custom changes preserve the relative reporting paths supplied by the comparer.
+
+The extension registers transient defaults for the two closed generic interfaces and preserves existing host DI
+registrations. The baseline resolves one snapshotter and retains it for both captures so capture policy can stay consistent.
+Each capture looks up the current output directory. A comparer is resolved after the second capture. Both services follow
+normal host DI ownership: DI-created services are disposed with the host; pre-instantiated services remain caller-owned.
+Native configuration and Git are not required by custom implementations.
 
 See the [diffing integration](../../src/Aspire.Hosting/Pipelines/PipelineOutputDiffingExtensions.cs),
-[default differ](../../src/Aspire.Hosting/Pipelines/SnapshotPipelineOutputDiffer.cs),
+[native snapshotter](../../src/Aspire.Hosting/Pipelines/NativePipelineOutputSnapshotter.cs),
+[native comparer](../../src/Aspire.Hosting/Pipelines/PipelineOutputComparer.cs),
 [artifact integration tests](../../tests/Aspire.Hosting.Tests/Pipelines/PipelineOutputDiffingTests.cs), and
 [EF graph and writer tests](../../tests/Aspire.Hosting.EntityFrameworkCore.Tests/EFOutputDiffingTests.cs).
 
@@ -223,9 +233,11 @@ See the [diffing integration](../../src/Aspire.Hosting/Pipelines/PipelineOutputD
 | AppHost configuration | `PipelineOptions.OutputPath` | Select the global output directory. |
 | Environment layout | `PublishingContextUtils` | Select the Docker, Kubernetes, and Radius environment destination. |
 | Temporary storage | `IFileSystemService` | Allocate temporary storage and apply its cleanup policy. |
-| Diff target | `PipelineOutputDiffingExtensions`, `IPipelineOutputDiffer` | Run one replaceable check across the selected baseline and target boundaries. |
+| Diff target | `PipelineOutputDiffingExtensions` | Capture before and after the selected target, then compare the typed snapshots. |
+| Provider contracts | `IPipelineOutputSnapshotter<TSnapshot>`, `IPipelineOutputComparer<TSnapshot>` | Pair capture and comparison through a shared snapshot type. |
 | Default selection | `PipelineOutputDiffOptions` | Configure ordered include/exclude rules and the Git strategy. |
-| Default diffing | `SnapshotPipelineOutputDiffer`, internal `PipelineOutputSnapshotter` | Capture file snapshots and compare entry kinds and hashes. |
+| Default capture | Internal `NativePipelineOutputSnapshotter`, `PipelineOutputSnapshotter` | Retain capture strategy and capture file snapshots. |
+| Default comparison | Internal `PipelineOutputComparer` | Compare captured entry kinds, hashes, and available Git modes without reading live output. |
 
 ## Resources
 

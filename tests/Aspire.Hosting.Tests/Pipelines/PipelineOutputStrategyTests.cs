@@ -23,11 +23,11 @@ public sealed class PipelineOutputStrategyTests(ITestOutputHelper output)
         var path = Path.Combine(workspace.Path, "artifact.txt");
         File.WriteAllText(path, "line\n");
         var runner = new PipelineOutputTestProcessRunner(_ => throw new InvalidOperationException("Git must not run"));
-        var differ = new SnapshotPipelineOutputDiffer(new(), runner, Options.Create(new PipelineOutputDiffOptions { Mode = PipelineOutputDiffMode.FileSystem }));
-        await differ.CaptureBeforeAsync(workspace.Path, TestContext.Current.CancellationToken);
+        var nativeSnapshotter = new NativePipelineOutputSnapshotter(new(), runner, Options.Create(new PipelineOutputDiffOptions { Mode = PipelineOutputDiffMode.FileSystem }));
+        var beforeSnapshot = await nativeSnapshotter.CaptureAsync(workspace.Path, TestContext.Current.CancellationToken);
         File.WriteAllText(path, "line\r\n");
-        await differ.CaptureAfterAsync(workspace.Path, TestContext.Current.CancellationToken);
-        Assert.Equal(PipelineOutputChangeKind.Changed, Assert.Single(await differ.CompareAsync(TestContext.Current.CancellationToken)).Kind);
+        var afterSnapshot = await nativeSnapshotter.CaptureAsync(workspace.Path, TestContext.Current.CancellationToken);
+        Assert.Equal(PipelineOutputChangeKind.Changed, Assert.Single(await new PipelineOutputComparer().CompareAsync(beforeSnapshot, afterSnapshot, TestContext.Current.CancellationToken)).Kind);
         Assert.Empty(runner.Calls);
     }
 
@@ -47,23 +47,23 @@ public sealed class PipelineOutputStrategyTests(ITestOutputHelper output)
         var runner = new PipelineOutputTestProcessRunner(_ => throw new InvalidOperationException("Git must not run"));
         var options = new PipelineOutputDiffOptions { Mode = PipelineOutputDiffMode.FileSystem };
         Assert.Empty(options.Rules);
-        var differ = new SnapshotPipelineOutputDiffer(new(), runner, Options.Create(options));
+        var nativeSnapshotter = new NativePipelineOutputSnapshotter(new(), runner, Options.Create(options));
 
-        var snapshot = await differ.CaptureAsync(workspace.Path, TestContext.Current.CancellationToken);
+        var snapshot = await nativeSnapshotter.CaptureAsync(workspace.Path, TestContext.Current.CancellationToken);
 
-        Assert.Equal(new[] { artifact, metadata }.Order(PipelineOutputRoot.PathComparer), snapshot.Keys.Order(PipelineOutputRoot.PathComparer));
+        Assert.Equal(new[] { artifact, metadata }.Order(PipelineOutputRoot.PathComparer), snapshot.Files.Keys.Order(PipelineOutputRoot.PathComparer));
 
         options.Rules.Add(new() { Action = "Include", Pattern = "**/*" });
         options.Rules.Add(new() { Action = "Exclude", Pattern = "**/.git" });
         options.Rules.Add(new() { Action = "Exclude", Pattern = "**/.git/**" });
-        differ = new(new(), runner, Options.Create(options));
-        snapshot = await differ.CaptureAsync(workspace.Path, TestContext.Current.CancellationToken);
-        Assert.Equal(new[] { artifact }, snapshot.Keys);
+        nativeSnapshotter = new(new(), runner, Options.Create(options));
+        snapshot = await nativeSnapshotter.CaptureAsync(workspace.Path, TestContext.Current.CancellationToken);
+        Assert.Equal(new[] { artifact }, snapshot.Files.Keys);
 
         options.Rules.Add(new() { Action = "Include", Pattern = "**/*" });
-        differ = new(new(), runner, Options.Create(options));
-        snapshot = await differ.CaptureAsync(workspace.Path, TestContext.Current.CancellationToken);
-        Assert.Equal(new[] { artifact, metadata }.Order(PipelineOutputRoot.PathComparer), snapshot.Keys.Order(PipelineOutputRoot.PathComparer));
+        nativeSnapshotter = new(new(), runner, Options.Create(options));
+        snapshot = await nativeSnapshotter.CaptureAsync(workspace.Path, TestContext.Current.CancellationToken);
+        Assert.Equal(new[] { artifact, metadata }.Order(PipelineOutputRoot.PathComparer), snapshot.Files.Keys.Order(PipelineOutputRoot.PathComparer));
         Assert.Empty(runner.Calls);
     }
 
@@ -77,8 +77,8 @@ public sealed class PipelineOutputStrategyTests(ITestOutputHelper output)
         var runner = new PipelineOutputTestProcessRunner(_ => missingExecutable
             ? throw new Win32Exception(2)
             : new(128, "", "unavailable in any language"));
-        var differ = new SnapshotPipelineOutputDiffer(new(), runner, Options.Create(options));
-        var failure = await Assert.ThrowsAsync<DistributedApplicationException>(() => differ.CaptureBeforeAsync(workspace.Path, TestContext.Current.CancellationToken));
+        var nativeSnapshotter = new NativePipelineOutputSnapshotter(new(), runner, Options.Create(options));
+        var failure = await Assert.ThrowsAsync<DistributedApplicationException>(() => nativeSnapshotter.CaptureAsync(workspace.Path, TestContext.Current.CancellationToken));
         Assert.Contains("Git", failure.Message);
         Assert.Single(runner.Calls);
     }
@@ -92,11 +92,11 @@ public sealed class PipelineOutputStrategyTests(ITestOutputHelper output)
         var path = Path.Combine(workspace.Path, "artifact.txt");
         File.WriteAllText(path, "before");
         var runner = new PipelineOutputTestProcessRunner(_ => new(exitCode, discovery, "診断は解析しません"));
-        var differ = new SnapshotPipelineOutputDiffer(new(), runner, Options.Create(new PipelineOutputDiffOptions()));
-        await differ.CaptureBeforeAsync(workspace.Path, TestContext.Current.CancellationToken);
+        var nativeSnapshotter = new NativePipelineOutputSnapshotter(new(), runner, Options.Create(new PipelineOutputDiffOptions()));
+        var beforeSnapshot = await nativeSnapshotter.CaptureAsync(workspace.Path, TestContext.Current.CancellationToken);
         File.WriteAllText(path, "after!");
-        await differ.CaptureAfterAsync(workspace.Path, TestContext.Current.CancellationToken);
-        Assert.Equal(PipelineOutputChangeKind.Changed, Assert.Single(await differ.CompareAsync(TestContext.Current.CancellationToken)).Kind);
+        var afterSnapshot = await nativeSnapshotter.CaptureAsync(workspace.Path, TestContext.Current.CancellationToken);
+        Assert.Equal(PipelineOutputChangeKind.Changed, Assert.Single(await new PipelineOutputComparer().CompareAsync(beforeSnapshot, afterSnapshot, TestContext.Current.CancellationToken)).Kind);
         Assert.Single(runner.Calls);
     }
 
@@ -110,10 +110,10 @@ public sealed class PipelineOutputStrategyTests(ITestOutputHelper output)
         var missing = Path.Combine(workspace.Path, "missing");
         Assert.False(Directory.Exists(missing));
         var runner = new PipelineOutputTestProcessRunner(_ => throw new InvalidOperationException("Missing roots must not probe Git"));
-        var differ = new SnapshotPipelineOutputDiffer(new(), runner, Options.Create(new PipelineOutputDiffOptions { Mode = mode }));
-        await differ.CaptureBeforeAsync(missing, TestContext.Current.CancellationToken);
-        await differ.CaptureAfterAsync(missing, TestContext.Current.CancellationToken);
-        Assert.Empty(await differ.CompareAsync(TestContext.Current.CancellationToken));
+        var nativeSnapshotter = new NativePipelineOutputSnapshotter(new(), runner, Options.Create(new PipelineOutputDiffOptions { Mode = mode }));
+        var beforeSnapshot = await nativeSnapshotter.CaptureAsync(missing, TestContext.Current.CancellationToken);
+        var afterSnapshot = await nativeSnapshotter.CaptureAsync(missing, TestContext.Current.CancellationToken);
+        Assert.Empty(await new PipelineOutputComparer().CompareAsync(beforeSnapshot, afterSnapshot, TestContext.Current.CancellationToken));
         Assert.Empty(runner.Calls);
     }
 
@@ -129,14 +129,14 @@ public sealed class PipelineOutputStrategyTests(ITestOutputHelper output)
         var runner = new PipelineOutputTestProcessRunner(args => args.Contains("rev-parse")
             ? mode is PipelineOutputDiffMode.Git ? new(0, "true\n\n", "") : new(128, "", "unavailable")
             : new(0, args.Contains("--others") ? "artifact.txt\0" : args.Contains("hash-object") ? new string('a', 40) + "\n" : "", ""));
-        var differ = new SnapshotPipelineOutputDiffer(new(), runner, Options.Create(new PipelineOutputDiffOptions { Mode = mode }));
-        await differ.CaptureBeforeAsync(directory, TestContext.Current.CancellationToken);
+        var nativeSnapshotter = new NativePipelineOutputSnapshotter(new(), runner, Options.Create(new PipelineOutputDiffOptions { Mode = mode }));
+        var beforeSnapshot = await nativeSnapshotter.CaptureAsync(directory, TestContext.Current.CancellationToken);
         Assert.Empty(runner.Calls);
         Directory.CreateDirectory(directory);
         var path = Path.Combine(directory, "artifact.txt");
         File.WriteAllText(path, "generated");
-        await differ.CaptureAfterAsync(directory, TestContext.Current.CancellationToken);
-        var change = Assert.Single(await differ.CompareAsync(TestContext.Current.CancellationToken));
+        var afterSnapshot = await nativeSnapshotter.CaptureAsync(directory, TestContext.Current.CancellationToken);
+        var change = Assert.Single(await new PipelineOutputComparer().CompareAsync(beforeSnapshot, afterSnapshot, TestContext.Current.CancellationToken));
         Assert.Equal(PipelineOutputChangeKind.Added, change.Kind);
         Assert.Equal(Path.GetRelativePath(directory, path), change.Path);
         Assert.Equal(mode is PipelineOutputDiffMode.FileSystem ? 0 : 1, runner.Calls.Count(args => args.Contains("rev-parse")));
@@ -175,8 +175,8 @@ public sealed class PipelineOutputStrategyTests(ITestOutputHelper output)
         using var workspace = TemporaryWorkspace.Create(output);
         var runner = new PipelineOutputTestProcessRunner(args => new(0,
             args.Contains("rev-parse") ? "true\n\n" : args.Contains("status") ? status : "", ""));
-        var differ = new SnapshotPipelineOutputDiffer(new(), runner, Options.Create(new PipelineOutputDiffOptions()));
-        var failure = await Assert.ThrowsAsync<DistributedApplicationException>(() => differ.CaptureBeforeAsync(workspace.Path, TestContext.Current.CancellationToken));
+        var nativeSnapshotter = new NativePipelineOutputSnapshotter(new(), runner, Options.Create(new PipelineOutputDiffOptions()));
+        var failure = await Assert.ThrowsAsync<DistributedApplicationException>(() => nativeSnapshotter.CaptureAsync(workspace.Path, TestContext.Current.CancellationToken));
         Assert.Contains("malformed pipeline output status", failure.Message);
     }
 
@@ -224,18 +224,18 @@ public sealed class PipelineOutputStrategyTests(ITestOutputHelper output)
             args.Contains("rev-parse") ? "true\n\n" :
             args.Contains("--stage") && indexed ? "H 120000 " + new string('a', 40) + " 0\tlink\0" :
             args.Contains("--others") && !indexed ? "link\0" : "", ""));
-        var differ = new SnapshotPipelineOutputDiffer(new(), runner, Options.Create(new PipelineOutputDiffOptions()));
+        var nativeSnapshotter = new NativePipelineOutputSnapshotter(new(), runner, Options.Create(new PipelineOutputDiffOptions()));
         if (malformed)
         {
-            var failure = await Assert.ThrowsAsync<DistributedApplicationException>(() => differ.CaptureAsync(root, TestContext.Current.CancellationToken));
+            var failure = await Assert.ThrowsAsync<DistributedApplicationException>(() => nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken));
             Assert.Contains("malformed pipeline output link object ID", failure.Message);
         }
         else
         {
-            var snapshot = await differ.CaptureAsync(root, TestContext.Current.CancellationToken);
-            Assert.True(snapshot[path].IsLink);
-            Assert.Equal(indexed ? "120000" : null, snapshot[path].GitMode);
-            Assert.Equal(Encoding.ASCII.GetBytes(oid), snapshot[path].Hash.ToArray());
+            var snapshot = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
+            Assert.True(snapshot.Files[path].IsLink);
+            Assert.Equal(indexed ? "120000" : null, snapshot.Files[path].GitMode);
+            Assert.Equal(Encoding.ASCII.GetBytes(oid), snapshot.Files[path].Hash.ToArray());
         }
         Assert.Equal(new[] { "rev-parse", "ls-files", "ls-files", "status", "hash-object" }, runner.Calls.Select(args => args[1]));
         Assert.Equal(new[] { "--no-optional-locks", "hash-object", "--stdin" }, runner.Calls[^1]);
@@ -267,8 +267,8 @@ public sealed class PipelineOutputStrategyTests(ITestOutputHelper output)
         File.WriteAllText(path, "content");
         var runner = new PipelineOutputTestProcessRunner(args => new(0,
             args.Contains("rev-parse") ? "true\n\n" : args.Contains("--others") ? gitPath + "\0" : args.Contains("hash-object") ? new string('a', 40) + "\n" : "", ""));
-        var differ = new SnapshotPipelineOutputDiffer(new(), runner, Options.Create(new PipelineOutputDiffOptions()));
-        await differ.CaptureBeforeAsync(workspace.Path, TestContext.Current.CancellationToken);
+        var nativeSnapshotter = new NativePipelineOutputSnapshotter(new(), runner, Options.Create(new PipelineOutputDiffOptions()));
+        await nativeSnapshotter.CaptureAsync(workspace.Path, TestContext.Current.CancellationToken);
         var hashIndex = runner.Calls.FindIndex(args => args.Contains("hash-object"));
         Assert.True(hashIndex >= 0);
         var expectedPath = OperatingSystem.IsWindows() ? path.Replace('\\', '/') : path;
@@ -585,28 +585,28 @@ public sealed class PipelineOutputStrategyTests(ITestOutputHelper output)
             "ls-files", "--others", "--exclude-standard", "-z", "--", "output"));
         var status = await PipelineOutputGitTestHelper.RunAsync(workspace.Path, "status", "--porcelain=v2", "-z", "--untracked-files=no", "--no-renames");
         Assert.Equal('D', Assert.Single(status.Split('\0', StringSplitOptions.RemoveEmptyEntries)).Split(' ')[1][1]);
-        var native = new SnapshotPipelineOutputDiffer(new(), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions()));
-        Assert.Empty(await native.CaptureAsync(root, TestContext.Current.CancellationToken));
+        var native = new NativePipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions()));
+        Assert.Empty((await native.CaptureAsync(root, TestContext.Current.CancellationToken)).Files);
         var calls = new ConcurrentBag<string>();
-        var custom = new SnapshotPipelineOutputDiffer(new PipelineOutputSnapshotter(new TestPipelineOutputFileHasher(async (file, token) =>
+        var custom = new NativePipelineOutputSnapshotter(new PipelineOutputSnapshotter(new TestPipelineOutputFileHasher(async (file, token) =>
         {
             calls.Add(file.FullName);
             using var reader = File.OpenText(file.FullName);
             return Encoding.UTF8.GetBytes(await reader.ReadToEndAsync(token));
         })), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions()));
 
-        await custom.CaptureBeforeAsync(root, TestContext.Current.CancellationToken);
+        var beforeSnapshot = await custom.CaptureAsync(root, TestContext.Current.CancellationToken);
         Assert.Equal(new[] { path }, calls);
         var unchanged = await custom.CaptureAsync(root, TestContext.Current.CancellationToken);
-        Assert.Equal(Encoding.UTF8.GetBytes("available through indexed name"), unchanged[path].Hash.ToArray());
+        Assert.Equal(Encoding.UTF8.GetBytes("available through indexed name"), unchanged.Files[path].Hash.ToArray());
         File.WriteAllText(external, "changed through indexed name");
-        await custom.CaptureAfterAsync(root, TestContext.Current.CancellationToken);
+        var afterSnapshot = await custom.CaptureAsync(root, TestContext.Current.CancellationToken);
 
-        var change = Assert.Single(await custom.CompareAsync(TestContext.Current.CancellationToken));
+        var change = Assert.Single(await new PipelineOutputComparer().CompareAsync(beforeSnapshot, afterSnapshot, TestContext.Current.CancellationToken));
         Assert.Equal(PipelineOutputChangeKind.Changed, change.Kind);
         Assert.Equal(Path.Combine("ignored-child", "model.txt"), change.Path);
         Assert.Equal(new[] { path, path, path }, calls);
-        Assert.Empty(await native.CaptureAsync(root, TestContext.Current.CancellationToken));
+        Assert.Empty((await native.CaptureAsync(root, TestContext.Current.CancellationToken)).Files);
     }
 
     [Theory]
@@ -657,15 +657,14 @@ public sealed class PipelineOutputStrategyTests(ITestOutputHelper output)
         builder.WithOutputDiffing();
         builder.Services.Configure<PipelineOutputDiffOptions>(options => options.Mode = mode);
         using var app = builder.Build();
-        var differ = throughDi ? app.Services.GetRequiredService<IPipelineOutputDiffer>() : new SnapshotPipelineOutputDiffer(snapshotter, new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions { Mode = mode }));
+        var nativeSnapshotter = throughDi ? app.Services.GetRequiredService<IPipelineOutputSnapshotter<PipelineOutputSnapshot>>() : new NativePipelineOutputSnapshotter(snapshotter, new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions { Mode = mode }));
         if (throwing)
         {
             var rawFailure = await Assert.ThrowsAsync<IOException>(() => snapshotter.CaptureAsync(root, TestContext.Current.CancellationToken));
             Assert.Equal("explicit callback failure", rawFailure.Message);
-            var failure = await Assert.ThrowsAsync<IOException>(() => differ.CaptureBeforeAsync(root, TestContext.Current.CancellationToken));
+            var failure = await Assert.ThrowsAsync<IOException>(() => nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken));
             Assert.Equal("explicit callback failure", failure.Message);
             Assert.InRange(calls, 2, 4);
-            await Assert.ThrowsAsync<InvalidOperationException>(() => differ.CompareAsync(TestContext.Current.CancellationToken));
         }
         else
         {
@@ -673,18 +672,18 @@ public sealed class PipelineOutputStrategyTests(ITestOutputHelper output)
             Assert.All(rawBefore.Values, snapshot => Assert.Null(snapshot.GitMode));
             File.WriteAllText(path, "raw control changed\n");
             var rawAfter = await snapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
-            Assert.Empty(SnapshotPipelineOutputDiffer.Compare(rawBefore, rawAfter, root));
+            Assert.Empty(PipelineOutputComparer.Compare(rawBefore, rawAfter, root));
             Assert.Equal(4, calls);
             calls = 0;
-            await differ.CaptureBeforeAsync(root, TestContext.Current.CancellationToken);
+            var beforeSnapshot = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
             Assert.Equal(2, calls);
-            File.WriteAllText(path, "differ changed\n");
-            await differ.CaptureAfterAsync(root, TestContext.Current.CancellationToken);
+            File.WriteAllText(path, "snapshotter changed\n");
+            var afterSnapshot = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
             Assert.Equal(4, calls);
-            Assert.Empty(await differ.CompareAsync(TestContext.Current.CancellationToken));
-            var customCapture = await Assert.IsType<SnapshotPipelineOutputDiffer>(differ).CaptureAsync(root, TestContext.Current.CancellationToken);
-            Assert.Equal(2, customCapture.Count);
-            Assert.All(customCapture.Values, snapshot => Assert.Null(snapshot.GitMode));
+            Assert.Empty(await new PipelineOutputComparer().CompareAsync(beforeSnapshot, afterSnapshot, TestContext.Current.CancellationToken));
+            var customCapture = await Assert.IsType<NativePipelineOutputSnapshotter>(nativeSnapshotter).CaptureAsync(root, TestContext.Current.CancellationToken);
+            Assert.Equal(2, customCapture.Files.Count);
+            Assert.All(customCapture.Files.Values, snapshot => Assert.Null(snapshot.GitMode));
         }
         Assert.All(streams, stream => Assert.False(stream.CanRead));
     }

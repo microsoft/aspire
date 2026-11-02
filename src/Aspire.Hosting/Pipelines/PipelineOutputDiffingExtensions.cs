@@ -91,6 +91,79 @@ public static class PipelineOutputDiffingExtensions
         this IDistributedApplicationBuilder builder,
         Func<PipelineStep> createStep)
     {
+        return builder.WithOutputDiffing<PipelineOutputSnapshot, NativePipelineOutputSnapshotter, PipelineOutputComparer>(createStep);
+    }
+
+    /// <summary>
+    /// Adds an opt-in target using a typed snapshotter and comparer.
+    /// </summary>
+    /// <typeparam name="TSnapshot">The snapshot representation shared by capture and comparison.</typeparam>
+    /// <typeparam name="TSnapshotter">The snapshotter implementation registered when none exists for <typeparamref name="TSnapshot"/>.</typeparam>
+    /// <typeparam name="TComparer">The comparer implementation registered when none exists for <typeparamref name="TSnapshot"/>.</typeparam>
+    /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/>.</param>
+    /// <param name="targetStep">The step whose completed output is compared. Defaults to <c>publish</c>.</param>
+    /// <param name="diffStepName">The comparison target name. When null, uses the target name followed by <c>-and-diff</c>.</param>
+    /// <param name="description">An optional description of the comparison target.</param>
+    /// <returns>The <see cref="IDistributedApplicationBuilder"/> for chaining.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="builder"/> or <paramref name="targetStep"/> is null.</exception>
+    /// <exception cref="ArgumentException"><paramref name="targetStep"/> or <paramref name="diffStepName"/> is empty.</exception>
+    /// <inheritdoc cref="WithOutputDiffing{TSnapshot, TSnapshotter, TComparer}(IDistributedApplicationBuilder, Func{PipelineStep})" path="/remarks" />
+    /// <example>
+    /// <code>
+    /// builder.WithOutputDiffing&lt;DeploymentSnapshot, DeploymentSnapshotter, DeploymentComparer&gt;();
+    /// </code>
+    /// </example>
+    [Experimental("ASPIREPIPELINES005", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExportIgnore(Reason = "Custom output providers use .NET snapshot and service types.")]
+    public static IDistributedApplicationBuilder WithOutputDiffing<TSnapshot, TSnapshotter, TComparer>(
+        this IDistributedApplicationBuilder builder,
+        string targetStep = WellKnownPipelineSteps.Publish,
+        string? diffStepName = null,
+        string? description = null)
+        where TSnapshot : notnull
+        where TSnapshotter : class, IPipelineOutputSnapshotter<TSnapshot>
+        where TComparer : class, IPipelineOutputComparer<TSnapshot>
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(targetStep);
+        diffStepName ??= targetStep + "-and-diff";
+        ArgumentException.ThrowIfNullOrEmpty(diffStepName);
+
+        return builder.WithOutputDiffing<TSnapshot, TSnapshotter, TComparer>(() => new PipelineStep
+        {
+            Name = diffStepName,
+            Description = description,
+            DependsOnSteps = [targetStep],
+            Action = _ => Task.CompletedTask
+        });
+    }
+
+    /// <summary>
+    /// Adds an opt-in target using a typed snapshotter and comparer.
+    /// </summary>
+    /// <typeparam name="TSnapshot">The snapshot representation shared by capture and comparison.</typeparam>
+    /// <typeparam name="TSnapshotter">The snapshotter implementation registered when none exists for <typeparamref name="TSnapshot"/>.</typeparam>
+    /// <typeparam name="TComparer">The comparer implementation registered when none exists for <typeparamref name="TSnapshot"/>.</typeparam>
+    /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/>.</param>
+    /// <param name="createStep">A factory that constructs the comparison step, including its dependencies and action.</param>
+    /// <returns>The <see cref="IDistributedApplicationBuilder"/> for chaining.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="builder"/> or <paramref name="createStep"/> is null.</exception>
+    /// <inheritdoc cref="WithOutputDiffing(IDistributedApplicationBuilder, Func{PipelineStep})" path="/remarks" />
+    /// <remarks>
+    /// The snapshotter and comparer are registered as transient defaults for <typeparamref name="TSnapshot"/>.
+    /// Existing registrations for either closed generic interface are preserved.
+    /// Each check resolves one snapshotter and retains it across both captures. A comparer is resolved after the
+    /// second capture. The host disposes DI-created services; callers retain ownership of pre-instantiated instances.
+    /// </remarks>
+    [Experimental("ASPIREPIPELINES005", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExportIgnore(Reason = "Custom output providers use .NET snapshot and service types.")]
+    public static IDistributedApplicationBuilder WithOutputDiffing<TSnapshot, TSnapshotter, TComparer>(
+        this IDistributedApplicationBuilder builder,
+        Func<PipelineStep> createStep)
+        where TSnapshot : notnull
+        where TSnapshotter : class, IPipelineOutputSnapshotter<TSnapshot>
+        where TComparer : class, IPipelineOutputComparer<TSnapshot>
+    {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(createStep);
         var step = createStep();
@@ -103,10 +176,11 @@ public static class PipelineOutputDiffingExtensions
             builder.Services.AddSingleton<IValidateOptions<PipelineOutputDiffOptions>, PipelineOutputDiffOptionsValidator>();
         }
         builder.Services.TryAddSingleton<PipelineOutputSnapshotter>();
-        builder.Services.TryAddTransient<IPipelineOutputDiffer, SnapshotPipelineOutputDiffer>();
+        builder.Services.TryAddTransient<IPipelineOutputSnapshotter<TSnapshot>, TSnapshotter>();
+        builder.Services.TryAddTransient<IPipelineOutputComparer<TSnapshot>, TComparer>();
         var pipeline = builder.Pipeline;
         var baselineName = step.Name + "-baseline";
-        IPipelineOutputDiffer? activeDiffer = null;
+        (IPipelineOutputSnapshotter<TSnapshot> Snapshotter, TSnapshot Snapshot)? activeCapture = null;
 
         pipeline.AddStep(new PipelineStep
         {
@@ -115,26 +189,27 @@ public static class PipelineOutputDiffingExtensions
             Tags = [BaselineTag],
             Action = async context =>
             {
-                activeDiffer = null;
+                activeCapture = null;
                 var execution = context.PipelineContext;
                 if (!execution.SelectedSteps.Any(selected => selected.Name == step.Name))
                 {
                     return;
                 }
 
-                var differ = context.Services.GetRequiredService<IPipelineOutputDiffer>();
-                await differ.CaptureBeforeAsync(GetOutputDirectory(context), context.CancellationToken).ConfigureAwait(false);
-                activeDiffer = differ;
+                var snapshotter = context.Services.GetRequiredService<IPipelineOutputSnapshotter<TSnapshot>>();
+                var snapshot = await snapshotter.CaptureAsync(GetOutputDirectory(context), context.CancellationToken).ConfigureAwait(false);
+                activeCapture = (snapshotter, snapshot);
             }
         });
 
         step.AddFinalAction(async context =>
         {
-            var differ = activeDiffer ?? throw new InvalidOperationException($"Output diff baseline '{baselineName}' did not complete for '{step.Name}'.");
-            activeDiffer = null;
+            var captured = activeCapture ?? throw new InvalidOperationException($"Output diff baseline '{baselineName}' did not complete for '{step.Name}'.");
+            activeCapture = null;
 
-            await differ.CaptureAfterAsync(GetOutputDirectory(context), context.CancellationToken).ConfigureAwait(false);
-            var changes = await differ.CompareAsync(context.CancellationToken).ConfigureAwait(false);
+            var after = await captured.Snapshotter.CaptureAsync(GetOutputDirectory(context), context.CancellationToken).ConfigureAwait(false);
+            var outputComparer = context.Services.GetRequiredService<IPipelineOutputComparer<TSnapshot>>();
+            var changes = await outputComparer.CompareAsync(captured.Snapshot, after, context.CancellationToken).ConfigureAwait(false);
             if (changes.Count > 0)
             {
                 var comparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;

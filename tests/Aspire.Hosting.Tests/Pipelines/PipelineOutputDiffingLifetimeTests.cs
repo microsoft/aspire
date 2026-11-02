@@ -26,27 +26,35 @@ public class PipelineOutputDiffingLifetimeTests(ITestOutputHelper output)
     [InlineData(true, "after")]
     [InlineData(true, "compare")]
     [InlineData(true, "cancel")]
-    public async Task NextRunResolvesFreshDifferAfterSuccessFailureOrCancellation(bool sequential, string failure)
+    public async Task NextRunResolvesFreshProvidersAfterSuccessFailureOrCancellation(bool sequential, string failure)
     {
         using var workspace = TemporaryWorkspace.Create(output);
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish,
             outputPath: workspace.Path, step: "publish-and-diff");
-        var instances = new List<LifetimeDiffer>();
+        var snapshotters = new List<LifetimeSnapshotter>();
+        var comparers = new List<LifetimeComparer>();
         var firstRun = true;
         var writerCalls = 0;
-        builder.Services.AddTransient<IPipelineOutputDiffer>(_ =>
+        builder.Services.AddTransient<IPipelineOutputSnapshotter<LifetimeSnapshot>>(_ =>
         {
-            var differ = new LifetimeDiffer(instances.Count == 0 ? failure : "none");
-            instances.Add(differ);
-            return differ;
+            var snapshotter = new LifetimeSnapshotter(snapshotters.Count == 0 ? failure : "none");
+            snapshotters.Add(snapshotter);
+            return snapshotter;
         });
-        builder.WithOutputDiffing();
+        builder.Services.AddTransient<IPipelineOutputComparer<LifetimeSnapshot>>(_ =>
+        {
+            Assert.Equal(new[] { "before", "after" }, snapshotters[^1].Events);
+            var comparer = new LifetimeComparer(firstRun ? failure : "none");
+            comparers.Add(comparer);
+            return comparer;
+        });
+        builder.WithOutputDiffing<LifetimeSnapshot, LifetimeSnapshotter, LifetimeComparer>();
         builder.Pipeline.AddStep("lifetime-writer", context =>
         {
             writerCalls++;
             if (context.PipelineContext.SelectedSteps.Any(step => step.Name == "publish-and-diff"))
             {
-                Assert.Equal(new[] { "before" }, instances[^1].Phases);
+                Assert.Equal(new[] { "before" }, snapshotters[^1].Events);
             }
             if (firstRun && failure == "writer")
             {
@@ -57,7 +65,8 @@ public class PipelineOutputDiffingLifetimeTests(ITestOutputHelper output)
         using var app = builder.Build();
         var pipeline = Assert.IsType<DistributedApplicationPipeline>(app.Services.GetRequiredService<IDistributedApplicationPipeline>());
         var context = NewContext();
-        Assert.Empty(instances);
+        Assert.Empty(snapshotters);
+        Assert.Empty(comparers);
         Assert.Equal(0, writerCalls);
 
         if (failure == "none")
@@ -70,31 +79,44 @@ public class PipelineOutputDiffingLifetimeTests(ITestOutputHelper output)
             Assert.Contains("lifetime-" + failure, error.ToString());
         }
         firstRun = false;
-        var first = Assert.Single(instances);
-        var expectedFirstPhases = failure switch
+        var first = Assert.Single(snapshotters);
+        var expectedFirstEvents = failure switch
         {
             "before" or "cancel" or "writer" => new[] { "before" },
             "after" => new[] { "before", "after" },
             _ => new[] { "before", "after", "compare" }
         };
-        Assert.Equal(expectedFirstPhases, first.Phases);
+        var firstComparerCount = failure is "none" or "compare" ? 1 : 0;
+        Assert.Equal(expectedFirstEvents, first.Events);
+        Assert.Equal(firstComparerCount, comparers.Count);
+        Assert.All(comparers, comparer => Assert.Equal(1, comparer.Comparisons));
         Assert.Equal(failure is "before" or "cancel" ? 0 : 1, writerCalls);
         Assert.False(first.Disposed);
+        Assert.All(comparers, comparer => Assert.False(comparer.Disposed));
 
-        // Ordinary publish after the first run must not resolve another differ.
+        // Ordinary publish must not construct either provider or reuse a completed capture.
         await Run(pipeline, NewContext(), WellKnownPipelineSteps.Publish);
-        Assert.Single(instances);
-        Assert.Equal(expectedFirstPhases, first.Phases);
+        Assert.Single(snapshotters);
+        Assert.Equal(firstComparerCount, comparers.Count);
+        Assert.Equal(expectedFirstEvents, first.Events);
 
         await Run(pipeline, context, "publish-and-diff");
-        Assert.Equal(2, instances.Count);
-        var second = instances[1];
+        Assert.Equal(2, snapshotters.Count);
+        var second = snapshotters[1];
         Assert.NotSame(first, second);
-        Assert.Equal(expectedFirstPhases, first.Phases);
-        Assert.Equal(new[] { "before", "after", "compare" }, second.Phases);
-        Assert.All(instances, differ => Assert.False(differ.Disposed));
+        Assert.Equal(expectedFirstEvents, first.Events);
+        Assert.Equal(new[] { "before", "after", "compare" }, second.Events);
+        Assert.Equal(firstComparerCount + 1, comparers.Count);
+        if (firstComparerCount == 1)
+        {
+            Assert.NotSame(comparers[0], comparers[1]);
+        }
+        Assert.All(comparers, comparer => Assert.Equal(1, comparer.Comparisons));
+        Assert.All(snapshotters, snapshotter => Assert.False(snapshotter.Disposed));
+        Assert.All(comparers, comparer => Assert.False(comparer.Disposed));
         app.Dispose();
-        Assert.All(instances, differ => Assert.True(differ.Disposed));
+        Assert.All(snapshotters, snapshotter => Assert.True(snapshotter.Disposed));
+        Assert.All(comparers, comparer => Assert.True(comparer.Disposed));
 
         PipelineContext NewContext() => new(app.Services.GetRequiredService<DistributedApplicationModel>(),
             app.Services.GetRequiredService<DistributedApplicationExecutionContext>(), app.Services,
@@ -110,80 +132,107 @@ public class PipelineOutputDiffingLifetimeTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public async Task CloneResolvesItsOwnDifferWithoutReusingCompletedPhases()
+    public async Task CloneResolvesItsOwnProvidersWithoutReusingCompletedSnapshots()
     {
         using var workspace = TemporaryWorkspace.Create(output);
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish,
             outputPath: workspace.Path, step: "publish-and-diff");
-        var instances = new List<LifetimeDiffer>();
-        builder.Services.AddTransient<IPipelineOutputDiffer>(_ =>
+        var snapshotters = new List<LifetimeSnapshotter>();
+        var comparers = new List<LifetimeComparer>();
+        builder.Services.AddTransient<IPipelineOutputSnapshotter<LifetimeSnapshot>>(_ =>
         {
-            var differ = new LifetimeDiffer("none");
-            instances.Add(differ);
-            return differ;
+            var snapshotter = new LifetimeSnapshotter("none");
+            snapshotters.Add(snapshotter);
+            return snapshotter;
         });
-        builder.WithOutputDiffing();
+        builder.Services.AddTransient<IPipelineOutputComparer<LifetimeSnapshot>>(_ =>
+        {
+            Assert.Equal(new[] { "before", "after" }, snapshotters[^1].Events);
+            var comparer = new LifetimeComparer("none");
+            comparers.Add(comparer);
+            return comparer;
+        });
+        builder.WithOutputDiffing<LifetimeSnapshot, LifetimeSnapshotter, LifetimeComparer>();
         using var app = builder.Build();
         var pipeline = Assert.IsType<DistributedApplicationPipeline>(app.Services.GetRequiredService<IDistributedApplicationPipeline>());
         var context = new PipelineContext(app.Services.GetRequiredService<DistributedApplicationModel>(),
             app.Services.GetRequiredService<DistributedApplicationExecutionContext>(), app.Services,
             NullLogger.Instance, TestContext.Current.CancellationToken);
-        Assert.Empty(instances);
+        Assert.Empty(snapshotters);
+        Assert.Empty(comparers);
 
         await pipeline.ExecuteAsync(context);
-        var first = Assert.Single(instances);
-        Assert.Equal(new[] { "before", "after", "compare" }, first.Phases);
+        var first = Assert.Single(snapshotters);
+        var firstComparer = Assert.Single(comparers);
+        Assert.Equal(new[] { "before", "after", "compare" }, first.Events);
         await pipeline.Clone().ExecuteAsync(context);
 
-        Assert.Equal(2, instances.Count);
-        Assert.NotSame(first, instances[1]);
-        Assert.All(instances, differ => Assert.Equal(new[] { "before", "after", "compare" }, differ.Phases));
+        Assert.Equal(2, snapshotters.Count);
+        Assert.Equal(2, comparers.Count);
+        Assert.NotSame(first, snapshotters[1]);
+        Assert.NotSame(firstComparer, comparers[1]);
+        Assert.All(snapshotters, snapshotter => Assert.Equal(new[] { "before", "after", "compare" }, snapshotter.Events));
+        Assert.All(comparers, comparer => Assert.Equal(1, comparer.Comparisons));
+        Assert.All(snapshotters, snapshotter => Assert.False(snapshotter.Disposed));
+        Assert.All(comparers, comparer => Assert.False(comparer.Disposed));
+        app.Dispose();
+        Assert.All(snapshotters, snapshotter => Assert.True(snapshotter.Disposed));
+        Assert.All(comparers, comparer => Assert.True(comparer.Disposed));
     }
 
-    private sealed class LifetimeDiffer(string failure) : IPipelineOutputDiffer, IDisposable
+    private sealed record LifetimeSnapshot(LifetimeSnapshotter Owner, int Capture);
+
+    private sealed class LifetimeSnapshotter(string failure) : IPipelineOutputSnapshotter<LifetimeSnapshot>, IDisposable
     {
-        public List<string> Phases { get; } = [];
+        public List<string> Events { get; } = [];
         public bool Disposed { get; private set; }
 
-        public Task CaptureBeforeAsync(string outputDirectory, CancellationToken ct)
+        public Task<LifetimeSnapshot> CaptureAsync(string outputDirectory, CancellationToken ct)
         {
+            ct.ThrowIfCancellationRequested();
             Assert.False(Disposed);
-            Assert.Empty(Phases);
             Assert.NotEmpty(outputDirectory);
-            Phases.Add("before");
-            if (failure == "before")
+            Assert.InRange(Events.Count, 0, 1);
+            var first = Events.Count == 0;
+            var capture = first ? "before" : "after";
+            Events.Add(capture);
+            if (failure == capture)
             {
-                throw new IOException("lifetime-before");
+                throw new IOException("lifetime-" + capture);
             }
-            if (failure == "cancel")
+            if (first && failure == "cancel")
             {
                 throw new OperationCanceledException("lifetime-cancel", new CancellationToken(canceled: true));
             }
-            return Task.CompletedTask;
+
+            return Task.FromResult(new LifetimeSnapshot(this, Events.Count));
         }
 
-        public Task CaptureAfterAsync(string outputDirectory, CancellationToken ct)
-        {
-            Assert.False(Disposed);
-            Assert.Equal(new[] { "before" }, Phases);
-            Assert.NotEmpty(outputDirectory);
-            Phases.Add("after");
-            if (failure == "after")
-            {
-                throw new IOException("lifetime-after");
-            }
-            return Task.CompletedTask;
-        }
+        public void Dispose() => Disposed = true;
+    }
 
-        public Task<IReadOnlyList<PipelineOutputChange>> CompareAsync(CancellationToken ct)
+    private sealed class LifetimeComparer(string failure) : IPipelineOutputComparer<LifetimeSnapshot>, IDisposable
+    {
+        public int Comparisons { get; private set; }
+        public bool Disposed { get; private set; }
+
+        public Task<IReadOnlyList<PipelineOutputChange>> CompareAsync(LifetimeSnapshot before, LifetimeSnapshot after, CancellationToken ct)
         {
+            ct.ThrowIfCancellationRequested();
             Assert.False(Disposed);
-            Assert.Equal(new[] { "before", "after" }, Phases);
-            Phases.Add("compare");
+            Assert.Equal(0, Comparisons);
+            Assert.Same(before.Owner, after.Owner);
+            Assert.False(before.Owner.Disposed);
+            Assert.Equal(1, before.Capture);
+            Assert.Equal(2, after.Capture);
+            Assert.Equal(new[] { "before", "after" }, before.Owner.Events);
+            before.Owner.Events.Add("compare");
+            Comparisons++;
             if (failure == "compare")
             {
                 throw new IOException("lifetime-compare");
             }
+
             return Task.FromResult<IReadOnlyList<PipelineOutputChange>>([]);
         }
 

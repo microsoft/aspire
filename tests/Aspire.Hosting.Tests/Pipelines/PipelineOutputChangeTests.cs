@@ -47,7 +47,7 @@ public class PipelineOutputChangeTests
 
         Assert.Equal(new[]
         {
-            "IPipelineOutputDiffer", "PipelineOutputChange", "PipelineOutputChangeKind", "PipelineOutputDiffMode",
+            "IPipelineOutputComparer`1", "IPipelineOutputSnapshotter`1", "PipelineOutputChange", "PipelineOutputChangeKind", "PipelineOutputDiffMode",
             "PipelineOutputDiffOptions", "PipelineOutputDiffRule", "PipelineOutputDiffingExtensions"
         }, types);
     }
@@ -56,7 +56,7 @@ public class PipelineOutputChangeTests
     public void DiffingConsumerContractsAreExperimental()
     {
         var members = GetDiffingTypes().Cast<MemberInfo>()
-            .Concat(typeof(PipelineOutputDiffingExtensions).GetMethods(BindingFlags.Public | BindingFlags.Static))
+            .Concat(GetDiffingExtensions())
             .ToArray();
         Assert.NotEmpty(members);
 
@@ -68,8 +68,18 @@ public class PipelineOutputChangeTests
         });
     }
 
-    private static IEnumerable<Type> GetDiffingTypes() => typeof(IPipelineOutputDiffer).Assembly.GetExportedTypes()
-        .Where(type => type.Namespace == typeof(IPipelineOutputDiffer).Namespace &&
+    private static IEnumerable<MethodInfo> GetDiffingExtensions()
+    {
+        var methods = typeof(PipelineOutputDiffingExtensions).GetMethods(BindingFlags.Public | BindingFlags.Static);
+        Assert.Equal(4, methods.Length);
+        Assert.Equal(2, methods.Count(method => method.IsGenericMethodDefinition));
+        Assert.All(methods, method => Assert.Equal("WithOutputDiffing", method.Name));
+
+        return methods;
+    }
+
+    private static IEnumerable<Type> GetDiffingTypes() => typeof(PipelineOutputChange).Assembly.GetExportedTypes()
+        .Where(type => type.Namespace == typeof(PipelineOutputChange).Namespace &&
             (type.Name.StartsWith("PipelineOutput", StringComparison.Ordinal) ||
                 type.Name.StartsWith("IPipelineOutput", StringComparison.Ordinal)) && type != typeof(IPipelineOutputService));
 }
