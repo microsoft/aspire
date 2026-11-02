@@ -1,0 +1,120 @@
+{
+  "run_id": 41481855737,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/41481855737",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-02T17:31:46Z",
+  "verdict": "transient-infra",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 21364,
+    "title": "Support configurable named skill sources",
+    "author": "JamesNK",
+    "state": "closed",
+    "head_branch": "jamesnk/configurable-skill-sources",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/21364",
+    "merged_at": "2026-11-02T16:28:36Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "1d3c45f9a299c30d46fc3166148902d466043df2",
+    "failed_sha": "3d42183549d7fc8e4817e5c98c8d427ebd20e464",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "a8dff1cee6a428a0e5eff5dbdf7bf258f6cc32d0",
+        "message": "Only show 'Stopping Aspire' when canceling aspire run (#21561) Co-authored-by: davidfowl <95136+davidfowl@users.noreply.github.com> Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com> Co-authored-by: James Newton-King <james@newtonking.com>",
+        "html_url": "https://github.com/microsoft/aspire/commit/a8dff1cee6a428a0e5eff5dbdf7bf258f6cc32d0",
+        "pull_request": {
+          "number": 21561,
+          "title": "Only show 'Stopping Aspire' when canceling aspire run",
+          "url": "https://github.com/microsoft/aspire/pull/21561",
+          "merged_at": "2026-11-02T05:29:25Z"
+        }
+      },
+      {
+        "sha": "ae2c92730f335db41c02dffb22fdfc83793e231d",
+        "message": "Unquarantine 2 CLI E2E tests that pass 100% in the quarantine lane (#21649) ## Description This unquarantines 2 CLI E2E tests that have passed 100% of the time in the quarantined-tests lane over the last 14 days. No product or test logic changes: the PR only removes `[QuarantinedTest]` and the now-unused `using Aspire.TestUtilities;` directives. Quarantine-lane evidence comes from `tests-quarantine.yml` scheduled runs created 2026-10-18 to 2026-11-01. I parsed each run's Final Results table (174",
+        "html_url": "https://github.com/microsoft/aspire/commit/ae2c92730f335db41c02dffb22fdfc83793e231d",
+        "pull_request": {
+          "number": 21649,
+          "title": "Unquarantine 2 CLI E2E tests that pass 100% in the quarantine lane",
+          "url": "https://github.com/microsoft/aspire/pull/21649",
+          "merged_at": "2026-11-02T06:25:05Z"
+        }
+      },
+      {
+        "sha": "7961070663e774084a46b4ee908ea4c0149db633",
+        "message": "Support config source adoption and explicit project opt-out (#21678)",
+        "html_url": "https://github.com/microsoft/aspire/commit/7961070663e774084a46b4ee908ea4c0149db633",
+        "pull_request": {
+          "number": 21678,
+          "title": "Support config source adoption and explicit project opt-out",
+          "url": "https://github.com/microsoft/aspire/pull/21678",
+          "merged_at": "2026-11-02T08:31:25Z"
+        }
+      },
+      {
+        "sha": "1afc0d0ee72484a35e189eafaec0ae9f409e5cc7",
+        "message": "Limit configuration sources to project-local settings (#21679)",
+        "html_url": "https://github.com/microsoft/aspire/commit/1afc0d0ee72484a35e189eafaec0ae9f409e5cc7",
+        "pull_request": {
+          "number": 21679,
+          "title": "Limit configuration sources to project-local settings",
+          "url": "https://github.com/microsoft/aspire/pull/21679",
+          "merged_at": "2026-11-02T09:59:35Z"
+        }
+      },
+      {
+        "sha": "2137ceca1d3baa8bcabd5036f3974f1538f92c1a",
+        "message": "Fix array-aware CLI configuration editing (#21572)",
+        "html_url": "https://github.com/microsoft/aspire/commit/2137ceca1d3baa8bcabd5036f3974f1538f92c1a",
+        "pull_request": {
+          "number": 21572,
+          "title": "Fix array-aware CLI configuration editing",
+          "url": "https://github.com/microsoft/aspire/pull/21572",
+          "merged_at": "2026-11-02T12:35:27Z"
+        }
+      },
+      {
+        "sha": "9f0961d0c7173732f45ce88d571c8b53f8059934",
+        "message": "Reject registration-only configuration on existing Entra references (#21493) ## Description Registration-only Entra configuration currently accepts existing registrations and silently does nothing, leaving applications to fail later during authentication. Fail at the configuration call instead, with guidance for configuring the registration manually. Guard redirect URIs, owners, ID-token issuance, pre-authorization, admin consent, and the default application ID URI. Align existing role, certific",
+        "html_url": "https://github.com/microsoft/aspire/commit/9f0961d0c7173732f45ce88d571c8b53f8059934",
+        "pull_request": {
+          "number": 21493,
+          "title": "Reject registration-only configuration on existing Entra references",
+          "url": "https://github.com/microsoft/aspire/pull/21493",
+          "merged_at": "2026-11-02T15:21:50Z"
+        }
+      },
+      {
+        "sha": "3d42183549d7fc8e4817e5c98c8d427ebd20e464",
+        "message": "Support configurable named skill sources (#21364) ## Description Allow teams to configure multiple named skill sources instead of always registering only `microsoft/aspire-skills`. This builds on #20946 and lets shared `configSource` configuration distribute skill-source settings. - Add `skillSources` configuration with per-source repositories, marketplace/plugin names, refs, and OpenCode catalogs. Keep the built-in source unless it is explicitly disabled or overridden. - Merge named sources acr",
+        "html_url": "https://github.com/microsoft/aspire/commit/3d42183549d7fc8e4817e5c98c8d427ebd20e464",
+        "pull_request": {
+          "number": 21364,
+          "title": "Support configurable named skill sources",
+          "url": "https://github.com/microsoft/aspire/pull/21364",
+          "merged_at": "2026-11-02T16:28:36Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Validate VS Code extension bootstrap (Linux)",
+      "id": 125411461913,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/41481855737/job/125411461913",
+      "classification": "transient-infra",
+      "reason": "yarn install fetching from dnceng npm feed failed with 429 Too Many Requests (registry rate limiting)",
+      "failed_steps": [
+        "Validate seeded cache via yarn install"
+      ]
+    }
+  ],
+  "failed_tests": [],
+  "causes": [
+    "npm-registry-rate-limit"
+  ]
+}
