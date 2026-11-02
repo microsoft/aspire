@@ -352,8 +352,8 @@ internal sealed class TestRunCoordinator(
                 e => !completed.Contains(e.ResourceId) && IsTerminal(e.Snapshot), cancellationToken).ConfigureAwait(false);
             var snapshot = terminal.Snapshot;
 
-            if (snapshot.State?.Text == KnownResourceStates.FailedToStart ||
-                snapshot.State?.Text == KnownResourceStates.RuntimeUnhealthy)
+            if (StringComparers.ResourceState.Equals(snapshot.State?.Text, KnownResourceStates.FailedToStart) ||
+                StringComparers.ResourceState.Equals(snapshot.State?.Text, KnownResourceStates.RuntimeUnhealthy))
             {
                 logger.LogError("Test resource '{ResourceName}' could not start ({State}).", terminal.ResourceId, snapshot.State.Text);
                 passed = false;
@@ -398,8 +398,8 @@ internal sealed class TestRunCoordinator(
             }
 
             completed.Add(terminal.ResourceId);
-            var outcome = snapshot.State?.Text == KnownResourceStates.FailedToStart ||
-                snapshot.State?.Text == KnownResourceStates.RuntimeUnhealthy || snapshot.ExitCode != 0
+            var outcome = StringComparers.ResourceState.Equals(snapshot.State?.Text, KnownResourceStates.FailedToStart) ||
+                StringComparers.ResourceState.Equals(snapshot.State?.Text, KnownResourceStates.RuntimeUnhealthy) || snapshot.ExitCode != 0
                 ? "failed"
                 : "passed";
             onCompleted?.Invoke(ToState(resource, terminal.ResourceId, snapshot) with { Outcome = outcome });
@@ -420,5 +420,5 @@ internal sealed class TestRunCoordinator(
 
     private static bool IsTerminal(CustomResourceSnapshot snapshot) =>
         KnownResourceStates.TerminalStates.Contains(snapshot.State?.Text, StringComparers.ResourceState) ||
-        snapshot.State?.Text == KnownResourceStates.RuntimeUnhealthy;
+        StringComparers.ResourceState.Equals(snapshot.State?.Text, KnownResourceStates.RuntimeUnhealthy);
 }

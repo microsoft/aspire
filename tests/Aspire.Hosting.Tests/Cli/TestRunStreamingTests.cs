@@ -76,6 +76,33 @@ public class TestRunStreamingTests(ITestOutputHelper outputHelper)
         Assert.Contains(items[..^1], e => e.Resource is { ResourceId: "tests", Outcome: "passed", ExitCode: 0 });
     }
 
+    [Theory]
+    [InlineData("FailedToStart", 0)]
+    [InlineData("failedtostart", 0)]
+    [InlineData("FAILEDTOSTART", 0)]
+    [InlineData("failedtostart", null)]
+    [InlineData("RuntimeUnhealthy", 0)]
+    [InlineData("runtimeunhealthy", 0)]
+    [InlineData("RUNTIMEUNHEALTHY", 0)]
+    [InlineData("runtimeunhealthy", null)]
+    public async Task FailureStatesAreCaseInsensitiveRegardlessOfExitCode(string state, int? exitCode)
+    {
+        using var notifications = ResourceNotificationServiceTestHelpers.Create();
+        var tests = new ContainerResource("tests");
+        tests.Annotations.Add(new TestingAnnotation());
+        await notifications.PublishUpdateAsync(tests, "tests-1", s => s with { State = state, ExitCode = exitCode });
+        using var coordinator = new TestRunCoordinator(new DistributedApplicationModel([tests]), notifications,
+            TimeProvider.System, NullLogger<TestRunCoordinator>.Instance);
+        var events = new ConcurrentQueue<TestRunEvent>();
+
+        await CollectAsync(coordinator.WatchAsync(TestContext.Current.CancellationToken), events).DefaultTimeout();
+
+        var completed = Assert.Single(events, e => e.Resource?.Outcome is "passed" or "failed").Resource!;
+        Assert.Equal(("tests-1", state, exitCode, "failed"),
+            (completed.ResourceId, completed.State, completed.ExitCode, completed.Outcome));
+        Assert.False(events.Last().Passed);
+    }
+
     [Fact]
     public async Task DisposingAnIncompleteStreamDrainsItsObservers()
     {
