@@ -120,6 +120,16 @@ internal partial class BackchannelJsonSerializerContext : JsonSerializerContext
     {
         var formatter = new SystemTextJsonFormatter();
         formatter.JsonSerializerOptions = CreateJsonSerializerOptions();
+
+        // StreamJsonRpc creates its IAsyncEnumerable<T> converters by closing a generic type via
+        // reflection, which the trimmer/Native AOT removes for any T that isn't registered up front.
+        // Register every element type the CLI receives as an IAsyncEnumerable<T> over the backchannel.
+        formatter.RegisterGenericType<RpcResourceState>();
+        formatter.RegisterGenericType<BackchannelLogEntry>();
+        formatter.RegisterGenericType<PublishingActivity>();
+        formatter.RegisterGenericType<ResourceSnapshot>();
+        formatter.RegisterGenericType<ResourceLogLine>();
+        formatter.RegisterGenericType<ResourceLogBatch>();
         return formatter;
     }
 

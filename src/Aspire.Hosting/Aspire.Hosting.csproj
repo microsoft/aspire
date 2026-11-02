@@ -92,9 +92,6 @@
          The public AspireTerminal handle keeps these implementation types out of the API surface. -->
     <PackageReference Include="Hex1b" />
     <PackageReference Include="KubernetesClient" />
-    <!-- Central transitive pins do not flow to out-of-tree ProjectReference consumers.
-         Keep this explicit security pin until https://github.com/microsoft/aspire/issues/21050 is resolved. -->
-    <PackageReference Include="MessagePack" />
     <PackageReference Include="Microsoft.Extensions.Hosting" />
     <PackageReference Include="ModelContextProtocol" />
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
