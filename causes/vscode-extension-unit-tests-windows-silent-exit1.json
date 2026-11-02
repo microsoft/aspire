@@ -1,0 +1,15 @@
+{
+  "id": "vscode-extension-unit-tests-windows-silent-exit1",
+  "type": "infra-failure",
+  "title": "VS Code extension unit tests (Windows) exit code 1 with no failing test or diagnostic",
+  "error_pattern": "Process completed with exit code 1. Test output stops mid-suite; no failing test reported.",
+  "occurrences": [
+    {
+      "run_id": 41509624265,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/41509624265",
+      "job": "Tests / Run VS Code extension unit tests (Windows) / Run VS Code extension unit tests (Windows)",
+      "pr_number": 0,
+      "observed_at": "2026-11-02T21:21:40Z"
+    }
+  ]
+}

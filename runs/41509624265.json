@@ -1,0 +1,220 @@
+{
+  "run_id": 41509624265,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/41509624265",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-02T21:21:40Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 21546,
+    "title": "Make WithBindMount idempotent and fail fast on conflicting mount targets",
+    "author": "davidfowl",
+    "state": "closed",
+    "head_branch": "aspireagent/bindmount-idempotent-11981",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/21546",
+    "merged_at": "2026-11-02T19:24:17Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "1d3c45f9a299c30d46fc3166148902d466043df2",
+    "failed_sha": "0efbfcb095bf85ccf89678193d64b46022e7657e",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "a8dff1cee6a428a0e5eff5dbdf7bf258f6cc32d0",
+        "message": "Only show 'Stopping Aspire' when canceling aspire run (#21561) Co-authored-by: davidfowl <95136+davidfowl@users.noreply.github.com> Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com> Co-authored-by: James Newton-King <james@newtonking.com>",
+        "html_url": "https://github.com/microsoft/aspire/commit/a8dff1cee6a428a0e5eff5dbdf7bf258f6cc32d0",
+        "pull_request": {
+          "number": 21561,
+          "title": "Only show 'Stopping Aspire' when canceling aspire run",
+          "url": "https://github.com/microsoft/aspire/pull/21561",
+          "merged_at": "2026-11-02T05:29:25Z"
+        }
+      },
+      {
+        "sha": "ae2c92730f335db41c02dffb22fdfc83793e231d",
+        "message": "Unquarantine 2 CLI E2E tests that pass 100% in the quarantine lane (#21649) ## Description This unquarantines 2 CLI E2E tests that have passed 100% of the time in the quarantined-tests lane over the last 14 days. No product or test logic changes: the PR only removes `[QuarantinedTest]` and the now-unused `using Aspire.TestUtilities;` directives. Quarantine-lane evidence comes from `tests-quarantine.yml` scheduled runs created 2026-10-18 to 2026-11-01. I parsed each run's Final Results table (174",
+        "html_url": "https://github.com/microsoft/aspire/commit/ae2c92730f335db41c02dffb22fdfc83793e231d",
+        "pull_request": {
+          "number": 21649,
+          "title": "Unquarantine 2 CLI E2E tests that pass 100% in the quarantine lane",
+          "url": "https://github.com/microsoft/aspire/pull/21649",
+          "merged_at": "2026-11-02T06:25:05Z"
+        }
+      },
+      {
+        "sha": "7961070663e774084a46b4ee908ea4c0149db633",
+        "message": "Support config source adoption and explicit project opt-out (#21678)",
+        "html_url": "https://github.com/microsoft/aspire/commit/7961070663e774084a46b4ee908ea4c0149db633",
+        "pull_request": {
+          "number": 21678,
+          "title": "Support config source adoption and explicit project opt-out",
+          "url": "https://github.com/microsoft/aspire/pull/21678",
+          "merged_at": "2026-11-02T08:31:25Z"
+        }
+      },
+      {
+        "sha": "1afc0d0ee72484a35e189eafaec0ae9f409e5cc7",
+        "message": "Limit configuration sources to project-local settings (#21679)",
+        "html_url": "https://github.com/microsoft/aspire/commit/1afc0d0ee72484a35e189eafaec0ae9f409e5cc7",
+        "pull_request": {
+          "number": 21679,
+          "title": "Limit configuration sources to project-local settings",
+          "url": "https://github.com/microsoft/aspire/pull/21679",
+          "merged_at": "2026-11-02T09:59:35Z"
+        }
+      },
+      {
+        "sha": "2137ceca1d3baa8bcabd5036f3974f1538f92c1a",
+        "message": "Fix array-aware CLI configuration editing (#21572)",
+        "html_url": "https://github.com/microsoft/aspire/commit/2137ceca1d3baa8bcabd5036f3974f1538f92c1a",
+        "pull_request": {
+          "number": 21572,
+          "title": "Fix array-aware CLI configuration editing",
+          "url": "https://github.com/microsoft/aspire/pull/21572",
+          "merged_at": "2026-11-02T12:35:27Z"
+        }
+      },
+      {
+        "sha": "9f0961d0c7173732f45ce88d571c8b53f8059934",
+        "message": "Reject registration-only configuration on existing Entra references (#21493) ## Description Registration-only Entra configuration currently accepts existing registrations and silently does nothing, leaving applications to fail later during authentication. Fail at the configuration call instead, with guidance for configuring the registration manually. Guard redirect URIs, owners, ID-token issuance, pre-authorization, admin consent, and the default application ID URI. Align existing role, certific",
+        "html_url": "https://github.com/microsoft/aspire/commit/9f0961d0c7173732f45ce88d571c8b53f8059934",
+        "pull_request": {
+          "number": 21493,
+          "title": "Reject registration-only configuration on existing Entra references",
+          "url": "https://github.com/microsoft/aspire/pull/21493",
+          "merged_at": "2026-11-02T15:21:50Z"
+        }
+      },
+      {
+        "sha": "3d42183549d7fc8e4817e5c98c8d427ebd20e464",
+        "message": "Support configurable named skill sources (#21364) ## Description Allow teams to configure multiple named skill sources instead of always registering only `microsoft/aspire-skills`. This builds on #20946 and lets shared `configSource` configuration distribute skill-source settings. - Add `skillSources` configuration with per-source repositories, marketplace/plugin names, refs, and OpenCode catalogs. Keep the built-in source unless it is explicitly disabled or overridden. - Merge named sources acr",
+        "html_url": "https://github.com/microsoft/aspire/commit/3d42183549d7fc8e4817e5c98c8d427ebd20e464",
+        "pull_request": {
+          "number": 21364,
+          "title": "Support configurable named skill sources",
+          "url": "https://github.com/microsoft/aspire/pull/21364",
+          "merged_at": "2026-11-02T16:28:36Z"
+        }
+      },
+      {
+        "sha": "b58809d3eeae94db4cb5b8b839b9232fc59434de",
+        "message": "Support Key Vault resource references for Entra certificate credentials (#21425) ## Description Entra certificate credentials can now use a Key Vault resource already modeled in the AppHost instead of requiring a hard-coded vault URL. The URI remains a deferred resource reference during local run and publish, including the Key Vault emulator endpoint in run mode. A literal vault URL is still accepted for vaults managed outside the AppHost. The same exported method accepts either a URL or a Key V",
+        "html_url": "https://github.com/microsoft/aspire/commit/b58809d3eeae94db4cb5b8b839b9232fc59434de",
+        "pull_request": {
+          "number": 21425,
+          "title": "Support Key Vault resource references for Entra certificate credentials",
+          "url": "https://github.com/microsoft/aspire/pull/21425",
+          "merged_at": "2026-11-02T17:34:47Z"
+        }
+      },
+      {
+        "sha": "25935214f31928dd58118449a2fe2f96da09ac70",
+        "message": "Accept natural ps leader exit racing a failed Windows taskkill (Fixes #20869) (#21595) ## Description Fixes the intermittent VS Code extension E2E (Windows, apphost-tree) failure `owns at most one ps follower…`. The test reports `Timed out after 30000ms waiting for 1 owned ps follower(s)` and the state error `Failed to stop the previous AppHost watcher: Error: taskkill for aspire ps exited with code 255 while PID N remained live.` ### Denominator (ci.yml, 2026-10-29 13:00Z → 10-31 13:23Z, 388 ru",
+        "html_url": "https://github.com/microsoft/aspire/commit/25935214f31928dd58118449a2fe2f96da09ac70",
+        "pull_request": {
+          "number": 21595,
+          "title": "Accept natural ps leader exit racing a failed Windows taskkill (Fixes #20869)",
+          "url": "https://github.com/microsoft/aspire/pull/21595",
+          "merged_at": "2026-11-02T18:45:57Z"
+        }
+      },
+      {
+        "sha": "42793ba28262d772539c5da685d90a78e0f0a16c",
+        "message": "Fix flaky IntegrationHostLauncherTests discovery timeout on Windows (#21428) ## Description Fixes the intermittent Windows CI failure of `Aspire.Hosting.RemoteHost.Tests.IntegrationHostLauncherTests.InitializeHostsAsync_WaitsForEveryRegistrationBeforeDiscovery`. The test fails with `TimeoutException` at `initialization.WaitAsync(10s)` after about 11s. It failed on the first attempt of 3 main-branch runs in the last 72 hours: [40554609235](https://github.com/microsoft/aspire/actions/runs/40554609",
+        "html_url": "https://github.com/microsoft/aspire/commit/42793ba28262d772539c5da685d90a78e0f0a16c",
+        "pull_request": {
+          "number": 21428,
+          "title": "Fix flaky IntegrationHostLauncherTests discovery timeout on Windows",
+          "url": "https://github.com/microsoft/aspire/pull/21428",
+          "merged_at": "2026-11-02T18:53:26Z"
+        }
+      },
+      {
+        "sha": "00d1e6694a7fd94f0a7ee2fc48aa7ad2faef14c2",
+        "message": "Target dashboard resource cards in DashboardUrlTests breakpoint test (#21656) ## Description `DashboardUrlTests.DashboardDisplaysResourceUpdatesWhileAppHostIsPausedAtBreakpoint` has failed in every scheduled Outerloop run on `main` since #21412 (\"Modernize the dashboard experience\") made the Cards layout the default resources view. Before #21412 it passed 12 of 12 runs; since then it has failed 2 of 2 ([41158473015](https://github.com/microsoft/aspire/actions/runs/41158473015), [41263841334](htt",
+        "html_url": "https://github.com/microsoft/aspire/commit/00d1e6694a7fd94f0a7ee2fc48aa7ad2faef14c2",
+        "pull_request": {
+          "number": 21656,
+          "title": "Target dashboard resource cards in DashboardUrlTests breakpoint test",
+          "url": "https://github.com/microsoft/aspire/pull/21656",
+          "merged_at": "2026-11-02T19:13:50Z"
+        }
+      },
+      {
+        "sha": "0efbfcb095bf85ccf89678193d64b46022e7657e",
+        "message": "Make WithBindMount idempotent and fail fast on conflicting mount targets (#21546) ## Description `WithBindMount` always appended a new `ContainerMountAnnotation`, even when the resource already had a mount at that target. Duplicates went straight to DCP, and Docker refused to create the container with `Duplicate mount point: <target>`. You hit this easily with layered extension methods, or by adding a mount from a `BeforeResourceStartedEvent` handler. That handler runs again on every restart, so",
+        "html_url": "https://github.com/microsoft/aspire/commit/0efbfcb095bf85ccf89678193d64b46022e7657e",
+        "pull_request": {
+          "number": 21546,
+          "title": "Make WithBindMount idempotent and fail fast on conflicting mount targets",
+          "url": "https://github.com/microsoft/aspire/pull/21546",
+          "merged_at": "2026-11-02T19:24:17Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension unit tests (Windows) / Run VS Code extension unit tests (Windows)",
+      "id": 125517627226,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/41509624265/job/125517627226",
+      "classification": "transient-infra",
+      "reason": "Run tests step exited 1 with no failing test and no diagnostic; output stopped mid-suite (all shown tests passed) before a generic exit code 1.",
+      "failed_steps": [
+        "Run tests"
+      ]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.DevTunnels.Tests, Hosting.DevTunnels, Hosting.DevTunnel... / Hosting.DevTunnels (ubuntu-latest)",
+      "id": 125517678860,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/41509624265/job/125517678860",
+      "classification": "flaky-test",
+      "reason": "DevTunnelMonitorTests ObjectDisposedException on disposed IServiceProvider, a known recurring test-teardown race.",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, azure-functions-node)",
+      "id": 125528709145,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/41509624265/job/125528709145",
+      "classification": "flaky-test",
+      "reason": "Azure Functions Node debugger E2E control command failed; matches known recurring flaky E2E.",
+      "failed_steps": [
+        "Run extension E2E tests"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.DevTunnels.Tests.DevTunnelMonitorTests.ReconciliationRetriesUntilUnrecognizedOutputCanBeReplacedByServiceStatus",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.DevTunnels.Tests, Hosting.DevTunnels, Hosting.DevTunnel... / Hosting.DevTunnels (ubuntu-latest)",
+      "error": "System.ObjectDisposedException : Cannot access a disposed object.\nObject name: 'IServiceProvider'.",
+      "stack_trace": "at Microsoft.Extensions.DependencyInjection.ServiceLookup.ThrowHelper.ThrowObjectDisposedException()\n   at Microsoft.Extensions.DependencyInjection.ServiceLookup.ServiceProviderEngineScope.GetService(Type serviceType)\n   at Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService(IServiceProvider provider, Type serviceType)\n   at Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService[T](IServiceProvider provider)\n   at Aspire.Hosting.DevTunnelsResourceBuilderExtensions.<>c__DisplayClass15_0.<AddDevTunnelPort>b__5(UpdateCommandStateContext context) in /_/src/Aspire.Hosting.DevTunnels/DevTunnelResourceBuilderExtensions.cs:line 647\n   at Aspire.Hosting.ApplicationModel.ResourceNotificationService.UpdateCommands(IResource resource, CustomResourceSnapshot previousState) in /_/src/Aspire.Hosting/ApplicationModel/ResourceNotificationService.cs:line 1162\n   at Aspire.Hosting.ApplicationModel.ResourceNotificationService.PublishUpdateAsync(IResource resource, String resourceId, Func`2 stateFactory) in /_/src/Aspire.Hosting/ApplicationModel/ResourceNotificationService.cs:line 900\n   at Aspire.Hosting.ApplicationModel.ResourceNotificationService.PublishUpdateAsync(IResource resource, Func`2 stateFactory) in /_/src/Aspire.Hosting/ApplicationModel/ResourceNotificationService.cs:line 1284\n   at Aspire.Hosting.DevTunnelsResourceBuilderExtensions.UpdatePortAccessAsync(DevTunnelPortResource portResource, ResourceNotificationService notifications, ResourceLoggerService logs, DateTimeOffset now) in /_/src/Aspire.Hosting.DevTunnels/DevTunnelResourceBuilderExtensions.cs:line 811\n   at Aspire.Hosting.DevTunnels.DevTunnelMonitor.<>c__DisplayClass40_0.<<RefreshAccessAsync>b__0>d.MoveNext() in /_/src/Aspire.Hosting.DevTunnels/DevTunnelMonitor.cs:line 356\n--- End of stack trace from previous location ---\n   at Aspire.Hosting.DevTunnels.DevTunnelMonitor.<>c__DisplayClass55_0`1.<<InvokeAsync>b__0>d.MoveNext() in /_/src/As",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Disposed service provider race in monitor test teardown, unrelated to candidate merges."
+    },
+    {
+      "name": "Aspire Node Functions debugger E2E starts Core Tools, attaches pwa-node, hits an HTTP breakpoint and cleans up the worker",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, azure-functions-node)",
+      "error": "Failed to apply E2E control revision 1793651173814: E2E control command failed.",
+      "stack_trace": "Error: Failed to apply E2E control revision 1793651173814: E2E control command failed.\n    at applyE2eControl (out/test-e2e/test-e2e/helpers/assertions.js:355:15)\n    at async executeE2eControlCommand (out/test-e2e/test-e2e/helpers/fixtures.js:170:12)\n    at async Context.<anonymous> (out/test-e2e/test-e2e/azureFunctionsNode.e2e.test.js:119:24)",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Known flaky E2E on this test; control command failure."
+    }
+  ],
+  "causes": [
+    "vscode-extension-unit-tests-windows-silent-exit1",
+    "devtunnels-devtunnelmonitor-reconciliationretries-objectdisposed",
+    "vscode-e2e-linux-azure-functions-node-breakpoint-timeout"
+  ]
+}

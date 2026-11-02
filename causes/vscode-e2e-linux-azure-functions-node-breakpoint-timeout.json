@@ -46,6 +46,13 @@
       "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, azure-functions-node)",
       "pr_number": 0,
       "observed_at": "2026-10-26T21:20:35Z"
+    },
+    {
+      "run_id": 41509624265,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/41509624265",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, azure-functions-node)",
+      "pr_number": 0,
+      "observed_at": "2026-11-02T21:21:40Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/20998"
