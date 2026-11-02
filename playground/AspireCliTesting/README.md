@@ -100,7 +100,7 @@ output directories and collectors are only activated by `aspire test`.
 
 ## Dashboard testing indicators
 
-The modern resource pane includes a beaker toggle labeled **Testing**. The five
+The modern resource pane includes a beaker toggle labeled **Testing**. The six
 testing resources are shown by default, alongside ordinary resources. Turn off
 **Resources** and **Parameters** to list just testing resources; turn off
 **Testing** to hide them instead. These preferences also scope the overview and
@@ -116,12 +116,13 @@ category. The shared snapshot metadata also exposes the tag in the previous
 dashboard's resource properties and through `aspire describe`.
 
 For this playground, the beaker category contains `foundation-tests`,
-`mstest-tests`, `pytest-tests`, `go-tests` and `rust-tests`; `service` and
+`mstest-tests`, `pytest-tests`, `go-tests`, `rust-tests` and `java-tests`; `service` and
 `pytest-tests-installer` remain ordinary resources.
 
 Select **Testing**, alongside **Metrics**, to view published test outcomes grouped
-by resource. Foundation, MSTest, pytest and Go publish individual results; Cargo
-publishes no individual outcomes and is represented by one resource-outcome row.
+by resource. Foundation, MSTest, pytest, Go and Java JUnit publish individual
+results; Cargo publishes no individual outcomes and is represented by one
+resource-outcome row.
 Passing individual results do not hide execution or collector failures, and a
 pending or unknown resource is not reported as passed. The page shows distinct
 Passed, Failed, Skipped, Inconclusive, Error, Timed out and Cancelled test statuses.
@@ -137,8 +138,9 @@ During ordinary `aspire run`, collectors are not activated; annotated resources
 still appear with one resource-outcome row based on their actual execution state.
 The dashboard does not start tests or change execution behavior. To exercise a
 failure in the resource-only fallback, prefix the testing command with
-`RUST_PLAYGROUND_FAIL=true`. `MSTEST_PLAYGROUND_FAIL`, `PYTEST_PLAYGROUND_FAIL` and
-`GO_PLAYGROUND_FAIL` exercise individual-result failures independently.
+`RUST_PLAYGROUND_FAIL=true`. `MSTEST_PLAYGROUND_FAIL`, `PYTEST_PLAYGROUND_FAIL`,
+`GO_PLAYGROUND_FAIL` and `JAVA_PLAYGROUND_FAIL` exercise individual-result
+failures independently.
 
 ## Shared scenario and extension points
 

@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Cli;
@@ -24,7 +25,7 @@ public class JUnitCollectorTests(ITestOutputHelper outputHelper)
         using var directory = new TempJavaAppDirectory();
         using var builder = CreateBuilder(directory);
         var source = directory.Write("reports/TEST-ServiceTest.xml", SurefireJUnitReportTests.PassingReport);
-        var resource = builder.AddJavaApp("java-tests", directory.Path).WithMavenGoal("test")
+        var resource = builder.AddJavaApp("java-tests", directory.Path).WithMavenGoal("test").WithTags("Backend")
             .WithTesting(context => SurefireJUnitReport.CollectAsync(context, Path.GetDirectoryName(source)!));
         using var notifications = ResourceNotificationServiceTestHelpers.Create();
         using var coordinator = new TestRunCoordinator(new DistributedApplicationModel(builder.Resources),
@@ -46,6 +47,23 @@ public class JUnitCollectorTests(ITestOutputHelper outputHelper)
         Assert.Equal(("java-tests", "example.ServiceTest.probe(String)[1]", "passed", 125d),
             (result.ResourceName, result.Name, result.Outcome, result.DurationMilliseconds));
         Assert.Equal("completed", events.Last(item => item.Collection is not null).Collection!.Status);
+        var annotation = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
+        Assert.NotNull(annotation.DashboardResults);
+        var fresh = ResourceTraitSnapshotProperties.AddTraitProperties(resource.Resource, []);
+        var replay = ResourceTraitSnapshotProperties.AddTraitProperties(resource.Resource, fresh);
+        foreach (var properties in new[] { fresh, replay })
+        {
+            Assert.Equal("true", Assert.Single(properties, p => p.Name == KnownProperties.Resource.Testing).Value);
+            Assert.Equal(["Backend", "Testing"], Assert.IsType<string[]>(
+                Assert.Single(properties, p => p.Name == KnownProperties.Resource.TraitPrefix + KnownResourceTraits.DashboardTag).Value));
+            Assert.Same(annotation.DashboardResults,
+                Assert.Single(properties, p => p.Name == KnownProperties.Resource.TestingResults).Value);
+        }
+        var snapshot = annotation.DashboardResults.StructValue;
+        Assert.Equal(passed ? "passed" : "failed", snapshot.Fields["resourceOutcome"].StringValue);
+        Assert.Equal("completed", snapshot.Fields["collectionStatus"].StringValue);
+        var retained = Assert.Single(snapshot.Fields["results"].ListValue.Values).StructValue;
+        Assert.Equal((result.Name, result.Outcome), (retained.Fields["name"].StringValue, retained.Fields["outcome"].StringValue));
     }
 
     [Theory]
