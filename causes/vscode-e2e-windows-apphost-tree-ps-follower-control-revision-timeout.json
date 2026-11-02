@@ -1,0 +1,16 @@
+{
+  "id": "vscode-e2e-windows-apphost-tree-ps-follower-control-revision-timeout",
+  "type": "flaky-test",
+  "title": "Flaky: apphost-tree E2E ps follower test times out waiting for E2E control revision",
+  "error_pattern": "Timed out after 10000ms waiting for E2E control revision 1793646760876.\nLast error: <none>",
+  "test_name": "Aspire AppHost tree E2E owns at most one ps follower through view, editor, settings, and reload transitions",
+  "occurrences": [
+    {
+      "run_id": 41503655043,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/41503655043",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, apphost-tree)",
+      "pr_number": 0,
+      "observed_at": "2026-11-02T20:07:32Z"
+    }
+  ]
+}

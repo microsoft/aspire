@@ -1,0 +1,15 @@
+{
+  "id": "vscode-e2e-windows-browser-debugger-resource-running-timeout",
+  "type": "main-repository-breakage",
+  "title": "VS Code Blazor browser-debugger E2E times out waiting for resource 'standalone' Running",
+  "error_pattern": "Timed out after 570124ms waiting for resource 'standalone' state Running.\nLast error: <none>",
+  "occurrences": [
+    {
+      "run_id": 41503655043,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/41503655043",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
+      "pr_number": 0,
+      "observed_at": "2026-11-02T20:07:32Z"
+    }
+  ]
+}

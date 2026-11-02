@@ -1,0 +1,197 @@
+{
+  "run_id": 41503655043,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/41503655043",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-02T20:07:32Z",
+  "verdict": "mixed",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 21595,
+    "title": "Accept natural ps leader exit racing a failed Windows taskkill (Fixes #20869)",
+    "author": "davidfowl",
+    "state": "closed",
+    "head_branch": "aspireagent/fix-20869-ps-follower",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/21595",
+    "merged_at": "2026-11-02T18:45:57Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "1d3c45f9a299c30d46fc3166148902d466043df2",
+    "failed_sha": "25935214f31928dd58118449a2fe2f96da09ac70",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "a8dff1cee6a428a0e5eff5dbdf7bf258f6cc32d0",
+        "message": "Only show 'Stopping Aspire' when canceling aspire run (#21561) Co-authored-by: davidfowl <95136+davidfowl@users.noreply.github.com> Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com> Co-authored-by: James Newton-King <james@newtonking.com>",
+        "html_url": "https://github.com/microsoft/aspire/commit/a8dff1cee6a428a0e5eff5dbdf7bf258f6cc32d0",
+        "pull_request": {
+          "number": 21561,
+          "title": "Only show 'Stopping Aspire' when canceling aspire run",
+          "url": "https://github.com/microsoft/aspire/pull/21561",
+          "merged_at": "2026-11-02T05:29:25Z"
+        }
+      },
+      {
+        "sha": "ae2c92730f335db41c02dffb22fdfc83793e231d",
+        "message": "Unquarantine 2 CLI E2E tests that pass 100% in the quarantine lane (#21649) ## Description This unquarantines 2 CLI E2E tests that have passed 100% of the time in the quarantined-tests lane over the last 14 days. No product or test logic changes: the PR only removes `[QuarantinedTest]` and the now-unused `using Aspire.TestUtilities;` directives. Quarantine-lane evidence comes from `tests-quarantine.yml` scheduled runs created 2026-10-18 to 2026-11-01. I parsed each run's Final Results table (174",
+        "html_url": "https://github.com/microsoft/aspire/commit/ae2c92730f335db41c02dffb22fdfc83793e231d",
+        "pull_request": {
+          "number": 21649,
+          "title": "Unquarantine 2 CLI E2E tests that pass 100% in the quarantine lane",
+          "url": "https://github.com/microsoft/aspire/pull/21649",
+          "merged_at": "2026-11-02T06:25:05Z"
+        }
+      },
+      {
+        "sha": "7961070663e774084a46b4ee908ea4c0149db633",
+        "message": "Support config source adoption and explicit project opt-out (#21678)",
+        "html_url": "https://github.com/microsoft/aspire/commit/7961070663e774084a46b4ee908ea4c0149db633",
+        "pull_request": {
+          "number": 21678,
+          "title": "Support config source adoption and explicit project opt-out",
+          "url": "https://github.com/microsoft/aspire/pull/21678",
+          "merged_at": "2026-11-02T08:31:25Z"
+        }
+      },
+      {
+        "sha": "1afc0d0ee72484a35e189eafaec0ae9f409e5cc7",
+        "message": "Limit configuration sources to project-local settings (#21679)",
+        "html_url": "https://github.com/microsoft/aspire/commit/1afc0d0ee72484a35e189eafaec0ae9f409e5cc7",
+        "pull_request": {
+          "number": 21679,
+          "title": "Limit configuration sources to project-local settings",
+          "url": "https://github.com/microsoft/aspire/pull/21679",
+          "merged_at": "2026-11-02T09:59:35Z"
+        }
+      },
+      {
+        "sha": "2137ceca1d3baa8bcabd5036f3974f1538f92c1a",
+        "message": "Fix array-aware CLI configuration editing (#21572)",
+        "html_url": "https://github.com/microsoft/aspire/commit/2137ceca1d3baa8bcabd5036f3974f1538f92c1a",
+        "pull_request": {
+          "number": 21572,
+          "title": "Fix array-aware CLI configuration editing",
+          "url": "https://github.com/microsoft/aspire/pull/21572",
+          "merged_at": "2026-11-02T12:35:27Z"
+        }
+      },
+      {
+        "sha": "9f0961d0c7173732f45ce88d571c8b53f8059934",
+        "message": "Reject registration-only configuration on existing Entra references (#21493) ## Description Registration-only Entra configuration currently accepts existing registrations and silently does nothing, leaving applications to fail later during authentication. Fail at the configuration call instead, with guidance for configuring the registration manually. Guard redirect URIs, owners, ID-token issuance, pre-authorization, admin consent, and the default application ID URI. Align existing role, certific",
+        "html_url": "https://github.com/microsoft/aspire/commit/9f0961d0c7173732f45ce88d571c8b53f8059934",
+        "pull_request": {
+          "number": 21493,
+          "title": "Reject registration-only configuration on existing Entra references",
+          "url": "https://github.com/microsoft/aspire/pull/21493",
+          "merged_at": "2026-11-02T15:21:50Z"
+        }
+      },
+      {
+        "sha": "3d42183549d7fc8e4817e5c98c8d427ebd20e464",
+        "message": "Support configurable named skill sources (#21364) ## Description Allow teams to configure multiple named skill sources instead of always registering only `microsoft/aspire-skills`. This builds on #20946 and lets shared `configSource` configuration distribute skill-source settings. - Add `skillSources` configuration with per-source repositories, marketplace/plugin names, refs, and OpenCode catalogs. Keep the built-in source unless it is explicitly disabled or overridden. - Merge named sources acr",
+        "html_url": "https://github.com/microsoft/aspire/commit/3d42183549d7fc8e4817e5c98c8d427ebd20e464",
+        "pull_request": {
+          "number": 21364,
+          "title": "Support configurable named skill sources",
+          "url": "https://github.com/microsoft/aspire/pull/21364",
+          "merged_at": "2026-11-02T16:28:36Z"
+        }
+      },
+      {
+        "sha": "b58809d3eeae94db4cb5b8b839b9232fc59434de",
+        "message": "Support Key Vault resource references for Entra certificate credentials (#21425) ## Description Entra certificate credentials can now use a Key Vault resource already modeled in the AppHost instead of requiring a hard-coded vault URL. The URI remains a deferred resource reference during local run and publish, including the Key Vault emulator endpoint in run mode. A literal vault URL is still accepted for vaults managed outside the AppHost. The same exported method accepts either a URL or a Key V",
+        "html_url": "https://github.com/microsoft/aspire/commit/b58809d3eeae94db4cb5b8b839b9232fc59434de",
+        "pull_request": {
+          "number": 21425,
+          "title": "Support Key Vault resource references for Entra certificate credentials",
+          "url": "https://github.com/microsoft/aspire/pull/21425",
+          "merged_at": "2026-11-02T17:34:47Z"
+        }
+      },
+      {
+        "sha": "25935214f31928dd58118449a2fe2f96da09ac70",
+        "message": "Accept natural ps leader exit racing a failed Windows taskkill (Fixes #20869) (#21595) ## Description Fixes the intermittent VS Code extension E2E (Windows, apphost-tree) failure `owns at most one ps follower…`. The test reports `Timed out after 30000ms waiting for 1 owned ps follower(s)` and the state error `Failed to stop the previous AppHost watcher: Error: taskkill for aspire ps exited with code 255 while PID N remained live.` ### Denominator (ci.yml, 2026-10-29 13:00Z → 10-31 13:23Z, 388 ru",
+        "html_url": "https://github.com/microsoft/aspire/commit/25935214f31928dd58118449a2fe2f96da09ac70",
+        "pull_request": {
+          "number": 21595,
+          "title": "Accept natural ps leader exit racing a failed Windows taskkill (Fixes #20869)",
+          "url": "https://github.com/microsoft/aspire/pull/21595",
+          "merged_at": "2026-11-02T18:45:57Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
+      "id": 125478503703,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/41503655043/job/125478503703",
+      "classification": "main-repository-breakage",
+      "reason": "Two ConfigureUnattendedSsh test cases fail deterministically on Windows with GitCommandException: verified OpenSSH executable required",
+      "failed_steps": [
+        "Run tests (Windows)"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, apphost-tree)",
+      "id": 125489102839,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/41503655043/job/125489102839",
+      "classification": "flaky-test",
+      "reason": "apphost-tree E2E timed out waiting for E2E control revision; UI-state timing, known flaky shard",
+      "failed_steps": [
+        "Run extension E2E tests"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
+      "id": 125489102962,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/41503655043/job/125489102962",
+      "classification": "main-repository-breakage",
+      "reason": "Blazor browser-debugger before-all hook timed out waiting for resource 'standalone' Running; no structured test result or transient evidence",
+      "failed_steps": [
+        "Run extension E2E tests"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Cli.Tests.Git.GitCommandRunnerTests.ConfigureUnattendedSsh_VerifiesOpenSshAndAppliesBatchModeAfterUrlRewrites(rewritten: False, setting: \"GIT_SSH_COMMAND\")",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
+      "error": "Aspire.Cli.Git.GitCommandException : Unattended Git requires a verified OpenSSH executable, not a custom SSH command or wrapper. Run interactively, or select OpenSSH using GIT_SSH and configure keys and host options in your OpenSSH config instead of GIT_SSH_COMMAND or core.sshCommand.",
+      "stack_trace": "at Aspire.Cli.Git.GitCommandRunner.ConfigureUnattendedSshAsync(ProcessStartInfo startInfo, String[] arguments, CancellationToken cancellationToken) in /_/src/Aspire.Cli/Git/GitCommandRunner.cs:line 155\n   at Aspire.Cli.Tests.Git.GitCommandRunnerTests.ConfigureUnattendedSsh_VerifiesOpenSshAndAppliesBatchModeAfterUrlRewrites(Boolean rewritten, String setting) in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Git\\GitCommandRunnerTests.Authentication.cs:line 226\n--- End of stack trace from previous location ---",
+      "standard_output": "Temporary workspace created at: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\Aspire.Cli.Tests\\Workspace\\boa3d3uy.mce\n| [2026-11-02T18:52:39] Aspire.Cli.Git.GitCommandRunner Debug: Starting Git process.\n| [2026-11-02T18:52:39] Aspire.Cli.Git.GitCommandRunner Debug: Git process 4172 started after 00:00:00.0018251.\n| [2026-11-02T18:52:39] Aspire.Cli.Git.GitCommandRunner Debug: Git process 4172 output drained after 00:00:00.0262186.\n| [2026-11-02T18:52:39] Aspire.Cli.Git.GitCommandRunner Debug: Git process completed after 00:00:00.0268787; exit code 0, failure (null), cancelled False.\n| [2026-11-02T18:52:39] Aspire.Cli.Git.GitCommandRunner Debug: Starting Git process.\n| [2026-11-02T18:52:39] Aspire.Cli.Git.GitCommandRunner Debug: Git process 6268 started after 00:00:00.0018384.\n| [2026-11-02T18:52:39] Aspire.Cli.Git.GitCommandRunner Debug: Git process 6268 output drained after 00:00:00.0566136.\n| [2026-11-02T18:52:39] Aspire.Cli.Git.GitCommandRunner Debug: Git process completed after 00:00:00.0573328; exit code 0, failure (null), cancelled False.\nDisposing temporary workspace at: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\Aspire.Cli.Tests\\Workspace\\boa3d3uy.mce",
+      "standard_error": "",
+      "classification": "code-issue",
+      "reason": "Deterministic assertion/exception in OpenSSH verification on Windows"
+    },
+    {
+      "name": "Aspire.Cli.Tests.Git.GitCommandRunnerTests.ConfigureUnattendedSsh_VerifiesOpenSshAndAppliesBatchModeAfterUrlRewrites(rewritten: False, setting: \"core.sshCommand\")",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
+      "error": "Aspire.Cli.Git.GitCommandException : Unattended Git requires a verified OpenSSH executable, not a custom SSH command or wrapper. Run interactively, or select OpenSSH using GIT_SSH and configure keys and host options in your OpenSSH config instead of GIT_SSH_COMMAND or core.sshCommand.",
+      "stack_trace": "at Aspire.Cli.Git.GitCommandRunner.ConfigureUnattendedSshAsync(ProcessStartInfo startInfo, String[] arguments, CancellationToken cancellationToken) in /_/src/Aspire.Cli/Git/GitCommandRunner.cs:line 155\n   at Aspire.Cli.Tests.Git.GitCommandRunnerTests.ConfigureUnattendedSsh_VerifiesOpenSshAndAppliesBatchModeAfterUrlRewrites(Boolean rewritten, String setting) in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Git\\GitCommandRunnerTests.Authentication.cs:line 226\n--- End of stack trace from previous location ---",
+      "standard_output": "Temporary workspace created at: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\Aspire.Cli.Tests\\Workspace\\3lg0xsla.t1w\n| [2026-11-02T18:52:44] Aspire.Cli.Git.GitCommandRunner Debug: Starting Git process.\n| [2026-11-02T18:52:44] Aspire.Cli.Git.GitCommandRunner Debug: Git process 8472 started after 00:00:00.0020063.\n| [2026-11-02T18:52:44] Aspire.Cli.Git.GitCommandRunner Debug: Git process 8472 output drained after 00:00:00.0263608.\n| [2026-11-02T18:52:44] Aspire.Cli.Git.GitCommandRunner Debug: Git process completed after 00:00:00.0271360; exit code 0, failure (null), cancelled False.\n| [2026-11-02T18:52:44] Aspire.Cli.Git.GitCommandRunner Debug: Starting Git process.\n| [2026-11-02T18:52:44] Aspire.Cli.Git.GitCommandRunner Debug: Git process 5232 started after 00:00:00.0016537.\n| [2026-11-02T18:52:44] Aspire.Cli.Git.GitCommandRunner Debug: Git process 5232 output drained after 00:00:00.0234544.\n| [2026-11-02T18:52:44] Aspire.Cli.Git.GitCommandRunner Debug: Git process completed after 00:00:00.0240527; exit code 0, failure (null), cancelled False.\n| [2026-11-02T18:52:44] Aspire.Cli.Git.GitCommandRunner Debug: Starting Git process.\n| [2026-11-02T18:52:44] Aspire.Cli.Git.GitCommandRunner Debug: Git process 4188 started after 00:00:00.0015904.\n| [2026-11-02T18:52:44] Aspire.Cli.Git.GitCommandRunner Debug: Git process 4188 output drained after 00:00:00.1112485.\n| [2026-11-02T18:52:44] Aspire.Cli.Git.GitCommandRunner Debug: Git process completed after 00:00:00.1119164; exit code 0, failure (null), cancelled False.\nDisposing temporary workspace at: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\Aspire.Cli.Tests\\Workspace\\3lg0xsla.t1w",
+      "standard_error": "",
+      "classification": "code-issue",
+      "reason": "Deterministic assertion/exception in OpenSSH verification on Windows"
+    },
+    {
+      "name": "Aspire AppHost tree E2E owns at most one ps follower through view, editor, settings, and reload transitions",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, apphost-tree)",
+      "error": "Timed out after 10000ms waiting for E2E control revision 1793646760876.\nLast error: <none>\nLast state: {\n  \"extensionHostSessionId\": \"c8d6ad73-8c61-4ee0-b380-84d289bda2e5\",\n  \"updatedAt\": \"2026-11-02T19:13:49.288Z\",\n  \"runId\": \"6852-1793646718787\",\n  \"state\": {\n    \"viewMode\": \"workspace\",\n    \"isRepositoryLoading\": false,\n    \"isWorkspaceAppHostDiscoveryComplete\": true,\n    \"hasError\": false,\n    \"workspaceAppHostName\": \"AspireE2E.AppHost.csproj\",\n    \"workspaceAppHostPath\": \"c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-cdTjnA\\\\workspace\\\\AspireE2E.AppHost\\\\AspireE2E.AppHost.csproj\",\n    \"workspaceAppHostCandidatePaths\": [\n      \"c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-cdTjnA\\\\workspace\\\\AspireE2E.AppHost\\\\AspireE2E.AppHost.csproj\"\n    ],\n    \"workspaceAppHostDescription\": \"Workspace view selected because aspire ls found one buildable C# AppHost.\",\n    \"workspaceResources\": [],\n    \"appHosts\": [],\n    \"launchingPaths\": [],\n    \"stoppingPaths\": [],\n    \"debugSessions\": [",
+      "stack_trace": "Error: Timed out after 10000ms waiting for E2E control revision 1793646760876.\nLast error: <none>\nLast state: {\n  \"extensionHostSessionId\": \"c8d6ad73-8c61-4ee0-b380-84d289bda2e5\",\n  \"updatedAt\": \"2026-11-02T19:13:49.288Z\",\n  \"runId\": \"6852-1793646718787\",\n  \"state\": {\n    \"viewMode\": \"workspace\",\n    \"isRepositoryLoading\": false,\n    \"isWorkspaceAppHostDiscoveryComplete\": true,\n    \"hasError\": false,\n    \"workspaceAppHostName\": \"AspireE2E.AppHost.csproj\",\n    \"workspaceAppHostPath\": \"c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-cdTjnA\\\\workspace\\\\AspireE2E.AppHost\\\\AspireE2E.AppHost.csproj\",\n    \"workspaceAppHostCandidatePaths\": [\n      \"c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-cdTjnA\\\\workspace\\\\AspireE2E.AppHost\\\\AspireE2E.AppHost.csproj\"\n    ],\n    \"workspaceAppHostDescription\": \"Workspace view selected because aspire ls found one buildable C# AppHost.\",\n    \"workspaceResources\": [],\n    \"appHosts\": [],\n    \"launchingPaths\": [],\n    \"stoppingPaths\": [],\n    \"debugSessions\": []\n  },\n  \"commandInvocations\": [\n    {\n      \"command\": \"aspire-vscode.switchToWorkspaceView\",\n      \"outcome\": \"success\",\n      \"durationMs\": 3,\n      \"source\": \"tree\",\n      \"sequence\": 1\n    },\n    {\n      \"command\": \"aspire-vscode.switchToGlobalView\",\n      \"outcome\": \"success\",\n      \"durationMs\": 5,\n      \"source\": \"tree\",\n      \"sequence\": 2\n    },\n    {\n      \"command\": \"aspire-vscode.switchToWorkspaceView\",\n      \"outcome\": \"success\",\n      \"durationMs\": 5,\n      \"source\": \"tree\",\n      \"sequence\": 3\n    }\n  ],\n  \"terminalCommands\": [],\n  \"debugLaunches\": [],\n  \"debugConsoleOutputs\": [],\n  \"stoppingPathEvents\": [],\n  \"taskProcessEvents\": [],\n  \"browserDebugSessions\": [],\n  \"control\": {\n    \"revision\": 1793646760876,\n    \"status\": \"started\",\n    \"startedObserved\": true\n  }\n}\n    at waitForExtensionState (out\\test-e2e\\test-e2e\\helpers\\assertions.js:276:11)\n    at async applyE2eControl (out\\test-e2e\\test-e2e\\helpers\\assertions.js:353:23)\n    at async executeE2eControlComma",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Timing timeout in extension UI state; known flaky test"
+    }
+  ],
+  "causes": [
+    "aspire-cli-git-configureunattendedssh-windows-openssh",
+    "vscode-e2e-windows-apphost-tree-ps-follower-control-revision-timeout",
+    "vscode-e2e-windows-browser-debugger-resource-running-timeout"
+  ]
+}
