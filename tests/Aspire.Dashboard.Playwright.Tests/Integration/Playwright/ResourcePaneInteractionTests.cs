@@ -87,12 +87,12 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Dashboard
             var title = page.Locator("h1.resource-title");
             var selectAll = pane.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.ResourcePaneSelectAll, Exact = true });
             await Assertions.Expect(title).ToHaveTextAsync(resourceName);
-            await Assertions.Expect(selectAll).ToHaveAttributeAsync("aria-pressed", "false");
+            await Assertions.Expect(selectAll).ToHaveTextAsync(Resources.Layout.ResourcePaneSelectAll);
+            Assert.Null(await selectAll.GetAttributeAsync("aria-pressed"));
 
-            // With a selection, "Select all" isn't pressed. Pressing it selects all resources again.
             await selectAll.ClickAsync();
             await Assertions.Expect(title).ToHaveTextAsync(Resources.Layout.ResourceHeaderAllResources);
-            await Assertions.Expect(selectAll).ToHaveAttributeAsync("aria-pressed", "true");
+            await Assertions.Expect(selectAll).ToHaveTextAsync(Resources.Layout.ResourcePaneSelectAll);
             await Assertions.Expect(pane.Locator("a[aria-current]")).ToHaveCountAsync(0);
 
             var overviewCards = page.Locator(".resource-card-grid");
@@ -107,12 +107,36 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Dashboard
             await page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions { Name = Resources.Layout.ResourceTabOverview }).ClickAsync();
             await Assertions.Expect(page).ToHaveURLAsync(new Regex("/resources$"));
             await Assertions.Expect(overviewCards).ToBeVisibleAsync();
-            await Assertions.Expect(selectAll).ToHaveAttributeAsync("aria-pressed", "true");
+            await Assertions.Expect(selectAll).ToHaveTextAsync(Resources.Layout.ResourcePaneSelectAll);
 
             // The cleared selection is remembered when entering the resources view again.
             await page.GotoAsync("/resources");
             await Assertions.Expect(overviewCards).ToBeVisibleAsync();
             await Assertions.Expect(title).ToHaveTextAsync(Resources.Layout.ResourceHeaderAllResources);
+        });
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task SelectAll_VisibleLabelAndKeyboardActivationRestoreAllResources()
+    {
+        await RunTestAsync(async page =>
+        {
+            await page.SetViewportSizeAsync(1280, 900);
+            await page.GotoAsync("/resources/TestResource");
+            await Assertions.Expect(page.Locator("h1.resource-title")).ToHaveTextAsync("TestResource");
+
+            var selectAll = page.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.ResourcePaneSelectAll, Exact = true });
+            await Assertions.Expect(selectAll).ToHaveTextAsync(Resources.Layout.ResourcePaneSelectAll);
+            Assert.Null(await selectAll.GetAttributeAsync("aria-pressed"));
+            await selectAll.FocusAsync();
+            await page.Keyboard.PressAsync("Enter");
+            await Assertions.Expect(page.Locator("h1.resource-title")).ToHaveTextAsync(Resources.Layout.ResourceHeaderAllResources);
+            await Assertions.Expect(page).ToHaveURLAsync(new Regex("/resources$"));
+            await selectAll.FocusAsync();
+            await page.Keyboard.PressAsync("Space");
+            await Assertions.Expect(page.Locator("h1.resource-title")).ToHaveTextAsync(Resources.Layout.ResourceHeaderAllResources);
+            await Assertions.Expect(page.Locator(".resource-pane a[aria-current]")).ToHaveCountAsync(0);
         });
     }
 
