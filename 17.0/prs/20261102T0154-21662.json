@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only unquarantine",
+  "mergedAt": "2026-11-02T01:54:48Z",
+  "number": 21662,
+  "runDate": "2026-11-02T06:10:00Z",
+  "status": "excluded",
+  "title": "Unquarantine PersistentContainersPreserveDataAcrossAppHostRuns"
+}

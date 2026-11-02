@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only unquarantine",
+  "mergedAt": "2026-11-02T01:12:03Z",
+  "number": 21653,
+  "runDate": "2026-11-02T06:10:00Z",
+  "status": "excluded",
+  "title": "Unquarantine StopNonInteractive E2E tests"
+}

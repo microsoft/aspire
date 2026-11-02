@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Bug fix for ResourceReadyEvent failure visibility",
+  "mergedAt": "2026-11-02T00:17:10Z",
+  "number": 21605,
+  "runDate": "2026-11-02T06:10:00Z",
+  "status": "included",
+  "title": "Surface ResourceReadyEvent subscriber failures in resource logs and dependent waits"
+}
