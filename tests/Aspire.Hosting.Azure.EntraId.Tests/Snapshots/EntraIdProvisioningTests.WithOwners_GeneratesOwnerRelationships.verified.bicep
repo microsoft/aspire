@@ -26,6 +26,9 @@ resource application 'Microsoft.Graph/applications@v1.0' = {
 
 resource servicePrincipal 'Microsoft.Graph/servicePrincipals@v1.0' = {
   appId: application.appId
+  tags: [
+    'WindowsAzureActiveDirectoryIntegratedApp'
+  ]
   owners: {
     relationships: [
       '11112222-aaaa-3333-bbbb-4444cccc5555'

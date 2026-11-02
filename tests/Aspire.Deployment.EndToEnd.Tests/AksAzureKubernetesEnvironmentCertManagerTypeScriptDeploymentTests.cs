@@ -12,7 +12,7 @@ namespace Aspire.Deployment.EndToEnd.Tests;
 /// <see cref="AksAzureKubernetesEnvironmentCertManagerDeploymentTests"/> but uses the
 /// TypeScript Express/React starter (<c>aspire new</c> --&gt; <c>Starter App (Express/React, TypeScript AppHost)</c>)
 /// and patches <c>apphost.mts</c> to wire <c>addAzureKubernetesEnvironment</c> +
-/// <c>addCertManager</c> + <c>addIssuer().withLetsEncryptProductionParam(acmeEmail).withHttp01Solver()</c>
+/// <c>addCertManager</c> + <c>addIssuer().withAcmeServer(url, acmeEmail).withHttp01Solver()</c>
 /// + <c>gateway.withGatewayTlsIssuer(letsEncrypt)</c> around the Express API.
 ///
 /// Proves that the cert-manager API surface generated for TypeScript via <c>[AspireExport]</c>
@@ -126,7 +126,7 @@ public sealed class AksAzureKubernetesEnvironmentCertManagerTypeScriptDeployment
             // The TypeScript surface mirrors the C# API exposed via [AspireExport]:
             //   addAzureKubernetesEnvironment / withSubnet / withSystemNodePool / addNodePool
             //   addLoadBalancer
-            //   addCertManager / addIssuer / withLetsEncryptProductionParam / withHttp01Solver
+            //   addCertManager / addIssuer / withAcmeServer / withHttp01Solver
             //   addGateway / withLoadBalancer / withRoute / withGatewayTlsIssuer
             //   publishAsKubernetesService / addManifest
             var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
@@ -166,11 +166,12 @@ const publicLb = await aks.addLoadBalancer("public", albSubnet);
 // Email registered with the ACME endpoint. Passed as a parameter so the test
 // supplies it via Parameters__acmeemail without burning it into apphost source.
 const acmeEmail = await builder.addParameter("acmeemail");
+const acmeServer = await builder.addParameter("acmeserver");
 
 // Install cert-manager via the typed API and declare a Let's Encrypt PRODUCTION ClusterIssuer.
 const certManager = await aks.addCertManager("cert-manager");
 const letsEncrypt = await certManager.addIssuer("letsencrypt-prod");
-await letsEncrypt.withLetsEncryptProductionParam(acmeEmail);
+await letsEncrypt.withAcmeServer(acmeServer, acmeEmail);
 await letsEncrypt.withHttp01Solver();
 
 // Gateway with HTTPS listener. withGatewayTlsIssuer(letsEncrypt) creates the listener AND
@@ -210,7 +211,8 @@ await builder.build().run();
                 $"unset ASPIRE_PLAYGROUND && unset Azure__Location && " +
                 $"export AZURE__LOCATION=westus3 && " +
                 $"export AZURE__RESOURCEGROUP={resourceGroupName} && " +
-                $"export Parameters__acmeemail={acmeEmail}");
+                $"export Parameters__acmeemail={acmeEmail} && " +
+                "export Parameters__acmeserver=https://acme-v02.api.letsencrypt.org/directory");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter);
 

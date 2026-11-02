@@ -21,6 +21,9 @@ resource application 'Microsoft.Graph/applications@v1.0' = {
 
 resource servicePrincipal 'Microsoft.Graph/servicePrincipals@v1.0' = {
   appId: application.appId
+  tags: [
+    'WindowsAzureActiveDirectoryIntegratedApp'
+  ]
 }
 
 output clientId string = application.appId

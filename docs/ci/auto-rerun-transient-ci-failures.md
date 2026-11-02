@@ -239,12 +239,17 @@ They are intentionally behavior-focused rather than regex-focused:
 - they use representative fixtures for each supported behavior
 - they keep representative job and step fixtures anchored to the current CI workflow names so matcher coverage does not drift from the implementation
 - they cover the mixed-failure veto and ignored-step override explicitly
-- they keep only a minimal set of YAML contract checks for safety rails such as the optional manual `dry_run` override, up-to-three-attempt automatic reruns, enabling manual reruns through `workflow_dispatch`, and gating the rerun job on `rerun_execution_eligible`
 - they validate the `eng/test-retry-patterns.json` config structure and regex compilation in Node.js (V8)
 - they test pattern matching functions (substring, regex, AND/OR logic, disabled rules)
 - they test TRX parsing, output capping, XML entity decoding, and the `analyzeTrxFiles` deduplication
 - they test the `promoteTestExecutionFailureJobs` promotion logic and `selectTestResultsArtifact` selection
 - they test the `analyzeFailedJobs` integration with `retryPatternsConfig` for job log pattern matching
+
+Workflow-only safety rails such as the optional manual `dry_run` override,
+up-to-three-attempt automatic reruns, `workflow_dispatch`, and the
+`rerun_execution_eligible` job gate need validation in the actual workflow.
+Source-text assertions do not establish their behavior and should not be copied
+or mechanically updated as regression coverage.
 
 ### Running the tests
 

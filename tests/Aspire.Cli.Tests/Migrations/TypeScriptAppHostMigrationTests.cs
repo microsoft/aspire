@@ -223,6 +223,18 @@ public class TypeScriptAppHostMigrationTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ApplyAsync_WithLegacyAppHost_WritesAspireConfigWithOsLineBreaksAndSingleFinalNewline()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var root = workspace.WorkspaceRoot;
+        await WriteLegacyLayoutAsync(root);
+
+        await CreateMigration(workspace).ApplyAsync(MigrationContext.CurrentDirectory, CancellationToken.None);
+
+        LineEndingAssert.FileUsesOsLineBreaksAndSingleFinalNewline(Path.Combine(root.FullName, "aspire.config.json"));
+    }
+
+    [Fact]
     public async Task ApplyAsync_WithSelectedLegacyAppHostOutsideWorkingDirectory_MigratesSelectedAppHost()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

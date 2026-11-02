@@ -18,6 +18,8 @@ internal sealed class StartCommand : BaseCommand
 
     protected override bool UpdateNotificationsEnabled => true;
 
+    protected override string CancellationMessage => InteractionServiceStrings.StoppingAspire;
+
     private readonly AppHostLauncher _appHostLauncher;
     private readonly IConfiguration _configuration;
     private readonly ProfileCaptureState _profileCaptureState;

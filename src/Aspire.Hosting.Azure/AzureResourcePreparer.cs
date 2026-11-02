@@ -357,7 +357,7 @@ internal sealed class AzureResourcePreparer(
                 if (executionContext.IsPublishMode)
                 {
                     var roleAssignments = GetAllRoleAssignments(resource);
-                    if (roleAssignments.Count > 0)
+                    if (roleAssignments.Count > 0 || resource.HasAnnotationOfType<ManagedIdentityRequiredAnnotation>())
                     {
                         var (identityResource, roleAssignmentResources) = CreateIdentityAndRoleAssignmentResources(resource, roleAssignments);
 

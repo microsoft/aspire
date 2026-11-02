@@ -51,7 +51,7 @@ public class EntraIdInitializationTests
         using var builder = TestDistributedApplicationBuilder.Create();
         var entra = builder.AddExistingEntraApplication("entra-web", tenantId: TenantId, clientId: ClientId)
             .WithClientSecret(builder.AddParameter("EntraClientSecret", "super-secret", secret: true))
-            .WithFicMsi(ClientId);
+            .WithFederatedManagedIdentityCredential(ClientId);
 
         using var app = builder.Build();
         var snapshot = await InitializeAsync(app, entra.Resource);
@@ -234,6 +234,33 @@ public class EntraIdInitializationTests
             "Failed to provision the Entra ID application. If your tenant does not allow creating registrations, use AddExistingEntraApplication " +
             "with an existing registration's tenant ID and client ID.",
             log.Message);
+    }
+
+    [Fact]
+    public async Task Initialize_CreatedApplication_MissingAzureConfiguration_DoesNotOverwriteProvisioningState()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var entra = builder.AddEntraIdApplication("entra-api");
+
+        using var app = builder.Build();
+        var notifications = app.Services.GetRequiredService<ResourceNotificationService>();
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await notifications.PublishUpdateAsync(entra.Resource, snapshot => snapshot with { State = new("Missing subscription configuration", KnownResourceStateStyles.Error) });
+        entra.Resource.ProvisioningTaskCompletionSource!.SetException(new MissingConfigurationException("Azure subscription is missing."));
+        var initialization = PublishInitializationAsync(app, entra.Resource, cts.Token);
+
+        try
+        {
+            // Initialization has nothing to publish in this case, so give it time to (incorrectly) overwrite the state.
+            await Task.Delay(TimeSpan.FromSeconds(1));
+            Assert.True(notifications.TryGetCurrentState(entra.Resource.Name, out var resourceEvent));
+            Assert.Equal("Missing subscription configuration", resourceEvent.Snapshot.State?.Text);
+        }
+        finally
+        {
+            cts.Cancel();
+            await initialization.ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing | ConfigureAwaitOptions.ContinueOnCapturedContext);
+        }
     }
 
     [Fact]
@@ -516,4 +543,7 @@ public class EntraIdInitializationTests
 
         return [.. batches.Current.Select(line => (line.Content[(line.Content.IndexOf(' ') + 1)..], line.IsErrorMessage))];
     }
-}
+
+            // Stands in for Aspire.Hosting.Azure's internal exception, which Entra matches by type name.
+            private sealed class MissingConfigurationException(string message) : Exception(message);
+        }

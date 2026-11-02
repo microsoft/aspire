@@ -1,0 +1,15 @@
+﻿{
+  "mcp": {
+    "servers": {
+      "aspire": {
+        "type": "local",
+        "command": [
+          "aspire",
+          "agent",
+          "mcp"
+        ],
+        "disabled": true
+      }
+    }
+  }
+}

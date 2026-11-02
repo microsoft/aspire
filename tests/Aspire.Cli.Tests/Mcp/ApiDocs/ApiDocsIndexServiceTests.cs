@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Documentation;
 using Aspire.Cli.Documentation.ApiDocs;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Configuration;
@@ -67,6 +68,91 @@ public class ApiDocsIndexServiceTests
     }
 
     [Fact]
+    public async Task ListAsync_BuildsHierarchyForGo()
+    {
+        var service = CreateGoAndTypeScriptService();
+
+        var roots = await service.ListAsync("go");
+        var moduleChildren = await service.ListAsync("go/aspire.hosting");
+        var itemChildren = await service.ListAsync("go/aspire.hosting/containerresource");
+        var redisChildren = await service.ListAsync("go/aspire.hosting.redis");
+
+        Assert.Collection(
+            roots,
+            item =>
+            {
+                Assert.Equal("go/aspire.hosting", item.Id);
+                Assert.Equal(ApiReferenceLanguages.Go, item.Language);
+                Assert.Equal(ApiReferenceKinds.Module, item.Kind);
+                Assert.Equal("go", item.ParentId);
+            },
+            item =>
+            {
+                Assert.Equal("go/aspire.hosting.redis", item.Id);
+                Assert.Equal(ApiReferenceLanguages.Go, item.Language);
+                Assert.Equal(ApiReferenceKinds.Module, item.Kind);
+                Assert.Equal("go", item.ParentId);
+            });
+
+        Assert.Collection(
+            moduleChildren,
+            item =>
+            {
+                Assert.Equal("go/aspire.hosting/containerresource", item.Id);
+                Assert.Equal(ApiReferenceLanguages.Go, item.Language);
+                Assert.Equal(ApiReferenceKinds.Symbol, item.Kind);
+                Assert.Equal("go/aspire.hosting", item.ParentId);
+            },
+            item =>
+            {
+                Assert.Equal("go/aspire.hosting/environmentcallbackcontext", item.Id);
+                Assert.Equal(ApiReferenceLanguages.Go, item.Language);
+                Assert.Equal(ApiReferenceKinds.Member, item.Kind);
+                Assert.Equal("go/aspire.hosting", item.ParentId);
+            });
+
+        Assert.Collection(
+            itemChildren,
+            item =>
+            {
+                Assert.Equal("go/aspire.hosting/containerresource/withendpoint", item.Id);
+                Assert.Equal(ApiReferenceKinds.Member, item.Kind);
+                Assert.Equal("go/aspire.hosting/containerresource", item.ParentId);
+            },
+            item =>
+            {
+                Assert.Equal("go/aspire.hosting/containerresource/withenvironment", item.Id);
+                Assert.Equal(ApiReferenceKinds.Member, item.Kind);
+                Assert.Equal("go/aspire.hosting/containerresource", item.ParentId);
+            });
+
+        Assert.Collection(
+            redisChildren,
+            item =>
+            {
+                Assert.Equal("go/aspire.hosting.redis/addredis", item.Id);
+                Assert.Equal(ApiReferenceKinds.Member, item.Kind);
+                Assert.Equal("go/aspire.hosting.redis", item.ParentId);
+            });
+    }
+
+    [Fact]
+    public async Task ListAsync_ClassifiesGoAndTypeScriptItemsIndependently()
+    {
+        var service = CreateGoAndTypeScriptService();
+
+        var goChildren = await service.ListAsync("go/aspire.hosting");
+        var typeScriptChildren = await service.ListAsync("typescript/aspire.hosting");
+
+        var goItem = Assert.Single(goChildren, item => item.Id == "go/aspire.hosting/containerresource");
+        Assert.Equal(ApiReferenceKinds.Symbol, goItem.Kind);
+
+        var typeScriptItem = Assert.Single(typeScriptChildren);
+        Assert.Equal("typescript/aspire.hosting/containerresource", typeScriptItem.Id);
+        Assert.Equal(ApiReferenceKinds.Member, typeScriptItem.Kind);
+    }
+
+    [Fact]
     public async Task SearchAsync_RespectsLanguageFilterAndFindsDirectRouteItems()
     {
         var service = CreateService();
@@ -78,6 +164,84 @@ public class ApiDocsIndexServiceTests
         Assert.Equal("csharp/aspire.test.package/testtype/methods", result.Id);
         Assert.Equal(ApiReferenceKinds.MemberGroup, result.Kind);
         Assert.Empty(typeScriptResults);
+    }
+
+    [Fact]
+    public async Task SearchAsync_RespectsGoLanguageFilterAndFindsDirectRouteItems()
+    {
+        var service = CreateGoAndTypeScriptService();
+
+        var goResults = await service.SearchAsync("addredis", ApiReferenceLanguages.Go, 10);
+        var typeScriptResults = await service.SearchAsync("addredis", ApiReferenceLanguages.TypeScript, 10);
+        var allResults = await service.SearchAsync("addredis", topK: 10);
+
+        var goResult = Assert.Single(goResults);
+        Assert.Equal("go/aspire.hosting.redis/addredis", goResult.Id);
+        Assert.Equal(ApiReferenceLanguages.Go, goResult.Language);
+        Assert.Equal(ApiReferenceKinds.Member, goResult.Kind);
+        Assert.Equal("go/aspire.hosting.redis", goResult.ParentId);
+
+        var typeScriptResult = Assert.Single(typeScriptResults);
+        Assert.Equal("typescript/aspire.hosting.redis/addredis", typeScriptResult.Id);
+
+        Assert.Equal(2, allResults.Count);
+        Assert.Contains(allResults, result => result.Id == goResult.Id);
+        Assert.Contains(allResults, result => result.Id == typeScriptResult.Id);
+    }
+
+    [Fact]
+    public async Task SearchAsync_ListsTypeScriptBeforeGoWhenScoresTie()
+    {
+        var service = CreateGoAndTypeScriptService();
+
+        var results = await service.SearchAsync("addredis", topK: 10);
+
+        // Go routes mirror TypeScript routes segment for segment, so the twins score the same.
+        // The language order, not the "go/" versus "typescript/" id prefix, decides which is listed first.
+        Assert.Collection(
+            results,
+            result => Assert.Equal("typescript/aspire.hosting.redis/addredis", result.Id),
+            result => Assert.Equal("go/aspire.hosting.redis/addredis", result.Id));
+        Assert.Equal(results[0].Score, results[1].Score);
+    }
+
+    [Theory]
+    [InlineData("go")]
+    [InlineData("GO")]
+    [InlineData(" Go ")]
+    public async Task SearchAsync_AcceptsGoLanguageFilterCaseInsensitively(string language)
+    {
+        var service = CreateGoAndTypeScriptService();
+
+        var results = await service.SearchAsync("addredis", language, 10);
+
+        var result = Assert.Single(results);
+        Assert.Equal("go/aspire.hosting.redis/addredis", result.Id);
+    }
+
+    [Theory]
+    [InlineData("golang")]
+    [InlineData("rust")]
+    public async Task SearchAsync_RejectsUnsupportedLanguageFilter(string language)
+    {
+        var service = CreateGoAndTypeScriptService();
+
+        var results = await service.SearchAsync("addredis", language, 10);
+
+        Assert.Empty(results);
+    }
+
+    [Theory]
+    [InlineData("csharp", true)]
+    [InlineData("typescript", true)]
+    [InlineData("go", true)]
+    [InlineData("GO", true)]
+    [InlineData("golang", false)]
+    [InlineData("rust", false)]
+    [InlineData("", false)]
+    public void ApiReferenceLanguages_IsSupported_MatchesKnownLanguages(string language, bool expected)
+    {
+        Assert.Equal(expected, ApiReferenceLanguages.IsSupported(language));
     }
 
     [Fact]
@@ -358,6 +522,47 @@ public class ApiDocsIndexServiceTests
     }
 
     [Fact]
+    public async Task GetAsync_ForGoItemPage_ReturnsMarkdownFromConfiguredHost()
+    {
+        var (service, fetcher) = CreateGoContentService();
+
+        var item = await service.GetAsync("go/aspire.hosting/containerresource");
+
+        Assert.NotNull(item);
+        Assert.Equal(ApiReferenceLanguages.Go, item.Language);
+        Assert.Equal(ApiReferenceKinds.Symbol, item.Kind);
+        Assert.Equal("go/aspire.hosting", item.ParentId);
+        Assert.Equal("http://localhost:4321/reference/api/go/aspire.hosting/containerresource", item.Url);
+        Assert.Equal(["http://localhost:4321/reference/api/go/aspire.hosting/containerresource"], fetcher.RequestedPageUrls);
+        Assert.Equal(["http://localhost:4321/reference/api/go/aspire.hosting/containerresource.md"], fetcher.RequestedMarkdownUrls);
+        Assert.Contains("```go", item.Content, StringComparison.Ordinal);
+        Assert.Contains("Args() *List[string]", item.Content, StringComparison.Ordinal);
+        Assert.Contains("## Errors", item.Content, StringComparison.Ordinal);
+        Assert.Contains("[WithEndpoint](http://localhost:4321/reference/api/go/aspire.hosting/containerresource/withendpoint.md)", item.Content, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task GetAsync_ForGoMemberPage_ReturnsMarkdownFromConfiguredHost()
+    {
+        var (service, fetcher) = CreateGoContentService();
+
+        var item = await service.GetAsync("go/aspire.hosting/containerresource/withendpoint");
+
+        Assert.NotNull(item);
+        Assert.Equal(ApiReferenceLanguages.Go, item.Language);
+        Assert.Equal(ApiReferenceKinds.Member, item.Kind);
+        Assert.Equal("go/aspire.hosting/containerresource", item.ParentId);
+        Assert.Equal("http://localhost:4321/reference/api/go/aspire.hosting/containerresource/withendpoint", item.Url);
+        Assert.Equal(["http://localhost:4321/reference/api/go/aspire.hosting/containerresource/withendpoint"], fetcher.RequestedPageUrls);
+        Assert.Equal(["http://localhost:4321/reference/api/go/aspire.hosting/containerresource/withendpoint.md"], fetcher.RequestedMarkdownUrls);
+        Assert.Contains("## Options", item.Content, StringComparison.Ordinal);
+        Assert.Contains("`Tags` (`[]string`)", item.Content, StringComparison.Ordinal);
+        Assert.Contains("`Metadata` (`map[string]string`)", item.Content, StringComparison.Ordinal);
+        Assert.Contains("check `Err()` for the `error`", item.Content, StringComparison.Ordinal);
+        Assert.Contains("[ContainerResource](http://localhost:4321/reference/api/go/aspire.hosting/containerresource.md)", item.Content, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task EnsureIndexedAsync_RebuildsCachedIndexWhenSitemapChangesAcrossInstances()
     {
         var cache = new TestApiDocsCache();
@@ -423,6 +628,48 @@ public class ApiDocsIndexServiceTests
         Assert.Collection(
             items,
             item => Assert.Equal("csharp/aspire.cached.package", item.Id));
+    }
+
+    [Fact]
+    public async Task EnsureIndexedAsync_RebuildsIndexCachedByPreviousSchemaVersion()
+    {
+        var sitemap = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+              <url><loc>https://aspire.dev/reference/api/csharp/aspire.test.package/</loc></url>
+              <url><loc>https://aspire.dev/reference/api/go/aspire.hosting/</loc></url>
+            </urlset>
+            """;
+
+        var cache = new TestApiDocsCache();
+        await cache.SetIndexAsync(
+        [
+            new ApiReferenceItem
+            {
+                Id = "csharp/aspire.test.package",
+                Name = "aspire.test.package",
+                Language = ApiReferenceLanguages.CSharp,
+                Kind = ApiReferenceKinds.Package,
+                PageUrl = "https://aspire.dev/reference/api/csharp/aspire.test.package",
+                ParentId = ApiReferenceLanguages.CSharp
+            }
+        ]);
+
+        // Schema version 1 predates Go routes, so an index cached under it was built without them.
+        var previousFingerprint = SourceContentFingerprint.Compute(sitemap, schemaVersion: 1);
+        await cache.SetIndexSourceFingerprintAsync(previousFingerprint);
+
+        var service = new ApiDocsIndexService(
+            new SequenceApiDocsFetcher([sitemap]),
+            cache,
+            new ConfigurationBuilder().Build(),
+            NullLogger<ApiDocsIndexService>.Instance);
+
+        var goItems = await service.ListAsync("go");
+
+        var module = Assert.Single(goItems);
+        Assert.Equal("go/aspire.hosting", module.Id);
+        Assert.NotEqual(previousFingerprint, await cache.GetIndexSourceFingerprintAsync());
     }
 
     private static ApiDocsIndexService CreateService(IConfiguration? configuration = null)
@@ -577,6 +824,122 @@ public class ApiDocsIndexServiceTests
             });
 
         return new ApiDocsIndexService(fetcher, new TestApiDocsCache(), new ConfigurationBuilder().Build(), NullLogger<ApiDocsIndexService>.Instance);
+    }
+
+    private static ApiDocsIndexService CreateGoAndTypeScriptService()
+    {
+        var fetcher = new TestApiDocsFetcher(
+            """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+              <url><loc>https://aspire.dev/reference/api/go/</loc></url>
+              <url><loc>https://aspire.dev/reference/api/go/aspire.hosting/</loc></url>
+              <url><loc>https://aspire.dev/reference/api/go/aspire.hosting/containerresource/</loc></url>
+              <url><loc>https://aspire.dev/reference/api/go/aspire.hosting/containerresource/withendpoint/</loc></url>
+              <url><loc>https://aspire.dev/reference/api/go/aspire.hosting/containerresource/withenvironment/</loc></url>
+              <url><loc>https://aspire.dev/reference/api/go/aspire.hosting/environmentcallbackcontext/</loc></url>
+              <url><loc>https://aspire.dev/reference/api/go/aspire.hosting.redis/</loc></url>
+              <url><loc>https://aspire.dev/reference/api/go/aspire.hosting.redis/addredis/</loc></url>
+              <url><loc>https://aspire.dev/reference/api/typescript/aspire.hosting/</loc></url>
+              <url><loc>https://aspire.dev/reference/api/typescript/aspire.hosting/containerresource/</loc></url>
+              <url><loc>https://aspire.dev/reference/api/typescript/aspire.hosting.redis/</loc></url>
+              <url><loc>https://aspire.dev/reference/api/typescript/aspire.hosting.redis/addredis/</loc></url>
+            </urlset>
+            """,
+            new Dictionary<string, string>());
+
+        return new ApiDocsIndexService(fetcher, new TestApiDocsCache(), new ConfigurationBuilder().Build(), NullLogger<ApiDocsIndexService>.Instance);
+    }
+
+    private static (ApiDocsIndexService Service, TestApiDocsFetcher Fetcher) CreateGoContentService()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [ApiDocsSourceConfiguration.SitemapUrlConfigPath] = "http://localhost:4321/sitemap-0.xml"
+            })
+            .Build();
+
+        var fetcher = new TestApiDocsFetcher(
+            """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+              <url><loc>https://aspire.dev/reference/api/go/aspire.hosting/</loc></url>
+              <url><loc>https://aspire.dev/reference/api/go/aspire.hosting/containerresource/</loc></url>
+              <url><loc>https://aspire.dev/reference/api/go/aspire.hosting/containerresource/withendpoint/</loc></url>
+            </urlset>
+            """,
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["http://localhost:4321/reference/api/go/aspire.hosting/containerresource.md"] = """
+                    # ContainerResource
+
+                    `interface` -- Represents a container resource.
+
+                    ## Definition
+
+                    ```go
+                    type ContainerResource interface {
+                        handleReference
+                        Args() *List[string]
+                        Err() error
+                        WithEndpoint(options ...*WithEndpointOptions) ContainerResource
+                        WithEnvironment(name string, value any) ContainerResource
+                    }
+                    ```
+
+                    ## Methods
+
+                    - [WithEndpoint](/reference/api/go/aspire.hosting/containerresource/withendpoint.md) -- Adds a network endpoint.
+                    - [WithEnvironment](/reference/api/go/aspire.hosting/containerresource/withenvironment.md) -- Sets an environment variable.
+
+                    ## Errors
+
+                    Methods that return a handle record a failure and report it through `Err()`.
+
+                    ## Applies to
+
+                    - [aspire.hosting](/reference/api/go/aspire.hosting.md)
+                    """,
+                ["http://localhost:4321/reference/api/go/aspire.hosting/containerresource/withendpoint.md"] = """
+                    # WithEndpoint
+
+                    ## Definition
+
+                    ```go
+                    WithEndpoint(options ...*WithEndpointOptions) ContainerResource
+                    ```
+
+                    ## Signature
+
+                    ```go
+                    WithEndpoint(options ...*WithEndpointOptions) ContainerResource
+                    ```
+
+                    ## Parameters
+
+                    - `options` (`...*WithEndpointOptions`) -- Optional settings for the endpoint.
+
+                    ## Options
+
+                    - `Port` (`*float64`) -- The port to bind.
+                    - `Name` (`*string`) -- The endpoint name.
+                    - `Tags` (`[]string`) -- Labels applied to the endpoint.
+                    - `Metadata` (`map[string]string`) -- Additional endpoint metadata.
+
+                    ## Returns
+
+                    [ContainerResource](/reference/api/go/aspire.hosting/containerresource.md) -- The same handle, so calls can be chained. Failures are deferred: check `Err()` for the `error`.
+
+                    ## Defined on
+
+                    - [ContainerResource](/reference/api/go/aspire.hosting/containerresource.md)
+                    """
+            });
+
+        var service = new ApiDocsIndexService(fetcher, new TestApiDocsCache(), configuration, NullLogger<ApiDocsIndexService>.Instance);
+
+        return (service, fetcher);
     }
 
     private sealed class TestApiDocsFetcher(string sitemapContent, IReadOnlyDictionary<string, string> pageContent) : IApiDocsFetcher

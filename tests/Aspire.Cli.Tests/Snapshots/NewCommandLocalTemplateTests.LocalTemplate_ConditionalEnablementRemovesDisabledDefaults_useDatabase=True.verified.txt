@@ -1,0 +1,7 @@
+﻿{
+  settings.txt:
+Database enabled: True
+Mode: cloud
+Token: template-token
+
+}

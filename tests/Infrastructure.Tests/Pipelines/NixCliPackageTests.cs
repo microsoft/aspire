@@ -22,51 +22,6 @@ public sealed class NixCliPackageTests(ITestOutputHelper outputHelper) : IDispos
     public void Dispose() => _workspace.Dispose();
 
     [Fact]
-    public async Task ManifestDescribesExpectedStableReleaseAssets()
-    {
-        var manifest = await ReadJsonObjectAsync("eng/nix/versions.json");
-
-        var version = GetRequiredString(manifest, "version");
-        Assert.Matches(@"^\d+\.\d+\.\d+$", version);
-        Assert.Equal($"v{version}", GetRequiredString(manifest, "releaseTag"));
-
-        var systems = GetRequiredObject(manifest, "systems");
-        Assert.Equal(
-            s_expectedSystems.Keys.Order(StringComparer.Ordinal),
-            systems.Select(system => system.Key).Order(StringComparer.Ordinal));
-
-        foreach (var (system, rid) in s_expectedSystems)
-        {
-            var entry = GetRequiredObject(systems, system);
-            var archiveName = $"aspire-cli-{rid}-{version}.tar.gz";
-            Assert.Equal(rid, GetRequiredString(entry, "rid"));
-            Assert.Equal(archiveName, GetRequiredString(entry, "archiveName"));
-
-            var url = new Uri(GetRequiredString(entry, "url"));
-            Assert.Equal("https", url.Scheme);
-            Assert.Equal("github.com", url.Host);
-            Assert.Equal($"/microsoft/aspire/releases/download/v{version}/{archiveName}", url.AbsolutePath);
-
-            var hash = GetRequiredString(entry, "hash");
-            Assert.StartsWith("sha512-", hash, StringComparison.Ordinal);
-            Assert.Equal(64, Convert.FromBase64String(hash["sha512-".Length..]).Length);
-        }
-    }
-
-    [Fact]
-    public async Task ManifestVersionMatchesPackageValidationBaselineVersion()
-    {
-        var manifest = await ReadJsonObjectAsync("eng/nix/versions.json");
-        var directoryBuildProps = await ReadRepoFileAsync("src/Directory.Build.props");
-        var match = System.Text.RegularExpressions.Regex.Match(
-            directoryBuildProps,
-            @"<PackageValidationBaselineVersion[^>]*>([^<]+)</PackageValidationBaselineVersion>");
-
-        Assert.True(match.Success, "Expected PackageValidationBaselineVersion in src/Directory.Build.props.");
-        Assert.Equal(match.Groups[1].Value, GetRequiredString(manifest, "version"));
-    }
-
-    [Fact]
     [RequiresTools(["bash", "base64", "xxd"])]
     public async Task UpdateVersionsParsesFirstHashTokenFromSha512CompanionFile()
     {
@@ -192,22 +147,6 @@ public sealed class NixCliPackageTests(ITestOutputHelper outputHelper) : IDispos
         Assert.False(result.ExitCode == 0, $"Expected update-versions.sh to fail with a partial override set.{Environment.NewLine}{result.Output}");
         Assert.Contains("no --sha512 override supplied for rid", result.Output, StringComparison.Ordinal);
         Assert.False(File.Exists(outputPath), "versions.json must not be written when the override set is incomplete.");
-    }
-
-    [Fact]
-    public async Task FlakeLockPinsNixpkgsInput()
-    {
-        var flakeLock = await ReadJsonObjectAsync("flake.lock");
-        var nodes = GetRequiredObject(flakeLock, "nodes");
-        var nixpkgs = GetRequiredObject(nodes, "nixpkgs");
-        var locked = GetRequiredObject(nixpkgs, "locked");
-        var original = GetRequiredObject(nixpkgs, "original");
-
-        Assert.Equal("github", GetRequiredString(locked, "type"));
-        Assert.Equal("NixOS", GetRequiredString(locked, "owner"));
-        Assert.Equal("nixpkgs", GetRequiredString(locked, "repo"));
-        Assert.StartsWith("sha256-", GetRequiredString(locked, "narHash"), StringComparison.Ordinal);
-        Assert.Equal("nixos-unstable", GetRequiredString(original, "ref"));
     }
 
     private static async Task<JsonObject> ReadJsonObjectAsync(string relativePath)

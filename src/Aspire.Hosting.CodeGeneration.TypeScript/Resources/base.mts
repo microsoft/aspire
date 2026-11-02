@@ -1039,6 +1039,8 @@ export interface AspireCapabilityProjection {
     targetTypeId?: string;
     targetType?: AspireTypeRef;
     targetParameterName?: string;
+    /** Native provider phase invoked only with resource-scoped server authority. */
+    lifecyclePhase?: 'initialize' | 'allocated' | 'ready' | 'retiring';
     returnsBuilder?: boolean;
     owningTypeName?: string;
     expandedTargetTypes?: readonly AspireTypeRef[];

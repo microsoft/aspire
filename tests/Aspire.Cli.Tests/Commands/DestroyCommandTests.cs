@@ -31,6 +31,65 @@ public class DestroyCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(0, exitCode);
     }
 
+    [Theory]
+    [InlineData("destroy --yes --force", "--force")]
+    [InlineData("destroy --yes --unknown=value", "--unknown=value")]
+    [InlineData("destroy --yes unexpected", "unexpected")]
+    [InlineData("destroy --list-steps --force", "--force")]
+    [InlineData("destroy --list-steps --format 0", "either 'table' or 'json'")]
+    [InlineData("destroy --list-steps --format=0", "either 'table' or 'json'")]
+    [InlineData("destroy --list-steps --format 1", "either 'table' or 'json'")]
+    [InlineData("destroy --list-steps --format=1", "either 'table' or 'json'")]
+    [InlineData("destroy --list-steps --format=2", "either 'table' or 'json'")]
+    [InlineData("destroy --list-steps --format=table,json", "either 'table' or 'json'")]
+    public async Task DestroyCommandRejectsInvalidArgumentsBeforeStartingAppHost(string commandLine, string expectedError)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostStarted = false;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
+            {
+                RunAsyncCallback = (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, cancellationToken) =>
+                {
+                    appHostStarted = true;
+                    return Task.FromResult(0);
+                }
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(commandLine);
+
+        var error = Assert.Single(result.Errors);
+        Assert.Contains(expectedError, error.Message);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.False(appHostStarted);
+    }
+
+    [Theory]
+    [InlineData("destroy --yes --format json")]
+    [InlineData("destroy --yes --format=json")]
+    public async Task DestroyCommandRejectsFormatWithoutListSteps(string commandLine)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(commandLine);
+
+        var error = Assert.Single(result.Errors);
+        Assert.Equal(SharedCommandStrings.PipelineFormatRequiresListSteps, error.Message);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+    }
+
     [Fact]
     public async Task DestroyCommandFailsWithInvalidProjectFile()
     {

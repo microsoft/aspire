@@ -37,6 +37,57 @@ public partial class TraceDetailsTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task Render_ManySpanLogs_RendersButtonsWithoutTooltipText()
+    {
+        SetupTraceDetailsServices();
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        Services.GetRequiredService<DimensionManager>().InvokeOnViewportInformationChanged(viewport);
+        var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await repository.AddTracesAsync(new AddContext(),
+        [
+            new ResourceSpans
+            {
+                Resource = CreateResource(),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans = { CreateSpan(traceId: "1", spanId: "1-1", startTime: s_testTime, endTime: s_testTime.AddMinutes(1)) }
+                    }
+                }
+            }
+        ]);
+        var logs = new ScopeLogs { Scope = CreateScope(name: "test-scope") };
+        logs.LogRecords.Add(Enumerable.Range(0, 501).Select(index =>
+            CreateLogRecord(time: s_testTime.AddMilliseconds(index), traceId: "1", spanId: "1-1",
+                eventName: "Test event", message: "Test message")));
+        await repository.AddLogsAsync(new AddContext(),
+        [
+            new ResourceLogs { Resource = CreateResource(), ScopeLogs = { logs } }
+        ]);
+
+        var cut = Render<TraceDetail>(builder => builder
+            .Add(p => p.TraceId, Convert.ToHexString(Encoding.UTF8.GetBytes("1")))
+            .AddCascadingValue(viewport));
+
+        cut.WaitForAssertion(() =>
+        {
+            var buttons = cut.FindAll(".span-log-entry-button");
+            Assert.Equal(501, buttons.Count);
+            // Span logs can number in the thousands, so their buttons carry no tooltip text. The log's details open
+            // on click instead.
+            Assert.All(buttons, button =>
+            {
+                Assert.Null(button.GetAttribute("data-tooltip"));
+                Assert.Equal("Log entry details", button.GetAttribute("aria-label"));
+            });
+            // Only the bounded trace header keeps its rich Fluent tooltip.
+            Assert.Single(cut.FindComponents<FluentTooltip>());
+        });
+    }
+
+    [Fact]
     public async Task Render_HasTrace_SubscriptionRemovedOnDispose()
     {
         // Arrange
@@ -87,7 +138,7 @@ public partial class TraceDetailsTests : DashboardTestContext
     }
 
     [Fact]
-    public async Task Render_HasLogs_TooltipsLimitedPerSpan()
+    public async Task Render_HasLogs_RendersEveryLogMarkerOnEachSpan()
     {
         SetupTraceDetailsServices();
         Render<FluentTooltipProvider>();
@@ -149,18 +200,17 @@ public partial class TraceDetailsTests : DashboardTestContext
             var spanContainers = cut.FindAll(".span-button-container");
             Assert.Equal(2, spanContainers.Count);
 
-            var tooltips = cut.FindComponents<FluentTooltip>();
+            // Every log marker is rendered on each span. They carry no tooltip, so there's no per-span limit to apply:
+            // the log's details open on click.
             Assert.All(spanContainers, container =>
             {
                 var buttons = container.QuerySelectorAll(".span-log-entry-button");
                 Assert.Equal(501, buttons.Length);
-
-                var buttonIds = buttons.Select(button => button.Id).ToHashSet(StringComparer.Ordinal);
-                Assert.Equal(500, tooltips.Count(tooltip => buttonIds.Contains(tooltip.Instance.Anchor)));
-                for (var i = 0; i < buttons.Length; i++)
+                Assert.All(buttons, button =>
                 {
-                    Assert.Equal(i < 500 ? string.Empty : "Event - TestScope", buttons[i].GetAttribute("title"));
-                }
+                    Assert.Null(button.GetAttribute("title"));
+                    Assert.Null(button.GetAttribute("data-tooltip"));
+                });
             });
         });
     }

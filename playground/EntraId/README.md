@@ -9,6 +9,7 @@ Like HashR, both use ID-token-only OpenID Connect implicit sign-in: Entra return
 and the app validates its signature, issuer, audience, lifetime, and nonce before creating a local login session.
 Neither app exchanges an authorization code or requires a client secret.
 Neither app calls the other or a downstream API.
+An opt-in local certificate scenario below enables authorization-code redemption and a Microsoft Graph call in the .NET app; the default and Node sign-in flows stay unchanged.
 The two front ends have separate local sessions, although Entra ID can reuse your browser's single-sign-on session.
 
 ## Choose a mode in the AppHost
@@ -66,6 +67,18 @@ dotnet user-secrets set "Parameters:entra-web-client-id" "<web-client-id>"
 Set `useExistingApplication = false`. You do not need to create a registration manually or supply `entra-tenant-id` and
 `entra-web-client-id`; these parameters are only declared in existing mode. Previously saved values are ignored, not deleted.
 
+### Opt in to the local certificate scenario
+
+**Use a development-only registration, never production.** Choose a developer-specific **Tenant-scoped resource suffix** in the Azure configuration dialog, different from production. Different resource groups do not isolate registrations in the same tenant.
+
+Keep `useExistingApplication = false` and set `useLocalCertificate = true` in `EntraId.AppHost/AppHost.cs`. The scenario is only enabled in run mode.
+
+On the next run, Aspire provisions a short-lived developer certificate and the delegated Graph `User.Read` permission, and the .NET app switches to authorization code flow. Sign in again, consent when prompted (your tenant may require administrator approval), then select **Call Microsoft Graph /me**.
+
+The certificate renews automatically at startup when 24 hours or less remain. Restart the AppHost before it expires.
+
+Set `useLocalCertificate = false` to turn the scenario off. See the [integration's local certificate contract](../../src/Aspire.Hosting.Azure.EntraId/README.md#local-developer-certificate) for storage, permissions, and security details.
+
 ### Configure Azure provisioning
 
 You need an Azure subscription, permission to deploy to its resource group, permission to create application registrations
@@ -99,6 +112,12 @@ The AppHost calls `WithIdTokenIssuance()` because both front ends use ID-token-o
 client secret, expose API scopes, or grant API permissions. Both front ends wait for `entra-web` and receive its provisioned
 tenant/client IDs through `WithReference`.
 
+The AppHost also declares two application roles, `User` and `Admin`, with `WithAppRole`. Aspire only declares them; it doesn't
+assign them. To see a role in the .NET front end, open the `entra-web` enterprise application in the Entra admin center, select
+**Users and groups**, assign yourself a role, and sign in again: the page lists the roles in your ID token's `roles` claim.
+Without an assignment it shows none. To retire a role later, set `isEnabled: false` on it and redeploy before removing it; see the
+integration's README for the removal rules.
+
 Unchanged restarts reuse deployment state. Configuration updates preserve the registration's identity while the tenant,
 resource name, and suffix stay unchanged, independently of the resource group. Different developers should choose distinct
 suffixes to avoid sharing and overwriting the same registration. Changing the name or suffix targets another registration
@@ -125,8 +144,9 @@ that pins it to `https://localhost:7251`, whichever profile the AppHost runs wit
 forwards to the app. The Node front end uses `https://localhost:7252` for the same reason; Aspire supplies its HTTPS
 certificate and private key.
 
-Use a non-isolated run in either mode. `--isolated` randomizes endpoint ports, so it requires updating the callbacks in the
-existing registration or the creation-mode `WithRedirectUris` call to match the actual URLs.
+Use a non-isolated run in existing mode. `--isolated` randomizes endpoint ports, so it requires updating the callbacks in the
+existing registration. In creation mode the AppHost derives the callback hosts and ports from each front end's endpoint, so
+isolated runs register the actual URLs; the callback paths remain fixed in the AppHost's `WithRedirectUris` calls.
 
 From this directory, run `aspire run`, or `dotnet run --project EntraId.AppHost`. In the dashboard, open
 `webfrontend` at `https://localhost:7251`, select **Sign in with Microsoft Entra ID**, and view your signed-in identity.

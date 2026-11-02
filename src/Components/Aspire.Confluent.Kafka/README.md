@@ -130,6 +130,7 @@ In your AppHost project, install the `Aspire.Hosting.Kafka` library with [NuGet]
 
 ```dotnetcli
 dotnet add package Aspire.Hosting.Kafka
+dotnet add package Aspire.Hosting.Dotnet
 ```
 
 Then, in the _AppHost.cs_ file of `AppHost`, register an Apache Kafka container and consume the connection using the following methods:
@@ -137,7 +138,7 @@ Then, in the _AppHost.cs_ file of `AppHost`, register an Apache Kafka container 
 ```csharp
 var messaging = builder.AddKafka("messaging");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(messaging);
 ```
 

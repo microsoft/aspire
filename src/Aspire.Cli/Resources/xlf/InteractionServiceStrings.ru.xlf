@@ -1,50 +1,50 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="ru" original="../InteractionServiceStrings.resx">
     <body>
       <trans-unit id="AppHostConnectionLost">
         <source>The connection to the AppHost was lost: {0}</source>
-        <target state="needs-review-translation">Потеряно подключение к узлу приложения: {0}.</target>
+        <target state="translated">Подключение к AppHost потеряно: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostConnectionLostGeneric">
         <source>The connection to the application was lost.</source>
-        <target state="new">The connection to the application was lost.</target>
+        <target state="translated">Подключение к приложению потеряно.</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostNotCompatibleConsiderUpgrading">
         <source>The AppHost version is not compatible. Please upgrade the AppHost or Aspire CLI.</source>
-        <target state="needs-review-translation">Версия AppHost несовместима. Обновите хост приложений или Aspire CLI.</target>
+        <target state="translated">Версия AppHost несовместима. Обновите узел приложений или Aspire CLI.</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostNotCompatibleUpdateAppHost">
         <source>The AppHost is using an older Aspire version than the Aspire CLI. Update the AppHost's Aspire packages to continue.</source>
-        <target state="new">The AppHost is using an older Aspire version than the Aspire CLI. Update the AppHost's Aspire packages to continue.</target>
+        <target state="translated">AppHost использует более старую версию Aspire, чем Aspire CLI. Обновите пакеты Aspire для AppHost, чтобы продолжить.</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostNotCompatibleUpdateCli">
         <source>The Aspire CLI is older than the Aspire version used by the AppHost. Update the Aspire CLI to continue.</source>
-        <target state="new">The Aspire CLI is older than the Aspire version used by the AppHost. Update the Aspire CLI to continue.</target>
+        <target state="translated">Версия Aspire CLI старше версии Aspire, используемой AppHost. Обновите Aspire CLI, чтобы продолжить.</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostShutDown">
         <source>The application shut down.</source>
-        <target state="new">The application shut down.</target>
+        <target state="translated">Работа приложения завершена.</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireCLIVersion">
         <source>Aspire CLI version</source>
-        <target state="needs-review-translation">Версия CLI Aspire</target>
+        <target state="translated">Версия Aspire CLI</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireHostingSDKVersion">
         <source>Aspire.Hosting version</source>
-        <target state="needs-review-translation">Версия Aspire.Hosting</target>
+        <target state="translated">Версия Aspire.Hosting</target>
         <note />
       </trans-unit>
       <trans-unit id="BuildingAppHost">
         <source>Building AppHost...</source>
-        <target state="needs-review-translation">Создание хоста приложений...</target>
+        <target state="translated">Создание узла приложений...</target>
         <note />
       </trans-unit>
       <trans-unit id="CheckingCertificates">
@@ -84,32 +84,32 @@
       </trans-unit>
       <trans-unit id="ErrorConnectingToAppHost">
         <source>An error occurred while connecting to the AppHost: {0}</source>
-        <target state="needs-review-translation">При подключении к хосту приложений возникла ошибка. Возможно, хост приложения аварийно завершил работу до того, как стал доступен: {0}.</target>
+        <target state="translated">Произошла ошибка при подключении к AppHost: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="FindingAppHosts">
         <source>Finding AppHosts...</source>
-        <target state="needs-review-translation">Поиск хостов приложений...</target>
+        <target state="translated">Поиск хостов приложений...</target>
         <note />
       </trans-unit>
       <trans-unit id="InteractiveInputNotSupported">
         <source>This prompt requires interactive input but the CLI is running in non-interactive mode. This operation does not yet support non-interactive execution.</source>
-        <target state="needs-review-translation">Интерактивный ввод не поддерживается в этой среде. Используйте флаг --non-interactive или убедитесь, что CLI запущен в интерактивном терминале.</target>
+        <target state="translated">Для этого запроса требуется интерактивный ввод, но CLI выполняется в неинтерактивном режиме. Эта операция пока не поддерживает неинтерактивное выполнение.</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidSelection">
         <source>Invalid selection.</source>
-        <target state="new">Invalid selection.</target>
+        <target state="translated">Недопустимый выбор.</target>
         <note />
       </trans-unit>
       <trans-unit id="MoreInfoNewCliVersion">
         <source>[dim]For more information, see: {0}[/]</source>
-        <target state="needs-review-translation">[dim]Дополнительные сведения: [link]{0}[/][/]</target>
+        <target state="translated">[dim]Дополнительные сведения: {0}[/]</target>
         <note>Do not translate [dim]. Also leave [/] as-is. {0} is a pre-formatted link</note>
       </trans-unit>
       <trans-unit id="NewCliVersionAvailable">
         <source>[yellow]A new version of Aspire is available: {0}[/]</source>
-        <target state="new">[yellow]A new version of Aspire is available: {0}[/]</target>
+        <target state="translated">[yellow]Доступна новая версия Aspire: {0}[/]</target>
         <note>Do not translate [yellow] and also leave [/] as-is. {0} is the version number</note>
       </trans-unit>
       <trans-unit id="NoItemsAvailableForSelection">
@@ -119,32 +119,32 @@
       </trans-unit>
       <trans-unit id="NoSupportedAppHostsFound">
         <source>No supported app hosts were found.</source>
-        <target state="new">No supported app hosts were found.</target>
+        <target state="translated">Поддерживаемые узлы приложений не найдены.</target>
         <note />
       </trans-unit>
       <trans-unit id="NonInteractiveAvailableValues">
         <source>Available values: {0}</source>
-        <target state="new">Available values: {0}</target>
+        <target state="translated">Допустимые значения: {0}</target>
         <note>{0} is a comma-separated list of valid values</note>
       </trans-unit>
       <trans-unit id="NonInteractiveInvalidValue">
         <source>The value '{0}' is not valid for {1}.</source>
-        <target state="new">The value '{0}' is not valid for {1}.</target>
+        <target state="translated">Значение '{0}' недопустимо для {1}.</target>
         <note>{0} is the provided value. {1} is the option/argument display name.</note>
       </trans-unit>
       <trans-unit id="NonInteractiveOptionRequired">
         <source>The {0} option must be specified when running in non-interactive mode.</source>
-        <target state="new">The {0} option must be specified when running in non-interactive mode.</target>
+        <target state="translated">При выполнении в неинтерактивном режиме необходимо указать параметр {0}.</target>
         <note>{0} is the option/argument display name like '--publisher' or '&lt;integration&gt;'</note>
       </trans-unit>
       <trans-unit id="OpenAppHostLog">
         <source>Open AppHost Log</source>
-        <target state="new">Open AppHost Log</target>
+        <target state="translated">Открыть журнал AppHost</target>
         <note />
       </trans-unit>
       <trans-unit id="OpenCliLog">
         <source>Open CLI Log</source>
-        <target state="new">Open CLI Log</target>
+        <target state="translated">Открыть журнал CLI</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationCancelled">
@@ -154,12 +154,12 @@
       </trans-unit>
       <trans-unit id="ProjectCouldNotBeBuilt">
         <source>The project could not be built.</source>
-        <target state="new">The project could not be built.</target>
+        <target state="translated">Не удалось выполнить сборку проекта.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectCouldNotBeCreated">
         <source>The app could not be created.</source>
-        <target state="new">The app could not be created.</target>
+        <target state="translated">Не удалось создать приложение.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectOptionDoesntExist">
@@ -169,27 +169,27 @@
       </trans-unit>
       <trans-unit id="ProjectOptionNotSpecifiedMultipleAppHostsFound">
         <source>The --apphost option was not specified and multiple AppHost project files were detected.</source>
-        <target state="needs-review-translation">Параметр --apphost не указан, и обнаружено несколько файлов проекта app host.</target>
+        <target state="translated">Параметр --apphost не указан, и обнаружено несколько файлов проекта AppHost.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectOptionNotSpecifiedNoAppHostsFound">
         <source>The --apphost option was not specified and no AppHost project files were detected.</source>
-        <target state="new">The --apphost option was not specified and no AppHost project files were detected.</target>
+        <target state="translated">Параметр --apphost не указан, и файлы проекта AppHost не обнаружены.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectOptionSpecifiedDirectoryContainsMultipleAppHosts">
         <source>The --apphost option specified a directory that contains multiple AppHost project files.</source>
-        <target state="new">The --apphost option specified a directory that contains multiple AppHost project files.</target>
+        <target state="translated">Параметром --apphost указан каталог, содержащий несколько файлов проекта AppHost.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectOptionSpecifiedDirectoryContainsNoAppHosts">
         <source>The --apphost option specified a directory that does not contain any AppHost project files.</source>
-        <target state="new">The --apphost option specified a directory that does not contain any AppHost project files.</target>
+        <target state="translated">Параметром --apphost указан каталог, не содержащий файлы проекта AppHost.</target>
         <note />
       </trans-unit>
       <trans-unit id="RequiredCapability">
         <source>Required capability</source>
-        <target state="needs-review-translation">Нужная возможность</target>
+        <target state="translated">Требуемая возможность</target>
         <note />
       </trans-unit>
       <trans-unit id="SearchingProjects">
@@ -199,7 +199,7 @@
       </trans-unit>
       <trans-unit id="SeeAppHostLogsAt">
         <source>See AppHost logs at {0}</source>
-        <target state="new">See AppHost logs at {0}</target>
+        <target state="translated">Журналы AppHost: {0}</target>
         <note>{0} is the log file path of the CLI process managing the AppHost</note>
       </trans-unit>
       <trans-unit id="SeeLogsAt">
@@ -209,12 +209,12 @@
       </trans-unit>
       <trans-unit id="SelectAppHostToUse">
         <source>Select an AppHost to use:</source>
-        <target state="needs-review-translation">Выберите хост приложений для использования:</target>
+        <target state="translated">Выберите хост приложений для использования:</target>
         <note />
       </trans-unit>
       <trans-unit id="SpecifiedProjectFileNotAppHostProject">
         <source>The specified project file is not an Aspire AppHost project.</source>
-        <target state="needs-review-translation">Указанный файл проекта не является проектом Aspire AppHost.</target>
+        <target state="translated">Указанный файл проекта не является проектом Aspire AppHost.</target>
         <note />
       </trans-unit>
       <trans-unit id="StoppingAspire">
@@ -234,7 +234,7 @@
       </trans-unit>
       <trans-unit id="UnbuildableAppHostsDetected">
         <source>No AppHosts were found (there may be AppHost project files with syntax errors/invalid SDK versions).</source>
-        <target state="needs-review-translation">Хосты приложений не найдены (возможно, есть файлы проектов хостов приложений с синтаксическими ошибками или недопустимыми версиями SDK).</target>
+        <target state="translated">AppHost не найдены (возможно, есть файлы проекта AppHost с синтаксическими ошибками или недопустимыми версиями SDK).</target>
         <note />
       </trans-unit>
       <trans-unit id="UnexpectedErrorOccurred">
@@ -244,12 +244,12 @@
       </trans-unit>
       <trans-unit id="UpdatedSettingsFile">
         <source>Updated settings file at {0}.</source>
-        <target state="new">Updated settings file at {0}.</target>
+        <target state="translated">Файл параметров обновлен в {0}.</target>
         <note>{0} is a path</note>
       </trans-unit>
       <trans-unit id="WaitingForDebuggerToAttachToAppHost">
         <source>Waiting for debugger to attach to AppHost process</source>
-        <target state="needs-review-translation">Ожидание подключения отладчика к процессу хоста приложения</target>
+        <target state="translated">Ожидание подключения отладчика к процессу AppHost</target>
         <note />
       </trans-unit>
     </body>

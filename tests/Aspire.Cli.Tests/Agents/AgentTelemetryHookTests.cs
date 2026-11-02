@@ -17,7 +17,7 @@ public class AgentTelemetryHookTests
     [InlineData("""{"toolName":"Read","tool_input":{"file_path":"/skills/third-party/SKILL.md"}}""")]
     public void UnrelatedOrMalformedEventsDoNotInitializeCli(string payload)
     {
-        Assert.Null(AgentTelemetryHook.Classify(payload, false, AgentTelemetryHook.DefaultMaxPayloadCharacters));
+        Assert.Null(AgentTelemetryHook.Classify(payload, new TestEnvironment(), AgentTelemetryHook.DefaultMaxPayloadCharacters));
     }
 
     [Theory]
@@ -25,18 +25,37 @@ public class AgentTelemetryHookTests
     [InlineData("tool_name", "tool_input", "Skill", """{"skill":"aspire:aspire"}""")]
     public void SkillEventsPreserveArguments(string nameProperty, string inputProperty, string tool, string input)
     {
-        var args = AgentTelemetryHook.Classify($$"""{"{{nameProperty}}":"{{tool}}","{{inputProperty}}":{{input}}}""", true, AgentTelemetryHook.DefaultMaxPayloadCharacters);
+        var args = AgentTelemetryHook.Classify($$"""{"{{nameProperty}}":"{{tool}}","{{inputProperty}}":{{input}}}""", new TestEnvironment(), AgentTelemetryHook.DefaultMaxPayloadCharacters);
         Assert.NotNull(args);
         Assert.Equal("aspire", args[Array.IndexOf(args, "--skill-name") + 1]);
         Assert.Equal("skill_invocation", args[Array.IndexOf(args, "--event-type") + 1]);
+    }
+
+    [Theory]
+    [InlineData("github_copilot_app_agent", "copilot-app")]
+    [InlineData("another_agent", "copilot-cli")]
+    [InlineData(null, "copilot-cli")]
+    public void SkillEventsUseAppMarkerBeforeCopilotCliFallback(string? aiAgent, string expectedClient)
+    {
+        var environment = new TestEnvironment(new Dictionary<string, string?>
+        {
+            ["AI_AGENT"] = aiAgent
+        });
+        var args = AgentTelemetryHook.Classify(
+            """{"toolName":"skill","toolArgs":"{\"skill\":\"aspire\"}"}""",
+            environment,
+            AgentTelemetryHook.DefaultMaxPayloadCharacters);
+
+        Assert.NotNull(args);
+        Assert.Equal(expectedClient, args[Array.IndexOf(args, "--client-name") + 1]);
     }
 
     [Fact]
     public void OversizedPayloadIsIgnored()
     {
         const string payload = """{"toolName":"skill","toolArgs":{"skill":"aspire"}}""";
-        Assert.NotNull(AgentTelemetryHook.Classify(payload, false, payload.Length));
-        Assert.Null(AgentTelemetryHook.Classify(payload, false, payload.Length - 1));
+        Assert.NotNull(AgentTelemetryHook.Classify(payload, new TestEnvironment(), payload.Length));
+        Assert.Null(AgentTelemetryHook.Classify(payload, new TestEnvironment(), payload.Length - 1));
     }
 
     [Fact]
@@ -78,7 +97,7 @@ public class AgentTelemetryHookTests
     [Fact]
     public void MalformedMcpArgumentsDoNotLoseToolInvocation()
     {
-        var args = AgentTelemetryHook.Classify("""{"toolName":"aspire-list_resources","toolArgs":"not json"}""", true, AgentTelemetryHook.DefaultMaxPayloadCharacters);
+        var args = AgentTelemetryHook.Classify("""{"toolName":"aspire-list_resources","toolArgs":"not json"}""", new TestEnvironment(), AgentTelemetryHook.DefaultMaxPayloadCharacters);
         Assert.NotNull(args);
         Assert.Equal("aspire-list_resources", args[Array.IndexOf(args, "--tool-name") + 1]);
     }
@@ -91,7 +110,7 @@ public class AgentTelemetryHookTests
     {
         var args = AgentTelemetryHook.Classify(
             $$"""{"toolName":"aspire-list_resources","sessionId":"{{sessionId}}"}""",
-            true, AgentTelemetryHook.DefaultMaxPayloadCharacters);
+            new TestEnvironment(), AgentTelemetryHook.DefaultMaxPayloadCharacters);
         Assert.NotNull(args);
         var index = Array.IndexOf(args, "--session-id");
         Assert.Equal(expected, index >= 0);
@@ -102,13 +121,18 @@ public class AgentTelemetryHookTests
     }
 
     [Theory]
-    [InlineData("1")]
-    [InlineData("TrUe")]
-    public async Task HookUsesInjectedClientEnvironmentAndReturnsBenignResponseOnFailure(string copilotCli)
+    [InlineData("1", null, "copilot-cli")]
+    [InlineData("TrUe", null, "copilot-cli")]
+    [InlineData(null, "github_copilot_app_agent", "copilot-app")]
+    [InlineData("1", "github_copilot_app_agent", "copilot-app")]
+    [InlineData("1", "another_agent", "copilot-cli")]
+    [InlineData(null, "another_agent", "claude-code")]
+    public async Task HookUsesInjectedClientEnvironmentAndReturnsBenignResponseOnFailure(string? copilotCli, string? aiAgent, string expectedClient)
     {
         var hook = new AgentTelemetryHook(new TestEnvironment(new Dictionary<string, string?>
         {
-            ["COPILOT_CLI"] = copilotCli
+            ["COPILOT_CLI"] = copilotCli,
+            ["AI_AGENT"] = aiAgent
         }));
         using var input = new StringReader("""{"hook_event_name":"PostToolUse","tool_name":"mcp__aspire__list_resources"}""");
         using var output = new StringWriter();
@@ -122,7 +146,7 @@ public class AgentTelemetryHookTests
         }));
 
         Assert.NotNull(recordedArgs);
-        Assert.Equal("copilot-cli", recordedArgs[Array.IndexOf(recordedArgs, "--client-name") + 1]);
+        Assert.Equal(expectedClient, recordedArgs[Array.IndexOf(recordedArgs, "--client-name") + 1]);
         Assert.Equal("""{"continue":true}""" + Environment.NewLine, output.ToString());
         Assert.Equal("Agent telemetry hook failed (IOException)." + Environment.NewLine, error.ToString());
     }
@@ -215,7 +239,7 @@ public class AgentTelemetryHookTests
     {
         const string payload = """{"toolName":"skill","toolArgs":{"skill":"aspire"}}""";
         var padded = payload.PadRight(AgentTelemetryHook.DefaultMaxPayloadCharacters + 1);
-        Assert.Null(AgentTelemetryHook.Classify(padded, false, AgentTelemetryHook.DefaultMaxPayloadCharacters));
-        Assert.NotNull(AgentTelemetryHook.Classify(padded, false, padded.Length));
+        Assert.Null(AgentTelemetryHook.Classify(padded, new TestEnvironment(), AgentTelemetryHook.DefaultMaxPayloadCharacters));
+        Assert.NotNull(AgentTelemetryHook.Classify(padded, new TestEnvironment(), padded.Length));
     }
 }

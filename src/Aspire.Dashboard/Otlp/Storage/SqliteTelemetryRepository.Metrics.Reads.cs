@@ -13,9 +13,10 @@ namespace Aspire.Dashboard.Otlp.Storage;
 public sealed partial class SqliteTelemetryRepository
 {
     private const int MaxMetricReadBatchSize = 500;
-    private const string MetricPointRangeFilterSql = "p.start_time_unix_nano <= @EndUnixNano AND p.end_time_unix_nano >= r.start_time_unix_nano";
-    private const string MetricSourcePointRangeFilterSql = "source.start_time_unix_nano <= @EndUnixNano AND source.end_time_unix_nano >= r.start_time_unix_nano";
-    private const string SelectedMetricPointsCteSql = $"""
+    // Buckets are only an index prefilter. Keep exact interval checks for windows within a bucket.
+    private static readonly string s_metricPointRangeFilterSql = string.Create(CultureInfo.InvariantCulture, $"p.start_time_unix_nano <= @EndUnixNano AND p.end_time_unix_nano >= r.start_time_unix_nano AND p.end_time_bucket >= r.start_time_unix_nano / {MetricTimeBucketWidthUnixNano}");
+    private static readonly string s_metricSourcePointRangeFilterSql = string.Create(CultureInfo.InvariantCulture, $"source.start_time_unix_nano <= @EndUnixNano AND source.end_time_unix_nano >= r.start_time_unix_nano AND source.end_time_bucket >= r.start_time_unix_nano / {MetricTimeBucketWidthUnixNano}");
+    private static readonly string s_selectedMetricPointsCteSql = $"""
         selected_metric_points AS (
             SELECT
                 p.point_id,
@@ -35,11 +36,11 @@ public sealed partial class SqliteTelemetryRepository
             JOIN telemetry_metric_dimensions d ON d.dimension_id = p.dimension_id
             JOIN telemetry_metric_instruments i ON i.instrument_id = d.instrument_id
             JOIN metric_dimension_query_ranges r ON r.dimension_id = p.dimension_id
-            WHERE {MetricPointRangeFilterSql}
+            WHERE {s_metricPointRangeFilterSql}
         )
         """;
-    private const string EffectiveMetricPointsCteSql = $"""
-        {SelectedMetricPointsCteSql},
+    private static readonly string s_effectiveMetricPointsCteSql = $"""
+        {s_selectedMetricPointsCteSql},
         ranked_metric_points AS (
             SELECT
                 p.*,
@@ -59,7 +60,7 @@ public sealed partial class SqliteTelemetryRepository
     // Cumulative representatives start at their earliest source interval, not the rounded bucket
     // boundary: rounding a reset at 3.5s to 3s would lower the preceding window's count.
     private static readonly string s_rolledUpMetricPointsCteSql = $"""
-        {EffectiveMetricPointsCteSql},
+        {s_effectiveMetricPointsCteSql},
         bucketed_metric_points AS (
             SELECT
                 p.*,
@@ -107,8 +108,8 @@ public sealed partial class SqliteTelemetryRepository
             WHERE p.rollup_rank = 1
         )
         """;
-    private const string FullFidelityMetricPointsCteSql = $"""
-        {EffectiveMetricPointsCteSql},
+    private static readonly string s_fullFidelityMetricPointsCteSql = $"""
+        {s_effectiveMetricPointsCteSql},
         rolled_up_metric_points AS (
             SELECT
                 p.point_id,
@@ -167,10 +168,22 @@ public sealed partial class SqliteTelemetryRepository
     private DateTime? GetInstrumentLatestEndTimeFromDatabase(ResourceKey resourceKey, string meterName, string instrumentName)
     {
         using var connection = _database.OpenConnection();
+        // The highest bucket contains the maximum exact end time, but the newest point ID may not.
+        // Keep both seeks inside a per-dimension scalar query: a top-level MAX can make SQLite
+        // scan all points and execute the correlated bucket lookup once per point.
         var endTimeUnixNano = connection.QuerySingleOrDefault<long?>("""
-            SELECT MAX(p.end_time_unix_nano)
-            FROM telemetry_metric_points p
-            JOIN telemetry_metric_dimensions d ON d.dimension_id = p.dimension_id
+            SELECT MAX((
+                SELECT MAX(p.end_time_unix_nano)
+                FROM telemetry_metric_points p
+                WHERE p.dimension_id = d.dimension_id
+                  AND p.end_time_bucket = (
+                      SELECT end_time_bucket
+                      FROM telemetry_metric_points
+                      WHERE dimension_id = d.dimension_id
+                      ORDER BY end_time_bucket DESC
+                      LIMIT 1)
+            ))
+            FROM telemetry_metric_dimensions d
             JOIN telemetry_metric_instruments i ON i.instrument_id = d.instrument_id
             JOIN telemetry_resources r ON r.resource_id = i.resource_id
             JOIN telemetry_scopes s ON s.scope_id = i.scope_id
@@ -233,7 +246,7 @@ public sealed partial class SqliteTelemetryRepository
             dimensionCursors,
             startTime,
             queryParameters);
-        var metricPointsCteSql = dataPointInterval is null ? FullFidelityMetricPointsCteSql : s_rolledUpMetricPointsCteSql;
+        var metricPointsCteSql = dataPointInterval is null ? s_fullFidelityMetricPointsCteSql : s_rolledUpMetricPointsCteSql;
         var pointRecords = connection.Query<MetricPointDataRecord>($"""
             WITH {dimensionQueryRangesCteSql},
             {metricPointsCteSql}
@@ -473,6 +486,8 @@ public sealed partial class SqliteTelemetryRepository
         IReadOnlyList<MetricPointDataRecord> points,
         bool populateExemplarAttributes)
     {
+        // Filter intervals through the time-window index before loading points and exemplars
+        // to avoid scanning their history.
         var records = connection.Query<MetricExemplarRecord>($"""
             WITH {dimensionQueryRangesCteSql}
             SELECT
@@ -486,12 +501,11 @@ public sealed partial class SqliteTelemetryRepository
                 e.span_id AS SpanId,
                 e.trace_id AS TraceId
             FROM telemetry_metric_exemplars e
-            JOIN telemetry_metric_points source ON source.point_id = e.point_id
+            JOIN telemetry_metric_points source INDEXED BY ix_telemetry_metric_points_time ON source.point_id = e.point_id
             JOIN metric_dimension_query_ranges r ON r.dimension_id = source.dimension_id
-            WHERE {MetricSourcePointRangeFilterSql}
+            WHERE {s_metricSourcePointRangeFilterSql}
               AND e.time_unix_nano >= r.start_time_unix_nano
-              AND e.time_unix_nano <= @EndUnixNano
-            ORDER BY source.dimension_id, source.start_time_unix_nano, e.exemplar_id;
+              AND e.time_unix_nano <= @EndUnixNano;
             """, queryParameters, transaction).AsList();
         var pointIntervalUnixNano = dataPointInterval is { } interval ? interval.Ticks * TimeSpan.NanosecondsPerTick : (long?)null;
         // Match the SQL partition using source timestamps, independently of the displayed start.

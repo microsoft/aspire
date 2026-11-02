@@ -39,7 +39,11 @@ public sealed class DashboardCommandExecutor(
 
     /// <summary>Executes a resource command with confirmation and result notifications.</summary>
     /// <returns>True only when the command completes successfully.</returns>
-    public async Task<bool> ExecuteAsync(ResourceViewModel resource, CommandViewModel command, Func<ResourceViewModel, string> getResourceName)
+    public async Task<bool> ExecuteAsync(
+        ResourceViewModel resource,
+        CommandViewModel command,
+        Func<ResourceViewModel, string> getResourceName,
+        ExecuteResourceCommandOptions? options = null)
     {
         var executingCommandKey = (resource.Name, command.Name);
         lock (_lock)
@@ -59,7 +63,7 @@ public sealed class DashboardCommandExecutor(
 
             try
             {
-                var succeeded = await ExecuteAsyncCore(resource, command, getResourceName).ConfigureAwait(false);
+                var succeeded = await ExecuteAsyncCore(resource, command, getResourceName, options).ConfigureAwait(false);
                 telemetryService.SetOperationStatus(activity, ActivityStatusCode.Ok);
                 return succeeded;
             }
@@ -89,7 +93,11 @@ public sealed class DashboardCommandExecutor(
         }
     }
 
-    public async Task<bool> ExecuteAsyncCore(ResourceViewModel resource, CommandViewModel command, Func<ResourceViewModel, string> getResourceName)
+    public async Task<bool> ExecuteAsyncCore(
+        ResourceViewModel resource,
+        CommandViewModel command,
+        Func<ResourceViewModel, string> getResourceName,
+        ExecuteResourceCommandOptions? commandOptions = null)
     {
         if (!string.IsNullOrWhiteSpace(command.ConfirmationMessage))
         {
@@ -145,7 +153,7 @@ public sealed class DashboardCommandExecutor(
                 resource.Name,
                 resource.ResourceType,
                 command,
-                new ExecuteResourceCommandOptions(),
+                commandOptions ?? new ExecuteResourceCommandOptions(),
                 executeCommandCts.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (executeCommandCts.IsCancellationRequested)

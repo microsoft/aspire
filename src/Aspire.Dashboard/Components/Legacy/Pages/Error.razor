@@ -1,0 +1,28 @@
+﻿@page "/legacy/error"
+@layout Aspire.Dashboard.Components.Legacy.Layout.LegacyEmptyLayout
+@attribute [AllowAnonymous]
+@inject IStringLocalizer<Dashboard.Resources.Routes> Loc
+
+<PageTitle>@Loc[nameof(Dashboard.Resources.Routes.ErrorHandlerPageTitle)]</PageTitle>
+
+<div class="error-backdrop standalone-backdrop">
+    <div class="error-container standalone-surface">
+        <div class="error-logo standalone-logo">
+            <AspireLogo Height="128" Width="128" />
+        </div>
+        <div class="error-entry-container standalone-entry">
+            <h1>@Loc[nameof(Dashboard.Resources.Routes.ErrorHandlerPageTitle)]</h1>
+            <h5>@Loc[nameof(Dashboard.Resources.Routes.ErrorHandlerPageSubtitle)]</h5>
+
+            @if (ShowRequestId)
+            {
+                <p>
+                    <strong>@Loc[nameof(Dashboard.Resources.Routes.ErrorHandlerPageRequestId)]</strong> <code>@RequestId</code>
+                </p>
+            }
+        </div>
+    </div>
+    <div class="version-info">
+        @VersionHelpers.DashboardDisplayVersion
+    </div>
+</div>

@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Bundles;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Layout;
 using Aspire.Cli.NuGet;
@@ -16,6 +17,7 @@ namespace Aspire.Cli.Projects;
 /// </summary>
 internal interface IAppHostServerProjectFactory
 {
+    string GetInstanceIdentifier(string appPath);
     Task<IAppHostServerProject> CreateAsync(string appPath, CancellationToken cancellationToken = default);
     Task<IAppHostServerProject> CreateAsync(string appPath, FileInfo appHostFile, CancellationToken cancellationToken);
     Task<IAppHostServerProject> CreateAsync(string appPath, string? restoreRootConfigDirectory, CancellationToken cancellationToken);
@@ -36,6 +38,16 @@ internal sealed class AppHostServerProjectFactory(
     IProcessExecutionFactory processExecutionFactory,
     ILoggerFactory loggerFactory) : IAppHostServerProjectFactory
 {
+    public string GetInstanceIdentifier(string appPath)
+    {
+        if (IsNativeServerEnabled(appPath) || AspireRepositoryDetector.DetectRepositoryRoot(appPath) is null)
+        {
+            return appPath;
+        }
+
+        return DotNetBasedAppHostServerProject.GetDefaultInstanceIdentifier(appPath);
+    }
+
     public Task<IAppHostServerProject> CreateAsync(string appPath, CancellationToken cancellationToken = default)
         => CreateAsync(
             appPath,
@@ -70,6 +82,12 @@ internal sealed class AppHostServerProjectFactory(
         string workloadId,
         CancellationToken cancellationToken)
     {
+        if (IsNativeServerEnabled(appPath))
+        {
+            return await NativeAppHostServerProject.CreateAsync(appPath, bundleService, environment,
+                processExecutionFactory, loggerFactory.CreateLogger<NativeAppHostServerProject>(), cancellationToken).ConfigureAwait(false);
+        }
+
         var socketPath = CliPathHelper.CreateGuestAppHostSocketPath("apphost.sock");
 
         // Priority 1: Check for dev mode (ASPIRE_REPO_ROOT or running from Aspire source repo)
@@ -134,5 +152,12 @@ internal sealed class AppHostServerProjectFactory(
             layoutLease?.Dispose();
             throw;
         }
+    }
+
+    private static bool IsNativeServerEnabled(string appPath)
+    {
+        var configDirectory = ConfigurationHelper.GetConfigRootDirectory(new DirectoryInfo(appPath));
+
+        return KnownFeatures.IsAppHostServerV2Enabled(AspireConfigFile.Load(configDirectory.FullName));
     }
 }

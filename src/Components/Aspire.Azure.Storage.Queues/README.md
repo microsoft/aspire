@@ -120,16 +120,19 @@ In your AppHost project, install the Aspire Azure Storage Hosting library with [
 
 ```dotnetcli
 dotnet add package Aspire.Hosting.Azure.Storage
+dotnet add package Aspire.Hosting.Dotnet
 ```
 
 Then, in the _AppHost.cs_ file of `AppHost`, add a Storage Queue connection and consume the connection using the following methods:
 
 ```csharp
-var queue = builder.ExecutionContext.IsPublishMode
+using Aspire.Hosting.ApplicationModel;
+
+IResourceBuilder<IResourceWithConnectionString> queue = builder.ExecutionContext.IsPublishMode
     ? builder.AddAzureStorage("storage").AddQueues("queue")
     : builder.AddConnectionString("queue");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(queue);
 ```
 

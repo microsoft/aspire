@@ -45,7 +45,11 @@ jobs:
       jobs:
       - job: BuildNative_${{ replace(targetRid, '-', '_') }}
         displayName: ${{ replace(targetRid, '-', '_') }}
-        timeoutInMinutes: 60
+        # Signing and notarization can push successful macOS jobs close to an hour.
+        ${{ if eq(parameters.agentOs, 'macos') }}:
+          timeoutInMinutes: 90
+        ${{ else }}:
+          timeoutInMinutes: 60
 
         variables:
         - TeamName: ${{ parameters.teamName }}
@@ -204,6 +208,17 @@ jobs:
 
           - script: >-
               $(Build.SourcesDirectory)/$(dotnetScript)
+              msbuild
+              $(Build.SourcesDirectory)/eng/Bundle.proj
+              /t:_PublishAppHostServer
+              /p:Configuration=$(_BuildConfig)
+              /p:TargetRid=${{ targetRid }}
+              ${{ parameters.extraBuildArgs }}
+              /bl:$(Build.Arcade.LogsPath)PublishAppHostServer.binlog
+            displayName: Prepare AppHost Server v2
+
+          - script: >-
+              $(Build.SourcesDirectory)/$(dotnetScript)
               publish
               $(Build.SourcesDirectory)/src/Aspire.TerminalHost/Aspire.TerminalHost.csproj
               -c $(_BuildConfig)
@@ -277,9 +292,14 @@ jobs:
           - ${{ if and(eq(parameters.codeSign, true), eq(parameters.agentOs, 'macos')) }}:
             - pwsh: |
                 Remove-Item -LiteralPath "$(Build.SourcesDirectory)/artifacts/bin/Aspire.Dashboard/${{ targetRid }}/Release/net11.0/${{ targetRid }}/publish/Aspire.Dashboard.dSYM" -Recurse -Force
-                $symbols = "$(Build.SourcesDirectory)/artifacts/bin/Aspire.TerminalHost/Release/net11.0/${{ targetRid }}/publish/Aspire.TerminalHost.dSYM"
-                if (Test-Path -LiteralPath $symbols) {
-                  Remove-Item -LiteralPath $symbols -Recurse -Force
+                $optionalSymbols = @(
+                  "$(Build.SourcesDirectory)/artifacts/bin/Aspire.TerminalHost/Release/net11.0/${{ targetRid }}/publish/Aspire.TerminalHost.dSYM"
+                  "$(Build.SourcesDirectory)/artifacts/bin/Aspire.Hosting.Native.Server/Release/net11.0/${{ targetRid }}/publish/Aspire.Hosting.Native.Server.dSYM"
+                )
+                foreach ($symbols in $optionalSymbols) {
+                  if (Test-Path -LiteralPath $symbols) {
+                    Remove-Item -LiteralPath $symbols -Recurse -Force
+                  }
                 }
               displayName: 🟣Remove Native AOT bundle debug symbols
 
@@ -326,6 +346,7 @@ jobs:
             - script: |
                 chmod +x $(Build.SourcesDirectory)/artifacts/bin/Aspire.Managed/Release/net10.0/${{ targetRid }}/publish/aspire-managed
                 chmod +x $(Build.SourcesDirectory)/artifacts/bin/Aspire.Dashboard/${{ targetRid }}/Release/net11.0/${{ targetRid }}/publish/Aspire.Dashboard
+                chmod +x $(Build.SourcesDirectory)/artifacts/bin/Aspire.Hosting.Native.Server/Release/net11.0/${{ targetRid }}/publish/Aspire.Hosting.Native.Server
                 chmod +x $(Build.SourcesDirectory)/artifacts/bin/Aspire.TerminalHost/Release/net11.0/${{ targetRid }}/publish/Aspire.TerminalHost
               displayName: 🟣Restore execute permissions on managed executables
 
@@ -413,6 +434,7 @@ jobs:
               -restore
               /p:SkipManagedBuild=true
               /p:TargetRids=${{ targetRid }}
+              /p:SkipAppHostServerBuild=true
               /p:BundlePayloadPath=$(Build.SourcesDirectory)/artifacts/bundle/aspire-ci-bundlepayload-${{ targetRid }}.tar.gz
               /p:AspireCliChannel=$(aspireCliChannel)
               $(_buildArgs)

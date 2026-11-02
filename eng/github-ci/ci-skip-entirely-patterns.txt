@@ -34,6 +34,10 @@ eng/github-ci/ci-skip-entirely-patterns.txt
 # Documentation
 **.md
 
+# License text is packed as-is, like README files; it does not change compiled or runtime behavior.
+# Filter it before Layer 1, which otherwise attributes the packed None item to every packable project.
+THIRD-PARTY-NOTICES.TXT
+
 # Generated API and ATS baselines
 # These files are generated release/API-surface artifacts and do not require PR CI.
 src/*/api/Aspire.*.cs

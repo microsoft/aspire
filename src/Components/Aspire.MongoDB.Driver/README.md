@@ -92,6 +92,7 @@ In your AppHost project, install the `Aspire.Hosting.MongoDB` library with [NuGe
 
 ```dotnetcli
 dotnet add package Aspire.Hosting.MongoDB
+dotnet add package Aspire.Hosting.Dotnet
 ```
 
 Then, in the _AppHost.cs_ file of `AppHost`, register a MongoDB database and consume the connection using the following methods:
@@ -99,7 +100,7 @@ Then, in the _AppHost.cs_ file of `AppHost`, register a MongoDB database and con
 ```csharp
 var mongodb = builder.AddMongoDB("mongodb").AddDatabase("mydatabase");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(mongodb);
 ```
 

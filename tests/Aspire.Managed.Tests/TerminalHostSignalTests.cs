@@ -5,7 +5,6 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using Aspire.Hosting;
-using Xunit;
 
 namespace Aspire.Managed.Tests;
 

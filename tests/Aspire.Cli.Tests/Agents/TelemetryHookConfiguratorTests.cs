@@ -3,7 +3,10 @@
 
 using System.Text.Json.Nodes;
 using Aspire.Cli.Agents;
+using Aspire.Cli.Agents.ClaudeCode;
+using Aspire.Cli.Agents.Copilot;
 using Aspire.Cli.Agents.Hooks;
+using Aspire.Cli.Agents.OpenCode;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -387,6 +390,11 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
             homeDirectory: home);
         var environment = new TestEnvironment(environmentVariables);
         var installer = new TelemetryHookInstaller(executionContext, NullLogger<TelemetryHookInstaller>.Instance);
-        return new TelemetryHookConfigurator(installer, executionContext, environment, NullLogger<TelemetryHookConfigurator>.Instance);
+        return new TelemetryHookConfigurator(installer,
+        [
+            new CopilotAgentClient(executionContext, environment, NullLogger<CopilotAgentClient>.Instance),
+            new ClaudeCodeAgentClient(executionContext, environment, NullLogger<ClaudeCodeAgentClient>.Instance),
+            new OpenCodeAgentClient(executionContext, environment)
+        ]);
     }
 }

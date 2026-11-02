@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable CS0618 // Retain legacy project orchestration with synthetic metadata.
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Dcp;
@@ -1277,7 +1278,8 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
             options ?? new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
             new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build(),
-            new TestInteractionFileUploadStore());
+            new TestInteractionFileUploadStore(),
+            new InteractionServiceConsumerState());
     }
 
     private sealed class MockDeploymentStateManager : IDeploymentStateManager
@@ -1669,3 +1671,4 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         }
     }
 }
+#pragma warning restore CS0618

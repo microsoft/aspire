@@ -13,6 +13,11 @@
 #
 # === Client format reference ===
 #
+# GitHub Copilot app:
+#   - Uses Copilot CLI-compatible payloads.
+#   - Detection: AI_AGENT=github_copilot_app_agent (client name: copilot-app).
+#     Checked before COPILOT_CLI and payload-based client detection.
+#
 # Copilot CLI:
 #   - Field names: camelCase (toolName, sessionId, toolArgs) when the hook event is configured
 #     in camelCase (postToolUse); snake_case (tool_name, ...) when configured in PascalCase
@@ -470,7 +475,9 @@ toolInput=$(decode_event_value "$encodedToolInput")
 timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
 # Detect the client (used only for a low-cardinality client-name tag).
-if [ "$COPILOT_CLI" = "1" ]; then
+if [ "$AI_AGENT" = "github_copilot_app_agent" ]; then
+    clientName="copilot-app"
+elif [ "$COPILOT_CLI" = "1" ]; then
     clientName="copilot-cli"
 elif [ -n "$hookEventNameValue" ]; then
     toolUseId=$(decode_event_value "$toolUseIdValue")

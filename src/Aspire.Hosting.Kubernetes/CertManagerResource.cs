@@ -32,7 +32,7 @@ namespace Aspire.Hosting.Kubernetes;
 /// var certManager = aks.AddCertManager("cert-manager");
 ///
 /// var letsencrypt = certManager.AddIssuer("letsencrypt-prod")
-///     .WithLetsEncryptProduction("ops@contoso.com")
+///     .WithAcmeServer("https://acme-v02.api.letsencrypt.org/directory", "ops@contoso.com")
 ///     .WithHttp01Solver();
 ///
 /// aks.AddGateway("gw")

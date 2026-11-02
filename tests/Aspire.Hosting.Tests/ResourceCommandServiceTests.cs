@@ -1955,7 +1955,8 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
             new DistributedApplicationOptions(),
             services,
             builder.Configuration,
-            services.GetRequiredService<IInteractionFileUploadStore>()));
+            services.GetRequiredService<IInteractionFileUploadStore>(),
+            services.GetRequiredService<InteractionServiceConsumerState>()));
 
         var textDefinition = new InteractionInput
         {
@@ -2373,7 +2374,16 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         var projectPath = CreateBuildOutputTestProject(workspace.WorkspaceRoot.FullName, rebuildOutputMarker);
 
         using var builder = CreateBuilder();
+#pragma warning disable CS0618 // Retain supported legacy project command invocation.
         var project = builder.AddProject("myProject", projectPath, options => options.ExcludeLaunchProfile = true);
+#pragma warning restore CS0618
+
+        // The project itself is launched with `dotnet run`, which also builds it. Whether that build reaches
+        // the counting target depends on how quickly the rebuild command stops the process (slow on Windows),
+        // so tag the rebuilder's `dotnet build` and count only builds started by the rebuild command.
+        builder.CreateResourceBuilder<ProjectRebuilderResource>($"{project.Resource.Name}-rebuilder")
+            .WithEnvironment(RebuildCommandBuildEnvironmentVariable, "true");
+
         using var app = builder.Build();
 
         await app.StartAsync().DefaultTimeout(TimeSpan.FromMinutes(2));
@@ -2390,14 +2400,14 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(CommandResultFormat.Text, result.Data.Format);
         Assert.Contains("[build] Building project...", result.Data.Value);
         Assert.Contains(rebuildOutputMarker, result.Data.Value);
-        var firstBuildCount = File.ReadAllLines(buildCountPath).Length;
+        Assert.Single(File.ReadAllLines(buildCountPath));
 
         var secondResult = await app.ResourceCommands.ExecuteCommandAsync(project.Resource, KnownResourceCommands.RebuildCommand).DefaultTimeout(TimeSpan.FromMinutes(2));
 
         Assert.True(secondResult.Success);
         Assert.NotNull(secondResult.Data);
         Assert.Contains(rebuildOutputMarker, secondResult.Data.Value);
-        Assert.Equal(firstBuildCount + 1, File.ReadAllLines(buildCountPath).Length);
+        Assert.Equal(2, File.ReadAllLines(buildCountPath).Length);
     }
 
     [Fact]
@@ -2434,6 +2444,8 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(CommandResultFormat.Text, result.Data.Format);
     }
 
+    private const string RebuildCommandBuildEnvironmentVariable = "ASPIRE_TEST_REBUILD_COMMAND_BUILD";
+
     private static string CreateBuildOutputTestProject(string directoryPath, string buildOutputMarker)
     {
         var projectPath = Path.Combine(directoryPath, "BuildOutputProject.csproj");
@@ -2450,7 +2462,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
               </PropertyGroup>
 
               <Target Name="EmitAspireRebuildOutputMarker" AfterTargets="Build">
-                <WriteLinesToFile File="$(MSBuildProjectDirectory)/build-count.txt" Lines="built" Overwrite="false" />
+                <WriteLinesToFile Condition="'$({{RebuildCommandBuildEnvironmentVariable}})' == 'true'" File="$(MSBuildProjectDirectory)/build-count.txt" Lines="built" Overwrite="false" />
                 <Message Importance="High" Text="{{buildOutputMarker}}" />
               </Target>
             </Project>

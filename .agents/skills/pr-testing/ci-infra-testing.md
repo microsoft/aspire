@@ -111,10 +111,10 @@ Validation" section:
    conserved against a baseline. → I-1b(1)/I-5. (Reports as the *coverage-loss
    audit* evidence bullet.)
 4. **Is anything here generated, or a duplicated list?** Lock files compile
-   from `.md` sources; some `paths:` lists and YAML-contract tests must stay in
-   sync with the workflows they mirror. Regenerate and compare — don't trust
-   the hand edit. → I-2 (contract tests)/I-3.C; Failure modes §4/§6. (Reports
-   as *gh-aw*.)
+   from `.md` sources: regenerate and compare rather than trusting a hand edit.
+   Audit duplicated `paths:` lists against their consumers; do not add or update
+   source-text tests to mirror workflow configuration. → I-2/I-3.C; Failure
+   modes §4/§6. (Reports as *gh-aw*.)
 5. **Per behavioral change, what observable would a correct run produce?** A
    log marker, an artifact's shape, a binlog target, a skip *for the right
    reason*. Green only proves no step hard-failed; a change with no nameable
@@ -236,7 +236,8 @@ start of the analysis, not the end of it.
 ## Step I-2: Know what PR CI already covers (don't duplicate it)
 
 The repo unit-tests its workflow helper scripts (JavaScript, PowerShell, and
-bash) and asserts YAML contracts in `tests/Infrastructure.Tests/`. PR CI runs
+bash) in `tests/Infrastructure.Tests/`. Some existing tests assert source text
+instead; those do not establish behavioral coverage. PR CI runs
 that project **only when `ci.yml`'s test job isn't skipped** — and it *is*
 skipped when every changed file matches a glob in
 `eng/github-ci/ci-skip-entirely-patterns.txt`, which includes `eng/pipelines/**`
@@ -270,22 +271,25 @@ dotnet test --project tests/Infrastructure.Tests/Infrastructure.Tests.csproj \
 | `eng/scripts/split-test-matrix-by-deps.ps1` | `SplitTestMatrixByDepsTests` |
 | `eng/scripts/expand-test-matrix-github.ps1` | `ExpandTestMatrixGitHubTests` |
 | `eng/scripts/stage-native-cli-tool-packages.ps1` | `StageNativeCliToolPackagesTests` |
-| `eng/pipelines/**` release/npm | `ReleasePublishNugetPipelineTests`, `NpmCliPackageTests` |
+| `eng/pipelines/**` release/npm | Behavioral cases in `NpmCliPackageTests`, `ValidateNpmReleaseAliasesTests`, `ValidateNpmPackageSignaturesTests`; validate release wiring in the real pipeline |
 
 A changed helper with a matching test class — whether `*.js`, `*.ps1`, or `*.sh`
-— is **covered by CI when the test job runs** (note it and move on); if `ci.yml`
-skipped the test job for this PR (above), run that class locally instead. The
+— is covered only for the behavior those tests actually execute. Check that the
+tests invoke the changed production code path, not source assertions or a separate
+copy. If `ci.yml` skipped the test job for this PR (above), run the relevant
+behavioral cases locally instead. The
 valuable case is a
 changed helper with **no** test: an inline `run:` block, a `*.sh` with no harness,
 or e.g. the `check-changed-files` action's bash glob→regex logic (none). Say so in
-the report — "no automated coverage" is a finding, a candidate for a new test, and
-a prompt to validate that logic by hand here.
+the report and validate the logic in its real CI context. Add a behavioral test
+where practical; do not substitute source assertions when it is not.
 
-Some of these classes also include **YAML-contract assertions** — they read the
-workflow `.yml` text and assert key trigger / safety-rail lines are present
-(e.g. `WorkflowYamlKeepsDocumentedSafetyRails` in `AutoRerunTransientCiFailuresTests`).
-If you changed a workflow's `on:`, `if:`, permissions, or job gating, a contract
-test may need updating — a red contract test here is signal, not noise.
+Some existing classes contain source-text or extracted-script assertions. These
+do not establish workflow behavior and must not be copied or mechanically updated
+to accept a change. Follow
+`.github/instructions/infrastructure-tests.instructions.md`: inspect what each
+test actually executes, use production-entry-point behavioral tests, and validate
+runner/pipeline wiring in its real CI context.
 
 ## Step I-3: Validate by category
 
@@ -298,22 +302,25 @@ written in whatever language fits:
 - **`.github/workflows/*.js`** — `github-script` modules (only a few exist).
 - **Inline `run:` blocks** in `shell: bash` or `shell: pwsh` — the **most common**
   form by far (dozens of each). These live inside the `.yml` and have no
-  standalone unit test unless the logic was extracted.
-- **Extracted `eng/scripts/*.ps1` / `*.sh`** — see Section B; these are the ones
+  standalone unit test unless the logic was moved into a production script.
+- **Standalone `eng/scripts/*.ps1` / `*.sh`** — see Section B; these are the ones
   that usually *do* have an `Infrastructure.Tests` class.
 - **Composite-action logic** (`.github/actions/**`) — see Section E.
 
 To validate, regardless of language:
 
-- If a matching `Infrastructure.Tests` class exists (Step I-2), run it — that's
-  the JS *and* the PowerShell/bash extracted-script case.
+- If a matching `Infrastructure.Tests` class exists (Step I-2), run its relevant
+  behavioral cases against the production module or script.
 - A JS module is `require()`d by a `*.harness.js` and driven from C#; you can also
   run it directly with `node` against a representative JSON fixture.
 - For **inline** bash/pwsh that has no harness, you can't unit-test it in place:
   lint it (`bash -n`, or `pwsh -NoProfile -Command "[System.Management.Automation.Language.Parser]::ParseFile(...)"`),
-  extract a representative fixture and run the snippet directly, or — the durable
+  run a locally extracted snippet with representative fixtures, or — the durable
   fix — move the logic into an `eng/scripts/*` file with its own test, then
-  validate it as an extracted script (Section B).
+  validate that production script (Section B).
+  A locally extracted snippet is only a diagnostic aid, not a durable regression
+  test or validation of YAML expressions, wrapper semantics, or pipeline integration.
+  A standalone production script moved out of YAML is a valid test entry point.
 - The YAML that *calls* the helper is not exercised by the unit test — eyeball
   the `on:`, `permissions:`, and `if:` of the workflow, and consult the Failure
   modes tables below.
@@ -609,7 +616,7 @@ Cited PRs are real prior breakages (illustrative, not exhaustive).
 | `types: [closed]` fires for PRs closed **without** merging. | Confirm the first job's `if:` includes `github.event.pull_request.merged == true`. (#16167) |
 | A diff that **removes/narrows** `on.pull_request`/`paths`, deletes a workflow, or adds job-level `continue-on-error` silently stops gating the PR — CI still goes green. | Run the Step I-1b coverage-loss audit: enumerate every workflow/job that no longer gates this PR and require proof the replacement covers it. (#17996) |
 | A job made **conditional** (skip on PR, run on push) is only proven on the PR path by CI. | Confirm the `if:`/matrix keeps it on push/`main`/`release/*` and the aggregator `needs:`/required-check allowlist still gates those events. (#17973) |
-| Editing a workflow's `on:`/`if:`/permissions can desync a YAML-contract test. | Re-run the relevant `Infrastructure.Tests` class; update the contract assertion if the change is intentional. |
+| Editing a workflow's `on:`/`if:`/permissions changes behavior that helper unit tests do not exercise. | Inspect the affected event, permission, and gating paths and validate them in the actual workflow. Do not update source-text assertions as a substitute for that validation. |
 
 ### 2. Auth, permissions & tokens
 

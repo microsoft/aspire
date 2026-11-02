@@ -11,7 +11,6 @@ using Aspire.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.TestServices;
 
@@ -19,9 +18,9 @@ internal sealed class TestProcessExecutionFactory : IProcessExecutionFactory
 {
     private int _attemptCount;
 
-    internal static IProcessExecutionFactory CreateForCliGuardian(IEnvironment environment)
+    internal static IProcessExecutionFactory CreateForCliGuardian(IEnvironment environment, ILogger<ProcessExecutionFactory> logger)
     {
-        var factory = new ProcessExecutionFactory(environment, NullLogger<ProcessExecutionFactory>.Instance);
+        var factory = new ProcessExecutionFactory(environment, logger);
         static void ConfigureGuardian(ProcessInvocationOptions options)
         {
             // MTP cannot re-enter guardian mode. Only replace the executable and argv:

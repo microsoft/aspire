@@ -16,6 +16,7 @@ From your AppHost directory, add the `Aspire.Hosting.Azure.Redis` integration wi
 
 ```bash
 aspire add Aspire.Hosting.Azure.Redis
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Configure Azure Provisioning for local development
@@ -42,7 +43,7 @@ In the AppHost, register an Azure Managed Redis resource with either C# or TypeS
 ```csharp
 var redis = builder.AddAzureManagedRedis("cache");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(redis);
 ```
 

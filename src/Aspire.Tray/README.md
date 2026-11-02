@@ -1,17 +1,20 @@
 # Aspire Tray
 
 An experimental **C# NativeAOT** companion for the Aspire CLI, bundled on macOS and Windows.
-It uses native AppKit status items on macOS and Win32 notification icons and menus
-on Windows through small platform interop layers. It does not require a Swift build
+It uses a native AppKit status item on macOS and a Win32 notification icon on Windows
+through small platform interop layers. Activating the icon opens a flyout panel, the
+tray's only UI, drawn the same way on both platforms. It does not require a Swift build
 step, a WebView, a macOS .NET workload, Windows Forms, or an installed .NET runtime
 on the machine running the published app.
 
 ## Project layout
 
-- `src/Aspire.Tray/Common/`: shared protocol client, controller, and lifecycle code.
+- `src/Aspire.Tray/Common/`: shared protocol client, controller, and lifecycle code, plus the
+  flyout panel's layout, glyphs, palettes, and interaction (`TrayPanel*.cs`).
 - `src/Aspire.Tray/Mac/`: native AppKit frontend and macOS app packaging.
 - `src/Aspire.Tray/Windows/`: native Win32 frontend and Windows publishing.
-- `tests/Aspire.Tray.Tests/`: protocol, controller, and lifecycle tests in the normal test matrix.
+- `tests/Aspire.Tray.Tests/`: protocol, controller, lifecycle, and panel layout tests in the normal
+  test matrix, and an SVG renderer of the panel for previews.
 
 The platform projects and tests are included in `Aspire.slnx` and inherit the
 repository build, analyzer, versioning, and test infrastructure. Shared code is
@@ -68,9 +71,135 @@ user-only permissions and no raw discovery payloads or dashboard URLs.
 The launcher opens the log relative to no-follow directory handles and passes
 the open descriptor to the GUI, rather than asking another process to reopen a
 log pathname. Symlinked log files or parent directories are rejected.
-Quit the tray using its original CLI or **Quit Aspire** before upgrading from an
+Quit the tray using its original CLI or the panel's **Quit** (**Exit** on Windows) before upgrading from an
 earlier preview. The state directory has been renamed; a still-running older
 preview uses a separate control endpoint and must be stopped before starting this build.
+
+## Flyout panel
+
+Every activation of the tray icon opens a flyout panel, similar to OneDrive's: a left or
+right click, a Control-click on macOS, Enter or Space on the focused icon on Windows, and
+VoiceOver's press on macOS. Opening it from the keyboard or a screen reader also shows the
+keyboard focus on its first control. There are no native menus. The panel is the
+same on macOS and Windows: a header bar, as tall and colored as the footer, with the
+Aspire logo, the title, and a one-line status
+("3 running · 1 needs attention", "Connecting…") behind a colored connection dot, an
+optional banner for real problems (storage, discovery, or a failed action), the AppHost
+list, and a footer with three icon buttons on the right: **Settings** (a gear),
+**Documentation** (a globe) and **Quit** (**Exit** on Windows, following each platform's
+convention). Quit closes only the tray: its tooltip and accessibility description say
+"Quit the tray. AppHosts keep running." Every icon-only button, in the footer and on the
+rows, shows a native tooltip naming its action.
+
+The list has **Running**, **Pinned**, and **Recent** sections. Recent is collapsed while
+other AppHosts are listed, and its header has a **Clear** button. Each row shows a
+status glyph, the AppHost name, and `{status} · {parent/folder}`; the PID is added only
+when two running AppHosts share a name. Status glyphs differ by shape as well as color:
+a check (healthy), an exclamation mark (needs attention), a cross (unhealthy), a question
+mark (unknown), an outlined stop (stopped), and a ring (starting or stopping).
+Hovering or focusing a row shows its buttons: **Open dashboard**, **Stop**, and **More**
+for running AppHosts, **Start** and **More** for offline ones. **More** opens the row's
+action list in the panel, under the row: **Open in**, which shows the supported installed
+applications under it, each with its own icon (such as Visual Studio Code, Terminal, Ghostty
+or Xcode on macOS, and Visual Studio Code, Windows Terminal or PowerShell on Windows; an
+application whose icon can't be read gets a generic glyph), **Show in Finder** or **Show in File Explorer**,
+**Copy path** (the folder that contains the AppHost), **Pin** or **Unpin**, and **Remove
+from recent** for a recent AppHost. It is drawn by the shared scene like the rest of the
+panel, so it looks the same on both platforms and screen readers see its items as buttons.
+Clicking **More** again, picking an item, or acting on anything else closes it.
+Clicking a row itself does nothing, whether the AppHost runs or not; only its buttons act.
+The list scrolls when it is taller than the screen allows; the header and footer stay in place.
+The keyboard works too: Up/Down and Home/End move between rows and action list items, Tab
+and Shift-Tab also reach the row buttons, Enter or Space activates, and Escape steps back
+out of the Open in applications, then the action list, then closes the panel. Command-comma on macOS or Ctrl+comma on Windows opens Settings,
+and Command-Q quits on macOS. Clicking elsewhere closes the panel.
+
+**Stop** stops the AppHost right away, without asking, like the dashboard. Clicking a
+row that is starting or stopping does nothing, and its dashboard can't be opened while
+it stops. The panel asks for confirmation inline, instead of opening dialogs, only for
+what can't be undone: **Clear** turns the Recent header into "Clear recent AppHosts?
+Pinned AppHosts are kept.", and **Start**, **Open in** or **Show in** on a recent AppHost
+whose source file is gone offers to remove it. Focus starts on **Cancel**, Escape cancels,
+and clicking anything else abandons the confirmation. The strip goes away by itself if its AppHost goes away
+or the recent list is cleared elsewhere.
+
+The gear opens a **Settings** view inside the panel, with a back arrow: a **Launch at
+sign-in** toggle (disabled with an explanation when unavailable, and showing read or
+write failures under it), and the version and About text. Escape or the
+back arrow returns to the list.
+
+Everything except drawing is shared code in `Common/`: `TrayPanel` turns the view state
+and interaction state into a display list (paths, text boxes, the logo, clips) and hit
+targets in device-independent pixels. All glyphs are vector paths defined there. The
+macOS host draws the list with `NSBezierPath` and `NSAttributedString` in a borderless
+`NSPanel`; the Windows host draws shapes with the GDI+ flat API and text with GDI
+`DrawTextW` (ClearType) in a `WS_POPUP` window, rounded by DWM on Windows 11 or by a
+window region on Windows 10. Text uses the system font at the same sizes (SF on
+macOS, Segoe UI Variable Text or Segoe UI on Windows); layout never measures text, and
+each renderer truncates it to its box. The panel follows the light or dark appearance,
+the macOS **Increase contrast** setting, and the Windows high-contrast theme.
+
+Everything lines up on one grid, defined by the constants at the top of `TrayPanel`:
+- **Columns:** the leading column is centered at x 30 (the logo, status glyphs, icons and
+  the Settings back arrow), and text starts at 52. Nested items' labels start at 78. The
+  trailing column mirrors the leading one, with buttons centered at 330, 300 and 270.
+  Row highlights and cards span 8 to 352.
+- **Lines:** each kind of line has one vertical center. The header and footer bars are at
+  22, a row's glyph and buttons at 26 with its name and detail at 17 and 35, section labels
+  at 16, and action list items at 15.
+- **Text placement:** single-line text sits on its line by its capitals. The scene gives each
+  text a baseline half a cap height (0.70 em) below its line's center. Both renderers draw
+  at that baseline, snapped to device pixels, rather than centering the font's line box,
+  which lands differently in SF and Segoe UI. The header's status shares the title's baseline.
+
+The scene also emits this grid as guides (`TrayPanelScene.Guides`): columns, line centers,
+the shared baseline, and the box each glyph should fill. Layout tests check every sample state
+against them, and the SVG previews are also written with the guides drawn over them
+(`*-guides.svg`).
+
+Screen readers see the panel as native elements. Along with the display list, `TrayPanel`
+produces an accessibility list in reading order: buttons (rows, row buttons, action list
+items, Back, the confirmation and footer buttons), switches with an on/off state (Launch at sign-in, with the
+setting's description as help text), and read-only text (the header status, the notice, section titles, the
+confirmation question, About). On macOS the panel view is an `AXGroup` whose children
+are `NSAccessibilityElement` objects (`AXButton`, `AXCheckBox` with the `AXSwitch`
+subrole, `AXStaticText`); on Windows the panel window answers `WM_GETOBJECT` with a UI
+Automation fragment root whose children are Button (Invoke pattern), CheckBox (Toggle
+pattern) and Text elements, implemented with source-generated COM so NativeAOT needs no
+built-in COM interop. A press, invoke or toggle runs through `TrayPanel` exactly like a
+click, and setting focus on an element moves the panel's keyboard focus (scrolling it
+into view). Each host reports keyboard focus changes, elements appearing or going away
+(a confirmation strip, an action list, the Settings view) and toggled values.
+
+To preview the panel without running the tray, run the panel tests with
+`ASPIRE_TRAY_PANEL_PREVIEW_DIR` set. They write SVG images of the light and dark
+themes for several states (typical, problems, empty, connecting, disconnected, many
+rows, the two inline confirmations, action lists, and the Settings view), drawn from the same
+display list:
+
+```sh
+ASPIRE_TRAY_PANEL_PREVIEW_DIR="$PWD/artifacts/tray-panel" \
+    dotnet test --project tests/Aspire.Tray.Tests/Aspire.Tray.Tests.csproj \
+    --no-launch-profile -- --filter-class "*.TrayPanelTests"
+```
+
+## Tray icon status
+
+Both platforms follow the same rules (`Common/TrayIconStatus.cs`):
+
+| State | Icon |
+| --- | --- |
+| No AppHosts running | The logo alone. |
+| AppHosts running or starting | The logo with a green dot. |
+| Something needs attention | The logo with an amber dot: an unhealthy or degraded resource, a failed start or stop, or a storage or pin error, while AppHosts run. |
+| Connecting to discovery | The logo dimmed, no dot. |
+| Discovery unavailable or incompatible | The logo dimmed, no dot. The tooltip and the panel's banner explain. |
+
+The dot sits in the lower-right corner, in a transparent cut-out of the logo, so it
+stays readable on any menu bar, wallpaper tint or taskbar color. On macOS the logo is a
+template image and the dot is a small view over it, colored with the system green and
+orange; the dimmed state is AppKit's own disabled status-item rendering. The tooltip and
+accessibility label state the status in words, so the dot's color is never the only cue.
 
 ## Build and run on macOS
 
@@ -123,44 +252,22 @@ The foreground development entrypoint's `--cli` argument must be an existing
 **absolute executable path**. Unlike the packaged start command, this development
 entrypoint also accepts a managed CLI apphost when its .NET runtime is available.
 
-The menu bar shows the 20-point single-wave artwork from `Mac/Assets/AspireTrayTemplate.png`
-and `AspireTrayTemplate@2x.png` on a 22-point canvas. Excess transparent padding is
-trimmed from the supplied high-resolution artwork before generating the 20- and
-40-pixel standard/Retina representations, so the visible mark fills the tray space.
-The composite is an AppKit template image, preserving the assets' transparent
-diagonal wave and adapting its foreground to the menu-bar background. These are Aspire-inspired concept assets, not
-official brand masters; their supplied provenance is in `Mac/Assets/PROVENANCE.txt`.
-The app bundle and dialogs continue to use `src/Shared/Aspire_icon_256.png`.
-The lower-right connection badge replaces a numeric count: the idle mark is
-unbadged, dots indicate connecting, a cross indicates unavailable discovery, and
-a solid dot indicates active AppHosts. The badge's transparent border reveals the menu-bar background rather
-than painting an opaque outline. Native two-line AppHost
-rows show the project/worktree name first and directory context and PID underneath.
-The redundant branded/count header is omitted when AppHosts are listed; an empty
-placeholder or actionable error/disconnection notice is shown when appropriate.
-Each live AppHost has an **Open Dashboard** action and **Stop AppHost...** action.
-Menu items have no
-hover tooltips, so they cannot cover the action submenu. Stopping opens a native
-confirmation dialog showing the project name and PID, without the full project
-path, with Cancel as the default. **Don't ask again** skips future Stop warnings
-only after confirming Stop. Canceling, or discovering that the selected process
-has been replaced, does not save that preference. Exact process identity is still
-validated when the warning is disabled. Stop uses the system's standard adaptive
-button text rather than low-contrast red text on a gray button.
-Long names are shortened in the middle, preserving both ends. Native subtitles
-require macOS 14.4; older systems use a single-line layout with the same details.
-**Quit Aspire** (Command-Q while using the menu) removes the icon and stops its
+The menu bar shows the same Aspire logo as Windows (`src/Shared/Aspire_icon_256.png`),
+converted at startup to a one-color AppKit template image, as Apple recommends for
+menu bar extras. Darker parts of the logo (its outline) become opaque and lighter facets
+partly transparent, so the logo keeps its inner structure in the menu bar's own color.
+See [Tray icon status](#tray-icon-status) for the status dot. Any click on it opens the
+[flyout panel](#flyout-panel), which hangs below the item, or from the top-right corner of
+the screen when the item is hidden behind the camera housing or off a crowded menu bar.
+
+**Stop** stops an AppHost without a confirmation, as in the dashboard; the exact process
+identity is still validated, so a replaced process is never stopped by mistake.
+**Quit** (or Command-Q while the panel is open) removes the icon and stops the tray's
 own discovery subprocess, not any AppHost.
 
-AppHost health uses distinct native SF Symbols rather than color-only circles.
-Healthy, waiting/degraded, unhealthy, unknown, and stopped states are distinguishable
-without color. Updates change the existing row's icon even while the menu is open.
-The menu-bar connection badge indicates AppHost presence, not aggregate health.
-
-**Pin AppHost** keeps a project in the main list after it stops. **Unpin AppHost**
-removes that preference. Both are available in the AppHost action submenu and
-through a right-click context action. An offline pin has a neutral icon and an
-explicit **Start AppHost** action. Merely opening an AppHost submenu never starts it.
+**Pin** keeps a project in the Pinned section after it stops, and **Unpin** removes that
+preference; both are in the row's action list. An offline pin has an explicit **Start**
+button. Merely opening a row's action list never starts it.
 After the CLI reports a successful or timed-out start, the tray waits up to 60 seconds
 for discovery to observe the AppHost. If it never appears, the tray shows an unconfirmed-start
 warning and allows an explicit retry while discovery is connected and the path is not listed.
@@ -168,29 +275,26 @@ The AppHost may still start late, so check before retrying; the tray never retri
 Missing pinned projects are automatically removed from saved state rather than
 kept as broken entries. A discovery disconnection alone does not remove pins.
 
-**Open Recent** lists previously observed projects that are neither running nor
-already pinned in the main list. Each entry offers explicit Start, Pin, and folder
-actions. Missing project files prompt for removal when a file-dependent action is
-requested. **Clear Recently Opened...** asks for confirmation with Cancel as the
-default, warns that clearing is irreversible, and preserves pinned projects.
+The **Recent** section lists previously observed projects that are neither running nor
+already pinned. Each entry offers explicit Start, Pin, and folder actions. A missing
+project file is offered for removal inline when a file-dependent action is requested.
+**Clear** asks inline, with focus on Cancel, and preserves pinned projects.
 History stores only project paths and preferences, never process identities or
 dashboard login URLs, in the tray's per-user settings directory.
 
-**Open In** resolves installed folder-capable applications using macOS Launch
+**Open in** resolves installed folder-capable applications using macOS Launch
 Services, rather than assuming applications live in `/Applications`. Supported
 editors/terminals include VS Code, VS Code Insiders, Terminal, Ghostty, iTerm,
 Rider, and Xcode; only installed applications appear. The selected app opens the
 AppHost's directory without starting the AppHost. **Show in Finder** reveals the
-project file. **Copy Path**, directly below it, copies the AppHost's containing folder path
-without requiring the file to exist. These actions are available for running,
-pinned, and recent AppHosts. This intentionally uses a tray-owned menu: Finder's Services menu
-requires a document selection/responder contract that a status-menu row does not
-provide. **Documentation** opens [aspire.dev](https://aspire.dev). **Settings...**
-replaces the top-level About action and opens General and About information,
-including the same version and build text on both platforms. Documentation remains in the tray menu, and a divider
-separates **Quit Aspire** from the other utility actions. The Settings shortcut is Command-comma
-on macOS or Control-comma on Windows while the tray's menu or window has focus;
-it is not a system-wide hotkey.
+project file. **Copy path** copies the AppHost's containing folder path without
+requiring the file to exist. These actions are available for running, pinned, and
+recent AppHosts. The tray keeps its own list of applications because Finder's Services
+menu requires a document selection/responder contract that a panel row does not
+provide. **Documentation** opens [aspire.dev](https://aspire.dev). The gear opens the
+Settings view, with launch at sign-in and About information, including the same version
+and build text on both platforms. Command-comma opens it while the panel has focus; it is
+not a system-wide hotkey.
 A repeated launch restores the existing tray icon instead of starting another
 instance or watcher. It sends a same-user activation request, waits for native
 restoration to complete, and exits successfully. An unresponsive or older
@@ -204,7 +308,6 @@ again. Explicit restoration resets the item toward the right side using AppKit's
 undocumented saved-position preference (300 points from the right edge, verified
 during development); normal launches retain the user's placement. This recovery is
 not a guarantee against every crowded menu-bar/display configuration.
-Open tray menus or confirmation dialogs defer restoration until they close.
 Single-instance ownership uses an OS file lock under
 `~/.aspire/tray/runtime/instance.lock`; the empty file
 remains after exit, but its lock is released automatically. NativeAOT's Unix
@@ -226,7 +329,7 @@ validate that integration because they use ad-hoc signatures.
 
 Recent history defaults to **10 AppHosts**. Configure it in the existing per-user
 Aspire configuration file, normally `~/.aspire/aspire.config.json`, rather than in a project's
-configuration or the tray Settings dialog:
+configuration or the tray's Settings view:
 
 ```json
 {
@@ -250,32 +353,31 @@ limit keeps the most recent entries and preserves pins. Restart Aspire Tray afte
 editing the configuration. An invalid value is reported rather than silently
 replaced by the default.
 
-The **Don't ask again** preference is stored as `confirmStop: false` in the tray's
+History and pins are stored in the tray's
 per-user `~/.aspire/tray/apphosts.json` (`%USERPROFILE%\.aspire\tray\apphosts.json`
 on Windows), separately from sign-in registration. Like the CLI's global
 configuration, this uses the installation's Aspire home when defined, otherwise
 `ASPIRE_HOME` when set, then `~/.aspire`. The filename is `tray/apphosts.json`
-under that home, outside the versioned bundle cache. To restore the
-warning, quit the tray, set `confirmStop` to `true` (or remove that property), then
-restart it. History, pins, and Stop-confirmation preferences from the former OS
-application-data location are imported when the new file does not exist. The old
+under that home, outside the versioned bundle cache. Files written by earlier
+builds may also hold a `confirmStop` preference from when stopping asked first; it
+is read, ignored, and dropped the next time the file is saved. History and pins from
+the former OS application-data location are imported when the new file does not exist. The old
 file is left intact; an existing new file always takes precedence. Quit before editing that state
 file: the tray refuses to overwrite changes made by another writer while running.
 
 ## Launch at sign-in
 
-The General section in **Settings...** offers **Launch Aspire Tray when I sign in**.
-Normally, only the checkbox is shown. When unavailable, the optional note reads
-"Launch at sign-in requires a stable native CLI installation." This checks
-installation metadata, executable placement, and native executable shape, not
-Authenticode or a macOS signing trust chain. Read/write failures
-still show their error messages; Windows also shows **Refresh startup status** in
-that state. Reopening Settings re-reads the registration on either platform. Availability
-depends on a supported, verified native CLI installation, not just executable signing.
-It is off by default. Opening Settings, reading the preference, and closing the
-dialog never register startup or launch anything. Enabling it starts only the
+The panel's Settings view offers a **Launch at sign-in** switch. Normally, the switch
+is shown with a short description. When unavailable, the switch is disabled and the
+description reads "Launch at sign-in requires a stable native CLI installation." This
+checks installation metadata, executable placement, and native executable shape, not
+Authenticode or a macOS signing trust chain. Read/write failures show their error
+messages under the switch. Reopening Settings re-reads the registration on either
+platform. Availability depends on a supported, verified native CLI installation, not just
+executable signing. It is off by default. Opening Settings, reading the preference, and
+leaving it never register startup or launch anything. Enabling it starts only the
 companion at the next sign-in; it does not start pinned or recent AppHosts.
-**Quit Aspire** keeps the companion closed until the next sign-in or an explicit
+**Quit** (**Exit** on Windows) keeps the companion closed until the next sign-in or an explicit
 manual start.
 
 Startup invokes the selected CLI installation's stable entry point, which then
@@ -290,16 +392,16 @@ launch at sign-in. Removing or moving the selected CLI installation can break it
 startup registration.
 
 Registration is per user and does not require administrator privileges. The
-dialog reads the registration rather than a separate, potentially stale enabled
+Settings view reads the registration rather than a separate, potentially stale enabled
 flag. Operating-system startup/background-app policy can still override that
 registration. Read or write failures are shown explicitly without presenting a
 failed change as successfully saved. Native smoke uses an in-memory preference,
-so its checkbox never changes the real account's startup registration.
+so its switch never changes the real account's startup registration.
 
 On macOS, the setting manages
 `~/Library/LaunchAgents/dev.aspire.tray.login.plist`. The agent invokes
 `aspire tray start --non-interactive --nologo` once at the next sign-in, without
-KeepAlive or immediately starting a launchd job when the checkbox changes.
+KeepAlive or immediately starting a launchd job when the switch changes.
 On Windows, the `AspireTray` value under
 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` invokes an owned GUI bootstrap
 at `%LocalAppData%\Aspire\Tray\Startup\aspire-tray-login.exe`. This bootstrap calls
@@ -310,49 +412,23 @@ in Settings.
 
 ## Windows companion
 
-Windows uses the original colored `src/Shared/Aspire.ico`, not the macOS wave
-artwork. Its notification icon has no badge when discovery is connected but idle,
-a purple badge for active AppHosts, a gray dash while connecting, and an amber
-exclamation mark when discovery is unavailable. A stale AppHost list no longer
-looks like a working connection. The AppHost menus use the same shared health, history, pinning,
-explicit Start, and exact-instance Stop behavior described above. AppHost rows retain
-color-coded status indicators: green circles for healthy resources, orange for waiting/degraded,
-transitional, or unavailable discovery states, red for unhealthy resources or action
-errors, gray squares for stopped AppHosts, and gray circles for unknown health. Among commands, only
-**Documentation** and **Settings...** have small monochrome icons.
-**Open dashboard** uses the system's bold default-action style and remains available
-for running AppHosts with a known dashboard URL even when they need attention.
-AppHost names are limited to 44 text elements with a middle ellipsis and no appended
-status text. Each AppHost submenu ends with a divider followed by separate disabled
-status and path entries. Status text describes resource health, startup/shutdown,
-errors, and unavailable discovery without relying on color. Status is limited to
-45 text elements and paths to 44, with a middle ellipsis. Hovering
-over the path shows the full path and status or directory/PID details in a native tooltip, which
-can wrap long text. The tooltip's final native window bounds are constrained to
-the monitor work area without moving keyboard focus out of the menu.
-Parent AppHost rows and action items have no tooltips.
-Displayed and copied paths retain their original casing;
-Windows identity matching remains case-insensitive and still requires the exact PID
-and process start time. **Copy path** copies the complete original containing folder path. The final
-details entry and its tooltip refresh when status changes, including while the menu is open.
-
-The Windows adapter uses native popup menus and confirmation dialogs.
-Its embedded Common Controls v6 manifest enables Windows visual styles in both
-managed and NativeAOT builds. Settings uses a compact classic dialog with 9-point
-Segoe UI text, same-size bold General and About headings, native section separators,
-and native buttons and checkboxes. The original Aspire logo appears beside the About
-information. Dialog and menu colors follow the system palette, including high-contrast
-mode. Informational labels wrap instead of using editable-looking
-scroll panes. The layout expands for startup details and errors, reflows after DPI changes,
-and scrolls when needed to keep all actions reachable on shorter displays. This appearance
-uses Win32 and GDI only, without a Windows App SDK runtime dependency.
-**Show in File Explorer** (the Windows equivalent of **Show in Finder**), **Copy path**,
-and **Open in** act on the AppHost's source location without starting it.
-A divider separates these file actions from **Pin AppHost**/**Unpin AppHost**.
-Missing pinned projects are pruned, while missing recent projects
-offer removal and clearing history requires confirmation. The adapter retains
-native menu resources while a popup is being tracked, restores the notification
-icon after Explorer restarts, and responds to display scaling changes.
+Windows uses the original colored `src/Shared/Aspire.ico` (the same logo as macOS, in color)
+artwork, with the status dot described in [Tray icon status](#tray-icon-status).
+The dot's green and amber are picked for the taskbar's light or dark theme. A left or right
+click, the context menu key, or Enter or Space on the focused icon opens the
+[flyout panel](#flyout-panel); keyboard selection also shows the panel's keyboard focus.
+Ctrl+comma opens Settings while the panel has focus. The panel uses the same shared
+health, history, pinning, explicit Start, and exact-instance Stop behavior described above.
+Displayed and copied paths retain their original casing; Windows identity matching remains
+case-insensitive and still requires the exact PID and process start time. **Copy path**
+copies the complete original containing folder path. **Show in File Explorer** (the
+Windows equivalent of **Show in Finder**) and **Open in** (Visual Studio Code, Rider,
+Sublime Text, Windows Terminal or PowerShell, when installed) act on the AppHost's source location without
+starting it. Missing pinned projects are pruned, while missing recent projects offer
+removal inline. An action that fails shows its error in a message box. The adapter
+restores the notification icon after Explorer restarts and responds to display scaling
+changes. Its embedded Common Controls v6 manifest gives that message box Windows visual
+styles in both managed and NativeAOT builds.
 If Explorer's notification area is still initializing at startup, icon creation
 retries on the UI timer using the bounded Explorer recovery attempts. Startup is acknowledged only after
 the icon has been added; an unavailable notification area still fails explicitly.
@@ -389,15 +465,14 @@ The publishing helper also validates the original icon and native PE architectur
     -CliPath C:\absolute\path\to\aspire.exe -SmokeSeconds 30
 ```
 
-Smoke requires an interactive Windows desktop with Explorer. It exercises real
-menus, the final divided status/path entries (text limits, ordering, and disabled state),
-full-value details tooltips (native hover selection, live/stale refresh, focus, and dismissal),
-safe-default dialogs including the native Stop suppression checkbox,
-Cancel/stale-instance suppression safeguards, subsequent prompt skipping,
-exact path copying (including missing files and Unicode), immutable actions,
-pin/history operations, color-coded AppHost rows, Documentation/Settings-only command icons,
-bounded original-case paths and compact names, the compact Settings layout and About logo,
-distinct notification-area connection artwork, delayed initial icon creation, Explorer recovery, activation,
+Smoke requires an interactive Windows desktop with Explorer. It drives the real flyout
+through its window procedure: every icon notification (NIN_SELECT, WM_CONTEXTMENU,
+NIN_KEYSELECT with keyboard focus) opening it, Ctrl+comma, the Settings view with
+isolated startup preferences and their failure states, panel rows matching the view state,
+the action list (items, keyboard and UI Automation Invoke), Stop without a dialog and
+stale-instance safeguards, inline Clear and missing-file removal, exact path copying
+(including missing files and Unicode), pin/history operations, distinct notification-area
+connection artwork, delayed initial icon creation, Explorer recovery, activation,
 single-button message dismissal, and artwork invalidation.
 Synthetic invalidation is not a real monitor-DPI transition; verify display-scale
 changes separately on the desktop. Smoke uses only isolated fake AppHosts and
@@ -432,14 +507,16 @@ installed.
 - `TrayController` owns application state and independent per-AppHost operations.
   Its immutable view snapshots contain no AppKit handles or selectors.
   `AppHostPresentation` handles names, truncation, and directory context.
-- The platform adapters own native menus, callbacks, confirmation, browser launch,
-  and the main-thread event loop. There is no generic UI framework, MVVM/DI
+- `TrayPanel` owns all UI layout and interaction, including inline confirmations and row
+  action lists. The platform adapters own the status item or notification icon, the panel
+  window and its drawing, accessibility, callbacks, browser and application launch, and the
+  main-thread event loop. There is no generic UI framework, MVVM/DI
   container, reflection-based binding, or additional UI runtime.
 - UI changes are posted to the native main thread and coalesced, not polled.
-  While a menu is open, existing action state can update, but structural changes
-  wait until it closes so rows cannot move under the pointer.
+  While a click is in progress, the panel defers a new state until the button is
+  released, so rows cannot move under the pointer.
 - Actions carry path/PID/process-lifetime identity, not indices into a changing
-  list. Discovery revalidates that identity after native confirmation.
+  list. Discovery revalidates that identity before each action runs.
 - An explicit initial snapshot distinguishes an empty list from connecting.
   Complete replacement snapshots prevent incremental reconnect lists.
   Heartbeats maintain liveness without creating presentation updates.
@@ -451,7 +528,7 @@ installed.
   dashboard URLs are not logged.
 - Dashboard actions revalidate the selected instance and open only absolute
   HTTP(S) URLs without URI userinfo. Login query strings are preserved.
-- Stop actions revalidate the selection after confirmation, then invoke
+- Stop actions revalidate the selection, then invoke
   `aspire stop --apphost <absolute path> --pid <pid> --started-at <Unix milliseconds> --format json --protocol-version 1 --non-interactive --nologo`.
   The CLI revalidates the process lifetime before connection-bound shutdown.
   There is no fallback to PID-only or project-wide stop. If process lifetime
@@ -495,14 +572,27 @@ subprocess protocol, rather than a single-process tray.
 ## Checks
 
 The separate native smoke harness uses an injected fake backend with real
-AppKit objects and callbacks. It checks menu structure, titles/subtitles, icons,
-accessibility, absent tooltips, enabled state, safe-default confirmation, and
-Quit. It also checks connection badges, live health transitions, context pinning,
-offline pins, explicit Start, filtered recents, and safe clear/missing-file dialogs.
-Scenarios include empty/disconnected discovery, missing dashboards,
-independent pending stops, reordered rows, process replacement, retained
-senders after menu closure, updates during genuine native menu tracking, and
-acknowledged hidden-icon restoration deferred until menus close.
+AppKit objects and callbacks, and drives the flyout panel through the production paths:
+clicks through the pointer handlers, presses the way VoiceOver does (AXPress), and actions
+through the panel host. It checks that every activation of the status item opens the panel
+(left and right clicks, keyboard and VoiceOver activation with keyboard focus, and the
+button's own click) and that no menu is ever attached, Command-comma, the panel rows against
+the view state, the row action list (items, keyboard, VoiceOver), connection badges and
+accessibility labels, live health transitions, Stop without a confirmation by click and
+AXPress, a stale action after process replacement, pin and unpin from the action list,
+offline pins, explicit Start, Copy path (including Unicode and an injected clipboard
+failure), inline Clear and missing-file removal, missing-pin pruning, Documentation, and
+hidden-icon restoration. Scenarios include empty, connecting and disconnected discovery,
+missing dashboards, and independent pending stops.
+It also checks that the window matches the shared layout and that Escape closes it, that
+the gear opens the Settings view and its launch-at-sign-in toggle round-trips through the
+in-memory store, and that the window resizes with each view. Set
+`ASPIRE_TRAY_SMOKE_PANEL_CAPTURE_DIR` to an absolute directory to also write PNGs
+of the panel rendered by AppKit (light, dark, dark with hover, an open action list in light
+and dark, and the Settings view in light and dark). In the list, an open action list and
+the Settings view it also reads the panel's accessibility tree back through the
+NSAccessibility getters VoiceOver uses (roles, names, switch values, screen frames and
+the focused element) and presses a Settings switch the way VoiceOver does.
 It never opens a browser or starts/stops real AppHosts and exits automatically.
 Smoke bypasses the normal singleton lock, so it can run alongside the tray.
 
@@ -525,11 +615,9 @@ For a manual inspection, use `--smoke-seconds 120 --smoke-interactive`
 (or set `ASPIRE_TRAY_SMOKE_INTERACTIVE=1` with `--smoke-seconds 120`).
 After the automated checks pass, the harness leaves
 fake running AppHosts with healthy/waiting/failed states and a stopped, pinned
-example. Windows also describes these states as text in each AppHost submenu.
-The preview enables real native
-confirmation dialogs until **Quit Aspire**. The watchdog still bounds the automated
-checks but is removed when the interactive preview is ready. A Settings window
-identifies the preview so it is easy to find. History remains isolated from
+example, and opens the panel; use its **Quit** (**Exit** on Windows) button to close the preview. The watchdog
+still bounds the automated checks but is removed when the interactive preview is ready.
+The Settings view's About text identifies the preview. History remains isolated from
 the normal tray. Copy Path uses the real clipboard in the interactive preview;
 automated checks substitute a clipboard sink to preserve existing clipboard data.
 Its Start/Stop backend remains fake; explicit Open In actions
@@ -538,6 +626,19 @@ An isolated preview `.app` can set `ASPIRE_TRAY_SMOKE_INTERACTIVE=1` and
 `ASPIRE_TRAY_SMOKE_CLI=<absolute CLI path>` in its `LSEnvironment` to support
 Launch Services opening it without arguments. Normal product bundles do not set
 these variables.
+
+To check alignment on a real screen, the interactive preview takes three more variables:
+- `ASPIRE_TRAY_SMOKE_PREVIEW_APPEARANCE`: `light` or `dark`.
+- `ASPIRE_TRAY_SMOKE_PREVIEW_STATE`: `hover` (shows the first row's buttons), `actions`
+  (opens its action list) or `settings`.
+- `ASPIRE_TRAY_SMOKE_PREVIEW_EXPORT`: a JSON path. The preview writes there what the scene
+  draws and the guides it intends. On macOS the export names the window, for
+  `screencapture -o -l <windowId>`. On Windows the tray also saves the composited screen under
+  the panel as PNG next to the JSON.
+
+Run the Windows preview from the interactive desktop (Windows App or the console), not over
+SSH, since an SSH session has no desktop to show or capture. Drawing the guides over a
+screenshot at its scale shows where each element actually landed.
 
 Platform-independent tests exercise protocol framing and validation, subprocess
 cleanup, reconnects, lifetime replacement, concurrent stops, and controller

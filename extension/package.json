@@ -49,6 +49,7 @@
     "workspaceContains:**/apphost.mjs",
     "workspaceContains:**/apphost.cjs",
     "workspaceContains:**/apphost.rs",
+    "workspaceContains:**/apphost.go",
     "workspaceContains:**/AppHost.java",
     "workspaceContains:**/apphost.java",
     "workspaceContains:**/src/main/java/AppHost.java",
@@ -56,6 +57,7 @@
     "onCommand:aspire-vscode.verifyCliInstalled",
     "onLanguageModelTool:aspire_apphost_start",
     "onLanguageModelTool:aspire_apphost_stop",
+    "onLanguageModelTool:aspire_resource_debug",
     "onLanguageModelTool:aspire_debug_session_status",
     "onLanguageModelTool:aspire_explain_launch_failure",
     "onLanguageModelTool:aspire_open_dashboard",
@@ -136,6 +138,48 @@
           },
           "required": [
             "appHostPath"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "aspire_resource_debug",
+        "toolReferenceName": "aspireDebugResource",
+        "displayName": "%languageModelTool.aspireResourceDebug.displayName%",
+        "modelDescription": "%languageModelTool.aspireResourceDebug.modelDescription%",
+        "userDescription": "%languageModelTool.aspireResourceDebug.userDescription%",
+        "icon": "$(debug-alt)",
+        "canBeReferencedInPrompt": true,
+        "when": "isWorkspaceTrusted",
+        "tags": [
+          "aspire",
+          "debug",
+          "resource"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "appHostPath": {
+              "type": "string",
+              "description": "%languageModelTool.aspireResourceDebug.appHostPath.description%"
+            },
+            "resourceName": {
+              "type": "string",
+              "description": "%languageModelTool.aspireResourceDebug.resourceName.description%"
+            },
+            "strategy": {
+              "type": "string",
+              "enum": [
+                "auto",
+                "attach"
+              ],
+              "default": "auto",
+              "description": "%languageModelTool.aspireResourceDebug.strategy.description%"
+            }
+          },
+          "required": [
+            "appHostPath",
+            "resourceName"
           ],
           "additionalProperties": false
         }
@@ -662,6 +706,12 @@
         "icon": "$(debug-restart)"
       },
       {
+        "command": "aspire-vscode.attachDebuggerToResource",
+        "title": "%command.attachDebuggerToResource%",
+        "category": "Aspire",
+        "icon": "$(debug-alt)"
+      },
+      {
         "command": "aspire-vscode.viewResourceLogs",
         "title": "%command.viewResourceLogs%",
         "category": "Aspire",
@@ -820,12 +870,12 @@
       "explorer/context": [
         {
           "command": "aspire-vscode.runAppHostFromExplorer",
-          "when": "resourceFilename =~ /apphost\\.(cs|ts|mts|cts|js|mjs|cjs|rs|java)$/i",
+          "when": "resourceFilename =~ /apphost\\.(cs|ts|mts|cts|js|mjs|cjs|rs|java|go)$/i",
           "group": "aspire_actions@1"
         },
         {
           "command": "aspire-vscode.debugAppHostFromExplorer",
-          "when": "resourceFilename =~ /apphost\\.(cs|ts|mts|cts|js|mjs|cjs|rs|java)$/i",
+          "when": "resourceFilename =~ /apphost\\.(cs|ts|mts|cts|js|mjs|cjs|rs|java|go)$/i",
           "group": "aspire_actions@2"
         }
       ],
@@ -924,6 +974,10 @@
         },
         {
           "command": "aspire-vscode.restartResource",
+          "when": "false"
+        },
+        {
+          "command": "aspire-vscode.attachDebuggerToResource",
           "when": "false"
         },
         {
@@ -1127,14 +1181,19 @@
           "group": "2_actions@3"
         },
         {
+          "command": "aspire-vscode.attachDebuggerToResource",
+          "when": "view == aspire-vscode.appHosts && viewItem =~ /^resource.*:canAttachDebugger/",
+          "group": "2_actions@4"
+        },
+        {
           "command": "aspire-vscode.executeResourceCommand",
           "when": "view == aspire-vscode.appHosts && viewItem =~ /^resource(:|$)/",
-          "group": "2_actions@4"
+          "group": "2_actions@5"
         },
         {
           "command": "aspire-vscode.executeResourceCommandItem",
           "when": "view == aspire-vscode.appHosts && viewItem == resourceCommand:enabled",
-          "group": "2_actions@4"
+          "group": "2_actions@5"
         },
         {
           "command": "aspire-vscode.viewResourceLogs",

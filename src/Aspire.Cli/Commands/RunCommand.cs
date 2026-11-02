@@ -112,6 +112,8 @@ internal sealed class RunCommand : BaseCommand
 
     protected override TimeSpan GracefulShutdownBudget => s_gracefulShutdownBudget;
 
+    protected override string CancellationMessage => InteractionServiceStrings.StoppingAspire;
+
     internal override void PrepareForExecution(ParseResult parseResult)
     {
         // The spawned child runs without --detach, so its environment marker preserves detach-only
