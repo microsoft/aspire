@@ -325,7 +325,7 @@ test("Windows discovery surfaces known-folder lookup failures", async () => {
         if (fail) throw new Error("Known-folder lookup failed");
         return { stdout: "\r\n" };
       },
-    }), /Unable to locate Windows application data/);
+    }), { code: "gh_cli_discovery_failed", message: /Unable to locate Windows application data/ });
   }
 });
 
@@ -431,7 +431,7 @@ test("unexpected CLI failures surface a safe diagnostic rather than using legacy
       calls.push(args);
       throw Object.assign(new Error("private error"), { code: 2, stderr: "private details" });
     },
-  }), /GitHub CLI account discovery failed/);
+  }), { code: "gh_cli_discovery_failed", message: /GitHub CLI account discovery failed/ });
   assert.deepEqual(calls, [["auth", "status", "--json", "hosts"]]);
 });
 

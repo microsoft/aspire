@@ -218,13 +218,25 @@ async function computeDashboard({ progress = true, background = false } = {}) {
   const stream = sseClients.size > 0;
   const previous = cache?.dashboard ?? null;
   const prefs = await loadPrefs();
-  const auth = await resolveAuth(prefs);
+  const healthMode = prefs.mode === "health";
+  let auth;
+  let githubDiscoveryError = null;
+  try {
+    auth = await resolveAuth(prefs);
+  } catch (error) {
+    if (!healthMode || !["gh_cli_missing", "gh_cli_lookup_failed", "gh_cli_discovery_failed"].includes(error.code)) {
+      throw error;
+    }
+    // Azure-only Health does not require GitHub credentials. Keep the discovery
+    // failure visible in the dashboard's error bar without blocking Azure sources.
+    githubDiscoveryError = error.message;
+    auth = { accounts: [], tokenById: new Map() };
+  }
   const active = auth.accounts.filter((a) => a.active && a.status !== "failed");
   const accountsForLoad = active
     .map((a) => ({ token: auth.tokenById.get(a.id), login: a.login, repos: a.repos, graphql: a.graphql }))
     .filter((a) => a.token && a.login);
 
-  const healthMode = prefs.mode === "health";
   let dashboard;
   if (accountsForLoad.length === 0 && !healthMode) {
     const anyDetected = auth.accounts.length > 0;
@@ -255,6 +267,9 @@ async function computeDashboard({ progress = true, background = false } = {}) {
           showDrafts: prefs.showDrafts,
           onProgress: stream && progress ? broadcastProgress : undefined,
         });
+  }
+  if (githubDiscoveryError) {
+    dashboard.errors.push(`GitHub account discovery: ${githubDiscoveryError}`);
   }
 
   // A preference mutation can finish while GitHub requests are in flight. Auto is a publish choice,

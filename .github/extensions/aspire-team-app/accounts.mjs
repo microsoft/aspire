@@ -55,6 +55,10 @@ function tokenHash(token) {
 // Candidate enumeration
 // ---------------------------------------------------------------------------
 
+function accountDiscoveryError(message) {
+  return Object.assign(new Error(message), { code: "gh_cli_discovery_failed" });
+}
+
 async function readGhAccounts(run, env) {
   try {
     // JSON status keeps all accounts even when one host fails authentication:
@@ -67,7 +71,7 @@ async function readGhAccounts(run, env) {
   } catch (error) {
     if (error.code === "gh_cli_missing" || error.code === "gh_cli_lookup_failed") throw error;
     if (!/unknown flag: --json\b/.test(error.stderr ?? "")) {
-      throw new Error("GitHub CLI account discovery failed. Check `gh auth status` in a terminal.");
+      throw accountDiscoveryError("GitHub CLI account discovery failed. Check `gh auth status` in a terminal.");
     }
   }
 
@@ -78,7 +82,7 @@ async function readGhAccounts(run, env) {
     // Older gh versions have no JSON status. Exit 1 still includes healthy accounts
     // alongside failures, on either stream: "Logged in to github.com account octo (keyring)".
     if (error.code !== 1) {
-      throw new Error("GitHub CLI account discovery failed. Check `gh auth status` in a terminal.");
+      throw accountDiscoveryError("GitHub CLI account discovery failed. Check `gh auth status` in a terminal.");
     }
     output = error;
   }
@@ -103,11 +107,11 @@ async function ghAccounts(run, env, platform) {
         { timeout: 8000, env },
       ));
     } catch {
-      throw new Error("Unable to locate Windows application data for GitHub CLI. Set GH_CONFIG_DIR to the existing GitHub CLI configuration directory.");
+      throw accountDiscoveryError("Unable to locate Windows application data for GitHub CLI. Set GH_CONFIG_DIR to the existing GitHub CLI configuration directory.");
     }
     const folder = appData.trim();
     if (!folder) {
-      throw new Error("Unable to locate Windows application data for GitHub CLI. Set GH_CONFIG_DIR to the existing GitHub CLI configuration directory.");
+      throw accountDiscoveryError("Unable to locate Windows application data for GitHub CLI. Set GH_CONFIG_DIR to the existing GitHub CLI configuration directory.");
     }
     env.APPDATA = folder;
     return ghAccounts(run, env, platform);

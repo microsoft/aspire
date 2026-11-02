@@ -109,6 +109,8 @@ Authenticate with an existing `az` session or `AZURE_DEVOPS_EXT_PAT`. The app st
 only normalized pipeline coordinates and branch preferences; it never stores tokens
 or other credentials. GitHub and Azure DevOps sources are loaded independently, so
 an unavailable provider does not hide results from the other provider.
+GitHub CLI discovery failures appear in Health's error bar without blocking
+configured Azure pipelines; GitHub-only modes still report the discovery failure.
 
 When a configured Azure pipeline builds a watched GitHub repository directly, provider
 metadata links both sources into one repository group. Azure Repos mirrors do not expose
