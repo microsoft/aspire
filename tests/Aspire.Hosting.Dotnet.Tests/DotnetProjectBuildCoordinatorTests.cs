@@ -1350,7 +1350,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
         const string compilerError = "/src/Api/Program.cs(3,1): error CS1002: ; expected [/src/Api/Api.csproj]";
         const string fileInUseError = "C:\\sdk\\Microsoft.NET.Sdk.Razor.StaticWebAssets.targets(1,1): error MSB3026: Could not copy file. The process cannot access the file because it is being used by another process. [/src/Worker/Worker.csproj]";
-        UseBuildOutput(
+        var getReadCount = UseBuildOutput(
             app,
             buildResource,
             "Restore complete (0.5s)",
@@ -1377,8 +1377,13 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             Assert.Contains(fileInUseError, exception.Message);
             Assert.DoesNotContain("Restore complete", exception.Message);
             Assert.Single(exception.Message.Split(Environment.NewLine), line => line == compilerError);
+
+            await app.ResourceNotifications.PublishUpdateAsync(
+                buildResource,
+                snapshot => snapshot with { ResourceReadyEvent = new(Task.FromResult(new object())) });
         }
 
+        Assert.Equal(1, getReadCount());
         var appHostError = Assert.Single(
             app.Services.GetFakeLogCollector().GetSnapshot(),
             record => record.Level == LogLevel.Error && record.Message.Contains("The coordinated .NET build failed", StringComparison.Ordinal));
@@ -1469,61 +1474,274 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task CoordinatedBuildKeepsOutputSubscribedUntilBuildSettles()
+    public async Task SuccessfulCoordinatedBuildDoesNotSubscribeToOrReadOutput()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(
             options => options.ProjectDirectory = workspace.Path,
             outputHelper);
         var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
-        builder.AddDotnetProject("worker", projectPath, options => options.ExcludeLaunchProfile = true);
+        var project = builder.AddDotnetProject("worker", projectPath, options => options.ExcludeLaunchProfile = true);
         await using var app = builder.Build();
         await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
 
         var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
         var buildLogName = Assert.Single(buildResource.GetResolvedResourceNames());
         var loggerService = app.Services.GetRequiredService<ResourceLoggerService>();
+        var getReadCount = UseBuildOutput(app, buildResource, "Build succeeded.");
         Assert.False(loggerService.HasActiveSubscribers(buildLogName));
 
-        // DCP only drains a terminated build's output before publishing the terminal state while a log subscriber
-        // is active, so the subscription must exist as soon as the build attempt starts.
         await builder.Eventing.PublishAsync(
             new BeforeResourceStartedEvent(buildResource, app.Services),
             TestContext.Current.CancellationToken);
-        Assert.True(loggerService.HasActiveSubscribers(buildLogName));
-
-        using var watchCancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
-        var subscriberChanges = loggerService.WatchAnySubscribersAsync(watchCancellation.Token).GetAsyncEnumerator(watchCancellation.Token);
-        var unsubscribed = WaitForUnsubscribedAsync();
+        Assert.False(loggerService.HasActiveSubscribers(buildLogName));
 
         await app.ResourceNotifications.PublishUpdateAsync(
             buildResource,
             snapshot => snapshot with { State = KnownResourceStates.Running });
-        Assert.True(loggerService.HasActiveSubscribers(buildLogName));
+        Assert.False(loggerService.HasActiveSubscribers(buildLogName));
 
         await app.ResourceNotifications.PublishUpdateAsync(
             buildResource,
             snapshot => snapshot with
             {
                 State = KnownResourceStates.Finished,
-                ExitCode = 1,
+                ExitCode = 0,
             });
 
-        await unsubscribed.WaitAsync(TestConstants.LongTimeoutTimeSpan, TestContext.Current.CancellationToken);
+        var completion = Assert.Single(project.Resource.Annotations.OfType<DotnetProgramBuildCompletionAnnotation>());
+        await completion.Callback(app.Services, TestContext.Current.CancellationToken);
         Assert.False(loggerService.HasActiveSubscribers(buildLogName));
-        watchCancellation.Cancel();
-        await subscriberChanges.DisposeAsync();
+        Assert.Equal(0, getReadCount());
+    }
 
-        async Task WaitForUnsubscribedAsync()
+    [Theory]
+    [InlineData(false, nameof(KnownResourceStates.Finished), 1)]
+    [InlineData(true, nameof(KnownResourceStates.Exited), 1)]
+    [InlineData(false, nameof(KnownResourceStates.FailedToStart), null)]
+    [InlineData(true, nameof(KnownResourceStates.FailedToStart), null)]
+    public async Task FailedBuildDiagnosticsAreSharedPerAttempt(bool useRebuilder, string finalState, int? exitCode)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        builder.Services.AddLogging(logging => logging.AddFakeLogging());
+        var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
+        var project = builder.AddDotnetProject("worker", projectPath, options => options.ExcludeLaunchProfile = true);
+        await using var app = builder.Build();
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        var completion = Assert.Single(project.Resource.Annotations.OfType<DotnetProgramBuildCompletionAnnotation>());
+        IResource target = buildResource;
+        if (useRebuilder)
         {
-            while (await subscriberChanges.MoveNextAsync())
-            {
-                if (subscriberChanges.Current.Name == buildLogName && !subscriberChanges.Current.AnySubscribers)
-                {
-                    return;
-                }
-            }
+            await app.ResourceNotifications.PublishUpdateAsync(
+                buildResource,
+                snapshot => snapshot with { State = KnownResourceStates.Finished, ExitCode = 0 });
+            target = Assert.Single(builder.Resources.OfType<ProjectRebuilderResource>());
         }
+
+        for (var attempt = 1; attempt <= 2; attempt++)
+        {
+            var error = $"Worker.cs(1,1): error CS0103: Build attempt {attempt} failed.";
+            var getReadCount = UseBuildOutput(app, target, error);
+            await app.ResourceNotifications.PublishUpdateAsync(
+                target,
+                snapshot => snapshot with { State = KnownResourceStates.Starting, ExitCode = null });
+            await builder.Eventing.PublishAsync(
+                new BeforeResourceStartedEvent(target, app.Services),
+                TestContext.Current.CancellationToken);
+            var wait = completion.Callback(app.Services, TestContext.Current.CancellationToken);
+            Assert.False(wait.IsCompleted);
+
+            await app.ResourceNotifications.PublishUpdateAsync(
+                target,
+                snapshot => snapshot with { State = finalState, ExitCode = exitCode });
+            var first = await Assert.ThrowsAsync<DistributedApplicationException>(() => wait);
+            await app.ResourceNotifications.PublishUpdateAsync(
+                target,
+                snapshot => snapshot with { ResourceReadyEvent = new(Task.FromResult(new object())) });
+            var second = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
+                completion.Callback(app.Services, TestContext.Current.CancellationToken));
+
+            Assert.Contains(error, first.Message);
+            Assert.Equal(first.Message, second.Message);
+            Assert.Equal(1, getReadCount());
+        }
+
+        Assert.Equal(2, app.Services.GetFakeLogCollector().GetSnapshot().Count(
+            record => record.Level == LogLevel.Error && record.Message.Contains("The coordinated .NET build failed", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public async Task CancelingOneDiagnosticWaitDoesNotCancelSharedRead()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        builder.Services.AddLogging(logging => logging.AddFakeLogging());
+        var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
+        var project = builder.AddDotnetProject("worker", projectPath, options => options.ExcludeLaunchProfile = true);
+        await using var app = builder.Build();
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        var completion = Assert.Single(project.Resource.Annotations.OfType<DotnetProgramBuildCompletionAnnotation>());
+        const string error = "Worker.cs(1,1): error CS0103: Shared build failure.";
+        var output = Channel.CreateUnbounded<IReadOnlyList<LogEntry>>();
+        output.Writer.TryWrite([LogEntry.Create(timestamp: null, error, isErrorMessage: false)]);
+        var readStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var readCount = 0;
+        app.Services.GetRequiredService<ResourceLoggerService>().SetConsoleLogsService(
+            new TestConsoleLogsService(_ =>
+            {
+                Interlocked.Increment(ref readCount);
+                readStarted.TrySetResult();
+                return output;
+            }));
+        await app.ResourceNotifications.PublishUpdateAsync(
+            buildResource,
+            snapshot => snapshot with { State = KnownResourceStates.Finished, ExitCode = 1 });
+
+        using var canceled = new CancellationTokenSource();
+        try
+        {
+            var canceledWait = completion.Callback(app.Services, canceled.Token);
+            await readStarted.Task.WaitAsync(TestConstants.LongTimeoutTimeSpan, TestContext.Current.CancellationToken);
+            var firstWait = completion.Callback(app.Services, TestContext.Current.CancellationToken);
+            var secondWait = completion.Callback(app.Services, TestContext.Current.CancellationToken);
+            canceled.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => canceledWait);
+            Assert.False(firstWait.IsCompleted);
+            Assert.False(secondWait.IsCompleted);
+
+            output.Writer.Complete();
+            var failures = await Task.WhenAll(
+                Assert.ThrowsAsync<DistributedApplicationException>(() => firstWait),
+                Assert.ThrowsAsync<DistributedApplicationException>(() => secondWait));
+            Assert.All(failures, failure => Assert.Contains(error, failure.Message));
+            Assert.Equal(1, Volatile.Read(ref readCount));
+            Assert.Single(app.Services.GetFakeLogCollector().GetSnapshot(),
+                record => record.Level == LogLevel.Error && record.Message.Contains("The coordinated .NET build failed", StringComparison.Ordinal));
+        }
+        finally
+        {
+            output.Writer.TryComplete();
+        }
+    }
+
+    [Fact]
+    public async Task RestartDoesNotReplaceAnInFlightDiagnosticResult()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        builder.Services.AddLogging(logging => logging.AddFakeLogging());
+        var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
+        var project = builder.AddDotnetProject("worker", projectPath, options => options.ExcludeLaunchProfile = true);
+        await using var app = builder.Build();
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        var completion = Assert.Single(project.Resource.Annotations.OfType<DotnetProgramBuildCompletionAnnotation>());
+        const string firstError = "Worker.cs(1,1): error CS0103: First attempt failed.";
+        const string secondError = "Worker.cs(1,1): error CS0103: Second attempt failed.";
+        var firstOutput = Channel.CreateUnbounded<IReadOnlyList<LogEntry>>();
+        firstOutput.Writer.TryWrite([LogEntry.Create(timestamp: null, firstError, isErrorMessage: false)]);
+        var firstReadStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        app.Services.GetRequiredService<ResourceLoggerService>().SetConsoleLogsService(
+            new TestConsoleLogsService(_ =>
+            {
+                firstReadStarted.TrySetResult();
+                return firstOutput;
+            }));
+        await app.ResourceNotifications.PublishUpdateAsync(
+            buildResource,
+            snapshot => snapshot with { State = KnownResourceStates.Finished, ExitCode = 1 });
+
+        try
+        {
+            var firstWait = completion.Callback(app.Services, TestContext.Current.CancellationToken);
+            await firstReadStarted.Task.WaitAsync(TestConstants.LongTimeoutTimeSpan, TestContext.Current.CancellationToken);
+            await app.ResourceNotifications.PublishUpdateAsync(
+                buildResource,
+                snapshot => snapshot with { State = KnownResourceStates.Starting, ExitCode = null });
+            await builder.Eventing.PublishAsync(
+                new BeforeResourceStartedEvent(buildResource, app.Services),
+                TestContext.Current.CancellationToken);
+            var getReadCount = UseBuildOutput(app, buildResource, secondError);
+            await app.ResourceNotifications.PublishUpdateAsync(
+                buildResource,
+                snapshot => snapshot with { State = KnownResourceStates.Finished, ExitCode = 1 });
+            var second = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
+                completion.Callback(app.Services, TestContext.Current.CancellationToken));
+            firstOutput.Writer.Complete();
+            var first = await Assert.ThrowsAsync<DistributedApplicationException>(() => firstWait);
+
+            Assert.EndsWith(firstError, first.Message);
+            Assert.EndsWith(secondError, second.Message);
+            Assert.Equal(1, getReadCount());
+            Assert.Equal(2, app.Services.GetFakeLogCollector().GetSnapshot().Count(
+                record => record.Level == LogLevel.Error && record.Message.Contains("The coordinated .NET build failed", StringComparison.Ordinal)));
+        }
+        finally
+        {
+            firstOutput.Writer.TryComplete();
+        }
+    }
+
+    [Fact]
+    [RequiresTools(["dotnet"])]
+    public async Task FailedBuildReportsFinalErrorsWithoutLogSubscribers()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectPath = CreateBrokenProject(workspace.Path, "COORDINATED_BUILD_MARKER");
+        const string errorMarker = "CoordinatedBuildFailureMarker";
+        File.WriteAllText(
+            Path.Combine(Path.GetDirectoryName(projectPath)!, "Program.cs"),
+            $"System.Console.WriteLine({errorMarker});");
+        using var builder = TestDistributedApplicationBuilder.Create(options =>
+        {
+            options.ProjectDirectory = workspace.Path;
+            options.DisableDashboard = true;
+            options.EnableResourceLogging = false;
+        }).WithResourceCleanUp(true);
+        builder.Services.AddLogging(logging => logging.AddFakeLogging());
+        var project = builder.AddDotnetProject("broken", projectPath, options => options.ExcludeLaunchProfile = true);
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        await using var app = builder.Build();
+
+        using (var startCts = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan))
+        {
+            await app.StartAsync(startCts.Token);
+        }
+
+        using (var completionCts = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan))
+        {
+            var buildEvent = await app.ResourceNotifications.WaitForResourceAsync(
+                buildResource.Name,
+                resourceEvent => DotnetProjectBuildCoordinator.IsSettledBuildSnapshot(resourceEvent.Snapshot),
+                completionCts.Token);
+            Assert.NotEqual(0, buildEvent.Snapshot.ExitCode);
+            var completion = Assert.Single(project.Resource.Annotations.OfType<DotnetProgramBuildCompletionAnnotation>());
+            var failure = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
+                completion.Callback(app.Services, completionCts.Token));
+            Assert.Contains("error CS0103", failure.Message);
+            Assert.Contains(errorMarker, failure.Message);
+            var loggers = app.Services.GetRequiredService<ResourceLoggerService>();
+            Assert.False(loggers.HasActiveSubscribers(buildEvent.ResourceId));
+        }
+
+        Assert.Single(app.Services.GetFakeLogCollector().GetSnapshot(),
+            record => record.Level == LogLevel.Error &&
+                record.Message.Contains("The coordinated .NET build failed", StringComparison.Ordinal) &&
+                record.Message.Contains(errorMarker, StringComparison.Ordinal));
+        using var stopCts = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan);
+        await app.StopAsync(stopCts.Token);
     }
 
     [Fact]
@@ -1558,21 +1776,24 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             exception.Message);
     }
 
-    private static void UseBuildOutput(DistributedApplication app, DotnetProjectBuildResource buildResource, params string[] lines)
+    private static Func<int> UseBuildOutput(DistributedApplication app, IResource buildResource, params string[] lines)
     {
         var buildResourceNames = buildResource.GetResolvedResourceNames();
+        var readCount = 0;
         app.Services.GetRequiredService<ResourceLoggerService>().SetConsoleLogsService(
             new TestConsoleLogsService(resourceName =>
             {
                 var channel = Channel.CreateUnbounded<IReadOnlyList<LogEntry>>();
                 if (buildResourceNames.Contains(resourceName))
                 {
+                    Interlocked.Increment(ref readCount);
                     channel.Writer.TryWrite([.. lines.Select(line => LogEntry.Create(timestamp: null, line, isErrorMessage: false))]);
                 }
 
                 channel.Writer.Complete();
                 return channel;
             }));
+        return () => Volatile.Read(ref readCount);
     }
 
     [Fact]

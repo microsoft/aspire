@@ -25,7 +25,7 @@ internal static partial class DotnetProjectBuildCoordinator
     private const int MaxReportedBuildOutputLines = 20;
     private const int MaxReportedBuildOutputLineLength = 1000;
     private static readonly TimeSpan s_buildOutputReadTimeout = TimeSpan.FromSeconds(10);
-    private static readonly ConditionalWeakTable<CustomResourceSnapshot, Lazy<Task<string>>> s_buildFailureMessages = new();
+    private static readonly ConditionalWeakTable<IResource, BuildFailureState> s_buildFailures = new();
 
     private static readonly ConditionalWeakTable<IDistributedApplicationBuilder, CoordinatorState> s_states = new();
 
@@ -123,13 +123,7 @@ internal static partial class DotnetProjectBuildCoordinator
             .ExcludeFromManifest()
             .WithHiddenOnCompletion(0);
 
-        builder.Eventing.Subscribe<BeforeResourceStartedEvent>(
-            buildResource,
-            (@event, _) =>
-            {
-                KeepBuildOutputSubscribedUntilSettled(@event.Services, buildResource);
-                return Task.CompletedTask;
-            });
+        BeginBuildAttemptOnResourceStart(builder, buildResource);
 
         return buildResource;
     }
@@ -199,91 +193,48 @@ internal static partial class DotnetProjectBuildCoordinator
         CancellationToken cancellationToken)
     {
         var notificationService = services.GetRequiredService<ResourceNotificationService>();
-        var buildEvent = await notificationService.WaitForResourceAsync(
-            buildResource.Name,
-            resourceEvent => IsSettledBuildSnapshot(resourceEvent.Snapshot),
-            cancellationToken).ConfigureAwait(false);
-
-        if (buildEvent.Snapshot.State?.Text == KnownResourceStates.FailedToStart ||
-            buildEvent.Snapshot.ExitCode is not 0)
+        var failureState = s_buildFailures.GetValue(buildResource, static _ => new BuildFailureState());
+        while (true)
         {
-            // Every dependent of the build observes the same settled snapshot, so read the build output and
-            // report the failure to the AppHost log once per build attempt. Without this, the build output only
-            // exists in the hidden build resource's log.
-            var snapshot = buildEvent.Snapshot;
-            var message = await s_buildFailureMessages.GetValue(
-                snapshot,
-                _ => new Lazy<Task<string>>(() => ReportBuildFailureAsync(services, buildResource, snapshot)))
-                .Value
-                .WaitAsync(cancellationToken)
-                .ConfigureAwait(false);
+            var attempt = failureState.Attempt;
+            var buildEvent = await notificationService.WaitForResourceAsync(
+                buildResource.Name,
+                resourceEvent => IsSettledBuildSnapshot(resourceEvent.Snapshot),
+                cancellationToken).ConfigureAwait(false);
 
+            if (buildEvent.Snapshot.State?.Text != KnownResourceStates.FailedToStart &&
+                buildEvent.Snapshot.ExitCode is 0)
+            {
+                if (failureState.IsCurrentAttempt(attempt))
+                {
+                    return;
+                }
+
+                continue;
+            }
+
+            var messageTask = failureState.GetFailureMessage(attempt, services, buildResource, buildEvent.Snapshot);
+            if (messageTask is null)
+            {
+                // A start raced with the terminal-state wait. Do not cache an old snapshot as the new attempt's failure.
+                continue;
+            }
+
+            var message = await messageTask.WaitAsync(cancellationToken).ConfigureAwait(false);
             throw new DistributedApplicationException(message);
         }
     }
 
-    // DCP drains a terminated executable's output before publishing its terminal state only while the resource has an
-    // active log subscriber. Keeping one for each build attempt makes the complete output, including compiler errors
-    // written just before exit, readable as soon as dependents observe the failed build.
-    private static void KeepBuildOutputSubscribedUntilSettled(IServiceProvider services, IResource buildResource)
+    private static Action BeginBuildAttemptOnResourceStart(IDistributedApplicationBuilder builder, IResource resource)
     {
-        var notificationService = services.GetService<ResourceNotificationService>();
-        var resourceLoggerService = services.GetService<ResourceLoggerService>();
-        if (notificationService is null || resourceLoggerService is null)
-        {
-            return;
-        }
-
-        var initialSnapshot = notificationService.TryGetCurrentState(buildResource.Name, out var resourceEvent)
-            ? resourceEvent.Snapshot
-            : null;
-        var applicationStopping = services.GetService<IHostApplicationLifetime>()?.ApplicationStopping ?? CancellationToken.None;
-        var subscription = CancellationTokenSource.CreateLinkedTokenSource(applicationStopping);
-
-        // Advancing the enumerator registers the subscriber synchronously, before DCP starts the build process.
-        var logs = resourceLoggerService.WatchAsync(buildResource).GetAsyncEnumerator(subscription.Token);
-        var firstBatch = logs.MoveNextAsync();
-        _ = DrainAsync();
-        _ = UnsubscribeWhenSettledAsync();
-
-        async Task DrainAsync()
-        {
-            try
+        var subscription = builder.Eventing.Subscribe<BeforeResourceStartedEvent>(
+            resource,
+            static (@event, _) =>
             {
-                if (await firstBatch.ConfigureAwait(false))
-                {
-                    while (await logs.MoveNextAsync().ConfigureAwait(false))
-                    {
-                    }
-                }
-            }
-            catch (OperationCanceledException)
-            {
-            }
-            finally
-            {
-                await logs.DisposeAsync().ConfigureAwait(false);
-            }
-        }
-
-        async Task UnsubscribeWhenSettledAsync()
-        {
-            try
-            {
-                await notificationService.WaitForResourceAsync(
-                    buildResource.Name,
-                    e => !ReferenceEquals(e.Snapshot, initialSnapshot) && IsSettledBuildSnapshot(e.Snapshot),
-                    subscription.Token).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-            }
-            finally
-            {
-                subscription.Cancel();
-                subscription.Dispose();
-            }
-        }
+                s_buildFailures.GetValue(@event.Resource, static _ => new BuildFailureState()).BeginAttempt();
+                return Task.CompletedTask;
+            });
+        return () => builder.Eventing.Unsubscribe(subscription);
     }
 
     private static async Task<string> ReportBuildFailureAsync(
@@ -322,6 +273,8 @@ internal static partial class DotnetProjectBuildCoordinator
         readCancellation.CancelAfter(s_buildOutputReadTimeout);
         try
         {
+            // Completed DCP process output is stored independently of live log forwarding; no subscriber is needed.
+            // https://github.com/microsoft/dcp/blob/v0.27.2/internal/exerunners/process_executable_runner.go#L207-L220
             await foreach (var batch in resourceLoggerService.GetAllAsync(buildResource)
                 .WithCancellation(readCancellation.Token)
                 .ConfigureAwait(false))
@@ -745,6 +698,11 @@ internal static partial class DotnetProjectBuildCoordinator
 
                     foreach (var entry in step.Projects)
                     {
+                        if (FindRebuilder(model, entry.Registration.Resource) is { } rebuilder)
+                        {
+                            rollbackActions.Push(BeginBuildAttemptOnResourceStart(_builder, rebuilder));
+                        }
+
                         var originalBuildWorkingDirectory = entry.Metadata.BuildWorkingDirectory;
                         entry.Metadata.SetBuildWorkingDirectory(step.WorkingDirectory);
                         rollbackActions.Push(() =>
@@ -1575,6 +1533,60 @@ internal static partial class DotnetProjectBuildCoordinator
             public bool IsAbandoned { get; set; }
 
             public bool CleanupScheduled { get; set; }
+        }
+    }
+
+    private sealed class BuildFailureState
+    {
+        private readonly object _lock = new();
+        private long _attempt;
+        private Lazy<Task<string>>? _message;
+
+        public long Attempt
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return _attempt;
+                }
+            }
+        }
+
+        public void BeginAttempt()
+        {
+            lock (_lock)
+            {
+                _attempt++;
+                _message = null;
+            }
+        }
+
+        public bool IsCurrentAttempt(long attempt)
+        {
+            lock (_lock)
+            {
+                return attempt == _attempt;
+            }
+        }
+
+        public Task<string>? GetFailureMessage(
+            long attempt,
+            IServiceProvider services,
+            IResource resource,
+            CustomResourceSnapshot snapshot)
+        {
+            lock (_lock)
+            {
+                if (attempt != _attempt)
+                {
+                    return null;
+                }
+
+                // Metadata updates replace snapshots without starting a new build.
+                _message ??= new(() => ReportBuildFailureAsync(services, resource, snapshot));
+                return _message.Value;
+            }
         }
     }
 }
