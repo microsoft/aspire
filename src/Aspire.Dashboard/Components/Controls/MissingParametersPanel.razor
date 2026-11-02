@@ -13,7 +13,7 @@
                             CustomColor="currentColor" />
             </span>
             <h2 id="missing-parameters-title">@Loc[nameof(Dashboard.Resources.Resources.MissingParametersCardTitle)]</h2>
-            <span class="missing-parameters-count">@Editors.Count</span>
+            <span class="missing-parameters-count">@Loc[Editors.Count == 1 ? nameof(Dashboard.Resources.Resources.MissingParameterCount) : nameof(Dashboard.Resources.Resources.MissingParametersCount), Editors.Count]</span>
         </header>
         <p class="missing-parameters-description">@Loc[nameof(Dashboard.Resources.Resources.MissingParametersPanelDescription)]</p>
 
@@ -46,10 +46,12 @@
                                                      Placeholder="@field.ViewModel.Input.Placeholder"
                                                      Required="@field.ViewModel.Input.Required"
                                                      Immediate="true"
+                                                     MessageCondition="@(_ => false)"
                                                      AutoComplete="@(isSecret ? "one-time-code" : "off")"
                                                      TextInputType="@(isSecret && !field.ViewModel.IsSecretTextVisible ? TextInputType.Password : TextInputType.Text)"
                                                      Disabled="@IsEditorDisabled(editor)"
-                                                     aria-describedby="@field.DescriptionId">
+                                                     aria-describedby="@GetDescribedBy(input, field.DescriptionId)"
+                                                     aria-invalid="@(HasValidationErrors(input) ? "true" : null)">
                                         <EndTemplate>
                                             @if (isSecret)
                                             {
@@ -83,13 +85,15 @@
                                                       @bind-Value="field.ViewModel.Value"
                                                       Placeholder="@field.ViewModel.Input.Placeholder"
                                                       Required="@field.ViewModel.Input.Required"
+                                                      MessageCondition="@(_ => false)"
                                                       Items="@field.ViewModel.SelectOptions"
                                                       OptionValue="@((SelectViewModel<string>? option) => option?.Id)"
                                                       OptionText="@((SelectViewModel<string>? option) => option?.Name)"
                                                       Height="250px"
                                                       Position="SelectPosition.Below"
                                                       Disabled="@IsEditorDisabled(editor)"
-                                                      aria-describedby="@field.DescriptionId" />
+                                                      aria-describedby="@GetDescribedBy(input, field.DescriptionId)"
+                                                      aria-invalid="@(HasValidationErrors(input) ? "true" : null)" />
                                     }
                                     else
                                     {
@@ -106,12 +110,14 @@
                                                             ImmediateDelay="@FluentUIExtensions.InputDelay"
                                                             Placeholder="@field.ViewModel.Input.Placeholder"
                                                             Required="@field.ViewModel.Input.Required"
+                                                            MessageCondition="@(_ => false)"
                                                             Items="@field.ViewModel.FilteredOptions()"
                                                             OptionText="@((SelectViewModel<string>? option) => option?.Name)"
                                                             Height="250px"
                                                             Position="SelectPosition.Below"
                                                             Disabled="@IsEditorDisabled(editor)"
-                                                            aria-describedby="@field.DescriptionId">
+                                                            aria-describedby="@GetDescribedBy(input, field.DescriptionId)"
+                                                            aria-invalid="@(HasValidationErrors(input) ? "true" : null)">
                                                 <FreeOption>
                                                     <FreeOptionOutput />
                                                 </FreeOption>
@@ -136,8 +142,10 @@
                                                        Placeholder="@field.ViewModel.Input.Placeholder"
                                                        Required="@field.ViewModel.Input.Required"
                                                        Immediate="true"
+                                                       MessageCondition="@(_ => false)"
                                                        Disabled="@IsEditorDisabled(editor)"
-                                                       aria-describedby="@field.DescriptionId" />
+                                                       aria-describedby="@GetDescribedBy(input, field.DescriptionId)"
+                                                       aria-invalid="@(HasValidationErrors(input) ? "true" : null)" />
                                     break;
                                 case InputType.File:
                                     var fileButtonId = $"{field.ViewModel.ElementId}-file-upload";
@@ -174,13 +182,21 @@
                                                       Appearance="ButtonAppearance.Primary"
                                                       Class="aspire-button"
                                                       IconStart="@(new Icons.Regular.Size16.FolderOpen())"
-                                                      Disabled="@IsEditorDisabled(editor)">
+                                                      Disabled="@IsEditorDisabled(editor)"
+                                                      aria-describedby="@GetDescribedBy(input, field.DescriptionId)"
+                                                      aria-invalid="@(HasValidationErrors(input) ? "true" : null)">
                                             @GetFileButtonText(editor)
                                         </FluentButton>
                                     </div>
                                     break;
                             }
                         </InteractionInputField>
+                        <div id="@($"{input.ElementId}-validation")" aria-live="polite">
+                            @if (HasValidationErrors(input))
+                            {
+                                <div class="validation-message">@Loc[nameof(Dashboard.Resources.Resources.ParameterValueRequired)]</div>
+                            }
+                        </div>
                     </section>
                 }
             </div>

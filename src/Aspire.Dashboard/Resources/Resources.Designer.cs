@@ -1477,7 +1477,7 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Enter the missing values together, then apply them without leaving the resource overview..
+        ///   Looks up a localized string similar to Complete every required field below, then select Set parameter values to submit all values together..
         /// </summary>
         public static string MissingParametersPanelDescription {
             get {

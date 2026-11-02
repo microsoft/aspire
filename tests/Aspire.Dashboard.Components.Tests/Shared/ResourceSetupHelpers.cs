@@ -85,6 +85,20 @@ internal static class ResourceSetupHelpers
         FluentUISetupHelpers.SetupFluentUIComponents(context);
     }
 
+    public static void SetupMissingParametersPanel(BunitContext context)
+    {
+        FluentUISetupHelpers.AddCommonDashboardServices(context);
+        FluentUISetupHelpers.SetupFluentUIComponents(context);
+        FluentUISetupHelpers.SetupFluentButton(context);
+        FluentUISetupHelpers.SetupFluentTextField(context);
+        FluentUISetupHelpers.SetupFluentInputLabel(context);
+        FluentUISetupHelpers.SetupFluentCheckbox(context);
+        FluentUISetupHelpers.SetupFluentInputFile(context);
+        FluentUISetupHelpers.SetupFluentList(context);
+        FluentUISetupHelpers.SetupFluentCombobox(context);
+        context.JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Components.TextInput.attachImmediateEvent", _ => true).SetVoidResult();
+    }
+
     public static void SetupResourcesPage(
         BunitContext context,
         ViewportInformation viewport,

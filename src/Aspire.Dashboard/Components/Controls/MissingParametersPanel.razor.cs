@@ -25,6 +25,7 @@ public partial class MissingParametersPanel : IAsyncDisposable
     private IReadOnlyList<ParameterEditor> _editors = [];
     private InputViewModel? _saveInput;
     private bool _saveToUserSecrets;
+    private bool _submitAttempted;
 
     [Inject]
     public required IStringLocalizer<Resources.Resources> Loc { get; init; }
@@ -74,7 +75,7 @@ public partial class MissingParametersPanel : IAsyncDisposable
 
     private bool IsSubmitDisabled =>
         Editors.Count == 0 ||
-        Editors.Any(editor => IsEditorDisabled(editor) || IsMissingRequiredValue(editor.ValueInput));
+        Editors.Any(IsEditorDisabled);
 
     // The AppHost's inputs interaction, when it's shown in this panel. The interaction is submitted as a whole, so the
     // panel uses it only when it shows every parameter the interaction asks for. Otherwise each parameter is set with
@@ -140,6 +141,10 @@ public partial class MissingParametersPanel : IAsyncDisposable
             }
         }
 
+        if (!_editors.Select(editor => editor.Resource.Name).SequenceEqual(editors.Select(editor => editor.Resource.Name), StringComparers.ResourceName))
+        {
+            _submitAttempted = false;
+        }
         _editors = editors;
 
         var interactionSaveInput = interaction?.Inputs.FirstOrDefault(input =>
@@ -166,9 +171,21 @@ public partial class MissingParametersPanel : IAsyncDisposable
         input.Input.InputType != InputType.Boolean &&
         string.IsNullOrWhiteSpace(input.Value);
 
+    private bool HasValidationErrors(InputViewModel input) =>
+        _submitAttempted && IsMissingRequiredValue(input);
+
+    private string? GetDescribedBy(InputViewModel input, string? descriptionId) =>
+        HasValidationErrors(input) ? $"{descriptionId} {input.ElementId}-validation".TrimStart() : descriptionId;
+
     private async Task SubmitAsync()
     {
         if (IsSubmitDisabled)
+        {
+            return;
+        }
+
+        _submitAttempted = true;
+        if (Editors.Any(editor => IsMissingRequiredValue(editor.ValueInput)))
         {
             return;
         }

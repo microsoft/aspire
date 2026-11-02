@@ -615,7 +615,7 @@
     <value>Value set</value>
   </data>
   <data name="MissingParametersPanelDescription" xml:space="preserve">
-    <value>Enter the missing values together, then apply them without leaving the resource overview.</value>
+    <value>Complete every required field below, then select Set parameter values to submit all values together.</value>
   </data>
   <data name="MissingParametersCardTitle" xml:space="preserve">
     <value>Missing parameter values</value>

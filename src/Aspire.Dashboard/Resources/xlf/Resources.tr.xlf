@@ -143,8 +143,8 @@
         <note />
       </trans-unit>
       <trans-unit id="MissingParametersPanelDescription">
-        <source>Enter the missing values together, then apply them without leaving the resource overview.</source>
-        <target state="new">Enter the missing values together, then apply them without leaving the resource overview.</target>
+        <source>Complete every required field below, then select Set parameter values to submit all values together.</source>
+        <target state="new">Complete every required field below, then select Set parameter values to submit all values together.</target>
         <note />
       </trans-unit>
       <trans-unit id="MissingParametersReview">
