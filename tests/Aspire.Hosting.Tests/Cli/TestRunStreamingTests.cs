@@ -92,7 +92,7 @@ public class TestRunStreamingTests(ITestOutputHelper outputHelper)
         tests.Annotations.Add(new TestingAnnotation());
         await notifications.PublishUpdateAsync(tests, "tests-1", s => s with { State = state, ExitCode = exitCode });
         using var coordinator = new TestRunCoordinator(new DistributedApplicationModel([tests]), notifications,
-            TimeProvider.System, NullLogger<TestRunCoordinator>.Instance);
+            TimeProvider.System, NullLogger<TestRunCoordinator>.Instance, new ResourceLoggerService());
         var events = new ConcurrentQueue<TestRunEvent>();
 
         await CollectAsync(coordinator.WatchAsync(TestContext.Current.CancellationToken), events).DefaultTimeout();
