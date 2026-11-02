@@ -126,6 +126,8 @@
 @media (max-width: 768px) {
     .dashboard-message-bar {
         position: relative;
+        /* Let the capped alert stack scroll instead of compressing wrapped actions out of their card. */
+        flex-shrink: 0;
         grid-template-columns: auto minmax(0, 1fr);
         align-items: start;
         padding: 8px 40px 8px 8px;

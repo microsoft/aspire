@@ -44,7 +44,7 @@ public class ResourceOverviewEmptyPanelsTests : DashboardTestContext
         var tabs = cut.FindAll("[role='tab']").Select(t => t.TextContent).ToArray();
         var navigation = Services.GetRequiredService<NavigationManager>();
         var initialUrl = navigation.Uri;
-        var selector = cut.Find(".resource-header-row .overview-panel-selector [role='group']");
+        var selector = cut.Find(".resource-header-controls .overview-panel-selector [role='group']");
         Assert.Equal("Panels", selector.GetAttribute("aria-label"));
         Assert.Equal(["Hide empty panels", "Show all panels"], selector.QuerySelectorAll("button").Select(b => b.GetAttribute("aria-label")));
         var all = cut.Find(".overview-panel-selector [aria-label='Show all panels']");
@@ -91,7 +91,7 @@ public class ResourceOverviewEmptyPanelsTests : DashboardTestContext
         Services.GetRequiredService<NavigationManager>().NavigateTo("/resources/test");
         var cut = RenderOverview(viewport);
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
-        var selector = cut.Find(".resource-header-row .overview-panel-selector [role='group']");
+        var selector = cut.Find(".resource-header-controls .overview-panel-selector [role='group']");
         var options = cut.FindAll(".overview-panel-selector button");
         Assert.Equal("Panels", selector.TextContent.Trim());
         Assert.Equal(["Hide empty panels", "Show all panels"], options.Select(option => option.GetAttribute("aria-label")));
