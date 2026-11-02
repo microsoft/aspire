@@ -795,6 +795,10 @@
     background: transparent;
 }
 
+.resource-header-icon.scope {
+    background: transparent;
+}
+
 .resource-header-text {
     display: flex;
     flex: 1 1 auto;
