@@ -64,7 +64,7 @@
     <value>Use the proposed Git configuration source. Specify false to decline it.</value>
   </data>
   <data name="RefreshOptionDescription" xml:space="preserve">
-    <value>Apply allowed settings from the nearest local and global saved Git configuration sources, replacing local edits to supplied settings, without updating packages or the CLI.</value>
+    <value>Apply allowed settings from the nearest local saved Git configuration source, replacing local edits to supplied settings, without updating packages or the CLI.</value>
   </data>
   <data name="InvalidRepository" xml:space="preserve">
     <value>The configuration source must be an absolute local repository path or an HTTPS or SSH Git repository address without passwords, tokens, queries, or fragments.</value>

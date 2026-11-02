@@ -104,7 +104,7 @@ internal sealed class ConfigSource
 internal sealed record ConfigSourceMetadata(ConfigSource Source, string Commit, string Version, DateTimeOffset FetchedAt);
 
 internal sealed record ConfigSourceCheckMetadata(
-    ConfigSource Source, string Commit, string Version, DateTimeOffset CheckedAt, string[]? ComparedAppliedVersions);
+    ConfigSource Source, string Commit, string Version, DateTimeOffset CheckedAt, string? ComparedAppliedVersion);
 
 internal sealed record ConfigSourceSnapshot(ConfigSourceMetadata Metadata, JsonObject Configuration);
 

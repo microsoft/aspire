@@ -134,8 +134,8 @@ Source origin: {3}</target>
         <note>{0} is the environment variable name.</note>
       </trans-unit>
       <trans-unit id="RefreshOptionDescription">
-        <source>Apply allowed settings from the nearest local and global saved Git configuration sources, replacing local edits to supplied settings, without updating packages or the CLI.</source>
-        <target state="new">Apply allowed settings from the nearest local and global saved Git configuration sources, replacing local edits to supplied settings, without updating packages or the CLI.</target>
+        <source>Apply allowed settings from the nearest local saved Git configuration source, replacing local edits to supplied settings, without updating packages or the CLI.</source>
+        <target state="new">Apply allowed settings from the nearest local saved Git configuration source, replacing local edits to supplied settings, without updating packages or the CLI.</target>
         <note />
       </trans-unit>
       <trans-unit id="Refreshed">
