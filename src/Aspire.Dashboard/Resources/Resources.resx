@@ -513,8 +513,11 @@
   <data name="ResourceOverviewFilterEnvironmentVariables" xml:space="preserve">
     <value>Filter environment variables</value>
   </data>
-  <data name="ResourceOverviewInternalEndpoint" xml:space="preserve">
-    <value>Internal</value>
+  <data name="ResourceOverviewDetailsOnlyEndpoint" xml:space="preserve">
+    <value>Details only</value>
+  </data>
+  <data name="ResourceOverviewDetailsOnlyEndpointDescription" xml:space="preserve">
+    <value>Details-only endpoints appear in resource details, not summaries. This display setting does not restrict network access.</value>
   </data>
   <data name="ResourceOverviewCountOfTotal" xml:space="preserve">
     <value>{0} of {1}</value>

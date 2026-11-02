@@ -238,6 +238,12 @@
     font-size: 11px;
 }
 
+.overview-endpoint-help {
+    margin: 8px 0 0;
+    color: var(--colorNeutralForeground2);
+    font-size: 12px;
+}
+
 .overview-badge.overview-volume-type {
     display: inline-flex;
     align-items: center;

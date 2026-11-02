@@ -511,6 +511,24 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Details only.
+        /// </summary>
+        public static string ResourceOverviewDetailsOnlyEndpoint {
+            get {
+                return ResourceManager.GetString("ResourceOverviewDetailsOnlyEndpoint", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Details-only endpoints appear in resource details, not summaries. This display setting does not restrict network access..
+        /// </summary>
+        public static string ResourceOverviewDetailsOnlyEndpointDescription {
+            get {
+                return ResourceManager.GetString("ResourceOverviewDetailsOnlyEndpointDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Endpoints.
         /// </summary>
         public static string ResourceOverviewEndpointsTitle {
@@ -570,15 +588,6 @@ namespace Aspire.Dashboard.Resources {
         public static string ResourceOverviewInstruments {
             get {
                 return ResourceManager.GetString("ResourceOverviewInstruments", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Internal.
-        /// </summary>
-        public static string ResourceOverviewInternalEndpoint {
-            get {
-                return ResourceManager.GetString("ResourceOverviewInternalEndpoint", resourceCulture);
             }
         }
 

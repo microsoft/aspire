@@ -292,6 +292,16 @@
         <target state="new">{0} of {1}</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourceOverviewDetailsOnlyEndpoint">
+        <source>Details only</source>
+        <target state="new">Details only</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewDetailsOnlyEndpointDescription">
+        <source>Details-only endpoints appear in resource details, not summaries. This display setting does not restrict network access.</source>
+        <target state="new">Details-only endpoints appear in resource details, not summaries. This display setting does not restrict network access.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResourceOverviewEndpointsTitle">
         <source>Endpoints</source>
         <target state="new">Endpoints</target>
@@ -325,11 +335,6 @@
       <trans-unit id="ResourceOverviewInstruments">
         <source>Instruments</source>
         <target state="new">Instruments</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourceOverviewInternalEndpoint">
-        <source>Internal</source>
-        <target state="new">Internal</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewLogsTitle">

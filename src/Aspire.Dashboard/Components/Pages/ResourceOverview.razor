@@ -205,36 +205,43 @@
                         <span class="overview-card-count">@endpointGroups.Count</span>
                     }
                 </div>
-                <ul class="overview-list">
-                    @foreach (var group in endpointGroups)
+                <div>
+                    <ul class="overview-list">
+                        @foreach (var group in endpointGroups)
+                        {
+                            var url = group.Primary;
+                            var label = url.DisplayName is { } displayName && url.Name == "-" ? displayName : url.Name;
+                            <li>
+                                <span class="overview-list-label" data-tooltip="@label">@label</span>
+                                @if (url.Url is not null)
+                                {
+                                    var maskedUrl = DashboardUIHelpers.MaskQueryStringValues(url.Url);
+                                    <a class="overview-list-value" href="@url.Url" data-tooltip="@maskedUrl" target="_blank" rel="noreferrer noopener"
+                                       aria-describedby="@(url.IsInternal ? "overview-endpoint-display-help" : null)">@(url.DisplayName ?? maskedUrl)</a>
+                                }
+                                else
+                                {
+                                    <span class="overview-list-value overview-mono" data-tooltip="@url.Text">@url.Text</span>
+                                }
+                                @if (group.Secondary?.Url is { } secondaryUrl)
+                                {
+                                    @* The secondary url (typically the internal address of the same endpoint) is shown as faint
+                                       supplementary text instead of a duplicate row, and hides first as space runs out. *@
+                                    var maskedSecondaryUrl = DashboardUIHelpers.MaskQueryStringValues(secondaryUrl);
+                                    <span class="overview-list-ghost overview-mono" data-tooltip="@maskedSecondaryUrl">@maskedSecondaryUrl</span>
+                                }
+                                @if (url.IsInternal)
+                                {
+                                    <span class="overview-badge">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewDetailsOnlyEndpoint)]</span>
+                                }
+                            </li>
+                        }
+                    </ul>
+                    @if (endpointGroups.Any(g => g.Primary.IsInternal))
                     {
-                        var url = group.Primary;
-                        var label = url.DisplayName is { } displayName && url.Name == "-" ? displayName : url.Name;
-                        <li>
-                            <span class="overview-list-label" data-tooltip="@label">@label</span>
-                            @if (url.Url is not null)
-                            {
-                                var maskedUrl = DashboardUIHelpers.MaskQueryStringValues(url.Url);
-                                <a class="overview-list-value" href="@url.Url" data-tooltip="@maskedUrl" target="_blank" rel="noreferrer noopener">@(url.DisplayName ?? maskedUrl)</a>
-                            }
-                            else
-                            {
-                                <span class="overview-list-value overview-mono" data-tooltip="@url.Text">@url.Text</span>
-                            }
-                            @if (group.Secondary?.Url is { } secondaryUrl)
-                            {
-                                @* The secondary url (typically the internal address of the same endpoint) is shown as faint
-                                   supplementary text instead of a duplicate row, and hides first as space runs out. *@
-                                var maskedSecondaryUrl = DashboardUIHelpers.MaskQueryStringValues(secondaryUrl);
-                                <span class="overview-list-ghost overview-mono" data-tooltip="@maskedSecondaryUrl">@maskedSecondaryUrl</span>
-                            }
-                            @if (url.IsInternal)
-                            {
-                                <span class="overview-badge">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewInternalEndpoint)]</span>
-                            }
-                        </li>
+                        <p id="overview-endpoint-display-help" class="overview-endpoint-help">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewDetailsOnlyEndpointDescription)]</p>
                     }
-                </ul>
+                </div>
             </section>
             }
             else
