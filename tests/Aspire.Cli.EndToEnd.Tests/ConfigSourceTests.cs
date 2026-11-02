@@ -29,15 +29,22 @@ public sealed class ConfigSourceTests(ITestOutputHelper output)
             await context.AssertSourceAppliedAsync("original");
         });
 
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
+    [Fact]
     [CaptureWorkspaceOnFailure]
-    public Task New_PromptsForConfigurationSourceConsent(bool accept)
+    public Task New_AcceptingConfigurationSourceAppliesSettings()
         => ConfigSourceTestContext.RunAsync(output, async context =>
         {
-            await context.CreateProjectWithConsentAsync(accept);
-            await context.AssertConsentResultAsync(accept);
+            await context.CreateProjectWithConsentAsync(accept: true);
+            await context.AssertConsentResultAsync(accepted: true);
+        });
+
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public Task New_DecliningConfigurationSourcePersistsOptOut()
+        => ConfigSourceTestContext.RunAsync(output, async context =>
+        {
+            await context.CreateProjectWithConsentAsync(accept: false);
+            await context.AssertConsentResultAsync(accepted: false);
         });
 
     [Fact]
@@ -65,6 +72,26 @@ public sealed class ConfigSourceTests(ITestOutputHelper output)
             await context.UpdateSourceAsync();
             await context.RunAndAssertUpdateNotificationAsync();
             await context.AssertConfigurationUnchangedAsync(original);
+        });
+
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public Task Update_ConfigSourceWithoutBindingReportsUsefulMessage()
+        => ConfigSourceTestContext.RunAsync(output, async context =>
+        {
+            var original = await context.CreateUnboundProjectAsync();
+            await context.AssertRefreshWithoutBindingAsync();
+            await context.AssertConfigurationUnchangedAsync(original);
+        });
+
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public Task Update_AcceptingConfigurationSourceUpdatesBrownfieldConfiguration()
+        => ConfigSourceTestContext.RunAsync(output, async context =>
+        {
+            var original = await context.CreateUnboundProjectAsync();
+            await context.UpdateProjectWithSourceConsentAsync();
+            await context.AssertConfigurationSourceAdoptedAsync(original);
         });
 
     [Fact]
