@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Docs site frontend/tooling change; no matching changelog entry",
+  "mergedAt": "2026-11-01T20:33:37Z",
+  "number": 1988,
+  "runDate": "2026-11-02T00:06:00Z",
+  "status": "excluded",
+  "title": "Keep the footer language picker on English-only pages"
+}

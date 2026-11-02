@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only change; not user-facing",
+  "mergedAt": "2026-11-01T23:07:51Z",
+  "number": 21548,
+  "runDate": "2026-11-02T00:06:00Z",
+  "status": "excluded",
+  "title": "Pick an available non-ephemeral host port in DockerCompose dashboard deploy test"
+}

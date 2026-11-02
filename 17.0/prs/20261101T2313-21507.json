@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only change; not user-facing",
+  "mergedAt": "2026-11-01T23:13:47Z",
+  "number": 21507,
+  "runDate": "2026-11-02T00:06:00Z",
+  "status": "excluded",
+  "title": "Fix telemetry watch test timeouts hiding watch failures"
+}

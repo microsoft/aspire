@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Docs site frontend/tooling change; no matching changelog entry",
+  "mergedAt": "2026-11-01T20:34:39Z",
+  "number": 1990,
+  "runDate": "2026-11-02T00:06:00Z",
+  "status": "excluded",
+  "title": "Fix Markdown page actions on untranslated locale pages"
+}

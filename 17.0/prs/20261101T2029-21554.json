@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only change; not user-facing",
+  "mergedAt": "2026-11-01T20:29:00Z",
+  "number": 21554,
+  "runDate": "2026-11-02T00:06:00Z",
+  "status": "excluded",
+  "title": "Fix host-pids race in IntegrationHostProcessTests"
+}

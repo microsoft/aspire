@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only change; not user-facing",
+  "mergedAt": "2026-11-01T18:56:29Z",
+  "number": 21613,
+  "runDate": "2026-11-02T00:06:00Z",
+  "status": "excluded",
+  "title": "Give RemoteHost tests thread-pool headroom above xunit's synchronous slots"
+}
