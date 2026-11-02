@@ -358,6 +358,8 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var homeDirectory = workspace.CreateDirectory("fake-home");
+        // Bound nearest-settings discovery to this workspace.
+        await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json"), "{}");
         var prompts = new List<string>();
         var riskWarnings = new List<string>();
         var interaction = new TestInteractionService
@@ -398,6 +400,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
             options.CliExecutionContextFactory = _ => TestExecutionContextHelper.CreateExecutionContext(workspace.WorkspaceRoot, homeDirectory: homeDirectory);
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
             options.InteractionServiceFactory = _ => interaction;
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
         });
         using var provider = services.BuildServiceProvider();
 

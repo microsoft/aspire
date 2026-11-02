@@ -6,6 +6,7 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Agents;
+using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Agents.ClaudeCode;
 using Aspire.Cli.Agents.OpenCode;
 using Aspire.Cli.Certificates;
@@ -218,10 +219,9 @@ internal sealed class InitCommand : BaseCommand
             PromptBinding.Create(parseResult, AgentInitCommand.s_scopeOption, AgentConfigurationScope.Project),
             cancellationToken);
 
-        if (agentInitResult.ExitCode == CliExitCodes.Success &&
-            agentInitResult.NativeRegisteredClients.Count > 0)
+        if (agentInitResult.ExitCode == CliExitCodes.Success)
         {
-            var commands = GetAspireifyCommands(agentInitResult.NativeRegisteredClients);
+            var commands = GetAspireifyCommands(agentInitResult);
             if (commands.Count > 0)
             {
                 InteractionService.DisplayEmptyLine();
@@ -259,21 +259,46 @@ internal sealed class InitCommand : BaseCommand
         }
     }
 
-    private static IReadOnlyList<string> GetAspireifyCommands(IReadOnlyList<IAgentClient> selectedClients)
+    private static IReadOnlyList<string> GetAspireifyCommands(AgentInitExecutionResult agentInitResult)
     {
+        var registeredClients = agentInitResult.RegistrationResults
+            .Where(result => result.Status is AgentConfigurationStatus.Configured or AgentConfigurationStatus.Unchanged)
+            .SelectMany(result => result.Clients.Where(client =>
+                result.Configuration is { } configuration &&
+                HasAspireifyRegistration(client, configuration, agentInitResult.SkillSources)))
+            .ToArray();
         var commands = new List<string>();
 
-        if (selectedClients.Any(client => string.Equals(client.Id, ClaudeCodeAgentClient.ClientId, StringComparisons.AgentClientId)))
+        if (registeredClients.Any(client => string.Equals(client.Id, ClaudeCodeAgentClient.ClientId, StringComparisons.AgentClientId)))
         {
             commands.Add("claude \"run the aspireify skill\"");
         }
 
-        if (selectedClients.Any(client => string.Equals(client.Id, OpenCodeAgentClient.ClientId, StringComparisons.AgentClientId)))
+        if (registeredClients.Any(client => string.Equals(client.Id, OpenCodeAgentClient.ClientId, StringComparisons.AgentClientId)))
         {
             commands.Add("opencode --prompt \"run the aspireify skill\"");
         }
 
         return commands;
+    }
+
+    // No-op registrations and custom plugins do not prove Aspireify is available.
+    // OpenCode must contain an official catalog belonging to an enabled source,
+    // not just an old registration or an unused V1/V2 catalog setting.
+    private static bool HasAspireifyRegistration(IAgentClient client, JsonObject configuration, IReadOnlyList<SkillSource> sources)
+    {
+        if (client.Id == OpenCodeAgentClient.ClientId)
+        {
+            return AspireSkillsRemoteConfiguration.ReadOpenCodeSkills(configuration)?
+                .Select(AspireSkillsRemoteConfiguration.String)
+                .Any(catalog => AspireSkillsRemoteConfiguration.IsOpenCodeCatalog(catalog, SkillSource.BuiltIn) &&
+                    sources.Any(source => AspireSkillsRemoteConfiguration.IsOpenCodeCatalog(catalog, source))) is true;
+        }
+
+        return sources.Any(source => (source.Plugins ?? ["aspire"]).Contains("aspire", StringComparer.Ordinal) &&
+            string.Equals(AspireSkillsRemoteConfiguration.NormalizeRepositoryUrl(source.GetRepositoryUrl()),
+                AspireSkillsRemoteConfiguration.NormalizeRepositoryUrl(AspireSkillsRemoteConfiguration.RepositoryUrl),
+                StringComparison.OrdinalIgnoreCase));
     }
 
     private async Task<int> DropCSharpSkeletonAsync(DirectoryInfo workingDirectory, FileInfo? solutionFile, CancellationToken cancellationToken)

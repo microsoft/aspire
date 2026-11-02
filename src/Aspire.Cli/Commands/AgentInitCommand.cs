@@ -528,17 +528,12 @@ internal sealed class AgentInitCommand : BaseCommand
                 .Select(client => client.GetSkillBaseDirectory(scope, workspaceRoot)));
         }
 
-        IReadOnlyList<IAgentClient> registeredClients = [];
+        IReadOnlyList<AgentTargetResult> registrationResults = [];
         if (configureAspire)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var results = await AgentConfiguration.ApplyRemoteAsync(selectedClients, workspaceRoot, scope, skillSources, cancellationToken);
-            hasErrors |= DisplayRemoteConfigurationResults(results, workspaceRoot);
-            registeredClients = results
-                .Where(result => result.Status is AgentConfigurationStatus.Configured or AgentConfigurationStatus.Unchanged)
-                .SelectMany(result => result.Clients)
-                .Distinct()
-                .ToArray();
+            registrationResults = await AgentConfiguration.ApplyRemoteAsync(selectedClients, workspaceRoot, scope, skillSources, cancellationToken);
+            hasErrors |= DisplayRemoteConfigurationResults(registrationResults, workspaceRoot);
         }
 
         // --- Phase 3: Apply copied skill files at each unique destination ---
@@ -689,7 +684,8 @@ internal sealed class AgentInitCommand : BaseCommand
             selectedClients,
             selectedSkills)
         {
-            NativeRegisteredClients = registeredClients
+            RegistrationResults = registrationResults,
+            SkillSources = skillSources
         };
     }
 
@@ -1009,5 +1005,6 @@ internal readonly record struct AgentInitExecutionResult(
     IReadOnlyList<IAgentClient> SelectedClients,
     IReadOnlyList<SkillDefinition> SelectedSkills)
 {
-    public IReadOnlyList<IAgentClient> NativeRegisteredClients { get; init; } = [];
+    public IReadOnlyList<AgentTargetResult> RegistrationResults { get; init; } = [];
+    public IReadOnlyList<SkillSource> SkillSources { get; init; } = [];
 }

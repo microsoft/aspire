@@ -14,6 +14,7 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Scaffolding;
+using Aspire.Cli.Tests.Agents;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Hosting;
@@ -814,6 +815,66 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.DoesNotContain(interactionService.DisplayedMessages, m => m.Message.Contains("To complete setup", StringComparison.Ordinal));
         Assert.DoesNotContain(subtleMessages, m => m.Contains("run the aspireify skill", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("{}", "claude", null, true, true)]
+    [InlineData("{}", "opencode", null, true, true)]
+    [InlineData("""{"skillSources":{"default":{"enabled":false}}}""", "claude", null, false, false)]
+    [InlineData("""{"skillSources":{"default":{"enabled":false}}}""", "opencode", null, false, false)]
+    [InlineData("""{"skillSources":{"default":{"enabled":false},"team":{"repository":"example/team","plugins":["deployment"]}}}""", "claude", null, true, false)]
+    [InlineData("""{"skillSources":{"default":{"repository":"example/team"}}}""", "claude", null, true, false)]
+    [InlineData("""{"skillSources":{"default":{"plugins":["deployment"]}}}""", "claude", null, true, false)]
+    [InlineData("""{"skillSources":{"default":{"enabled":false},"team":{"repository":"microsoft/aspire-skills"}}}""", "claude", null, true, true)]
+    [InlineData("""{"skillSources":{"default":{"enabled":false},"team":{"repository":"example/team"}}}""", "opencode", null, false, false)]
+    [InlineData("""{"skillSources":{"default":{"repository":"https://github.com/Microsoft/Aspire-Skills.git/"}}}""", "claude", null, true, true)]
+    [InlineData("{}", "claude", """{"enabledPlugins":{"aspire@aspire-skills":true},"extraKnownMarketplaces":{"aspire-skills":{"source":{"source":"github","repo":"microsoft/aspire-skills","ref":"release"}}}}""", true, true)]
+    [InlineData("{}", "opencode", """{"skills":{"urls":["https://raw.githubusercontent.com/microsoft/aspire-skills/v0.0.3/opencode/v1/"]}}""", true, true)]
+    [InlineData("""{"skillSources":{"default":{"enabled":false}}}""", "claude", """{"enabledPlugins":{"aspire@aspire-skills":true}}""", true, false)]
+    [InlineData("""{"skillSources":{"default":{"enabled":false}}}""", "opencode", """{"skills":{"urls":["https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v1/"]}}""", true, false)]
+    [InlineData("""{"skillSources":{"default":{"enabled":false},"team":{"repository":"example/team","openCodeV1Catalog":"https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v1/","openCodeV2Catalog":"https://example.com/v2/"}}}""", "opencode", null, true, true)]
+    [InlineData("""{"skillSources":{"default":{"enabled":false},"team":{"repository":"example/team","openCodeV1Catalog":"https://example.com/v1/","openCodeV2Catalog":"https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v2/"}}}""", "opencode", null, true, false)]
+    [InlineData("""{"skillSources":{"default":{"enabled":false},"team":{"repository":"example/team","openCodeV1Catalog":"https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v1/","openCodeV2Catalog":"https://example.com/v2/"}}}""", "opencode", """{"skills":[]}""", true, false)]
+    [InlineData("""{"skillSources":{"default":{"enabled":false},"team":{"repository":"example/team","openCodeV1Catalog":"https://example.com/v1/","openCodeV2Catalog":"https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v2/"}}}""", "opencode", """{"skills":[]}""", true, true)]
+    [InlineData("""{"skillSources":{"default":{"enabled":false},"team":{"repository":"example/team","openCodeV1Catalog":"https://example.com/v1/","openCodeV2Catalog":"https://example.com/v2/"}}}""", "opencode", null, true, false)]
+    [InlineData("""{"skillSources":{"default":{"enabled":false},"team":{"repository":"example/team","openCodeV1Catalog":"https://example.com/v1/","openCodeV2Catalog":"https://example.com/v2/"}}}""", "opencode", """{"skills":[]}""", true, false)]
+    [InlineData("""{"skillSources":{"default":{"enabled":false},"team":{"repository":"example/team","openCodeV1Catalog":"https://example.com/v1/","openCodeV2Catalog":"https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v2/"}}}""", "opencode", """{"skills":{"urls":["https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v1/"]}}""", true, false)]
+    [InlineData("""{"skillSources":{"default":{"enabled":false},"team":{"repository":"example/team","openCodeV1Catalog":"https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v1/","openCodeV2Catalog":"https://example.com/v2/"}}}""", "opencode", """{"skills":["https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v2/"]}""", true, false)]
+    [InlineData("""{"skillSources":{"default":{"enabled":false},"team":{"repository":"example/team","openCodeV1Catalog":"https://example.com/v1/","openCodeV2Catalog":"https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v2/"}}}""", "opencode", """{"skills":{"urls":["https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v2/"]}}""", true, true)]
+    public async Task InitCommand_OnlyRecommendsAspireifyForApplicableOfficialSources(
+        string settings, string clientId, string? nativeConfiguration, bool hasNativeConfiguration, bool recommendsAspireify)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json"), settings);
+        var interaction = new TestInteractionService
+        {
+            ConfirmCallback = (_, defaultValue) => defaultValue
+        };
+        var subtleMessages = new List<string>();
+        interaction.DisplaySubtleMessageCallback = subtleMessages.Add;
+        using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interaction;
+            options.CliHostEnvironmentFactory = _ => global::Aspire.Cli.Tests.TestHelpers.CreateInteractiveHostEnvironment();
+            options.ScaffoldingServiceFactory = _ => new TestScaffoldingService();
+        }).BuildServiceProvider();
+
+        var client = provider.GetServices<IAgentClient>().Single(client => client.Id == clientId);
+        var nativePath = client.GetIntegrationConfigPath(AgentConfigurationScope.Project, workspace.WorkspaceRoot);
+        if (nativeConfiguration is not null)
+        {
+            await AgentConfigurationTestContext.WriteAsync(nativePath, nativeConfiguration);
+        }
+        var result = provider.GetRequiredService<InitCommand>().Parse(
+            $"init --language typescript --agents {clientId} --scope project --skills aspire");
+
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+        Assert.Equal(hasNativeConfiguration, File.Exists(nativePath));
+        var expectedCommands = recommendsAspireify
+            ? new[] { clientId == "claude" ? "  claude \"run the aspireify skill\"" : "  opencode --prompt \"run the aspireify skill\"" }
+            : [];
+        Assert.Equal(expectedCommands, subtleMessages.Where(message => message.StartsWith("  ", StringComparison.Ordinal)));
+        Assert.Empty(interaction.DisplayedErrors);
     }
 
     [Fact]
