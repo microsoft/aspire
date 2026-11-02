@@ -128,6 +128,7 @@ internal static partial class DotnetProjectBuildCoordinator
             .WithHiddenOnCompletion(0);
 
         BeginBuildAttemptOnResourceStart(builder, buildResource);
+        ReportBuildFailureOnResourceStopped(builder, buildResource);
 
         return buildResource;
     }
@@ -241,6 +242,27 @@ internal static partial class DotnetProjectBuildCoordinator
         return () => builder.Eventing.Unsubscribe(subscription);
     }
 
+    // Dependents report the failure when their wait observes it, but an explicit-start resource with no dependents never
+    // waits. Start the shared per-attempt report when the build itself settles so the AppHost log still gets the summary.
+    private static void ReportBuildFailureOnResourceStopped(IDistributedApplicationBuilder builder, IResource resource)
+    {
+        builder.Eventing.Subscribe<ResourceStoppedEvent>(
+            resource,
+            static (@event, _) =>
+            {
+                var snapshot = @event.ResourceEvent.Snapshot;
+                if (IsSettledBuildSnapshot(snapshot) &&
+                    (snapshot.State?.Text == KnownResourceStates.FailedToStart || snapshot.ExitCode is not 0))
+                {
+                    var failureState = s_buildFailures.GetValue(@event.Resource, static _ => new BuildFailureState());
+                    // Do not block event dispatch on reading the build output; waiters share the same cached task.
+                    failureState.GetFailureMessage(failureState.Attempt, @event.Services, @event.Resource, snapshot);
+                }
+
+                return Task.CompletedTask;
+            });
+    }
+
     private static async Task<string> ReportBuildFailureAsync(
         IServiceProvider services,
         IResource buildResource,
@@ -271,7 +293,10 @@ internal static partial class DotnetProjectBuildCoordinator
         }
 
         var errors = new List<string>();
-        var tail = new Queue<string>();
+        // Stdout, stderr, startup and system streams are read concurrently, so delivery order is not chronological.
+        // Keep the newest lines by their DCP timestamp, using delivery order for equal or missing timestamps.
+        var tail = new SortedSet<BuildOutputLine>();
+        long sequence = 0;
         var applicationStopping = services.GetService<IHostApplicationLifetime>()?.ApplicationStopping ?? CancellationToken.None;
         using var readCancellation = CancellationTokenSource.CreateLinkedTokenSource(applicationStopping);
         readCancellation.CancelAfter(s_buildOutputReadTimeout);
@@ -285,9 +310,17 @@ internal static partial class DotnetProjectBuildCoordinator
             {
                 foreach (var logLine in batch)
                 {
-                    var content = TimestampParser.TryParseConsoleTimestamp(logLine.Content, out var timestampResult)
-                        ? timestampResult.Value.ModifiedText
-                        : logLine.Content;
+                    // Stored DCP lines are prefixed with their timestamp, for example:
+                    //   2026-11-02T22:12:48.9230608Z Program.cs(3,1): error CS0103: ...
+                    // Lines without a parsable timestamp are treated as newer than every timestamped line.
+                    DateTimeOffset? timestamp = null;
+                    var content = logLine.Content;
+                    if (TimestampParser.TryParseConsoleTimestamp(content, out var timestampResult))
+                    {
+                        content = timestampResult.Value.ModifiedText;
+                        timestamp = timestampResult.Value.Timestamp;
+                    }
+
                     content = content.TrimEnd();
                     if (content.Length == 0)
                     {
@@ -306,10 +339,10 @@ internal static partial class DotnetProjectBuildCoordinator
                         errors.Add(content);
                     }
 
-                    tail.Enqueue(content);
+                    tail.Add(new BuildOutputLine(timestamp?.UtcDateTime ?? DateTime.MaxValue, sequence++, content));
                     if (tail.Count > MaxReportedBuildOutputLines)
                     {
-                        tail.Dequeue();
+                        tail.Remove(tail.Min);
                     }
                 }
             }
@@ -326,7 +359,7 @@ internal static partial class DotnetProjectBuildCoordinator
                 .LogDebug(ex, "Failed to read the output of .NET build resource '{ResourceName}'.", buildResource.Name);
         }
 
-        return errors.Count > 0 ? errors : [.. tail];
+        return errors.Count > 0 ? errors : [.. tail.Select(static line => line.Content)];
     }
 
     // Matches MSBuild canonical error lines such as "File.cs(1,2): error CS1002: ..." or "MSBUILD : error MSB1009: ...".
@@ -612,7 +645,6 @@ internal static partial class DotnetProjectBuildCoordinator
                 return;
             }
 
-            var buildSteps = CreateBuildSteps(buildEntries);
             var restoreProjectsIndividually = _builder.Configuration.GetValue<bool>(RestoreProjectsIndividuallyConfigurationKey);
             var applicationLifetime = services.GetRequiredService<IHostApplicationLifetime>();
             var primaryBuildResource = PrimaryBuildResource!;
@@ -624,6 +656,12 @@ internal static partial class DotnetProjectBuildCoordinator
 
             try
             {
+                foreach (var entry in buildEntries)
+                {
+                    ReconcileFileAppPath(model, entry, rollbackActions);
+                }
+
+                var buildSteps = CreateBuildSteps(buildEntries);
                 rollbackActions.Push(() =>
                     primaryBuildResource.ConfigureTraversalBuild(
                         originalPrimaryProjectPaths,
@@ -779,6 +817,45 @@ internal static partial class DotnetProjectBuildCoordinator
                 }
 
                 throw;
+            }
+        }
+
+        // Prepare resolves a file app's spelling at registration, but the file may not exist yet; then only its existing
+        // ancestors are resolved. Resolve again now that it exists so the direct build, `run --file --no-build`, the
+        // rebuilder, and their default working directories use one spelling and therefore one SDK cache entry.
+        private static void ReconcileFileAppPath(
+            DistributedApplicationModel model,
+            ProjectEntry entry,
+            Stack<Action> rollbackActions)
+        {
+            var originalPath = entry.Metadata.ProjectPath;
+            if (IsProjectFile(originalPath))
+            {
+                return;
+            }
+
+            var resolvedPath = DotnetProjectBuildResource.ResolveBuildPathCasing(originalPath);
+            if (resolvedPath.Equals(originalPath, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            entry.Metadata.SetProjectPath(resolvedPath);
+            rollbackActions.Push(() => entry.Metadata.SetProjectPath(originalPath));
+
+            var originalDirectory = Path.GetDirectoryName(originalPath);
+            var resolvedDirectory = Path.GetDirectoryName(resolvedPath)!;
+            IResource?[] launchResources = [entry.Registration.Resource, FindRebuilder(model, entry.Registration.Resource)];
+            foreach (var resource in launchResources)
+            {
+                // Explicit or SDK-selected working directories belong to the caller; only move the registration default.
+                if (resource?.Annotations.OfType<ExecutableAnnotation>().LastOrDefault() is { } executable &&
+                    !executable.WorkingDirectoryExplicitlySet &&
+                    string.Equals(executable.WorkingDirectory, originalDirectory, StringComparison.Ordinal))
+                {
+                    executable.WorkingDirectory = resolvedDirectory;
+                    rollbackActions.Push(() => executable.WorkingDirectory = originalDirectory!);
+                }
             }
         }
 
@@ -1538,6 +1615,12 @@ internal static partial class DotnetProjectBuildCoordinator
 
             public bool CleanupScheduled { get; set; }
         }
+    }
+
+    private readonly record struct BuildOutputLine(DateTime Timestamp, long Sequence, string Content) : IComparable<BuildOutputLine>
+    {
+        public int CompareTo(BuildOutputLine other) =>
+            Timestamp.CompareTo(other.Timestamp) is var result and not 0 ? result : Sequence.CompareTo(other.Sequence);
     }
 
     private sealed class BuildFailureState
