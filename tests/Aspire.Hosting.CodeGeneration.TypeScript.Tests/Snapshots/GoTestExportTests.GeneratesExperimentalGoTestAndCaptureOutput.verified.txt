@@ -1,4 +1,16 @@
 ﻿{
   Add:     addGoTest(name: string, appDirectory: string, options?: AddGoTestOptions): GoTestResourcePromise;,
-  Capture:     captureOutputAsync(): ResourceTestingContextPromise;
+  Capture:     captureOutputAsync(): ResourceTestingContextPromise;,
+  Testing:     withTesting(options?: WithTestingOptions): GoTestResourcePromise;,
+  Wait:     waitForCompletionAsync(options?: WaitForCompletionAsyncOptions): Promise<boolean>;,
+  testingOptions:
+export interface WithTestingOptions {
+    /** An optional asynchronous result collector that runs alongside resource execution during testing. */
+    callback?: (arg: ResourceTestingContext) => Promise<void>;
+},
+  waitOptions:
+export interface WaitForCompletionAsyncOptions {
+    /** An optional token that cancels only this wait, in addition to test-run cancellation. */
+    cancellationToken?: AbortSignal | CancellationToken;
+}
 }

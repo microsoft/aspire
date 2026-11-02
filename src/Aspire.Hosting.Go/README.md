@@ -101,6 +101,21 @@ stderr file. These Aspire-owned files use 0600 modes on Unix inside the CLI-owne
 choose their modes. Partial files remain on cancellation/errors without a completion
 marker. Windows uses the run directory's inherited access controls.
 
+The collector is a runtime-only `WithTesting(async context => ...)` callback;
+runner arguments and environment are configured separately before launch. Capture
+writes directly into `<run>/go-tests` (or the chosen logical resource name), without
+temporary framework reports or GUID subdirectories. Replacing the collector with
+`WithTesting(callback)`, or clearing it with `WithTesting()`, preserves the output
+destination and runner configuration. The replacement is responsible for harvesting
+results if desired.
+
+Go's named `pass`, `fail`, and `skip` events map only to `Passed`, `Failed`, and
+`Skipped`. The common API also supports `Inconclusive`, `Error`, `TimedOut`, and
+`Cancelled`; only `Passed` and `Skipped` are non-failing. Go package/build failures,
+panics, and timeouts with no named terminal event fail resource execution/collection
+without inventing a named test outcome. A published failing outcome returns CLI
+exit `23`; command deadlines and interruption remain distinct command outcomes.
+
 Only one native, non-terminal invocation per resource is supported: no replicas,
 restarts, execution wrappers, retry runners, benchmarks, or sustained fuzzing.
 Reporting/cache/execution flags are reserved, including overrides in effective

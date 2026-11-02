@@ -22,6 +22,7 @@ public class GoTestExecutionTests(ITestOutputHelper outputHelper)
     [InlineData("filtered")]
     [InlineData("large")]
     [InlineData("repeat")]
+    [InlineData("timeout")]
     [RequiresTools(["go"])]
     [OuterloopTest("Runs real Go tests through DCP and captures their complete raw process output.")]
     public async Task RealGoResultsContributeToCommonAggregate(string scenario)
@@ -35,9 +36,10 @@ public class GoTestExecutionTests(ITestOutputHelper outputHelper)
         {
             File.WriteAllText(Path.Combine(directory, "fixture_test.go"), """
                 package fixture
-                import ("testing"; "os"; "fmt")
+                import ("testing"; "os"; "fmt"; "time")
                 func TestOutcome(t *testing.T) {
                     if os.Getenv("REFERENCE") != "configured" { t.Fatal("missing reference") }
+                    if os.Getenv("SCENARIO") == "timeout" { time.Sleep(time.Second) }
                     t.Run("child", func(t *testing.T) { t.Log("subtest output") })
                     if os.Getenv("SCENARIO") == "fail" { t.Fatal("intentional parent cleanup failure") }
                     if os.Getenv("SCENARIO") == "large" {
@@ -63,6 +65,10 @@ public class GoTestExecutionTests(ITestOutputHelper outputHelper)
         {
             resource.WithArgs("-cpu=1,2");
         }
+        if (scenario == "timeout")
+        {
+            resource.WithArgs("-timeout=50ms");
+        }
         await using var app = builder.Build();
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         timeout.CancelAfter(TimeSpan.FromMinutes(3));
@@ -74,18 +80,19 @@ public class GoTestExecutionTests(ITestOutputHelper outputHelper)
             {
                 events.Add(item);
             }
-            Assert.Equal(scenario is not ("fail" or "build"), events.Last().Passed);
+            Assert.Equal(scenario is not ("fail" or "build" or "timeout"), events.Last().Passed);
             var results = events.Where(e => e.Result is not null).Select(e => e.Result!).ToArray();
             var expected = scenario switch
             {
-                "empty" or "filtered" or "build" => (Passed: 0, Failed: 0, Skipped: 0),
+                "empty" or "filtered" or "build" or "timeout" => (Passed: 0, Failed: 0, Skipped: 0),
                 "fail" => (Passed: 0, Failed: 1, Skipped: 1),
                 "repeat" => (Passed: 2, Failed: 0, Skipped: 2),
                 _ => (Passed: 1, Failed: 0, Skipped: 1)
             };
             Assert.Equal(expected, (results.Count(r => r.Outcome == "passed"),
                 results.Count(r => r.Outcome == "failed"), results.Count(r => r.Outcome == "skipped")));
-            var path = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>()).Options!.OutputPath!;
+            var path = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>()).OutputPath!;
+            Assert.Equal(Path.Combine(workspace.Path, "results", "tests"), path);
             Assert.True(File.Exists(Path.Combine(path, "output.complete")));
             Assert.True(File.Exists(Path.Combine(path, "stderr.log")));
             var stdout = await File.ReadAllTextAsync(Path.Combine(path, "stdout.log"), timeout.Token);
@@ -105,7 +112,7 @@ public class GoTestExecutionTests(ITestOutputHelper outputHelper)
             {
                 Assert.Equal(4, results.Select(r => r.Name).Distinct(StringComparer.Ordinal).Count());
             }
-            Assert.Equal(scenario is "fail" or "build" ? "failed" : "completed",
+            Assert.Equal(scenario is "fail" or "build" or "timeout" ? "failed" : "completed",
                 events.Last(e => e.Collection is not null).Collection!.Status);
             if (!OperatingSystem.IsWindows())
             {
