@@ -1235,7 +1235,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Cancelled, exitCode);
         // "Stopping Aspire." implies the AppHost is being stopped, but describe never owns the AppHost.
         var cancellation = Assert.Single(interactionService.DisplayedCancellations);
-        Assert.Equal(InteractionServiceStrings.OperationCancelled, cancellation.Message);
+        Assert.Null(cancellation.Message);
     }
 
     private ServiceProvider CreateDescribeTestServices(

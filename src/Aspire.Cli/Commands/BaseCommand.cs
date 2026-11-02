@@ -68,7 +68,7 @@ internal abstract class BaseCommand : Command
 
     // Commands that start an AppHost or dashboard provide their own stopping message.
     // Other commands report a neutral cancellation.
-    protected virtual string? CancellationMessage => InteractionServiceStrings.OperationCancelled;
+    protected virtual string? CancellationMessage => null;
 
     private void DisplayCancellationMessage(ConsoleOutput? consoleOverride = null)
     {

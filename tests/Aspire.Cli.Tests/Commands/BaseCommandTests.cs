@@ -403,7 +403,7 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Cancelled, exitCode);
 
         var cancellation = Assert.Single(testInteractionService.DisplayedCancellations);
-        Assert.Equal(InteractionServiceStrings.OperationCancelled, cancellation.Message);
+        Assert.Null(cancellation.Message);
         Assert.Equal(ConsoleOutput.Error, cancellation.ConsoleOverride);
     }
 
@@ -513,9 +513,9 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.FailedToBuildArtifacts, exitCode);
         Assert.Empty(testInteractionService.DisplayedErrors);
         var cancellation = Assert.Single(testInteractionService.DisplayedCancellations);
-        var expectedMessage = commandArgs switch
+        string? expectedMessage = commandArgs switch
         {
-            "publish" => InteractionServiceStrings.OperationCancelled,
+            "publish" => null,
             "deploy" => DeployCommandStrings.DeploymentCanceled,
             "destroy --yes" => DestroyCommandStrings.DestroyCanceled,
             "do test-step" => DoCommandStrings.OperationCanceled,

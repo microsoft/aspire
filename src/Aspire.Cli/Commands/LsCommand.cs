@@ -135,7 +135,7 @@ internal sealed class LsCommand : BaseCommand
         {
             if (format != OutputFormat.Json || !stream)
             {
-                InteractionService.DisplayCancellationMessage(InteractionServiceStrings.OperationCancelled);
+                InteractionService.DisplayCancellationMessage();
             }
 
             return CommandResult.Success();

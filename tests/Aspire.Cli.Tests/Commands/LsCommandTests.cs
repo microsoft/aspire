@@ -7,7 +7,6 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Projects;
-using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
@@ -693,7 +692,7 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         var cancellation = Assert.Single(interactionService.DisplayedCancellations);
-        Assert.Equal(InteractionServiceStrings.OperationCancelled, cancellation.Message);
+        Assert.Null(cancellation.Message);
     }
 
     [Fact]
