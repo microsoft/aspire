@@ -31,7 +31,7 @@ internal static class TestOutputCapture
             {
                 throw new InvalidOperationException("The output directory must not contain symbolic links or reparse points.");
             }
-            if (directory.FullName == context.RunContext.OutputPath)
+            if (directory.FullName == context.TestingContext.OutputPath)
             {
                 break;
             }
