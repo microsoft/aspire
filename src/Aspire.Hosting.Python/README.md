@@ -85,7 +85,13 @@ await builder.addPytest("api-tests", "../python-api")
     .waitFor(python);
 ```
 
-Run `aspire test` from the AppHost directory. `WithReference` supplies connection configuration; `WaitFor` waits for the referenced service before starting tests. Use `WithArgs` for pytest selectors and options, without changing the application's working directory or import mode.
+The preview CLI command is disabled by default. From the AppHost directory, opt in only for that invocation without changing saved configuration:
+
+```bash
+features__testCommandEnabled=true aspire test
+```
+
+`WithReference` supplies connection configuration; `WaitFor` waits for the referenced service before starting tests. Use `WithArgs` for pytest selectors and options, without changing the application's working directory or import mode. The feature flag gates CLI registration, not the hosting collector API.
 
 `AddPytest` returns the existing Python resource builder. By default, it launches `.venv/bin/pytest` (`.venv/Scripts/pytest.exe` on Windows), with the usual application/AppHost environment discovery. `WithVirtualEnvironment("custom-venv")` selects a different environment. Requirements-based projects use the existing pip installer. `WithUv` runs an installer child with `uv sync`, then launches pytest directly, not `uv run`; it aligns `UV_PROJECT_ENVIRONMENT` with the selected environment. For a custom dependency group, use `WithUv(args: ["sync", "--group", "test"])`; these arguments belong to the installer, not pytest.
 

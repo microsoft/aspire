@@ -177,7 +177,7 @@ and publishes all results. Foundation and pytest results remain passing.
 Exercise the independent pytest failure without changing MSTest:
 
 ```bash
-PYTEST_PLAYGROUND_FAIL=true \
+features__testCommandEnabled=true PYTEST_PLAYGROUND_FAIL=true \
 dotnet run --project src/Aspire.Cli/Aspire.Cli.csproj --no-launch-profile -- \
   test --apphost playground/AspireCliTesting/apphost.cs --isolated \
   --timeout-seconds 120 --format json --non-interactive
