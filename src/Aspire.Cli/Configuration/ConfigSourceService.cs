@@ -227,7 +227,7 @@ internal sealed class ConfigSourceService(
         var path = ConfigurationHelper.FindNearestConfigFilePath(projectDirectory)
             ?? Path.Combine(projectDirectory.FullName, AspireConfigFile.FileName);
         var configuration = await ReadProjectConfigurationAsync(path, cancellationToken);
-        if (configuration is not null && TryGetValue(configuration, [ConfigSource.SectionName], out _))
+        if (configuration is not null && configuration.ContainsKey(GetKey(configuration, ConfigSource.SectionName)))
         {
             return;
         }
