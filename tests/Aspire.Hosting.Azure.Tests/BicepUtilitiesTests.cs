@@ -42,6 +42,32 @@ public class BicepUtilitiesTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task SetScopeAsync_ExistingComputeRoleTargetDoesNotReenterTemplateGeneration()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var environment = builder.AddAzureContainerAppEnvironment("env")
+            .AsExistingInResourceGroup("existing-env", "existing-rg", "existing-subscription");
+        var configurationCount = 0;
+        environment.ConfigureInfrastructure(_ => configurationCount++);
+        var roles = new AzureRoleAssignmentResource("roles", environment.Resource, null, null, infrastructure =>
+            environment.Resource.AddAsExistingResource(infrastructure));
+        environment.Resource.RegisterRoleAssignmentScope(roles);
+
+        var moduleScope = new JsonObject();
+        await BicepUtilities.SetScopeAsync(moduleScope, environment.Resource);
+        await BicepUtilities.SetScopeAsync(moduleScope, environment.Resource);
+
+        Assert.Equal(1, configurationCount);
+        Assert.Single(moduleScope);
+        Assert.Null(moduleScope["resourceGroup"]);
+        Assert.Equal("existing-rg", roles.Scope!.ResourceGroup);
+        Assert.Equal("existing-subscription", roles.Scope.Subscription);
+        Assert.Contains(environment.Resource, roles.References);
+        using var template = roles.GetBicepTemplateFile();
+        await Verify(await File.ReadAllTextAsync(template.Path), "bicep");
+    }
+
+    [Fact]
     public async Task SetScopeAsync_ExistingResourceStillUsesAnnotationScope()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);

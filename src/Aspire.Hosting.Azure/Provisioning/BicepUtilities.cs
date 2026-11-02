@@ -180,6 +180,16 @@ internal static class BicepUtilities
 
     internal static AzureBicepResourceScope? GetExistingResourceScope(AzureBicepResource resource)
     {
+        if (resource is IAzureComputeEnvironmentResource &&
+            resource is AzureProvisioningResource provisioningResource &&
+            resource.HasAnnotationOfType<ExistingAzureResourceAnnotation>())
+        {
+            // The compute template chooses whether the existing reference or its supporting
+            // infrastructure sets the module scope. Run callbacks before reading that scope.
+            _ = provisioningResource.GetBicepTemplateString();
+            return provisioningResource.Scope;
+        }
+
         if (resource.Scope is not null)
         {
             return resource.Scope;
@@ -188,22 +198,6 @@ internal static class BicepUtilities
         if (!resource.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existingResource))
         {
             return null;
-        }
-
-        if (resource is IAzureComputeEnvironmentResource && resource is AzureProvisioningResource provisioningResource)
-        {
-            // Configuration can either set the module scope or scope the existing reference inside
-            // the template. Materialize it before deciding where supporting infrastructure belongs.
-            _ = provisioningResource.GetBicepTemplateString();
-            if (provisioningResource.Scope is not null)
-            {
-                return provisioningResource.Scope;
-            }
-
-            if (provisioningResource.HandlesExistingResourceScopeInTemplate)
-            {
-                return null;
-            }
         }
 
         return AzureBicepResourceScope.FromExistingResourceAnnotation(existingResource);

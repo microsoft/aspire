@@ -69,6 +69,7 @@ public sealed class AksExistingClusterDeploymentTests(ITestOutputHelper output)
                 #pragma warning disable ASPIRECOMPUTE003
                 using Aspire.Hosting.Azure;
                 using Azure.Core;
+                using Azure.Provisioning.Resources;
 
                 var builder = DistributedApplication.CreateBuilder(args);
                 var resourceId = builder.AddParameter("aksResourceId");
@@ -87,6 +88,9 @@ public sealed class AksExistingClusterDeploymentTests(ITestOutputHelper output)
                 aks.Resource.Scope = new AzureBicepResourceScope(
                     builder.AddParameter("supportingGroup").Resource,
                     builder.AddParameter("supportingSubscription").Resource);
+                builder.AddAzureUserAssignedIdentity("cluster-reader")
+                    .WithAnnotation(new RoleAssignmentAnnotation(aks.Resource,
+                        new HashSet<RoleDefinition> { new(ArmBuiltInRole.Reader.ToString(), nameof(ArmBuiltInRole.Reader)) }));
                 builder.AddDotnetProject("apiservice", "../ExistingAks.ApiService/ExistingAks.ApiService.csproj")
                     .WithComputeEnvironment(aks);
 
@@ -113,6 +117,12 @@ public sealed class AksExistingClusterDeploymentTests(ITestOutputHelper output)
                     > "$BOOTSTRAP_DIR/cluster-after.json"
                 diff -u "$BOOTSTRAP_DIR/cluster-before.json" "$BOOTSTRAP_DIR/cluster-after.json"
                 test "$(az aks list --subscription "$TEST_SUBSCRIPTION" --resource-group "$DEPLOY_RG" --query 'length(@)' -o tsv)" = 0
+                READER_PRINCIPAL=$(az deployment group show --subscription "$TEST_SUBSCRIPTION" --resource-group "$DEPLOY_RG" \
+                    --name cluster-reader --query properties.outputs.principalId.value -o tsv)
+                test -n "$READER_PRINCIPAL"
+                az role assignment list --subscription "$TEST_SUBSCRIPTION" --scope "$Parameters__aksResourceId" \
+                    --query "[?principalId=='$READER_PRINCIPAL' && roleDefinitionName=='Reader']" -o json \
+                    | jq -e 'length == 1'
                 # Azure CLI and Bicep can use different casing for the same ARM resource ID.
                 az deployment group list --subscription "$TEST_SUBSCRIPTION" --resource-group "$DEPLOY_RG" \
                     --query '[].name' -o tsv | while IFS= read -r DEPLOYMENT; do

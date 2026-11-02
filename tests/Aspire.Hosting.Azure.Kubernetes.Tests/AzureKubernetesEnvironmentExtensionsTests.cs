@@ -10,7 +10,10 @@ using Aspire.Hosting.Azure.Kubernetes;
 using Aspire.Hosting.Kubernetes;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
+using Azure.Provisioning.Authorization;
 using Azure.Provisioning.ContainerService;
+using Azure.Provisioning.Expressions;
+using Azure.Provisioning.Resources;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Azure.Tests;
@@ -539,6 +542,94 @@ public class AzureKubernetesEnvironmentExtensionsTests(ITestOutputHelper outputH
 
         var manifest = await AzureManifestUtils.GetManifestWithBicep(referenceResource);
         await Verify(manifest.BicepText, extension: "bicep").UseParameters(existing);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task ExistingCluster_RoleTargetsClusterScopeInsteadOfSupportingScope(bool inheritedSubscription, bool callbackScope)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        var clusterGroup = builder.AddParameter("cluster-group", "cluster-rg");
+        if (inheritedSubscription)
+        {
+            aks.AsExisting(builder.AddParameter("cluster-name", "existing-cluster"), clusterGroup);
+        }
+        else
+        {
+            aks.AsExistingInResourceGroup(
+                builder.AddParameter("cluster-name", "existing-cluster"),
+                clusterGroup,
+                builder.AddParameter("cluster-subscription", "00000000-0000-0000-0000-000000000001"));
+        }
+
+        var supportingScope = new AzureBicepResourceScope(
+            builder.AddParameter("supporting-group", "supporting-rg").Resource,
+            builder.AddParameter("supporting-subscription", "00000000-0000-0000-0000-000000000002").Resource);
+        if (callbackScope)
+        {
+            aks.ConfigureInfrastructure(infrastructure => infrastructure.AspireResource.Scope = supportingScope);
+        }
+        else
+        {
+            aks.Resource.Scope = supportingScope;
+        }
+
+        var roles = builder.AddResource(new AzureRoleAssignmentResource("cluster-roles", aks.Resource, null, null, infrastructure =>
+        {
+            var cluster = aks.Resource.AddAsExistingResource(infrastructure);
+            infrastructure.Add(new RoleAssignment("cluster_reader")
+            {
+                Name = "00000000-0000-0000-0000-000000000003",
+                Scope = new IdentifierExpression(cluster.BicepIdentifier),
+                PrincipalId = Guid.Parse("00000000-0000-0000-0000-000000000004"),
+                PrincipalType = RoleManagementPrincipalType.ServicePrincipal,
+                RoleDefinitionId = BicepFunction.GetSubscriptionResourceId("Microsoft.Authorization/roleDefinitions", ArmBuiltInRole.Reader.ToString())
+            });
+        }));
+
+        await using var app = builder.Build();
+        await app.RunAsync();
+
+        Assert.Same(supportingScope, aks.Resource.Scope);
+        Assert.Same(clusterGroup.Resource, roles.Resource.Scope!.ResourceGroup);
+        Assert.Same(
+            inheritedSubscription ? supportingScope.Subscription : builder.Resources.OfType<ParameterResource>().Single(parameter => parameter.Name == "cluster-subscription"),
+            roles.Resource.Scope.Subscription);
+        Assert.Contains(aks.Resource, roles.Resource.References);
+
+        var mainBicep = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "main.bicep"));
+        var clusterBicep = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "aks", "aks.bicep"));
+        var roleBicep = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "cluster-roles", "cluster-roles.bicep"));
+        await Verify(mainBicep, "bicep")
+            .UseParameters(inheritedSubscription, callbackScope)
+            .AppendContentAsFile(clusterBicep, "bicep")
+            .AppendContentAsFile(roleBicep, "bicep");
+    }
+
+    [Fact]
+    public async Task AddAsExistingResource_InheritsModuleSubscriptionAcrossTemplates()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
+        var aks = builder.AddAzureKubernetesEnvironment("aks")
+            .AsExisting(
+                builder.AddParameter("cluster-name", "existing-cluster"),
+                builder.AddParameter("cluster-group", "cluster-rg"));
+        aks.Resource.Scope = new AzureBicepResourceScope("supporting-rg", "cluster-subscription");
+
+        var referenceResource = new AzureProvisioningResource("reference", infrastructure =>
+            aks.Resource.AddAsExistingResource(infrastructure))
+        {
+            Scope = new AzureBicepResourceScope("consumer-rg", "consumer-subscription")
+        };
+
+        var manifest = await AzureManifestUtils.GetManifestWithBicep(referenceResource);
+        await Verify(manifest.BicepText, "bicep");
     }
 
     [Fact]

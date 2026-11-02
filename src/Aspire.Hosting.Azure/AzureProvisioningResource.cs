@@ -6,7 +6,6 @@
 using System.Diagnostics;
 using System.Text;
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Azure.Provisioning;
 using Azure.Provisioning;
 using Azure.Provisioning.Authorization;
 using Azure.Provisioning.Expressions;
@@ -27,7 +26,7 @@ public class AzureProvisioningResource(string name, Action<AzureResourceInfrastr
     internal void RegisterRoleAssignmentScope(AzureRoleAssignmentResource roleAssignment)
     {
         (_roleAssignmentResources ??= []).Add(roleAssignment);
-        roleAssignment.Scope = BicepUtilities.GetExistingResourceScope(this);
+        roleAssignment.Scope = GetResourceReferenceScope(this);
         // Existing-resource names can be literals rather than output references. Retain an
         // explicit dependency so the target's callbacks finish before role deployment reads Scope.
         roleAssignment.References.Add(this);
@@ -37,11 +36,6 @@ public class AzureProvisioningResource(string name, Action<AzureResourceInfrastr
     /// Callback for configuring the Azure resources.
     /// </summary>
     public Action<AzureResourceInfrastructure> ConfigureInfrastructure { get; internal set; } = configureInfrastructure ?? throw new ArgumentNullException(nameof(configureInfrastructure));
-
-    /// <summary>
-    /// Gets whether the resource handles its existing-reference scope inside its own Bicep template.
-    /// </summary>
-    internal bool HandlesExistingResourceScopeInTemplate { get; private set; }
 
     /// <summary>
     /// Gets or sets the <see cref="global::Azure.Provisioning.ProvisioningBuildOptions"/> which contains common settings and
@@ -106,7 +100,7 @@ public class AzureProvisioningResource(string name, Action<AzureResourceInfrastr
         // modules aligned without running callbacks early or rebuilding shared provisioning values.
         if (_roleAssignmentResources is { } roleAssignments)
         {
-            var scope = BicepUtilities.GetExistingResourceScope(this);
+            var scope = GetResourceReferenceScope(this);
             foreach (var roleAssignment in roleAssignments)
             {
                 roleAssignment.Scope = scope;
@@ -230,24 +224,37 @@ public class AzureProvisioningResource(string name, Action<AzureResourceInfrastr
         ((IBicepValue)existingResourceName).Self = new BicepValueReference(provisionableResource, "Name", ["name"]);
         provisionableResource.ProvisionableProperties["name"] = existingResourceName;
 
-        var annotationScope = AzureBicepResourceScope.FromExistingResourceAnnotation(existingAnnotation);
-        var moduleScope = (aspireResource as AzureBicepResource)?.Scope;
-        // Compute environments can deploy supporting infrastructure separately from the existing compute.
-        var resourceScope = aspireResource is IAzureComputeEnvironmentResource
-            ? annotationScope ?? moduleScope
-            : moduleScope ?? annotationScope;
+        var resourceScope = GetResourceReferenceScope(aspireResource);
         if (resourceScope is { } scope &&
             !ScopeEquals(scope, infra.AspireResource.Scope))
         {
             SetScopeProperty(provisionableResource, CreateScopeExpression(scope, infra));
         }
 
-        if (ReferenceEquals(aspireResource, infra.AspireResource))
+        return true;
+    }
+
+    private static AzureBicepResourceScope? GetResourceReferenceScope(IAzureResource resource)
+    {
+        var moduleScope = (resource as AzureBicepResource)?.Scope;
+        var annotationScope = resource.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var annotation)
+            ? AzureBicepResourceScope.FromExistingResourceAnnotation(annotation)
+            : null;
+
+        if (resource is not IAzureComputeEnvironmentResource)
         {
-            infra.AspireResource.HandlesExistingResourceScopeInTemplate = true;
+            return moduleScope ?? annotationScope;
         }
 
-        return true;
+        // Existing compute can live separately from supporting infrastructure. Resolve its full
+        // scope here so references in other modules inherit the compute module's subscription.
+        if (annotationScope is { HasResourceGroup: true, Subscription: null } &&
+            moduleScope?.Subscription is { } subscription)
+        {
+            return new AzureBicepResourceScope(annotationScope.ResourceGroup, subscription);
+        }
+
+        return annotationScope ?? moduleScope;
     }
 
     private static bool ScopeEquals(AzureBicepResourceScope expected, AzureBicepResourceScope? actual)
