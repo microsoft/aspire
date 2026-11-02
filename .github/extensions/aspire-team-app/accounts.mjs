@@ -12,6 +12,7 @@ import { promisify } from "node:util";
 import { createHash } from "node:crypto";
 
 import { coreTeamMemberAliasSuffixes } from "./constants.mjs";
+import { createCliRunner } from "./cli.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -64,7 +65,7 @@ async function readGhAccounts(run, env) {
       .filter((account) => account.state === "success" && account.host && account.login)
       .map(({ host, login }) => ({ host, login }));
   } catch (error) {
-    if (error.code === "ENOENT") return null;
+    if (error.code === "gh_cli_missing" || error.code === "gh_cli_lookup_failed") throw error;
     if (!/unknown flag: --json\b/.test(error.stderr ?? "")) {
       throw new Error("GitHub CLI account discovery failed. Check `gh auth status` in a terminal.");
     }
@@ -87,7 +88,6 @@ async function readGhAccounts(run, env) {
 
 async function ghAccounts(run, env, platform) {
   const accounts = await readGhAccounts(run, env);
-  if (accounts === null) return [];
   const hasConfigLocation = Object.entries(env).some(([name, value]) =>
     ["APPDATA", "GH_CONFIG_DIR", "XDG_CONFIG_HOME"].includes(name.toUpperCase()) && value);
   if (accounts.length === 0 && platform === "win32" && !hasConfigLocation) {
@@ -176,13 +176,14 @@ export async function detectCandidates({ run = execFileAsync, env = process.env,
     delete ghEnv[name];
   }
   let accounts = [];
+  const runGh = createCliRunner("gh", "GitHub CLI", { run, platform });
   try {
-    accounts = await ghAccounts(run, ghEnv, platform);
+    accounts = await ghAccounts(runGh, ghEnv, platform);
   } catch (error) {
     diagnostics.push(error);
   }
   for (const a of accounts) {
-    add("gh", await ghToken(a.host, a.login, run, ghEnv), a.login, a.host);
+    add("gh", await ghToken(a.host, a.login, runGh, ghEnv), a.login, a.host);
   }
 
   // Plain env tokens (host from GH_HOST when targeting an enterprise instance).
