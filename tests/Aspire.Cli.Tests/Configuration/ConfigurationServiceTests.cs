@@ -743,8 +743,10 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var (service, _) = CreateService(workspace, """
             {
-              "plugins": ["aspire", "other"],
-              "matrix": [[{"name": "first"}]],
+              "plugins": [null, "aspire", null, "other", null],
+              "matrix": [[{"name": "first"}, null], null],
+              "nullOnly": [null],
+              "nullProperty": null,
               "custom": {"0": "numeric property"},
               "emptyArray": [],
               "emptyObject": {}

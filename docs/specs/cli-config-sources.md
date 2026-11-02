@@ -248,7 +248,7 @@ Setting an existing index replaces only that element. An index equal to the arra
 
 Numeric dot or colon segments can also address an existing array, so `skillSources.team.plugins.0` edits element zero when `plugins` is already an array. Otherwise numeric segments remain object property names: creating `custom.0` creates an object with a `"0"` property. Use brackets when creating an array rather than relying on numeric property names.
 
-Deleting an array element shifts subsequent elements down by one index. Deleting the final element leaves an empty array, and deleting a property within an array element preserves the element even if it becomes an empty object. `aspire config list` displays individual array entries using bracketed indices, while empty arrays and objects remain visible.
+Deleting an array element shifts subsequent elements down by one index. Deleting the final element leaves an empty array, and deleting a property within an array element preserves the element even if it becomes an empty object. `aspire config list` displays individual array entries using bracketed indices, including `null` for null array elements, while empty arrays and objects remain visible.
 
 ### Check for updates without applying them
 

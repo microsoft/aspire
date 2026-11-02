@@ -362,7 +362,15 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
         {
             for (var i = 0; i < array.Count; i++)
             {
-                FlattenJsonValue(array[i], result, $"{key}[{i.ToString(CultureInfo.InvariantCulture)}]");
+                var elementKey = $"{key}[{i.ToString(CultureInfo.InvariantCulture)}]";
+                if (array[i] is null)
+                {
+                    result[elementKey] = "null";
+                }
+                else
+                {
+                    FlattenJsonValue(array[i], result, elementKey);
+                }
             }
         }
         else if (value is not null)
