@@ -20,7 +20,7 @@ on:
 env:
   # Test project shortname (maps to tests/Aspire.{name}.Tests/ or tests/{name}.Tests/)
   # Examples: Hosting, Core, Dashboard, Components.Common, Cli.EndToEnd
-  TEST_PROJECT: "Hosting"
+  TEST_PROJECT: "Cli.EndToEnd"
 
   # Test filter arguments passed to dotnet test (after the -- separator).
   # Use quotes around wildcard patterns to prevent shell glob expansion.
@@ -28,18 +28,22 @@ env:
   #   --filter-method "*.TestMethodName"
   #   --filter-class "*.TestClassName"
   #   --filter-method "*.Test1" --filter-method "*.Test2"
-  TEST_FILTER: '--filter-method "*.YourTestMethodName"'
+  TEST_FILTER: '--filter-method "*.DeployTypeScriptK8sWithPersistentVolumeSurvivesPodRestart" --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"'
 
   # Target operating systems (comma-separated)
   # Options: ubuntu-latest, windows-latest, macos-latest
-  TARGET_OSES: "ubuntu-latest,windows-latest"
+  TARGET_OSES: "ubuntu-latest"
 
   # Number of parallel runners per OS
   # Total jobs = RUNNERS_PER_OS × number of OSes (must be ≤ 256)
-  RUNNERS_PER_OS: "3"
+  RUNNERS_PER_OS: "5"
 
   # Number of test iterations each runner executes
-  ITERATIONS_PER_RUNNER: "3"
+  ITERATIONS_PER_RUNNER: "5"
+
+  ASPIRE_E2E_CLI_ARCHIVE_DIR: ${{ github.workspace }}/cli-archives
+  GITHUB_PR_NUMBER: "21654"
+  GITHUB_PR_HEAD_SHA: "a37b38abee08fce375f174fd4cb6a29b5004d208"
 
 jobs:
 
@@ -166,6 +170,39 @@ jobs:
 
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Use identical product artifacts for the baseline and fixed test code so
+      # a moving daily CLI cannot introduce unrelated differences between runs.
+      - name: Download pinned PR CLI archive
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          github-token: ${{ github.token }}
+          run-id: 41309223734
+          name: cli-native-archives-linux-x64
+          path: ${{ github.workspace }}/cli-archives
+
+      - name: Download pinned PR NuGet packages
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          github-token: ${{ github.token }}
+          run-id: 41309223734
+          name: built-nugets
+          path: ${{ github.workspace }}/pr-packages
+
+      - name: Download pinned PR architecture-specific NuGet packages
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          github-token: ${{ github.token }}
+          run-id: 41309223734
+          name: built-nugets-for-linux-x64
+          path: ${{ github.workspace }}/pr-arch-packages
+
+      - name: Assemble pinned PR package feed
+        shell: bash
+        run: |
+          set -euo pipefail
+          find pr-packages pr-arch-packages -name '*.nupkg' -exec cp {} cli-archives/ \;
+          test -n "$(find cli-archives -maxdepth 1 -name 'Aspire.Cli.*.nupkg' -print -quit)"
 
       - name: Trust HTTPS development certificate (Linux)
         if: runner.os == 'Linux'
