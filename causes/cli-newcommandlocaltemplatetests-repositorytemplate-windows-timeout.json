@@ -1,0 +1,16 @@
+{
+  "id": "cli-newcommandlocaltemplatetests-repositorytemplate-windows-timeout",
+  "type": "flaky-test",
+  "title": "Flaky: NewCommandLocalTemplateTests.RepositoryTemplate_ResolvesRefsAndReusesPinnedCheckoutsAcrossInvocations times out after 30s on Windows",
+  "test_name": "Aspire.Cli.Tests.Commands.NewCommandLocalTemplateTests.RepositoryTemplate_ResolvesRefsAndReusesPinnedCheckoutsAcrossInvocations",
+  "error_pattern": "System.TimeoutException : The operation at D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Commands\\NewCommandLocalTemplateTests.cs:1700 timed out after reaching the limit of 30000ms.",
+  "occurrences": [
+    {
+      "run_id": 41534093007,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/41534093007",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
+      "pr_number": 0,
+      "observed_at": "2026-11-02T23:24:10Z"
+    }
+  ]
+}

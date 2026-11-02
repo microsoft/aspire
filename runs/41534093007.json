@@ -1,0 +1,209 @@
+{
+  "run_id": 41534093007,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/41534093007",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-02T23:24:10Z",
+  "verdict": "mixed",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 21597,
+    "title": "Treat DCP FailedToStart as stopped and restart Starting/no-state replicas after rebuild",
+    "author": "davidfowl",
+    "state": "closed",
+    "head_branch": "fix/dcp-stop-failedtostart",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/21597",
+    "merged_at": "2026-11-02T22:04:44Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "1d3c45f9a299c30d46fc3166148902d466043df2",
+    "failed_sha": "1b2640341430f83d74c472de559bcf780ebc4c3c",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "a8dff1cee6a428a0e5eff5dbdf7bf258f6cc32d0",
+        "message": "Only show 'Stopping Aspire' when canceling aspire run (#21561) Co-authored-by: davidfowl <95136+davidfowl@users.noreply.github.com> Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com> Co-authored-by: James Newton-King <james@newtonking.com>",
+        "html_url": "https://github.com/microsoft/aspire/commit/a8dff1cee6a428a0e5eff5dbdf7bf258f6cc32d0",
+        "pull_request": {
+          "number": 21561,
+          "title": "Only show 'Stopping Aspire' when canceling aspire run",
+          "url": "https://github.com/microsoft/aspire/pull/21561",
+          "merged_at": "2026-11-02T05:29:25Z"
+        }
+      },
+      {
+        "sha": "ae2c92730f335db41c02dffb22fdfc83793e231d",
+        "message": "Unquarantine 2 CLI E2E tests that pass 100% in the quarantine lane (#21649) ## Description This unquarantines 2 CLI E2E tests that have passed 100% of the time in the quarantined-tests lane over the last 14 days. No product or test logic changes: the PR only removes `[QuarantinedTest]` and the now-unused `using Aspire.TestUtilities;` directives. Quarantine-lane evidence comes from `tests-quarantine.yml` scheduled runs created 2026-10-18 to 2026-11-01. I parsed each run's Final Results table (174",
+        "html_url": "https://github.com/microsoft/aspire/commit/ae2c92730f335db41c02dffb22fdfc83793e231d",
+        "pull_request": {
+          "number": 21649,
+          "title": "Unquarantine 2 CLI E2E tests that pass 100% in the quarantine lane",
+          "url": "https://github.com/microsoft/aspire/pull/21649",
+          "merged_at": "2026-11-02T06:25:05Z"
+        }
+      },
+      {
+        "sha": "7961070663e774084a46b4ee908ea4c0149db633",
+        "message": "Support config source adoption and explicit project opt-out (#21678)",
+        "html_url": "https://github.com/microsoft/aspire/commit/7961070663e774084a46b4ee908ea4c0149db633",
+        "pull_request": {
+          "number": 21678,
+          "title": "Support config source adoption and explicit project opt-out",
+          "url": "https://github.com/microsoft/aspire/pull/21678",
+          "merged_at": "2026-11-02T08:31:25Z"
+        }
+      },
+      {
+        "sha": "1afc0d0ee72484a35e189eafaec0ae9f409e5cc7",
+        "message": "Limit configuration sources to project-local settings (#21679)",
+        "html_url": "https://github.com/microsoft/aspire/commit/1afc0d0ee72484a35e189eafaec0ae9f409e5cc7",
+        "pull_request": {
+          "number": 21679,
+          "title": "Limit configuration sources to project-local settings",
+          "url": "https://github.com/microsoft/aspire/pull/21679",
+          "merged_at": "2026-11-02T09:59:35Z"
+        }
+      },
+      {
+        "sha": "2137ceca1d3baa8bcabd5036f3974f1538f92c1a",
+        "message": "Fix array-aware CLI configuration editing (#21572)",
+        "html_url": "https://github.com/microsoft/aspire/commit/2137ceca1d3baa8bcabd5036f3974f1538f92c1a",
+        "pull_request": {
+          "number": 21572,
+          "title": "Fix array-aware CLI configuration editing",
+          "url": "https://github.com/microsoft/aspire/pull/21572",
+          "merged_at": "2026-11-02T12:35:27Z"
+        }
+      },
+      {
+        "sha": "9f0961d0c7173732f45ce88d571c8b53f8059934",
+        "message": "Reject registration-only configuration on existing Entra references (#21493) ## Description Registration-only Entra configuration currently accepts existing registrations and silently does nothing, leaving applications to fail later during authentication. Fail at the configuration call instead, with guidance for configuring the registration manually. Guard redirect URIs, owners, ID-token issuance, pre-authorization, admin consent, and the default application ID URI. Align existing role, certific",
+        "html_url": "https://github.com/microsoft/aspire/commit/9f0961d0c7173732f45ce88d571c8b53f8059934",
+        "pull_request": {
+          "number": 21493,
+          "title": "Reject registration-only configuration on existing Entra references",
+          "url": "https://github.com/microsoft/aspire/pull/21493",
+          "merged_at": "2026-11-02T15:21:50Z"
+        }
+      },
+      {
+        "sha": "3d42183549d7fc8e4817e5c98c8d427ebd20e464",
+        "message": "Support configurable named skill sources (#21364) ## Description Allow teams to configure multiple named skill sources instead of always registering only `microsoft/aspire-skills`. This builds on #20946 and lets shared `configSource` configuration distribute skill-source settings. - Add `skillSources` configuration with per-source repositories, marketplace/plugin names, refs, and OpenCode catalogs. Keep the built-in source unless it is explicitly disabled or overridden. - Merge named sources acr",
+        "html_url": "https://github.com/microsoft/aspire/commit/3d42183549d7fc8e4817e5c98c8d427ebd20e464",
+        "pull_request": {
+          "number": 21364,
+          "title": "Support configurable named skill sources",
+          "url": "https://github.com/microsoft/aspire/pull/21364",
+          "merged_at": "2026-11-02T16:28:36Z"
+        }
+      },
+      {
+        "sha": "b58809d3eeae94db4cb5b8b839b9232fc59434de",
+        "message": "Support Key Vault resource references for Entra certificate credentials (#21425) ## Description Entra certificate credentials can now use a Key Vault resource already modeled in the AppHost instead of requiring a hard-coded vault URL. The URI remains a deferred resource reference during local run and publish, including the Key Vault emulator endpoint in run mode. A literal vault URL is still accepted for vaults managed outside the AppHost. The same exported method accepts either a URL or a Key V",
+        "html_url": "https://github.com/microsoft/aspire/commit/b58809d3eeae94db4cb5b8b839b9232fc59434de",
+        "pull_request": {
+          "number": 21425,
+          "title": "Support Key Vault resource references for Entra certificate credentials",
+          "url": "https://github.com/microsoft/aspire/pull/21425",
+          "merged_at": "2026-11-02T17:34:47Z"
+        }
+      },
+      {
+        "sha": "25935214f31928dd58118449a2fe2f96da09ac70",
+        "message": "Accept natural ps leader exit racing a failed Windows taskkill (Fixes #20869) (#21595) ## Description Fixes the intermittent VS Code extension E2E (Windows, apphost-tree) failure `owns at most one ps follower…`. The test reports `Timed out after 30000ms waiting for 1 owned ps follower(s)` and the state error `Failed to stop the previous AppHost watcher: Error: taskkill for aspire ps exited with code 255 while PID N remained live.` ### Denominator (ci.yml, 2026-10-29 13:00Z → 10-31 13:23Z, 388 ru",
+        "html_url": "https://github.com/microsoft/aspire/commit/25935214f31928dd58118449a2fe2f96da09ac70",
+        "pull_request": {
+          "number": 21595,
+          "title": "Accept natural ps leader exit racing a failed Windows taskkill (Fixes #20869)",
+          "url": "https://github.com/microsoft/aspire/pull/21595",
+          "merged_at": "2026-11-02T18:45:57Z"
+        }
+      },
+      {
+        "sha": "42793ba28262d772539c5da685d90a78e0f0a16c",
+        "message": "Fix flaky IntegrationHostLauncherTests discovery timeout on Windows (#21428) ## Description Fixes the intermittent Windows CI failure of `Aspire.Hosting.RemoteHost.Tests.IntegrationHostLauncherTests.InitializeHostsAsync_WaitsForEveryRegistrationBeforeDiscovery`. The test fails with `TimeoutException` at `initialization.WaitAsync(10s)` after about 11s. It failed on the first attempt of 3 main-branch runs in the last 72 hours: [40554609235](https://github.com/microsoft/aspire/actions/runs/40554609",
+        "html_url": "https://github.com/microsoft/aspire/commit/42793ba28262d772539c5da685d90a78e0f0a16c",
+        "pull_request": {
+          "number": 21428,
+          "title": "Fix flaky IntegrationHostLauncherTests discovery timeout on Windows",
+          "url": "https://github.com/microsoft/aspire/pull/21428",
+          "merged_at": "2026-11-02T18:53:26Z"
+        }
+      },
+      {
+        "sha": "00d1e6694a7fd94f0a7ee2fc48aa7ad2faef14c2",
+        "message": "Target dashboard resource cards in DashboardUrlTests breakpoint test (#21656) ## Description `DashboardUrlTests.DashboardDisplaysResourceUpdatesWhileAppHostIsPausedAtBreakpoint` has failed in every scheduled Outerloop run on `main` since #21412 (\"Modernize the dashboard experience\") made the Cards layout the default resources view. Before #21412 it passed 12 of 12 runs; since then it has failed 2 of 2 ([41158473015](https://github.com/microsoft/aspire/actions/runs/41158473015), [41263841334](htt",
+        "html_url": "https://github.com/microsoft/aspire/commit/00d1e6694a7fd94f0a7ee2fc48aa7ad2faef14c2",
+        "pull_request": {
+          "number": 21656,
+          "title": "Target dashboard resource cards in DashboardUrlTests breakpoint test",
+          "url": "https://github.com/microsoft/aspire/pull/21656",
+          "merged_at": "2026-11-02T19:13:50Z"
+        }
+      },
+      {
+        "sha": "0efbfcb095bf85ccf89678193d64b46022e7657e",
+        "message": "Make WithBindMount idempotent and fail fast on conflicting mount targets (#21546) ## Description `WithBindMount` always appended a new `ContainerMountAnnotation`, even when the resource already had a mount at that target. Duplicates went straight to DCP, and Docker refused to create the container with `Duplicate mount point: <target>`. You hit this easily with layered extension methods, or by adding a mount from a `BeforeResourceStartedEvent` handler. That handler runs again on every restart, so",
+        "html_url": "https://github.com/microsoft/aspire/commit/0efbfcb095bf85ccf89678193d64b46022e7657e",
+        "pull_request": {
+          "number": 21546,
+          "title": "Make WithBindMount idempotent and fail fast on conflicting mount targets",
+          "url": "https://github.com/microsoft/aspire/pull/21546",
+          "merged_at": "2026-11-02T19:24:17Z"
+        }
+      },
+      {
+        "sha": "1b2640341430f83d74c472de559bcf780ebc4c3c",
+        "message": "Treat DCP FailedToStart as stopped and restart Starting/no-state replicas after rebuild (#21597) ## Description This PR changes how a resource stop is detected, and it also changes the rebuild command's lifecycle policy. 1. **Stop detection.** `DcpExecutor.StopResourceAsync` treats DCP's `FailedToStart` state as stopped, for both Executables and Containers. 2. **Rebuild restart policy** (`ShouldRestartAfterRebuild`, `GetReplicaActionAfterRebuild`). After a successful build, the rebuild command r",
+        "html_url": "https://github.com/microsoft/aspire/commit/1b2640341430f83d74c472de559bcf780ebc4c3c",
+        "pull_request": {
+          "number": 21597,
+          "title": "Treat DCP FailedToStart as stopped and restart Starting/no-state replicas after rebuild",
+          "url": "https://github.com/microsoft/aspire/pull/21597",
+          "merged_at": "2026-11-02T22:04:44Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
+      "id": 125582814185,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/41534093007/job/125582814185",
+      "classification": "flaky-test",
+      "reason": "Test timed out after 30s on Windows while a git process ran ~24s and exited 1; unrelated transient timeout",
+      "failed_steps": [
+        "Run tests (Windows)"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
+      "id": 125591652332,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/41534093007/job/125591652332",
+      "classification": "main-repository-breakage",
+      "reason": "VS Code Windows browser-debugger E2E fails again on main (same job as earlier run's known breakage); only JsonRpc connection-closed output extracted",
+      "failed_steps": [
+        "Run extension E2E tests"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Cli.Tests.Commands.NewCommandLocalTemplateTests.RepositoryTemplate_ResolvesRefsAndReusesPinnedCheckoutsAcrossInvocations",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
+      "error": "System.TimeoutException : The operation at D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Commands\\NewCommandLocalTemplateTests.cs:1700 timed out after reaching the limit of 30000ms.",
+      "stack_trace": "at Microsoft.AspNetCore.InternalTesting.AsyncTestHelpers.TimeoutAfter[T](Task`1 task, TimeSpan timeout, String filePath, Int32 lineNumber) in D:\\a\\aspire\\aspire\\tests\\Shared\\AsyncTestHelpers.cs:line 180\n   at Aspire.Cli.Tests.Commands.NewCommandLocalTemplateTests.<>c__DisplayClass87_0.<<RepositoryTemplate_ResolvesRefsAndReusesPinnedCheckoutsAcrossInvocations>g__GenerateAsync|0>d.MoveNext() in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Commands\\NewCommandLocalTemplateTests.cs:line 1700\n--- End of stack trace from previous location ---\n   at Aspire.Cli.Tests.Commands.NewCommandLocalTemplateTests.RepositoryTemplate_ResolvesRefsAndReusesPinnedCheckoutsAcrossInvocations() in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Commands\\NewCommandLocalTemplateTests.cs:line 1679\n--- End of stack trace from previous location ---",
+      "standard_output": "Temporary workspace created at: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\Aspire.Cli.Tests\\Workspace\\2evlw0go.g3c\n[2026-11-02T22:17:19.8069394+00:00] Starting 'git --version' in 'D:\\a\\aspire\\aspire\\artifacts\\bin\\Aspire.Cli.Tests\\Debug\\net11.0'\n[2026-11-02T22:17:19.8197661+00:00] 'git --version' started with PID 4140 after 00:00:00.0128313\n[2026-11-02T22:17:19.9390542+00:00] 'git --version' (PID 4140) stdout: git version 2.56.0.windows.4\n[2026-11-02T22:17:19.9788915+00:00] 'git --version' (PID 4140) stdout closed\n[2026-11-02T22:17:19.9789318+00:00] 'git --version' (PID 4140) stderr closed\n[2026-11-02T22:17:19.9819939+00:00] 'git --version' (PID 4140) finished after 00:00:00.1750578; exit code: 0\n[2026-11-02T22:17:19.9884656+00:00] Starting 'git init --initial-branch=main' in 'C:\\Users\\runneradmin\\AppData\\Local\\Temp\\Aspire.Cli.Tests\\Workspace\\2evlw0go.g3c\\repository'\n[2026-11-02T22:17:19.9985608+00:00] 'git init --initial-branch=main' started with PID 1336 after 00:00:00.0100994\n[2026-11-02T22:17:20.1307474+00:00] 'git init --initial-branch=main' (PID 1336) stdout: Initialized empty Git repository in C:/Users/runneradmin/AppData/Local/Temp/Aspire.Cli.Tests/Workspace/2evlw0go.g3c/repository/.git/\n[2026-11-02T22:17:20.1623729+00:00] 'git init --initial-branch=main' (PID 1336) stderr closed\n[2026-11-02T22:17:20.1624195+00:00] 'git init --initial-branch=main' (PID 1336) stdout closed\n[2026-11-02T22:17:20.1659660+00:00] 'git init --initial-branch=main' (PID 1336) finished after 00:00:00.1775033; exit code: 0\n[2026-11-02T22:17:20.1661605+00:00] Starting 'git config user.email test@example.com' in 'C:\\Users\\runneradmin\\AppData\\Local\\Temp\\Aspire.Cli.Tests\\Workspace\\2evlw0go.g3c\\repository'\n[2026-11-02T22:17:20.1742699+00:00] 'git config user.email test@example.com' started with PID 6912 after 00:00:00.0081124\n[2026-11-02T22:17:20.3169130+00:00] 'git config user.email test@example.com' (PID 6912) stderr closed\n[2026-11-02T22:17:20.3169596+00:00] 'git config user.email test@example.com' (PID 6912) stdout closed\n[2026-11-02T22:17:20.3221745+00:00] 'git config user.email test@example.com' (PID 6912) finished after 00:00:00.1560160; exit code: 0\n[2026-11-02T22:17:20.3223961+00:00] Starting 'git config user.name Test User' in 'C:\\Users\\runneradmin\\AppData\\Local\\Temp\\Aspire.Cli.Tests\\Workspace\\2evlw0go.g3c\\repository'\n[2026-11-02T22:17:20.3405446+00:00] 'git config user.name Test User' started with PID 5080 after 00:00:00.0181525\n[2026-11-02T22:17:20.4608529+00:00] 'git config user.name Test User' (PID 5080) stdout closed\n[2026-11-02T22:17:20.4608779+00:00] 'git config user.name Test User' (PID 5080) stderr closed\n[2026-11-02T22:17:20.4618147+00:00] 'git config user.name Test User' (PID 5080) finished after 00:00:00.1394205; exit code: 0\n[2026-11-02T22:17:20.4620171+00:00] Starting 'git config commit.gpgsign false' in 'C:\\Users\\runneradmin\\AppData\\Local\\Temp\\Aspire.Cli.Tests\\Workspace\\2evlw0go.g3c\\repository'\n[2026-11-02T22:17:20.4671867+00:00] 'git config commit.gpgsign false' started with PID 8244 after 00:00:00.0051712\n[2026-11-02T22:17:20.5565948+00:00] 'git config commit.gpgsign false' (PID 8244) stderr closed\n[2026-11-02T22:17:20.5566374+00:00] 'git config commit.gpgsign false' (PID 8244) stdout closed\n[2026-11-02T22:17:20.5568025+00:00] 'git config commit.gpgsign false' (PID 8244) finished after 00:00:00.0947870; exit code: 0\n[2026-11-02T22:17:20.5569662+00:00] Starting 'git config tag.gpgsign false' in 'C:\\Users\\runneradmin\\AppData\\Local\\Temp\\Aspire.Cli.Tests\\Workspace\\2evlw0go.g3c\\repository'\n[2026-11-02T22:17:20.5739714+00:00] 'git config tag.gpgsign false' started with PID 6780 after 00:00:00.0170085\n[2026-11-02T22:17:20.6638579+00:00] 'git config tag.gpgsign false' (PID 6780) stdout closed\n[2026-11-02T22:17:20.6641659+00:00] 'git config tag.gpgsign false' (PID 6780) stderr closed\n[2026-11-02T22:17:20.6659942+00:00] 'git config tag.gpgsign false' (PID 6780) finished after 00:00:00.1090300; exit code: 0\n[2026-11-02T22:17:20.6661519+00:",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "30s timeout on Windows during git operation; not tied to a deterministic change"
+    }
+  ],
+  "causes": [
+    "cli-newcommandlocaltemplatetests-repositorytemplate-windows-timeout",
+    "vscode-e2e-windows-browser-debugger-resource-running-timeout"
+  ]
+}
