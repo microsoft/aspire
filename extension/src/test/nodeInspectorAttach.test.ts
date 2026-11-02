@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as net from 'net';
 import * as os from 'os';
 import * as path from 'path';
+import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { AspireDebugSession } from '../debugger/AspireDebugSession';
 import { denoAppHostInspectorAttachTimeoutMs, nodeDebuggerExtension } from '../debugger/languages/node';
@@ -32,6 +33,7 @@ interface FixtureProcess {
     lines: string[];
     // Before it reports "attached" the fixture never closes its control socket, so closure then means the process exited.
     closed: Promise<void>;
+    isClosed(): boolean;
     waitForLine(line: string): Promise<void>;
 }
 
@@ -47,8 +49,16 @@ suite('Node Debugger Deno AppHost inspector attach (js-debug)', function () {
     let nextFixture: ((fixture: FixtureProcess) => void) | undefined;
     const disposables: vscode.Disposable[] = [];
     const resourceCleanups: vscode.Disposable[] = [];
+    const pendingStartCancellations = new Set<vscode.Disposable>();
+    // Tracked independently of the cleanup under test so teardown can always stop leftover fixtures.
+    const controlSockets = new Set<net.Socket>();
+    const fixtures: FixtureProcess[] = [];
     const aspireDebugSession = {
-        registerResourceCleanup: (disposable: vscode.Disposable) => resourceCleanups.push(disposable)
+        registerResourceCleanup: (disposable: vscode.Disposable) => resourceCleanups.push(disposable),
+        registerPendingStartCancellation: (disposable: vscode.Disposable) => {
+            pendingStartCancellations.add(disposable);
+            return { dispose: () => pendingStartCancellations.delete(disposable) };
+        },
     } as unknown as AspireDebugSession;
 
     suiteSetup(async () => {
@@ -58,9 +68,15 @@ suite('Node Debugger Deno AppHost inspector attach (js-debug)', function () {
 
         controlServer = net.createServer(socket => {
             socket.setEncoding('utf8');
+            controlSockets.add(socket);
             const lines: string[] = [];
             const waiters: { line: string; resolve: () => void }[] = [];
-            const closed = new Promise<void>(resolve => socket.once('close', () => resolve()));
+            let isClosed = false;
+            const closed = new Promise<void>(resolve => socket.once('close', () => {
+                isClosed = true;
+                controlSockets.delete(socket);
+                resolve();
+            }));
             let buffer = '';
             let fixture: FixtureProcess | undefined;
             socket.on('data', (data: string) => {
@@ -80,10 +96,12 @@ suite('Node Debugger Deno AppHost inspector attach (js-debug)', function () {
                             socket,
                             lines,
                             closed,
+                            isClosed: () => isClosed,
                             waitForLine: (expected: string) => lines.includes(expected)
                                 ? Promise.resolve()
                                 : new Promise<void>(resolve => waiters.push({ line: expected, resolve })),
                         };
+                        fixtures.push(fixture);
                         nextFixture?.(fixture);
                     }
                 }
@@ -95,18 +113,40 @@ suite('Node Debugger Deno AppHost inspector attach (js-debug)', function () {
     });
 
     suiteTeardown(async () => {
+        controlSockets.forEach(socket => socket.destroy());
         await new Promise<void>(resolve => controlServer.close(() => resolve()));
         fs.rmSync(tempDir, { recursive: true, force: true });
     });
 
     teardown(async () => {
         nextFixture = undefined;
-        disposables.splice(0).forEach(d => d.dispose());
-        await vscode.debug.stopDebugging();
-        resourceCleanups.splice(0).forEach(d => d.dispose());
+        try {
+            disposables.splice(0).forEach(d => d.dispose());
+            await vscode.debug.stopDebugging();
+            resourceCleanups.splice(0).forEach(d => d.dispose());
+        }
+        finally {
+            sinon.restore();
+            pendingStartCancellations.clear();
+            // Don't rely on the production cleanup being tested: kill any fixture that is still connected.
+            for (const fixture of fixtures.splice(0)) {
+                if (!fixture.isClosed()) {
+                    try {
+                        process.kill(fixture.pid);
+                    }
+                    catch {
+                        // Already exited.
+                    }
+                }
+            }
+            controlSockets.forEach(socket => socket.destroy());
+        }
     });
 
-    async function createAppHostAttachConfiguration(name: string, configuredTimeout?: number): Promise<AspireResourceExtendedDebugConfiguration> {
+    async function createAppHostAttachConfiguration(
+        name: string,
+        configuredTimeout?: number,
+        debugSession: AspireDebugSession = aspireDebugSession): Promise<AspireResourceExtendedDebugConfiguration> {
         const launchConfig: NodeLaunchConfiguration = { type: 'node', runtime_executable: 'deno', working_directory: tempDir };
         const debugConfig: AspireResourceExtendedDebugConfiguration = {
             runId: name,
@@ -121,7 +161,7 @@ suite('Node Debugger Deno AppHost inspector attach (js-debug)', function () {
             launchConfig,
             ['run', '-A', path.join(tempDir, 'apphost.mts')],
             [],
-            { debug: true, runId: name, debugSessionId: name, isApphost: true, debugSession: aspireDebugSession },
+            { debug: true, runId: name, debugSessionId: name, isApphost: true, debugSession },
             debugConfig);
 
         // Keep js-debug's attach settings and the runtime's --inspect-wait argument from the Deno AppHost
@@ -226,5 +266,77 @@ suite('Node Debugger Deno AppHost inspector attach (js-debug)', function () {
         await fixture.closed;
         assert.ok(!fixture.lines.includes('attached'));
         assert.strictEqual(await started, false);
+    });
+
+    test('stops the runtime when the session is cancelled as js-debug receives the launch request', async () => {
+        const name = 'cancelled-during-launch';
+        const debugConfig = await createAppHostAttachConfiguration(name);
+        const fixtureStarted = waitForFixture();
+        let cancelled = false;
+        // Request the stop before js-debug has spawned the runtime. VS Code delivers it later, so the
+        // runtime-not-yet-listed race itself is covered deterministically by the stopInspectorWaitingProcesses
+        // unit tests; this checks the end-to-end cancellation path.
+        disposables.push(vscode.debug.registerDebugAdapterTrackerFactory('pwa-node', {
+            createDebugAdapterTracker: session => session.configuration.name !== name || session.configuration.__pendingTargetId ? undefined : {
+                onWillReceiveMessage: (message: { type?: string; command?: string }) => {
+                    if (message.type === 'request' && message.command === 'launch' && !cancelled) {
+                        cancelled = true;
+                        void vscode.debug.stopDebugging(session);
+                    }
+                }
+            }
+        }));
+
+        const started = vscode.debug.startDebugging(undefined, debugConfig);
+        const fixture = await fixtureStarted;
+        assert.ok(cancelled);
+
+        await fixture.closed;
+        assert.ok(!fixture.lines.includes('attached'));
+        assert.strictEqual(await started, false);
+    });
+
+    test('stops a pending inspector attach when the owning Aspire session stops', async () => {
+        const name = 'owning-session-stopped';
+        const parentSession = {
+            id: 'owning-aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            workspaceFolder: undefined,
+            configuration: { type: 'aspire', request: 'launch', name: 'Aspire', program: path.join(tempDir, 'apphost.mts'), command: 'run' },
+            customRequest: sinon.stub(),
+            getDebugProtocolBreakpoint: sinon.stub(),
+        };
+        const stopDebugging = vscode.debug.stopDebugging;
+        // The synthetic parent is not a real VS Code session; every other stop goes to VS Code.
+        sinon.stub(vscode.debug, 'stopDebugging').callsFake(session =>
+            session?.id === parentSession.id ? Promise.resolve() : stopDebugging(session));
+        const owningSession = new AspireDebugSession(
+            parentSession as unknown as vscode.DebugSession,
+            {} as any,
+            {} as any,
+            { isDebugConfigEnvironmentLoggingEnabled: () => false } as any,
+            () => { });
+        const debugConfig = await createAppHostAttachConfiguration(name, undefined, owningSession);
+        const fixtureStarted = waitForFixture();
+
+        // Mirror AspireDebugSession.startAndGetDebugSession: shutdown waits for this pending start.
+        const pendingStart = owningSession.beginPendingDebugSessionStart(name);
+        let startSettled = false;
+        const started = vscode.debug.startDebugging(undefined, debugConfig).then(result => {
+            startSettled = true;
+            pendingStart.dispose();
+            return result;
+        });
+        const fixture = await fixtureStarted;
+
+        // js-debug is still polling the inspector, well inside the 120s attach timeout. Without
+        // pending-start cancellation the shutdown waits on this start until its stop budget runs out.
+        await owningSession.stopDebugging();
+        assert.ok(startSettled, 'The owning session finished stopping before the pending Deno AppHost start settled');
+        assert.strictEqual(await started, false);
+
+        await fixture.closed;
+        assert.ok(!fixture.lines.includes('attached'));
     });
 });

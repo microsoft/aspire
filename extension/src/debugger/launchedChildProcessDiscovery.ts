@@ -545,7 +545,7 @@ export class SystemLaunchedChildProcessCommandRunner implements LaunchedChildPro
     }
 }
 
-const systemLaunchedChildProcessClock: LaunchedChildProcessClock = {
+export const systemLaunchedChildProcessClock: LaunchedChildProcessClock = {
     now: () => Date.now(),
     sleep: (milliseconds, cancellationToken) => new Promise<void>((resolve, reject) => {
         if (cancellationToken?.isCancellationRequested) {

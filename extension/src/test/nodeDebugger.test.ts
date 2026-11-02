@@ -2,15 +2,16 @@ import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { getSupportedCapabilities } from '../capabilities';
 import { AspireDebugSession } from '../debugger/AspireDebugSession';
-import { denoAppHostInspectorAttachTimeoutMs, findInspectorWaitingProcessIds, hasCommandLineArgument, nodeDebuggerExtension } from '../debugger/languages/node';
-import { LaunchedChildProcess } from '../debugger/launchedChildProcessDiscovery';
+import { denoAppHostInspectorAttachTimeoutMs, findInspectorWaitingProcessIds, getDenoAppHostLaunchFailureMessage, hasCommandLineArgument, inspectorWaitingProcessSettleTimeoutMs, nodeDebuggerExtension, stopInspectorWaitingProcesses } from '../debugger/languages/node';
+import { LaunchedChildProcess, LaunchedChildProcessClock } from '../debugger/launchedChildProcessDiscovery';
 import { launchMethodDirect, launchMethodPackageManager } from '../debugger/languages/javascriptRuntime';
 import { AspireResourceExtendedDebugConfiguration, NodeLaunchConfiguration } from '../dcp/types';
 
 suite('Node Debugger Tests', () => {
     const resourceCleanups: vscode.Disposable[] = [];
     const fakeAspireDebugSession = {
-        registerResourceCleanup: (disposable: vscode.Disposable) => resourceCleanups.push(disposable)
+        registerResourceCleanup: (disposable: vscode.Disposable) => resourceCleanups.push(disposable),
+        registerPendingStartCancellation: () => ({ dispose: () => { } }),
     } as unknown as AspireDebugSession;
 
     teardown(() => {
@@ -190,6 +191,87 @@ suite('Node Debugger Tests', () => {
                 getProcess: async pid => ({ pid, parentPid: 10, executable: '', command: '', commandLineArguments: posixArguments.get(pid) }),
             }, 10),
             [11]);
+    });
+
+    function createFakeClock(): LaunchedChildProcessClock & { sleeps: number[] } {
+        let now = 0;
+        const sleeps: number[] = [];
+        return {
+            sleeps,
+            now: () => now,
+            sleep: async milliseconds => {
+                sleeps.push(milliseconds);
+                now += milliseconds;
+            },
+        };
+    }
+
+    // A Windows-style listing (trusted identity) of the extension host (pid 10) and its children.
+    function createListing(listings: number[][], argument: string) {
+        let call = 0;
+        return {
+            canTrustListedProcessIdentity: true,
+            listProcesses: async (): Promise<LaunchedChildProcess[]> => {
+                const pids = listings[Math.min(call++, listings.length - 1)];
+                return [
+                    { pid: 10, parentPid: 1, executable: 'Code.exe', command: 'Code.exe --type=extensionHost' },
+                    ...pids.map(pid => ({ pid, parentPid: 10, executable: 'deno.exe', command: `deno.exe run ${argument} apphost.mts` })),
+                ];
+            },
+        };
+    }
+
+    test('stops a Deno AppHost that appears in the process listing after cleanup starts', async () => {
+        const argument = '--inspect-wait=127.0.0.1:1234';
+        const clock = createFakeClock();
+        const killed: number[] = [];
+        // Cancelled before js-debug spawned the runtime: the first listings miss it, then it appears, then it exits.
+        const result = await stopInspectorWaitingProcesses(argument, createListing([[], [], [21], []], argument), clock, {
+            launcherPid: 10,
+            kill: pid => killed.push(pid),
+        });
+
+        assert.deepStrictEqual(killed, [21]);
+        assert.deepStrictEqual(result, { stopped: [21], running: [] });
+        assert.deepStrictEqual(clock.sleeps, [100, 200, 400]);
+    });
+
+    test('bounds the search for a Deno AppHost that never appears and does not report a stop', async () => {
+        const argument = '--inspect-wait=127.0.0.1:1234';
+        const clock = createFakeClock();
+        const killed: number[] = [];
+        const result = await stopInspectorWaitingProcesses(argument, createListing([[]], argument), clock, {
+            launcherPid: 10,
+            kill: pid => killed.push(pid),
+        });
+
+        assert.deepStrictEqual(killed, []);
+        assert.deepStrictEqual(result, { stopped: [], running: [] });
+        assert.strictEqual(clock.now(), inspectorWaitingProcessSettleTimeoutMs);
+    });
+
+    test('reports a Deno AppHost that is still running after cleanup instead of claiming it stopped', async () => {
+        const argument = '--inspect-wait=127.0.0.1:1234';
+        const clock = createFakeClock();
+        const killed: number[] = [];
+        const result = await stopInspectorWaitingProcesses(argument, createListing([[21]], argument), clock, {
+            launcherPid: 10,
+            settleTimeoutMs: 2_000,
+            kill: pid => killed.push(pid),
+        });
+
+        assert.deepStrictEqual(killed, [21]);
+        assert.deepStrictEqual(result, { stopped: [], running: [21] });
+    });
+
+    test('only reports an inspector readiness timeout when the launch ran for the whole timeout', () => {
+        const reason = 'Could not connect to debug target at http://127.0.0.1:1234: Could not find any debuggable target';
+        const timedOut = getDenoAppHostLaunchFailureMessage('127.0.0.1:1234', 120_000, 120_004, reason);
+        assert.ok(timedOut.includes('127.0.0.1:1234') && timedOut.includes('120 seconds') && timedOut.endsWith(reason), timedOut);
+        assert.ok(!/stopped/i.test(timedOut), timedOut);
+
+        const missingExecutable = getDenoAppHostLaunchFailureMessage('127.0.0.1:1234', 120_000, 15, 'Can\'t find Node.js binary "deno"');
+        assert.strictEqual(missingExecutable, 'The debugger could not launch the Deno AppHost: Can\'t find Node.js binary "deno"');
     });
 
     test('does not open the Deno inspector when running an AppHost without debugging', async () => {
