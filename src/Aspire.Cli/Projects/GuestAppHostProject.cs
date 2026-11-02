@@ -963,6 +963,22 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 return guestExitCode;
             }
 
+            if (context.IsTestRun)
+            {
+                // A clean guest exit does not prove that the server shut down successfully.
+                // Drive its existing shutdown ladder, then retain failure/forced-kill exit codes
+                // instead of discarding them in the best-effort session disposal path.
+                await serverStopCts.CancelAsync();
+                var serverExitCode = await serverCompletion.WaitAsync(cancellationToken);
+                if (serverExitCode != 0)
+                {
+                    MergeServerOutputIntoContextCollector(context, appHostServerOutputCollector);
+                    _logger.LogError("AppHost server exited with code {ExitCode} after test execution.", serverExitCode);
+                }
+
+                return serverExitCode;
+            }
+
             if (launcher is ExtensionGuestLauncher)
             {
                 // Extension manages the guest app host lifecycle via VS Code debug session.
