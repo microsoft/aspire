@@ -85,8 +85,9 @@ public class CargoTestingExecutionTests(ITestOutputHelper outputHelper)
             Assert.Equal(scenario is "pass" or "empty", events.Last().Passed);
             Assert.All(events, e => Assert.Null(e.Result));
             Assert.Equal("completed", Assert.Single(events, e => e.Collection?.Status == "completed").Collection!.Status);
-            var options = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>()).Options!;
-            var path = options.OutputPath!;
+            var annotation = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
+            var path = annotation.OutputPath!;
+            Assert.Equal(Path.Combine(workspace.Path, "results", "tests"), path);
             Assert.Equal(["output.complete", "stderr.log", "stdout.log"],
                 Directory.GetFiles(path).Select(Path.GetFileName).Order().ToArray());
             var stdout = await File.ReadAllTextAsync(Path.Combine(path, "stdout.log"), timeout.Token);

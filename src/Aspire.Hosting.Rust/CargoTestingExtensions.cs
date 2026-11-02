@@ -37,6 +37,8 @@ public static class CargoTestingExtensions
     /// During testing, raw stdout and stderr are captured into the assigned private resource directory
     /// after authoritative process completion, including nonzero exits. The collector drains both streams
     /// without requiring a report or changing a failing resource into a passing one.
+    /// Collection runs only at runtime during testing, never while defining the model or during ordinary runs.
+    /// Capture observes test-run cancellation; partial diagnostic files can remain after interruption.
     /// Supports one native invocation without terminals, replicas, or restarts.
     /// Ordinary runs retain the caller's execution without capture. Publishing excludes this test resource.
     /// </para>
@@ -60,16 +62,13 @@ public static class CargoTestingExtensions
         builder.WithRequiredCommand("cargo", "https://www.rust-lang.org/tools/install")
             .ExcludeFromManifest();
 
-        builder.WithTesting(options =>
+        // Capture drains even after a failed exit; resource completion remains authoritative.
+        // It publishes no testcase outcomes and does not interpret Cargo's human output.
+        builder.WithTesting(context => context.CaptureOutputAsync());
+        var isTestRun = builder.ApplicationBuilder.ExecutionContext.IsRunMode &&
+            builder.ApplicationBuilder.Configuration["ASPIRE_TEST_OUTPUT_PATH"] is not null;
+        if (isTestRun)
         {
-            if (!options.IsTestRun)
-            {
-                return;
-            }
-
-            // Capture drains even after a failed exit; resource completion remains authoritative.
-            // It publishes no testcase outcomes and does not interpret Cargo's human output.
-            options.CollectResults(context => context.CaptureOutputAsync());
             builder.ApplicationBuilder.OnBeforeStart((_, _) =>
             {
                 if (builder.Resource.Command != "cargo" ||
@@ -102,7 +101,7 @@ public static class CargoTestingExtensions
                 }
                 return Task.CompletedTask;
             });
-        });
+        }
 
         return builder;
     }
