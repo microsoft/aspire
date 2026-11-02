@@ -47,6 +47,14 @@ internal sealed record PublishedTestResult
     public required string Outcome { get; init; }
     public double? DurationMilliseconds { get; init; }
     public string? Message { get; init; }
+
+    // Published timeouts/cancellations fail testing without cancelling the command itself.
+    internal bool IsFailure() => Outcome switch
+    {
+        "passed" or "skipped" => false,
+        "failed" or "inconclusive" or "error" or "timedOut" or "cancelled" => true,
+        _ => throw new InvalidOperationException("The AppHost sent an invalid published test outcome.")
+    };
 }
 
 internal sealed record TestCollectionState

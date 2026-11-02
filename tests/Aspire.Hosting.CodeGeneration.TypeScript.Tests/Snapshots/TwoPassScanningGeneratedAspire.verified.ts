@@ -756,7 +756,13 @@ export enum ResourceCommandVisibility {
     Api = "Api",
 }
 
-/** Defines the outcomes that a resource test collector can publish. */
+/**
+ * Defines the outcomes that a resource test collector can publish.
+ *
+ * Only `Passed` and `Skipped` are non-failing outcomes.
+ * The default is `Failed`. A published timeout or cancellation fails testing;
+ * it does not cancel the containing command or change its deadline.
+ */
 export enum TestOutcome {
     /** The test failed. */
     Failed = "Failed",
@@ -764,6 +770,14 @@ export enum TestOutcome {
     Passed = "Passed",
     /** The test was skipped. */
     Skipped = "Skipped",
+    /** The test did not reach a conclusive result. */
+    Inconclusive = "Inconclusive",
+    /** The test encountered an execution error. */
+    Error = "Error",
+    /** The test exceeded its runner's time limit. */
+    TimedOut = "TimedOut",
+    /** The test was cancelled by its runner. */
+    Cancelled = "Cancelled",
 }
 
 /** Test persistence mode enum. */

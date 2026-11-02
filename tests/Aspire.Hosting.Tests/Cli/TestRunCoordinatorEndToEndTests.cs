@@ -20,10 +20,16 @@ namespace Aspire.Hosting.Tests;
 public class TestRunCoordinatorEndToEndTests(ITestOutputHelper outputHelper)
 {
     [Theory]
-    [InlineData(0)]
-    [InlineData(1)]
-    [InlineData(null)]
-    public async Task BackchannelWaitsForAllTestResourcesAndStopsOnlyOnRequest(int? exitCode)
+    [InlineData(0, TestOutcome.Passed, "passed", true)]
+    [InlineData(1, TestOutcome.Passed, "passed", false)]
+    [InlineData(null, TestOutcome.Passed, "passed", false)]
+    [InlineData(0, TestOutcome.Failed, "failed", false)]
+    [InlineData(0, TestOutcome.Skipped, "skipped", true)]
+    [InlineData(0, TestOutcome.Inconclusive, "inconclusive", false)]
+    [InlineData(0, TestOutcome.Error, "error", false)]
+    [InlineData(0, TestOutcome.TimedOut, "timedOut", false)]
+    [InlineData(0, TestOutcome.Cancelled, "cancelled", false)]
+    public async Task BackchannelWaitsForAllTestResourcesAndStopsOnlyOnRequest(int? exitCode, TestOutcome outcome, string wireOutcome, bool passed)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var outputDirectory = workspace.CreateDirectory("test-output");
@@ -52,7 +58,7 @@ public class TestRunCoordinatorEndToEndTests(ITestOutputHelper outputHelper)
             Assert.True(Directory.Exists(context.OutputPath));
             collectorStarted.TrySetResult();
             await context.WaitForCompletionAsync();
-            context.PublishResult(new TestResult { Name = "fixture result", Outcome = TestOutcome.Passed });
+            context.PublishResult(new TestResult { Name = "fixture result", Outcome = outcome });
         });
         Assert.False(collectorStarted.Task.IsCompleted);
         var remaining = builder.AddParameter("remaining", "value").WithTesting();
@@ -82,10 +88,10 @@ public class TestRunCoordinatorEndToEndTests(ITestOutputHelper outputHelper)
         await app.ResourceNotifications.PublishUpdateAsync(remaining.Resource,
             s => s with { State = KnownResourceStates.Finished, ExitCode = 0 });
 
-        Assert.Equal(exitCode == 0, await completion.WaitAsync(timeout.Token));
+        Assert.Equal(passed, await completion.WaitAsync(timeout.Token));
         Assert.Contains(streamEvents, e => e.Resource is { ResourceName: "tests", Outcome: "passed" or "failed" });
         Assert.Contains(streamEvents, e => e.Resource is { ResourceName: "remaining", Outcome: "passed" });
-        Assert.Contains(streamEvents, e => e.Result is { ResourceName: "tests", Name: "fixture result", Outcome: "passed" });
+        Assert.Equal(wireOutcome, Assert.Single(streamEvents, e => e.Result is { ResourceName: "tests", Name: "fixture result" }).Result!.Outcome);
         Assert.False(lifetime.ApplicationStopping.IsCancellationRequested);
         await rpc.InvokeWithCancellationAsync("RequestStopAsync", [], timeout.Token);
         await app.StopAsync(timeout.Token);

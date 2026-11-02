@@ -233,9 +233,16 @@
   </data>
   <data name="PublishedSummary" xml:space="preserve">
     <value>Published test results: {0} passed, {1} failed, {2} skipped</value>
+    <comment>Failed includes failed, inconclusive, error, timed out, and cancelled test results. Each published result is counted once.</comment>
   </data>
   <data name="Skipped" xml:space="preserve">
     <value>skipped</value>
+  </data>
+  <data name="Inconclusive" xml:space="preserve">
+    <value>inconclusive</value>
+  </data>
+  <data name="Error" xml:space="preserve">
+    <value>error</value>
   </data>
   <data name="LogCaptureFailed" xml:space="preserve">
     <value>No longer receiving logs from the test AppHost.</value>

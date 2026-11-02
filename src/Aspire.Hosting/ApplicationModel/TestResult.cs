@@ -51,6 +51,11 @@ public sealed class TestResult
 /// <summary>
 /// Defines the outcomes that a resource test collector can publish.
 /// </summary>
+/// <remarks>
+/// Only <see cref="Passed"/> and <see cref="Skipped"/> are non-failing outcomes.
+/// The default is <see cref="Failed"/>. A published timeout or cancellation fails testing;
+/// it does not cancel the containing command or change its deadline.
+/// </remarks>
 [Experimental(TestingDiagnostics.DiagnosticId, UrlFormat = TestingDiagnostics.UrlFormat)]
 public enum TestOutcome
 {
@@ -67,5 +72,25 @@ public enum TestOutcome
     /// <summary>
     /// The test was skipped.
     /// </summary>
-    Skipped
+    Skipped,
+
+    /// <summary>
+    /// The test did not reach a conclusive result.
+    /// </summary>
+    Inconclusive,
+
+    /// <summary>
+    /// The test encountered an execution error.
+    /// </summary>
+    Error,
+
+    /// <summary>
+    /// The test exceeded its runner's time limit.
+    /// </summary>
+    TimedOut,
+
+    /// <summary>
+    /// The test was cancelled by its runner.
+    /// </summary>
+    Cancelled
 }

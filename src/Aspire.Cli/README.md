@@ -121,9 +121,16 @@ without waiting, or await completion before harvesting artifacts. Each resource'
 collector runs concurrently with the others and is awaited before final output and teardown;
 an early-returning collector does not end resource execution.
 
-Use `PublishResult(TestResult)` to report an observed name, passed/failed/skipped
-outcome, optional duration, and optional framework message. Resource identity is
-assigned by the context. Published failures and collector exceptions fail the
+Use `PublishResult(TestResult)` to report an observed name, outcome, optional
+duration, and optional framework message. `TestOutcome` uses the implicit order
+`Failed`, `Passed`, `Skipped`, `Inconclusive`, `Error`, `TimedOut`, `Cancelled`;
+its default is `Failed`, and the `Outcome` property remains required.
+Only `Passed` and `Skipped` are non-failing. All other outcomes, including
+`Inconclusive`, make testing unsuccessful even when the process exits zero.
+Published `TimedOut`/`Cancelled` outcomes are ordinary test failures (exit `23`),
+not command deadline expiry (`17`) or user cancellation (`130`). They do not
+cancel other resources, change the run's deadline, or fabricate unobserved tests.
+Resource identity is assigned by the context. Unsuccessful results and collector exceptions fail the
 run without discarding earlier results or stopping other tests. Results cannot
 be published after a collector returns or is cancelled. Marker-only
 `WithTesting()` remains usable without individual-result collection. Containers
@@ -143,6 +150,11 @@ summary-file path, overall status, CLI exit code, diagnostic, and each observed 
 instance ID, state, exit code, expected replica count, and outcome. It also
 contains `testResults`, resource `collections` with output paths/errors/status,
 and `publishedResults` totals derived only from actual published results.
+Individual outcomes are preserved as `failed`, `passed`, `skipped`, `inconclusive`,
+`error`, `timedOut`, or `cancelled`. The `failed` total includes all five
+unsuccessful outcomes; `passed` and `skipped` count only their named outcomes.
+Text resource summaries use that same failure count and classify only skips as
+`other`. No published result is omitted from the aggregate counts.
 Resource execution outcomes remain separate from individual test results; an
 exit code never fabricates individual test counts. Cancelled and failed
 runs retain observed outcomes and mark unfinished resources `incomplete`; an

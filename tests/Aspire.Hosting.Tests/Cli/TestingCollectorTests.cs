@@ -89,7 +89,7 @@ public class TestingCollectorTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData("", TestOutcome.Passed, 0)]
     [InlineData("fixture", (TestOutcome)(-1), 0)]
-    [InlineData("fixture", (TestOutcome)3, 0)]
+    [InlineData("fixture", (TestOutcome)7, 0)]
     [InlineData("fixture", TestOutcome.Passed, -1)]
     public void InvalidPublishedResultsAreExplicitErrors(string name, TestOutcome outcome, int duration)
     {
@@ -116,6 +116,37 @@ public class TestingCollectorTests(ITestOutputHelper outputHelper)
         Assert.Equal(TestOutcome.Failed, Assert.IsType<TestResult>(published).Outcome);
         Assert.NotNull(typeof(TestResult).GetProperty(nameof(TestResult.Outcome))!
             .GetCustomAttribute<System.Runtime.CompilerServices.RequiredMemberAttribute>());
+    }
+
+    [Theory]
+    [InlineData(TestOutcome.Failed, "failed", false)]
+    [InlineData(TestOutcome.Passed, "passed", true)]
+    [InlineData(TestOutcome.Skipped, "skipped", true)]
+    [InlineData(TestOutcome.Inconclusive, "inconclusive", false)]
+    [InlineData(TestOutcome.Error, "error", false)]
+    [InlineData(TestOutcome.TimedOut, "timedOut", false)]
+    [InlineData(TestOutcome.Cancelled, "cancelled", false)]
+    public async Task PublishedOutcomeControlsAggregateWithoutChangingProcessOutcome(TestOutcome outcome, string wireOutcome, bool passed)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = CreateBuilder(workspace);
+        var resource = builder.AddResource(new ContainerResource("tests")).WithTesting(context =>
+        {
+            context.PublishResult(new TestResult { Name = "fixture", Outcome = outcome });
+            return Task.CompletedTask;
+        });
+        using var notifications = ResourceNotificationServiceTestHelpers.Create();
+        using var coordinator = CreateCoordinator(builder, notifications);
+        var completion = coordinator.WaitForCompletionAsync(TestContext.Current.CancellationToken);
+        await notifications.PublishUpdateAsync(resource.Resource, s => s with { State = KnownResourceStates.Finished, ExitCode = 0 });
+
+        Assert.Equal(passed, await completion.DefaultTimeout());
+        var events = new ConcurrentQueue<TestRunEvent>();
+        await ReadAsync(coordinator, events).DefaultTimeout();
+        Assert.Equal(wireOutcome, Assert.Single(events, e => e.Result is not null).Result!.Outcome);
+        Assert.Equal("completed", Assert.Single(events, e => e.Collection?.Status == "completed").Collection!.Status);
+        Assert.Contains(events, e => e.Resource is { Outcome: "passed", ExitCode: 0 });
+        Assert.Equal(passed, events.Last().Passed);
     }
 
     [Fact]

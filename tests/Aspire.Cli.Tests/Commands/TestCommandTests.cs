@@ -25,10 +25,16 @@ namespace Aspire.Cli.Tests.Commands;
 public class TestCommandTests(ITestOutputHelper outputHelper)
 {
     [Theory]
-    [InlineData(false, false)]
-    [InlineData(true, false)]
-    [InlineData(false, true)]
-    public async Task JsonReportsLivePublishedResultsAndWaitsForCollection(bool keepAlive, bool cancelDuringCollection)
+    [InlineData(false, false, "failed")]
+    [InlineData(true, false, "failed")]
+    [InlineData(false, true, "failed")]
+    [InlineData(false, false, "inconclusive")]
+    [InlineData(false, false, "error")]
+    [InlineData(false, false, "timedOut")]
+    [InlineData(false, false, "cancelled")]
+    [InlineData(true, false, "timedOut")]
+    [InlineData(true, false, "cancelled")]
+    public async Task JsonReportsLivePublishedResultsAndWaitsForCollection(bool keepAlive, bool cancelDuringCollection, string outcome)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = CreateAppHost(workspace);
@@ -50,7 +56,7 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
             {
                 Result = new PublishedTestResult
                 {
-                    ResourceName = "tests", Name = "failed fixture", Outcome = "failed", DurationMilliseconds = 25,
+                    ResourceName = "tests", Name = "failed fixture", Outcome = outcome, DurationMilliseconds = 25,
                     Message = "fixture assertion"
                 }
             };
@@ -110,7 +116,7 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal("", stdout.ToString());
         var live = JsonNode.Parse(File.ReadAllText(summaryPath!))!;
         Assert.Equal("running", live["status"]!.GetValue<string>());
-        Assert.Equal("failed", live["testResults"]![0]!["outcome"]!.GetValue<string>());
+        Assert.Equal(outcome, live["testResults"]![0]!["outcome"]!.GetValue<string>());
         if (cancelDuringCollection)
         {
             cancellation.Cancel();
@@ -140,6 +146,7 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal((1, 0, 0), (output["publishedResults"]!["failed"]!.GetValue<int>(),
             output["publishedResults"]!["passed"]!.GetValue<int>(), output["publishedResults"]!["skipped"]!.GetValue<int>()));
         Assert.Equal("failed fixture", output["testResults"]![0]!["name"]!.GetValue<string>());
+        Assert.Equal(outcome, output["testResults"]![0]!["outcome"]!.GetValue<string>());
         Assert.Equal(25, output["testResults"]![0]!["durationMilliseconds"]!.GetValue<int>());
         Assert.Equal(cancelDuringCollection ? "incomplete" : "completed", output["collections"]![0]!["status"]!.GetValue<string>());
         if (!keepAlive)

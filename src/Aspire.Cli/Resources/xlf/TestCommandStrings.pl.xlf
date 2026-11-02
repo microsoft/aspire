@@ -57,6 +57,11 @@
         <target state="new">Run an AppHost until all resources marked with WithTesting() and their collectors finish</target>
         <note />
       </trans-unit>
+      <trans-unit id="Error">
+        <source>error</source>
+        <target state="new">error</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ExitCode">
         <source>Exit code</source>
         <target state="new">Exit code</target>
@@ -80,6 +85,11 @@
       <trans-unit id="Incomplete">
         <source>incomplete</source>
         <target state="new">incomplete</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Inconclusive">
+        <source>inconclusive</source>
+        <target state="new">inconclusive</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidStartupTimeout">
@@ -160,7 +170,7 @@
       <trans-unit id="PublishedSummary">
         <source>Published test results: {0} passed, {1} failed, {2} skipped</source>
         <target state="new">Published test results: {0} passed, {1} failed, {2} skipped</target>
-        <note />
+        <note>Failed includes failed, inconclusive, error, timed out, and cancelled test results. Each published result is counted once.</note>
       </trans-unit>
       <trans-unit id="RecentAppHostStartupOutput">
         <source>Recent AppHost startup output</source>

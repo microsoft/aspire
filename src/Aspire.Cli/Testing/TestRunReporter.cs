@@ -135,7 +135,7 @@ internal sealed class TestRunReporter
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (passed is true && (_resources.Count == 0 || _resources.Values.Any(r => r.Outcome != "passed") ||
-                _results.Any(r => r.Outcome == "failed") ||
+                _results.Any(r => r.IsFailure()) ||
                 _collections.Values.Any(c => c.Status is not ("completed" or "notConfigured")) ||
                 _resources.Values.GroupBy(r => r.ResourceName, StringComparers.ResourceName)
                     .Any(group => group.Count() != group.First().ExpectedReplicas ||
@@ -173,8 +173,8 @@ internal sealed class TestRunReporter
                 return;
             }
             ArgumentException.ThrowIfNullOrWhiteSpace(result.Name);
-            if (result.Outcome is not ("passed" or "failed" or "skipped") ||
-                result.DurationMilliseconds is { } duration && (!double.IsFinite(duration) || duration < 0) ||
+            var failed = result.IsFailure();
+            if (result.DurationMilliseconds is { } duration && (!double.IsFinite(duration) || duration < 0) ||
                 !_resources.Values.Any(r => StringComparers.ResourceName.Equals(r.ResourceName, result.ResourceName)))
             {
                 throw new InvalidOperationException("The AppHost sent an invalid published test result.");
@@ -185,7 +185,7 @@ internal sealed class TestRunReporter
             {
                 _interaction.DisplayMessage(KnownEmojis.Microscope, string.Format(CultureInfo.CurrentCulture,
                     TestCommandStrings.PublishedResult, FormatResourceName(result.ResourceName),
-                    $"[blue]{result.Name.EscapeMarkup()}[/]", FormatOutcome(result.Outcome)), allowMarkup: true);
+                    $"[blue]{result.Name.EscapeMarkup()}[/]", FormatOutcome(result.Outcome, failed ? "red" : null)), allowMarkup: true);
             }
         }
     }
@@ -318,12 +318,12 @@ internal sealed class TestRunReporter
         var complete = resourceComplete && collectionComplete;
         var outcome = !complete ? "incomplete"
             : resources.Any(r => r.Outcome == "failed") || collection!.Status == "failed" ||
-                results.Any(r => r.Outcome == "failed") ? "failed" : "passed";
+                results.Any(r => r.IsFailure()) ? "failed" : "passed";
         _interaction.DisplayMessage(KnownEmojis.BarChart, string.Format(CultureInfo.CurrentCulture,
             complete ? TestCommandStrings.ResourceResults : TestCommandStrings.PartialResourceResults,
             FormatResourceName(resourceName), FormatOutcome(outcome),
             FormatCount(results.Count(r => r.Outcome == "passed"), "green"),
-            FormatCount(results.Count(r => r.Outcome == "failed"), "red"),
+            FormatCount(results.Count(r => r.IsFailure()), "red"),
             FormatCount(results.Count(r => r.Outcome == "skipped"), "yellow")), allowMarkup: true);
         _displayedResourceSummaries.Add(resourceName);
     }
@@ -336,9 +336,9 @@ internal sealed class TestRunReporter
 
     private static string FormatCount(int count, string color) => $"[{color}]{count.ToString(CultureInfo.CurrentCulture)}[/]";
 
-    private static string FormatOutcome(string outcome)
+    private static string FormatOutcome(string outcome, string? color = null)
     {
-        var color = outcome switch
+        color ??= outcome switch
         {
             "passed" => "green",
             "failed" => "red",
@@ -509,7 +509,7 @@ internal sealed class TestRunReporter
     private PublishedResultSummary ResultSummary() => new()
     {
         Passed = _results.Count(r => r.Outcome == "passed"),
-        Failed = _results.Count(r => r.Outcome == "failed"),
+        Failed = _results.Count(r => r.IsFailure()),
         Skipped = _results.Count(r => r.Outcome == "skipped")
     };
 
@@ -528,6 +528,8 @@ internal sealed class TestRunReporter
         "timedOut" => TestCommandStrings.TimedOut,
         "incomplete" => TestCommandStrings.Incomplete,
         "skipped" => TestCommandStrings.Skipped,
+        "inconclusive" => TestCommandStrings.Inconclusive,
+        "error" => TestCommandStrings.Error,
         _ => TestCommandStrings.Pending
     };
 

@@ -5,6 +5,7 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Backchannel;
 using Microsoft.Extensions.Logging;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using System.Threading.Channels;
 
 namespace Aspire.Hosting.Cli;
@@ -291,18 +292,16 @@ internal sealed class TestRunCoordinator(
         var hasFailedResult = false;
         var context = new ResourceTestingContext(runContext, resourceName, outputPath, result =>
         {
-            hasFailedResult |= result.Outcome == TestOutcome.Failed;
-            Publish(new TestRunEvent
+            var published = new PublishedTestResult
             {
-                Result = new PublishedTestResult
-                {
-                    ResourceName = resourceName,
-                    Name = result.Name,
-                    Outcome = result.Outcome.ToString().ToLowerInvariant(),
-                    DurationMilliseconds = result.Duration?.TotalMilliseconds,
-                    Message = result.Message
-                }
-            });
+                ResourceName = resourceName,
+                Name = result.Name,
+                Outcome = JsonNamingPolicy.CamelCase.ConvertName(result.Outcome.ToString()),
+                DurationMilliseconds = result.Duration?.TotalMilliseconds,
+                Message = result.Message
+            };
+            hasFailedResult |= published.IsFailure();
+            Publish(new TestRunEvent { Result = published });
         }, resourceCompletion, cancellationToken);
         // Avoid running a collector's synchronous prefix on the resource startup path.
         var task = Task.Run(() => collector(context), cancellationToken);

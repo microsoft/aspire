@@ -70,6 +70,24 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to inconclusive.
+        /// </summary>
+        internal static string Inconclusive {
+            get {
+                return ResourceManager.GetString("Inconclusive", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to error.
+        /// </summary>
+        internal static string Error {
+            get {
+                return ResourceManager.GetString("Error", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized invalid test startup timeout diagnostic.
         /// </summary>
         internal static string InvalidStartupTimeout {

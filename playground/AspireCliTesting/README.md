@@ -99,6 +99,11 @@ Ordinary runs still execute the probe but do not invoke the collector.
 Text output distinguishes `Resource`
 state transitions from `Test` results, shows exit codes only for terminal states,
 and reports each resource's passed/failed/other counts after its collectors finish.
+`Failed` counts published `Failed`, `Inconclusive`, `Error`, `TimedOut`, and
+`Cancelled` outcomes, all of which fail testing even if the process exits zero.
+Individual result lines and JSON retain each specific outcome. Published test
+timeouts/cancellations return normal test failure (`23`), not CLI deadline (`17`)
+or user cancellation (`130`), and do not stop other resources.
 `Other` counts published skipped results. Interrupted collectors instead show
 the results published so far. Resource-only scenarios do not invent test counts.
 The final output retains the run verdict, published totals and artifact link

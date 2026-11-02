@@ -1848,6 +1848,8 @@ public class AtsTypeScriptCodeGeneratorTests
         var cancellation = Assert.Single(wait.Parameters, parameter => parameter.Name == "cancellationToken");
         Assert.True(cancellation.IsOptional);
         Assert.Equal(AtsConstants.CancellationToken, cancellation.Type?.TypeId);
+        var outcome = Assert.Single(scanResult.EnumTypes, type => type.Name == nameof(TestOutcome));
+        Assert.Equal(["Failed", "Passed", "Skipped", "Inconclusive", "Error", "TimedOut", "Cancelled"], outcome.Values);
 #pragma warning restore ASPIRETESTING001
     }
 

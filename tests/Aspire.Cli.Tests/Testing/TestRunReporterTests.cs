@@ -209,7 +209,7 @@ public class TestRunReporterTests(ITestOutputHelper outputHelper)
             var processTransitionCount = interaction.DisplayedMessages.Count;
             yield return new TestRunEvent { Resource = resource with { State = "Finished", ExitCode = 0, Outcome = "passed" } };
             Assert.Equal(processTransitionCount, interaction.DisplayedMessages.Count);
-            foreach (var outcome in new[] { "passed", "failed", "skipped" })
+            foreach (var outcome in new[] { "failed", "passed", "skipped", "inconclusive", "error", "timedOut", "cancelled" })
             {
                 yield return new TestRunEvent
                 {
@@ -221,6 +221,78 @@ public class TestRunReporterTests(ITestOutputHelper outputHelper)
             Assert.Equal(1, interaction.DisplayedMessages.Count(m => m.Emoji.Name == KnownEmojis.BarChart.Name));
             yield return new TestRunEvent { Passed = false };
         }
+    }
+
+    [Theory]
+    [InlineData("failed", false, "red")]
+    [InlineData("passed", true, "green")]
+    [InlineData("skipped", true, "yellow")]
+    [InlineData("inconclusive", false, "red")]
+    [InlineData("error", false, "red")]
+    [InlineData("timedOut", false, "red")]
+    [InlineData("cancelled", false, "red")]
+    public async Task PublishedOutcomePreservesIndividualIdentityAndTruthfulResourceCounts(string outcome, bool passed, string color)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interaction = new TestInteractionService();
+        var reporter = CreateReporter(CreateContext(workspace), interaction, interactive: true);
+        var backchannel = new TestAppHostBackchannel
+        {
+            WatchTestRunAsyncCallback = _ => Events(
+                new TestRunEvent { Resource = Resource("tests-1", "Finished", 0, "passed") with { ExpectedReplicas = 1 } },
+                new TestRunEvent { Result = new PublishedTestResult { ResourceName = "tests", Name = "fixture", Outcome = outcome } },
+                new TestRunEvent { Collection = new TestCollectionState { ResourceName = "tests", CollectorCount = 1, Status = "completed" } },
+                new TestRunEvent { Passed = passed })
+        };
+        Assert.Equal(passed, await reporter.WaitForCompletionAsync(backchannel, TestContext.Current.CancellationToken));
+        reporter.Complete(passed ? CommandResult.Success() : CommandResult.Failure(CliExitCodes.TestRunFailed));
+
+        var displayOutcome = outcome == "timedOut" ? TestCommandStrings.TimedOut : outcome;
+        Assert.Equal($"Test [teal]tests[/] / [blue]fixture[/]: [{color}]{displayOutcome}[/]",
+            Assert.Single(interaction.DisplayedMessages, m => m.Message.StartsWith("Test [", StringComparison.Ordinal)).Message);
+        var summary = JsonNode.Parse(File.ReadAllText(reporter.SummaryPath))!;
+        Assert.Equal(outcome, Assert.Single(summary["testResults"]!.AsArray())!["outcome"]!.GetValue<string>());
+        Assert.Equal(passed ? "passed" : "failed", summary["status"]!.GetValue<string>());
+        Assert.Equal(passed ? 0 : CliExitCodes.TestRunFailed, summary["cliExitCode"]!.GetValue<int>());
+        var counts = summary["publishedResults"]!;
+        var expected = (Passed: outcome == "passed" ? 1 : 0, Failed: passed ? 0 : 1, Other: outcome == "skipped" ? 1 : 0);
+        Assert.Equal(expected, (counts["passed"]!.GetValue<int>(), counts["failed"]!.GetValue<int>(), counts["skipped"]!.GetValue<int>()));
+        Assert.Equal($"Resource [teal]tests[/]: [{(passed ? "green" : "red")}]{(passed ? "passed" : "failed")}[/]; " +
+            $"[green]{expected.Passed}[/] passed, [red]{expected.Failed}[/] failed, [yellow]{expected.Other}[/] other",
+            Assert.Single(interaction.DisplayedMessages, m => m.Emoji.Name == KnownEmojis.BarChart.Name).Message);
+    }
+
+    [Fact]
+    public async Task AllPublishedOutcomesRetainSpecificNamesAndTotalsInJson()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interaction = new TestInteractionService();
+        var reporter = TestRunReporter.Create(CreateContext(workspace), interaction, interactive: true,
+            OutputFormat.Json, new FakeTimeProvider(), NullLogger.Instance);
+        var items = new List<TestRunEvent>
+        {
+            new() { Resource = Resource("tests-1", "Finished", 0, "passed") with { ExpectedReplicas = 1 } }
+        };
+        items.AddRange(new[] { "failed", "passed", "skipped", "inconclusive", "error", "timedOut", "cancelled" }
+            .Select(outcome => new TestRunEvent
+            {
+                Result = new PublishedTestResult { ResourceName = "tests", Name = $"fixture-{outcome}", Outcome = outcome }
+            }));
+        items.Add(new TestRunEvent { Collection = new TestCollectionState { ResourceName = "tests", CollectorCount = 1, Status = "completed" } });
+        items.Add(new TestRunEvent { Passed = false });
+        var backchannel = new TestAppHostBackchannel { WatchTestRunAsyncCallback = _ => Events(items.ToArray()) };
+        Assert.False(await reporter.WaitForCompletionAsync(backchannel, TestContext.Current.CancellationToken));
+        reporter.Complete(CommandResult.Failure(CliExitCodes.TestRunFailed));
+        Assert.Empty(interaction.DisplayedMessages);
+        var stdout = Assert.Single(interaction.DisplayedRawText);
+        Assert.Equal(ConsoleOutput.Standard, stdout.ConsoleOverride);
+        Assert.Equal(File.ReadAllText(reporter.SummaryPath), stdout.Text);
+        var summary = JsonNode.Parse(stdout.Text)!;
+        summary["runId"] = "run-id";
+        summary["outputPath"] = "output-directory";
+        summary["summaryPath"] = "summary-file";
+        await Verify(summary.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }), "json")
+            .UseDirectory("Snapshots");
     }
 
     [Theory]
@@ -350,6 +422,10 @@ public class TestRunReporterTests(ITestOutputHelper outputHelper)
 
     [Theory]
     [InlineData("failedResult")]
+    [InlineData("inconclusive")]
+    [InlineData("error")]
+    [InlineData("timedOut")]
+    [InlineData("cancelled")]
     [InlineData("unknownOutcome")]
     [InlineData("unknownResource")]
     [InlineData("negativeDuration")]
@@ -364,9 +440,13 @@ public class TestRunReporterTests(ITestOutputHelper outputHelper)
         var resource = Resource("tests-1", "Finished", 0, "passed") with { ExpectedReplicas = 1 };
         var item = scenario switch
         {
-            "failedResult" => new TestRunEvent
+            "failedResult" or "inconclusive" or "error" or "timedOut" or "cancelled" => new TestRunEvent
             {
-                Result = new PublishedTestResult { ResourceName = resource.ResourceName, Name = "example", Outcome = "failed" }
+                Result = new PublishedTestResult
+                {
+                    ResourceName = resource.ResourceName, Name = "example",
+                    Outcome = scenario == "failedResult" ? "failed" : scenario
+                }
             },
             "unknownOutcome" => new TestRunEvent
             {
