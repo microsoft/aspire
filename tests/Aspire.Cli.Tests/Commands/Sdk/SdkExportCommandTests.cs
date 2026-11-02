@@ -51,20 +51,17 @@ public class SdkExportCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task SdkExportResolvesTheGoGeneratorWhenTheGoFeatureIsEnabled()
+    public async Task SdkExportResolvesTheGoGenerator()
     {
         var interactionService = new TestInteractionService();
         var rpcClient = new StubExportRpcClient();
         var project = new CapturingAppHostServerProject();
-        var features = new TestFeatures();
-        features.SetFeature(KnownFeatures.ExperimentalPolyglotGo, true);
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var provider = CreateProvider(
             interactionService,
             workspace,
             rpcClient,
-            project,
-            features: features);
+            project);
 
         var exitCode = await InvokeAsync(provider, "sdk export --language go --package Contoso.Aspire.Widgets@2.0");
 

@@ -35,7 +35,6 @@ public sealed class GoPolyglotApphostDirectoryTests(ITestOutputHelper output)
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
-        await auto.EnableExperimentalGoSupportAsync(counter);
 
         // Put the AppHost in a subdirectory so we can `cd ..` away from it and then resolve it
         // back via `--apphost goapp`. That forces AppHost discovery through the path the running

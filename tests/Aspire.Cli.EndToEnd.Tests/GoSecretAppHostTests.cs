@@ -28,7 +28,6 @@ public sealed class GoSecretAppHostTests(ITestOutputHelper output)
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
-        await auto.EnableExperimentalGoSupportAsync(counter);
 
         // Create the Go AppHost via aspire init
         await auto.AspireInitGoAppHostAsync(counter);

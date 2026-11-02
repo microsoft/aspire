@@ -38,7 +38,6 @@ public sealed class GoKubernetesDeployTests(ITestOutputHelper output)
         await auto.InstallAspireCliAsync(strategy, counter);
 
         await auto.VerifyPullRequestCliVersionAsync(counter);
-        await auto.EnableExperimentalGoSupportAsync(counter);
 
         try
         {
