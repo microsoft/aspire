@@ -34,7 +34,6 @@ module aks 'aks/aks.bicep' = {
     location: location
     cluster_name: cluster_name
     cluster_group: cluster_group
-    supporting_subscription: supporting_subscription
   }
 }
 

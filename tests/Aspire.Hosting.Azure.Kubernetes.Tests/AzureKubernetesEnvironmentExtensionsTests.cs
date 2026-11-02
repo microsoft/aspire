@@ -572,6 +572,9 @@ public class AzureKubernetesEnvironmentExtensionsTests(ITestOutputHelper outputH
             builder.AddParameter("supporting-subscription", "00000000-0000-0000-0000-000000000002").Resource);
         if (callbackScope)
         {
+            aks.Resource.Scope = new AzureBicepResourceScope(
+                clusterGroup.Resource,
+                inheritedSubscription ? "initial-subscription" : builder.Resources.OfType<ParameterResource>().Single(parameter => parameter.Name == "cluster-subscription"));
             aks.ConfigureInfrastructure(infrastructure => infrastructure.AspireResource.Scope = supportingScope);
         }
         else
@@ -620,7 +623,9 @@ public class AzureKubernetesEnvironmentExtensionsTests(ITestOutputHelper outputH
             .AsExisting(
                 builder.AddParameter("cluster-name", "existing-cluster"),
                 builder.AddParameter("cluster-group", "cluster-rg"));
-        aks.Resource.Scope = new AzureBicepResourceScope("supporting-rg", "cluster-subscription");
+        aks.Resource.Scope = new AzureBicepResourceScope("initial-rg", "initial-subscription");
+        aks.ConfigureInfrastructure(infrastructure =>
+            infrastructure.AspireResource.Scope = new AzureBicepResourceScope("supporting-rg", "cluster-subscription"));
 
         var referenceResource = new AzureProvisioningResource("reference", infrastructure =>
             aks.Resource.AddAsExistingResource(infrastructure))

@@ -3,13 +3,11 @@ param location string = resourceGroup().location
 
 param cluster_name string
 
-param supporting_subscription string
-
 param cluster_group string
 
 resource aks 'Microsoft.ContainerService/managedClusters@2026-07-01' existing = {
   name: cluster_name
-  scope: resourceGroup(supporting_subscription, cluster_group)
+  scope: resourceGroup(cluster_group)
 }
 
 output id string = aks.id

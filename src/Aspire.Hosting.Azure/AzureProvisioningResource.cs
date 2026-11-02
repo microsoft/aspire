@@ -226,18 +226,25 @@ public class AzureProvisioningResource(string name, Action<AzureResourceInfrastr
         ((IBicepValue)existingResourceName).Self = new BicepValueReference(provisionableResource, "Name", ["name"]);
         provisionableResource.ProvisionableProperties["name"] = existingResourceName;
 
+        var isSourceTemplate = ReferenceEquals(aspireResource, infra.AspireResource);
         if (aspireResource is AzureProvisioningResource source &&
             source is IAzureComputeEnvironmentResource &&
-            !ReferenceEquals(source, infra.AspireResource))
+            !isSourceTemplate)
         {
             // Materialize the source, not the consumer: its callbacks determine whether the
             // existing resource uses the module scope or an independently scoped declaration.
             _ = source.GetBicepTemplateString();
         }
 
-        var resourceScope = GetResourceReferenceScope(aspireResource);
+        // Keep the source declaration scoped even if it matches the current module scope:
+        // callbacks can still move the module. Group-only declarations inherit its final
+        // subscription; only cross-template consumers need that subscription explicitly.
+        var isComputeSourceTemplate = isSourceTemplate && aspireResource is IAzureComputeEnvironmentResource;
+        var resourceScope = isComputeSourceTemplate
+            ? AzureBicepResourceScope.FromExistingResourceAnnotation(existingAnnotation)
+            : GetResourceReferenceScope(aspireResource);
         if (resourceScope is { } scope &&
-            !ScopeEquals(scope, infra.AspireResource.Scope))
+            (isComputeSourceTemplate || !ScopeEquals(scope, infra.AspireResource.Scope)))
         {
             SetScopeProperty(provisionableResource, CreateScopeExpression(scope, infra));
         }

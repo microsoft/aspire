@@ -7,7 +7,7 @@ param cluster_rg string
 
 resource aks 'Microsoft.ContainerService/managedClusters@2026-07-01' existing = {
   name: cluster_name
-  scope: resourceGroup('00000000-0000-0000-0000-000000000003', cluster_rg)
+  scope: resourceGroup(cluster_rg)
 }
 
 output id string = aks.id
