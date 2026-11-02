@@ -116,23 +116,35 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Dashboard
         });
     }
 
-    [Fact]
+    [Theory]
+    [InlineData(1280)]
+    [InlineData(640)]
     [OuterloopTest("Resource-intensive Playwright browser test")]
-    public async Task SelectAll_VisibleLabelAndKeyboardActivationRestoreAllResources()
+    public async Task SelectAll_VisibleLabelAndKeyboardActivationRestoreAllResources(int viewportWidth)
     {
         await RunTestAsync(async page =>
         {
-            await page.SetViewportSizeAsync(1280, 900);
+            await page.SetViewportSizeAsync(viewportWidth, 900);
             await page.GotoAsync("/resources/TestResource");
             await Assertions.Expect(page.Locator("h1.resource-title")).ToHaveTextAsync("TestResource");
+            if (viewportWidth < 769)
+            {
+                await page.Locator(".resource-pane-open-button").ClickAsync();
+            }
 
             var selectAll = page.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.ResourcePaneSelectAll, Exact = true });
             await Assertions.Expect(selectAll).ToHaveTextAsync(Resources.Layout.ResourcePaneSelectAll);
+            await Assertions.Expect(selectAll).ToBeInViewportAsync(new() { Ratio = 1 });
             Assert.Null(await selectAll.GetAttributeAsync("aria-pressed"));
             await selectAll.FocusAsync();
             await page.Keyboard.PressAsync("Enter");
             await Assertions.Expect(page.Locator("h1.resource-title")).ToHaveTextAsync(Resources.Layout.ResourceHeaderAllResources);
             await Assertions.Expect(page).ToHaveURLAsync(new Regex("/resources$"));
+            if (viewportWidth < 769)
+            {
+                await Assertions.Expect(page.Locator(".resource-pane")).ToBeHiddenAsync();
+                await page.Locator(".resource-pane-open-button").ClickAsync();
+            }
             await selectAll.FocusAsync();
             await page.Keyboard.PressAsync("Space");
             await Assertions.Expect(page.Locator("h1.resource-title")).ToHaveTextAsync(Resources.Layout.ResourceHeaderAllResources);
