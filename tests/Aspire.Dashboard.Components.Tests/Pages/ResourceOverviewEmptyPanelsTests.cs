@@ -191,7 +191,7 @@ public class ResourceOverviewEmptyPanelsTests : DashboardTestContext
     }
 
     [Fact]
-    public void FilteredPropertiesAndEnvironment_RetainTheirControls()
+    public async Task Properties_DefaultToShowAllAndRetainExplicitCoreFilterControls()
     {
         SetupOverview(new TestDashboardClient(isEnabled: true,
             initialResources: [ModelTestHelpers.CreateResource("test",
@@ -202,16 +202,33 @@ public class ResourceOverviewEmptyPanelsTests : DashboardTestContext
                 environment: [new("RUNTIME_ONLY", "runtime-value", false)])],
             resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
         var cut = RenderOverview(s_viewport);
-        cut.Find(".overview-panel-selector [aria-label='Hide empty panels']").Click();
-
         var properties = cut.Find("[aria-labelledby='overview-properties-title']");
         var environment = cut.Find("[aria-labelledby='overview-environment-title']");
         Assert.False(properties.HasAttribute("hidden"));
+        Assert.Equal("1", properties.QuerySelector(".overview-card-count")!.TextContent);
+        Assert.Contains("custom-value", properties.TextContent);
         Assert.False(environment.HasAttribute("hidden"));
         Assert.NotEmpty(properties.QuerySelectorAll(".overview-card-actions fluent-button"));
         Assert.NotEmpty(environment.QuerySelectorAll(".overview-card-actions fluent-button"));
-        properties.QuerySelector(".overview-card-actions fluent-button")!.Click();
-        Assert.Contains("custom-value", cut.Find("[aria-labelledby='overview-properties-title']").TextContent);
+
+        cut.Find("[aria-labelledby='overview-properties-title'] [aria-label='Show core properties']").Click();
+        properties = cut.Find("[aria-labelledby='overview-properties-title']");
+        Assert.False(properties.HasAttribute("hidden"));
+        Assert.Equal("0", properties.QuerySelector(".overview-card-count")!.TextContent);
+        Assert.NotNull(properties.QuerySelector("[aria-label='Show all properties']"));
+
+        await SelectPanelsAsync(cut, hideEmpty: false);
+        await SelectPanelsAsync(cut, hideEmpty: true);
+        properties = cut.Find("[aria-labelledby='overview-properties-title']");
+        Assert.False(properties.HasAttribute("hidden"));
+        Assert.Equal("0", properties.QuerySelector(".overview-card-count")!.TextContent);
+        cut.Find("[aria-labelledby='overview-properties-title'] [aria-label='Show all properties']").Click();
+        properties = cut.Find("[aria-labelledby='overview-properties-title']");
+        Assert.False(properties.HasAttribute("hidden"));
+        Assert.Equal("1", properties.QuerySelector(".overview-card-count")!.TextContent);
+        Assert.Contains("custom-value", properties.TextContent);
+        Assert.NotNull(properties.QuerySelector("[aria-label='Show core properties']"));
+        Assert.False(cut.Find("[aria-labelledby='overview-environment-title']").HasAttribute("hidden"));
     }
 
     [Fact]
