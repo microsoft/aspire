@@ -62,17 +62,58 @@ export function hasCommandLineArgument(candidate: LaunchedChildProcess, argument
         (end === candidate.command.length || /[\s"]/.test(candidate.command[end]));
 }
 
+// Descendants of processes that may already have exited: a child keeps its exited parent's pid as parentPid.
+function findDescendantsOfKnownProcesses(rootPids: readonly number[], processes: readonly LaunchedChildProcess[]): number[] {
+    const childrenByParentId = new Map<number, number[]>();
+    for (const candidate of processes) {
+        const children = childrenByParentId.get(candidate.parentPid) ?? [];
+        children.push(candidate.pid);
+        childrenByParentId.set(candidate.parentPid, children);
+    }
+
+    const visited = new Set(rootPids);
+    const pending = [...rootPids];
+    const descendants: number[] = [];
+    while (pending.length > 0) {
+        for (const child of childrenByParentId.get(pending.pop()!) ?? []) {
+            if (!visited.has(child)) {
+                visited.add(child);
+                descendants.push(child);
+                pending.push(child);
+            }
+        }
+    }
+
+    return descendants;
+}
+
 /**
  * Finds the extension host's descendants that were started with the given inspector argument. Every match is
  * returned because a Windows .cmd shim (for example an npm-installed deno.cmd) leaves both cmd.exe and deno.exe with the argument.
+ *
+ * Stopping the shim detaches deno.exe from the extension host's process tree, so processes matched earlier are
+ * passed as `knownProcessIds`: they are matched again while still listed, and their descendants are searched
+ * even after they have exited.
  */
 export async function findInspectorWaitingProcessIds(
     inspectorArgument: string,
     query: LaunchedChildProcessQuery,
-    launcherPid: number = process.pid): Promise<number[]> {
+    launcherPid: number = process.pid,
+    knownProcessIds: readonly number[] = []): Promise<number[]> {
     const processes = await query.listProcesses(undefined, inspectorWaitingProcessQueryTimeoutMs);
+    const candidatePids = new Set<number>(findDescendantProcessIds(launcherPid, false, processes) ?? []);
+    for (const pid of knownProcessIds) {
+        if (processes.some(candidate => candidate.pid === pid)) {
+            candidatePids.add(pid);
+        }
+    }
+
+    for (const pid of findDescendantsOfKnownProcesses(knownProcessIds, processes)) {
+        candidatePids.add(pid);
+    }
+
     const matches: number[] = [];
-    for (const pid of findDescendantProcessIds(launcherPid, false, processes) ?? []) {
+    for (const pid of candidatePids) {
         const listed = processes.find(candidate => candidate.pid === pid);
         const candidate = query.canTrustListedProcessIdentity === true || !query.getProcess
             ? listed
@@ -96,7 +137,8 @@ export interface InspectorWaitingProcessStopResult {
  * Stops every extension host descendant started with the inspector argument and confirms each one exited.
  * It keeps polling (with backoff, bounded by the settle window) until it has stopped at least one process and
  * a later listing no longer shows any, so a runtime that js-debug spawns just after cancellation is still
- * found and a stop is only reported once it is observed.
+ * found and a stop is only reported once it is observed. Each listing also checks the processes already
+ * signalled and their descendants, so a deno.exe left behind by a stopped deno.cmd shim is still found.
  */
 export async function stopInspectorWaitingProcesses(
     inspectorArgument: string,
@@ -112,7 +154,7 @@ export async function stopInspectorWaitingProcesses(
 
     while (true) {
         try {
-            running = await findInspectorWaitingProcessIds(inspectorArgument, query, options.launcherPid);
+            running = await findInspectorWaitingProcessIds(inspectorArgument, query, options.launcherPid ?? process.pid, [...signalled]);
         }
         catch {
             // Without a listing nothing can be confirmed; anything already signalled is still unconfirmed.
@@ -206,21 +248,25 @@ export function registerDenoAppHostInspectorCleanup(
 
         cleanedUp = true;
         extensionLogOutputChannel.info(`Stopping the Deno AppHost that was waiting for a debugger at ${inspectorAddress}.`);
-        void stopInspectorWaitingProcesses(inspectorArgument, query, clock).then(({ stopped, running }) => {
+        const cleanup = stopInspectorWaitingProcesses(inspectorArgument, query, clock).then(({ stopped, running }) => {
             if (stopped.length > 0) {
                 extensionLogOutputChannel.info(`Stopped Deno AppHost process ${stopped.join(', ')} that never attached to the debugger.`);
             }
 
             if (running.length > 0) {
-                extensionLogOutputChannel.warn(`Deno AppHost process ${running.join(', ')} waiting for a debugger at ${inspectorAddress} was still running after cleanup.`);
+                throw new Error(`Deno AppHost process ${running.join(', ')} waiting for a debugger at ${inspectorAddress} was still running after cleanup.`);
             }
 
-            if (stopped.length === 0 && running.length === 0) {
+            if (stopped.length === 0) {
                 extensionLogOutputChannel.info(`No Deno AppHost process waiting for a debugger at ${inspectorAddress} was found.`);
             }
-        }, error => {
-            extensionLogOutputChannel.warn(`Failed to stop the Deno AppHost waiting for a debugger at ${inspectorAddress}: ${error}`);
         });
+        void cleanup.catch(error => {
+            extensionLogOutputChannel.warn(`Failed to stop the Deno AppHost waiting for a debugger at ${inspectorAddress}: ${error instanceof Error ? error.message : error}`);
+        });
+        // The owning session's shutdown waits for the runtime to exit, so a workspace deletion or restart
+        // that follows it does not race the still-running process.
+        launchOptions.debugSession.trackPendingResourceCleanup(rootSession.name, cleanup);
     };
 
     disposables.push(launchOptions.debugSession.registerPendingStartCancellation({

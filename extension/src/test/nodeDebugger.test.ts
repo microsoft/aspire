@@ -12,6 +12,7 @@ suite('Node Debugger Tests', () => {
     const fakeAspireDebugSession = {
         registerResourceCleanup: (disposable: vscode.Disposable) => resourceCleanups.push(disposable),
         registerPendingStartCancellation: () => ({ dispose: () => { } }),
+        trackPendingResourceCleanup: () => { },
     } as unknown as AspireDebugSession;
 
     teardown(() => {
@@ -262,6 +263,58 @@ suite('Node Debugger Tests', () => {
 
         assert.deepStrictEqual(killed, [21]);
         assert.deepStrictEqual(result, { stopped: [], running: [21] });
+    });
+
+    // A Windows listing where a deno.cmd shim (pid 20, a child of the extension host, pid 10) started deno.exe (pid 21).
+    function createShimListing(listings: { shim: boolean; deno: boolean }[], argument: string) {
+        let call = 0;
+        return {
+            canTrustListedProcessIdentity: true,
+            listProcesses: async (): Promise<LaunchedChildProcess[]> => {
+                const { shim, deno } = listings[Math.min(call++, listings.length - 1)];
+                return [
+                    { pid: 10, parentPid: 1, executable: 'Code.exe', command: 'Code.exe --type=extensionHost' },
+                    ...(shim ? [{ pid: 20, parentPid: 10, executable: 'cmd.exe', command: `cmd.exe /d /s /c "deno.cmd run ${argument} apphost.mts"` }] : []),
+                    // Once the shim exits, deno.exe still reports it as its parent but is no longer in the extension host's tree.
+                    ...(deno ? [{ pid: 21, parentPid: 20, executable: 'deno.exe', command: `deno.exe run ${argument} apphost.mts` }] : []),
+                ];
+            },
+        };
+    }
+
+    test('keeps confirming a Deno AppHost whose Windows shim exited before it did', async () => {
+        const argument = '--inspect-wait=127.0.0.1:1234';
+        const clock = createFakeClock();
+        const killed: number[] = [];
+        const result = await stopInspectorWaitingProcesses(argument, createShimListing([
+            { shim: true, deno: true },
+            { shim: false, deno: true },
+            { shim: false, deno: false },
+        ], argument), clock, { launcherPid: 10, kill: pid => killed.push(pid) });
+
+        assert.deepStrictEqual(killed, [20, 21]);
+        assert.deepStrictEqual(result, { stopped: [20, 21], running: [] });
+        assert.deepStrictEqual(clock.sleeps, [100, 200]);
+
+        // If deno.exe never exits, it is reported as still running rather than as stopped.
+        const stuck = await stopInspectorWaitingProcesses(argument, createShimListing([
+            { shim: true, deno: true },
+            { shim: false, deno: true },
+        ], argument), createFakeClock(), { launcherPid: 10, settleTimeoutMs: 2_000, kill: () => { } });
+        assert.deepStrictEqual(stuck, { stopped: [20], running: [21] });
+    });
+
+    test('stops a Deno AppHost that first appears after its Windows shim exited', async () => {
+        const argument = '--inspect-wait=127.0.0.1:1234';
+        const killed: number[] = [];
+        const result = await stopInspectorWaitingProcesses(argument, createShimListing([
+            { shim: true, deno: false },
+            { shim: false, deno: true },
+            { shim: false, deno: false },
+        ], argument), createFakeClock(), { launcherPid: 10, kill: pid => killed.push(pid) });
+
+        assert.deepStrictEqual(killed, [20, 21]);
+        assert.deepStrictEqual(result, { stopped: [20, 21], running: [] });
     });
 
     test('only reports an inspector readiness timeout when the launch ran for the whole timeout', () => {

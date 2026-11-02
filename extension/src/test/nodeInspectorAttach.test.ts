@@ -59,6 +59,7 @@ suite('Node Debugger Deno AppHost inspector attach (js-debug)', function () {
             pendingStartCancellations.add(disposable);
             return { dispose: () => pendingStartCancellations.delete(disposable) };
         },
+        trackPendingResourceCleanup: () => { },
     } as unknown as AspireDebugSession;
 
     suiteSetup(async () => {
@@ -331,12 +332,12 @@ suite('Node Debugger Deno AppHost inspector attach (js-debug)', function () {
         const fixture = await fixtureStarted;
 
         // js-debug is still polling the inspector, well inside the 120s attach timeout. Without
-        // pending-start cancellation the shutdown waits on this start until its stop budget runs out.
+        // pending-start cancellation the shutdown waits on this start until its stop budget runs out,
+        // and it must not finish before the runtime has exited.
         await owningSession.stopDebugging();
         assert.ok(startSettled, 'The owning session finished stopping before the pending Deno AppHost start settled');
-        assert.strictEqual(await started, false);
-
-        await fixture.closed;
+        assert.ok(fixture.isClosed(), 'The owning session finished stopping while the Deno AppHost was still running');
         assert.ok(!fixture.lines.includes('attached'));
+        assert.strictEqual(await started, false);
     });
 });

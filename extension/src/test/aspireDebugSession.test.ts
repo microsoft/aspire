@@ -3554,6 +3554,55 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         ]);
     });
 
+    function createParentDebugSessionForCleanup() {
+        return {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            workspaceFolder: undefined,
+            configuration: { type: 'aspire', request: 'launch', name: 'Aspire', program: '/workspace/apphost.cs', command: 'run' },
+            customRequest: sinon.stub(),
+            getDebugProtocolBreakpoint: sinon.stub(),
+        };
+    }
+
+    test('stopDebugging waits for tracked resource cleanup before resolving', async () => {
+        sinon.stub(vscode.debug, 'stopDebugging').resolves();
+        const aspireDebugSession = new AspireDebugSession(
+            createParentDebugSessionForCleanup() as unknown as vscode.DebugSession,
+            {} as any,
+            {} as any,
+            { isDebugConfigEnvironmentLoggingEnabled: () => false } as any,
+            () => { });
+        let finishCleanup!: () => void;
+        aspireDebugSession.trackPendingResourceCleanup('deno', new Promise<void>(resolve => { finishCleanup = resolve; }));
+
+        let stopped = false;
+        const shutdown = aspireDebugSession.stopDebugging().then(() => { stopped = true; });
+        await new Promise(resolve => setImmediate(resolve));
+        assert.strictEqual(stopped, false, 'Shutdown resolved while resource cleanup was still running');
+
+        finishCleanup();
+        await shutdown;
+        assert.strictEqual(stopped, true);
+    });
+
+    test('stopDebugging reports resource cleanup that could not confirm the process exited', async () => {
+        sinon.stub(vscode.debug, 'stopDebugging').resolves();
+        const aspireDebugSession = new AspireDebugSession(
+            createParentDebugSessionForCleanup() as unknown as vscode.DebugSession,
+            {} as any,
+            {} as any,
+            { isDebugConfigEnvironmentLoggingEnabled: () => false } as any,
+            () => { });
+        let failCleanup!: (error: Error) => void;
+        aspireDebugSession.trackPendingResourceCleanup('deno', new Promise<void>((_, reject) => { failCleanup = reject; }));
+
+        const shutdown = aspireDebugSession.stopDebugging();
+        failCleanup(new Error('Deno AppHost process 21 was still running after cleanup.'));
+        await assert.rejects(shutdown, /Deno AppHost process 21 was still running after cleanup\./);
+    });
+
     test('stopDebugging cancels pending launch work before awaiting its completion', async () => {
         const parentDebugSession = {
             id: 'aspire-session',
