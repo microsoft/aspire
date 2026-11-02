@@ -4,6 +4,7 @@
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Python;
+using Microsoft.Extensions.DependencyInjection;
 
 #pragma warning disable ASPIRETESTING001 // Implements the experimental testing integration.
 
@@ -30,11 +31,15 @@ public static class PytestHostingExtensions
     /// WithUv synchronizes the selected virtual environment before launching pytest directly.
     /// </para>
     /// <para>
-    /// During testing, Aspire reserves the JUnit report destination and waits for completion before
+    /// During testing, Aspire reserves a fresh temporary JUnit report destination before launch and waits for completion before
     /// collecting results, including after a nonzero exit. Missing or invalid reports fail collection.
+    /// The runtime collector stages pytest.xml into its resource output directory. The AppHost file-system
+    /// service cleans up temporary runner files on disposal.
     /// Results count JUnit outcomes, not unique collected pytest items: setup/teardown and collection
     /// errors can produce additional outcomes with the same name. Raw suite totals remain in pytest.xml.
-    /// Reports have pytest-controlled file permissions inside Aspire's private resource output directory.
+    /// JUnit failures map to Failed, errors to Error, skips and xfails to Skipped, and outcome-free cases
+    /// to Passed. Non-strict XPASS is a pass in built-in XML; strict XPASS is a failure.
+    /// Staged files use the copy writer's permissions inside Aspire's private resource output directory.
     /// Only one invocation per resource is supported, without replicas, restarts, or retry plugins.
     /// </para>
     /// <para>
@@ -90,14 +95,18 @@ public static class PytestHostingExtensions
             });
         }
 
-        resource.WithTesting(testing =>
+        string? reportDirectory = null;
+        resource.WithTesting(async context =>
         {
-            if (testing.OutputPath is not { } outputPath)
-            {
-                return;
-            }
-            testing.CollectResults(PytestJunitReport.CollectAsync);
-            builder.OnBeforeStart((_, _) =>
+            // Collection can start before BeforeStart. Only consume the launch-owned path after
+            // resource completion; the callback's synchronous prefix must not configure the runner.
+            await context.WaitForCompletionAsync().ConfigureAwait(false);
+            await PytestJunitReport.CollectAsync(context, reportDirectory ??
+                throw new InvalidOperationException("The pytest report directory was not initialized before execution.")).ConfigureAwait(false);
+        });
+        if (builder.ExecutionContext.IsRunMode && builder.Configuration["ASPIRE_TEST_OUTPUT_PATH"] is not null)
+        {
+            builder.OnBeforeStart((beforeStartEvent, _) =>
             {
                 if (resource.Resource.TryGetLastAnnotation<ReplicaAnnotation>(out var replicas) && replicas.Replicas != 1)
                 {
@@ -111,6 +120,10 @@ public static class PytestHostingExtensions
                 {
                     throw new DistributedApplicationException("The pytest entrypoint cannot be replaced during testing.");
                 }
+                // Resolve through DI so the file-system service participates in AppHost disposal,
+                // even if WithTesting later replaces or removes the default runtime collector.
+                reportDirectory ??= beforeStartEvent.Services.GetRequiredService<IFileSystemService>()
+                    .TempDirectory.CreateTempSubdirectory("aspire-pytest-").Path;
                 // Register after model definition so later WithArgs calls compose. pytest prepends
                 // configuration/addopts before CLI args; the last report option wins. Insert before
                 // '--', which makes subsequent tokens positional even when they resemble options.
@@ -120,7 +133,7 @@ public static class PytestHostingExtensions
                     ValidateArguments(context.Args);
                     var separator = context.Args.IndexOf("--");
                     context.Args.Insert(separator < 0 ? context.Args.Count : separator,
-                        "--junitxml=" + Path.Combine(outputPath, PytestJunitReport.FileName));
+                        "--junitxml=" + Path.Combine(reportDirectory, PytestJunitReport.FileName));
                 });
                 return Task.CompletedTask;
             });
@@ -133,7 +146,7 @@ public static class PytestHostingExtensions
                 }
                 return Task.CompletedTask;
             });
-        });
+        }
 
         return resource;
     }
