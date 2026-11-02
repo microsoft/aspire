@@ -22,7 +22,6 @@ namespace Aspire.Cli.Configuration;
 
 internal sealed class ConfigSourceService(
     CliExecutionContext executionContext,
-    IConfigurationService configurationService,
     IEnvironment environment,
     IInternalMicrosoftDetector detector,
     IGitClient git,
@@ -50,7 +49,7 @@ internal sealed class ConfigSourceService(
     };
 
     /// <summary>
-    /// Checks saved sources in the nearest local and global configuration files without applying changes.
+    /// Checks the saved source in the nearest local configuration file without applying changes.
     /// Runs in the background and defers advisory messages until command exit.
     /// </summary>
     /// <param name="projectDirectory">The directory of the project already resolved by the caller.</param>
@@ -351,55 +350,33 @@ internal sealed class ConfigSourceService(
                 }
                 _projectChecked = true;
             }
-            var foundBinding = false;
-            var refreshedSources = new HashSet<ConfigSourceIdentity>();
-            var sources = new List<ConfigSource>();
-            var configPaths = new[]
+            cancellationToken.ThrowIfCancellationRequested();
+            var configPath = ConfigurationHelper.FindNearestConfigFilePath(directory);
+            var source = configPath is null ? null : await ReadBindingAsync(configPath, cancellationToken);
+            if (configPath is null || source is null)
             {
-                ConfigurationHelper.FindNearestConfigFilePath(directory),
-                configurationService.GetSettingsFilePath(isGlobal: true)
-            }.OfType<string>().Distinct(StringComparers.FileSystemPath);
-            // Use the same local/global files as settings lookup, even if the nearest
-            // file has no binding. Await each source so Git terminal input cannot compete.
-            foreach (var configPath in configPaths)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                var source = await ReadBindingAsync(configPath, cancellationToken);
-                if (source is null)
-                {
-                    continue;
-                }
-                foundBinding = true;
-                var identity = new ConfigSourceIdentity(source.Repository, source.Path, source.Ref);
                 if (force)
                 {
-                    var snapshot = await AcquireAsync(source, force: refreshedSources.Add(identity), cancellationToken);
-                    await ApplySnapshotAsync(source, snapshot, configPath, cancellationToken);
+                    interaction.DisplayMessage(KnownEmojis.Information, ConfigSourceStrings.NoBinding, consoleOverride: ConsoleOutput.Error);
                 }
-                else
-                {
-                    sources.Add(source);
-                }
+                return;
             }
-            foreach (var group in sources.GroupBy(source => new ConfigSourceIdentity(source.Repository, source.Path, source.Ref)))
+            if (force)
             {
-                if (group.Any(source => string.IsNullOrEmpty(source.AppliedVersion)))
-                {
-                    ReportOnce(ConfigSourceStrings.AppliedVersionMissing);
-                }
-                var versionedSources = group.Where(source => !string.IsNullOrEmpty(source.AppliedVersion)).ToArray();
-                if (versionedSources.Length > 0)
-                {
-                    var observed = await CheckVersionAsync(versionedSources, cancellationToken);
-                    if (versionedSources.Any(source => observed.Version != source.AppliedVersion))
-                    {
-                        ReportOnce(ConfigSourceStrings.UpdateAvailable);
-                    }
-                }
+                var snapshot = await AcquireAsync(source, force: true, cancellationToken);
+                await ApplySnapshotAsync(source, snapshot, configPath, cancellationToken);
             }
-            if (force && !foundBinding)
+            else if (string.IsNullOrEmpty(source.AppliedVersion))
             {
-                interaction.DisplayMessage(KnownEmojis.Information, ConfigSourceStrings.NoBinding, consoleOverride: ConsoleOutput.Error);
+                ReportOnce(ConfigSourceStrings.AppliedVersionMissing);
+            }
+            else
+            {
+                var observed = await CheckVersionAsync(source, cancellationToken);
+                if (observed.Version != source.AppliedVersion)
+                {
+                    ReportOnce(ConfigSourceStrings.UpdateAvailable);
+                }
             }
         }
         catch (Exception ex) when (!force && ex is ConfigSourceException or JsonException or IOException or UnauthorizedAccessException or TimeoutException)
@@ -515,7 +492,7 @@ internal sealed class ConfigSourceService(
                 JsonSerializer.Serialize(snapshot.Metadata, JsonSourceGenerationContext.Default.ConfigSourceMetadata), cancellationToken);
             await File.WriteAllTextAsync(temporaryPointer, snapshotName, cancellationToken);
             await WriteCheckMetadataAsync(cacheDirectory,
-                new(identity, commit, version, now, source.AppliedVersion is null ? [] : [source.AppliedVersion]), cancellationToken);
+                new(identity, commit, version, now, source.AppliedVersion), cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             // The immutable snapshot contains both files. Only this pointer is replaced, so
             // failures or cancellation cannot publish half a configuration/metadata pair.
@@ -553,9 +530,8 @@ internal sealed class ConfigSourceService(
         }
     }
 
-    private async Task<ConfigSourceCheckMetadata> CheckVersionAsync(IReadOnlyList<ConfigSource> sources, CancellationToken cancellationToken)
+    private async Task<ConfigSourceCheckMetadata> CheckVersionAsync(ConfigSource source, CancellationToken cancellationToken)
     {
-        var source = sources[0];
         var cacheDirectory = GetCacheDirectory(source);
         DirectoryHelper.CreateWithOwnerOnlyPermissions(Path.GetDirectoryName(cacheDirectory)!);
         DirectoryHelper.CreateWithOwnerOnlyPermissions(cacheDirectory);
@@ -581,10 +557,10 @@ internal sealed class ConfigSourceService(
             var age = timeProvider.GetUtcNow() - previous.CheckedAt;
             // A different app can have applied a version newer than this shared observation.
             // Reuse a mismatch only when that applied version was actually checked against it.
-            // Older metadata without the version set is revalidated once.
+            // Metadata without the compared applied version is revalidated once.
             if (age >= TimeSpan.Zero && age < TimeSpan.FromHours(24)
-                && sources.All(binding => previous.Version == binding.AppliedVersion
-                    || previous.ComparedAppliedVersions?.Contains(binding.AppliedVersion, StringComparer.Ordinal) is true))
+                && (previous.Version == source.AppliedVersion
+                    || previous.ComparedAppliedVersion == source.AppliedVersion))
             {
                 return previous;
             }
@@ -599,8 +575,8 @@ internal sealed class ConfigSourceService(
                 Ref = source.Ref
             };
             var (commit, version) = await CheckRepositoryAsync(identity, temporaryDirectory.FullName, cancellationToken);
-            var comparedAppliedVersions = sources.Select(binding => binding.AppliedVersion).OfType<string>().Distinct(StringComparer.Ordinal).ToArray();
-            var metadata = new ConfigSourceCheckMetadata(identity, commit, version, timeProvider.GetUtcNow(), comparedAppliedVersions);
+            var metadata = new ConfigSourceCheckMetadata(identity, commit, version, timeProvider.GetUtcNow(),
+                source.AppliedVersion);
             await WriteCheckMetadataAsync(cacheDirectory, metadata, cancellationToken);
             return metadata;
         }

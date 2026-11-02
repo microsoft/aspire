@@ -526,7 +526,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task UpdateConfigSource_RefreshesGlobalBindingWhenNearestConfigurationHasNone(bool explicitAppHost)
+    public async Task UpdateConfigSource_IgnoresGlobalBindingWhenNearestConfigurationHasNone(bool explicitAppHost)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var localPath = Path.Combine(workspace.Path, AspireConfigFile.FileName);
@@ -535,11 +535,16 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         {
             await File.WriteAllTextAsync(Path.Combine(workspace.Path, "apphost.cs"), "#:sdk Aspire.AppHost.Sdk");
         }
-        using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper).BuildServiceProvider();
+        var interaction = new TestInteractionService();
+        using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interaction;
+        }).BuildServiceProvider();
         var globalFile = new FileInfo(provider.GetRequiredService<IConfigurationService>().GetSettingsFilePath(isGlobal: true));
         globalFile.Directory!.Create();
         await TestConfigSourceServices.SaveBindingAsync(s_source, globalFile.Directory, CancellationToken.None);
         File.Move(Path.Combine(globalFile.Directory.FullName, AspireConfigFile.FileName), globalFile.FullName);
+        var originalGlobalConfiguration = await File.ReadAllTextAsync(globalFile.FullName);
         var git = Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>());
         git.ReadConfiguration = (_, _) => Task.FromResult(("version-2", new JsonObject()));
         var appHostArgument = explicitAppHost ? $" --apphost \"{Path.Combine(workspace.Path, "apphost.cs")}\"" : "";
@@ -548,11 +553,12 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
 
-        Assert.Equal(1, git.Calls);
+        Assert.Equal(0, git.Calls);
         Assert.Equal(0, git.CheckCalls);
+        Assert.Equal(0, Assert.IsType<TestConfigSourceDetector>(provider.GetRequiredService<IInternalMicrosoftDetector>()).Calls);
+        Assert.Equal(ConfigSourceStrings.NoBinding, Assert.Single(interaction.DisplayedMessages).Message);
         Assert.Equal("{}", await File.ReadAllTextAsync(localPath));
-        var globalConfiguration = JsonNode.Parse(await File.ReadAllTextAsync(globalFile.FullName))!;
-        Assert.Equal("version-2", globalConfiguration["configSource"]!["appliedVersion"]!.GetValue<string>());
+        Assert.Equal(originalGlobalConfiguration, await File.ReadAllTextAsync(globalFile.FullName));
     }
 
     [Theory]
