@@ -111,6 +111,40 @@ public class BicepUtilitiesTests(ITestOutputHelper testOutputHelper)
         Assert.Equal("existing-subscription", scope["subscription"]?.GetValue<string>());
     }
 
+    [Fact]
+    public async Task SetScopeAsync_ModuleScopedComputeReferencesPreserveExplicitScope()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var identity = builder.AddAzureUserAssignedIdentity("identity")
+            .AsExistingInResourceGroup("existing-identity", "existing-rg", "existing-subscription");
+        var resource = builder.AddAzureSandboxGroup("sandbox")
+            .WithAcrPullIdentity(identity)
+            .AsExistingInResourceGroup("existing-sandbox", "existing-rg", "existing-subscription").Resource;
+        var explicitScope = new AzureBicepResourceScope("module-rg", "module-subscription");
+        resource.Scope = explicitScope;
+        var roles = new AzureRoleAssignmentResource("roles", resource, null, null, infrastructure =>
+            resource.AddAsExistingResource(infrastructure));
+        resource.RegisterRoleAssignmentScope(roles);
+        var consumer = new AzureProvisioningResource("consumer", infrastructure =>
+            resource.AddAsExistingResource(infrastructure))
+        {
+            Scope = new AzureBicepResourceScope("consumer-rg", "consumer-subscription")
+        };
+
+        // Generate the consumer first so the reference cannot depend on prior source materialization.
+        var consumerBicep = consumer.GetBicepTemplateString();
+        var scope = new JsonObject();
+        await BicepUtilities.SetScopeAsync(scope, resource);
+
+        Assert.Equal("module-rg", scope["resourceGroup"]?.GetValue<string>());
+        Assert.Equal("module-subscription", scope["subscription"]?.GetValue<string>());
+        Assert.Same(explicitScope, resource.Scope);
+        Assert.Same(explicitScope, roles.Scope);
+        await Verify(resource.GetBicepTemplateString(), "bicep")
+            .AppendContentAsFile(roles.GetBicepTemplateString(), "bicep")
+            .AppendContentAsFile(consumerBicep, "bicep");
+    }
+
     [Theory]
     [InlineData(DistributedApplicationOperation.Run, null, "", null)]
     [InlineData(DistributedApplicationOperation.Run, "dev-a", "dev-a", null)]

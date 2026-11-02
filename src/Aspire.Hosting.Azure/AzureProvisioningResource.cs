@@ -22,6 +22,7 @@ public class AzureProvisioningResource(string name, Action<AzureResourceInfrastr
     : AzureBicepResource(name, templateFile: $"{name}.module.bicep")
 {
     private HashSet<AzureRoleAssignmentResource>? _roleAssignmentResources;
+    private bool _existingResourceUsesModuleScope;
 
     internal void RegisterRoleAssignmentScope(AzureRoleAssignmentResource roleAssignment)
     {
@@ -180,6 +181,7 @@ public class AzureProvisioningResource(string name, Action<AzureResourceInfrastr
             {
                 infrastructure.AspireResource.Scope ??= scope;
             }
+            infrastructure.AspireResource._existingResourceUsesModuleScope = true;
         }
         else
         {
@@ -224,6 +226,15 @@ public class AzureProvisioningResource(string name, Action<AzureResourceInfrastr
         ((IBicepValue)existingResourceName).Self = new BicepValueReference(provisionableResource, "Name", ["name"]);
         provisionableResource.ProvisionableProperties["name"] = existingResourceName;
 
+        if (aspireResource is AzureProvisioningResource source &&
+            source is IAzureComputeEnvironmentResource &&
+            !ReferenceEquals(source, infra.AspireResource))
+        {
+            // Materialize the source, not the consumer: its callbacks determine whether the
+            // existing resource uses the module scope or an independently scoped declaration.
+            _ = source.GetBicepTemplateString();
+        }
+
         var resourceScope = GetResourceReferenceScope(aspireResource);
         if (resourceScope is { } scope &&
             !ScopeEquals(scope, infra.AspireResource.Scope))
@@ -241,7 +252,8 @@ public class AzureProvisioningResource(string name, Action<AzureResourceInfrastr
             ? AzureBicepResourceScope.FromExistingResourceAnnotation(annotation)
             : null;
 
-        if (resource is not IAzureComputeEnvironmentResource)
+        if (resource is not IAzureComputeEnvironmentResource ||
+            resource is AzureProvisioningResource { _existingResourceUsesModuleScope: true })
         {
             return moduleScope ?? annotationScope;
         }
