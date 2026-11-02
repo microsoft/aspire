@@ -1522,6 +1522,7 @@ const toggleAccountActive = (id, active) => withRefresh(() => postJSON("api/acco
 function captureSettingsDraft() {
   const release = document.getElementById("release-input");
   const showDrafts = document.getElementById("s-drafts");
+  const detachedSessions = document.getElementById("s-detached");
   const reviewRequested = document.getElementById("n-review");
   const readyToMerge = document.getElementById("n-ready");
   const changesRequested = document.getElementById("n-changes");
@@ -1530,6 +1531,7 @@ function captureSettingsDraft() {
   return {
     release: release.value,
     showDrafts: showDrafts.checked,
+    detachedSessions: detachedSessions?.checked ?? false,
     notifications: {
       reviewRequested: reviewRequested.checked,
       readyToMerge: readyToMerge.checked,
@@ -1543,12 +1545,14 @@ function restoreSettingsDraft(draft) {
   if (!draft) return;
   const release = document.getElementById("release-input");
   const showDrafts = document.getElementById("s-drafts");
+  const detachedSessions = document.getElementById("s-detached");
   const reviewRequested = document.getElementById("n-review");
   const readyToMerge = document.getElementById("n-ready");
   const changesRequested = document.getElementById("n-changes");
   const ciFailing = document.getElementById("n-ci");
   if (release) release.value = draft.release;
   if (showDrafts) showDrafts.checked = draft.showDrafts;
+  if (detachedSessions) detachedSessions.checked = draft.detachedSessions;
   if (reviewRequested) reviewRequested.checked = draft.notifications.reviewRequested;
   if (readyToMerge) readyToMerge.checked = draft.notifications.readyToMerge;
   if (changesRequested) changesRequested.checked = draft.notifications.changesRequested;
@@ -2040,6 +2044,7 @@ function persistAccountRepos(id, previousRepos) {
 async function saveSettings() {
   const release = document.getElementById("release-input").value;
   const showDrafts = document.getElementById("s-drafts").checked;
+  const detachedSessions = document.getElementById("s-detached").checked;
   const notifications = {
     reviewRequested: document.getElementById("n-review").checked,
     readyToMerge: document.getElementById("n-ready").checked,
@@ -2047,7 +2052,7 @@ async function saveSettings() {
     ciFailing: document.getElementById("n-ci").checked,
   };
   goView("queue", true);
-  await withRefresh(() => postJSON("api/prefs", { release, showDrafts, notifications }));
+  await withRefresh(() => postJSON("api/prefs", { release, showDrafts, detachedSessions, notifications }));
 }
 
 async function rescanAccounts() {
@@ -3063,6 +3068,10 @@ function settingsView() {
         '<div class="policy-row">' + ICONS.pr + '<span>Draft PRs are hidden by default. They are prototypes and experiments, not review work.</span></div>' +
       "</div>" +
       toggle("s-drafts", "Show draft PRs", "Include drafts in lanes and counts", !!prefs.showDrafts) +
+    "</div>" +
+    '<div class="section"><h3>Agentic actions</h3>' +
+      toggle("s-detached", "Create detached sessions", "Apply to all actions that open a new session", prefs.detachedSessions === true) +
+      '<p class="hint">Off by default: new sessions are children of this canvas session. When enabled, sessions appear at the sidebar top level and do not report back here. PRs are checked out using gh instead of the dedicated PR opener, so automatic PR/issue association is not guaranteed. Actions that run here are unchanged. This preference is saved on this machine across canvas sessions.</p>' +
     "</div>" +
     '<div class="section"><h3>Ship milestone</h3>' +
       '<p class="hint">Used by Ship mode to group work for the active release.</p>' +

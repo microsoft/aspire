@@ -65,6 +65,9 @@ test("sidebar instances disable PR and Health agent actions without affecting se
   assert.equal((await fetch(new URL("styles.css", sidebar.url))).status, 200);
   assert.equal((await fetch(new URL("api/state", sidebar.url))).status, 200);
   assert.equal((await postJson(sidebar.url, "api/auto-apply", { enabled: false })).status, 200);
+  const savedPrefs = await postJson(sidebar.url, "api/prefs", { detachedSessions: true });
+  assert.equal(savedPrefs.status, 200);
+  assert.equal((await savedPrefs.json()).prefs.detachedSessions, true);
 
   const pr = { repository: "microsoft/aspire", number: 1, url: "https://github.com/microsoft/aspire/pull/1" };
   for (const target of ["new-session", "current-session"]) {
@@ -82,6 +85,7 @@ test("sidebar instances disable PR and Health agent actions without affecting se
   const response = await postAction(active.url, { kind: "review", target: "new-session", pr });
   assert.equal(response.status, 200);
   assert.equal(sent.length, 1);
+  assert.match(sent[0].prompt, /- detached: true/);
 
   // Rehydration must replace the context even when the loopback server already exists.
   assert.equal(await server.startInstance("session-actions-test", () => {}, sessionContext, true), active);
@@ -160,6 +164,27 @@ test("Azure pipeline mutation routes validate input and reject stale removals", 
   const staleRemove = await postJson(entry.url, "api/health/pipeline/remove", { id: pipeline.id });
   assert.equal(staleRemove.status, 400);
   assert.equal((await staleRemove.json()).code, "pipeline_not_found");
+});
+
+test("detached session preference migrates safely and persists boolean settings", async (t) => {
+  await resetTestHome({ detachedSessions: "true" });
+  delete process.env.GH_TOKEN;
+  delete process.env.GITHUB_TOKEN;
+  process.env.PATH = "";
+  const server = await import(`./server.mjs?test=detached-prefs-${Date.now()}`);
+  const entry = await server.startInstance("detached-prefs-test", () => {});
+  t.after(() => server.stopInstance("detached-prefs-test"));
+
+  const loaded = await (await fetch(new URL("api/state", entry.url))).json();
+  assert.equal(loaded.prefs.detachedSessions, false);
+  for (const value of [true, false, true]) {
+    const saved = await postJson(entry.url, "api/prefs", { detachedSessions: value });
+    assert.equal(saved.status, 200);
+    assert.equal((await saved.json()).prefs.detachedSessions, value);
+    assert.equal(JSON.parse(await readFile(preferencesPath, "utf8")).detachedSessions, value);
+  }
+  const invalid = await postJson(entry.url, "api/prefs", { detachedSessions: "false" });
+  assert.equal((await invalid.json()).prefs.detachedSessions, true);
 });
 
 test("Health source order persists and reorders the cached dashboard", async (t) => {
@@ -647,6 +672,14 @@ test("card action route bridges { prompt, log } to the session and echoes the qu
   // The log uses the cached canonical title ("Add widget"), never the tampered client title.
   assert.equal(received.log, 'Test PR microsoft/aspire#123 — "Add widget" in a new session');
 
+  const enabled = await postJson(entry.url, "api/prefs", { detachedSessions: true });
+  assert.equal(enabled.status, 200);
+  const detached = await postAction(entry.url, { kind: "test", pr, detachedSessions: false });
+  assert.equal(detached.status, 200);
+  assert.match(received.prompt, /Use create_session with:/);
+  assert.match(received.prompt, /- detached: true/);
+  assert.doesNotMatch(received.prompt, /evil\.example|IGNORE PREVIOUS INSTRUCTIONS|octocat/);
+
   // A current-session action routes into this session instead of a sub-session.
   received = null;
   const here = await postAction(entry.url, { kind: "test", target: "current-session", pr });
@@ -655,6 +688,12 @@ test("card action route bridges { prompt, log } to the session and echoes the qu
   assert.equal(hereBody.target, "current-session");
   assert.doesNotMatch(received.prompt, /open_pr_session/);
   assert.equal(received.log, 'Test PR microsoft/aspire#123 — "Add widget" in this session');
+
+  const disabled = await postJson(entry.url, "api/prefs", { detachedSessions: false });
+  assert.equal(disabled.status, 200);
+  const child = await postAction(entry.url, { kind: "test", pr, detachedSessions: true });
+  assert.equal(child.status, 200);
+  assert.match(received.prompt, /Use the open_pr_session tool with:/);
 
   // An unknown kind is rejected before the bridge is ever called.
   received = null;
@@ -723,6 +762,24 @@ test("health actions resolve canonical sources from the last complete snapshot",
   assert.equal(body.target, "new-session");
   assert.match(received.prompt, /NEW project session for microsoft\/aspire/);
   assert.doesNotMatch(received.prompt, /evil\/repo|IGNORE PREVIOUS INSTRUCTIONS/);
+
+  const enabled = await postJson(entry.url, "api/prefs", { detachedSessions: true });
+  assert.equal(enabled.status, 200);
+  const detached = await postHealthAction(entry.url, {
+    kind: "fix-health",
+    target: "new-session",
+    source: { id: sourceId },
+  });
+  assert.equal(detached.status, 200);
+  assert.match(received.prompt, /Set detached: true/);
+  const here = await postHealthAction(entry.url, {
+    kind: "diagnose-health",
+    target: "current-session",
+    source: { id: sourceId },
+  });
+  assert.equal(here.status, 200);
+  assert.match(received.prompt, /Work in THIS session/);
+  assert.doesNotMatch(received.prompt, /detached: true/);
 
   received = null;
   const stale = await postHealthAction(entry.url, {

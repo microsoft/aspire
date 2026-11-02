@@ -1409,6 +1409,7 @@ test("Azure pipeline mutations preserve unsaved settings fields across renders",
   const elements = {
     "release-input": { value: "13.4-preview" },
     "s-drafts": { checked: true },
+    "s-detached": { checked: true },
     "n-review": { checked: false },
     "n-ready": { checked: true },
     "n-changes": { checked: false },
@@ -1417,6 +1418,7 @@ test("Azure pipeline mutations preserve unsaved settings fields across renders",
   const resetToPersistedValues = () => {
     elements["release-input"].value = "13.1";
     elements["s-drafts"].checked = false;
+    elements["s-detached"].checked = false;
     elements["n-review"].checked = true;
     elements["n-ready"].checked = false;
     elements["n-changes"].checked = true;
@@ -1458,10 +1460,49 @@ test("Azure pipeline mutations preserve unsaved settings fields across renders",
 
   assert.equal(elements["release-input"].value, "13.4-preview");
   assert.equal(elements["s-drafts"].checked, true);
+  assert.equal(elements["s-detached"].checked, true);
   assert.equal(elements["n-review"].checked, false);
   assert.equal(elements["n-ready"].checked, true);
   assert.equal(elements["n-changes"].checked, false);
   assert.equal(elements["n-ci"].checked, false);
+});
+
+test("settings render the detached opt-in and save its selected value", async () => {
+  let request;
+  const { app, api } = createRendererHarness({
+    elements: {
+      "release-input": { value: "13.5" },
+      "s-drafts": { checked: false },
+      "s-detached": { checked: true },
+      "n-review": { checked: true },
+      "n-ready": { checked: true },
+      "n-changes": { checked: false },
+      "n-ci": { checked: true },
+    },
+    fetch: async (path, options) => {
+      if (String(path) !== "api/prefs") return new Promise(() => {});
+      request = { path: String(path), body: JSON.parse(options.body) };
+      return jsonResponse({ dashboard: healthDashboard([], emptyHealthCounts(), true), prefs: rendererPrefs() });
+    },
+  });
+  api.setState(healthDashboard([], emptyHealthCounts(), true));
+  api.setPrefs(rendererPrefs());
+  api.setView("settings");
+  api.render();
+  assert.match(app.innerHTML, /Create detached sessions/);
+  assert.match(app.innerHTML, /id="s-detached"/);
+  assert.match(app.innerHTML, /do not report back here/);
+  assert.match(app.innerHTML, /association is not guaranteed/);
+  await api.saveSettings();
+  assert.deepEqual(request, {
+    path: "api/prefs",
+    body: {
+      release: "13.5",
+      showDrafts: false,
+      detachedSessions: true,
+      notifications: { reviewRequested: true, readyToMerge: true, changesRequested: false, ciFailing: true },
+    },
+  });
 });
 
 test("settings Enter shortcut leaves interactive controls to their native actions", () => {
@@ -1550,6 +1591,7 @@ function createRendererHarness(overrides = {}) {
 
   vm.runInNewContext(`${APP_JS}\n;globalThis.__test = {\n  render,\n  withRefresh,\n  load,\n  rescanAccounts,\n  onCardAction,\n  applyPushedState,\n  onUpdateAvailable,\n  onPreferences,\n  onSnapshot,\n  onPollSchedule,\n  applyAvailableUpdate,\n  toggleAutoApply,\n  autoApplyEnabled,\n  openLinkedPr,\n  deleteRepo,\n  persistAccountRepos,\n  draftReposByAcct,\n  editingByAcct,\n  forYouCardActions,\n  focusCardActions,\n  laneCardActions,\n  signalActions,\n  mergeActions,\n  queuePanel,\n  cardActionBtn,\n  issueCard,\n  healthCard,\n  healthView,\n  healthRepositoryGroups,\n  pipelineEditorHtml,\n  addAzurePipeline,\n  removeAzurePipeline,\n  commitHealthOrder,\n  moveHealthSource,\n  dropHealthSource,\n  setHealthDropMarker,\n  wireHealthOrdering,\n  actionKey,\n  inflightActions,\n  setProgress,\n  setState(value) { state = value; },\n  getState() { return state; },\n  getAppliedSeq() { return lastAppliedSeq; },\n  getUpdateAvailable() { return updateAvailable; },\n  setPrefs(value) { prefs = value; },\n  getPrefs() { return prefs; },\n  setHealthOrderSaving(value) { healthOrderSaving = !!value; },\n  setPipelineDrafts(url, branch) { pipelineUrlDraft = url; pipelineBranchDraft = branch; },\n  getPipelineDrafts() { return { url: pipelineUrlDraft, branch: pipelineBranchDraft, error: pipelineError }; },\n  setView(value) { view = value; },\n  setRefreshing(value) { refreshing = !!value; },\n  setRefreshInFlight(value) { refreshInFlight = value; },\n  setLoadError(value) { loadError = value; },\n  getLoadError() { return loadError; },\n};`, sandbox);
 
+  sandbox.__test.saveSettings = vm.runInNewContext("saveSettings", sandbox);
   return { app, api: sandbox.__test, events, document };
 }
 

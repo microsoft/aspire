@@ -170,6 +170,19 @@ No credential is written to the extension preferences.
 
 ## Agent actions
 
+In **Settings → Agentic actions**, **Create detached sessions** is off by default.
+Enable it to launch all new-session PR and Health actions as top-level sessions
+instead of children of the canvas's session. Actions targeting the current
+conversation (including GHES fallbacks) are unchanged.
+
+Detached PR sessions use `create_session` and check out the live PR using `gh`,
+instead of `open_pr_session`. They have no automatic report-back relationship
+with the dashboard conversation, and automatic PR/issue association is not
+guaranteed. Read results and answer questions in the launched session.
+The preference follows the existing machine-local settings in
+`$COPILOT_HOME/extensions/aspire-team-app/artifacts/preferences.json`
+(`COPILOT_HOME` defaults to `~/.copilot`); it is not committed to the repository.
+
 - `refresh` — reload the queue and push to the open dashboard.
 - `set_mode` — switch to `review` / `issues` / `ship` / `health`.
 - `set_repos` — replace the watched repositories for an account (targets the first

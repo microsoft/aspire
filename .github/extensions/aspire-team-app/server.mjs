@@ -692,6 +692,7 @@ async function handle(req, res, log, instanceId) {
       await updatePrefs((prefs) => {
         if (typeof body.release === "string" && body.release.trim()) prefs.release = body.release.trim();
         if (typeof body.showDrafts === "boolean") prefs.showDrafts = body.showDrafts;
+        if (typeof body.detachedSessions === "boolean") prefs.detachedSessions = body.detachedSessions;
         if (body.notifications) prefs.notifications = { ...prefs.notifications, ...body.notifications };
       });
       const next = await getDashboard(true);
@@ -776,9 +777,10 @@ async function handle(req, res, log, instanceId) {
       if (!resolvedSource) {
         return send(res, 400, { error: "This health source is no longer in view. Refresh and try again." });
       }
+      const prefs = await loadPrefs();
       let prompt;
       try {
-        prompt = buildHealthActionPrompt(kind, resolvedSource, target);
+        prompt = buildHealthActionPrompt(kind, resolvedSource, target, prefs);
       } catch (error) {
         return send(res, 400, { error: error.message });
       }
@@ -819,9 +821,10 @@ async function handle(req, res, log, instanceId) {
       if (!resolvedPr) {
         return send(res, 400, { error: "This pull request is no longer in view. Refresh and try again." });
       }
+      const prefs = await loadPrefs();
       let prompt;
       try {
-        prompt = buildAgentActionPrompt(kind, resolvedPr, target);
+        prompt = buildAgentActionPrompt(kind, resolvedPr, target, prefs);
       } catch (e) {
         return send(res, 400, { error: e.message });
       }
