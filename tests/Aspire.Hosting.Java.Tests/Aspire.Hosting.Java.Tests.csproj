@@ -11,7 +11,16 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Aspire.Hosting.AppHost\Aspire.Hosting.AppHost.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Java\Aspire.Hosting.Java.csproj" />
+    <ProjectReference Include="..\..\src\Aspire.Hosting.Dotnet\Aspire.Hosting.Dotnet.csproj" />
     <ProjectReference Include="..\Aspire.Hosting.TestUtilities\Aspire.Hosting.TestUtilities.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\..\playground\AspireCliTesting\java-tests\**\*" Exclude="..\..\playground\AspireCliTesting\java-tests\target\**\*">
+      <Link>Fixtures\java-tests\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\playground\AspireCliTesting\service\service.cs" Link="Fixtures\service.cs" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
