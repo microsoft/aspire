@@ -189,7 +189,7 @@
                              data-resource-grouping="@_grouping"
                              @key="@GetGroupKey(group)">
                             @{
-                                var groupResourceNames = group.Resources.Select(GetResourceName).ToList();
+                                var groupResourceNames = group.Resources.Select(GetResourceTargetName).ToList();
                                 var isGroupSelected = IsResourceGroupSelected(groupResourceNames);
 
                                 <div class="resource-tag-header @(isGroupSelected ? "selected" : string.Empty)">
@@ -798,7 +798,8 @@
     private void RenderResourceRow(RenderTreeBuilder __builder, ResourceViewModel resource, ResourceGridViewModel? row)
     {
         var resourceName = GetResourceName(resource);
-        var isSelected = IsSelected(resourceName);
+        var resourceTargetName = GetResourceTargetName(resource);
+        var isSelected = IsSelected(resourceTargetName);
         var stateViewModel = ResourceStateViewModel.GetStateViewModel(resource, ColumnsLoc);
         var errorCount = GetUnviewedErrorCount(resource);
         var depth = row?.Depth ?? 0;
@@ -813,7 +814,7 @@
              data-resource-parent="@GetReorderParentName(resource)"
              @key="resource.Name">
             <a class="resource-row-link"
-               href="@GetRowUrl(resourceName)"
+               href="@GetRowUrl(resourceTargetName)"
                style="@(depth == 0 ? null : $"--resource-row-depth: {depth}")"
                aria-current="@GetRowAriaCurrent(isSelected)"
                aria-label="@resourceName"
@@ -821,7 +822,7 @@
                draggable="@(canReorder ? "true" : null)"
                data-resource-drag-handle="@canReorder"
                aria-keyshortcuts="@(canReorder ? "Alt+ArrowUp Alt+ArrowDown" : null)"
-               @onclick="@(e => OnRowClickAsync(e, resourceName))"
+               @onclick="@(e => OnRowClickAsync(e, resourceTargetName))"
                @onclick:preventDefault="true">
                 <span class="resource-row-icon">
                     <FluentIcon Width="@(IsSpacious ? "20px" : "16px")"

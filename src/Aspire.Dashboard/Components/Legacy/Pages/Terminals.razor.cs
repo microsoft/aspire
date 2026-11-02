@@ -221,7 +221,7 @@ public sealed partial class Terminals : ComponentBase, IAsyncDisposable, ICompon
 
     private string? GetResourceName(SelectViewModel<ResourceTypeDetails>? selectedResource)
         => selectedResource?.Id?.InstanceId is { } name && _resourceByName.TryGetValue(name, out var resource)
-            ? ResourceViewModel.GetResourceName(resource, _resourceByName)
+            ? ResourceViewModel.GetResourceTargetName(resource, _resourceByName)
             : null;
 
     private ResourceViewModel? GetSelectedResource()

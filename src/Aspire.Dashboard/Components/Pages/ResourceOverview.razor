@@ -63,6 +63,7 @@
     else
     {
         var resourceName = GetResourceName(resource);
+        var resourceTargetName = GetResourceTargetName(resource);
         var stateViewModel = ResourceStateViewModel.GetStateViewModel(resource, ColumnsLoc);
         // Internal URLs are listed after the URLs a user can browse to.
         var urls = ResourceUrlHelpers.GetUrls(resource, includeInternalUrls: true, includeNonEndpointUrls: true).OrderBy(u => u.IsInternal).ToList();
@@ -233,7 +234,7 @@
                         <FluentIcon Value="@(new Icons.Regular.Size16.ChartMultiple())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
                     </span>
                     <h2 id="overview-metrics-title">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewMetricsTitle)]</h2>
-                    <a class="overview-card-link" href="@DashboardUrls.MetricsUrl(resourceName)">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewViewAll)]</a>
+                    <a class="overview-card-link" href="@DashboardUrls.MetricsUrl(resourceTargetName)">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewViewAll)]</a>
                 </div>
                 @if (!_telemetryLoaded)
                 {
@@ -257,7 +258,7 @@
                     {
                         <div class="overview-empty overview-metrics-empty">
                             <span>@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewNoPinnedMetrics)]</span>
-                            <a class="overview-card-link" href="@DashboardUrls.MetricsUrl(resourceName)">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewBrowseMeters)]</a>
+                            <a class="overview-card-link" href="@DashboardUrls.MetricsUrl(resourceTargetName)">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewBrowseMeters)]</a>
                         </div>
                     }
                     else
@@ -265,7 +266,7 @@
                     <LiveMetricTiles ResourceKey="@_telemetryKey!.Value"
                                      Instruments="@pinnedInstruments.Take(MetricsPreviewCount).ToList()"
                                      Duration="@s_metricsPreviewDuration"
-                                     GetInstrumentUrl="@(instrument => DashboardUrls.MetricsUrl(resourceName, instrument.Parent.Name, instrument.Name))" />
+                                     GetInstrumentUrl="@(instrument => DashboardUrls.MetricsUrl(resourceTargetName, instrument.Parent.Name, instrument.Name))" />
                     }
                 }
             </section>
@@ -330,7 +331,7 @@
                         @CardActionButton(
                             Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewOpenConsole)],
                             new Icons.Regular.Size16.Open(),
-                            () => NavigationManager.NavigateTo(DashboardUrls.ConsoleLogsUrl(resourceName)))
+                            () => NavigationManager.NavigateTo(DashboardUrls.ConsoleLogsUrl(resourceTargetName)))
                     </div>
                 </div>
                 @{
@@ -382,7 +383,7 @@
                         <FluentIcon Value="@(new Icons.Regular.Size16.SlideTextSparkle())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
                     </span>
                     <h2 id="overview-logs-title">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewLogsTitle)]</h2>
-                    <a class="overview-card-link" href="@DashboardUrls.StructuredLogsUrl(resourceName)">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewViewAll)]</a>
+                    <a class="overview-card-link" href="@DashboardUrls.StructuredLogsUrl(resourceTargetName)">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewViewAll)]</a>
                 </div>
                 @if (!_telemetryLoaded)
                 {
@@ -392,15 +393,15 @@
                 {
                 var telemetry = logsTelemetry;
                     <div class="overview-stats">
-                        <a class="overview-stat" href="@DashboardUrls.StructuredLogsUrl(resourceName)">
+                        <a class="overview-stat" href="@DashboardUrls.StructuredLogsUrl(resourceTargetName)">
                             <span class="overview-stat-value">@telemetry.LogCount.ToString("N0", CultureInfo.CurrentCulture)</span>
                             <span class="overview-stat-label">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewTotal)]</span>
                         </a>
-                        <a class="overview-stat @(telemetry.WarningLogCount > 0 ? "warning" : string.Empty)" href="@DashboardUrls.StructuredLogsUrl(resourceName, logLevel: "warning")">
+                        <a class="overview-stat @(telemetry.WarningLogCount > 0 ? "warning" : string.Empty)" href="@DashboardUrls.StructuredLogsUrl(resourceTargetName, logLevel: "warning")">
                             <span class="overview-stat-value">@telemetry.WarningLogCount.ToString("N0", CultureInfo.CurrentCulture)</span>
                             <span class="overview-stat-label">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewWarnings)]</span>
                         </a>
-                        <a class="overview-stat @(telemetry.ErrorLogCount > 0 ? "error" : string.Empty)" href="@DashboardUrls.StructuredLogsUrl(resourceName, logLevel: "error")">
+                        <a class="overview-stat @(telemetry.ErrorLogCount > 0 ? "error" : string.Empty)" href="@DashboardUrls.StructuredLogsUrl(resourceTargetName, logLevel: "error")">
                             <span class="overview-stat-value">@telemetry.ErrorLogCount.ToString("N0", CultureInfo.CurrentCulture)</span>
                             <span class="overview-stat-label">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewErrors)]</span>
                         </a>
@@ -412,7 +413,7 @@
                             {
                                 <li @key="log.InternalId">
                                     <span class="overview-level @(log.IsError ? "error" : "warning")">@log.Severity</span>
-                                    <a class="overview-list-value" href="@DashboardUrls.StructuredLogsUrl(resourceName, logEntryId: log.InternalId)" data-tooltip="@log.Message">@log.Message</a>
+                                    <a class="overview-list-value" href="@DashboardUrls.StructuredLogsUrl(resourceTargetName, logEntryId: log.InternalId)" data-tooltip="@log.Message">@log.Message</a>
                                     <span class="overview-list-time">@FormatHelpers.FormatTime(TimeProvider, log.TimeStamp)</span>
                                 </li>
                             }
@@ -425,7 +426,7 @@
                             {
                                 <li @key="log.InternalId">
                                     <span class="overview-level">@log.Severity</span>
-                                    <a class="overview-list-value" href="@DashboardUrls.StructuredLogsUrl(resourceName, logEntryId: log.InternalId)" data-tooltip="@log.Message">@log.Message</a>
+                                    <a class="overview-list-value" href="@DashboardUrls.StructuredLogsUrl(resourceTargetName, logEntryId: log.InternalId)" data-tooltip="@log.Message">@log.Message</a>
                                     <span class="overview-list-time">@FormatHelpers.FormatTime(TimeProvider, log.TimeStamp)</span>
                                 </li>
                             }
@@ -451,7 +452,7 @@
                         <FluentIcon Value="@(new Icons.Regular.Size16.GanttChart())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
                     </span>
                     <h2 id="overview-traces-title">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewTracesTitle)]</h2>
-                    <a class="overview-card-link" href="@DashboardUrls.TracesUrl(resourceName)">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewViewAll)]</a>
+                    <a class="overview-card-link" href="@DashboardUrls.TracesUrl(resourceTargetName)">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewViewAll)]</a>
                 </div>
                 @if (!_telemetryLoaded)
                 {
@@ -461,7 +462,7 @@
                 {
                 var telemetry = tracesTelemetry;
                     <div class="overview-stats">
-                        <a class="overview-stat" href="@DashboardUrls.TracesUrl(resourceName)">
+                        <a class="overview-stat" href="@DashboardUrls.TracesUrl(resourceTargetName)">
                             <span class="overview-stat-value">@telemetry.TraceCount.ToString("N0", CultureInfo.CurrentCulture)</span>
                             <span class="overview-stat-label">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewTotal)]</span>
                         </a>
@@ -880,6 +881,7 @@
         if (ResourcesLayout is not null && ResourceViewModel.TryGetResourceByName(name, ResourcesLayout.ResourceByName, out var resource))
         {
             var resourceName = GetResourceName(resource);
+            var resourceTargetName = GetResourceTargetName(resource);
             var stateViewModel = ResourceStateViewModel.GetStateViewModel(resource, ColumnsLoc);
             var urls = ResourceUrlHelpers.GetUrls(resource, includeInternalUrls: false, includeNonEndpointUrls: true);
             var primaryUrl = urls.FirstOrDefault();
@@ -893,7 +895,7 @@
                                 Color="Color.Custom"
                                 CustomColor="@ColorGenerator.Instance.GetColorVariableByKey(resourceName)"
                                 Value="@ResourceIconHelpers.GetIconForResource(IconResolver, resource, IconSize.Size20)" />
-                    <a class="overview-selection-card-title" href="@DashboardUrls.ResourceOverviewUrl(resourceName)" data-tooltip="@resourceName">@resourceName</a>
+                    <a class="overview-selection-card-title" href="@DashboardUrls.ResourceOverviewUrl(resourceTargetName)" data-tooltip="@resourceName">@resourceName</a>
                     <span class="overview-state @ResourcesLayout.GetStateClass(resource)">
                         <FluentIcon Value="@stateViewModel.Icon" Width="14px" Color="Color.Custom" CustomColor="currentColor" />
                         @stateViewModel.Text
@@ -929,18 +931,18 @@
                         }
                     </div>
                     <nav class="overview-selection-actions" aria-label="@resourceName">
-                        @SelectionAction(DashboardUrls.ConsoleLogsUrl(resourceName), Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewConsoleTitle)], new Icons.Regular.Size16.SlideText(), 0)
+                        @SelectionAction(DashboardUrls.ConsoleLogsUrl(resourceTargetName), Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewConsoleTitle)], new Icons.Regular.Size16.SlideText(), 0)
                         @if (isInstrumented)
                         {
-                            @SelectionAction(DashboardUrls.StructuredLogsUrl(resourceName), Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewLogsTitle)], new Icons.Regular.Size16.SlideTextSparkle(), errorCount)
+                            @SelectionAction(DashboardUrls.StructuredLogsUrl(resourceTargetName), Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewLogsTitle)], new Icons.Regular.Size16.SlideTextSparkle(), errorCount)
                         }
                         @if (otlpResource is not null)
                         {
-                            @SelectionAction(DashboardUrls.TracesUrl(resourceName), Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewTracesTitle)], new Icons.Regular.Size16.GanttChart(), 0)
+                            @SelectionAction(DashboardUrls.TracesUrl(resourceTargetName), Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewTracesTitle)], new Icons.Regular.Size16.GanttChart(), 0)
                         }
                         @if (isInstrumented)
                         {
-                            @SelectionAction(DashboardUrls.MetricsUrl(resourceName), Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewMetricsTitle)], new Icons.Regular.Size16.ChartMultiple(), 0)
+                            @SelectionAction(DashboardUrls.MetricsUrl(resourceTargetName), Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewMetricsTitle)], new Icons.Regular.Size16.ChartMultiple(), 0)
                         }
                     </nav>
                 </div>

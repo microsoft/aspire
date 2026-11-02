@@ -763,7 +763,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         // Resource details are displayed by the resources view. Only parameters are displayed in this page's details panel.
         if (!resource.IsParameter && PageViewModel.SelectedViewKind is ResourceViewKind.Graph or ResourceViewKind.Parameters)
         {
-            NavigationManager.NavigateTo(DashboardUrls.ResourceOverviewUrl(GetResourceName(resource)));
+            NavigationManager.NavigateTo(DashboardUrls.ResourceOverviewUrl(ResourceViewModel.GetResourceTargetName(resource, _resourceByName)));
             return;
         }
 

@@ -12,6 +12,7 @@ using Aspire.Dashboard.Tests.Shared;
 using Aspire.Tests.Shared.DashboardModel;
 using Bunit;
 using Google.Protobuf.WellKnownTypes;
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Sections;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -21,6 +22,41 @@ namespace Aspire.Dashboard.Components.Tests.Controls;
 [UseCulture("en-US")]
 public class ApplicationSummaryTests : DashboardTestContext
 {
+    [Theory]
+    [InlineData(GroupOverview.Cards)]
+    [InlineData(GroupOverview.Resources)]
+    public async Task RenamedResource_UsesTechnicalNavigationAndScope(GroupOverview overview)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources:
+            [
+                ModelTestHelpers.CreateResource("cache-instance", displayName: "cache", resourceDisplayName: "Shared Cache"),
+                ModelTestHelpers.CreateResource("Shared Cache", resourceDisplayName: "Other cache")
+            ], resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var cut = Render<ApplicationSummary>(p => p.AddCascadingValue(viewport));
+        await cut.InvokeAsync(() => Services.GetRequiredService<DashboardViewPreferences>().SetGroupOverviewAsync(overview));
+        var selector = overview == GroupOverview.Cards ? ".resource-card" : ".home-table-resource";
+        cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll(selector).Count));
+        var item = cut.FindAll(selector).Single(item => item.QuerySelector(".resource-name-text")!.TextContent == "Shared Cache");
+        if (overview == GroupOverview.Cards)
+        {
+            await cut.InvokeAsync(() => item.Click());
+            Assert.Equal("http://localhost/resources/cache", Services.GetRequiredService<NavigationManager>().Uri);
+        }
+        else
+        {
+            Assert.Equal("/resources/cache", item.GetAttribute("href"));
+        }
+
+        cut.Render(p => p.Add(p => p.ResourceNames, new[] { "Shared Cache" }));
+        cut.WaitForAssertion(() => Assert.Equal("Other cache",
+            Assert.Single(cut.FindAll(selector)).QuerySelector(".resource-name-text")!.TextContent));
+        cut.Render(p => p.Add(p => p.ResourceNames, new[] { "cache" }));
+        cut.WaitForAssertion(() => Assert.Equal("Shared Cache",
+            Assert.Single(cut.FindAll(selector)).QuerySelector(".resource-name-text")!.TextContent));
+    }
+
     [Theory]
     [InlineData(GroupOverview.Cards)]
     [InlineData(GroupOverview.Resources)]

@@ -588,10 +588,11 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     }
 
     private bool IsInScope(ResourceViewModel resource) => _scopedResourceNames is not { } names ||
-        names.Contains(GetResourceName(resource), StringComparers.ResourceName) ||
+        names.Contains(GetResourceTargetName(resource), StringComparers.ResourceName) ||
         names.Contains(resource.Name, StringComparers.ResourceName);
 
     private string GetResourceName(ResourceViewModel resource) => ResourceViewModel.GetResourceName(resource, _resourceByName);
+    private string GetResourceTargetName(ResourceViewModel resource) => ResourceViewModel.GetResourceTargetName(resource, _resourceByName);
 
     // Like the resources grid, every row reserves room for as many highlighted commands as the busiest resource has, so
     // the action columns line up. At most two are shown; the others are in the menu.
@@ -602,7 +603,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     private bool HasMultipleReplicas(ResourceViewModel resource) =>
         _resourceByName.Values.Count(r => !r.IsResourceHidden(showHiddenResources: false) && string.Equals(r.DisplayName, resource.DisplayName, StringComparisons.ResourceName)) >= 2;
 
-    private void NavigateToResource(ResourceViewModel resource) => NavigationManager.NavigateTo(DashboardUrls.ResourceOverviewUrl(GetResourceName(resource)));
+    private void NavigateToResource(ResourceViewModel resource) => NavigationManager.NavigateTo(DashboardUrls.ResourceOverviewUrl(GetResourceTargetName(resource)));
 
     private void OnResourceCardKeyDown(KeyboardEventArgs args, ResourceViewModel resource)
     {
