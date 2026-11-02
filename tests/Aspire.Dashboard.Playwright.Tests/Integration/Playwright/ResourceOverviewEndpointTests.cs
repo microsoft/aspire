@@ -23,6 +23,7 @@ public sealed class ResourceOverviewEndpointTests : PlaywrightTestsBase<Resource
     private static readonly string s_longAddress = "https://localhost:7443/" + new string('a', 160) + "/openapi";
     private static readonly string s_longUrl = s_longAddress + "?token=example";
     private static readonly string s_maskedLongUrl = s_longAddress + "?token=" + Mask;
+    private static readonly string s_longFriendlyName = "OpenAPI" + new string('N', 160);
 
     public ResourceOverviewEndpointTests(EndpointResourcesFixture dashboardServerFixture)
         : base(dashboardServerFixture)
@@ -95,13 +96,15 @@ public sealed class ResourceOverviewEndpointTests : PlaywrightTestsBase<Resource
 
             var longAddress = card.GetByRole(AriaRole.Link, new() { Name = s_maskedLongUrl, Exact = true });
             await Assertions.Expect(longAddress).ToHaveAttributeAsync("href", s_longUrl);
-            await longAddress.ScrollIntoViewIfNeededAsync();
+            await longAddress.Locator("..").ScrollIntoViewIfNeededAsync();
             await Assertions.Expect(longAddress).ToBeVisibleAsync();
+            await Assertions.Expect(longAddress.Locator("..").Locator(".overview-endpoint-name")).ToHaveTextAsync(s_longFriendlyName);
             await page.ScreenshotAsync(new() { Path = Path.Combine(AppContext.BaseDirectory, $"endpoints-compact-long-{width}x{height}.png") });
 
             // Ellipsis clips only the displayed address. The complete masked value remains available through
             // the shared tooltip on hover and keyboard focus, while the link retains the original destination.
             Assert.True(await card.EvaluateAsync<bool>("card => card.scrollWidth <= card.clientWidth"));
+            Assert.True(await card.Locator(".overview-list").EvaluateAsync<bool>("list => list.scrollWidth <= list.clientWidth"));
             foreach (var address in await card.Locator(".overview-endpoint-address").AllAsync())
             {
                 Assert.True(await address.EvaluateAsync<bool>(
@@ -134,7 +137,7 @@ public sealed class ResourceOverviewEndpointTests : PlaywrightTestsBase<Resource
             [
                 new("https", new Uri(PublicUrl), false, false, new("Catalog API", 5)),
                 new("https", new Uri(InternalUrl), true, false, new("Catalog API", 5)),
-                new("openapi", new Uri(s_longUrl), false, false, new("OpenAPI document", 4)),
+                new("openapi", new Uri(s_longUrl), false, false, new(s_longFriendlyName, 4)),
                 new(null, new Uri("https://localhost:7443/docs"), false, false, new("Documentation", 3)),
                 new("http", new Uri("http://localhost:5080"), false, false, UrlDisplayPropertiesViewModel.Empty),
                 new("tcp", new Uri(TcpUrl), true, false, new("Cache connection", 0))

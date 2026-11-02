@@ -409,6 +409,7 @@ a.overview-list-value:hover {
 
 .overview-endpoint-name {
     color: var(--colorNeutralForeground1);
+    overflow-wrap: anywhere;
 }
 
 a.overview-endpoint-address {
