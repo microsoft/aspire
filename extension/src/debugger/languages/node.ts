@@ -140,6 +140,8 @@ export interface InspectorWaitingProcessStopResult {
  * found and a stop is only reported once it is observed. Each listing also checks the processes already
  * signalled and their descendants, so a deno.exe left behind by a stopped deno.cmd shim is still found.
  * Once `isSpawnSettled` reports that the runtime can no longer be spawned, an empty listing ends the search.
+ * A failed listing is never treated as empty: known processes are reported as still running, and if none
+ * are known when the settle window ends, the listing error is thrown.
  */
 export async function stopInspectorWaitingProcesses(
     inspectorArgument: string,
@@ -160,18 +162,24 @@ export async function stopInspectorWaitingProcesses(
     const deadline = clock.now() + (options.settleTimeoutMs ?? inspectorWaitingProcessSettleTimeoutMs);
     const signalled = new Set<number>();
     let running: number[] = [];
+    let listed = false;
+    let listingError: unknown;
     let retryDelayMs = inspectorWaitingProcessInitialRetryDelayMs;
 
     while (true) {
         try {
             running = await findInspectorWaitingProcessIds(inspectorArgument, query, options.launcherPid ?? process.pid, [...knownProcessIds, ...signalled]);
+            listed = true;
         }
-        catch {
-            // Without a listing nothing can be confirmed; anything already signalled is still unconfirmed.
-            running = [...signalled];
+        catch (error) {
+            // Without a listing nothing can be confirmed: processes known from an earlier attempt or already
+            // signalled stay unconfirmed, and a failed listing never counts as proof that nothing is running.
+            listed = false;
+            listingError = error;
+            running = [...new Set([...knownProcessIds, ...signalled])];
         }
 
-        if (running.length === 0 && (signalled.size > 0 || options.isSpawnSettled?.() === true)) {
+        if (listed && running.length === 0 && (signalled.size > 0 || options.isSpawnSettled?.() === true)) {
             break;
         }
 
@@ -194,6 +202,11 @@ export async function stopInspectorWaitingProcesses(
 
         await clock.sleep(Math.min(retryDelayMs, remainingMs));
         retryDelayMs = Math.min(inspectorWaitingProcessMaximumRetryDelayMs, retryDelayMs * 2);
+    }
+
+    if (!listed && running.length === 0) {
+        // Nothing was identified and the last listing failed, so it is unknown whether a runtime is running.
+        throw listingError;
     }
 
     return { stopped: [...signalled].filter(pid => !running.includes(pid)), running };

@@ -300,6 +300,54 @@ suite('Node Debugger Tests', () => {
         assert.deepStrictEqual(result, { stopped: [21], running: [] });
     });
 
+    function createFailingListing(failures: number, argument: string, pids: number[] = []) {
+        let call = 0;
+        const listing = createListing([pids], argument);
+        return {
+            canTrustListedProcessIdentity: true,
+            listProcesses: async (): Promise<LaunchedChildProcess[]> => {
+                if (call++ < failures) {
+                    throw new Error('Get-CimInstance failed');
+                }
+
+                return listing.listProcesses();
+            },
+        };
+    }
+
+    test('does not report a Deno AppHost cleanup as successful when the process listing fails', async () => {
+        const argument = '--inspect-wait=127.0.0.1:1234';
+        // The launch already finished, so an empty listing would end the search, but a failed one must not.
+        await assert.rejects(
+            stopInspectorWaitingProcesses(argument, createFailingListing(Number.MAX_SAFE_INTEGER, argument), createFakeClock(), {
+                launcherPid: 10,
+                settleTimeoutMs: 2_000,
+                kill: () => { },
+                isSpawnSettled: () => true,
+            }),
+            /Get-CimInstance failed/);
+
+        // A transient failure is retried, and the first successful empty listing ends the search.
+        const clock = createFakeClock();
+        assert.deepStrictEqual(
+            await stopInspectorWaitingProcesses(argument, createFailingListing(1, argument), clock, { launcherPid: 10, kill: () => { }, isSpawnSettled: () => true }),
+            { stopped: [], running: [] });
+        assert.deepStrictEqual(clock.sleeps, [100]);
+    });
+
+    test('keeps processes from an earlier cleanup attempt unconfirmed when the process listing fails', async () => {
+        const argument = '--inspect-wait=127.0.0.1:1234';
+        const result = await stopInspectorWaitingProcesses(argument, createFailingListing(Number.MAX_SAFE_INTEGER, argument), createFakeClock(), {
+            launcherPid: 10,
+            settleTimeoutMs: 2_000,
+            kill: () => { },
+            knownProcessIds: [21],
+            isSpawnSettled: () => true,
+        });
+
+        assert.deepStrictEqual(result, { stopped: [], running: [21] });
+    });
+
     // A Windows listing where a deno.cmd shim (pid 20, a child of the extension host, pid 10) started deno.exe (pid 21).
     function createShimListing(listings: { shim: boolean; deno: boolean }[], argument: string) {
         let call = 0;
