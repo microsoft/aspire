@@ -1471,6 +1471,59 @@ public partial class MetricsTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task ReplicaGroupChart_PinUsesEmittingResource()
+    {
+        JSInterop.Mode = JSRuntimeMode.Loose;
+        MetricsSetupHelpers.SetupMetricsPage(this);
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
+        {
+            CreateResourceMetrics("first"),
+            CreateResourceMetrics("second")
+        });
+        var resourceKey = new ResourceKey("TestApp", InstanceId: null);
+        var resources = telemetryRepository.GetResources();
+        var summary = Assert.Single(telemetryRepository.GetInstrumentSummaries(resourceKey));
+
+        var cut = Render<ChartContainer>(builder =>
+        {
+            builder.Add(component => component.ResourceKey, resourceKey);
+            builder.Add(component => component.MeterName, "test-meter");
+            builder.Add(component => component.InstrumentName, "shared-instrument");
+            builder.Add(component => component.Duration, TimeSpan.FromMinutes(5));
+            builder.Add(component => component.ActiveView, MetricViewKind.Graph);
+            builder.Add(component => component.OnViewChangedAsync, _ => Task.CompletedTask);
+            builder.Add(component => component.ShowRunningTotal, true);
+            builder.Add(component => component.OnShowRunningTotalChangedAsync, _ => Task.CompletedTask);
+            builder.Add(component => component.ShowChangePerIntervalOption, true);
+            builder.Add(component => component.Resources, resources);
+        });
+
+        cut.WaitForState(() => cut.FindComponents<MetricPinButton>().Count == 1);
+        cut.FindComponent<MetricPinButton>().Find("fluent-button").Click();
+
+        cut.WaitForAssertion(() =>
+        {
+            var pinStore = Services.GetRequiredService<MetricPinStore>();
+            Assert.Equal([new MetricPin(summary.ResourceView.ResourceKey, summary.GetKey())], pinStore.GetPins());
+            Assert.Equal([summary], pinStore.GetPinnedInstruments([summary]));
+        });
+
+        static ResourceMetrics CreateResourceMetrics(string instanceId) => new()
+        {
+            Resource = CreateResource(name: "TestApp", instanceId: instanceId),
+            ScopeMetrics =
+            {
+                new ScopeMetrics
+                {
+                    Scope = CreateScope(name: "test-meter"),
+                    Metrics = { CreateSumMetric(metricName: "shared-instrument", startTime: s_testTime.AddMinutes(1)) }
+                }
+            }
+        };
+    }
+
+    [Fact]
     public async Task AllResources_MatchingInstruments_PinIndependently()
     {
         MetricsSetupHelpers.SetupMetricsPage(this);

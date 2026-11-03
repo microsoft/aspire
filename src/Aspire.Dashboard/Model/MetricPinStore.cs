@@ -185,7 +185,9 @@ public sealed class MetricPinStore
                 instrument_name TEXT NOT NULL
             );
             CREATE UNIQUE INDEX metric_pins_identity ON metric_pins (
+                resource_name IS NULL,
                 IFNULL(resource_name, ''),
+                resource_instance_id IS NULL,
                 IFNULL(resource_instance_id, ''),
                 meter_name,
                 instrument_name
@@ -210,7 +212,9 @@ public sealed class MetricPinStore
                 instrument_name TEXT NOT NULL
             );
             CREATE UNIQUE INDEX metric_pins_identity ON metric_pins (
+                resource_name IS NULL,
                 IFNULL(resource_name, ''),
+                resource_instance_id IS NULL,
                 IFNULL(resource_instance_id, ''),
                 meter_name,
                 instrument_name

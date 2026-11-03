@@ -47,6 +47,23 @@ public sealed class MetricPinStoreTests(ITestOutputHelper testOutputHelper) : ID
     }
 
     [Fact]
+    public void SetPinned_NullAndEmptyInstanceIdsPersistIndependently()
+    {
+        var databasePath = Path.Combine(_workspace.Path, DashboardSettingsDatabase.DatabaseFileName);
+        var nullInstance = new ResourceKey("api", InstanceId: null);
+        var emptyInstance = new ResourceKey("api", InstanceId: string.Empty);
+        var store = new MetricPinStore(databasePath, NullLogger.Instance);
+
+        Assert.True(store.SetPinned(nullInstance, s_cpu, pinned: true));
+        Assert.True(store.SetPinned(emptyInstance, s_cpu, pinned: true));
+
+        store = new MetricPinStore(databasePath, NullLogger.Instance);
+        Assert.Equal(
+            [new MetricPin(nullInstance, s_cpu), new MetricPin(emptyInstance, s_cpu)],
+            store.GetPins());
+    }
+
+    [Fact]
     public void SetPinned_RaisesChangedOnlyWhenPinsChange()
     {
         var store = new MetricPinStore(databasePath: null, NullLogger.Instance);
@@ -122,7 +139,7 @@ public sealed class MetricPinStoreTests(ITestOutputHelper testOutputHelper) : ID
     public void ExistingGlobalPins_RemainGlobalUntilExplicitlyUnpinned()
     {
         var databasePath = Path.Combine(_workspace.Path, DashboardSettingsDatabase.DatabaseFileName);
-        var connectionString = new SqliteConnectionStringBuilder { DataSource = databasePath }.ToString();
+        var connectionString = new SqliteConnectionStringBuilder { DataSource = databasePath, Pooling = false }.ToString();
         using (var connection = new SqliteConnection(connectionString))
         {
             connection.Open();
