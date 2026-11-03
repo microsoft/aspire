@@ -209,7 +209,7 @@ public partial class NewCommandLocalTemplateTests
         Assert.Equal(0, git.Calls);
         Assert.Empty(git.FetchModes);
         Assert.Equal(originalGlobal, await File.ReadAllTextAsync(globalPath));
-        Assert.False(File.Exists(Path.Combine(workspace.Path, "out", AspireConfigFile.FileName)));
+        await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "out", AspireConfigFile.FileName)), "json");
         Assert.Equal("Personal: Hello", await File.ReadAllTextAsync(Path.Combine(workspace.Path, "out", "Demo.txt")));
     }
 

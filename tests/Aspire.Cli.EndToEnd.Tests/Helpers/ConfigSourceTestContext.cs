@@ -106,7 +106,7 @@ internal sealed class ConfigSourceTestContext
         // Exercise the interactive picker so declining must also suppress runtime inheritance.
         var consentOption = useOption ? accept ? " --use-config-source" : " --use-config-source false" : "";
         await _auto.TypeAsync(
-            $"aspire new --name SourceApp --output SourceApp --suppress-agent-init --localhost-tld false{consentOption}");
+            $"aspire new --name SourceApp --output SourceApp --suppress-agent-init{consentOption}");
         await _auto.EnterAsync();
         if (!useOption)
         {
@@ -127,6 +127,10 @@ internal sealed class ConfigSourceTestContext
         var languagePrompt = new CellPatternSearcher().Find("Which language would you like to use?");
         await _auto.WaitUntilAsync(snapshot => languagePrompt.Search(snapshot).Count > 0,
             timeout: TimeSpan.FromSeconds(30), description: "waiting for the empty AppHost language prompt");
+        await _auto.EnterAsync();
+        var urlsPrompt = new CellPatternSearcher().Find("Use *.dev.localhost URLs");
+        await _auto.WaitUntilAsync(snapshot => urlsPrompt.Search(snapshot).Count > 0,
+            timeout: TimeSpan.FromMinutes(2), description: "waiting for the local development URLs prompt");
         await _auto.EnterAsync();
         await _auto.WaitForSuccessPromptAsync(_counter, timeout: TimeSpan.FromMinutes(3));
         await ConfigureProjectAsync();

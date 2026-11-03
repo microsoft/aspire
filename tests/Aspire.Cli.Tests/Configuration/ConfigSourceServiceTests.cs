@@ -133,7 +133,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         }
         else
         {
-            Assert.Null(source);
+            Assert.True(Assert.IsType<ConfigSource>(source).OptOut);
             Assert.Empty(sources);
             Assert.Empty(repeatedSources);
             Assert.Empty(git.FetchModes);
@@ -1128,7 +1128,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task Materialize_PreservesProjectSettingsAndCopiesOnlyAllowedLeaves()
+    public async Task Materialize_PreservesProjectSettingsAndCopiesAllowedSections()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var project = workspace.CreateDirectory("created-project");
