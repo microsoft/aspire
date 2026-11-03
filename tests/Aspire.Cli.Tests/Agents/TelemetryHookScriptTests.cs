@@ -29,6 +29,7 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData("aspire")]
     [InlineData("aspire-project-v2-migration")]
+    [InlineData("aspire-terminals")]
     [RequiresTools(["bash"])]
     [SkipOnPlatform(TestPlatforms.Windows, "The shell hook targets POSIX shells; the PowerShell hook covers Windows.")]
     public async Task Bash_SkillInvocation_Copilot_ForwardsSkillName(string skillName)
@@ -105,6 +106,7 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
     [InlineData("aspire-deployment/references/azure.md")]
     [InlineData("aspire-project-v2-migration/references/compatibility-and-validation.md")]
     [InlineData("aspire-project-v2-migration/references/migration-patterns.md")]
+    [InlineData("aspire-terminals/references/tapes.md")]
     [RequiresTools(["bash"])]
     [SkipOnPlatform(TestPlatforms.Windows, "The shell hook targets POSIX shells; the PowerShell hook covers Windows.")]
     public async Task Bash_ReferenceFileRead_ForwardsRelativePath(string referencePath)
@@ -285,6 +287,7 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData("aspire")]
     [InlineData("aspire-project-v2-migration")]
+    [InlineData("aspire-terminals")]
     [RequiresTools(["pwsh"])]
     public async Task Pwsh_SkillInvocation_Copilot_ForwardsSkillName(string skillName)
     {
@@ -390,6 +393,7 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
     [InlineData("aspire-deployment/references/azure.md")]
     [InlineData("aspire-project-v2-migration/references/compatibility-and-validation.md")]
     [InlineData("aspire-project-v2-migration/references/migration-patterns.md")]
+    [InlineData("aspire-terminals/references/tapes.md")]
     [RequiresTools(["pwsh"])]
     public async Task Pwsh_ReferenceFileRead_ForwardsRelativePath(string referencePath)
     {

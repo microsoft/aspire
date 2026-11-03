@@ -3,6 +3,7 @@
 
 using System.Text.RegularExpressions;
 using Aspire.Cli.Agents.Hooks;
+using Aspire.Cli.Mcp;
 using Aspire.Cli.Tests.Utils;
 
 namespace Aspire.Cli.Tests.Agents;
@@ -149,6 +150,17 @@ public class AgentTelemetryHookTests
         Assert.Equal(expectedClient, recordedArgs[Array.IndexOf(recordedArgs, "--client-name") + 1]);
         Assert.Equal("""{"continue":true}""" + Environment.NewLine, output.ToString());
         Assert.Equal("Agent telemetry hook failed (IOException)." + Environment.NewLine, error.ToString());
+    }
+
+    [Fact]
+    public void CanonicalCatalogCoversKnownMcpToolsAndTerminalsSkill()
+    {
+        Assert.Equal(KnownMcpTools.All.Order(), AgentTelemetryCatalog.Canonical.Tools.Order());
+        Assert.Contains("aspire-terminals", AgentTelemetryCatalog.Canonical.Skills);
+        Assert.Contains("aspire-terminals/references/apphost-terminals.md", AgentTelemetryCatalog.Canonical.References);
+        Assert.Contains("aspire-terminals/references/automation-and-cli.md", AgentTelemetryCatalog.Canonical.References);
+        Assert.Contains("aspire-terminals/references/resource-terminals.md", AgentTelemetryCatalog.Canonical.References);
+        Assert.Contains("aspire-terminals/references/tapes.md", AgentTelemetryCatalog.Canonical.References);
     }
 
     [Fact]
