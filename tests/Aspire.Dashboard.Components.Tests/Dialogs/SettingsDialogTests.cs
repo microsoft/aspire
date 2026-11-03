@@ -72,7 +72,7 @@ public sealed class SettingsDialogTests : DashboardTestContext
         Assert.Equal(GetExpectedIconLabels(), cut.FindAll(".icon-toggle").Select(e => e.GetAttribute("aria-label")));
         Assert.Equal(["System", "Compact", "Cards", "System", "New dashboard"], cut.FindAll(".icon-toggle[aria-pressed='true']").Select(e => e.GetAttribute("aria-label")));
         Assert.Equal(GetExpectedIconLabels(), cut.FindAll(".icon-toggle-option-text").Select(e => e.TextContent));
-        Assert.Equal("Adjusts spacing and component sizing across the dashboard. Text size is unchanged.", cut.Find(".setting-description").TextContent);
+        Assert.Equal("Adjusts text, spacing, and component sizing across the dashboard.", cut.Find(".setting-description").TextContent);
         Assert.Equal("Compact", stored[BrowserStorageKeys.DashboardDensity]);
 
         await cut.InvokeAsync(() => cut.Find(".icon-toggle[aria-label='Dark']").Click());

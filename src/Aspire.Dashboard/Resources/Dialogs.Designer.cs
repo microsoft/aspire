@@ -1893,7 +1893,7 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Adjusts spacing and component sizing across the dashboard. Text size is unchanged..
+        ///   Looks up a localized string similar to Adjusts text, spacing, and component sizing across the dashboard..
         /// </summary>
         public static string SettingsDialogDashboardDensityDescription {
             get {

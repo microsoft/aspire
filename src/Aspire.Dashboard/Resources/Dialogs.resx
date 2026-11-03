@@ -711,7 +711,7 @@
     <value>Dashboard density</value>
   </data>
   <data name="SettingsDialogDashboardDensityDescription" xml:space="preserve">
-    <value>Adjusts spacing and component sizing across the dashboard. Text size is unchanged.</value>
+    <value>Adjusts text, spacing, and component sizing across the dashboard.</value>
   </data>
   <data name="SettingsDialogDashboardDensityComfortable" xml:space="preserve">
     <value>Comfortable</value>

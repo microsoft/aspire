@@ -135,6 +135,8 @@
     display: grid;
     background-color: var(--colorNeutralBackground2);
     color: var(--colorNeutralForeground1);
+    font-size: var(--aspire-density-font-size);
+    line-height: var(--aspire-density-line-height);
 }
 
 ::deep.layout.historical-run :is(.url-button, .url-container a, .url-overflow-popover a, .resource-details-layout a, .property-grid a, .log-content a) {

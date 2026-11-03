@@ -36,10 +36,10 @@
 .settings-group-title {
 	margin: 0;
 	color: var(--colorNeutralForeground2);
-	font-size: 11px;
+	font-size: var(--aspire-density-secondary-font-size);
 	font-weight: var(--fontWeightSemibold);
 	letter-spacing: .06em;
-	line-height: 16px;
+	line-height: var(--aspire-density-secondary-line-height);
 	text-transform: uppercase;
 }
 
@@ -54,8 +54,8 @@
 	flex-direction: column;
 	gap: 2px;
 	color: var(--colorNeutralForeground2);
-	font-size: 11px;
-	line-height: 16px;
+	font-size: var(--aspire-density-secondary-font-size);
+	line-height: var(--aspire-density-secondary-line-height);
 	text-align: start;
 }
 
@@ -73,7 +73,8 @@
 
 .input-container > ::deep fluent-field > label[slot="label"],
 .setting-title {
-	line-height: 20px;
+	font-size: var(--aspire-density-font-size);
+	line-height: var(--aspire-density-line-height);
 }
 
 .input-container > ::deep fluent-field > label[slot="label"] {
@@ -108,8 +109,8 @@
 
 .setting-subtext {
 	color: var(--foreground-settings-text);
-	font-size: 12px;
-	line-height: 20px;
+	font-size: var(--aspire-density-secondary-font-size);
+	line-height: var(--aspire-density-secondary-line-height);
 	margin: 0;
 }
 
@@ -121,8 +122,8 @@
 .setting-description {
 	display: block;
 	color: var(--foreground-settings-text);
-	font-size: 12px;
-	line-height: 16px;
+	font-size: var(--aspire-density-secondary-font-size);
+	line-height: var(--aspire-density-secondary-line-height);
 }
 
 ::deep .setting-title + div fluent-button,

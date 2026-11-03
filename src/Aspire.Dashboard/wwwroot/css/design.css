@@ -58,8 +58,15 @@
     --aspire-brand-hover-brightness: 1.1;
     --fontFamilyBase: var(--aspire-font-sans);
     --fontFamilyMonospace: var(--aspire-font-mono);
-    /* Density changes spacing and component sizing, but never typography. Compact controls retain a 28px
-       floor so keyboard and pointer targets don't become too small. */
+    /* Density uses Fluent's Base200/Base300/Base400 type sizes for primary application text. Secondary and
+       heading tokens keep the hierarchy coherent without blindly resizing fixed-geometry code and terminal views.
+       Compact controls retain a 28px floor so keyboard and pointer targets don't become too small. */
+    --aspire-density-font-size: 14px;
+    --aspire-density-line-height: 20px;
+    --aspire-density-secondary-font-size: 12px;
+    --aspire-density-secondary-line-height: 16px;
+    --aspire-density-heading-font-size: 16px;
+    --aspire-density-heading-line-height: 22px;
     --aspire-density-page-gutter: 12px;
     --aspire-density-section-gap: 12px;
     --aspire-density-card-gap: 14px;
@@ -71,6 +78,8 @@
     --aspire-density-dialog-padding: 24px;
     --aspire-density-flyout-padding: 14px;
     --aspire-density-menu-item-height: 28px;
+    --aspire-density-resource-row-height: 52px;
+    --aspire-density-resource-row-gap: 1px;
     --aspire-control-height: 28px;
     --aspire-control-radius: 6px;
     --aspire-popup-radius: 10px;
@@ -242,6 +251,12 @@
 }
 
 [data-density="compact"] {
+    --aspire-density-font-size: 12px;
+    --aspire-density-line-height: 16px;
+    --aspire-density-secondary-font-size: 12px;
+    --aspire-density-secondary-line-height: 16px;
+    --aspire-density-heading-font-size: 14px;
+    --aspire-density-heading-line-height: 20px;
     --aspire-density-page-gutter: 8px;
     --aspire-density-section-gap: 8px;
     --aspire-density-card-gap: 10px;
@@ -253,9 +268,16 @@
     --aspire-density-dialog-padding: 16px;
     --aspire-density-flyout-padding: 10px;
     --aspire-density-menu-item-height: 28px;
+    --aspire-density-resource-row-height: 44px;
 }
 
 [data-density="spacious"] {
+    --aspire-density-font-size: 16px;
+    --aspire-density-line-height: 22px;
+    --aspire-density-secondary-font-size: 14px;
+    --aspire-density-secondary-line-height: 20px;
+    --aspire-density-heading-font-size: 20px;
+    --aspire-density-heading-line-height: 28px;
     --aspire-density-page-gutter: 16px;
     --aspire-density-section-gap: 16px;
     --aspire-density-card-gap: 18px;
@@ -267,6 +289,7 @@
     --aspire-density-dialog-padding: 32px;
     --aspire-density-flyout-padding: 18px;
     --aspire-density-menu-item-height: 32px;
+    --aspire-density-resource-row-height: 60px;
     --aspire-control-height: 32px;
 }
 

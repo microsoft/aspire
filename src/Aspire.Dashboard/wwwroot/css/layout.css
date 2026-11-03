@@ -180,6 +180,8 @@ fluent-drawer-body > [slot="title"] {
 fluent-dialog::part(dialog),
 fluent-dialog-body {
     background-color: var(--dialog-background-color);
+    font-size: var(--aspire-density-font-size);
+    line-height: var(--aspire-density-line-height);
 }
 
 fluent-dialog::part(dialog) {
@@ -189,6 +191,8 @@ fluent-dialog::part(dialog) {
 }
 
 fluent-drawer::part(dialog) {
+    font-size: var(--aspire-density-font-size);
+    line-height: var(--aspire-density-line-height);
     transition-duration: 360ms !important;
     transition-timing-function: cubic-bezier(.2, .8, .2, 1) !important;
 }

@@ -666,6 +666,11 @@ body {
     margin: 0;
 }
 
+body {
+    font-size: var(--aspire-density-font-size);
+    line-height: var(--aspire-density-line-height);
+}
+
 :root {
     --inline-icon-margin: 5px;
 }
@@ -720,9 +725,9 @@ body {
     background-color: var(--aspire-popup-background);
     color: var(--aspire-dropdown-option-foreground);
     font-family: var(--fontFamilyBase);
-    font-size: var(--fontSizeBase300);
+    font-size: var(--aspire-density-font-size);
     font-weight: var(--fontWeightRegular);
-    line-height: var(--lineHeightBase300);
+    line-height: var(--aspire-density-line-height);
 }
 
 :is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-menu-item:state(submenu) {
@@ -959,15 +964,17 @@ fluent-text-input[type="search"] [slot="start"] svg {
     overflow-wrap: normal;
     cursor: default;
     word-break: normal;
+    font-size: var(--aspire-density-font-size);
+    line-height: var(--aspire-density-line-height);
 }
 
 .content-list-popover > strong {
     display: block;
     margin-bottom: 8px;
     font-family: var(--aspire-font-display);
-    font-size: 16px;
+    font-size: var(--aspire-density-heading-font-size);
     font-weight: var(--fontWeightSemibold);
-    line-height: normal;
+    line-height: var(--aspire-density-heading-line-height);
 }
 
 .content-list-popover-items {

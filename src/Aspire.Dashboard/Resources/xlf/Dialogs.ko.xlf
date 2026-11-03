@@ -989,8 +989,8 @@ aspire otel logs --dashboard-url {0}
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogDashboardDensityDescription">
-        <source>Adjusts spacing and component sizing across the dashboard. Text size is unchanged.</source>
-        <target state="new">Adjusts spacing and component sizing across the dashboard. Text size is unchanged.</target>
+        <source>Adjusts text, spacing, and component sizing across the dashboard.</source>
+        <target state="new">Adjusts text, spacing, and component sizing across the dashboard.</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogDashboardDensitySpacious">

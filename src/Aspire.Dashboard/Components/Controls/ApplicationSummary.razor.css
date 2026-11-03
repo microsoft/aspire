@@ -131,7 +131,8 @@
     gap: 8px;
     overflow: hidden;
     color: var(--colorNeutralForeground1);
-    font-size: 15px;
+    font-size: var(--aspire-density-heading-font-size);
+    line-height: var(--aspire-density-heading-line-height);
     font-weight: 600;
     text-decoration: none;
     white-space: nowrap;
@@ -163,7 +164,8 @@
     max-width: 45%;
     overflow: hidden;
     color: var(--colorNeutralForeground2);
-    font-size: 12px;
+    font-size: var(--aspire-density-secondary-font-size);
+    line-height: var(--aspire-density-secondary-line-height);
     text-overflow: ellipsis;
     white-space: nowrap;
 }
@@ -185,7 +187,8 @@
 
 .resource-card-label {
     color: var(--colorNeutralForeground2);
-    font-size: 11px;
+    font-size: var(--aspire-density-secondary-font-size);
+    line-height: var(--aspire-density-secondary-line-height);
     font-weight: 600;
     letter-spacing: 0.02em;
     text-transform: uppercase;
@@ -206,7 +209,8 @@
     display: block;
     overflow: hidden;
     color: var(--colorNeutralForeground1);
-    line-height: 20px;
+    font-size: var(--aspire-density-font-size);
+    line-height: var(--aspire-density-line-height);
     text-overflow: ellipsis;
     white-space: nowrap;
 }
@@ -214,7 +218,8 @@
 .resource-card-unset-value {
     flex: 0 0 auto;
     color: var(--colorNeutralForeground2);
-    font-size: 12px;
+    font-size: var(--aspire-density-secondary-font-size);
+    line-height: var(--aspire-density-secondary-line-height);
 }
 
 .resource-card-footer {
@@ -250,7 +255,8 @@
     gap: 6px;
     overflow: hidden;
     color: var(--colorNeutralForeground2);
-    font-size: 12px;
+    font-size: var(--aspire-density-secondary-font-size);
+    line-height: var(--aspire-density-secondary-line-height);
     white-space: nowrap;
 }
 
