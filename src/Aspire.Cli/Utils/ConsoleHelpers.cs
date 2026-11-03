@@ -1,7 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.NuGet;
 using Aspire.Cli.Resources;
 using Spectre.Console;
 using Spectre.Console.Rendering;
@@ -16,6 +18,13 @@ internal static class ConsoleHelpers
     public static void DisplaySourceTrustWarning(this IInteractionService interactionService)
     {
         interactionService.DisplayMessage(KnownEmojis.PoliceCarLight, $"[yellow]{SharedCommandStrings.SourceTrustWarning.EscapeMarkup()}[/]", allowMarkup: true, consoleOverride: ConsoleOutput.Error);
+    }
+
+    public static void DisplayNuGetSearchLimitWarning(this IInteractionService interactionService)
+    {
+        var message = string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.NuGetSearchLimitWarning,
+            NuGetSearchLimits.MaxResults);
+        interactionService.DisplayMessage(KnownEmojis.PoliceCarLight, $"[yellow]{message.EscapeMarkup()}[/]", allowMarkup: true, consoleOverride: ConsoleOutput.Error);
     }
 
     /// <summary>

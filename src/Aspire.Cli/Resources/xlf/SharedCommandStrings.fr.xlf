@@ -122,6 +122,11 @@
         <target state="translated">La commande {0} requiert --yes lorsque l’option --non-interactive est spécifiée.</target>
         <note>{0} is the command name.</note>
       </trans-unit>
+      <trans-unit id="NuGetSearchLimitWarning">
+        <source>NuGet search results may be incomplete because the limit of {0} packages per feed was reached. Use narrower integration source patterns.</source>
+        <target state="new">NuGet search results may be incomplete because the limit of {0} packages per feed was reached. Use narrower integration source patterns.</target>
+        <note>{0} is the search query, {1} is the maximum number of packages searched per feed.</note>
+      </trans-unit>
       <trans-unit id="PipelineEnvironmentOptionDescription">
         <source>The environment to use for the operation. The default is 'Production'.</source>
         <target state="translated">L’environnement à utiliser pour l’opération. La valeur par défaut est « Production ».</target>

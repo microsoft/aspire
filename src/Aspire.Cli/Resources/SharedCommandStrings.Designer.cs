@@ -277,6 +277,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to NuGet search results may be incomplete because the limit of {0} packages per feed was reached. Use narrower integration source patterns..
+        /// </summary>
+        internal static string NuGetSearchLimitWarning {
+            get {
+                return ResourceManager.GetString("NuGetSearchLimitWarning", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to The environment to use for the operation. The default is &apos;Production&apos;..
         /// </summary>
         internal static string PipelineEnvironmentOptionDescription {

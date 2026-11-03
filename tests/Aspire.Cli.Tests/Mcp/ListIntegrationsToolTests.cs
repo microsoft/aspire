@@ -62,6 +62,7 @@ public class ListIntegrationsToolTests(ITestOutputHelper outputHelper)
         var queries = new ConcurrentBag<(string Source, string Query)>();
         var cache = new FakeNuGetPackageCache
         {
+            SearchLimitReached = true,
             GetPackagesAsyncCallback = (_, query, filter, includePrerelease, config, _, _) =>
             {
                 var source = Assert.Single(XDocument.Load(config!.FullName).Root!.Element("packageSources")!.Elements("add")).Attribute("value")!.Value;
@@ -85,7 +86,11 @@ public class ListIntegrationsToolTests(ITestOutputHelper outputHelper)
                 return Task.FromResult(packages.Where(package => filter!(package.Id)));
             }
         };
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        var interactionService = new TestInteractionService();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+        });
         services.AddSingleton<IPackagingService>(packagingService);
         services.AddSingleton<INuGetPackageCache>(cache);
         using var provider = services.BuildServiceProvider();
@@ -94,11 +99,36 @@ public class ListIntegrationsToolTests(ITestOutputHelper outputHelper)
         var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), TestContext.Current.CancellationToken).DefaultTimeout();
 
         Assert.True(result.IsError is null or false);
+        Assert.Empty(interactionService.DisplayedMessages);
         Assert.Equal(
             [("https://example.com/other", "Fabrikam.Hosting."), ("https://example.com/team", "Contoso.Hosting.")],
             queries.OrderBy(static query => query.Source, StringComparer.Ordinal));
         var textContent = Assert.IsType<TextContentBlock>(Assert.Single(result.Content));
         await VerifyJson(textContent.Text).UseParameters(useAppHostDirectory);
+    }
+
+    [Fact]
+    public async Task ListIntegrationsTool_CallToolAsync_ReturnsWarningWhenLimitedSearchHasNoMatches()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.Path, AspireConfigFile.FileName), """
+            {"integrationSources":{"default":{"enabled":false},"team":{"source":"https://example.com/team","patterns":["Contoso.Hosting.*"]}}}
+            """);
+        var interactionService = new TestInteractionService();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+        });
+        services.AddSingleton<INuGetPackageCache>(new FakeNuGetPackageCache { SearchLimitReached = true });
+        using var provider = services.BuildServiceProvider();
+        var tool = ActivatorUtilities.CreateInstance<ListIntegrationsTool>(provider);
+
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.True(result.IsError is null or false);
+        Assert.Empty(interactionService.DisplayedMessages);
+        var textContent = Assert.IsType<TextContentBlock>(Assert.Single(result.Content));
+        await Verify(textContent.Text, "json");
     }
 
     [Fact]

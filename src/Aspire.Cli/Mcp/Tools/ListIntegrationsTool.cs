@@ -1,11 +1,13 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
+using Aspire.Cli.Resources;
 using ModelContextProtocol.Protocol;
 using Semver;
 
@@ -45,6 +47,10 @@ internal sealed class ListIntegrationsResponse
     /// </summary>
     [JsonPropertyName("integrations")]
     public required List<Integration> Integrations { get; set; }
+
+    [JsonPropertyName("warning")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Warning { get; set; }
 }
 
 /// <summary>
@@ -81,7 +87,7 @@ internal sealed class ListIntegrationsTool(IntegrationPackageSearchService integ
 
             // Group by package ID and select the latest version using semantic version comparison
             // Parse version once and include it in the result to avoid redundant parsing
-            var packagesWithParsedVersions = packagesWithChannels
+            var packagesWithParsedVersions = packagesWithChannels.Packages
                 .Select(static package => package.Package)
                 .Select(p => new
                 {
@@ -111,7 +117,10 @@ internal sealed class ListIntegrationsTool(IntegrationPackageSearchService integ
 
             var response = new ListIntegrationsResponse
             {
-                Integrations = integrations
+                Integrations = integrations,
+                Warning = packagesWithChannels.LimitReached
+                    ? string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.NuGetSearchLimitWarning, NuGetSearchLimits.MaxResults)
+                    : null
             };
 
             var jsonContent = JsonSerializer.Serialize(response, JsonSourceGenerationContext.Default.ListIntegrationsResponse);

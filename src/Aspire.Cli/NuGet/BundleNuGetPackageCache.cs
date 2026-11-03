@@ -53,10 +53,10 @@ internal sealed class BundleNuGetPackageCache(
             SearchTake,
             cancellationToken).ConfigureAwait(false);
 
-        return packages.Where(package => package.Id.Equals("Aspire.ProjectTemplates", StringComparison.OrdinalIgnoreCase));
+        return packages.Packages.Where(package => package.Id.Equals("Aspire.ProjectTemplates", StringComparison.OrdinalIgnoreCase));
     }
 
-    public Task<IEnumerable<NuGetPackage>> GetIntegrationPackagesAsync(
+    public Task<PackageSearchResult<NuGetPackage>> GetIntegrationPackagesAsync(
         NuGetPackageOperationConfiguration configuration,
         bool prerelease,
         CancellationToken cancellationToken)
@@ -74,10 +74,10 @@ internal sealed class BundleNuGetPackageCache(
             SearchTake,
             cancellationToken).ConfigureAwait(false);
 
-        return packages.Where(package => package.Id.Equals("Aspire.Cli", StringComparison.OrdinalIgnoreCase));
+        return packages.Packages.Where(package => package.Id.Equals("Aspire.Cli", StringComparison.OrdinalIgnoreCase));
     }
 
-    public async Task<IEnumerable<NuGetPackage>> GetPackagesAsync(
+    public async Task<PackageSearchResult<NuGetPackage>> GetPackagesAsync(
         NuGetPackageOperationConfiguration configuration,
         string packageId,
         Func<string, bool>? filter,
@@ -98,12 +98,12 @@ internal sealed class BundleNuGetPackageCache(
             filter is null ? SearchTake : int.MaxValue,
             cancellationToken).ConfigureAwait(false);
 
-        var matches = FilterPackages(packages, filter).ToArray();
+        var matches = FilterPackages(packages.Packages, filter).ToArray();
         logger.LogDebug(
             "NuGet search for query '{Query}' returned {ReturnedCount} packages; {MatchedCount} matched in {ElapsedMilliseconds} ms.",
-            displayQuery, packages.Count, matches.Length, Stopwatch.GetElapsedTime(startTimestamp).TotalMilliseconds);
+            displayQuery, packages.Packages.Count, matches.Length, Stopwatch.GetElapsedTime(startTimestamp).TotalMilliseconds);
 
-        return matches;
+        return new(matches, packages.LimitReached);
     }
 
     public async Task<IEnumerable<NuGetPackage>> GetPackageVersionsAsync(
@@ -122,7 +122,7 @@ internal sealed class BundleNuGetPackageCache(
 
         // The helper had no exact-match mode. The CLI ran an ordinary search for the package ID and expanded the
         // versions of the one result whose ID matched it exactly, including its casing.
-        var exactMatch = results.FirstOrDefault(package => package.Id.Equals(exactPackageId, StringComparison.Ordinal));
+        var exactMatch = results.Packages.FirstOrDefault(package => package.Id.Equals(exactPackageId, StringComparison.Ordinal));
         if (exactMatch is null)
         {
             return [];
@@ -136,7 +136,7 @@ internal sealed class BundleNuGetPackageCache(
         }).ToList();
     }
 
-    private async Task<List<NuGetPackage>> SearchAsync(
+    private async Task<PackageSearchResult<NuGetPackage>> SearchAsync(
         NuGetPackageOperationConfiguration configuration,
         string query,
         bool prerelease,
@@ -150,15 +150,17 @@ internal sealed class BundleNuGetPackageCache(
             take,
             cancellationToken).ConfigureAwait(false);
 
-        return results.Select(package => new NuGetPackage
+        var packages = results.Packages.Select(package => new NuGetPackage
         {
             Id = package.Id,
             Version = package.Version,
             Source = package.Source
         }).ToList();
+
+        return new(packages, results.LimitReached);
     }
 
-    private async Task<IReadOnlyList<NuGetSearchResult>> SearchClientAsync(
+    private async Task<PackageSearchResult<NuGetSearchResult>> SearchClientAsync(
         NuGetPackageOperationConfiguration configuration,
         string query,
         bool prerelease,

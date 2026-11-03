@@ -201,6 +201,62 @@ public class IntegrationSourceTests(ITestOutputHelper output)
     }
 
     [Theory]
+    [InlineData(false, false, false, false)]
+    [InlineData(false, false, false, true)]
+    [InlineData(false, true, false, true)]
+    [InlineData(true, false, false, false)]
+    [InlineData(true, false, false, true)]
+    [InlineData(true, true, false, true)]
+    [InlineData(true, false, true, true)]
+    [InlineData(true, true, true, true)]
+    public async Task Discovery_PreservesSearchLimitFlag(bool polyglot, bool sourceOverride, bool tagSearchOnly, bool limitReached)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(output);
+        File.WriteAllText(Path.Combine(workspace.Path, AspireConfigFile.FileName), """
+            {"integrationSources":{"default":{"enabled":false},"team":{"source":"https://example.com/team","patterns":["Aspire.Hosting.*","Aspire.Other.*"]}}}
+            """);
+        var cache = new FakeNuGetPackageCache
+        {
+            SearchLimitReached = limitReached && !tagSearchOnly,
+            PolyglotSearchLimitReached = limitReached && tagSearchOnly,
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) =>
+                Task.FromResult<IEnumerable<NuGetPackage>>([Package("Aspire.Hosting.Redis", "https://example.com/team")]),
+            GetPackagesAsyncCallback = (_, _, _, _, _, _, _) =>
+                Task.FromResult<IEnumerable<NuGetPackage>>([Package("Aspire.Hosting.Redis", "https://example.com/team")])
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, output, options =>
+        {
+            options.PackagingServiceFactory = _ => new TestPackagingService
+            {
+                GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>(
+                    [PackageChannel.CreateImplicitChannel(cache, new TestFeatures(), NullLogger.Instance)])
+            };
+        });
+        services.AddSingleton<INuGetPackageCache>(cache);
+        using var provider = services.BuildServiceProvider();
+        var search = provider.GetRequiredService<IntegrationPackageSearchService>();
+        var source = sourceOverride ? "https://example.com/override" : null;
+
+        if (polyglot)
+        {
+            var result = await search.GetIntegrationPackagesWithPolyglotCompatibilityAsync(
+                workspace.WorkspaceRoot, null, source, TestContext.Current.CancellationToken);
+
+            Assert.Equal(limitReached, result.LimitReached);
+            Assert.Equal("Aspire.Hosting.Redis", Assert.Single(result.Packages).Package.Id);
+            Assert.Equal(["Aspire.Hosting.Redis"], result.PolyglotCompatibleIds);
+        }
+        else
+        {
+            var result = await search.GetIntegrationPackagesWithChannelsAsync(
+                workspace.WorkspaceRoot, null, source, TestContext.Current.CancellationToken);
+
+            Assert.Equal(limitReached, result.LimitReached);
+            Assert.Equal("Aspire.Hosting.Redis", Assert.Single(result.Packages).Package.Id);
+        }
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task Discovery_QueriesEachConfiguredFeedAndAppliesPatterns(bool polyglot)
@@ -242,7 +298,7 @@ public class IntegrationSourceTests(ITestOutputHelper output)
         }
         else
         {
-            packages = (await search.GetIntegrationPackagesWithChannelsAsync(workspace.WorkspaceRoot, null, TestContext.Current.CancellationToken)).ToArray();
+            packages = (await search.GetIntegrationPackagesWithChannelsAsync(workspace.WorkspaceRoot, null, TestContext.Current.CancellationToken)).Packages;
         }
 
         Assert.Equal(["Acme.Hosting.Redis", "Exact.Integration", "Other.Hosting.Redis"], packages.Select(p => p.Package.Id).Order());
@@ -332,7 +388,7 @@ public class IntegrationSourceTests(ITestOutputHelper output)
             contosoPackages.Append(Package("Fabrikam.Redis", source)).Append(otherVersion)
                 .OrderBy(package => package.Id, StringComparer.Ordinal).ThenBy(package => package.Version)
                 .Select(package => (package.Id, package.Version, package.Source)),
-            packages.Select(package => package.Package)
+            packages.Packages.Select(package => package.Package)
                 .OrderBy(package => package.Id, StringComparer.Ordinal).ThenBy(package => package.Version)
                 .Select(package => (package.Id, package.Version, package.Source)));
     }
@@ -363,7 +419,7 @@ public class IntegrationSourceTests(ITestOutputHelper output)
         var packages = await provider.GetRequiredService<IntegrationPackageSearchService>()
             .GetIntegrationPackagesWithChannelsAsync(workspace.WorkspaceRoot, null, TestContext.Current.CancellationToken);
 
-        Assert.Equal(["Acme.Hosting.Redis", "Aspire.Hosting.Redis"], packages.Select(p => p.Package.Id).Order());
+        Assert.Equal(["Acme.Hosting.Redis", "Aspire.Hosting.Redis"], packages.Packages.Select(p => p.Package.Id).Order());
     }
 
     [Fact]
@@ -393,7 +449,7 @@ public class IntegrationSourceTests(ITestOutputHelper output)
         var packages = await provider.GetRequiredService<IntegrationPackageSearchService>()
             .GetIntegrationPackagesWithChannelsAsync(workspace.WorkspaceRoot, null, "https://example.com/override", TestContext.Current.CancellationToken);
 
-        Assert.Equal("Aspire.Hosting.Redis", Assert.Single(packages).Package.Id);
+        Assert.Equal("Aspire.Hosting.Redis", Assert.Single(packages.Packages).Package.Id);
     }
 
     [Fact]

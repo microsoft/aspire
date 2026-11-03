@@ -195,35 +195,43 @@ internal sealed class AddCommand : BaseCommand
 
             List<(NuGetPackage Package, PackageChannel Channel)> packagesWithChannels;
             IReadOnlySet<string> polyglotCompatibleIds = ImmutableHashSet<string>.Empty;
+            bool searchLimitReached;
             using (var searchPackagesActivity = _profilingTelemetry.StartAddSearchPackages(configuredChannel))
             {
                 if (applyPolyglotFilter)
                 {
-                    var (discoveredPackages, discoveredPolyglotIds) = await InteractionService.ShowStatusAsync(
+                    var result = await InteractionService.ShowStatusAsync(
                         AddCommandStrings.SearchingForAspirePackages,
                         async () => await _integrationPackageSearchService.GetIntegrationPackagesWithPolyglotCompatibilityAsync(
                             effectiveAppHostProjectFile.Directory!,
                             configuredChannel,
                             source,
                             cancellationToken));
-                    packagesWithChannels = discoveredPackages as List<(NuGetPackage Package, PackageChannel Channel)> ?? discoveredPackages.ToList();
-                    polyglotCompatibleIds = discoveredPolyglotIds;
+                    packagesWithChannels = result.Packages.ToList();
+                    polyglotCompatibleIds = result.PolyglotCompatibleIds;
+                    searchLimitReached = result.LimitReached;
                 }
                 else
                 {
-                    var discoveredPackages = await InteractionService.ShowStatusAsync(
+                    var result = await InteractionService.ShowStatusAsync(
                         AddCommandStrings.SearchingForAspirePackages,
                         async () => await _integrationPackageSearchService.GetIntegrationPackagesWithChannelsAsync(
                             effectiveAppHostProjectFile.Directory!,
                             configuredChannel,
                             source,
                             cancellationToken));
-                    packagesWithChannels = discoveredPackages as List<(NuGetPackage Package, PackageChannel Channel)> ?? discoveredPackages.ToList();
+                    packagesWithChannels = result.Packages.ToList();
+                    searchLimitReached = result.LimitReached;
                 }
 
                 var packageCount = packagesWithChannels.Count;
                 searchPackagesActivity.SetAddPackageSearchResultCount(packageCount);
                 addActivity.SetAddPackageSearchResultCount(packageCount);
+            }
+
+            if (searchLimitReached)
+            {
+                InteractionService.DisplayNuGetSearchLimitWarning();
             }
 
             if (packagesWithChannels.Count == 0)

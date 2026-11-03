@@ -244,7 +244,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         return filteredPackages;
     }
 
-    public Task<IEnumerable<NuGetPackage>> GetIntegrationPackagesAsync(DirectoryInfo workingDirectory, CancellationToken cancellationToken)
+    public Task<PackageSearchResult<NuGetPackage>> GetIntegrationPackagesAsync(DirectoryInfo workingDirectory, CancellationToken cancellationToken)
     {
         return GetIntegrationPackagesAsync(
             workingDirectory,
@@ -254,7 +254,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
             cancellationToken);
     }
 
-    public Task<IEnumerable<NuGetPackage>> GetIntegrationPackagesAsync(
+    public Task<PackageSearchResult<NuGetPackage>> GetIntegrationPackagesAsync(
         DirectoryInfo workingDirectory,
         PackageMapping[] mappings,
         CancellationToken cancellationToken)
@@ -269,7 +269,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
             cancellationToken);
     }
 
-    private async Task<IEnumerable<NuGetPackage>> GetIntegrationPackagesAsync(
+    private async Task<PackageSearchResult<NuGetPackage>> GetIntegrationPackagesAsync(
         DirectoryInfo workingDirectory,
         PackageMapping[]? mappings,
         bool applyPinnedVersion,
@@ -295,10 +295,10 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
                 "Local integration discovery for channel '{ChannelName}' from '{Source}' found {PackageCount} packages in {ElapsedMilliseconds} ms.",
                 channelName, sourceDetails, localPackages.Length, Stopwatch.GetElapsedTime(startTimestamp).TotalMilliseconds);
 
-            return localPackages;
+            return new(localPackages, LimitReached: false);
         }
 
-        var tasks = new List<Task<IEnumerable<NuGetPackage>>>();
+        var tasks = new List<Task<PackageSearchResult<NuGetPackage>>>();
 
         using var searchConfiguration = await CreatePackageOperationConfigurationAsync(
             workingDirectory,
@@ -336,7 +336,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         var packageResults = await Task.WhenAll(tasks);
 
         var packages = packageResults
-            .SelectMany(p => p)
+            .SelectMany(result => result.Packages)
             .DistinctBy(p => $"{p.Id}-{p.Version}", StringComparer.OrdinalIgnoreCase);
 
         // When doing a `dotnet package search` the results may include stable packages even when searching for
@@ -357,13 +357,13 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         // so the correct version gets installed regardless of what the feed reports as latest.
         if (applyPinnedVersion && PinnedVersion is not null)
         {
-            return filteredPackages.Select(p => new NuGetPackage { Id = p.Id, Version = PinnedVersion, Source = p.Source });
+            filteredPackages = filteredPackages.Select(p => new NuGetPackage { Id = p.Id, Version = PinnedVersion, Source = p.Source }).ToArray();
         }
 
-        return filteredPackages;
+        return new(filteredPackages, packageResults.Any(result => result.LimitReached));
     }
 
-    private async Task<IEnumerable<NuGetPackage>> SearchIntegrationPackagesAsync(
+    private async Task<PackageSearchResult<NuGetPackage>> SearchIntegrationPackagesAsync(
         NuGetPackageOperationConfiguration configuration,
         IntegrationSourceConfiguration source,
         string query,
@@ -375,16 +375,16 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
             "Searching integration source '{SourceName}' ({Source}) for query '{Query}'.",
             source.Name, sourceDetails, query);
 
-        var packages = (await nuGetPackageCache.GetPackagesAsync(configuration, query,
+        var result = await nuGetPackageCache.GetPackagesAsync(configuration, query,
             id => source.AllowsPackage(id) &&
                 (_features.IsFeatureEnabled(KnownFeatures.ShowDeprecatedPackages, defaultValue: false) || !DeprecatedPackages.IsDeprecated(id)),
-            prerelease: true, useCache: true, cancellationToken)).ToArray();
+            prerelease: true, useCache: true, cancellationToken);
 
         logger.LogDebug(
             "Integration query '{Query}' from source '{SourceName}' ({Source}) matched {PackageCount} packages in {ElapsedMilliseconds} ms.",
-            query, source.Name, sourceDetails, packages.Length, Stopwatch.GetElapsedTime(startTimestamp).TotalMilliseconds);
+            query, source.Name, sourceDetails, result.Packages.Count, Stopwatch.GetElapsedTime(startTimestamp).TotalMilliseconds);
 
-        return packages;
+        return result;
     }
 
     private (string Source, DirectoryInfo PackageSource)? GetLocalIntegrationPackageSource(PackageMapping[]? mappings)
@@ -509,7 +509,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
     /// <item>Remote feeds: a secondary <c>tags:polyglot</c> search is issued.</item>
     /// </list>
     /// </remarks>
-    public Task<IReadOnlySet<string>> GetPolyglotCompatiblePackageIdsAsync(
+    public Task<PackageSearchResult<string>> GetPolyglotCompatiblePackageIdsAsync(
         DirectoryInfo workingDirectory,
         CancellationToken cancellationToken)
     {
@@ -521,7 +521,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
             cancellationToken);
     }
 
-    public Task<IReadOnlySet<string>> GetPolyglotCompatiblePackageIdsAsync(
+    public Task<PackageSearchResult<string>> GetPolyglotCompatiblePackageIdsAsync(
         DirectoryInfo workingDirectory,
         PackageMapping[] mappings,
         CancellationToken cancellationToken)
@@ -536,7 +536,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
             cancellationToken);
     }
 
-    private async Task<IReadOnlySet<string>> GetPolyglotCompatiblePackageIdsAsync(
+    private async Task<PackageSearchResult<string>> GetPolyglotCompatiblePackageIdsAsync(
         DirectoryInfo workingDirectory,
         PackageMapping[]? mappings,
         bool applyPinnedVersion,
@@ -545,10 +545,12 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
     {
         if (GetLocalIntegrationPackageSource(mappings) is { } localPackageSource)
         {
-            return GetPolyglotCompatiblePackageIdsFromLocalPackageSource(
+            var ids = GetPolyglotCompatiblePackageIdsFromLocalPackageSource(
                 localPackageSource.PackageSource,
                 applyPinnedVersion ? GetLocalPackageVersion(workingDirectory) : null,
                 cancellationToken);
+
+            return new(ids.ToArray(), LimitReached: false);
         }
 
         using var searchConfiguration = await CreatePackageOperationConfigurationAsync(
@@ -557,7 +559,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
             hasExplicitSourceOverride,
             cancellationToken);
 
-        var tasks = new List<Task<IEnumerable<NuGetPackage>>>();
+        var tasks = new List<Task<PackageSearchResult<NuGetPackage>>>();
 
         if (Quality is PackageChannelQuality.Stable or PackageChannelQuality.Both)
         {
@@ -571,10 +573,13 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
 
         var results = await Task.WhenAll(tasks);
 
-        return results
-            .SelectMany(r => r)
+        var packageIds = results
+            .SelectMany(result => result.Packages)
             .Select(p => p.Id)
-            .ToHashSet(StringComparers.NuGetPackageId);
+            .Distinct(StringComparers.NuGetPackageId)
+            .ToArray();
+
+        return new(packageIds, results.Any(result => result.LimitReached));
     }
 
     private IReadOnlySet<string> GetPolyglotCompatiblePackageIdsFromLocalPackageSource(
@@ -683,7 +688,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
             return [new NuGetPackage { Id = packageId, Version = PinnedVersion, Source = SourceDetails }];
         }
 
-        var tasks = new List<Task<IEnumerable<NuGetPackage>>>();
+        var tasks = new List<Task<PackageSearchResult<NuGetPackage>>>();
 
         if (Quality is PackageChannelQuality.Stable || Quality is PackageChannelQuality.Both)
         {
@@ -710,7 +715,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         var packageResults = await Task.WhenAll(tasks);
 
         var packages = packageResults
-            .SelectMany(p => p)
+            .SelectMany(result => result.Packages)
             .DistinctBy(p => $"{p.Id}-{p.Version}");
 
         // In the event that we have no stable packages we fallback to
@@ -718,13 +723,13 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         // in preview (Aspire.Hosting.Docker circa 9.4).
         if (Quality is PackageChannelQuality.Stable && !packages.Any())
         {
-            packages = await nuGetPackageCache.GetPackagesAsync(
+            packages = (await nuGetPackageCache.GetPackagesAsync(
                 configuration: searchConfiguration,
                 packageId: packageId,
                 filter: id => id.Equals(packageId, StringComparisons.NuGetPackageId),
                 prerelease: true,
                 useCache: true, // Enable caching for package channel resolution
-                cancellationToken: cancellationToken);
+                cancellationToken: cancellationToken)).Packages;
 
             return packages;
         }

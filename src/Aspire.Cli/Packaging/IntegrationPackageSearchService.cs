@@ -29,7 +29,7 @@ internal sealed class IntegrationPackageSearchService(
 {
     private const double FuzzyMatchThreshold = 0.3;
 
-    public async Task<IEnumerable<(NuGetPackage Package, PackageChannel Channel)>> GetIntegrationPackagesWithChannelsAsync(DirectoryInfo workingDirectory, string? configuredChannel, CancellationToken cancellationToken)
+    public async Task<PackageSearchResult<(NuGetPackage Package, PackageChannel Channel)>> GetIntegrationPackagesWithChannelsAsync(DirectoryInfo workingDirectory, string? configuredChannel, CancellationToken cancellationToken)
     {
         return await GetIntegrationPackagesWithChannelsAsync(
             workingDirectory,
@@ -38,7 +38,7 @@ internal sealed class IntegrationPackageSearchService(
             cancellationToken);
     }
 
-    public async Task<IEnumerable<(NuGetPackage Package, PackageChannel Channel)>> GetIntegrationPackagesWithChannelsAsync(
+    public async Task<PackageSearchResult<(NuGetPackage Package, PackageChannel Channel)>> GetIntegrationPackagesWithChannelsAsync(
         DirectoryInfo workingDirectory,
         string? configuredChannel,
         string? sourceOverride,
@@ -51,6 +51,7 @@ internal sealed class IntegrationPackageSearchService(
 
         var packages = new List<(NuGetPackage Package, PackageChannel Channel)>();
         var packagesLock = new object();
+        var limitReached = false;
 
         await Parallel.ForEachAsync(channels, cancellationToken, async (channel, ct) =>
         {
@@ -64,11 +65,12 @@ internal sealed class IntegrationPackageSearchService(
                     ct);
             lock (packagesLock)
             {
-                packages.AddRange(integrationPackages.Select(p => (p, channel)));
+                packages.AddRange(integrationPackages.Packages.Select(p => (p, channel)));
+                limitReached |= integrationPackages.LimitReached;
             }
         });
 
-        return packages;
+        return new(packages, limitReached);
     }
 
     /// <summary>
@@ -81,7 +83,7 @@ internal sealed class IntegrationPackageSearchService(
     /// Resolving both lists together avoids re-resolving the channel set and lets each channel's integration
     /// search and its <c>tags:polyglot</c> lookup run concurrently, rather than as two serial discovery passes.
     /// </remarks>
-    public async Task<(IReadOnlyList<(NuGetPackage Package, PackageChannel Channel)> Packages, IReadOnlySet<string> PolyglotCompatibleIds)> GetIntegrationPackagesWithPolyglotCompatibilityAsync(DirectoryInfo workingDirectory, string? configuredChannel, CancellationToken cancellationToken)
+    public async Task<PolyglotPackageSearchResult> GetIntegrationPackagesWithPolyglotCompatibilityAsync(DirectoryInfo workingDirectory, string? configuredChannel, CancellationToken cancellationToken)
     {
         return await GetIntegrationPackagesWithPolyglotCompatibilityAsync(
             workingDirectory,
@@ -90,7 +92,7 @@ internal sealed class IntegrationPackageSearchService(
             cancellationToken);
     }
 
-    public async Task<(IReadOnlyList<(NuGetPackage Package, PackageChannel Channel)> Packages, IReadOnlySet<string> PolyglotCompatibleIds)> GetIntegrationPackagesWithPolyglotCompatibilityAsync(
+    public async Task<PolyglotPackageSearchResult> GetIntegrationPackagesWithPolyglotCompatibilityAsync(
         DirectoryInfo workingDirectory,
         string? configuredChannel,
         string? sourceOverride,
@@ -104,6 +106,7 @@ internal sealed class IntegrationPackageSearchService(
         var packages = new List<(NuGetPackage Package, PackageChannel Channel)>();
         var polyglotIds = new HashSet<string>(StringComparers.NuGetPackageId);
         var gate = new object();
+        var limitReached = false;
 
         await Parallel.ForEachAsync(channels, cancellationToken, async (channel, ct) =>
         {
@@ -119,12 +122,13 @@ internal sealed class IntegrationPackageSearchService(
 
             lock (gate)
             {
-                packages.AddRange(integrationPackagesTask.Result.Select(p => (p, channel)));
-                polyglotIds.UnionWith(polyglotIdsTask.Result);
+                packages.AddRange(integrationPackagesTask.Result.Packages.Select(p => (p, channel)));
+                polyglotIds.UnionWith(polyglotIdsTask.Result.Packages);
+                limitReached |= integrationPackagesTask.Result.LimitReached || polyglotIdsTask.Result.LimitReached;
             }
         });
 
-        return (packages, polyglotIds);
+        return new(packages, polyglotIds, limitReached);
     }
 
     private async Task<IEnumerable<PackageChannel>> GetSearchChannelsAsync(

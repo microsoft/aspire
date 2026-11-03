@@ -24,6 +24,45 @@ namespace Aspire.Cli.Tests.Commands;
 public class AddCommandTests(ITestOutputHelper outputHelper)
 {
     [Theory]
+    [InlineData("integration list")]
+    [InlineData("integration search redis")]
+    [InlineData("integration list --format Json")]
+    [InlineData("integration search redis --format Json")]
+    public async Task IntegrationDiscoveryDisplaysLimitWarningAfterSearchCompletes(string commandLine)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.Path, AspireConfigFile.FileName), """
+            {"integrationSources":{"default":{"enabled":false},"team":{"source":"https://example.test/team","patterns":["Acme.Hosting.*"]}}}
+            """);
+        var interactionService = new TestInteractionService();
+        interactionService.DisplayRawTextCallback = _ => Assert.Single(interactionService.DisplayedMessages);
+        var cache = new FakeNuGetPackageCache
+        {
+            SearchLimitReached = true,
+            GetPackagesAsyncCallback = (_, _, _, _, _, _, _) =>
+            {
+                Assert.Empty(interactionService.DisplayedMessages);
+                return Task.FromResult<IEnumerable<NuGetPackage>>(
+                    [new() { Id = "Acme.Hosting.Redis", Version = "1.0.0", Source = "https://example.test/team" }]);
+            }
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+        });
+        services.AddSingleton<Aspire.Cli.NuGet.INuGetPackageCache>(cache);
+        using var provider = services.BuildServiceProvider();
+
+        var exitCode = await provider.GetRequiredService<RootCommand>()
+            .Parse(commandLine).InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var warning = Assert.Single(interactionService.DisplayedMessages);
+        Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
+        Assert.Equal("[yellow]NuGet search results may be incomplete because the limit of 4000 packages per feed was reached. Use narrower integration source patterns.[/]", warning.Message);
+    }
+
+    [Theory]
     [InlineData("Contoso.*", false)]
     [InlineData("*", false)]
     [InlineData("Existing.*", false)]
@@ -255,7 +294,19 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     [InlineData(true)]
     public async Task AddCommandUsesConfiguredIntegrationSourceForDiscoveryVersionsAndRestore(bool specifyVersion)
     {
+        const string warningText = "[yellow]NuGet search results may be incomplete because the limit of 4000 packages per feed was reached. Use narrower integration source patterns.[/]";
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var limitWarningCount = 0;
+        var interactionService = new TestInteractionService
+        {
+            DisplayMessageCallback = (_, message, _) =>
+            {
+                if (message == warningText)
+                {
+                    Interlocked.Increment(ref limitWarningCount);
+                }
+            }
+        };
         var appDirectory = workspace.CreateDirectory("selected");
         var appHostFile = new FileInfo(Path.Combine(appDirectory.FullName, "apphost.ts"));
         File.WriteAllText(appHostFile.FullName, string.Empty);
@@ -273,8 +324,10 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             """);
         var cache = new FakeNuGetPackageCache
         {
+            SearchLimitReached = true,
             GetPackagesAsyncCallback = (_, query, filter, _, config, _, _) =>
             {
+                Assert.Equal(0, Volatile.Read(ref limitWarningCount));
                 Assert.Equal("Acme.Hosting.", query);
                 Assert.True(filter!("Acme.Hosting.Redis"));
                 Assert.False(filter("Unapproved.Package"));
@@ -296,11 +349,15 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         var factory = new TestTypeScriptStarterProjectFactory((_, _, _) => Task.FromResult(true));
         factory.Project.AddPackageAsyncCallback = (context, _) =>
         {
+            Assert.Equal(1, Volatile.Read(ref limitWarningCount));
+            var warning = Assert.Single(interactionService.DisplayedMessages, message => message.Message == warningText);
+            Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
             added = context;
             return Task.FromResult(true);
         };
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
+            options.InteractionServiceFactory = _ => interactionService;
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
             options.NuGetClientFactory = _ => NuGetTestHelper.CreateClient();
         });
@@ -2920,7 +2977,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             new TestFeatures(),
             NullLogger.Instance);
         var packages = (await stagingChannel.GetIntegrationPackagesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout())
-            .Select(package => ("redis", package, stagingChannel))
+            .Packages.Select(package => ("redis", package, stagingChannel))
             .ToArray();
         var interactionService = new TestInteractionService
         {

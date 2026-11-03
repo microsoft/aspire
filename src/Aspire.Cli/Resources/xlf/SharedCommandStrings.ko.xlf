@@ -122,6 +122,11 @@
         <target state="translated">{0} 명령은 --비대화형 옵션을 지정한 경우 --yes가 필요합니다.</target>
         <note>{0} is the command name.</note>
       </trans-unit>
+      <trans-unit id="NuGetSearchLimitWarning">
+        <source>NuGet search results may be incomplete because the limit of {0} packages per feed was reached. Use narrower integration source patterns.</source>
+        <target state="new">NuGet search results may be incomplete because the limit of {0} packages per feed was reached. Use narrower integration source patterns.</target>
+        <note>{0} is the search query, {1} is the maximum number of packages searched per feed.</note>
+      </trans-unit>
       <trans-unit id="PipelineEnvironmentOptionDescription">
         <source>The environment to use for the operation. The default is 'Production'.</source>
         <target state="translated">작업에 사용할 환경입니다. 기본값은 'Production'입니다.</target>
