@@ -50,7 +50,7 @@ internal sealed class ListIntegrationsResponse
 /// <summary>
 /// MCP tool for listing available Aspire hosting integrations.
 /// </summary>
-internal sealed class ListIntegrationsTool(IPackagingService packagingService, CliExecutionContext executionContext, IAuxiliaryBackchannelMonitor auxiliaryBackchannelMonitor) : CliMcpTool
+internal sealed class ListIntegrationsTool(IntegrationPackageSearchService integrationPackageSearchService, CliExecutionContext executionContext, IAuxiliaryBackchannelMonitor auxiliaryBackchannelMonitor) : CliMcpTool
 {
     public override string Name => KnownMcpTools.ListIntegrations;
 
@@ -72,30 +72,17 @@ internal sealed class ListIntegrationsTool(IPackagingService packagingService, C
     {
         try
         {
-            // Get all channels
-            var packageChannels = await packagingService.GetChannelsAsync(cancellationToken);
-
-            // Use only the default (first) channel
-            var defaultChannel = packageChannels.FirstOrDefault();
-            if (defaultChannel == null)
-            {
-                return new CallToolResult
-                {
-                    IsError = true,
-                    Content = [new TextContentBlock { Text = "No package channels available" }]
-                };
-            }
-
             // Determine the working directory to use
             // If there's an in-scope AppHost, use its directory; otherwise use the MCP's working directory
             var workingDirectory = GetWorkingDirectory();
 
-            // Get integration packages from the default channel
-            var integrationPackages = await defaultChannel.GetIntegrationPackagesAsync(workingDirectory, cancellationToken);
+            var packagesWithChannels = await integrationPackageSearchService.GetIntegrationPackagesWithChannelsAsync(
+                workingDirectory, configuredChannel: null, cancellationToken);
 
             // Group by package ID and select the latest version using semantic version comparison
             // Parse version once and include it in the result to avoid redundant parsing
-            var packagesWithParsedVersions = integrationPackages
+            var packagesWithParsedVersions = packagesWithChannels
+                .Select(static package => package.Package)
                 .Select(p => new
                 {
                     FriendlyName = GetFriendlyName(p.Id),
