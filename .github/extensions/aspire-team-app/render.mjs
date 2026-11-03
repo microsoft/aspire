@@ -247,7 +247,7 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
   max-width: min(360px, calc(100vw - 16px)); padding: 6px 9px;
   border: 1px solid var(--border); border-radius: 6px; background: var(--surface-3);
   color: var(--fg); box-shadow: var(--shadow-floating); font-size: 11.5px; font-weight: 500;
-  line-height: 1.35; white-space: normal; pointer-events: none;
+  line-height: 1.35; white-space: normal; pointer-events: auto;
 }
 .agent-action-tooltip[hidden] { display: none; }
 .cb-split[aria-disabled="true"] .card-btn { pointer-events: none; }
@@ -2109,8 +2109,15 @@ function goView(next, forward) {
 function pill(s) { return '<span class="pill ' + (s.tone || "muted") + '">' + esc(s.label) + "</span>"; }
 
 let agentTooltipOwner = null;
+let agentTooltipHideTimer = null;
+
+function cancelAgentTooltipHide() {
+  clearTimeout(agentTooltipHideTimer);
+  agentTooltipHideTimer = null;
+}
 
 function showAgentActionTooltip(owner) {
+  cancelAgentTooltipHide();
   const tooltip = document.getElementById("agent-action-tooltip");
   if (!tooltip) return;
   // Keep the tooltip under body, outside the collapsible sections' overflow clips
@@ -2132,20 +2139,34 @@ function showAgentActionTooltip(owner) {
 }
 
 function hideAgentActionTooltip() {
+  cancelAgentTooltipHide();
   const tooltip = document.getElementById("agent-action-tooltip");
   if (tooltip) tooltip.hidden = true;
   agentTooltipOwner = null;
+}
+
+function scheduleAgentTooltipHide() {
+  cancelAgentTooltipHide();
+  // Give magnifier users time to cross the 8px gap to the portaled tooltip.
+  agentTooltipHideTimer = setTimeout(() => {
+    const tooltip = document.getElementById("agent-action-tooltip");
+    const owner = agentTooltipOwner;
+    if (owner && !owner.contains(document.activeElement)
+      && !owner.matches(":hover") && !tooltip?.matches(":hover")) hideAgentActionTooltip();
+  }, 300);
 }
 
 function wireAgentActionTooltips() {
   document.addEventListener("pointerover", (event) => {
     const owner = event.target.closest?.(".cb-split[data-tooltip]");
     if (owner) showAgentActionTooltip(owner);
+    else if (document.getElementById("agent-action-tooltip")?.contains(event.target)) cancelAgentTooltipHide();
   });
   document.addEventListener("pointerout", (event) => {
     const owner = agentTooltipOwner;
-    if (owner && owner.contains(event.target) && !owner.contains(event.relatedTarget)
-      && document.activeElement !== owner) hideAgentActionTooltip();
+    const tooltip = document.getElementById("agent-action-tooltip");
+    if (owner && (owner.contains(event.target) || tooltip?.contains(event.target))
+      && !owner.contains(event.relatedTarget) && !tooltip?.contains(event.relatedTarget)) scheduleAgentTooltipHide();
   });
   document.addEventListener("focusin", (event) => {
     const owner = event.target.closest?.(".cb-split[data-tooltip]");
@@ -2154,7 +2175,7 @@ function wireAgentActionTooltips() {
   document.addEventListener("focusout", (event) => {
     const owner = agentTooltipOwner;
     if (owner && owner.contains(event.target) && !owner.contains(event.relatedTarget)
-      && !owner.matches(":hover")) hideAgentActionTooltip();
+      && !owner.matches(":hover")) scheduleAgentTooltipHide();
   });
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") hideAgentActionTooltip();
@@ -2980,9 +3001,9 @@ function statsHtml() {
 }
 
 function toggle(id, title, desc, checked) {
-  return '<div class="toggle-row"><span><span class="tl">' + esc(title) + "</span>" +
+  return '<div class="toggle-row"><span><span class="tl" id="' + id + '-label">' + esc(title) + "</span>" +
     (desc ? '<span class="td">' + esc(desc) + "</span>" : "") + "</span>" +
-    '<label class="switch"><input type="checkbox" id="' + id + '" ' + (checked ? "checked" : "") + ' /><span class="slider"></span></label></div>';
+    '<label class="switch"><input type="checkbox" id="' + id + '" aria-labelledby="' + id + '-label" ' + (checked ? "checked" : "") + ' /><span class="slider"></span></label></div>';
 }
 
 function filtersView() {

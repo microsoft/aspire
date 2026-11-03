@@ -331,10 +331,21 @@ test("sidebar action handlers never post work even when called directly", async 
 });
 
 test("agent tooltips follow pointer and focus lifecycles and dismiss stale anchors", () => {
+  const timers = new Map();
+  let nextTimer = 1;
+  const flushTimers = () => {
+    for (const [id, handler] of timers) {
+      timers.delete(id);
+      handler();
+    }
+  };
+  let tooltipHovered = false;
   const tooltip = {
     hidden: true,
     textContent: "",
     style: {},
+    contains(target) { return target === this; },
+    matches() { return tooltipHovered; },
     getBoundingClientRect() { return { width: 360, height: 80 }; },
   };
   const owner = {
@@ -344,7 +355,16 @@ test("agent tooltips follow pointer and focus lifecycles and dismiss stale ancho
     matches() { return false; },
     getBoundingClientRect() { return { left: 700, top: 560, bottom: 585 }; },
   };
-  const { api, events, document } = createRendererHarness({ elements: { "agent-action-tooltip": tooltip } });
+  const { api, events, document } = createRendererHarness({
+    elements: { "agent-action-tooltip": tooltip },
+    setTimeout(handler, delay) {
+      assert.equal(delay, 300);
+      const id = nextTimer++;
+      timers.set(id, handler);
+      return id;
+    },
+    clearTimeout(id) { timers.delete(id); },
+  });
   const dispatch = (type, event = {}) => {
     for (const handler of events[type] ?? []) handler(event);
   };
@@ -356,15 +376,36 @@ test("agent tooltips follow pointer and focus lifecycles and dismiss stale ancho
   dispatch("pointerout", { target: owner, relatedTarget: owner });
   assert.equal(tooltip.hidden, false);
   dispatch("pointerout", { target: owner, relatedTarget: null });
+  assert.equal(tooltip.hidden, false, "crossing the gap must not immediately hide the tooltip");
+  tooltipHovered = true;
+  dispatch("pointerover", { target: tooltip });
+  assert.equal(timers.size, 0, "entering the tooltip cancels its pending dismissal");
+  flushTimers();
+  assert.equal(tooltip.hidden, false);
+  tooltipHovered = false;
+  dispatch("pointerout", { target: tooltip, relatedTarget: null });
+  dispatch("pointerover", { target: owner });
+  assert.equal(timers.size, 0, "returning across the gap to the action cancels dismissal");
+  dispatch("pointerout", { target: owner, relatedTarget: tooltip });
+  assert.equal(timers.size, 0, "moving directly to the tooltip needs no dismissal");
+  dispatch("pointerout", { target: tooltip, relatedTarget: null });
+  flushTimers();
   assert.equal(tooltip.hidden, true);
 
   document.activeElement = owner;
   dispatch("focusin", { target: owner });
   assert.equal(tooltip.hidden, false);
   dispatch("pointerout", { target: owner, relatedTarget: null });
+  flushTimers();
   assert.equal(tooltip.hidden, false, "leaving with the pointer must preserve a focused tooltip");
   document.activeElement = null;
+  tooltipHovered = true;
   dispatch("focusout", { target: owner, relatedTarget: null });
+  flushTimers();
+  assert.equal(tooltip.hidden, false, "losing focus must preserve a hovered tooltip");
+  tooltipHovered = false;
+  dispatch("pointerout", { target: tooltip, relatedTarget: null });
+  flushTimers();
   assert.equal(tooltip.hidden, true);
 
   owner.getBoundingClientRect = () => ({ left: 20, top: 100, bottom: 130 });
@@ -372,13 +413,18 @@ test("agent tooltips follow pointer and focus lifecycles and dismiss stale ancho
   assert.deepEqual(tooltip.style, { left: "20px", top: "138px" });
   for (const type of ["keydown", "scroll", "resize"]) {
     dispatch("pointerover", { target: owner });
+    dispatch("pointerout", { target: owner, relatedTarget: null });
     dispatch(type, { key: "Escape" });
     assert.equal(tooltip.hidden, true, `${type} must dismiss the tooltip`);
+    assert.equal(timers.size, 0, `${type} must cancel delayed dismissal`);
   }
 
   dispatch("pointerover", { target: owner });
+  dispatch("pointerout", { target: owner, relatedTarget: null });
   api.render();
   assert.equal(tooltip.hidden, true, "render must not leave a tooltip anchored to a removed card");
+  assert.equal(timers.size, 0);
+  assert.match(STYLES, /\.agent-action-tooltip \{[^}]*pointer-events: auto;/);
 });
 
 test("cardActionBtn greys out and spins while refresh finalization is in progress", () => {
@@ -1491,6 +1537,18 @@ test("settings render the detached opt-in and save its selected value", async ()
   api.render();
   assert.match(app.innerHTML, /Create detached sessions/);
   assert.match(app.innerHTML, /id="s-detached"/);
+  for (const [id, title] of [
+    ["s-drafts", "Show draft PRs"],
+    ["s-detached", "Create detached sessions"],
+    ["n-review", "Review requested"],
+    ["n-ready", "Your PR is ready to merge"],
+    ["n-changes", "Changes requested on your PR"],
+    ["n-ci", "CI failing on your PR"],
+  ]) {
+    assert.ok(app.innerHTML.includes('<span class="tl" id="' + id + '-label">' + title + "</span>"));
+    assert.match(app.innerHTML, new RegExp('<input type="checkbox" id="' + id + '" aria-labelledby="' + id + '-label"'));
+  }
+  assert.match(app.innerHTML, /id="s-detached" aria-labelledby="s-detached-label"  \/>/);
   assert.match(app.innerHTML, /do not report back here/);
   assert.match(app.innerHTML, /association is not guaranteed/);
   await api.saveSettings();

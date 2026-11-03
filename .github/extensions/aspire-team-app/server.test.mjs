@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import fs, { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import http from "node:http";
+import { syncBuiltinESMExports } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
@@ -601,6 +602,73 @@ test("dashboard load retries after an inflight account probe rejection", async (
   assert.equal(retried.status, 200);
   const payload = await retried.json();
   assert.equal(payload.dashboard.authenticated, true);
+});
+
+test("PR and Health actions keep detached sessions enabled during a preference save", async (t) => {
+  for (const health of [false, true]) {
+    await t.test(health ? "Health action" : "PR action", async (t) => {
+      await resetTestHome({
+        mode: health ? "health" : "review",
+        detachedSessions: true,
+        accounts: { "acct:octo": { repos: ["microsoft/aspire"], active: true } },
+      });
+      process.env.GH_TOKEN = "test-token";
+      delete process.env.GITHUB_TOKEN;
+      process.env.PATH = "";
+      globalThis.fetch = health ? makeGitHubHealthMock() : makeGitHubMock([makePrNode()]);
+      t.after(() => { globalThis.fetch = originalFetch; });
+
+      const server = await import(`./server.mjs?test=save-race-${health}-${Date.now()}`);
+      const instanceId = `save-race-${health}`;
+      const entry = await server.startInstance(instanceId, () => {}, sessionContext);
+      t.after(() => {
+        server.setAgentSend(null);
+        return server.stopInstance(instanceId);
+      });
+      await (await fetch(new URL("api/state", entry.url))).json();
+      const sent = [];
+      server.setAgentSend(async (payload) => {
+        sent.push(payload);
+        return { messageId: "save-race-message", queued: false };
+      });
+
+      let signalEntered;
+      let releaseSave;
+      const entered = new Promise((resolve) => { signalEntered = resolve; });
+      const resume = new Promise((resolve) => { releaseSave = resolve; });
+      const originalWrite = fs.writeFile;
+      const write = t.mock.method(fs, "writeFile", async (path, data, options) => {
+        // Hold the save after only a JSON prefix has reached disk, before publication.
+        await originalWrite(path, data.slice(0, 20), options);
+        signalEntered();
+        await resume;
+        await originalWrite(path, data, "utf8");
+      });
+      syncBuiltinESMExports();
+      t.after(() => { write.mock.restore(); syncBuiltinESMExports(); });
+
+      const { updatePrefs } = await import("./state.mjs");
+      const saving = updatePrefs((prefs) => { prefs.showDrafts = true; });
+      try {
+        await entered;
+        const response = await fetch(new URL(health ? "api/health/action" : "api/agent/action", entry.url), {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(health
+            ? { kind: "fix-health", target: "new-session", source: { id: "github:github.com/microsoft/aspire" } }
+            : { kind: "review", target: "new-session", pr: { repository: "microsoft/aspire", number: 1 } }),
+          signal: AbortSignal.timeout(5000),
+        });
+        assert.equal(response.status, 200);
+        assert.equal(sent.length, 1);
+        assert.match(sent[0].prompt, /detached: true/);
+      } finally {
+        releaseSave();
+        await saving;
+      }
+      assert.equal(JSON.parse(await readFile(preferencesPath, "utf8")).showDrafts, true);
+    });
+  }
 });
 
 test("card action route bridges { prompt, log } to the session and echoes the queued flag", async (t) => {
