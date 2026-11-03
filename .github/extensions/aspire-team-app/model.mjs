@@ -806,6 +806,8 @@ export function computeFocusItems(buckets) {
     .filter((i) => isWithinFocusAgeLimit(i.pullRequest, i.bucketLabel) || isReviewDebt(i.pullRequest))
     .filter((i) => !isCommunityPullRequest(i.pullRequest))
     .filter((i) => !isChecksFailing(i.pullRequest))
+    // Approved PRs already have the review they need, so they are not "needing attention".
+    .filter((i) => i.pullRequest.review.state !== "approved")
     .sort((a, b) => new Date(b.pullRequest.updatedAt) - new Date(a.pullRequest.updatedAt));
 }
 
@@ -839,6 +841,7 @@ function focusExclusionReason(pr, bucketLabels) {
   if (hasNeedsAuthorActionLabel(pr)) return { kind: "held-by-label", label: "Held by label", detail: "A do-not-merge label keeps it out of the focused queue.", tone: "danger" };
   if (isWaitingOnAuthor(bucketLabels)) return { kind: "author-response", label: "Author response", detail: "Changes were requested, so this is waiting on the author rather than the focused queue.", tone: "danger" };
   if (isCommunityPullRequest(pr) && !isAgedOutCommunityPullRequest(pr)) return { kind: "community-list", label: "Community list", detail: "Active external-contributor PRs show in the Community list.", tone: "accent" };
+  if (pr.review.state === "approved") return { kind: "approved", label: "Approved", detail: "Approved PRs are kept out of the focused queue.", tone: "success" };
   const specialized = bucketLabels.find((l) => specializedFocusBucketLabels.has(l));
   if (specialized) return { kind: "specialized-lane", label: `${specialized} lane`, detail: `Routed to the ${specialized} lane instead of Needs attention.`, tone: "accent" };
   const candidate = [...bucketLabels].filter((l) => !excludedFocusBucketLabels.has(l)).sort((a, b) => focusBucketRank(a) - focusBucketRank(b))[0] ?? null;
@@ -847,7 +850,7 @@ function focusExclusionReason(pr, bucketLabels) {
   return { kind: "outside-queue", label: "Outside queue", detail: "It does not currently match a focused, actionable lane.", tone: "muted" };
 }
 function exReasonRank(kind) {
-  return ["ci-failing", "merge-conflicts", "unresolved-feedback", "held-by-label", "author-response", "stale-activity", "community-list", "specialized-lane", "stalled-only", "outside-queue"].indexOf(kind);
+  return ["ci-failing", "merge-conflicts", "unresolved-feedback", "held-by-label", "author-response", "approved", "stale-activity", "community-list", "specialized-lane", "stalled-only", "outside-queue"].indexOf(kind);
 }
 
 // A PR with requested changes is waiting on its author, not the focused queue. Once the

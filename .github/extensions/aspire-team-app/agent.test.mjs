@@ -234,13 +234,23 @@ test("new-session routing degrades to current-session for a non-github.com (GHES
 
 test("new-session routing is unchanged for a github.com PR", () => {
   // Guard: the GHES fallback must not alter routing for the common github.com case.
-  for (const kind of AGENT_ACTION_KINDS) {
+  for (const kind of AGENT_ACTION_KINDS.filter((k) => k !== "close-pr")) {
     assert.match(buildAgentActionPrompt(kind, validPr), /open_pr_session/);
   }
 });
 
+test("close-pr always runs in the current session and asks for confirmation", () => {
+  for (const target of ["new-session", "current-session"]) {
+    const prompt = buildAgentActionPrompt("close-pr", validPr, target);
+    assert.doesNotMatch(prompt, /open_pr_session/);
+    assert.match(prompt, /ask_user/);
+    assert.match(prompt, /gh pr close 123 --repo microsoft\/aspire/);
+    assert.equal(resolveActionTarget(validPr, target, "close-pr"), "current-session");
+  }
+});
+
 test("detached preference routes every new-session PR action through detached creation", () => {
-  for (const kind of AGENT_ACTION_KINDS) {
+  for (const kind of AGENT_ACTION_KINDS.filter((k) => k !== "close-pr")) {
     const prompt = buildAgentActionPrompt(kind, validPr, "new-session", { detachedSessions: true });
     assert.match(prompt, /Use list_repositories/);
     assert.match(prompt, /Use create_session with:/);
