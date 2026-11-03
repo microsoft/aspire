@@ -96,12 +96,20 @@ Aspire treats the existing service itself as read-only. It can manage declared A
 
 Set `Sku` explicitly to the adopted service's actual pricing tier, even for Developer. Aspire requires this metadata to validate SKU-dependent children such as circuit breakers and OpenAI backends; it does not query or change the existing service's SKU. The Developer default applies only to new services.
 
-APIM uses a user-assigned managed identity for backend authentication and Key Vault access. Aspire creates this identity as a separate resource and grants its permissions through the standard Azure role-assignment pipeline. For an existing APIM service, attach the identity to the service outside Aspire before deploying managed-identity policies or Key Vault-backed named values. To use an identity already attached to the service, adopt it as an existing resource:
+APIM uses a user-assigned managed identity for backend authentication and Key Vault access. Aspire creates this identity as a separate resource and grants its permissions through the standard Azure role-assignment pipeline. For an existing APIM service, publishing managed-identity backends or Key Vault-backed named values throws unless you adopt an already-attached identity or explicitly confirm that the identity is attached outside Aspire. To use an identity already attached to the service, adopt it as an existing resource:
 
 ```csharp
 builder.CreateResourceBuilder(apim.Resource.Identity)
     .PublishAsExisting("shared-apim-identity", resourceGroup: "shared-infrastructure");
 ```
+
+Alternatively, after attaching Aspire's identity to the existing service outside Aspire, explicitly confirm the attachment:
+
+```csharp
+apim.WithIdentityAttachedToExistingService();
+```
+
+Both alternatives are caller assertions: Aspire does not query Azure to verify attachment, and the confirmation method does not attach the identity. New services attach their identity automatically. Existing services with only anonymous backends and literal named values do not require confirmation.
 
 Aspire uses the same identity and role-assignment path for new and existing APIM services. Role-assignment modules deploy at the target resource's scope, including other resource groups or subscriptions. Diagnostics configured on an existing APIM service still require the service and Application Insights resource to be in the same deployment resource group.
 

@@ -118,6 +118,31 @@ public static class AzureApiManagementExtensions
     }
 
     /// <summary>
+    /// Confirms that the API Management identity is attached to an existing service outside Aspire.
+    /// </summary>
+    /// <param name="builder">The Azure API Management resource builder.</param>
+    /// <returns>The Azure API Management resource builder.</returns>
+    /// <remarks>
+    /// Existing services are read-only: this method does not attach the identity or verify its attachment in Azure.
+    /// Call it only after attaching the identity to the service outside Aspire. Alternatively, configure the
+    /// identity as an existing Azure resource that is already attached to the service.
+    /// This confirmation is required when publishing managed-identity backends or Key Vault-backed named values
+    /// to an existing service unless its identity is configured as an existing resource.
+    /// New services attach the identity automatically and do not require this confirmation.
+    /// </remarks>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> is null.</exception>
+    [AspireExport]
+    public static IResourceBuilder<AzureApiManagementResource> WithIdentityAttachedToExistingService(
+        this IResourceBuilder<AzureApiManagementResource> builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        builder.Resource.IdentityAttachedToExistingService = true;
+
+        return builder;
+    }
+
+    /// <summary>
     /// Adds an API that routes requests to an Aspire compute resource.
     /// </summary>
     /// <typeparam name="T">The backend compute resource type.</typeparam>
@@ -1552,6 +1577,19 @@ public static class AzureApiManagementExtensions
             throw new InvalidOperationException(
                 $"Existing API Management resource '{azureResource.Name}' requires an explicit {nameof(AzureApiManagementOptions.Sku)} " +
                 "matching the adopted service. The default Developer SKU is only used for new services.");
+        }
+
+        if (isExisting &&
+            !azureResource.Identity.IsExisting() &&
+            !azureResource.IdentityAttachedToExistingService &&
+            (azureResource.Backends.Any(backend => backend.Options.ManagedIdentityResource is not null) ||
+             azureResource.NamedValues.Any(namedValue => namedValue.Value is IAzureKeyVaultSecretReference)))
+        {
+            throw new InvalidOperationException(
+                $"Existing API Management resource '{azureResource.Name}' uses managed-identity backends or Key Vault-backed named values, " +
+                "but its user-assigned identity is not confirmed as attached to the service. " +
+                "Adopt an already-attached identity with Identity.PublishAsExisting(...) or attach the identity outside Aspire " +
+                $"and call {nameof(WithIdentityAttachedToExistingService)}(). Aspire does not attach identities to existing services.");
         }
 
         var hasExplicitExistingScope =

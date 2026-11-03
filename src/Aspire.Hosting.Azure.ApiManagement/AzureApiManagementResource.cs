@@ -94,11 +94,15 @@ public class AzureApiManagementResource(
     /// </summary>
     /// <remarks>
     /// When adopting an existing API Management service, attach this identity to the service outside Aspire.
-    /// The identity can also be configured as an existing Azure resource.
+    /// Before publishing identity-dependent features, either configure the identity as an existing Azure resource
+    /// already attached to the service or call <see cref="AzureApiManagementExtensions.WithIdentityAttachedToExistingService"/>
+    /// to confirm the attachment.
     /// </remarks>
     [AspireExport]
     public AzureUserAssignedIdentityResource Identity { get; } =
         new(AzureApiManagementExtensions.CreateBoundedIdentifier($"{name}-identity", 64));
+
+    internal bool IdentityAttachedToExistingService { get; set; }
 
     /// <summary>
     /// Gets the user-assigned managed identity principal ID output reference.

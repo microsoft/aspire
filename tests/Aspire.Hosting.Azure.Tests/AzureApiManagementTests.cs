@@ -1920,7 +1920,8 @@ public class AzureApiManagementTests(ITestOutputHelper output)
             PublisherEmail = "api-owners@example.com",
             PublisherName = "Contoso APIs",
             Sku = AzureApiManagementSku.Developer,
-        }).PublishAsExisting("shared-apim", resourceGroup: overrideScope ? null : "gateway-resources");
+        }).PublishAsExisting("shared-apim", resourceGroup: overrideScope ? null : "gateway-resources")
+            .WithIdentityAttachedToExistingService();
         if (overrideScope)
         {
             apim.Resource.Scope = new AzureBicepResourceScope("gateway-resources");
@@ -2358,6 +2359,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         }).PublishAsExisting("existing-apim", resourceGroup: "shared-infrastructure");
         var backend = apim.AddBackend("catalog-backend", ReferenceExpression.Create($"https://example.com"));
         apim.AddApi("catalog-api", "catalog").WithBackend(backend);
+        apim.AddNamedValue("gateway-name", "Contoso");
 
         using var app = builder.Build();
         await ExecuteBeforeStartHooksAsync(app, default);
@@ -2372,6 +2374,151 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         Assert.DoesNotContain("output principalId", bicep);
     }
 
+    [Theory]
+    [InlineData("backend", false)]
+    [InlineData("backend", true)]
+    [InlineData("pool", false)]
+    [InlineData("pool", true)]
+    [InlineData("openai", false)]
+    [InlineData("openai", true)]
+    [InlineData("key-vault", false)]
+    [InlineData("key-vault", true)]
+    public async Task ExistingApiManagementRejectsUnconfirmedIdentityRegardlessOfCallOrder(string feature, bool adoptFirst)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
+            Sku = AzureApiManagementSku.Developer,
+        });
+        if (adoptFirst)
+        {
+            apim.PublishAsExisting("existing-apim", resourceGroup: null);
+        }
+
+        if (feature == "key-vault")
+        {
+            var vault = builder.AddAzureKeyVault("vault");
+            apim.AddKeyVaultNamedValue("upstream-secret", vault.GetSecret("upstream-secret"));
+        }
+        else if (feature == "openai")
+        {
+            var deployment = builder.AddAzureOpenAI("openai").AddDeployment("chat", "gpt-5-mini", "2025-08-07");
+            var backend = apim.AddAzureOpenAIBackend("openai-backend", deployment);
+            apim.AddOpenAIApi("chat-api", "chat").WithBackend(backend);
+        }
+        else
+        {
+            var backend = apim.AddBackend("catalog-backend", ReferenceExpression.Create($"https://example.com"), new()
+            {
+                ManagedIdentityResource = "api://catalog",
+            });
+            var api = apim.AddApi("catalog-api", "catalog");
+            if (feature == "pool")
+            {
+                api.WithBackend(apim.AddBackendPool("catalog-pool").WithBackend(backend));
+            }
+            else
+            {
+                api.WithBackend(backend);
+            }
+        }
+
+        if (!adoptFirst)
+        {
+            apim.PublishAsExisting("existing-apim", resourceGroup: null);
+        }
+
+        using var app = builder.Build();
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => ExecuteBeforeStartHooksAsync(app, default));
+
+        Assert.Equal(
+            "Existing API Management resource 'apim' uses managed-identity backends or Key Vault-backed named values, " +
+            "but its user-assigned identity is not confirmed as attached to the service. " +
+            "Adopt an already-attached identity with Identity.PublishAsExisting(...) or attach the identity outside Aspire " +
+            "and call WithIdentityAttachedToExistingService(). Aspire does not attach identities to existing services.",
+            exception.Message);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task ExistingApiManagementAllowsKeyVaultWithAdoptedOrConfirmedIdentity(bool confirmAttachment, bool configureIdentityFirst)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
+            Sku = AzureApiManagementSku.Developer,
+        });
+        if (configureIdentityFirst)
+        {
+            ConfigureIdentity();
+        }
+
+        var vault = builder.AddAzureKeyVault("vault");
+        apim.AddKeyVaultNamedValue("upstream-secret", vault.GetSecret("upstream-secret"));
+        apim.PublishAsExisting("existing-apim", resourceGroup: null);
+        if (!configureIdentityFirst)
+        {
+            ConfigureIdentity();
+        }
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        Assert.True(apim.Resource.IsExisting());
+        Assert.Equal(!confirmAttachment, apim.Resource.Identity.IsExisting());
+        Assert.Equal(confirmAttachment, apim.Resource.IdentityAttachedToExistingService);
+
+        void ConfigureIdentity()
+        {
+            if (confirmAttachment)
+            {
+                Assert.Same(apim, apim.WithIdentityAttachedToExistingService());
+            }
+            else
+            {
+                builder.CreateResourceBuilder(apim.Resource.Identity)
+                    .PublishAsExisting("shared-identity", resourceGroup: null);
+            }
+        }
+    }
+
+    [Fact]
+    public void IdentityAttachmentConfirmationRejectsNullBuilder()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+            AzureApiManagementExtensions.WithIdentityAttachedToExistingService(null!));
+    }
+
+    [Fact]
+    public async Task ExistingApiManagementDoesNotRequireIdentityConfirmationInRunMode()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
+            Sku = AzureApiManagementSku.Developer,
+        }).PublishAsExisting("existing-apim", resourceGroup: null);
+        var backend = apim.AddBackend("catalog-backend", ReferenceExpression.Create($"https://example.com"), new()
+        {
+            ManagedIdentityResource = "api://catalog",
+        });
+        apim.AddApi("catalog-api", "catalog").WithBackend(backend);
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        Assert.Empty(builder.Resources);
+        Assert.False(apim.Resource.IdentityAttachedToExistingService);
+    }
+
     [Fact]
     public async Task ExistingApiManagementUsesUserAssignedIdentityWithoutMutatingService()
     {
@@ -2381,7 +2528,8 @@ public class AzureApiManagementTests(ITestOutputHelper output)
             PublisherEmail = "api-owners@example.com",
             PublisherName = "Contoso APIs",
             Sku = AzureApiManagementSku.Developer,
-        }).PublishAsExisting("existing-apim", resourceGroup: null);
+        }).PublishAsExisting("existing-apim", resourceGroup: null)
+            .WithIdentityAttachedToExistingService();
         var backend = apim.AddBackend(
             "catalog-backend",
             ReferenceExpression.Create($"https://example.com"),
