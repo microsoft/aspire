@@ -83,7 +83,7 @@ export function mergeCliSpawnEnvironment(env: Record<string, string | undefined>
  * watchdog's one-second tolerance.
  */
 export function getCliParentWatchdogEnvironment(): EnvVar[] {
-    const startedAtUnixSeconds = Math.round((Date.now() - process.uptime() * 1000) / 1000);
+    const startedAtUnixSeconds = Math.floor((Date.now() - process.uptime() * 1000) / 1000);
     return [
         { name: EnvironmentVariables.ASPIRE_CLI_PARENT_PID, value: String(process.pid) },
         { name: EnvironmentVariables.ASPIRE_CLI_PARENT_STARTED, value: String(startedAtUnixSeconds) },
