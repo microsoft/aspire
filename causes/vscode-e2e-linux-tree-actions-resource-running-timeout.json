@@ -23,6 +23,26 @@
           "result_format": "mocha"
         }
       ]
+    },
+    {
+      "run_id": 41730290474,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/41730290474",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, resource-debug-tools)",
+      "observed_at": "2026-11-03T23:47:23Z",
+      "pr_number": 0,
+      "tests": [
+        {
+          "name": "Aspire resource debug language model tool E2E attaches to a .NET resource launched with Run Without Debugging",
+          "job_id": 126275261225,
+          "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, resource-debug-tools)",
+          "error": "Timed out after 180000ms waiting for resource 'e2e-worker' state Running.\nLast error: <none>\nLast state: {\n  \"extensionHostSessionId\": \"9d8faa0d-2fbb-4ce2-9429-0055644636ef\",\n  \"updatedAt\": \"2026-11-03T23:34:05.973Z\",\n  \"runId\": \"7144-1793748527037\",\n  \"state\": {\n    \"viewMode\": \"workspace\",\n    \"isRepositoryLoading\": false,\n    \"isWorkspaceAppHostDiscoveryComplete\": true,\n    \"hasError\": false,\n    \"workspaceAppHost\": {\n      \"appHostPath\": \"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-vcDOeX\\\\workspace\\\\AspireE2E.AppHost\\\\AspireE2E.AppHost.csproj\",\n      \"appHostPid\": 9224,\n      \"dashboardUrl\": \"https://localhost:56275/login?t=<redacted>\",\n      \"resources\": [\n        {\n          \"name\": \"e2e-custom-output-worker-yzkgkzmn\",\n          \"displayName\": \"e2e-custom-output-worker\",\n          \"resourceType\": \"Project\",\n          \"state\": \"Running\",\n          \"projectPath\": \"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-vcDOeX\\\\workspace\\\\AspireE2E.CustomOutputWorker\\\\AspireE2E.Cus",
+          "stack_trace": "Error: Timed out after 180000ms waiting for resource 'e2e-worker' state Running.\nLast error: <none>\nLast state: {\n  \"extensionHostSessionId\": \"9d8faa0d-2fbb-4ce2-9429-0055644636ef\",\n  \"updatedAt\": \"2026-11-03T23:34:05.973Z\",\n  \"runId\": \"7144-1793748527037\",\n  \"state\": {\n    \"viewMode\": \"workspace\",\n    \"isRepositoryLoading\": false,\n    \"isWorkspaceAppHostDiscoveryComplete\": true,\n    \"hasError\": false,\n    \"workspaceAppHost\": {\n      \"appHostPath\": \"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-vcDOeX\\\\workspace\\\\AspireE2E.AppHost\\\\AspireE2E.AppHost.csproj\",\n      \"appHostPid\": 9224,\n      \"dashboardUrl\": \"https://localhost:56275/login?t=<redacted>\",\n      \"resources\": [\n        {\n          \"name\": \"e2e-custom-output-worker-yzkgkzmn\",\n          \"displayName\": \"e2e-custom-output-worker\",\n          \"resourceType\": \"Project\",\n          \"state\": \"Running\",\n          \"projectPath\": \"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-vcDOeX\\\\workspace\\\\AspireE2E.CustomOutputWorker\\\\AspireE2E.CustomOutputWorker.csproj\",\n          \"dashboardUrl\": \"https://localhost:56275\",\n          \"urls\": [\n            {\n              \"name\": \"http\",\n              \"url\": \"http://localhost:56278\"\n            }\n          ],\n          \"commands\": {\n            \"rebuild\": {\n              \"displayName\": \"Rebuild\",\n              \"description\": \"Stop the resource, rebuild the project from source, and restart. Use this to apply source code changes.\",\n              \"state\": \"Enabled\"\n            },\n            \"restart\": {\n              \"displayName\": \"Restart\",\n              \"description\": \"Restart resource. Source code is not recompiled.\",\n              \"state\": \"Enabled\"\n            },\n            \"stop\": {\n              \"displayName\": \"Stop\",\n              \"description\": \"Stop resource\",\n              \"state\": \"Enabled\"\n            }\n          }\n        },\n        {\n          \"name\": \"e2e-go-rqapbunb\",\n          \"displayName\": \"e2e-go\",\n          \"resourceType\": \"Executable\",\n          \"sta",
+          "standard_output": "",
+          "standard_error": "",
+          "result_file": "00001.json",
+          "result_format": "mocha"
+        }
+      ]
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/21731"

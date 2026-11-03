@@ -1,0 +1,28 @@
+{
+  "id": "vscode-e2e-diagnostic-logs-element-visible-timeout",
+  "type": "flaky-test",
+  "title": "Flaky: VS Code extension E2E diagnostic-logs times out waiting for element to become visible",
+  "error_pattern": "Waiting until element is visible\nWait timed out after 2154ms",
+  "occurrences": [
+    {
+      "run_id": 41730290474,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/41730290474",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, diagnostic-logs)",
+      "observed_at": "2026-11-03T23:47:23Z",
+      "pr_number": 0,
+      "tests": [
+        {
+          "name": "CLI diagnostic log actions E2E offers both current CLI and AppHost logs on a connected failure",
+          "job_id": 126275261112,
+          "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, diagnostic-logs)",
+          "error": "Waiting until element is visible\nWait timed out after 2154ms",
+          "stack_trace": "TimeoutError: Waiting until element is visible\nWait timed out after 2154ms\n    at /home/runner/work/aspire/aspire/extension/node_modules/selenium-webdriver/lib/webdriver.js:929:22\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)",
+          "standard_output": "",
+          "standard_error": "",
+          "result_file": "00001.json",
+          "result_format": "mocha"
+        }
+      ]
+    }
+  ]
+}

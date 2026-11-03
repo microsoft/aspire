@@ -32,6 +32,27 @@
       "job": "Tests / No-package tests (regular, Aspire.TerminalHost.Tests, TerminalHost, TerminalHost, tests/Aspire.Te... / TerminalHost (ubuntu-latest)",
       "pr_number": 0,
       "observed_at": "2026-10-29T21:40:30Z"
+    },
+    {
+      "run_id": 41730290474,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/41730290474",
+      "job": "Tests / No-package tests (regular, Aspire.TerminalHost.Tests, TerminalHost, TerminalHost, tests/Aspire.Te... / TerminalHost (ubuntu-latest)",
+      "observed_at": "2026-11-03T23:47:23Z",
+      "pr_number": 0,
+      "tests": [
+        {
+          "name": "Aspire.TerminalHost.Tests.TerminalHostControlJsonSerializerContextTests.CancellationReachesServer",
+          "job_id": 126266003028,
+          "job": "Tests / No-package tests (regular, Aspire.TerminalHost.Tests, TerminalHost, TerminalHost, tests/Aspire.Te... / TerminalHost (ubuntu-latest)",
+          "error": "System.TimeoutException : The operation at /_/tests/Aspire.TerminalHost.Tests/TerminalHostControlJsonSerializerContextTests.cs:115 timed out after reaching the limit of 30000ms.",
+          "stack_trace": "   at Microsoft.AspNetCore.InternalTesting.AsyncTestHelpers.TimeoutAfter(Task task, TimeSpan timeout, String filePath, Int32 lineNumber) in /_/tests/Shared/AsyncTestHelpers.cs:line 201\n   at Aspire.TerminalHost.Tests.TerminalHostControlJsonSerializerContextTests.CancellationReachesServer() in /_/tests/Aspire.TerminalHost.Tests/TerminalHostControlJsonSerializerContextTests.cs:line 115\n--- End of stack trace from previous location ---",
+          "standard_output": "",
+          "standard_error": "",
+          "result_file": "00001.trx",
+          "result_format": "trx",
+          "execution_id": "8289aa4b-4c31-4011-95be-df61a8f6aaa9"
+        }
+      ]
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/20903"

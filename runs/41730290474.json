@@ -1,0 +1,123 @@
+{
+  "run_id": 41730290474,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/41730290474",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-03T23:47:23Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": null,
+  "main_context": {
+    "last_successful_main_sha": "d4994d7af558bd42ec3ec36e2499fb4b9ec31ce2",
+    "failed_sha": "031c1bc0745e242c8020d7f7c81b08e3fd1ab3da",
+    "candidate_merge_history_state": "incomplete",
+    "candidate_merges": null
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.TerminalHost.Tests, TerminalHost, TerminalHost, tests/Aspire.Te... / TerminalHost (ubuntu-latest)",
+      "id": 126266003028,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/41730290474/job/126266003028",
+      "classification": "flaky-test",
+      "reason": "CancellationReachesServer hit its 30s timeout once among 61 tests",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, diagnostic-logs)",
+      "id": 126275261112,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/41730290474/job/126275261112",
+      "classification": "flaky-test",
+      "reason": "E2E UI wait timed out after 2s waiting for element visibility",
+      "failed_steps": [
+        "Run extension E2E tests"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, resource-debug-tools)",
+      "id": 126275261225,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/41730290474/job/126275261225",
+      "classification": "flaky-test",
+      "reason": "Timed out waiting for resource to reach Running state",
+      "failed_steps": [
+        "Run extension E2E tests"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, java-apphost-debug-startup-timeout)",
+      "id": 126275261259,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/41730290474/job/126275261259",
+      "classification": "flaky-test",
+      "reason": "E2E control command failed during teardown",
+      "failed_steps": [
+        "Run extension E2E tests"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire Java AppHost debug startup timeout E2E debug startup waits past the old 60 second guest backchannel timeout",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, java-apphost-debug-startup-timeout)",
+      "error": "Java debug startup timeout E2E cleanup failed.\n1. Error: Failed to apply E2E control revision 1793748837340: E2E control command failed.",
+      "stack_trace": "AggregateError: Java debug startup timeout E2E cleanup failed.\n1. Error: Failed to apply E2E control revision 1793748837340: E2E control command failed.\n    at runE2eTeardown (out/test-e2e/test-e2e/helpers/fixtures.js:238:15)\n    at async Context.<anonymous> (out/test-e2e/test-e2e/javaAppHostDebugStartupTimeout.e2e.test.js:79:13)",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Teardown failed applying E2E control revision, matching a known intermittent mechanism",
+      "job_id": 126275261259,
+      "result_file": "00001.json",
+      "result_format": "mocha"
+    },
+    {
+      "name": "Aspire resource debug language model tool E2E attaches to a .NET resource launched with Run Without Debugging",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, resource-debug-tools)",
+      "error": "Timed out after 180000ms waiting for resource 'e2e-worker' state Running.\nLast error: <none>\nLast state: {\n  \"extensionHostSessionId\": \"9d8faa0d-2fbb-4ce2-9429-0055644636ef\",\n  \"updatedAt\": \"2026-11-03T23:34:05.973Z\",\n  \"runId\": \"7144-1793748527037\",\n  \"state\": {\n    \"viewMode\": \"workspace\",\n    \"isRepositoryLoading\": false,\n    \"isWorkspaceAppHostDiscoveryComplete\": true,\n    \"hasError\": false,\n    \"workspaceAppHost\": {\n      \"appHostPath\": \"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-vcDOeX\\\\workspace\\\\AspireE2E.AppHost\\\\AspireE2E.AppHost.csproj\",\n      \"appHostPid\": 9224,\n      \"dashboardUrl\": \"https://localhost:56275/login?t=<redacted>\",\n      \"resources\": [\n        {\n          \"name\": \"e2e-custom-output-worker-yzkgkzmn\",\n          \"displayName\": \"e2e-custom-output-worker\",\n          \"resourceType\": \"Project\",\n          \"state\": \"Running\",\n          \"projectPath\": \"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-vcDOeX\\\\workspace\\\\AspireE2E.CustomOutputWorker\\\\AspireE2E.Cus",
+      "stack_trace": "Error: Timed out after 180000ms waiting for resource 'e2e-worker' state Running.\nLast error: <none>\nLast state: {\n  \"extensionHostSessionId\": \"9d8faa0d-2fbb-4ce2-9429-0055644636ef\",\n  \"updatedAt\": \"2026-11-03T23:34:05.973Z\",\n  \"runId\": \"7144-1793748527037\",\n  \"state\": {\n    \"viewMode\": \"workspace\",\n    \"isRepositoryLoading\": false,\n    \"isWorkspaceAppHostDiscoveryComplete\": true,\n    \"hasError\": false,\n    \"workspaceAppHost\": {\n      \"appHostPath\": \"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-vcDOeX\\\\workspace\\\\AspireE2E.AppHost\\\\AspireE2E.AppHost.csproj\",\n      \"appHostPid\": 9224,\n      \"dashboardUrl\": \"https://localhost:56275/login?t=<redacted>\",\n      \"resources\": [\n        {\n          \"name\": \"e2e-custom-output-worker-yzkgkzmn\",\n          \"displayName\": \"e2e-custom-output-worker\",\n          \"resourceType\": \"Project\",\n          \"state\": \"Running\",\n          \"projectPath\": \"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-vcDOeX\\\\workspace\\\\AspireE2E.CustomOutputWorker\\\\AspireE2E.CustomOutputWorker.csproj\",\n          \"dashboardUrl\": \"https://localhost:56275\",\n          \"urls\": [\n            {\n              \"name\": \"http\",\n              \"url\": \"http://localhost:56278\"\n            }\n          ],\n          \"commands\": {\n            \"rebuild\": {\n              \"displayName\": \"Rebuild\",\n              \"description\": \"Stop the resource, rebuild the project from source, and restart. Use this to apply source code changes.\",\n              \"state\": \"Enabled\"\n            },\n            \"restart\": {\n              \"displayName\": \"Restart\",\n              \"description\": \"Restart resource. Source code is not recompiled.\",\n              \"state\": \"Enabled\"\n            },\n            \"stop\": {\n              \"displayName\": \"Stop\",\n              \"description\": \"Stop resource\",\n              \"state\": \"Enabled\"\n            }\n          }\n        },\n        {\n          \"name\": \"e2e-go-rqapbunb\",\n          \"displayName\": \"e2e-go\",\n          \"resourceType\": \"Executable\",\n          \"sta",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Intermittent timeout waiting for resource Running; other resources were running",
+      "job_id": 126275261225,
+      "result_file": "00001.json",
+      "result_format": "mocha"
+    },
+    {
+      "name": "Aspire.TerminalHost.Tests.TerminalHostControlJsonSerializerContextTests.CancellationReachesServer",
+      "job": "Tests / No-package tests (regular, Aspire.TerminalHost.Tests, TerminalHost, TerminalHost, tests/Aspire.Te... / TerminalHost (ubuntu-latest)",
+      "error": "System.TimeoutException : The operation at /_/tests/Aspire.TerminalHost.Tests/TerminalHostControlJsonSerializerContextTests.cs:115 timed out after reaching the limit of 30000ms.",
+      "stack_trace": "   at Microsoft.AspNetCore.InternalTesting.AsyncTestHelpers.TimeoutAfter(Task task, TimeSpan timeout, String filePath, Int32 lineNumber) in /_/tests/Shared/AsyncTestHelpers.cs:line 201\n   at Aspire.TerminalHost.Tests.TerminalHostControlJsonSerializerContextTests.CancellationReachesServer() in /_/tests/Aspire.TerminalHost.Tests/TerminalHostControlJsonSerializerContextTests.cs:line 115\n--- End of stack trace from previous location ---",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Known intermittent 30s timeout in the same test and assertion",
+      "job_id": 126266003028,
+      "execution_id": "8289aa4b-4c31-4011-95be-df61a8f6aaa9",
+      "result_file": "00001.trx",
+      "result_format": "trx"
+    },
+    {
+      "name": "CLI diagnostic log actions E2E offers both current CLI and AppHost logs on a connected failure",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, diagnostic-logs)",
+      "error": "Waiting until element is visible\nWait timed out after 2154ms",
+      "stack_trace": "TimeoutError: Waiting until element is visible\nWait timed out after 2154ms\n    at /home/runner/work/aspire/aspire/extension/node_modules/selenium-webdriver/lib/webdriver.js:929:22\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Short UI wait timeout in E2E, intermittent timing behavior",
+      "job_id": 126275261112,
+      "result_file": "00001.json",
+      "result_format": "mocha"
+    }
+  ],
+  "causes": [
+    "aspire-terminalhost-tests-cancellationreachesserver-timeout",
+    "vscode-e2e-windows-resource-debug-tools-control-failure",
+    "vscode-e2e-linux-tree-actions-resource-running-timeout",
+    "vscode-e2e-diagnostic-logs-element-visible-timeout"
+  ]
+}

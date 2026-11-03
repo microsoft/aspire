@@ -11,6 +11,26 @@
       "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, resource-debug-tools)",
       "pr_number": 0,
       "observed_at": "2026-10-29T21:40:30Z"
+    },
+    {
+      "run_id": 41730290474,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/41730290474",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, java-apphost-debug-startup-timeout)",
+      "observed_at": "2026-11-03T23:47:23Z",
+      "pr_number": 0,
+      "tests": [
+        {
+          "name": "Aspire Java AppHost debug startup timeout E2E debug startup waits past the old 60 second guest backchannel timeout",
+          "job_id": 126275261259,
+          "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, java-apphost-debug-startup-timeout)",
+          "error": "Java debug startup timeout E2E cleanup failed.\n1. Error: Failed to apply E2E control revision 1793748837340: E2E control command failed.",
+          "stack_trace": "AggregateError: Java debug startup timeout E2E cleanup failed.\n1. Error: Failed to apply E2E control revision 1793748837340: E2E control command failed.\n    at runE2eTeardown (out/test-e2e/test-e2e/helpers/fixtures.js:238:15)\n    at async Context.<anonymous> (out/test-e2e/test-e2e/javaAppHostDebugStartupTimeout.e2e.test.js:79:13)",
+          "standard_output": "",
+          "standard_error": "",
+          "result_file": "00001.json",
+          "result_format": "mocha"
+        }
+      ]
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/21411"
