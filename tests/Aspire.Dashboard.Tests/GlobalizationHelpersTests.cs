@@ -89,7 +89,8 @@ public class GlobalizationHelpersTests
 
     [Theory]
     [InlineData("en", "en-US", "en-US")]
-    [InlineData("en", "en-XX", "en")]
+    // ASP.NET Core only falls back to parent cultures for predefined cultures.
+    [InlineData("en", "en-XX", null)]
     [InlineData("de", "en-US", null)]
     [InlineData("zh-Hans", "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7", "zh-CN")]
     [InlineData("zh-Hans", "zh-CN", "zh-CN")]
@@ -113,5 +114,17 @@ public class GlobalizationHelpersTests
         {
             Assert.Null(requestCulture);
         }
+    }
+
+    [Fact]
+    public async Task ResolveSetCultureToAcceptedCultureAsync_FallsBackToSupportedParentCulture()
+    {
+        var englishCulture = CultureInfo.GetCultureInfo("en");
+
+        var requestCulture = await GlobalizationHelpers.ResolveSetCultureToAcceptedCultureAsync("en-US", [englishCulture]);
+
+        Assert.NotNull(requestCulture);
+        Assert.Equal(englishCulture, requestCulture.Culture);
+        Assert.Equal(englishCulture, requestCulture.UICulture);
     }
 }
