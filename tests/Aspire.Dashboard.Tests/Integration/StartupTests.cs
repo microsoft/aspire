@@ -6,6 +6,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Aspire.Dashboard.Authentication;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Otlp.Http;
 using Aspire.Dashboard.Otlp.Storage;
@@ -89,7 +90,7 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
         await app.StartAsync().DefaultTimeout();
 
         var options = app.Services.GetRequiredService<IOptions<Microsoft.AspNetCore.Http.Json.JsonOptions>>().Value.SerializerOptions;
-        Assert.Equal("test-token", JsonSerializer.Deserialize<ValidateTokenRequest>("""{"token":"test-token"}""", options)!.Token);
+        Assert.Equal("test-token", JsonSerializer.Deserialize("""{"token":"test-token"}""", BrowserTokenAuthenticationJsonSerializerContext.Default.BrowserTokenLoginRequest)!.Token);
         Assert.Equal("test-token", JsonSerializer.Deserialize<TelemetryValidateTokenRequest>("""{"token":"test-token"}""", options)!.Token);
     }
 
