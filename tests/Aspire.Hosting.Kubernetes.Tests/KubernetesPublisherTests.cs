@@ -32,9 +32,12 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
         var web = builder.AddContainer("web", "image").WithHttpEndpoint(targetPort: 8080).WithExternalHttpEndpoints();
         environment.AddIngress("public").WithHostname("public.example").WithHostname("alias.example").WithPath("/", web.GetEndpoint("http"));
         var origin = web.GetEndpoint("HTTP", KnownNetworkIdentifiers.LocalhostNetwork).BrowserOrigins.AsJson();
+        var token = builder.AddParameter("token", "test-token", secret: true);
         builder.AddContainer("consumer", "image")
             .WithEnvironment("ORIGINS_JSON", origin)
             .WithEnvironment("CONFIG", ReferenceExpression.Create($"origins={origin}"))
+            .WithEnvironment("SECRET_CONFIG", ReferenceExpression.Create($"origins={origin};token={token}"))
+            .WithEnvironment("TOKEN", token)
             .WithEnvironment("MULTILINE", builder.AddParameter("multiline", "first \"quoted\" line\nsecond\\line", publishValueAsDefault: true))
             .WithEnvironment("PORT", web.GetEndpoint("HTTP").Property(EndpointProperty.Port));
         var expected = configured ? "[\"https://override.example\",\"https://alias.example\"]" : "[\"http://public.example\",\"http://alias.example\"]";
@@ -49,7 +52,7 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
         var rendered = new System.Text.StringBuilder();
         var errors = new System.Text.StringBuilder();
         var overridePath = Path.Combine(workspace.Path, HelmDeploymentEngine.GetDeployValuesFileName("env"));
-        var arguments = "template origin-test . --show-only templates/consumer/config.yaml";
+        var arguments = "template origin-test . --show-only templates/consumer/config.yaml --show-only templates/consumer/secrets.yaml";
         if (File.Exists(overridePath))
         {
             arguments += $" -f \"{overridePath}\"";
@@ -59,12 +62,19 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
         Assert.True(exitCode == 0, errors.ToString());
         var yaml = new YamlStream();
         yaml.Load(new StringReader(rendered.ToString()));
-        var map = Assert.IsType<YamlMappingNode>(Assert.Single(yaml.Documents).RootNode);
+        Assert.Equal(2, yaml.Documents.Count);
+        var resources = yaml.Documents
+            .Select(document => Assert.IsType<YamlMappingNode>(document.RootNode))
+            .ToDictionary(resource => Assert.IsType<YamlScalarNode>(resource.Children[new YamlScalarNode("kind")]).Value!);
+        var map = resources["ConfigMap"];
         var data = Assert.IsType<YamlMappingNode>(map.Children[new YamlScalarNode("data")]);
         Assert.Equal(expected, Assert.IsType<YamlScalarNode>(data.Children[new YamlScalarNode("ORIGINS_JSON")]).Value);
         Assert.Equal($"origins={expected}", Assert.IsType<YamlScalarNode>(data.Children[new YamlScalarNode("CONFIG")]).Value);
         Assert.Equal("first \"quoted\" line\nsecond\\line", Assert.IsType<YamlScalarNode>(data.Children[new YamlScalarNode("MULTILINE")]).Value);
         Assert.Equal("8080", Assert.IsType<YamlScalarNode>(data.Children[new YamlScalarNode("PORT")]).Value);
+        var stringData = Assert.IsType<YamlMappingNode>(resources["Secret"].Children[new YamlScalarNode("stringData")]);
+        Assert.Equal($"origins={expected};token=test-token", Assert.IsType<YamlScalarNode>(stringData.Children[new YamlScalarNode("SECRET_CONFIG")]).Value);
+        Assert.Equal("test-token", Assert.IsType<YamlScalarNode>(stringData.Children[new YamlScalarNode("TOKEN")]).Value);
     }
 
     [Theory]

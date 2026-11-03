@@ -87,7 +87,11 @@ internal static class ResourceExtensions
                 : kvp.Value.Expression   // All secret values are strings
                   ?? string.Empty;
 
-            secret.StringData[kvp.Key] = expression.EnsureStringOutput();
+            // Quote the evaluated result so JSON or other embedded quotes remain valid YAML.
+            expression = expression.EnsureStringOutput();
+            secret.StringData[kvp.Key] = expression.ContainsHelmExpression()
+                ? expression.ToQuotedHelmTemplateExpression()
+                : expression;
             processedKeys.Add(kvp.Key);
         }
 

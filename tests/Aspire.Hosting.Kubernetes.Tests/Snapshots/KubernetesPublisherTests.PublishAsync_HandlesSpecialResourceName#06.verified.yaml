@@ -8,6 +8,6 @@ metadata:
     app.kubernetes.io/component: "SpeciaL-ApP"
     app.kubernetes.io/instance: "{{ .Release.Name }}"
 stringData:
-  param3: "{{ .Values.secrets.SpeciaL_ApP.param3 }}"
-  ConnectionStrings__api_cs: "Url={{ .Values.config.SpeciaL_ApP.param0 }}, Secret={{ .Values.secrets.SpeciaL_ApP.param1 }}"
+  param3: {{ tpl "{{ .Values.secrets.SpeciaL_ApP.param3 }}" . | quote }}
+  ConnectionStrings__api_cs: {{ tpl "Url={{ .Values.config.SpeciaL_ApP.param0 }}, Secret={{ .Values.secrets.SpeciaL_ApP.param1 }}" . | quote }}
 type: "Opaque"
