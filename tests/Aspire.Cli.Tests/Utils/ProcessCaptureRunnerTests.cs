@@ -115,7 +115,8 @@ public class ProcessCaptureRunnerTests(ITestOutputHelper outputHelper)
         startInfo.CreateNoWindow = true;
 
         // The caller cancels once the drain bound has expired and the runner is waiting for the
-        // backlogged pool, so the interruption must be observed by that wait. The deadline fires
+        // backlogged pool, so the interruption must be observed by that wait (or by the bound's own
+        // wait, if the backlog also starves the bound's timer). The deadline fires
         // after the 2s drain bound.
         var interruptAfter = TimeSpan.FromSeconds(3);
         using var callerCancel = cancelByCaller ? new CallerCancellation(callerCts) : null;
@@ -133,6 +134,7 @@ public class ProcessCaptureRunnerTests(ITestOutputHelper outputHelper)
             onDrainStart: () =>
             {
                 backlog.Start(cancelByCaller ? CancellationToken.None : captureToken);
+                callerCancel?.Arm();
                 backlogStarted.TrySetResult();
             },
             onProbingBacklog: () => callerCancel?.Trigger(),
@@ -217,9 +219,15 @@ public class ProcessCaptureRunnerTests(ITestOutputHelper outputHelper)
     }
 
     // Cancels from a dedicated thread once triggered, like a caller pressing Ctrl+C, without
-    // depending on timers or pool threads that the backlog starves.
+    // depending on timers or pool threads that the backlog starves. The drain bound's own timer
+    // needs a pool thread to fire, so if the backlog starves it the probe is never reached; once
+    // armed, the thread then cancels after a wall-clock fallback, which lands in the first drain
+    // wait and must be observed just as promptly.
     private sealed class CallerCancellation : IDisposable
     {
+        private static readonly TimeSpan s_fallback = TimeSpan.FromSeconds(5);
+
+        private readonly ManualResetEventSlim _armed = new();
         private readonly ManualResetEventSlim _trigger = new();
         private volatile bool _stopped;
         private readonly Thread _thread;
@@ -228,7 +236,8 @@ public class ProcessCaptureRunnerTests(ITestOutputHelper outputHelper)
         {
             _thread = new Thread(() =>
             {
-                _trigger.Wait();
+                _armed.Wait();
+                _trigger.Wait(s_fallback);
                 if (!_stopped)
                 {
                     cts.Cancel();
@@ -238,12 +247,19 @@ public class ProcessCaptureRunnerTests(ITestOutputHelper outputHelper)
             _thread.Start();
         }
 
-        public void Trigger() => _trigger.Set();
+        public void Arm() => _armed.Set();
+
+        public void Trigger()
+        {
+            _trigger.Set();
+            _armed.Set();
+        }
 
         public void Dispose()
         {
             _stopped = true;
             _trigger.Set();
+            _armed.Set();
             // Cancel() can run the runner, and the test awaiting it, inline on this thread.
             if (Thread.CurrentThread != _thread)
             {
