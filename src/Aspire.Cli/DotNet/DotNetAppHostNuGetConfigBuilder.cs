@@ -3,6 +3,7 @@
 
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
+using NuGet.Configuration;
 
 namespace Aspire.Cli.DotNet;
 
@@ -49,6 +50,13 @@ internal static class DotNetAppHostNuGetConfigBuilder
             .Where(source => integrationMappings.Any(mapping =>
                 PackageSourceIdentity.Comparer.Equals(mapping.Source, source.Source)))
             .ToArray();
+        var ambientPatterns = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var group in settings.PackageSourceMappings.GroupBy(
+            static mapping => mapping.SourceKey, StringComparer.OrdinalIgnoreCase))
+        {
+            ambientPatterns[group.Key] = [.. group.SelectMany(static mapping => mapping.Patterns)];
+        }
+        var ambientMapping = new PackageSourceMapping(ambientPatterns);
         // Introducing the first mapping makes every unmapped dependency ineligible for
         // restore. Keep mapping disabled rather than persisting ambient fallback policy.
         // https://learn.microsoft.com/nuget/consume-packages/package-source-mapping#package-pattern-requirements
@@ -58,7 +66,9 @@ internal static class DotNetAppHostNuGetConfigBuilder
                 [.. integrationMappings
                     .Where(mapping => PackageSourceIdentity.Comparer.Equals(mapping.Source, source.Source))
                     .Select(static mapping => mapping.PackageFilter)
+                    .Where(pattern => !IsAlreadyRoutedToIntegrationSource(settings, workloadId, ambientMapping, source, pattern))
                     .Distinct(StringComparer.OrdinalIgnoreCase)]))
+                .Where(static mapping => mapping.Patterns.Count > 0)
                 .ToArray();
         var selectedPatterns = selectedMappings.Count == 0
             ? [PackageSourceOverrideMappings.DefaultPackagePattern]
@@ -116,6 +126,38 @@ internal static class DotNetAppHostNuGetConfigBuilder
 
         return new DotNetAppHostNuGetConfig(
             workloadId, sourceChanges, [.. integrationSources.Select(static source => source.Key)], mappings, removedMappings);
+    }
+
+    private static bool IsAlreadyRoutedToIntegrationSource(
+        NuGetSettingsInfo settings,
+        string workloadId,
+        PackageSourceMapping ambientMapping,
+        NuGetConfigSource source,
+        string packagePattern)
+    {
+        if (!source.IsAmbient || !source.IsEnabled ||
+            !PackageSourceOverrideMappings.IsExactPackagePattern(packagePattern))
+        {
+            return false;
+        }
+
+        var ambientSource = settings.Sources.Single(ambient =>
+            string.Equals(ambient.Name, source.Key, StringComparison.OrdinalIgnoreCase));
+        // CLI-owned aliases must still participate in channel-pattern cleanup.
+        if (!ambientSource.IsIntegrationSource ||
+            NuGetConfigurationBuilder.IsCliManagedSource(ambientSource, workloadId))
+        {
+            return false;
+        }
+
+        // A matching wildcard is insufficient: exact IDs and longer prefixes take precedence.
+        // Reuse policy only when every eligible enabled alias resolves to the selected feed.
+        // https://learn.microsoft.com/nuget/consume-packages/package-source-mapping#package-pattern-precedence
+        var keys = ambientMapping.GetConfiguredPackageSources(packagePattern);
+        var eligibleSources = settings.Sources.Where(ambient =>
+            ambient.IsEnabled && keys.Contains(ambient.Name, StringComparer.OrdinalIgnoreCase)).ToArray();
+        return eligibleSources.Length > 0 &&
+            eligibleSources.All(ambient => string.Equals(ambient.Identity, ambientSource.Identity, StringComparison.Ordinal));
     }
 }
 

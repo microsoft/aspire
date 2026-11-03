@@ -15,7 +15,7 @@ using NuGet.Configuration;
 namespace Aspire.Cli.DotNet;
 
 /// <summary>
-/// Maintains channel-owned entries in local .NET AppHost configuration without replacing user policy.
+/// Maintains channel-owned entries and additive integration mappings without replacing user policy.
 /// </summary>
 internal sealed class DotNetAppHostNuGetConfigMerger(BundleNuGetService nuGetService)
 {
@@ -82,7 +82,17 @@ internal sealed class DotNetAppHostNuGetConfigMerger(BundleNuGetService nuGetSer
             }
         }
 
-        if (!configuration.HasSourcePolicyChanges && globalPackagesFolder is null)
+        // Discovery can narrow an already sufficient mapping policy without needing any
+        // persisted edits. Do not materialize an empty child configuration in that case.
+        var reusesExistingMappings = configuration.Settings.PackageSourceMappings.Count > 0 &&
+            configuration.AppHostConfig is
+            {
+                SourceChanges.Sources.Count: 0,
+                SourceChanges.RetiredSourceKeys.Count: 0,
+                PackageSourceMappings.Count: 0,
+                RemovedPackageSourceMappings.Count: 0
+            };
+        if ((!configuration.HasSourcePolicyChanges || reusesExistingMappings) && globalPackagesFolder is null)
         {
             return null;
         }
@@ -189,11 +199,15 @@ internal sealed class DotNetAppHostNuGetConfigMerger(BundleNuGetService nuGetSer
 
             var ambientSource = sourceConfiguration.Settings.Sources.Single(ambient =>
                 string.Equals(ambient.Name, source.Key, StringComparison.OrdinalIgnoreCase));
-            // Borrowing an alias can shadow inherited mappings and gives the CLI no
-            // reliable ownership for later cleanup. Maintain only CLI-owned local entries
-            // or local aliases explicitly named by the selected integration configuration.
-            // NuGet replaces mapping entries by key, so a local source definition alone
-            // does not make an inherited mapping safe to extend.
+            // Exact integration selections may extend local user mappings without taking
+            // ownership of the alias or its existing patterns. NuGet replaces mapping entries
+            // by key, so a local source definition alone cannot make inherited mappings safe
+            // to extend.
+            var canExtendIntegrationMapping = ambientSource.IsIntegrationSource &&
+                (source.IsExplicitlyNamed ||
+                 configuration.PackageSourceMappings
+                     .Where(mapping => string.Equals(mapping.SourceKey, source.Key, StringComparison.OrdinalIgnoreCase))
+                     .All(static mapping => mapping.Patterns.All(PackageSourceOverrideMappings.IsExactPackagePattern)));
             var inheritsMapping = !localMappingItems.Any(static item => item is ClearItem) &&
                 !localMappingItems.OfType<PackageSourceMappingSourceItem>().Any(mapping =>
                     string.Equals(mapping.Key, source.Key, StringComparison.OrdinalIgnoreCase)) &&
@@ -201,7 +215,7 @@ internal sealed class DotNetAppHostNuGetConfigMerger(BundleNuGetService nuGetSer
                     string.Equals(mapping.Key, source.Key, StringComparison.OrdinalIgnoreCase));
             if (inheritsMapping ||
                 !(NuGetConfigurationBuilder.IsCliManagedSourceKey(source.Key, configuration.WorkloadId) ||
-                  source.IsExplicitlyNamed && ambientSource.IsIntegrationSource) ||
+                  canExtendIntegrationMapping) ||
                 !localSources.Any(local =>
                     string.Equals(local.Key, source.Key, StringComparison.OrdinalIgnoreCase) &&
                     string.Equals(

@@ -24,6 +24,92 @@ namespace Aspire.Cli.Tests.Commands;
 public class AddCommandTests(ITestOutputHelper outputHelper)
 {
     [Theory]
+    [InlineData("Contoso.*", false)]
+    [InlineData("*", false)]
+    [InlineData("Existing.*", false)]
+    [InlineData("*", true)]
+    public async Task AddCommandReusesExistingAuthenticatedIntegrationAlias(string existingPattern, bool useNuGetOrg)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var source = useNuGetOrg ? PackageSources.NuGetOrg : "https://example.com/team";
+        var sourceKey = useNuGetOrg ? "nuget.org" : "company-feed";
+        var appHostFile = new FileInfo(Path.Combine(workspace.Path, "apphost.ts"));
+        File.WriteAllText(appHostFile.FullName, string.Empty);
+        File.WriteAllText(Path.Combine(workspace.Path, AspireConfigFile.FileName), $$"""
+            {
+              "integrationSources": {
+                "default": {"enabled": false},
+                "team": {"source": "{{source}}", "patterns": ["Contoso.Hosting.*"]}
+              }
+            }
+            """);
+        var configPath = Path.Combine(workspace.Path, "nuget.config");
+        File.WriteAllText(configPath, $$"""
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="{{sourceKey}}" value="{{source}}" />
+                <add key="sdk" value="https://example.com/sdk" />
+              </packageSources>
+              <packageSourceCredentials>
+                <{{sourceKey}}><add key="Username" value="user" /><add key="ClearTextPassword" value="test-password" /></{{sourceKey}}>
+              </packageSourceCredentials>
+              <packageSourceMapping>
+                <clear />
+                <packageSource key="{{sourceKey}}"><package pattern="{{existingPattern}}" /></packageSource>
+                <packageSource key="sdk"><package pattern="Aspire*" /></packageSource>
+              </packageSourceMapping>
+            </configuration>
+            """);
+        var original = await File.ReadAllBytesAsync(configPath);
+        var cache = new FakeNuGetPackageCache
+        {
+            GetPackagesAsyncCallback = (_, _, _, _, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>(
+                [new() { Id = "Contoso.Hosting.One", Version = "1.0.0", Source = source }])
+        };
+        AddPackageContext? added = null;
+        var factory = new TestTypeScriptStarterProjectFactory((_, _, _) => Task.FromResult(true));
+        factory.Project.AddPackageAsyncCallback = (context, _) =>
+        {
+            added = context;
+            return Task.FromResult(true);
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+            options.NuGetClientFactory = _ => NuGetTestHelper.CreateClient();
+        });
+        services.AddSingleton<Aspire.Cli.NuGet.INuGetPackageCache>(cache);
+        services.AddSingleton<IAppHostProjectFactory>(factory);
+        using var provider = services.BuildServiceProvider();
+
+        var exitCode = await provider.GetRequiredService<AddCommand>()
+            .Parse($"add Contoso.Hosting.One --apphost \"{appHostFile.FullName}\" --version 1.0.0").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(added);
+        Assert.Equal("Contoso.Hosting.One", added.PackageId);
+        Assert.Equal([source], NuGetTestHelper.GetEligiblePackageSources(workspace.Path, added.PackageId));
+        Assert.Equal([source], NuGetTestHelper.GetEligiblePackageSources(workspace.Path, existingPattern.TrimEnd('*') + "Dependency"));
+        Assert.Equal(["https://example.com/sdk"], NuGetTestHelper.GetEligiblePackageSources(workspace.Path, "Aspire.Hosting.Redis"));
+        var settings = NuGetTestHelper.LoadSettings(workspace.Path);
+        var configuredSources = new PackageSourceProvider(settings).LoadPackageSources().ToArray();
+        Assert.Equal([sourceKey, "sdk"], configuredSources.Select(static configuredSource => configuredSource.Name));
+        var configuredSource = Assert.Single(configuredSources, configuredSource => configuredSource.Name == sourceKey);
+        Assert.NotNull(configuredSource.Credentials);
+        Assert.Equal("user", configuredSource.Credentials.Username);
+        Assert.Equal("test-password", configuredSource.Credentials.PasswordText);
+        var mapping = Assert.Single(new PackageSourceMappingProvider(settings).GetPackageSourceMappingItems(),
+            mapping => mapping.Key == sourceKey);
+        Assert.Equal(existingPattern == "Existing.*" ? [existingPattern, added.PackageId] : [existingPattern],
+            mapping.Patterns.Select(static pattern => pattern.Pattern));
+        if (existingPattern != "Existing.*")
+        {
+            Assert.Equal(original, await File.ReadAllBytesAsync(configPath));
+        }
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task AddCommandPreservesConfiguredFeedsAcrossSequentialIntegrationAdds(bool hasMappings)

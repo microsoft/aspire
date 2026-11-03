@@ -12,6 +12,67 @@ namespace Aspire.Cli.Tests.NuGet;
 public class NuGetConfigurationTests
 {
     [Theory]
+    [InlineData("Contoso.*", "*", true, false)]
+    [InlineData("contoso.*", "*", true, false)]
+    [InlineData("Contoso.Hosting.One", "Contoso.*", true, false)]
+    [InlineData("*", "Contoso.*", true, true)]
+    [InlineData("Contoso.*", "Contoso.Hosting.*", true, true)]
+    [InlineData("Contoso.*", "Contoso.Hosting.One", true, true)]
+    [InlineData("*", "*", true, true)]
+    [InlineData("Contoso.*", "Contoso.*", true, true)]
+    [InlineData("Contoso.*", "*", false, true)]
+    public void Build_ExistingIntegrationMappingMustUniquelyRouteToSelectedFeed(
+        string selectedPattern, string otherPattern, bool selectedSourceEnabled, bool requiresMapping)
+    {
+        const string selectedSource = "https://selected.example/v3/index.json";
+        const string otherSource = "https://other.example/v3/index.json";
+        var settings = CreateSettings([new("company-feed", [selectedPattern]), new("other", [otherPattern])]);
+        settings = settings with
+        {
+            Sources =
+            [
+                new("company-feed", NuGetSourceIdentity.Compute(selectedSource, settings.SourceIdentityKey),
+                    selectedSourceEnabled, true, false) { IsIntegrationSource = true },
+                new("other", NuGetSourceIdentity.Compute(otherSource, settings.SourceIdentityKey), true, false, false)
+            ],
+            DisabledPackageSourceKeys = selectedSourceEnabled ? [] : ["company-feed"]
+        };
+
+        var configuration = DotNetAppHostNuGetConfigBuilder.Build(
+            settings, "test", [new("Contoso.Hosting.One", selectedSource) { SourceKey = "team" }]);
+
+        var persistence = Assert.IsType<DotNetAppHostNuGetConfig>(configuration.AppHostConfig);
+        Assert.Equal(requiresMapping ? ["company-feed"] : [],
+            persistence.PackageSourceMappings.Select(static mapping => mapping.SourceKey));
+        Assert.Empty(persistence.SourceChanges.Sources);
+        Assert.Empty(persistence.RemovedPackageSourceMappings);
+    }
+
+    [Fact]
+    public void Build_ExistingIntegrationMappingCanUseMultipleAliasesForSameFeed()
+    {
+        const string source = "https://selected.example/v3/index.json";
+        var settings = CreateSettings([new("authenticated", ["Contoso.*"]), new("anonymous", ["Contoso.*"])]);
+        var identity = NuGetSourceIdentity.Compute(source, settings.SourceIdentityKey);
+        settings = settings with
+        {
+            Sources =
+            [
+                new("authenticated", identity, true, true, false) { IsIntegrationSource = true },
+                new("anonymous", identity, true, false, false) { IsIntegrationSource = true }
+            ]
+        };
+
+        var configuration = DotNetAppHostNuGetConfigBuilder.Build(
+            settings, "test", [new("Contoso.Hosting.One", source) { SourceKey = "team" }]);
+
+        var persistence = Assert.IsType<DotNetAppHostNuGetConfig>(configuration.AppHostConfig);
+        Assert.Equal(["authenticated", "anonymous"], persistence.SelectedSourceKeys);
+        Assert.Empty(persistence.PackageSourceMappings);
+        Assert.Empty(persistence.SourceChanges.Sources);
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public void BuildStable_PreservesDisabledConfiguredIntegrationSources(bool hasMappings)
