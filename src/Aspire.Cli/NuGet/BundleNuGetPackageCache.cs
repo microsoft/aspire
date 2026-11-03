@@ -1,10 +1,12 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Globalization;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
@@ -54,20 +56,11 @@ internal sealed class BundleNuGetPackageCache(
         return packages.Where(package => package.Id.Equals("Aspire.ProjectTemplates", StringComparison.OrdinalIgnoreCase));
     }
 
-    public async Task<IEnumerable<NuGetPackage>> GetIntegrationPackagesAsync(
+    public Task<IEnumerable<NuGetPackage>> GetIntegrationPackagesAsync(
         NuGetPackageOperationConfiguration configuration,
         bool prerelease,
         CancellationToken cancellationToken)
-    {
-        var packages = await SearchAsync(
-            configuration,
-            "Aspire.Hosting",
-            prerelease,
-            SearchTake,
-            cancellationToken).ConfigureAwait(false);
-
-        return FilterPackages(packages, filter: null);
-    }
+        => GetPackagesAsync(configuration, "Aspire.Hosting", filter: null, prerelease, useCache: true, cancellationToken);
 
     public async Task<IEnumerable<NuGetPackage>> GetCliPackagesAsync(
         NuGetPackageOperationConfiguration configuration,
@@ -92,8 +85,12 @@ internal sealed class BundleNuGetPackageCache(
         bool useCache,
         CancellationToken cancellationToken)
     {
-        // Allowed integration patterns are applied after searching, so a broad merged query
-        // must not lose matching packages behind unrelated results on the first page.
+        var startTimestamp = Stopwatch.GetTimestamp();
+        var displayQuery = PackageSourceRedactor.RedactForDisplay(packageId);
+        logger.LogDebug("Searching NuGet packages for query '{Query}' (prerelease: {Prerelease}).", displayQuery, prerelease);
+
+        // Allowed integration patterns are applied after searching, so matching packages
+        // must not be lost behind unrelated results on the first page.
         var packages = await SearchAsync(
             configuration,
             packageId,
@@ -101,7 +98,12 @@ internal sealed class BundleNuGetPackageCache(
             filter is null ? SearchTake : int.MaxValue,
             cancellationToken).ConfigureAwait(false);
 
-        return FilterPackages(packages, filter);
+        var matches = FilterPackages(packages, filter).ToArray();
+        logger.LogDebug(
+            "NuGet search for query '{Query}' returned {ReturnedCount} packages; {MatchedCount} matched in {ElapsedMilliseconds} ms.",
+            displayQuery, packages.Count, matches.Length, Stopwatch.GetElapsedTime(startTimestamp).TotalMilliseconds);
+
+        return matches;
     }
 
     public async Task<IEnumerable<NuGetPackage>> GetPackageVersionsAsync(

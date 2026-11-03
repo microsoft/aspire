@@ -562,7 +562,7 @@ internal sealed class NuGetClient(
         }
     }
 
-    private static async Task<IReadOnlyList<NuGetSearchResult>> SearchSourceSafelyAsync(
+    private async Task<IReadOnlyList<NuGetSearchResult>> SearchSourceSafelyAsync(
         PackageSource source,
         string query,
         global::NuGet.Protocol.Core.Types.SearchFilter filter,
@@ -664,7 +664,7 @@ internal sealed class NuGetClient(
         }
     }
 
-    private static async Task<IReadOnlyList<NuGetSearchResult>> SearchSourceAsync(
+    private async Task<IReadOnlyList<NuGetSearchResult>> SearchSourceAsync(
         PackageSource source,
         string query,
         global::NuGet.Protocol.Core.Types.SearchFilter filter,
@@ -683,11 +683,18 @@ internal sealed class NuGetClient(
         var skip = 0;
         while (skip < take)
         {
-            // Merged integration patterns can require an empty search term. Page through that
-            // broader result set so unrelated packages cannot crowd out allowed integrations.
+            // Unrestricted integration sources can require an empty search term. Follow pagination
+            // so matching packages are not limited to the first page.
             var pageSize = Math.Min(1000, take - skip);
             var results = (await searchResource.SearchAsync(
                 query, filter, skip, pageSize, nuGetLogger, cancellationToken).ConfigureAwait(false)).ToArray();
+            logger.LogTrace(
+                "NuGet search page from '{SourceName}' ({Source}) for query '{Query}': skip {Skip}, take {Take}, returned {PackageCount} packages.",
+                PackageSourceRedactor.RedactForDisplay(source.Name),
+                PackageSourceRedactor.RedactForDisplay(source.Source),
+                PackageSourceRedactor.RedactForDisplay(query),
+                skip, pageSize, results.Length);
+
             foreach (var result in results)
             {
                 var versions = await result.GetVersionsAsync().ConfigureAwait(false);

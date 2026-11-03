@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.IO.Compression;
 using System.Xml.Linq;
 using Aspire.Cli.Configuration;
@@ -275,13 +276,26 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         bool hasExplicitSourceOverride,
         CancellationToken cancellationToken)
     {
+        var startTimestamp = Stopwatch.GetTimestamp();
+        var channelName = PackageSourceRedactor.RedactForDisplay(Name);
+        var sourceDetails = PackageSourceRedactor.RedactForDisplay(IntegrationSource?.Source ?? ComputeSourceDetails(mappings));
+        var patterns = IntegrationSource?.Patterns ?? mappings?.Select(mapping => mapping.PackageFilter).ToArray();
+        logger.LogDebug(
+            "Starting integration discovery for channel '{ChannelName}' from '{Source}'. Patterns: {Patterns}.",
+            channelName, sourceDetails, patterns is null ? "(built-in)" : string.Join(", ", patterns));
+
         if (GetLocalIntegrationPackageSource(mappings) is { } localPackageSource)
         {
-            return GetIntegrationPackagesFromLocalPackageSource(
+            var localPackages = GetIntegrationPackagesFromLocalPackageSource(
                 localPackageSource.Source,
                 localPackageSource.PackageSource,
                 applyPinnedVersion ? GetLocalPackageVersion(workingDirectory) : null,
-                cancellationToken);
+                cancellationToken).ToArray();
+            logger.LogDebug(
+                "Local integration discovery for channel '{ChannelName}' from '{Source}' found {PackageCount} packages in {ElapsedMilliseconds} ms.",
+                channelName, sourceDetails, localPackages.Length, Stopwatch.GetElapsedTime(startTimestamp).TotalMilliseconds);
+
+            return localPackages;
         }
 
         var tasks = new List<Task<IEnumerable<NuGetPackage>>>();
@@ -294,12 +308,17 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
 
         if (IntegrationSource is { } integrationSource)
         {
-            // NuGet feeds do not consistently support OR queries. Search the common prefix
-            // once (or all packages for disjoint prefixes), then enforce the union of patterns.
-            tasks.Add(nuGetPackageCache.GetPackagesAsync(searchConfiguration, integrationSource.SearchTerm,
-                id => integrationSource.AllowsPackage(id) &&
-                    (_features.IsFeatureEnabled(KnownFeatures.ShowDeprecatedPackages, defaultValue: false) || !DeprecatedPackages.IsDeprecated(id)),
-                prerelease: true, useCache: true, cancellationToken));
+            var searchTerms = integrationSource.SearchTerms.ToArray();
+            logger.LogDebug(
+                "Searching integration source '{SourceName}' with queries: {Queries}.",
+                integrationSource.Name, string.Join(", ", searchTerms.Select(term => $"'{term}'")));
+
+            // NuGet feeds do not consistently support OR queries. Search each prefix or exact ID
+            // separately so disjoint patterns cannot broaden discovery to the entire feed.
+            foreach (var searchTerm in searchTerms)
+            {
+                tasks.Add(SearchIntegrationPackagesAsync(searchConfiguration, integrationSource, searchTerm, cancellationToken));
+            }
         }
         else
         {
@@ -318,7 +337,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
 
         var packages = packageResults
             .SelectMany(p => p)
-            .DistinctBy(p => $"{p.Id}-{p.Version}");
+            .DistinctBy(p => $"{p.Id}-{p.Version}", StringComparer.OrdinalIgnoreCase);
 
         // When doing a `dotnet package search` the results may include stable packages even when searching for
         // prerelease packages. This filters out this noise.
@@ -328,7 +347,11 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
             { Quality: PackageChannelQuality.Stable, SemVer: { IsPrerelease: false } } => true,
             { Quality: PackageChannelQuality.Prerelease, SemVer: { IsPrerelease: true } } => true,
             _ => false
-        });
+        }).ToArray();
+
+        logger.LogDebug(
+            "Integration discovery for channel '{ChannelName}' from '{Source}' found {PackageCount} distinct packages in {ElapsedMilliseconds} ms.",
+            channelName, sourceDetails, filteredPackages.Length, Stopwatch.GetElapsedTime(startTimestamp).TotalMilliseconds);
 
         // When pinned to a specific version, override the version on each discovered package
         // so the correct version gets installed regardless of what the feed reports as latest.
@@ -338,6 +361,30 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         }
 
         return filteredPackages;
+    }
+
+    private async Task<IEnumerable<NuGetPackage>> SearchIntegrationPackagesAsync(
+        NuGetPackageOperationConfiguration configuration,
+        IntegrationSourceConfiguration source,
+        string query,
+        CancellationToken cancellationToken)
+    {
+        var startTimestamp = Stopwatch.GetTimestamp();
+        var sourceDetails = PackageSourceRedactor.RedactForDisplay(source.Source!);
+        logger.LogDebug(
+            "Searching integration source '{SourceName}' ({Source}) for query '{Query}'.",
+            source.Name, sourceDetails, query);
+
+        var packages = (await nuGetPackageCache.GetPackagesAsync(configuration, query,
+            id => source.AllowsPackage(id) &&
+                (_features.IsFeatureEnabled(KnownFeatures.ShowDeprecatedPackages, defaultValue: false) || !DeprecatedPackages.IsDeprecated(id)),
+            prerelease: true, useCache: true, cancellationToken)).ToArray();
+
+        logger.LogDebug(
+            "Integration query '{Query}' from source '{SourceName}' ({Source}) matched {PackageCount} packages in {ElapsedMilliseconds} ms.",
+            query, source.Name, sourceDetails, packages.Length, Stopwatch.GetElapsedTime(startTimestamp).TotalMilliseconds);
+
+        return packages;
     }
 
     private (string Source, DirectoryInfo PackageSource)? GetLocalIntegrationPackageSource(PackageMapping[]? mappings)

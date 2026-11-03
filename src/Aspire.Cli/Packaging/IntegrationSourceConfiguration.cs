@@ -34,24 +34,10 @@ internal sealed class IntegrationSourceConfiguration
     internal bool AllowsPackage(string packageId)
         => Patterns!.Any(pattern => PackageSourceOverrideMappings.MatchesPackage(pattern, packageId));
 
-    internal string SearchTerm
-    {
-        get
-        {
-            var prefix = Patterns![0].TrimEnd('*');
-            foreach (var pattern in Patterns.Skip(1))
-            {
-                var length = Math.Min(prefix.Length, pattern.TrimEnd('*').Length);
-                while (!pattern.AsSpan().StartsWith(prefix.AsSpan(0, length), StringComparison.OrdinalIgnoreCase))
-                {
-                    length--;
-                }
-                prefix = prefix[..length];
-            }
-
-            return prefix;
-        }
-    }
+    internal IEnumerable<string> SearchTerms
+        => Patterns!.Contains("*")
+            ? [""]
+            : Patterns!.Select(pattern => pattern.TrimEnd('*')).Distinct(StringComparer.OrdinalIgnoreCase);
 
     internal static IReadOnlyList<IntegrationSourceConfiguration> Resolve(DirectoryInfo directory, FileInfo globalSettingsFile)
     {

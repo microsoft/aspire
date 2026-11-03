@@ -2,13 +2,16 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Frozen;
+using System.Diagnostics;
 using System.Globalization;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
+using Aspire.Cli.Utils;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
 namespace Aspire.Cli.NuGet;
@@ -101,7 +104,8 @@ internal sealed class NuGetPackageCache(
     IMemoryCache memoryCache,
     AspireCliTelemetry telemetry,
     IFeatures features,
-    BundleNuGetService nuGetService) : INuGetPackageCache
+    BundleNuGetService nuGetService,
+    ILogger<NuGetPackageCache> logger) : INuGetPackageCache
 {
     private const int SearchPageSize = 1000;
 
@@ -174,6 +178,10 @@ internal sealed class NuGetPackageCache(
     {
         using var activity = telemetry.StartDiagnosticActivity();
 
+        var startTimestamp = Stopwatch.GetTimestamp();
+        var displayQuery = PackageSourceRedactor.RedactForDisplay(query);
+        logger.LogDebug("Searching NuGet packages for query '{Query}' (prerelease: {Prerelease}).", displayQuery, prerelease);
+
         var collectedPackages = new List<NuGetPackage>();
         var skip = 0;
 
@@ -200,6 +208,10 @@ internal sealed class NuGetPackageCache(
             }
             else
             {
+                logger.LogTrace(
+                    "NuGet search page for query '{Query}': skip {Skip}, take {Take}, returned {PackageCount} packages.",
+                    displayQuery, skip, SearchPageSize, result.Packages?.Length ?? 0);
+
                 if (result.Packages?.Length > 0)
                 {
                     collectedPackages.AddRange(result.Packages);
@@ -238,11 +250,17 @@ internal sealed class NuGetPackageCache(
             return isOfficialPackage;
         };
 
-        return nuGetService.FilterPackageSearchResults(
+        var packages = nuGetService.FilterPackageSearchResults(
             collectedPackages,
             configuration.ExplicitConfigFile?.FullName,
             configuration.EffectiveWorkingDirectory.FullName,
-            cancellationToken).Where(effectiveFilter);
+            cancellationToken).Where(effectiveFilter).ToArray();
+
+        logger.LogDebug(
+            "NuGet search for query '{Query}' returned {ReturnedCount} packages; {MatchedCount} matched in {ElapsedMilliseconds} ms.",
+            displayQuery, collectedPackages.Count, packages.Length, Stopwatch.GetElapsedTime(startTimestamp).TotalMilliseconds);
+
+        return packages;
     }
 
     public async Task<IEnumerable<NuGetPackage>> GetPackageVersionsAsync(

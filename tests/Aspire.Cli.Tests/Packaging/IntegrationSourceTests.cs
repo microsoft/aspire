@@ -126,7 +126,7 @@ public class IntegrationSourceTests(ITestOutputHelper output)
 
         Assert.Contains("*", source.Patterns!);
         Assert.True(source.AllowsPackage("Other.Hosting.Redis"));
-        Assert.Equal("", source.SearchTerm);
+        Assert.Equal([""], source.SearchTerms);
     }
 
     [Theory]
@@ -211,18 +211,22 @@ public class IntegrationSourceTests(ITestOutputHelper output)
 
         Assert.Equal(["Acme.Hosting.Redis", "Exact.Integration", "Other.Hosting.Redis"], packages.Select(p => p.Package.Id).Order());
         Assert.All(packages, p => Assert.Equal(p.Channel.IntegrationSource!.Source, p.Package.Source));
-        Assert.Equal(polyglot ? 6 : 2, queries.Count);
-        Assert.Equal("", Assert.Single(queries, q => q.Source.EndsWith("/team", StringComparison.Ordinal) && q.Query != "tags:polyglot").Query);
+        Assert.Equal(polyglot ? 7 : 3, queries.Count);
+        Assert.Equal(["Acme.", "Exact.Integration"],
+            queries.Where(q => q.Source.EndsWith("/team", StringComparison.Ordinal) && q.Query != "tags:polyglot")
+                .Select(q => q.Query).Order());
         var mergedSource = Assert.Single(packages.Select(p => p.Channel).Distinct(), channel => channel.IntegrationSource!.Source == "https://example.com/team").IntegrationSource!;
         Assert.Equal(["Acme.*", "Exact.Integration"], mergedSource.Patterns!);
     }
 
     [Theory]
-    [InlineData("Acme.Hosting.*", "acme.Hosting.Redis", "Acme.Hosting.")]
-    [InlineData("Acme.*", "Other.*", "")]
-    [InlineData("*", "Acme.*", "")]
-    [InlineData("Acme.Redis", "Acme.Redis*", "Acme.Redis")]
-    public void Resolve_MergesFeedPatternsAndUsesCommonSearchPrefix(string first, string second, string expectedSearch)
+    [InlineData("Acme.Hosting.*", "acme.Hosting.Redis", new[] { "Acme.Hosting.", "acme.Hosting.Redis" })]
+    [InlineData("Acme.*", "Other.*", new[] { "Acme.", "Other." })]
+    [InlineData("*", "Acme.*", new[] { "" })]
+    [InlineData("Acme.*", "*", new[] { "" })]
+    [InlineData("Acme.Redis", "Acme.Redis*", new[] { "Acme.Redis" })]
+    [InlineData("Acme.Redis*", "acme.redis", new[] { "Acme.Redis" })]
+    public void Resolve_MergesFeedPatternsAndUsesDistinctSearchTerms(string first, string second, string[] expectedSearches)
     {
         using var configuration = new ConfigurationManager();
         configuration.AddInMemoryCollection(new Dictionary<string, string?>
@@ -242,7 +246,59 @@ public class IntegrationSourceTests(ITestOutputHelper output)
         Assert.Equal("a", source.Name);
         Assert.Equal("https://example.com/feed", source.Source);
         Assert.Equal([first, second], source.Patterns!);
-        Assert.Equal(expectedSearch, source.SearchTerm);
+        Assert.Equal(expectedSearches, source.SearchTerms);
+    }
+
+    [Fact]
+    public async Task Discovery_SearchesDisjointPatternsWithPaginationAndDeduplicatesMatches()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(output);
+        const string source = "https://example.com/team";
+        File.WriteAllText(Path.Combine(workspace.Path, AspireConfigFile.FileName), """
+            {"integrationSources":{
+              "default":{"enabled":false},
+              "team":{"source":"https://example.com/team","patterns":["Contoso.*","Fabrikam.*","Contoso.Package0000"]}
+            }}
+            """);
+        var contosoPackages = Enumerable.Range(0, 1001).Select(index => Package($"Contoso.Package{index:D4}", source)).ToArray();
+        var otherVersion = new NuGetPackage { Id = "Contoso.Package0000", Version = "2.0.0", Source = source };
+        var queries = new System.Collections.Concurrent.ConcurrentBag<(string Query, int Skip)>();
+        var services = CliTestHelper.CreateServiceCollection(workspace, output, options =>
+        {
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
+            {
+                SearchPackagesAsyncCallback = (_, query, exactMatch, prerelease, take, skip, _, _, _, _) =>
+                {
+                    Assert.False(exactMatch);
+                    Assert.True(prerelease);
+                    Assert.Equal(1000, take);
+                    queries.Add((query, skip));
+                    var candidates = query switch
+                    {
+                        "Contoso." => contosoPackages.Append(Package("Unapproved.Package", source)).ToArray(),
+                        "Fabrikam." => [Package("Fabrikam.Redis", source), Package("contoso.package0000", source)],
+                        "Contoso.Package0000" => [Package("contoso.package0000", source), otherVersion],
+                        _ => throw new InvalidOperationException($"Unexpected search query '{query}'.")
+                    };
+                    return (0, candidates.Skip(skip).Take(take).ToArray());
+                }
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var packages = await provider.GetRequiredService<IntegrationPackageSearchService>()
+            .GetIntegrationPackagesWithChannelsAsync(workspace.WorkspaceRoot, null, TestContext.Current.CancellationToken);
+
+        Assert.Equal(
+            [("Contoso.", 0), ("Contoso.", 1000), ("Contoso.Package0000", 0), ("Fabrikam.", 0)],
+            queries.OrderBy(query => query.Query, StringComparer.Ordinal).ThenBy(query => query.Skip));
+        Assert.Equal(
+            contosoPackages.Append(Package("Fabrikam.Redis", source)).Append(otherVersion)
+                .OrderBy(package => package.Id, StringComparer.Ordinal).ThenBy(package => package.Version)
+                .Select(package => (package.Id, package.Version, package.Source)),
+            packages.Select(package => package.Package)
+                .OrderBy(package => package.Id, StringComparer.Ordinal).ThenBy(package => package.Version)
+                .Select(package => (package.Id, package.Version, package.Source)));
     }
 
     [Fact]
