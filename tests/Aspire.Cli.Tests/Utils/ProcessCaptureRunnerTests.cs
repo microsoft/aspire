@@ -49,6 +49,58 @@ public class ProcessCaptureRunnerTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RunAsync_ResponsivePoolAllowsPendingCaptureToFinish(bool cancelDuringRecovery)
+    {
+        using var callerCts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var recoveryStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var startInfo = OperatingSystem.IsWindows()
+            ? new ProcessStartInfo("cmd.exe", ["/d", "/c", "exit 0"])
+            : new ProcessStartInfo("/bin/sh", ["-c", "exit 0"]);
+        startInfo.UseShellExecute = false;
+        startInfo.CreateNoWindow = true;
+        var logger = new DrainLogger(
+            onDrainStart: () => { },
+            onProbingBacklog: () => { },
+            onPoolResponsive: () =>
+            {
+                if (cancelDuringRecovery)
+                {
+                    callerCts.Cancel();
+                }
+                recoveryStarted.TrySetResult();
+            },
+            onDrainInterrupted: () => { });
+
+        var result = await ProcessCaptureRunner.RunAsync(
+            startInfo,
+            TimeSpan.FromSeconds(30),
+            async (process, cancellationToken) =>
+            {
+                // A responsive probe can overtake a capture that still needs several reads
+                // to reach EOF. Keep those reads pending until the probe has run.
+                await recoveryStarted.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+                for (var i = 0; i < 3; i++)
+                {
+                    await ThreadPoolBacklog.QueueBehindAsync().ConfigureAwait(false);
+                }
+                return "captured";
+            },
+            () => "(empty)",
+            logger,
+            callerCts.Token).WaitAsync(TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken);
+
+        Assert.Null(result.FailureKind);
+        Assert.Equal(cancelDuringRecovery, result.Cancelled);
+        Assert.Equal(cancelDuringRecovery ? -1 : 0, result.ExitCode);
+        if (!cancelDuringRecovery)
+        {
+            Assert.Equal("captured", result.Capture);
+        }
+    }
+
+    [Theory]
     [InlineData(true, true)]
     [InlineData(false, true)]
     [InlineData(true, false)]
@@ -84,6 +136,7 @@ public class ProcessCaptureRunnerTests(ITestOutputHelper outputHelper)
                 backlogStarted.TrySetResult();
             },
             onProbingBacklog: () => callerCancel?.Trigger(),
+            onPoolResponsive: () => { },
             onDrainInterrupted: backlog.ObserveInterruption);
 
         var runTask = ProcessCaptureRunner.RunAsync(
@@ -135,7 +188,7 @@ public class ProcessCaptureRunnerTests(ITestOutputHelper outputHelper)
     }
 
     // Runs the callbacks inline on the runner's thread, so observing the drain needs no pool worker.
-    private sealed class DrainLogger(Action onDrainStart, Action onProbingBacklog, Action onDrainInterrupted) : ILogger
+    private sealed class DrainLogger(Action onDrainStart, Action onProbingBacklog, Action onPoolResponsive, Action onDrainInterrupted) : ILogger
     {
         public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
 
@@ -151,6 +204,10 @@ public class ProcessCaptureRunnerTests(ITestOutputHelper outputHelper)
             else if (message.Contains("checking the thread pool for a backlog", StringComparison.Ordinal))
             {
                 onProbingBacklog();
+            }
+            else if (message.Contains("Thread pool is responsive", StringComparison.Ordinal))
+            {
+                onPoolResponsive();
             }
             else if (message.Contains("was interrupted", StringComparison.Ordinal))
             {

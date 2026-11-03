@@ -280,9 +280,10 @@ internal static class ProcessCaptureRunner
         // redirected pipes yield to it), but the bound's timer does not wait for a pool thread.
         // Under a pool backlog the bound can therefore expire while the reads are still queued,
         // even though every writer has closed and the output is complete. Only give up once the
-        // pool can promptly run queued work; a descendant holding the pipes still releases the
-        // caller after one bound on a responsive pool. Every wait also observes the operation's
+        // pool can promptly run queued work and the capture has had a full bound to finish on
+        // that responsive pool. Every wait also observes the operation's
         // deadline and the caller's cancellation, which interrupt the drain.
+        var recoveryDrain = false;
         while (true)
         {
             try
@@ -295,6 +296,12 @@ internal static class ProcessCaptureRunner
             }
             catch (TimeoutException)
             {
+                if (recoveryDrain)
+                {
+                    logger.LogDebug("Timed out waiting {Bound}s for process output capture after thread pool recovery.", s_postExitCaptureWaitBound.TotalSeconds);
+                    ObserveCaptureFault(captureTask);
+                    return (createEmptyCapture(), false);
+                }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -306,8 +313,8 @@ internal static class ProcessCaptureRunner
                 return (createEmptyCapture(), false);
             }
 
-            // The probe is queued behind any read continuations already waiting for a thread,
-            // so it can only run before them if the reads are not queued at all.
+            // Measure scheduling delay behind work already queued, without assuming that
+            // earlier reads have finished when the probe runs.
             logger.LogDebug("Process output capture did not finish within {Bound}s; checking the thread pool for a backlog.", s_postExitCaptureWaitBound.TotalSeconds);
             var probeTask = MeasureThreadPoolDelayAsync();
             try
@@ -332,9 +339,12 @@ internal static class ProcessCaptureRunner
             var threadPoolDelay = await probeTask.ConfigureAwait(false);
             if (threadPoolDelay < s_threadPoolBacklogThreshold)
             {
-                logger.LogDebug("Timed out waiting {Bound}s for process output capture.", s_postExitCaptureWaitBound.TotalSeconds);
-                ObserveCaptureFault(captureTask);
-                return (createEmptyCapture(), false);
+                // Queue order does not guarantee completion order: a prompt probe can run
+                // while an earlier read is processing or scheduling its next read to reach EOF.
+                // Allow one final bounded drain, not unbounded retries for inherited pipes.
+                logger.LogDebug("Thread pool is responsive; allowing {Bound}s for pending process output capture.", s_postExitCaptureWaitBound.TotalSeconds);
+                recoveryDrain = true;
+                continue;
             }
 
             logger.LogDebug("Thread pool work waited {Delay} for a thread; extending the post-exit output drain.", threadPoolDelay);
