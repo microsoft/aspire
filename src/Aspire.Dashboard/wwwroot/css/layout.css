@@ -118,7 +118,7 @@
     align-items: center;
     justify-content: center;
     height: auto !important;
-    padding: 20px;
+    padding: calc(var(--aspire-density-section-gap) + 8px);
     border-bottom-color: var(--datagrid-border-color) !important;
 }
 
@@ -147,7 +147,7 @@
     display: flex;
     align-items: center;
     min-height: 46px;
-    column-gap: 20px;
+    column-gap: var(--aspire-density-section-gap);
 }
 
 .items-footer .result-count {
@@ -162,7 +162,7 @@
     flex: 1 1 auto;
     width: 100%;
     min-width: 0;
-    gap: 10px;
+    gap: var(--aspire-density-section-gap);
 }
 
 .pane-details-subtext {
@@ -244,7 +244,8 @@ fluent-dialog-body {
 fluent-dialog-body::part(content) {
     /* Browser scaling can round the content's client height below its scroll height. Let an
        unconstrained dialog absorb that rounding while preserving scrolling at max-height. */
-    padding-block-end: 1px;
+    padding: var(--aspire-density-dialog-padding);
+    padding-block-end: max(1px, var(--aspire-density-dialog-padding));
 }
 
 fluent-dialog-body fluent-dropdown,
@@ -276,11 +277,11 @@ fluent-dialog-body::part(actions) {
 }
 
 fluent-dialog-body::part(title) {
-    padding: 0 0 var(--spacingVerticalL);
+    padding: 0 0 var(--aspire-density-section-gap);
 }
 
 fluent-dialog-body::part(actions) {
-    padding: var(--spacingVerticalL) 0 0;
+    padding: var(--aspire-density-section-gap) 0 0;
     flex-direction: row;
     justify-content: flex-end;
 }
@@ -645,12 +646,12 @@ fluent-dialog-body .fluent-message-box {
     align-items: center;
     flex-wrap: wrap;
     min-width: 0;
-    gap: 8px;
+    gap: var(--aspire-density-section-gap);
 }
 
 .main-toolbar.filter-toolbar {
     padding: var(--layout-top-padding) var(--layout-right-padding) 4px var(--layout-left-padding);
-    gap: 8px;
+    gap: var(--aspire-density-section-gap);
 }
 
 .content-header {

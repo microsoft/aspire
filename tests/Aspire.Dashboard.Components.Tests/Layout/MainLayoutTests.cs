@@ -166,7 +166,8 @@ public partial class MainLayoutTests : DashboardTestContext
                 case BrowserStorageKeys.DashboardFeedbackPromptDismissed:
                     return (true, true);
                 // The view preferences are read with the layout. None are stored here.
-                case BrowserStorageKeys.ResourceListDensity:
+                case BrowserStorageKeys.DashboardDensity:
+                case BrowserStorageKeys.LegacyDashboardDensity:
                 case BrowserStorageKeys.GroupOverview:
                 case BrowserStorageKeys.RecordingsStyle:
                     return (false, null);
@@ -222,7 +223,8 @@ public partial class MainLayoutTests : DashboardTestContext
                 case BrowserStorageKeys.DashboardFeedbackPromptDismissed:
                     return (true, true);
                 // The view preferences are read with the layout. None are stored here.
-                case BrowserStorageKeys.ResourceListDensity:
+                case BrowserStorageKeys.DashboardDensity:
+                case BrowserStorageKeys.LegacyDashboardDensity:
                 case BrowserStorageKeys.GroupOverview:
                 case BrowserStorageKeys.RecordingsStyle:
                     return (false, null);
@@ -263,7 +265,8 @@ public partial class MainLayoutTests : DashboardTestContext
                 case BrowserStorageKeys.DashboardFeedbackPromptDismissed:
                     return (true, true);
                 // The view preferences are read with the layout. None are stored here.
-                case BrowserStorageKeys.ResourceListDensity:
+                case BrowserStorageKeys.DashboardDensity:
+                case BrowserStorageKeys.LegacyDashboardDensity:
                 case BrowserStorageKeys.GroupOverview:
                 case BrowserStorageKeys.RecordingsStyle:
                     return (false, null);
@@ -310,7 +313,7 @@ public partial class MainLayoutTests : DashboardTestContext
                     return (true, true);
                 }
 
-                if (key is BrowserStorageKeys.ResourceListDensity or BrowserStorageKeys.GroupOverview or BrowserStorageKeys.RecordingsStyle)
+                if (key is BrowserStorageKeys.DashboardDensity or BrowserStorageKeys.LegacyDashboardDensity or BrowserStorageKeys.GroupOverview or BrowserStorageKeys.RecordingsStyle)
                 {
                     return (false, null);
                 }
@@ -1070,6 +1073,31 @@ public partial class MainLayoutTests : DashboardTestContext
         Assert.Equal(initialUri, navigationManager.Uri);
     }
 
+    [Fact]
+    public async Task DensityChange_UpdatesApplicationRootAndDocumentAttribute()
+    {
+        SetupMainLayoutServices();
+        var cut = Render<MainLayout>(builder =>
+        {
+            builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+        var preferences = Services.GetRequiredService<DashboardViewPreferences>();
+
+        cut.WaitForAssertion(() => Assert.Equal("comfortable", cut.Find(".layout").GetAttribute("data-density")));
+
+        await cut.InvokeAsync(() => preferences.SetDensityAsync(DashboardDensity.Compact));
+
+        cut.WaitForAssertion(() =>
+        {
+            var root = cut.Find(".layout");
+            Assert.Equal("compact", root.GetAttribute("data-density"));
+            Assert.Contains("density-compact", root.ClassList);
+        });
+
+        Assert.Contains(JSInterop.Invocations, invocation =>
+            invocation.Identifier.EndsWith("updateDensity", StringComparison.Ordinal));
+    }
+
     private void SetupMainLayoutServices(
         TestLocalStorage? localStorage = null,
         Action<DashboardOptions>? configureOptions = null,
@@ -1127,6 +1155,7 @@ public partial class MainLayoutTests : DashboardTestContext
 
         var themeModule = JSInterop.SetupModule("/js/app-theme.js");
         themeModule.Setup<string>("updateTheme", _ => true).SetResult(ThemeManager.ThemeSettingSystem);
+        themeModule.SetupVoid("updateDensity", _ => true).SetVoidResult();
         JSInterop.SetupVoid("Blazor.theme.setThemeMode", _ => true).SetVoidResult();
 
         JSInterop.SetupModule("window.registerGlobalKeydownListener", _ => true);

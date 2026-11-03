@@ -973,6 +973,31 @@ Yeteneklerin kurulumu da dahil olmak üzere, kontrol paneli ile yapay zeka arac�
         <target state="translated">Koyu</target>
         <note />
       </trans-unit>
+      <trans-unit id="SettingsDialogDashboardDensity">
+        <source>Dashboard density</source>
+        <target state="new">Dashboard density</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SettingsDialogDashboardDensityComfortable">
+        <source>Comfortable</source>
+        <target state="new">Comfortable</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SettingsDialogDashboardDensityCompact">
+        <source>Compact</source>
+        <target state="new">Compact</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SettingsDialogDashboardDensityDescription">
+        <source>Adjusts spacing and component sizing across the dashboard. Text size is unchanged.</source>
+        <target state="new">Adjusts spacing and component sizing across the dashboard. Text size is unchanged.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SettingsDialogDashboardDensitySpacious">
+        <source>Spacious</source>
+        <target state="new">Spacious</target>
+        <note />
+      </trans-unit>
       <trans-unit id="SettingsDialogDashboardExperience">
         <source>Dashboard experience</source>
         <target state="new">Dashboard experience</target>
@@ -1051,26 +1076,6 @@ Yeteneklerin kurulumu da dahil olmak üzere, kontrol paneli ile yapay zeka arac�
       <trans-unit id="SettingsDialogLightTheme">
         <source>Light</source>
         <target state="translated">Açık</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SettingsDialogResourceListDensity">
-        <source>Resource list density</source>
-        <target state="new">Resource list density</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SettingsDialogResourceListDensityComfortable">
-        <source>Comfortable</source>
-        <target state="new">Comfortable</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SettingsDialogResourceListDensityCompact">
-        <source>Compact</source>
-        <target state="new">Compact</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SettingsDialogResourceListDensitySpacious">
-        <source>Spacious</source>
-        <target state="new">Spacious</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogSystemTheme">

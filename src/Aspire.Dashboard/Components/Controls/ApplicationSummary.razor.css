@@ -73,19 +73,17 @@
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
     grid-auto-rows: 236px;
-    gap: 14px;
+    gap: var(--aspire-density-card-gap);
 }
 
 .resource-card-grid-spacious {
     grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr));
     grid-auto-rows: 268px;
-    gap: 18px;
 }
 
 .resource-card-grid-compact {
     grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
     grid-auto-rows: 216px;
-    gap: 10px;
 }
 
 .resource-card {
@@ -121,7 +119,7 @@
     align-items: flex-start;
     justify-content: space-between;
     gap: 12px;
-    padding: 16px 16px 12px;
+    padding: var(--aspire-density-card-header-padding);
     border-bottom: 1px solid var(--colorNeutralStroke3);
 }
 
@@ -173,9 +171,9 @@
 .resource-card-body {
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: var(--aspire-density-card-body-gap);
     min-width: 0;
-    padding: 14px 16px 18px;
+    padding: var(--aspire-density-card-body-padding);
     overflow: hidden;
 }
 
@@ -221,12 +219,12 @@
 
 .resource-card-footer {
     display: flex;
-    min-height: 48px;
+    min-height: var(--aspire-density-card-footer-height);
     min-width: 0;
     align-items: center;
     justify-content: flex-start;
     gap: 12px;
-    padding: 7px 8px 7px 16px;
+    padding: var(--aspire-density-card-footer-padding);
     border-top: 1px solid var(--colorNeutralStroke1);
     background: var(--colorNeutralBackground3);
     box-shadow: inset 0 1px 0 color-mix(in srgb, var(--colorNeutralForeground1) 5%, transparent);
@@ -276,31 +274,11 @@
     padding-inline: 0;
 }
 
-.resource-card-grid-spacious .resource-card-header {
-    padding: 20px 20px 16px;
-}
-
-.resource-card-grid-spacious .resource-card-body {
-    gap: 18px;
-    padding: 18px 20px 22px;
-}
-
-.resource-card-grid-spacious .resource-card-footer {
-    min-height: 52px;
-    padding: 9px 12px 9px 20px;
-}
-
-.resource-card-grid-compact .resource-card-header {
-    padding: 10px 12px 8px;
-}
-
 .resource-card-grid-compact .resource-card-type {
     display: none;
 }
 
 .resource-card-grid-compact .resource-card-body {
-    gap: 8px;
-    padding: 8px 12px 10px;
 }
 
 .resource-card-grid-compact .resource-card-parameter .resource-card-body {
@@ -312,9 +290,7 @@
 }
 
 .resource-card-grid-compact .resource-card-footer {
-    min-height: 40px;
     gap: 8px;
-    padding: 3px 6px 3px 12px;
 }
 
 @container (max-width: 520px) {

@@ -1884,38 +1884,47 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Resource list density.
+        ///   Looks up a localized string similar to Dashboard density.
         /// </summary>
-        public static string SettingsDialogResourceListDensity {
+        public static string SettingsDialogDashboardDensity {
             get {
-                return ResourceManager.GetString("SettingsDialogResourceListDensity", resourceCulture);
+                return ResourceManager.GetString("SettingsDialogDashboardDensity", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Adjusts spacing and component sizing across the dashboard. Text size is unchanged..
+        /// </summary>
+        public static string SettingsDialogDashboardDensityDescription {
+            get {
+                return ResourceManager.GetString("SettingsDialogDashboardDensityDescription", resourceCulture);
             }
         }
 
         /// <summary>
         ///   Looks up a localized string similar to Comfortable.
         /// </summary>
-        public static string SettingsDialogResourceListDensityComfortable {
+        public static string SettingsDialogDashboardDensityComfortable {
             get {
-                return ResourceManager.GetString("SettingsDialogResourceListDensityComfortable", resourceCulture);
+                return ResourceManager.GetString("SettingsDialogDashboardDensityComfortable", resourceCulture);
             }
         }
 
         /// <summary>
         ///   Looks up a localized string similar to Compact.
         /// </summary>
-        public static string SettingsDialogResourceListDensityCompact {
+        public static string SettingsDialogDashboardDensityCompact {
             get {
-                return ResourceManager.GetString("SettingsDialogResourceListDensityCompact", resourceCulture);
+                return ResourceManager.GetString("SettingsDialogDashboardDensityCompact", resourceCulture);
             }
         }
 
         /// <summary>
         ///   Looks up a localized string similar to Spacious.
         /// </summary>
-        public static string SettingsDialogResourceListDensitySpacious {
+        public static string SettingsDialogDashboardDensitySpacious {
             get {
-                return ResourceManager.GetString("SettingsDialogResourceListDensitySpacious", resourceCulture);
+                return ResourceManager.GetString("SettingsDialogDashboardDensitySpacious", resourceCulture);
             }
         }
 

@@ -93,10 +93,10 @@ public class ApplicationSummaryTests : DashboardTestContext
 
         cut.WaitForAssertion(() => Assert.Contains("resource-card-grid-comfortable", cut.Find(".resource-card-grid").ClassList));
 
-        await cut.InvokeAsync(() => preferences.SetDensityAsync(ResourceListDensity.Compact));
+        await cut.InvokeAsync(() => preferences.SetDensityAsync(DashboardDensity.Compact));
         Assert.Contains("resource-card-grid-compact", cut.Find(".resource-card-grid").ClassList);
 
-        await cut.InvokeAsync(() => preferences.SetDensityAsync(ResourceListDensity.Spacious));
+        await cut.InvokeAsync(() => preferences.SetDensityAsync(DashboardDensity.Spacious));
         Assert.Contains("resource-card-grid-spacious", cut.Find(".resource-card-grid").ClassList);
     }
 

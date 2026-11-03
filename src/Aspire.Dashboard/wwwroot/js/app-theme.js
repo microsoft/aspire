@@ -19,6 +19,15 @@ export function getCurrentTheme() {
     return getEffectiveTheme(getThemeCookieValue());
 }
 
+export function updateDensity(density) {
+    const value = density.toLowerCase();
+    document.documentElement.dataset.density = value;
+
+    if (document.body) {
+        document.body.dataset.density = value;
+    }
+}
+
 function getSystemTheme() {
     return window.matchMedia("(prefers-color-scheme: dark)").matches
         ? themeSettingDark

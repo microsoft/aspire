@@ -109,6 +109,13 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     // The "Recordings" setting picks between the recordings icon and panel, and the "Live run" menu.
     private bool UseRunMenu => ViewPreferences.RecordingsStyle == RecordingsStyle.Menu;
 
+    private string DensityValue => ViewPreferences.Density switch
+    {
+        DashboardDensity.Compact => "compact",
+        DashboardDensity.Spacious => "spacious",
+        _ => "comfortable"
+    };
+
     [Inject]
     public required Aspire.Dashboard.Model.INotificationService NotificationService { get; init; }
 
@@ -320,6 +327,8 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         ThemeManager.EffectiveTheme = await _jsModule!.InvokeAsync<string>("updateTheme", theme);
     }
 
+    private ValueTask ApplyDensityAsync() => _jsModule!.InvokeVoidAsync("updateDensity", ViewPreferences.Density.ToString());
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (_isDisposing)
@@ -334,6 +343,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
                 _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", $"/{Assets["js/app-theme.js"]}");
                 await ThemeManager.EnsureInitializedAsync();
                 await ApplyThemeAsync(ThemeManager.SelectedTheme ?? ThemeManager.ThemeSettingSystem);
+                await ApplyDensityAsync();
                 _shortcutManagerReference = DotNetObjectReference.Create(ShortcutManager);
                 _layoutReference = DotNetObjectReference.Create(this);
                 _keyboardHandlers = await JS.InvokeAsync<IJSObjectReference>("window.registerGlobalKeydownListener", _shortcutManagerReference);
@@ -665,7 +675,14 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         });
     }
 
-    private void OnViewPreferencesChanged() => _ = InvokeAsync(StateHasChanged);
+    private void OnViewPreferencesChanged() => _ = InvokeAsync(async () =>
+    {
+        StateHasChanged();
+        if (_jsModule is not null)
+        {
+            await ApplyDensityAsync();
+        }
+    });
 
     public async ValueTask DisposeAsync()
     {

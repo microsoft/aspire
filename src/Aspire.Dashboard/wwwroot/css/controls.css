@@ -697,7 +697,7 @@ body {
 
 :is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-menu-list {
     gap: 0;
-    padding: 3px 0;
+    padding: calc(var(--aspire-density-flyout-padding) / 4) 0;
     border-radius: var(--aspire-popup-radius);
     background-color: var(--aspire-popup-background);
     box-shadow: var(--aspire-popup-shadow);
@@ -710,8 +710,8 @@ body {
 :is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-menu-item {
     gap: 0;
     grid-template-columns: minmax(32px, auto) 0 minmax(0, 1fr) minmax(32px, auto);
-    height: 28px;
-    min-height: 28px;
+    height: var(--aspire-density-menu-item-height);
+    min-height: var(--aspire-density-menu-item-height);
     box-sizing: border-box;
     inline-size: calc(100% - 8px);
     margin-inline: 4px;
@@ -953,7 +953,7 @@ fluent-text-input[type="search"] [slot="start"] svg {
 .content-list-popover::part(dialog) {
     max-width: 400px;
     max-height: 300px;
-    padding: 14px;
+    padding: var(--aspire-density-flyout-padding);
     overflow-x: hidden;
     overflow-y: auto;
     overflow-wrap: normal;

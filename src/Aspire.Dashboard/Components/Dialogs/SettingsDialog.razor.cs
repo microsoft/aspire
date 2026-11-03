@@ -25,7 +25,7 @@ public partial class SettingsDialog : IDisposable
     private TimeFormat _timeFormat;
     private IReadOnlyList<IconToggleOption<string>> _themeOptions = [];
     private IReadOnlyList<IconToggleOption<TimeFormat>> _timeFormatOptions = [];
-    private IReadOnlyList<IconToggleOption<ResourceListDensity>> _densityOptions = [];
+    private IReadOnlyList<IconToggleOption<DashboardDensity>> _densityOptions = [];
     private IReadOnlyList<IconToggleOption<GroupOverview>> _groupOverviewOptions = [];
     private IReadOnlyList<IconToggleOption<string>> _dashboardExperienceOptions = [];
 
@@ -88,9 +88,9 @@ public partial class SettingsDialog : IDisposable
         ];
         _densityOptions =
         [
-            new(ResourceListDensity.Spacious, new Icons.Regular.Size20.TextBulletListLtr(), Loc[nameof(Dashboard.Resources.Dialogs.SettingsDialogResourceListDensitySpacious)]),
-            new(ResourceListDensity.Comfortable, new Icons.Regular.Size20.AppsListDetail(), Loc[nameof(Dashboard.Resources.Dialogs.SettingsDialogResourceListDensityComfortable)]),
-            new(ResourceListDensity.Compact, new Icons.Regular.Size20.AppsList(), Loc[nameof(Dashboard.Resources.Dialogs.SettingsDialogResourceListDensityCompact)]),
+            new(DashboardDensity.Spacious, new Icons.Regular.Size20.TextBulletListLtr(), Loc[nameof(Dashboard.Resources.Dialogs.SettingsDialogDashboardDensitySpacious)]),
+            new(DashboardDensity.Comfortable, new Icons.Regular.Size20.AppsListDetail(), Loc[nameof(Dashboard.Resources.Dialogs.SettingsDialogDashboardDensityComfortable)]),
+            new(DashboardDensity.Compact, new Icons.Regular.Size20.AppsList(), Loc[nameof(Dashboard.Resources.Dialogs.SettingsDialogDashboardDensityCompact)]),
         ];
         _groupOverviewOptions = new IconToggleOption<GroupOverview>[]
         {

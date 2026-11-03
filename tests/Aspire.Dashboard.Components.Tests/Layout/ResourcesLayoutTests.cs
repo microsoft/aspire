@@ -1,4 +1,4 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Threading.Channels;
@@ -392,7 +392,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Empty(cut.FindAll(".resource-row-meta"));
 
         // The setting applies right away, without reloading the page.
-        await cut.InvokeAsync(() => Services.GetRequiredService<DashboardViewPreferences>().SetDensityAsync(ResourceListDensity.Compact));
+        await cut.InvokeAsync(() => Services.GetRequiredService<DashboardViewPreferences>().SetDensityAsync(DashboardDensity.Compact));
 
         cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".resource-pane-list.density-compact")));
         Assert.Empty(cut.FindAll("[data-resource-name] .resource-row-sub"));
@@ -566,11 +566,11 @@ public class ResourcesLayoutTests : DashboardTestContext
     }
 
     [Theory]
-    [InlineData(true, ResourceListDensity.Comfortable)]
-    [InlineData(true, ResourceListDensity.Compact)]
-    [InlineData(true, ResourceListDensity.Spacious)]
-    [InlineData(false, ResourceListDensity.Comfortable)]
-    public async Task RowTerminal_SelectsOnlyItsResourceAndPreservesViewState(bool desktop, ResourceListDensity density)
+    [InlineData(true, DashboardDensity.Comfortable)]
+    [InlineData(true, DashboardDensity.Compact)]
+    [InlineData(true, DashboardDensity.Spacious)]
+    [InlineData(false, DashboardDensity.Comfortable)]
+    public async Task RowTerminal_SelectsOnlyItsResourceAndPreservesViewState(bool desktop, DashboardDensity density)
     {
         var viewport = new ViewportInformation(IsDesktop: desktop, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var stop = new CommandViewModel("resource-stop", CommandViewModelState.Enabled, "Stop", "Stop resource", confirmationMessage: "", argumentInputs: [], isHighlighted: true, iconName: "Stop", iconVariant: IconVariant.Filled);
@@ -1054,16 +1054,16 @@ public class ResourcesLayoutTests : DashboardTestContext
     }
 
     [Theory]
-    [InlineData("Persistent", ResourceListDensity.Comfortable, "Container (persistent)")]
-    [InlineData("Persistent", ResourceListDensity.Compact, "Container (persistent)")]
-    [InlineData("Persistent", ResourceListDensity.Spacious, "Container (persistent)")]
-    [InlineData("Session", ResourceListDensity.Comfortable, "Container")]
-    [InlineData("Session", ResourceListDensity.Compact, "Container")]
-    [InlineData("Session", ResourceListDensity.Spacious, "Container")]
-    [InlineData(null, ResourceListDensity.Comfortable, "Container")]
-    [InlineData(null, ResourceListDensity.Compact, "Container")]
-    [InlineData(null, ResourceListDensity.Spacious, "Container")]
-    public async Task AppHost_ContainerLifetimeQualifiesTypeAndBadgesResourceGlyph(string? lifetime, ResourceListDensity density, string expectedType)
+    [InlineData("Persistent", DashboardDensity.Comfortable, "Container (persistent)")]
+    [InlineData("Persistent", DashboardDensity.Compact, "Container (persistent)")]
+    [InlineData("Persistent", DashboardDensity.Spacious, "Container (persistent)")]
+    [InlineData("Session", DashboardDensity.Comfortable, "Container")]
+    [InlineData("Session", DashboardDensity.Compact, "Container")]
+    [InlineData("Session", DashboardDensity.Spacious, "Container")]
+    [InlineData(null, DashboardDensity.Comfortable, "Container")]
+    [InlineData(null, DashboardDensity.Compact, "Container")]
+    [InlineData(null, DashboardDensity.Spacious, "Container")]
+    public async Task AppHost_ContainerLifetimeQualifiesTypeAndBadgesResourceGlyph(string? lifetime, DashboardDensity density, string expectedType)
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();

@@ -1,4 +1,4 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Microsoft.FluentUI.AspNetCore.Components;
@@ -37,7 +37,8 @@ internal static class BrowserStorageKeys
     public const string ResourcePaneMode = "Aspire_ResourcePane_Mode";
     public const string ResourcePaneGrouping = "Aspire_ResourcePane_Grouping";
     public const string ResourcePaneKinds = "Aspire_ResourcePane_Kinds";
-    public const string ResourceListDensity = "Aspire_ResourcePane_Density";
+    public const string DashboardDensity = "Aspire_Dashboard_Density";
+    public const string LegacyDashboardDensity = "Aspire_ResourcePane_Density";
     public const string GroupOverview = "Aspire_ResourceOverview_GroupView";
     public const string RecordingsStyle = "Aspire_Header_RecordingsStyle";
     public const string LastSelectedResources = "Aspire_ResourcePane_LastSelectedResources";

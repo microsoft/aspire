@@ -161,8 +161,8 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
 
     private string CardDensityClass => ViewPreferences.Density switch
     {
-        ResourceListDensity.Spacious => "resource-card-grid-spacious",
-        ResourceListDensity.Compact => "resource-card-grid-compact",
+        DashboardDensity.Spacious => "resource-card-grid-spacious",
+        DashboardDensity.Compact => "resource-card-grid-compact",
         _ => "resource-card-grid-comfortable"
     };
 

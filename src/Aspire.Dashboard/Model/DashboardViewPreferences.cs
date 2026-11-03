@@ -9,22 +9,22 @@ using Microsoft.JSInterop;
 namespace Aspire.Dashboard.Model;
 
 /// <summary>
-/// How much room each resource takes in the resource list.
+/// How much spacing and component sizing the dashboard uses.
 /// </summary>
-public enum ResourceListDensity
+public enum DashboardDensity
 {
     /// <summary>
-    /// Two lines per resource: the name, then its state and type.
+    /// The dashboard's default spacing and component sizing.
     /// </summary>
     Comfortable,
 
     /// <summary>
-    /// Three lines per resource: the name, state and type, then health and primary endpoint details.
+    /// More spacing and larger component sizing.
     /// </summary>
     Spacious,
 
     /// <summary>
-    /// One line per resource, with its state, type and persistence in aligned columns on the right.
+    /// Less spacing and smaller component sizing.
     /// </summary>
     Compact
 }
@@ -81,9 +81,9 @@ public sealed class DashboardViewPreferences(ILocalStorage localStorage, IOption
     private GroupOverview _groupOverview;
 
     /// <summary>
-    /// Gets the resource list's density.
+    /// Gets the dashboard's density.
     /// </summary>
-    public ResourceListDensity Density { get; private set; }
+    public DashboardDensity Density { get; private set; }
 
     /// <summary>
     /// Gets what the overview of several resources shows.
@@ -118,7 +118,7 @@ public sealed class DashboardViewPreferences(ILocalStorage localStorage, IOption
     /// </summary>
     public Task EnsureLoadedAsync() => _loadTask ??= LoadAsync();
 
-    public async Task SetDensityAsync(ResourceListDensity density)
+    public async Task SetDensityAsync(DashboardDensity density)
     {
         if (Density == density)
         {
@@ -127,7 +127,7 @@ public sealed class DashboardViewPreferences(ILocalStorage localStorage, IOption
 
         Density = density;
         Changed?.Invoke();
-        await localStorage.SetUnprotectedAsync(BrowserStorageKeys.ResourceListDensity, density.ToString()).ConfigureAwait(false);
+        await localStorage.SetUnprotectedAsync(BrowserStorageKeys.DashboardDensity, density.ToString()).ConfigureAwait(false);
     }
 
     public async Task SetGroupOverviewAsync(GroupOverview groupOverview)
@@ -159,7 +159,15 @@ public sealed class DashboardViewPreferences(ILocalStorage localStorage, IOption
     {
         try
         {
-            var density = await ReadAsync<ResourceListDensity>(BrowserStorageKeys.ResourceListDensity).ConfigureAwait(false);
+            var density = await ReadAsync<DashboardDensity>(BrowserStorageKeys.DashboardDensity).ConfigureAwait(false);
+            if (density is null)
+            {
+                density = await ReadAsync<DashboardDensity>(BrowserStorageKeys.LegacyDashboardDensity).ConfigureAwait(false);
+                if (density is not null)
+                {
+                    await localStorage.SetUnprotectedAsync(BrowserStorageKeys.DashboardDensity, density.Value.ToString()).ConfigureAwait(false);
+                }
+            }
             var groupOverview = await ReadAsync<GroupOverview>(BrowserStorageKeys.GroupOverview).ConfigureAwait(false);
             if (groupOverview == GroupOverview.Resources)
             {
@@ -167,11 +175,11 @@ public sealed class DashboardViewPreferences(ILocalStorage localStorage, IOption
                 await localStorage.SetUnprotectedAsync(BrowserStorageKeys.GroupOverview, groupOverview.ToString()).ConfigureAwait(false);
             }
             var recordingsStyle = await ReadAsync<RecordingsStyle>(BrowserStorageKeys.RecordingsStyle).ConfigureAwait(false);
-            if (density != Density || groupOverview != GroupOverview || recordingsStyle != RecordingsStyle)
+            if (density.GetValueOrDefault() != Density || groupOverview.GetValueOrDefault() != GroupOverview || recordingsStyle.GetValueOrDefault() != RecordingsStyle)
             {
-                Density = density;
-                GroupOverview = groupOverview;
-                RecordingsStyle = recordingsStyle;
+                Density = density.GetValueOrDefault();
+                GroupOverview = groupOverview.GetValueOrDefault();
+                RecordingsStyle = recordingsStyle.GetValueOrDefault();
                 Changed?.Invoke();
             }
         }
@@ -183,9 +191,9 @@ public sealed class DashboardViewPreferences(ILocalStorage localStorage, IOption
     }
 
     // Values are stored by name, so reordering the enums doesn't change a stored choice.
-    private async Task<T> ReadAsync<T>(string key) where T : struct, Enum
+    private async Task<T?> ReadAsync<T>(string key) where T : struct, Enum
     {
         var result = await localStorage.GetUnprotectedAsync<string>(key).ConfigureAwait(false);
-        return result.Success && Enum.TryParse<T>(result.Value, out var value) && Enum.IsDefined(value) ? value : default;
+        return result.Success && Enum.TryParse<T>(result.Value, out var value) && Enum.IsDefined(value) ? value : null;
     }
 }

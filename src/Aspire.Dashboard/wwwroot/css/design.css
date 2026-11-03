@@ -58,6 +58,19 @@
     --aspire-brand-hover-brightness: 1.1;
     --fontFamilyBase: var(--aspire-font-sans);
     --fontFamilyMonospace: var(--aspire-font-mono);
+    /* Density changes spacing and component sizing, but never typography. Compact controls retain a 28px
+       floor so keyboard and pointer targets don't become too small. */
+    --aspire-density-page-gutter: 12px;
+    --aspire-density-section-gap: 12px;
+    --aspire-density-card-gap: 14px;
+    --aspire-density-card-header-padding: 16px 16px 12px;
+    --aspire-density-card-body-gap: 14px;
+    --aspire-density-card-body-padding: 14px 16px 18px;
+    --aspire-density-card-footer-height: 48px;
+    --aspire-density-card-footer-padding: 7px 8px 7px 16px;
+    --aspire-density-dialog-padding: 24px;
+    --aspire-density-flyout-padding: 14px;
+    --aspire-density-menu-item-height: 28px;
     --aspire-control-height: 28px;
     --aspire-control-radius: 6px;
     --aspire-popup-radius: 10px;
@@ -119,9 +132,9 @@
     --accent-button-pressed-background: var(--colorBrandBackgroundPressed);
     --accent-button-pressed-foreground: var(--colorNeutralForegroundOnBrand);
 
-    --layout-left-padding: 12px;
-    --layout-right-padding: 12px;
-    --layout-top-padding: 12px;
+    --layout-left-padding: var(--aspire-density-page-gutter);
+    --layout-right-padding: var(--aspire-density-page-gutter);
+    --layout-top-padding: var(--aspire-density-page-gutter);
     --datagrid-hover-color: #efefef;
     --datagrid-selected-color: var(--colorNeutralBackground3);
     --datagrid-border-color: #e5e5e5;
@@ -226,6 +239,35 @@
     --accent-navy-text: #fff;
     --accent-ocean-text: #fff;
     --accent-olive-text: #fff;
+}
+
+[data-density="compact"] {
+    --aspire-density-page-gutter: 8px;
+    --aspire-density-section-gap: 8px;
+    --aspire-density-card-gap: 10px;
+    --aspire-density-card-header-padding: 10px 12px 8px;
+    --aspire-density-card-body-gap: 8px;
+    --aspire-density-card-body-padding: 8px 12px 10px;
+    --aspire-density-card-footer-height: 40px;
+    --aspire-density-card-footer-padding: 3px 6px 3px 12px;
+    --aspire-density-dialog-padding: 16px;
+    --aspire-density-flyout-padding: 10px;
+    --aspire-density-menu-item-height: 28px;
+}
+
+[data-density="spacious"] {
+    --aspire-density-page-gutter: 16px;
+    --aspire-density-section-gap: 16px;
+    --aspire-density-card-gap: 18px;
+    --aspire-density-card-header-padding: 20px 20px 16px;
+    --aspire-density-card-body-gap: 18px;
+    --aspire-density-card-body-padding: 18px 20px 22px;
+    --aspire-density-card-footer-height: 52px;
+    --aspire-density-card-footer-padding: 9px 12px 9px 20px;
+    --aspire-density-dialog-padding: 32px;
+    --aspire-density-flyout-padding: 18px;
+    --aspire-density-menu-item-height: 32px;
+    --aspire-control-height: 32px;
 }
 
 .log-overflow {

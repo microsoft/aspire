@@ -7,7 +7,9 @@
 @inject IStringLocalizer<TerminalStrings> TerminalLoc
 @inherits LayoutComponentBase
 
-<div class="layout @(!RunSelection.SelectedRun.IsCurrent ? "historical-run" : null)" style="@(_isNavMenuOpen ? "overflow: hidden;" : string.Empty)">
+<div class="layout density-@DensityValue @(!RunSelection.SelectedRun.IsCurrent ? "historical-run" : null)"
+     data-density="@DensityValue"
+     style="@(_isNavMenuOpen ? "overflow: hidden;" : string.Empty)">
     @if (ViewportInformation.IsDesktop)
     {
         @* Full-width top header with the brand lockup (logo + app name) and app-wide actions. The dashboard's main

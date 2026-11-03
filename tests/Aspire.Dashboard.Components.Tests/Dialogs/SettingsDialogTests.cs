@@ -54,7 +54,8 @@ public sealed class SettingsDialogTests : DashboardTestContext
         {
             OnGetUnprotectedAsync = key => key switch
             {
-                BrowserStorageKeys.ResourceListDensity => (true, "Compact"),
+                BrowserStorageKeys.DashboardDensity => (false, null),
+                BrowserStorageKeys.LegacyDashboardDensity => (true, "Compact"),
                 BrowserStorageKeys.GroupOverview => (true, "Resources"),
                 BrowserStorageKeys.RecordingsStyle => (true, "Menu"),
                 _ => (false, null)
@@ -71,15 +72,17 @@ public sealed class SettingsDialogTests : DashboardTestContext
         Assert.Equal(GetExpectedIconLabels(), cut.FindAll(".icon-toggle").Select(e => e.GetAttribute("aria-label")));
         Assert.Equal(["System", "Compact", "Cards", "System", "New dashboard"], cut.FindAll(".icon-toggle[aria-pressed='true']").Select(e => e.GetAttribute("aria-label")));
         Assert.Equal(GetExpectedIconLabels(), cut.FindAll(".icon-toggle-option-text").Select(e => e.TextContent));
+        Assert.Equal("Adjusts spacing and component sizing across the dashboard. Text size is unchanged.", cut.Find(".setting-description").TextContent);
+        Assert.Equal("Compact", stored[BrowserStorageKeys.DashboardDensity]);
 
         await cut.InvokeAsync(() => cut.Find(".icon-toggle[aria-label='Dark']").Click());
         await cut.InvokeAsync(() => cut.Find(".icon-toggle[aria-label='Comfortable']").Click());
         await cut.InvokeAsync(() => cut.Find(".icon-toggle[aria-label='Home']").Click());
 
-        Assert.Equal(ResourceListDensity.Comfortable, preferences.Density);
+        Assert.Equal(DashboardDensity.Comfortable, preferences.Density);
         Assert.Equal(GroupOverview.Summary, preferences.GroupOverview);
         Assert.Equal(ThemeManager.ThemeSettingDark, themeManager.SelectedTheme);
-        Assert.Equal("Comfortable", stored[BrowserStorageKeys.ResourceListDensity]);
+        Assert.Equal("Comfortable", stored[BrowserStorageKeys.DashboardDensity]);
         Assert.Equal("Summary", stored[BrowserStorageKeys.GroupOverview]);
         Assert.Equal(RecordingsStyle.Menu, preferences.RecordingsStyle);
         Assert.Equal(["Dark", "Comfortable", "Home", "System", "New dashboard"], cut.FindAll(".icon-toggle[aria-pressed='true']").Select(e => e.GetAttribute("aria-label")));

@@ -1300,8 +1300,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     // The density is set in the settings panel, which isn't part of this layout.
     private void OnViewPreferencesChanged() => InvokeAsync(StateHasChanged);
 
-    private bool IsCompact => ViewPreferences.Density == ResourceListDensity.Compact;
-    private bool IsSpacious => ViewPreferences.Density == ResourceListDensity.Spacious;
+    private bool IsCompact => ViewPreferences.Density == DashboardDensity.Compact;
+    private bool IsSpacious => ViewPreferences.Density == DashboardDensity.Spacious;
 
     // How long ago a resource started, for the detail line of a spacious row, and the same with the exact time for its tooltip.
     private string? GetStartedAge(ResourceViewModel resource) =>

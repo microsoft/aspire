@@ -20,9 +20,12 @@
             </div>
 
             <div class="input-container setting-row">
-                <span class="setting-title aspire-field-label">@Loc[nameof(Dialogs.SettingsDialogResourceListDensity)]</span>
-                <IconToggleGroup TValue="ResourceListDensity"
-                                 Label="@Loc[nameof(Dialogs.SettingsDialogResourceListDensity)]"
+                <span>
+                    <span class="setting-title aspire-field-label">@Loc[nameof(Dialogs.SettingsDialogDashboardDensity)]</span>
+                    <span class="setting-description">@Loc[nameof(Dialogs.SettingsDialogDashboardDensityDescription)]</span>
+                </span>
+                <IconToggleGroup TValue="DashboardDensity"
+                                 Label="@Loc[nameof(Dialogs.SettingsDialogDashboardDensity)]"
                                  Options="@_densityOptions"
                                  Value="@ViewPreferences.Density"
                                  ValueChanged="@(density => ViewPreferences.SetDensityAsync(density))"

@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <root>
   <!-- 
     Microsoft ResX Schema 
@@ -707,16 +707,19 @@
   <data name="SettingsDialogGroupOverviewCards" xml:space="preserve">
     <value>Cards</value>
   </data>
-  <data name="SettingsDialogResourceListDensity" xml:space="preserve">
-    <value>Resource list density</value>
+  <data name="SettingsDialogDashboardDensity" xml:space="preserve">
+    <value>Dashboard density</value>
   </data>
-  <data name="SettingsDialogResourceListDensityComfortable" xml:space="preserve">
+  <data name="SettingsDialogDashboardDensityDescription" xml:space="preserve">
+    <value>Adjusts spacing and component sizing across the dashboard. Text size is unchanged.</value>
+  </data>
+  <data name="SettingsDialogDashboardDensityComfortable" xml:space="preserve">
     <value>Comfortable</value>
   </data>
-  <data name="SettingsDialogResourceListDensityCompact" xml:space="preserve">
+  <data name="SettingsDialogDashboardDensityCompact" xml:space="preserve">
     <value>Compact</value>
   </data>
-  <data name="SettingsDialogResourceListDensitySpacious" xml:space="preserve">
+  <data name="SettingsDialogDashboardDensitySpacious" xml:space="preserve">
     <value>Spacious</value>
   </data>
   <data name="SettingsDialogTimeFormat" xml:space="preserve">
