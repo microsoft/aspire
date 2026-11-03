@@ -7,8 +7,6 @@ projects and file-based C# apps (added **by path**) in an Aspire solution. It is
 > [!NOTE]
 > Starting with Aspire 17.0, `Aspire.Hosting.Dotnet` follows Aspire's regular package versioning:
 > stabilized builds produce a stable package, while preview and daily builds remain prerelease.
-> Package stabilization does not graduate integration-authoring APIs marked `ASPIREPROJECTS001`;
-> those APIs remain experimental.
 
 ## Getting started
 
