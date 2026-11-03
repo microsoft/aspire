@@ -93,7 +93,7 @@ internal static class AspireSkillsRemoteConfiguration
             IsOpenCodeCatalog(String(value), SkillSource.BuiltIn) ||
             sources.Any(source => IsOpenCodeCatalog(String(value), source))) is true;
 
-    private static JsonArray? ReadOpenCodeSkills(JsonObject root)
+    internal static JsonArray? ReadOpenCodeSkills(JsonObject root)
     {
         if (!root.TryGetPropertyValue("skills", out var skills))
         {
@@ -109,7 +109,7 @@ internal static class AspireSkillsRemoteConfiguration
         return Strings(skills.AsArray());
     }
 
-    private static bool IsOpenCodeCatalog(string? source, SkillSource configuration)
+    internal static bool IsOpenCodeCatalog(string? source, SkillSource configuration)
     {
         if (source is null)
         {
@@ -326,7 +326,7 @@ internal static class AspireSkillsRemoteConfiguration
         };
     }
 
-    private static string NormalizeRepositoryUrl(string url)
+    internal static string NormalizeRepositoryUrl(string url)
     {
         if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme is "https" or "ssh")
         {

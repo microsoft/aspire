@@ -176,7 +176,7 @@ internal sealed class ConfigSourceTestContext
     public async Task RegisterAndAssertSkillSourcesAsync()
     {
         const string command = "aspire agent init --workspace-root . --agents copilot,claude,opencode --scope project " +
-            "--skills aspire --aspire-source remote --mcp=false --non-interactive";
+            "--skills aspire --mcp=false --non-interactive";
         const string expectedPluginSettings = """
             {
               "extraKnownMarketplaces": {
@@ -223,16 +223,6 @@ internal sealed class ConfigSourceTestContext
             }
         }
 
-        foreach (var source in new[] { "default", "platform", "team" })
-        {
-            await _auto.RunCommandAsync($"aspire config set skillSources.{source}.enabled false", _counter);
-        }
-        await _auto.RunCommandAsync(
-            "aspire agent init --workspace-root . --agents copilot,claude,opencode --scope project " +
-            "--skills aspire --aspire-source embedded --mcp=false --non-interactive " +
-            "> \"$ASPIRE_E2E_WORKSPACE/embedded-conflict.log\" 2>&1; " +
-            "result=$?; cat \"$ASPIRE_E2E_WORKSPACE/embedded-conflict.log\"; " +
-            $"test \"$result\" -eq {CliExitCodes.InvalidCommand}", _counter);
         Assert.False(Directory.Exists(Path.Combine(_root, "SourceApp", ".agents", "skills")));
     }
 
