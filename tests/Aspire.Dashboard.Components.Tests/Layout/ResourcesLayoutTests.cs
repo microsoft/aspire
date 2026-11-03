@@ -26,6 +26,33 @@ namespace Aspire.Dashboard.Components.Tests.Layout;
 [UseCulture("en-US")]
 public class ResourcesLayoutTests : DashboardTestContext
 {
+    [Theory]
+    [InlineData("api")]
+    [InlineData("cache")]
+    [InlineData("parameter")]
+    public async Task Traces_ChangingScopeKeepsTracesIncludingResourcesWithoutTelemetry(string target)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources:
+            [
+                ModelTestHelpers.CreateResource("api"),
+                ModelTestHelpers.CreateResource("cache"),
+                ModelTestHelpers.CreateResource("parameter", resourceType: KnownResourceTypes.Parameter)
+            ], resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        await AddTelemetryAsync("api");
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo("/traces");
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+
+        cut.Find($"[data-resource-name='{target}'] .resource-row-link").Click();
+
+        cut.WaitForAssertion(() => Assert.Equal($"/traces/resource/{target}", "/" + navigation.ToBaseRelativePath(navigation.Uri)));
+        Assert.Equal(ResourceTab.Traces, cut.Instance.CurrentTab);
+        Assert.True(cut.Instance.IsTabAvailable(ResourceTab.Traces));
+    }
+
     [Fact]
     public void AppHostTagsParticipateInGroupingWithoutUserTags()
     {

@@ -27,8 +27,8 @@
     width: var(--resource-pane-width);
     min-width: 0;
     position: relative;
-    border-right: 1px solid var(--colorNeutralStroke3);
-    background: var(--aspire-page-background);
+    border-right: 1px solid var(--colorNeutralStroke1);
+    background: var(--navigation-comparison-pane-background, var(--aspire-page-background));
 }
 
 /* The resizer straddles the pane's right border so it's easy to grab. */

@@ -70,8 +70,30 @@ public partial class MainLayoutTests : DashboardTestContext
 
         await cut.InvokeAsync(() => cut.Find($"header {selector}").Click());
 
-        Assert.Equal(DashboardUrls.ResourceListUrl(), "/" + navigationManager.ToBaseRelativePath(navigationManager.Uri));
+        Assert.Equal("/resources?home=true", "/" + navigationManager.ToBaseRelativePath(navigationManager.Uri));
         Assert.Empty(Assert.IsType<List<string>>(stored[BrowserStorageKeys.LastSelectedResources]));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task BrandingHomeAndBack_AreLabeledAndDoNotWriteOverviewPreference(bool desktop)
+    {
+        JSInterop.SetupVoid("history.back").SetVoidResult();
+        SetupMainLayoutServices(dashboardClient: new TestDashboardClient(isEnabled: true,
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var preferences = Services.GetRequiredService<DashboardViewPreferences>();
+        await preferences.EnsureLoadedAsync();
+        await preferences.SetGroupOverviewAsync(GroupOverview.Graph);
+        var cut = Render<MainLayout>(p => p.Add(p => p.ViewportInformation,
+            new ViewportInformation(IsDesktop: desktop, IsUltraLowHeight: false, IsUltraLowWidth: !desktop)));
+
+        Assert.Equal("Home", cut.Find(".brand-home-label").TextContent);
+        Assert.Equal("/resources?home=true", cut.Find(".application-name").GetAttribute("href"));
+        await cut.InvokeAsync(() => cut.Find(".application-name").Click());
+        Assert.Equal(GroupOverview.Graph, preferences.GroupOverview);
+        await cut.InvokeAsync(() => cut.Find(".dashboard-back").Click());
+        Assert.Single(JSInterop.Invocations["history.back"]);
     }
 
     [Theory]

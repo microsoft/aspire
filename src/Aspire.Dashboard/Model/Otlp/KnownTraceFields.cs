@@ -12,6 +12,7 @@ public static class KnownTraceFields
     public const string SpanIdField = "trace.spanid";
     public const string DurationField = "trace.duration";
     public const string TimestampField = "trace.timestamp";
+    public const string EndpointField = "trace.endpoint";
 
     // Not used in search.
     public const string StatusMessageField = "trace.statusmessage";

@@ -3177,6 +3177,102 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
+    public async Task EndpointDrillThrough_FiltersIncomingEndpointResourceAndExactWindow()
+    {
+        using var repositoryContext = await CreateRepositoryAsync();
+        var start = s_testTime.AddMinutes(1);
+        var end = start.AddMinutes(15);
+        Span Request(string id, DateTime timestamp, Span.Types.SpanKind kind, string methodField, string method, string route)
+        {
+            var span = CreateSpan(id, id, timestamp, timestamp.AddMilliseconds(120), kind: kind,
+                attributes: [new("http.route", route), new(methodField, method)]);
+            span.Name = $"request {id}";
+            return span;
+        }
+        ResourceSpans ResourceRequests(string resource, params Span[] spans) => new()
+        {
+            Resource = CreateResource(name: resource),
+            ScopeSpans = { new ScopeSpans { Scope = CreateScope(), Spans = { spans } } }
+        };
+        const string route = "/orders/{id}: details";
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            ResourceRequests("api",
+                Request("1", start, Span.Types.SpanKind.Server, "http.request.method", "GET", route),
+                Request("2", end.AddMilliseconds(-1), Span.Types.SpanKind.Server, "http.method", "GET", route),
+                Request("3", start.AddMilliseconds(-1), Span.Types.SpanKind.Server, "http.request.method", "GET", route),
+                Request("4", end, Span.Types.SpanKind.Server, "http.request.method", "GET", route),
+                Request("5", start, Span.Types.SpanKind.Server, "http.request.method", "POST", route),
+                Request("6", start, Span.Types.SpanKind.Server, "http.request.method", "GET", "/other"),
+                Request("7", start, Span.Types.SpanKind.Client, "http.request.method", "GET", route),
+                Request("9", start, Span.Types.SpanKind.Server, "http.request.method", "GET", "/other")),
+            ResourceRequests("worker",
+                Request("8", start, Span.Types.SpanKind.Server, "http.request.method", "GET", route),
+                CreateSpan("9", "9-child", start, start.AddMilliseconds(120), kind: Span.Types.SpanKind.Server,
+                    attributes: [new("http.route", route), new("http.request.method", "GET")])),
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "api", instanceId: "other"),
+                ScopeSpans = { new ScopeSpans { Scope = CreateScope(), Spans = { Request("10", start, Span.Types.SpanKind.Server, "http.request.method", "GET", route) } } }
+            }
+        });
+        var filters = new List<TelemetryFilter>
+        {
+            new FieldTelemetryFilter { Field = KnownTraceFields.EndpointField, Condition = FilterCondition.Equals, Value = $"GET {route}" },
+            new FieldTelemetryFilter { Field = KnownTraceFields.TimestampField, Condition = FilterCondition.GreaterThanOrEqual, Value = start.ToString("O", CultureInfo.InvariantCulture) },
+            new FieldTelemetryFilter { Field = KnownTraceFields.TimestampField, Condition = FilterCondition.LessThan, Value = end.ToString("O", CultureInfo.InvariantCulture) },
+            new FieldTelemetryFilter { Field = KnownResourceFields.ServiceNameField, Condition = FilterCondition.Equals, Value = "api" },
+            new FieldTelemetryFilter { Field = KnownResourceFields.ServiceInstanceIdField, Condition = FilterCondition.Equals, Value = "TestId" }
+        };
+        var result = await repositoryContext.Repository.GetTracesAsync(new GetTracesRequest
+        {
+            ResourceKeys = [new ResourceKey("api", InstanceId: null)],
+            StartIndex = 0,
+            Count = 20,
+            Filters = filters
+        }, CancellationToken.None);
+
+        Assert.Equal(2, result.PagedResult.TotalItemCount);
+        Assert.Equal(["1", "2"], result.PagedResult.Items.Select(trace => GetStringId(trace.TraceId)));
+        Assert.All(result.PagedResult.Items, trace =>
+            Assert.Equal($"GET {route}", OtlpSpan.GetFieldValue(trace.FirstSpan, KnownTraceFields.EndpointField).Value1));
+    }
+
+    [Theory]
+    [InlineData(Span.Types.SpanKind.Consumer, null, null, "consume orders")]
+    [InlineData(Span.Types.SpanKind.Server, "/orders", null, "/orders")]
+    [InlineData(Span.Types.SpanKind.Server, "", "GET", "consume orders")]
+    public async Task EndpointDrillThrough_UsesSummaryLabelFallbacks(Span.Types.SpanKind kind, string? route, string? method, string expectedLabel)
+    {
+        using var repositoryContext = await CreateRepositoryAsync();
+        var attributes = new List<KeyValuePair<string, string>>();
+        if (route is not null)
+        {
+            attributes.Add(new("http.route", route));
+        }
+        if (method is not null)
+        {
+            attributes.Add(new("http.request.method", method));
+        }
+        var span = CreateSpan("1", "1", s_testTime, s_testTime.AddMilliseconds(10), attributes: attributes, kind: kind);
+        span.Name = "consume orders";
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans { Resource = CreateResource(), ScopeSpans = { new ScopeSpans { Scope = CreateScope(), Spans = { span } } } }
+        });
+        var result = await repositoryContext.Repository.GetTracesAsync(new GetTracesRequest
+        {
+            ResourceKeys = [],
+            StartIndex = 0,
+            Count = 10,
+            Filters = [new FieldTelemetryFilter { Field = KnownTraceFields.EndpointField, Condition = FilterCondition.Equals, Value = expectedLabel }]
+        }, CancellationToken.None);
+
+        var trace = Assert.Single(result.PagedResult.Items);
+        Assert.Equal(expectedLabel, OtlpSpan.GetFieldValue(trace.FirstSpan, KnownTraceFields.EndpointField).Value1);
+    }
+
+    [Fact]
     public async Task GetRequestSpans_ReturnsNewestServerAndConsumerSpansInWindow()
     {
         using var repositoryContext = await CreateRepositoryAsync();

@@ -28,8 +28,8 @@
             <IconToggleGroup TValue="GroupOverview"
                              Label="@Loc[nameof(Dashboard.Resources.Resources.LayoutLabel)]"
                              Options="@OverviewOptions"
-                             Value="@ViewPreferences.GroupOverview"
-                             ValueChanged="@ViewPreferences.SetGroupOverviewAsync"
+                             Value="@CurrentOverview"
+                             ValueChanged="@ChangeOverviewAsync"
                              ShowLabel="true"
                              ShowCurrentLabel="false" />
         }
@@ -47,7 +47,7 @@
 </StableSectionContent>
 
 @* The application summary shown by the resource overview when several or all resources are selected. *@
-<div class="home @(ViewPreferences.GroupOverview == GroupOverview.Graph ? "graph-view" : null)">
+<div class="home @(CurrentOverview == GroupOverview.Graph ? "graph-view" : null)">
 
     @if (!_isLoaded)
     {
@@ -62,15 +62,15 @@
 
         @* The "group overview" setting picks between the summary and a table of the resources, which adds what the
            resource list next to the overview doesn't show: their endpoints and actions. *@
-        @if (ViewPreferences.GroupOverview == GroupOverview.Resources)
+        @if (CurrentOverview == GroupOverview.Resources)
         {
             @ResourceTableSection(resources)
         }
-        else if (ViewPreferences.GroupOverview == GroupOverview.Cards)
+        else if (CurrentOverview == GroupOverview.Cards)
         {
             @ResourceCardsSection()
         }
-        else if (ViewPreferences.GroupOverview == GroupOverview.Summary)
+        else if (CurrentOverview == GroupOverview.Summary)
         {
             @HeroSection(summary)
             @ActivitySection()
@@ -82,7 +82,7 @@
         }
 
         <div class="resources-summary-layout home-resource-graph-layout"
-             hidden="@(ViewPreferences.GroupOverview != GroupOverview.Graph)">
+             hidden="@(CurrentOverview != GroupOverview.Graph)">
             <div id="@GraphContainerId"
                  class="resource-graph-container"
                  tabindex="0"
@@ -559,7 +559,7 @@
                         @foreach (var endpoint in activity.SlowestEndpoints)
                         {
                             <li>
-                                <a href="@DashboardUrls.TracesUrl(resource: endpoint.ResourceName)" data-tooltip="@($"{endpoint.ResourceName}: {endpoint.Label} ({endpoint.Count} requests)")">
+                                <a href="@GetEndpointTracesUrl(endpoint, activity)" data-tooltip="@($"{endpoint.ResourceName}: {endpoint.Label} ({endpoint.Count} requests)")">
                                     <span class="home-insight-row">
                                         <span class="home-insight-name">@endpoint.Label</span>
                                         <span class="home-insight-value">@DurationFormatter.FormatDuration(endpoint.P95, CultureInfo.CurrentCulture)</span>

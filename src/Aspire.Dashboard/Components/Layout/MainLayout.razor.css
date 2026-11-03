@@ -12,7 +12,9 @@
 }
 
 ::deep.layout > header > a.application-name {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 8px;
     flex: 0 1 auto;
     min-width: 0;
     /* Long application names truncate with an ellipsis; the full name is in the tooltip. */
@@ -28,6 +30,25 @@
     text-decoration: none;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+::deep.layout .brand-application-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+::deep.layout .brand-home-label {
+    flex-shrink: 0;
+    font-family: var(--fontFamilyBase);
+    font-size: 13px;
+    font-weight: var(--fontWeightSemibold);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+::deep.layout .dashboard-back {
+    flex-shrink: 0;
 }
 
 ::deep.layout > header > .flex-filler {

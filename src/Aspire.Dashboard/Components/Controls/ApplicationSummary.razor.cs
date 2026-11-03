@@ -72,6 +72,20 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     [Parameter]
     public IReadOnlyList<string>? ResourceNames { get; set; }
 
+    [Parameter]
+    public bool ShowHome { get; set; }
+
+    private GroupOverview CurrentOverview => ShowHome ? GroupOverview.Summary : ViewPreferences.GroupOverview;
+
+    private async Task ChangeOverviewAsync(GroupOverview overview)
+    {
+        await ViewPreferences.SetGroupOverviewAsync(overview);
+        if (ShowHome)
+        {
+            NavigationManager.NavigateTo(DashboardUrls.ResourceListUrl());
+        }
+    }
+
     [Inject]
     public required IDashboardClient DashboardClient { get; init; }
 
@@ -135,7 +149,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         .ToList();
 
     private IconToggleOption<GroupOverview> GetCurrentOverviewOption() =>
-        OverviewOptions.First(option => option.Value == ViewPreferences.GroupOverview);
+        OverviewOptions.First(option => option.Value == CurrentOverview);
 
     private int GetMissingParameterCount() =>
         _resourceByName.Values.Count(resource => resource.HasMissingParameterValueState() && IsInScope(resource));
@@ -154,8 +168,8 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
             Text = option.Text,
             StartIcon = option.Icon,
             Role = MenuItemRole.Radio,
-            Checked = option.Value == ViewPreferences.GroupOverview,
-            OnClick = () => ViewPreferences.SetGroupOverviewAsync(option.Value),
+            Checked = option.Value == CurrentOverview,
+            OnClick = () => ChangeOverviewAsync(option.Value),
             RenderKey = option.Value
         }).ToList();
 
@@ -235,7 +249,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (_isDisposing || ViewPreferences.GroupOverview != GroupOverview.Graph || _graphInitialized || _graphInitializing)
+        if (_isDisposing || CurrentOverview != GroupOverview.Graph || _graphInitialized || _graphInitializing)
         {
             return;
         }
@@ -525,7 +539,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
             P95 = durations.Count == 0 ? null : TimeSpan.FromMilliseconds(Percentile(durations, 0.95)),
             ByResource = byResource,
             SlowestEndpoints = byEndpoint
-                .Select(e => new EndpointInsight(byResource[e.Key.Item1].Name, e.Key.Item2, e.Value.Count, TimeSpan.FromMilliseconds(Percentile(e.Value, 0.95))))
+                .Select(e => new EndpointInsight(e.Key.Item1, byResource[e.Key.Item1].Name, e.Key.Item2, e.Value.Count, TimeSpan.FromMilliseconds(Percentile(e.Value, 0.95))))
                 .OrderByDescending(e => e.P95)
                 .Take(InsightItemCount)
                 .ToList(),
@@ -554,6 +568,22 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
 
         var method = span.HttpMethod;
         return string.IsNullOrEmpty(method) ? route : $"{method} {route}";
+    }
+
+    private static string GetEndpointTracesUrl(EndpointInsight endpoint, HomeActivity activity)
+    {
+        // The summary groups incoming spans by method + route (for example "GET /orders/{id}"),
+        // falling back to the span name. Match the endpoint, resource and window on the same span;
+        // selecting a resource in Traces otherwise matches any trace that contains that resource.
+        FieldTelemetryFilter[] filters =
+        [
+            new() { Field = KnownTraceFields.EndpointField, Condition = FilterCondition.Equals, Value = endpoint.Label },
+            new() { Field = KnownTraceFields.TimestampField, Condition = FilterCondition.GreaterThanOrEqual, Value = activity.WindowStart.ToString("O", CultureInfo.InvariantCulture) },
+            new() { Field = KnownTraceFields.TimestampField, Condition = FilterCondition.LessThan, Value = (activity.WindowStart + s_activityBucketSize * ActivityBucketCount).ToString("O", CultureInfo.InvariantCulture) },
+            new() { Field = KnownResourceFields.ServiceNameField, Condition = FilterCondition.Equals, Value = endpoint.ResourceKey.Name },
+            new() { Field = KnownResourceFields.ServiceInstanceIdField, Condition = FilterCondition.Equals, Value = endpoint.ResourceKey.InstanceId ?? string.Empty }
+        ];
+        return DashboardUrls.TracesUrl(resource: endpoint.ResourceKey.GetCompositeName(), filters: TelemetryFilterFormatter.SerializeFiltersToString(filters));
     }
 
     private static double Percentile(List<double> values, double percentile)
@@ -708,7 +738,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
 
     private async Task UpdateResourceGraphResourcesAsync()
     {
-        if (ViewPreferences.GroupOverview != GroupOverview.Graph || !_graphInitialized || _jsModule is null)
+        if (CurrentOverview != GroupOverview.Graph || !_graphInitialized || _jsModule is null)
         {
             return;
         }
@@ -939,7 +969,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         public int TotalErrors => ErrorSpans + ErrorLogs;
     }
 
-    private sealed record EndpointInsight(string ResourceName, string Label, int Count, TimeSpan P95);
+    private sealed record EndpointInsight(ResourceKey ResourceKey, string ResourceName, string Label, int Count, TimeSpan P95);
 
     private sealed class HomeTelemetry
     {

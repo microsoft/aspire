@@ -56,6 +56,9 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
     [Parameter]
     public string? ResourceName { get; set; }
 
+    [SupplyParameterFromQuery(Name = "home")]
+    public bool ShowApplicationHome { get; set; }
+
     [CascadingParameter]
     public ResourcesLayout? ResourcesLayout { get; set; }
 

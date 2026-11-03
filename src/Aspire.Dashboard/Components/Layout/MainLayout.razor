@@ -14,15 +14,19 @@
            views are switched from the icon rail below the logo. *@
         <header>
             <div class="brand-logo-container">
-                <a href="/" class="logo" @onclick="GoToAllResourcesAsync" @onclick:preventDefault="true"
+                <a href="/resources?home=true" class="logo" @onclick="GoToAllResourcesAsync" @onclick:preventDefault="true"
                               data-tooltip="@Loc[nameof(Layout.MainLayoutAspire)]"
                               aria-label="@Loc[nameof(Layout.MainLayoutAspire)]">
                     <AspireLogo />
                 </a>
             </div>
-            <a href="/" class="application-name" data-tooltip="@DashboardClient.ApplicationName" data-tooltip-positioning="after" @onclick="GoToAllResourcesAsync" @onclick:preventDefault="true">
-                <ApplicationName/>
+            <a href="/resources?home=true" class="application-name" data-tooltip="@DashboardClient.ApplicationName" data-tooltip-positioning="after" @onclick="GoToAllResourcesAsync" @onclick:preventDefault="true">
+                <span class="brand-application-name"><ApplicationName/></span>
+                <span class="brand-home-label">@DialogsLoc[nameof(Dialogs.SettingsDialogGroupOverviewSummary)]</span>
             </a>
+            <FluentButton Class="dashboard-back" Appearance="ButtonAppearance.Transparent"
+                          IconStart="@(new Icons.Regular.Size20.ArrowLeft())"
+                          OnClick="GoBackAsync">@DialogsLoc[nameof(Dialogs.DashboardFeedbackBack)]</FluentButton>
             <div class="header-context">
                 <SectionOutlet SectionName="@HeaderContextSectionName" />
             </div>
@@ -77,16 +81,20 @@
     else
     {
         <div class="aspire-icon">
-            <a href="/" class="logo" @onclick="GoToAllResourcesAsync" @onclick:preventDefault="true"
+            <a href="/resources?home=true" class="logo" @onclick="GoToAllResourcesAsync" @onclick:preventDefault="true"
                           data-tooltip="@Loc[nameof(Layout.MainLayoutAspire)]"
                           aria-label="@Loc[nameof(Layout.MainLayoutAspire)]">
                 <AspireLogo />
             </a>
         </div>
         <header>
-            <a href="/" class="application-name" data-tooltip="@DashboardClient.ApplicationName" data-tooltip-positioning="after" @onclick="GoToAllResourcesAsync" @onclick:preventDefault="true">
-                <ApplicationName/>
+            <a href="/resources?home=true" class="application-name" data-tooltip="@DashboardClient.ApplicationName" data-tooltip-positioning="after" @onclick="GoToAllResourcesAsync" @onclick:preventDefault="true">
+                <span class="brand-application-name"><ApplicationName/></span>
+                <span class="brand-home-label">@DialogsLoc[nameof(Dialogs.SettingsDialogGroupOverviewSummary)]</span>
             </a>
+            <FluentButton Class="dashboard-back" Appearance="ButtonAppearance.Transparent"
+                          IconStart="@(new Icons.Regular.Size20.ArrowLeft())"
+                          OnClick="GoBackAsync">@DialogsLoc[nameof(Dialogs.DashboardFeedbackBack)]</FluentButton>
             <div class="flex-filler"></div>
             @if (RunStore.SupportsRunSelection && UseRunMenu)
             {

@@ -522,15 +522,17 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         _openPageDialog = await DialogService.ShowPanelAsync<NotificationsDialog>(parameters).ConfigureAwait(true);
     }
 
-    // The logo and the app name open the overview of all resources. Unlike the Resources entry of the rail, they don't
-    // restore the last selected resources, so the stored selection is cleared first. The links keep "/" as their
-    // address, so opening them in a new tab, which has no stored selection, shows the same view.
+    // Use browser history rather than synthesizing a destination from the selected resource or tab.
+    // First-entry behavior and focus restoration are intentionally left to the browser in this local comparison.
+    private Task GoBackAsync() => JS.InvokeVoidAsync("history.back").AsTask();
+
+    // Home is an explicit navigation intent, not a change to the saved overview preference.
     private async Task GoToAllResourcesAsync()
     {
         if (DashboardClient.IsEnabled)
         {
             await SessionStorage.SetAsync(BrowserStorageKeys.LastSelectedResources, new List<string>());
-            NavigationManager.NavigateTo(DashboardUrls.ResourceListUrl());
+            NavigationManager.NavigateTo("/resources?home=true");
         }
         else
         {

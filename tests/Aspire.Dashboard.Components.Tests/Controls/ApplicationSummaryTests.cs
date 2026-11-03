@@ -23,6 +23,23 @@ public class ApplicationSummaryTests : DashboardTestContext
 {
     [Theory]
     [InlineData(GroupOverview.Cards)]
+    [InlineData(GroupOverview.Graph)]
+    public async Task ExplicitHome_ShowsSummaryWithoutChangingSavedOverview(GroupOverview saved)
+    {
+        JSInterop.SetupModule("/js/app-resourcegraph.js").Mode = JSRuntimeMode.Loose;
+        var cut = RenderSummary();
+        await cut.InvokeAsync(() => Services.GetRequiredService<DashboardViewPreferences>().SetGroupOverviewAsync(saved));
+        cut.Render(p => p.Add(p => p.ShowHome, true));
+
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".home-hero")));
+        Assert.Equal(saved, Services.GetRequiredService<DashboardViewPreferences>().GroupOverview);
+        Assert.True(cut.Find(".home-resource-graph-layout").HasAttribute("hidden"));
+        cut.Render(p => p.Add(p => p.ShowHome, false));
+        cut.WaitForAssertion(() => Assert.Equal(saved == GroupOverview.Graph, !cut.Find(".home-resource-graph-layout").HasAttribute("hidden")));
+    }
+
+    [Theory]
+    [InlineData(GroupOverview.Cards)]
     [InlineData(GroupOverview.Resources)]
     public async Task Render_PersistentContainersHaveBadgedGlyphAndQualifiedType(GroupOverview overview)
     {

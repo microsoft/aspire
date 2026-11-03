@@ -234,16 +234,37 @@ public class OtlpSpan
         return field switch
         {
             KnownResourceFields.ServiceNameField => new FieldValues(span.Source.Resource.ResourceName, span.UninstrumentedPeer?.ResourceName),
+            KnownResourceFields.ServiceInstanceIdField => span.Source.Resource.InstanceId ?? string.Empty,
             KnownTraceFields.TraceIdField => span.TraceId,
             KnownTraceFields.SpanIdField => span.SpanId,
             KnownTraceFields.KindField => span.Kind.ToString(),
             KnownTraceFields.StatusField => span.Status.ToString(),
             KnownSourceFields.NameField => span.Scope.Name,
             KnownTraceFields.NameField => span.Name,
+            KnownTraceFields.EndpointField => GetEndpointLabel(span),
             KnownTraceFields.DurationField => span.Duration.TotalMilliseconds.ToString("R", CultureInfo.InvariantCulture),
             KnownTraceFields.TimestampField => (span.StartTime.ToUniversalTime().Ticks / TimeSpan.TicksPerMillisecond).ToString(CultureInfo.InvariantCulture),
             _ => span.Attributes.GetValue(field)
         };
+    }
+
+    private static string? GetEndpointLabel(OtlpSpan span)
+    {
+        if (span.Kind is not (OtlpSpanKind.Server or OtlpSpanKind.Consumer))
+        {
+            return null;
+        }
+
+        var route = OtlpHelpers.GetValue(span.Attributes, "http.route");
+        if (string.IsNullOrEmpty(route))
+        {
+            return span.Name;
+        }
+
+        var method = OtlpHelpers.GetValue(span.Attributes, "http.request.method")
+            ?? OtlpHelpers.GetValue(span.Attributes, "http.method");
+
+        return string.IsNullOrEmpty(method) ? route : $"{method} {route}";
     }
 
     public static Dictionary<string, int> GetFieldValuesFromTraces(IEnumerable<OtlpTrace> traces, string attributeName)

@@ -32,7 +32,8 @@
     else if (ResourcesLayout.IsMultiSelection || ResourceName is null)
     {
         @* All resources, or several selected resources: summarize them, with their endpoints. *@
-        <ApplicationSummary ResourceNames="@(ResourcesLayout.IsMultiSelection ? ResourcesLayout.SelectedResourceNames : ResourcesLayout.GetScopeResourceNames())" />
+        <ApplicationSummary ShowHome="@ShowApplicationHome"
+                            ResourceNames="@(ShowApplicationHome ? null : ResourcesLayout.IsMultiSelection ? ResourcesLayout.SelectedResourceNames : ResourcesLayout.GetScopeResourceNames())" />
     }
     else if (Resource is { IsParameter: true } parameter && parameter.HasMissingParameterValueState())
     {

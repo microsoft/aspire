@@ -538,6 +538,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         // resources are already shown keeps them. Telemetry sources has its own selection, so it must not restore
         // the last app-resource selection when its overview route has no selected source.
         _pendingLandingRedirect = DashboardClient.IsEnabled
+            && !string.Equals(HttpUtility.ParseQueryString(new Uri(location).Query)["home"], "true", StringComparison.OrdinalIgnoreCase)
             && ParsePaneMode(baseRelativePath) != ResourcePaneMode.Telemetry
             && parsedLocation.Tab == ResourceTab.Overview
             && parsedLocation.SelectedResourceNames.Count == 0
@@ -1667,6 +1668,11 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     private bool IsTabAvailable(ResourceTab tab, IReadOnlyList<SelectedResourceItem> selection)
     {
+        if (tab == ResourceTab.Traces && CurrentTab == ResourceTab.Traces)
+        {
+            return true;
+        }
+
         if (tab == ResourceTab.Terminal)
         {
             return !IsTelemetryPane && selection is [{ Resource: { } resource }] && CanViewResourceTerminal(resource);

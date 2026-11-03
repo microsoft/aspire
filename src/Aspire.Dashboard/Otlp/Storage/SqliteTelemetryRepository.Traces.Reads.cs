@@ -352,9 +352,25 @@ public sealed partial class SqliteTelemetryRepository
         var expression = filter.Field switch
         {
             KnownResourceFields.ServiceNameField => null,
+            KnownResourceFields.ServiceInstanceIdField => "COALESCE(r.instance_id, '')",
             KnownTraceFields.TraceIdField => "s.trace_id",
             KnownTraceFields.SpanIdField => "s.span_id",
             KnownTraceFields.NameField => "s.name",
+            // Match the incoming-request summary's endpoint label, including legacy HTTP method attributes
+            // and route-less consumer spans. Restricting the resource alone would include unrelated endpoints.
+            KnownTraceFields.EndpointField => $"""
+                CASE WHEN s.kind IN ({(int)OtlpSpanKind.Server}, {(int)OtlpSpanKind.Consumer}) THEN
+                    COALESCE(
+                        (SELECT CASE WHEN route.attribute_value = '' THEN s.name ELSE
+                            COALESCE(NULLIF(COALESCE(
+                                (SELECT method.attribute_value FROM telemetry_span_attributes method WHERE method.trace_id = s.trace_id AND method.span_id = s.span_id AND method.attribute_key = 'http.request.method' LIMIT 1),
+                                (SELECT method.attribute_value FROM telemetry_span_attributes method WHERE method.trace_id = s.trace_id AND method.span_id = s.span_id AND method.attribute_key = 'http.method' LIMIT 1)
+                            ), '') || ' ', '') || route.attribute_value END
+                         FROM telemetry_span_attributes route
+                         WHERE route.trace_id = s.trace_id AND route.span_id = s.span_id AND route.attribute_key = 'http.route' LIMIT 1),
+                        s.name)
+                END
+                """,
             KnownTraceFields.KindField => "sk.kind_name",
             KnownTraceFields.StatusField => "ss.status_name",
             KnownSourceFields.NameField => "sc.scope_name",
