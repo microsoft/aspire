@@ -29,6 +29,7 @@ internal static class KnownFeatures
     public static string ShowDeprecatedPackages => "showDeprecatedPackages";
     public static string StagingChannelEnabled => "stagingChannelEnabled";
     public static string DefaultWatchEnabled => "defaultWatchEnabled";
+    public static string TestCommandEnabled => "testCommandEnabled";
     public static string ShowAllTemplates => "showAllTemplates";
     public static string ExperimentalPolyglotRust => "experimentalPolyglotRust";
     public static string ExperimentalPolyglotJava => "experimentalPolyglotJava";
@@ -64,6 +65,11 @@ internal static class KnownFeatures
         [DefaultWatchEnabled] = new(
             DefaultWatchEnabled,
             "Enable or disable watch mode by default when running Aspire applications for automatic restarts on file changes",
+            DefaultValue: false),
+
+        [TestCommandEnabled] = new(
+            TestCommandEnabled,
+            "Enable or disable the preview 'aspire test' command",
             DefaultValue: false),
 
         [ShowAllTemplates] = new(

@@ -1,0 +1,7 @@
+﻿🔬 Tests are running
+⚙️ Resource resource[red]: Running
+🔬 Test resource[red] / test[blue]: skipped
+⚙️ Resource resource[red]: Finished (exit code 0)
+📊 Resource resource[red]: passed; 0 passed, 0 failed, 1 other
+🔬 Test run passed
+🔬 Published test results: 0 passed, 0 failed, 1 skipped

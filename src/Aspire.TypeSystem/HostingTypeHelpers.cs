@@ -13,6 +13,9 @@ public static class HostingTypeNames
     /// <summary>Full name of the AspireExportAttribute type.</summary>
     public const string AspireExportAttribute = "Aspire.Hosting.AspireExportAttribute";
 
+    /// <summary>Full name of the AspireCallbackTimeoutAttribute type.</summary>
+    public const string AspireCallbackTimeoutAttribute = "Aspire.Hosting.AspireCallbackTimeoutAttribute";
+
     /// <summary>Full name of the AspireExportIgnoreAttribute type.</summary>
     public const string AspireExportIgnoreAttribute = "Aspire.Hosting.AspireExportIgnoreAttribute";
 

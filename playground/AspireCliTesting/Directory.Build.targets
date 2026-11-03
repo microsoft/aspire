@@ -1,0 +1,15 @@
+<Project>
+  <ItemGroup Condition="'$(IsAspireHost)' == 'true'">
+    <!-- Keep the file-based AppHost discoverable without restoring a released
+         package that does not contain the experimental testing APIs. -->
+    <PackageReference Remove="Aspire.Hosting.AppHost" />
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.AppHost" />
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.Dotnet" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(IsAspireHost)' == 'true'">
+    <Compile Include="$([MSBuild]::GetPathOfFileAbove('KnownResourceNames.cs', '$(MSBuildThisFileDirectory)../'))" Link="KnownResourceNames.cs" />
+  </ItemGroup>
+
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.targets', '$(MSBuildThisFileDirectory)../'))" />
+</Project>

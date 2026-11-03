@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Globalization;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Ats;
+using Aspire.Hosting.Cli;
 using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Lifecycle;
@@ -731,6 +732,16 @@ public class DistributedApplication : IHost, IAsyncDisposable
                     pipelineActivity.SetError(ex);
                     throw;
                 }
+            }
+
+            if (execContext.IsRunMode && configuration[KnownConfigNames.TestOutputPath] is not null)
+            {
+                // Discover tests only after events, legacy hooks, and the complete before-start
+                // pipeline have finished mutating the model. Start collectors before hosted
+                // services execute resources, without waiting for a CLI backchannel connection.
+                cancellationToken.ThrowIfCancellationRequested();
+                _host.Services.GetRequiredService<TestRunCoordinator>().Start(
+                    _host.Services.GetRequiredService<IHostApplicationLifetime>().ApplicationStopping);
             }
         }
         catch (Exception ex)
