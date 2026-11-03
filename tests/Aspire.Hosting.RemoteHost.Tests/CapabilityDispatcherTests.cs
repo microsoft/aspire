@@ -2904,9 +2904,6 @@ internal sealed class TestResourceBuilder<T> : IResourceBuilder<T> where T : IRe
 }
 
 /// <summary>
-/// Test resource type with properties that should be accessible via builder handles.
-/// </summary>
-/// <summary>
 /// A resource that is an <see cref="IExpressionValue"/> but not an <see cref="IResourceWithConnectionString"/>.
 /// </summary>
 internal sealed class TestExpressionValueResource(string name) : Resource(name), IExpressionValue
@@ -2916,6 +2913,9 @@ internal sealed class TestExpressionValueResource(string name) : Resource(name),
     public ValueTask<string?> GetValueAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult<string?>("expression-value");
 }
 
+/// <summary>
+/// Test resource type with properties that should be accessible via builder handles.
+/// </summary>
 [AspireExport(ExposeProperties = true)]
 internal sealed class TestResourceWithProperties : Resource
 {
