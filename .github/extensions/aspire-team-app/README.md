@@ -185,6 +185,19 @@ credentials supplied by the app.
 
 ## Agent actions
 
+In **Settings → Agentic actions**, **Create detached sessions** is off by default.
+Enable it to launch all new-session PR and Health actions as top-level sessions
+instead of children of the canvas's session. Actions targeting the current
+conversation (including GHES fallbacks) are unchanged.
+
+Detached PR sessions use `create_session` and check out the live PR using `gh`,
+instead of `open_pr_session`. They have no automatic report-back relationship
+with the dashboard conversation, and automatic PR/issue association is not
+guaranteed. Read results and answer questions in the launched session.
+The preference follows the existing machine-local settings in
+`$COPILOT_HOME/extensions/aspire-team-app/artifacts/preferences.json`
+(`COPILOT_HOME` defaults to `~/.copilot`); it is not committed to the repository.
+
 - `refresh` — reload the queue and push to the open dashboard.
 - `set_mode` — switch to `review` / `issues` / `ship` / `health`.
 - `set_repos` — replace the watched repositories for an account (targets the first
@@ -218,6 +231,26 @@ repository session. It discovers stored `gh` accounts independently of tokens
 injected by the Copilot app, and an expired account on another host does not hide
 healthy accounts. The `gh` executable must be on the app's `PATH`; sign in with
 `gh auth login` only if no usable credentials are available.
+PR and Health agent-action buttons are disabled when the host does not provide an
+active session working directory, including sidebar-only canvases. Hover or focus
+the disabled action group to see why and how to enable it: open the canvas from a
+session in the relevant repository. This applies to **new session** actions too:
+the extension requests those through the owning conversation's agent, not a
+direct project/session-creation API. Browsing, refresh, and settings remain available.
+
+To preview this behavior from a normal repository session, open a fresh canvas
+instance with the following input:
+
+```json
+{
+  "previewSidebar": true
+}
+```
+
+The override disables agent actions only for that instance, including server-side
+dispatch. It is preserved when the canvas is rehydrated, does not change saved
+preferences, and cannot enable actions in a sidebar-only canvas.
+
 Older GitHub CLI versions without JSON authentication status use a text-status
 fallback that retains accounts reported on either output stream.
 

@@ -299,6 +299,9 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             ["AppHost:Path"] = AppHostPath,
             ["AppHost:FilePath"] = appHostFilePath,
             ["AppHost:DashboardApplicationName"] = dashboardApplicationName,
+            // The build configuration (Debug/Release) propagated to .NET project resources. Guest AppHosts
+            // don't have one, so the prebuilt AppHost server's configuration isn't applied to user projects.
+            ["AppHost:BuildConfiguration"] = options.Configuration,
             [AspireStore.AspireStorePathKeyName] = aspireDir
         });
 

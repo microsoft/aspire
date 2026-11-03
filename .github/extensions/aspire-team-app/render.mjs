@@ -44,6 +44,7 @@ export const HTML = `<!doctype html>
         </section>
       </div>
     </div>
+    <div id="agent-action-tooltip" class="agent-action-tooltip" role="tooltip" hidden></div>
     <script src="app.js"></script>
   </body>
 </html>`;
@@ -241,6 +242,16 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
   opacity: 0; transform: translateY(-2px); transition: opacity .12s ease, transform .12s ease;
 }
 .live-tooltip:hover::after, .live-tooltip:focus-visible::after { opacity: 1; transform: none; }
+.agent-action-tooltip {
+  position: fixed; z-index: 1001; width: max-content;
+  max-width: min(360px, calc(100vw - 16px)); padding: 6px 9px;
+  border: 1px solid var(--border); border-radius: 6px; background: var(--surface-3);
+  color: var(--fg); box-shadow: var(--shadow-floating); font-size: 11.5px; font-weight: 500;
+  line-height: 1.35; white-space: normal; pointer-events: auto;
+}
+.agent-action-tooltip[hidden] { display: none; }
+.cb-split[aria-disabled="true"] .card-btn { pointer-events: none; }
+.cb-split[aria-disabled="true"]:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .badge {
   position: absolute; top: -6px; right: -6px; min-width: 16px; height: 16px; padding: 0 4px;
   border-radius: 999px; background: var(--danger); color: var(--white); font-size: 10px; font-weight: 700;
@@ -1511,6 +1522,7 @@ const toggleAccountActive = (id, active) => withRefresh(() => postJSON("api/acco
 function captureSettingsDraft() {
   const release = document.getElementById("release-input");
   const showDrafts = document.getElementById("s-drafts");
+  const detachedSessions = document.getElementById("s-detached");
   const reviewRequested = document.getElementById("n-review");
   const readyToMerge = document.getElementById("n-ready");
   const changesRequested = document.getElementById("n-changes");
@@ -1519,6 +1531,7 @@ function captureSettingsDraft() {
   return {
     release: release.value,
     showDrafts: showDrafts.checked,
+    detachedSessions: detachedSessions?.checked ?? false,
     notifications: {
       reviewRequested: reviewRequested.checked,
       readyToMerge: readyToMerge.checked,
@@ -1532,12 +1545,14 @@ function restoreSettingsDraft(draft) {
   if (!draft) return;
   const release = document.getElementById("release-input");
   const showDrafts = document.getElementById("s-drafts");
+  const detachedSessions = document.getElementById("s-detached");
   const reviewRequested = document.getElementById("n-review");
   const readyToMerge = document.getElementById("n-ready");
   const changesRequested = document.getElementById("n-changes");
   const ciFailing = document.getElementById("n-ci");
   if (release) release.value = draft.release;
   if (showDrafts) showDrafts.checked = draft.showDrafts;
+  if (detachedSessions) detachedSessions.checked = draft.detachedSessions;
   if (reviewRequested) reviewRequested.checked = draft.notifications.reviewRequested;
   if (readyToMerge) readyToMerge.checked = draft.notifications.readyToMerge;
   if (changesRequested) changesRequested.checked = draft.notifications.changesRequested;
@@ -1844,7 +1859,7 @@ function wireHealthOrdering() {
 async function onCardAction(split, target) {
   const mainBtn = split.querySelector(".cb-main") || split;
   const caret = split.querySelector(".cb-caret");
-  if (mainBtn.classList.contains("busy") || mainBtn.classList.contains("done")) return;
+  if (!agentActions.available || mainBtn.disabled || mainBtn.classList.contains("busy") || mainBtn.classList.contains("done")) return;
   const d = split.dataset;
   const t = target || "new-session";
   // Guard across re-renders too: if a streamed 'state' event replaced this card while an
@@ -2029,6 +2044,7 @@ function persistAccountRepos(id, previousRepos) {
 async function saveSettings() {
   const release = document.getElementById("release-input").value;
   const showDrafts = document.getElementById("s-drafts").checked;
+  const detachedSessions = document.getElementById("s-detached").checked;
   const notifications = {
     reviewRequested: document.getElementById("n-review").checked,
     readyToMerge: document.getElementById("n-ready").checked,
@@ -2036,7 +2052,7 @@ async function saveSettings() {
     ciFailing: document.getElementById("n-ci").checked,
   };
   goView("queue", true);
-  await withRefresh(() => postJSON("api/prefs", { release, showDrafts, notifications }));
+  await withRefresh(() => postJSON("api/prefs", { release, showDrafts, detachedSessions, notifications }));
 }
 
 async function rescanAccounts() {
@@ -2092,6 +2108,91 @@ function goView(next, forward) {
 
 function pill(s) { return '<span class="pill ' + (s.tone || "muted") + '">' + esc(s.label) + "</span>"; }
 
+let agentTooltipOwner = null;
+let agentTooltipHideTimer = null;
+
+function cancelAgentTooltipHide() {
+  clearTimeout(agentTooltipHideTimer);
+  agentTooltipHideTimer = null;
+}
+
+function showAgentActionTooltip(owner) {
+  cancelAgentTooltipHide();
+  const tooltip = document.getElementById("agent-action-tooltip");
+  if (!tooltip) return;
+  // Keep the tooltip under body, outside the collapsible sections' overflow clips
+  // and the view's animated transform (which also contains fixed-position children).
+  tooltip.textContent = owner.dataset.tooltip;
+  tooltip.hidden = false;
+  agentTooltipOwner = owner;
+  const anchor = owner.getBoundingClientRect();
+  const box = tooltip.getBoundingClientRect();
+  const width = document.documentElement.clientWidth;
+  const height = document.documentElement.clientHeight;
+  const pad = 8;
+  const left = Math.max(pad, Math.min(anchor.left, width - box.width - pad));
+  const below = anchor.bottom + pad;
+  const top = below + box.height <= height - pad
+    ? below : Math.max(pad, anchor.top - box.height - pad);
+  tooltip.style.left = left + "px";
+  tooltip.style.top = top + "px";
+}
+
+function hideAgentActionTooltip() {
+  cancelAgentTooltipHide();
+  const tooltip = document.getElementById("agent-action-tooltip");
+  if (tooltip) tooltip.hidden = true;
+  agentTooltipOwner = null;
+}
+
+function scheduleAgentTooltipHide() {
+  cancelAgentTooltipHide();
+  // Give magnifier users time to cross the 8px gap to the portaled tooltip.
+  agentTooltipHideTimer = setTimeout(() => {
+    const tooltip = document.getElementById("agent-action-tooltip");
+    const owner = agentTooltipOwner;
+    if (owner && !owner.contains(document.activeElement)
+      && !owner.matches(":hover") && !tooltip?.matches(":hover")) hideAgentActionTooltip();
+  }, 300);
+}
+
+function wireAgentActionTooltips() {
+  document.addEventListener("pointerover", (event) => {
+    const owner = event.target.closest?.(".cb-split[data-tooltip]");
+    if (owner) showAgentActionTooltip(owner);
+    else if (document.getElementById("agent-action-tooltip")?.contains(event.target)) cancelAgentTooltipHide();
+  });
+  document.addEventListener("pointerout", (event) => {
+    const owner = agentTooltipOwner;
+    const tooltip = document.getElementById("agent-action-tooltip");
+    if (owner && (owner.contains(event.target) || tooltip?.contains(event.target))
+      && !owner.contains(event.relatedTarget) && !tooltip?.contains(event.relatedTarget)) scheduleAgentTooltipHide();
+  });
+  document.addEventListener("focusin", (event) => {
+    const owner = event.target.closest?.(".cb-split[data-tooltip]");
+    if (owner) showAgentActionTooltip(owner);
+  });
+  document.addEventListener("focusout", (event) => {
+    const owner = agentTooltipOwner;
+    if (owner && owner.contains(event.target) && !owner.contains(event.relatedTarget)
+      && !owner.matches(":hover")) scheduleAgentTooltipHide();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") hideAgentActionTooltip();
+  });
+  document.addEventListener("scroll", hideAgentActionTooltip, true);
+  if (window.addEventListener) window.addEventListener("resize", hideAgentActionTooltip);
+}
+
+function agentActionContainerAttrs() {
+  if (agentActions.available) return 'class="cb-split"';
+  // Native disabled buttons cannot receive keyboard focus. Put the explanation on
+  // their focusable group so both pointer and keyboard users can discover it.
+  const reason = esc(agentActions.reason);
+  return 'class="cb-split" role="group" tabindex="0" aria-disabled="true"' +
+    ' aria-label="' + reason + '" aria-describedby="agent-action-tooltip" data-tooltip="' + reason + '"';
+}
+
 // Encode the PR descriptor onto the split container as data-* attributes so the click
 // handler can post it back to /api/agent/action without another lookup. The whole card
 // body is a link, so buttons live in a sibling row (not nested in the <a>, which is
@@ -2115,7 +2216,7 @@ function cardActionBtn(pr, a) {
   const finalizing = refreshing && !inflight;
   const busyCls = (inflight || finalizing) ? " busy" : "";
   const spinCls = finalizing ? " spin" : "";
-  const disabledAttr = (inflight || refreshing) ? " disabled" : "";
+  const disabledAttr = (!agentActions.available || inflight || refreshing) ? " disabled" : "";
   const mainIcon = finalizing ? '<span class="cb-ico">' + ICONS.refresh + "</span>" : icon;
   const mainLabel = finalizing ? "Finalizing\u2026" : a.label;
   // open_pr_session can only target github.com, so the server degrades a new-session action on a
@@ -2131,12 +2232,12 @@ function cardActionBtn(pr, a) {
   // initial label, which does not announce, so only the in-place status updates are spoken.
   const mainBtn = '<button type="button" class="card-btn cb-main' + busyCls + spinCls + '" data-target="' + mainTarget + '" aria-live="polite"' + disabledAttr + '>' +
     mainIcon + '<span class="cb-label">' + esc(mainLabel) + "</span></button>";
-  // A GHES/EMU card has only the current-session target, so render the lone main button with no
-  // caret or menu — there is nothing to choose and no unsupported option to mislead with.
-  if (!isDotcom) {
-    return '<div class="cb-split"' + data + '>' + mainBtn + "</div>";
+  // GHES cards only support the current-session target. Without an active session,
+  // neither target works, so omit the menu and expose the disabled group's explanation.
+  if (!isDotcom || !agentActions.available) {
+    return '<div ' + agentActionContainerAttrs() + data + '>' + mainBtn + "</div>";
   }
-  return '<div class="cb-split"' + data + '>' +
+  return '<div ' + agentActionContainerAttrs() + data + '>' +
     mainBtn +
     '<button type="button" class="card-btn cb-caret" aria-haspopup="true" aria-expanded="false"' +
       ' title="Choose where to run" aria-label="Choose where to run ' + esc(a.label) + '"' + disabledAttr + '>' +
@@ -2660,9 +2761,10 @@ function healthActionBtn(item, kind, label, target) {
   const busy = inflightActions.has(key);
   const icon = kind === "diagnose-health" ? ICONS.pulse : ICONS.sparkle;
   const doneLabel = target === "new-session" ? "Repo session requested" : "Requested";
-  return '<span class="cb-split" data-kind="' + esc(kind) + '" data-source-id="' + esc(item.id) +
+  return '<span ' + agentActionContainerAttrs() + ' data-kind="' + esc(kind) + '" data-source-id="' + esc(item.id) +
     '" data-done-label="' + esc(doneLabel) + '"><button class="card-btn cb-main' + (busy ? ' busy spin' : '') +
-    '" type="button" data-target="' + esc(target) + '"' + (busy ? ' disabled aria-busy="true"' : '') +
+    '" type="button" data-target="' + esc(target) + '"' + (!agentActions.available || busy ? ' disabled' : '') +
+    (busy ? ' aria-busy="true"' : '') +
     '><span class="cb-ico">' + (busy ? ICONS.refresh : icon) + '</span><span class="cb-label">' +
     esc(label) + "</span></button></span>";
 }
@@ -2899,9 +3001,9 @@ function statsHtml() {
 }
 
 function toggle(id, title, desc, checked) {
-  return '<div class="toggle-row"><span><span class="tl">' + esc(title) + "</span>" +
+  return '<div class="toggle-row"><span><span class="tl" id="' + id + '-label">' + esc(title) + "</span>" +
     (desc ? '<span class="td">' + esc(desc) + "</span>" : "") + "</span>" +
-    '<label class="switch"><input type="checkbox" id="' + id + '" ' + (checked ? "checked" : "") + ' /><span class="slider"></span></label></div>';
+    '<label class="switch"><input type="checkbox" id="' + id + '" aria-labelledby="' + id + '-label" ' + (checked ? "checked" : "") + ' /><span class="slider"></span></label></div>';
 }
 
 function filtersView() {
@@ -2987,6 +3089,10 @@ function settingsView() {
         '<div class="policy-row">' + ICONS.pr + '<span>Draft PRs are hidden by default. They are prototypes and experiments, not review work.</span></div>' +
       "</div>" +
       toggle("s-drafts", "Show draft PRs", "Include drafts in lanes and counts", !!prefs.showDrafts) +
+    "</div>" +
+    '<div class="section"><h3>Agentic actions</h3>' +
+      toggle("s-detached", "Create detached sessions", "Apply to all actions that open a new session", prefs.detachedSessions === true) +
+      '<p class="hint">Off by default: new sessions are children of this canvas session. When enabled, sessions appear at the sidebar top level and do not report back here. PRs are checked out using gh instead of the dedicated PR opener, so automatic PR/issue association is not guaranteed. Actions that run here are unchanged. This preference is saved on this machine across canvas sessions.</p>' +
     "</div>" +
     '<div class="section"><h3>Ship milestone</h3>' +
       '<p class="hint">Used by Ship mode to group work for the active release.</p>' +
@@ -3147,6 +3253,7 @@ function authPicker() {
 /* ---- render ---- */
 
 function render(forward) {
+  hideAgentActionTooltip();
   app.removeAttribute("aria-busy");
   // Drop any split-button menu we portaled to <body> before rebuilding the subtree, so an
   // open menu never survives a re-render as a detached orphan carrying stale click handlers.
@@ -3635,5 +3742,6 @@ try {
   });
 } catch {}
 
+wireAgentActionTooltips();
 load();
 `;
