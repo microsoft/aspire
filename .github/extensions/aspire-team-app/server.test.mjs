@@ -11,11 +11,28 @@ const preferencesPath = join(copilotHome, "extensions", "aspire-team-app", "arti
 const originalEnv = {
   GH_TOKEN: process.env.GH_TOKEN,
   GITHUB_TOKEN: process.env.GITHUB_TOKEN,
+  GH_ENTERPRISE_TOKEN: process.env.GH_ENTERPRISE_TOKEN,
+  GITHUB_ENTERPRISE_TOKEN: process.env.GITHUB_ENTERPRISE_TOKEN,
+  GH_HOST: process.env.GH_HOST,
   COPILOT_HOME: process.env.COPILOT_HOME,
   PATH: process.env.PATH,
+  SHELL: process.env.SHELL,
 };
+const originalCopilotAccounts = Object.entries(process.env)
+  .filter(([key]) => key.startsWith("COPILOT_GH_ACCOUNT_"));
 const originalFetch = globalThis.fetch;
+const githubDiscoveryMessage = process.platform === "win32"
+  ? "GitHub CLI was not found. Install gh or make it available on PATH."
+  : "Unable to locate GitHub CLI through the login shell. Check your shell startup configuration.";
 
+// Tests must not discover the developer's CLI installations or injected accounts.
+// Clearing PATH alone cannot isolate login-shell executable discovery.
+process.env.PATH = "";
+process.env.SHELL = "/nonexistent/aspire-team-app-test-shell";
+for (const key of ["GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN", "GH_HOST"]) {
+  delete process.env[key];
+}
+for (const [key] of originalCopilotAccounts) delete process.env[key];
 process.env.COPILOT_HOME = copilotHome;
 
 test.after(async () => {
@@ -121,7 +138,14 @@ test("Health source order persists and reorders the cached dashboard", async (t)
   const entry = await server.startInstance("health-order-test", () => {});
   t.after(() => server.stopInstance("health-order-test"));
 
-  const initial = await (await fetch(new URL("api/state", entry.url))).json();
+  const initialResponse = await fetch(new URL("api/state", entry.url));
+  assert.equal(initialResponse.status, 200);
+  const initial = await initialResponse.json();
+  assert.equal(initial.dashboard.authenticated, true);
+  assert.deepEqual(initial.dashboard.accounts, []);
+  assert.deepEqual(initial.dashboard.errors, [
+    `GitHub account discovery: ${githubDiscoveryMessage}`,
+  ]);
   assert.deepEqual(
     initial.dashboard.health.items
       .map((item) => item.id)
@@ -137,6 +161,34 @@ test("Health source order persists and reorders the cached dashboard", async (t)
   assert.deepEqual(reordered.dashboard.health.items.slice(0, 2).map((item) => item.id), [second.id, first.id]);
   assert.deepEqual(reordered.prefs.healthOrder.slice(0, 2), [second.id, first.id]);
   assert.deepEqual(JSON.parse(await readFile(preferencesPath, "utf8")).healthOrder.slice(0, 2), [second.id, first.id]);
+});
+
+test("a fresh unauthenticated dashboard preserves diagnostics and navigation to Health", async (t) => {
+  await resetTestHome();
+  const server = await import(`./server.mjs?test=health-auth-error-${Date.now()}`);
+  const entry = await server.startInstance("health-auth-error-test", () => {});
+  t.after(() => server.stopInstance("health-auth-error-test"));
+
+  const initialResponse = await fetch(new URL("api/state", entry.url));
+  assert.equal(initialResponse.status, 200);
+  const initial = await initialResponse.json();
+  assert.equal(initial.dashboard.authenticated, false);
+  assert.equal(initial.dashboard.mode, "review");
+  assert.equal(initial.dashboard.message, githubDiscoveryMessage);
+  assert.deepEqual(initial.dashboard.accounts, []);
+  assert.deepEqual(initial.dashboard.errors, [
+    `GitHub account discovery: ${githubDiscoveryMessage}`,
+  ]);
+  for (const mode of ["health", "review", "issues", "ship"]) {
+    const response = await postJson(entry.url, "api/mode", { mode });
+    assert.equal(response.status, 200);
+    const result = await response.json();
+    assert.equal(result.dashboard.mode, mode);
+    assert.equal(result.dashboard.authenticated, false);
+    assert.equal(result.dashboard.githubDiscoveryError, githubDiscoveryMessage);
+    assert.deepEqual(result.dashboard.errors, [`GitHub account discovery: ${githubDiscoveryMessage}`]);
+    if (mode !== "health") assert.equal(result.dashboard.message, githubDiscoveryMessage);
+  }
 });
 
 test("applyHealthOrder keeps related provider sources contiguous", async () => {
@@ -1631,8 +1683,16 @@ function jsonResponse(body, options = {}) {
 function restoreEnvironment() {
   setOrDeleteEnv("GH_TOKEN", originalEnv.GH_TOKEN);
   setOrDeleteEnv("GITHUB_TOKEN", originalEnv.GITHUB_TOKEN);
+  setOrDeleteEnv("GH_ENTERPRISE_TOKEN", originalEnv.GH_ENTERPRISE_TOKEN);
+  setOrDeleteEnv("GITHUB_ENTERPRISE_TOKEN", originalEnv.GITHUB_ENTERPRISE_TOKEN);
+  setOrDeleteEnv("GH_HOST", originalEnv.GH_HOST);
   setOrDeleteEnv("COPILOT_HOME", originalEnv.COPILOT_HOME);
   setOrDeleteEnv("PATH", originalEnv.PATH);
+  setOrDeleteEnv("SHELL", originalEnv.SHELL);
+  for (const key of Object.keys(process.env)) {
+    if (key.startsWith("COPILOT_GH_ACCOUNT_")) delete process.env[key];
+  }
+  for (const [key, value] of originalCopilotAccounts) process.env[key] = value;
   globalThis.fetch = originalFetch;
 }
 

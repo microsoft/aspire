@@ -49,6 +49,70 @@ test("render keeps the current dashboard visible and surfaces later load errors"
   assert.match(app.innerHTML, /GitHub accounts/);
 });
 
+test("an unauthenticated initial load keeps Settings, Accounts, and Health navigation available", async () => {
+  const message = "GitHub CLI was not found. Install gh or make it available on PATH.";
+  const dashboard = {
+    seq: 1,
+    authenticated: false,
+    mode: "review",
+    accounts: [],
+    activeAccounts: [],
+    message,
+    githubDiscoveryError: message,
+    errors: [`GitHub account discovery: ${message}`],
+  };
+  const prefs = {
+    release: "9.5",
+    showDrafts: false,
+    azurePipelines: [],
+    notifications: { reviewRequested: true, readyToMerge: true, changesRequested: true, ciFailing: true },
+  };
+  const button = (dataset = {}) => ({
+    dataset,
+    listeners: {},
+    addEventListener(event, handler) { this.listeners[event] = handler; },
+  });
+  const gear = button();
+  const account = button();
+  const back = button();
+  const health = button({ mode: "health" });
+  const { app, api } = createRendererHarness({
+    elements: { "gear-btn": gear, "acct-btn": account, "back-btn": back },
+    querySelectorAll: (selector) => selector === ".tab" ? [health] : [],
+    fetch: async (url, options = {}) => {
+      if (String(url) === "api/mode") {
+        assert.equal(JSON.parse(options.body).mode, "health");
+        return jsonResponse({
+          dashboard: { ...dashboard, seq: 2, mode: "health", health: { items: [], counts: {} } },
+          prefs,
+        });
+      }
+      assert.equal(String(url), "api/state");
+      return jsonResponse({ dashboard, prefs });
+    },
+  });
+
+  await api.load();
+  assert.equal(api.getState().authenticated, false);
+  assert.match(app.innerHTML, /GitHub credentials unavailable/);
+  assert.match(app.innerHTML, /GitHub CLI was not found/);
+  assert.match(app.innerHTML, /id="rescan-btn"/);
+  assert.match(app.innerHTML, /id="gear-btn"/);
+  assert.match(app.innerHTML, /data-mode="health"/);
+
+  account.listeners.click();
+  assert.match(app.innerHTML, /GitHub accounts/);
+  assert.match(app.innerHTML, /GitHub CLI was not found/);
+  back.listeners.click();
+  gear.listeners.click();
+  assert.match(app.innerHTML, /id="pipeline-url-input"/);
+  back.listeners.click();
+  await health.listeners.click();
+  assert.equal(api.getState().mode, "health");
+  assert.match(app.innerHTML, /Repository &amp; delivery health/);
+  assert.match(app.innerHTML, /No health sources configured/);
+});
+
 test("deleteRepo completes once when both the animation and fallback timeout fire", () => {
   const row = {
     classList: { add() {} },
