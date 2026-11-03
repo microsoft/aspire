@@ -144,6 +144,52 @@ ID-token issuance through implicit or hybrid flows is disabled by default. `With
 
 A registration doesn't protect routes or authorize requests. Configure authentication and authorization in the consuming app with Microsoft.Identity.Web or the equivalent library for its language, and validate scopes or roles in the API.
 
+### Customize the generated infrastructure
+
+`ConfigureInfrastructure` callbacks can edit the Microsoft Graph resources that Aspire generates for registrations it creates; references to existing registrations aren't provisioned. The models are public in `Aspire.Hosting.Azure.EntraId.Provisioning`. The primary declarations have the Bicep identifiers `application` and `servicePrincipal`. An API registration that uses the default application ID URI declares the application a second time, so select by identifier rather than assuming there is one `MicrosoftGraphApplication`.
+
+**C#**
+
+```csharp
+using Aspire.Hosting.Azure.EntraId.Provisioning;
+
+var entra = builder.AddEntraIdApplication("entra")
+    .ConfigureInfrastructure(infrastructure =>
+    {
+        var application = infrastructure.GetProvisionableResources()
+            .OfType<MicrosoftGraphApplication>()
+            .Single(r => r.BicepIdentifier == "application");
+        application.Tags.Add("department:engineering");
+        application.ServiceManagementReference = "your-service-management-reference";
+
+        var principal = infrastructure.GetProvisionableResources()
+            .OfType<MicrosoftGraphServicePrincipal>().Single();
+        principal.Tags.Add("department:engineering");
+    });
+```
+
+**TypeScript**
+
+TypeScript AppHosts also need the experimental `Aspire.Hosting.Azure.Provisioning.EntraId` integration, which uses the [shared Bicep expression APIs](../Aspire.Hosting.Azure.Provisioning/README.md) to keep parameters and references deferred.
+
+```typescript
+const serviceReference = await builder.addParameter("service-reference");
+const entra = await builder.addEntraIdApplication("entra");
+await entra.configureInfrastructure(async infrastructure => {
+    const application = await infrastructure.getMicrosoftGraphApplicationByIdentifier("application");
+    const tags = await application.tags.get();
+    await tags.add("department:engineering");
+    await application.serviceManagementReference.set(infrastructure.bicep().parameter(serviceReference));
+
+    const principal = await infrastructure.getMicrosoftGraphServicePrincipalByIdentifier("servicePrincipal");
+    const principalTags = await principal.tags.get();
+    await principalTags.add("department:engineering");
+});
+```
+
+* **Tags are strings.** Microsoft Graph [application](https://learn.microsoft.com/graph/templates/bicep/reference/applications) and [service principal](https://learn.microsoft.com/graph/templates/bicep/reference/serviceprincipals) tags are string arrays, not Azure key/value tags. Add the exact string you need. Applications also have a `serviceManagementReference` property for a reference to a service or asset management database.
+* **Add to the service principal's tags.** Don't replace them: Aspire sets `WindowsAzureActiveDirectoryIntegratedApp`, which keeps the service principal in the Enterprise applications list.
+
 ### Expose an API and call it
 
 A registration becomes an API by exposing scopes, which you declare explicitly: Aspire doesn't derive them from caller permissions. A client registration declares the permissions it needs, and consent is granted only if you ask for it. Declaration, consent and pre-authorization are separate, and Aspire never combines them.

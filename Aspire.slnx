@@ -121,6 +121,7 @@
     <Project Path="src/Aspire.Hosting.Azure.Provisioning.ContainerRegistry/Aspire.Hosting.Azure.Provisioning.ContainerRegistry.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.Provisioning.ContainerService/Aspire.Hosting.Azure.Provisioning.ContainerService.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.Provisioning.CosmosDB/Aspire.Hosting.Azure.Provisioning.CosmosDB.csproj" />
+    <Project Path="src/Aspire.Hosting.Azure.Provisioning.EntraId/Aspire.Hosting.Azure.Provisioning.EntraId.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.Provisioning.EventHubs/Aspire.Hosting.Azure.Provisioning.EventHubs.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.Provisioning.KeyVault/Aspire.Hosting.Azure.Provisioning.KeyVault.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.Provisioning.Kusto/Aspire.Hosting.Azure.Provisioning.Kusto.csproj" />

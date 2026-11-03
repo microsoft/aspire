@@ -629,7 +629,7 @@ public class EntraIdApplicationResource : AzureProvisioningResource, IResourceWi
             // The Graph extension names a child as '{applicationUniqueName}/{credentialName}'. Referencing the
             // application's property, rather than reusing its name expression, makes the child depend on the application.
             BicepValue<string> applicationUniqueName = application.UniqueName.ToBicepExpression();
-            infrastructure.Add(new FederatedIdentityCredential(credentialIdentifier)
+            infrastructure.Add(new MicrosoftGraphFederatedIdentityCredential(credentialIdentifier)
             {
                 Name = BicepFunction.Interpolate($"{applicationUniqueName}/{credentialName}").Compile(),
                 Issuer = BicepFunction.Interpolate($"{EntraIdFederation.GetIssuerPrefix(resource.Instance)}/{BicepFunction.GetTenant().TenantId}/v2.0").Compile(),
