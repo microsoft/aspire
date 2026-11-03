@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
@@ -116,9 +117,14 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Dashboard
         });
     }
 
-    [Fact]
+    [Theory]
+    [InlineData(null, null, 0)]
+    [InlineData("macOS", "MacIntel", 0)]
+    [InlineData(null, "MacIntel", 5)]
+    [InlineData(null, "iPad", 5)]
+    [InlineData("Windows", "MacIntel", 0)]
     [OuterloopTest("Resource-intensive Playwright browser test")]
-    public async Task ResourceRowModifierClicks_SelectSeveralResources()
+    public async Task ResourceRowModifierClicks_SelectSeveralResources(string? userAgentPlatform, string? platform, int touchPoints)
     {
         var repository = DashboardServerFixture.DashboardApp.Services.GetRequiredService<ITelemetryRepositoryWriter>();
         await repository.AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
@@ -130,12 +136,28 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Dashboard
 
         await RunTestAsync(async page =>
         {
+            if (platform is not null)
+            {
+                await page.AddInitScriptAsync($$$"""
+                    (() => {
+                        const data={{{JsonSerializer.Serialize(new { userAgentPlatform, platform, touchPoints })}}};
+                        Object.defineProperty(navigator,'userAgentData',{value:data.userAgentPlatform===null ? undefined : {platform:data.userAgentPlatform}});
+                        Object.defineProperty(navigator,'platform',{value:data.platform});
+                        Object.defineProperty(navigator,'maxTouchPoints',{value:data.touchPoints});
+                    })();
+                    """);
+            }
             await page.SetViewportSizeAsync(1280, 900);
             await page.GotoAsync(DashboardUrls.AddTelemetryPane(DashboardUrls.StructuredLogsUrl(resource: "multi-a")));
 
+            // Read the browser, not the test host: iPadOS desktop mode reports MacIntel.
+            var usesCommand = await page.EvaluateAsync<bool>("""
+                () => /^(mac|iphone|ipad|ipod|ios)/i.test(navigator.userAgentData?.platform || navigator.platform)
+                """);
+            var selectionModifier = usesCommand ? KeyboardModifier.Meta : KeyboardModifier.Control;
             var pane = page.Locator(".resource-pane");
             var title = page.Locator("h1.resource-title");
-            await Assertions.Expect(page.GetByRole(AriaRole.Gridcell, new() { Name = "multi-a", Exact = true })).ToBeVisibleAsync();
+            await Assertions.Expect(page.GetByRole(AriaRole.Gridcell, new() { Name = "multi-a", Exact = true }).First).ToBeVisibleAsync();
             var telemetryToggle = pane.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.NavMenuTelemetrySourcesTab, Exact = true });
             if (await telemetryToggle.GetAttributeAsync("aria-pressed") != "true")
             {
@@ -149,7 +171,7 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Dashboard
             }
             await Assertions.Expect(title).ToHaveTextAsync("multi-a");
 
-            await GetRowLink("multi-c").ClickAsync(new LocatorClickOptions { Modifiers = [KeyboardModifier.ControlOrMeta] });
+            await GetRowLink("multi-c").ClickAsync(new LocatorClickOptions { Modifiers = [selectionModifier] });
             await Assertions.Expect(page).ToHaveURLAsync(new Regex(@"/structuredlogs\?resource=multi-a&resource=multi-c$"));
             await Assertions.Expect(title).ToHaveTextAsync(string.Format(CultureInfo.CurrentCulture, Resources.Layout.ResourceHeaderSelectedResources, 2));
             await Assertions.Expect(pane.Locator("a[aria-current='true']")).ToHaveCountAsync(2);
@@ -197,15 +219,17 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Dashboard
             Assert.NotNull(footerBounds);
             Assert.NotNull(hintBounds);
             Assert.InRange(Math.Abs(hintBounds.X + hintBounds.Width / 2 - footerBounds.X - footerBounds.Width / 2), 0, .5);
-            await Assertions.Expect(hint.Locator("kbd").First).ToHaveTextAsync("Ctrl + click");
+            await Assertions.Expect(hint.Locator("kbd").First).ToHaveTextAsync(usesCommand ? "⌘ + click" : "Ctrl + click");
             await Assertions.Expect(hint.Locator("kbd").Last).ToHaveTextAsync("Shift + click");
             await Assertions.Expect(hint).ToContainTextAsync("Add/remove");
             await Assertions.Expect(hint).ToContainTextAsync("Select range");
-            await Assertions.Expect(hint).ToHaveAttributeAsync("aria-label", Resources.Layout.ResourcePaneSelectionControlDescription);
+            await Assertions.Expect(hint).ToHaveAttributeAsync("aria-label", usesCommand
+                ? Resources.Layout.ResourcePaneSelectionCommandDescription
+                : Resources.Layout.ResourcePaneSelectionControlDescription);
             await pane.Locator(".resource-pane-canvas-toggle").ClickAsync();
             await Assertions.Expect(hint).ToBeVisibleAsync();
 
-            await GetRowLink("multi-b").ClickAsync(new LocatorClickOptions { Modifiers = [KeyboardModifier.ControlOrMeta] });
+            await GetRowLink("multi-b").ClickAsync(new LocatorClickOptions { Modifiers = [selectionModifier] });
             await Assertions.Expect(page).ToHaveURLAsync(new Regex(@"/structuredlogs\?resource=multi-a&resource=multi-c$"));
 
             await GetRowLink("multi-b").ClickAsync();
