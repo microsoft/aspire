@@ -49,6 +49,52 @@ test("render keeps the current dashboard visible and surfaces later load errors"
   assert.match(app.innerHTML, /GitHub accounts/);
 });
 
+test("Needs attention renders an ordered row-major queue with full-queue positions", () => {
+  const { app, api } = createRendererHarness({ fetch: () => new Promise(() => {}) });
+  const items = [1, 2, 12].map((position) => ({
+    queuePosition: position,
+    pr: { number: position, title: `PR ${position}`, url: `https://github.com/microsoft/aspire/pull/${position}`, repository: "microsoft/aspire", author: "davidfowl", review: { state: "waiting" } },
+    signals: [],
+  }));
+  api.setState({
+    authenticated: true, mode: "review", accounts: [], activeAccounts: [], notifications: [],
+    repos: ["microsoft/aspire"], counts: {}, errors: [],
+    attention: { focus: items, focusTotal: 20, focusMixed: true, forMe: [], focusExclusions: [], buckets: [] },
+  });
+  api.render();
+
+  const queue = app.innerHTML.match(/<ol class="focus-queue"[^>]*>([\s\S]*?)<\/ol>/);
+  assert.ok(queue);
+  assert.deepEqual([...queue[1].matchAll(/<li value="(\d+)">/g)].map((match) => Number(match[1])), [1, 2, 12]);
+  assert.deepEqual([...queue[1].matchAll(/class="card-title">([^<]+)</g)].map((match) => match[1]), ["PR 1", "PR 2", "PR 12"]);
+  assert.match(app.innerHTML, /First readiness, oldest first\. Blocked PRs keep their priority when they return\./);
+  assert.match(STYLES, /\.focus-queue \{[^}]*display: grid;[^}]*grid-template-columns: repeat\(auto-fill, minmax\(min\(100%, 280px\), 1fr\)\)/);
+});
+
+test("resizing the review board cannot redistribute Needs attention into masonry columns", () => {
+  // Only legacy .grid panels participate in the JavaScript column redistribution.
+  // The ordered list keeps its DOM/tab order at every responsive width.
+  const queried = [];
+  const { api, document } = createRendererHarness({
+    fetch: () => new Promise(() => {}),
+    querySelectorAll: (selector) => { queried.push(selector); return []; },
+  });
+  const items = [1, 2, 3].map((position) => ({
+    queuePosition: position,
+    pr: { number: position, title: `PR ${position}`, url: `https://github.com/microsoft/aspire/pull/${position}`, repository: "microsoft/aspire", author: "davidfowl" },
+  }));
+  const markup = api.queuePanel({ id: "needs-attention", title: "Needs attention", items, numbered: true });
+  for (const width of [280, 600, 900]) {
+    document.documentElement.clientWidth = width;
+    queried.length = 0;
+    api.layoutGrids();
+    assert.deepEqual(queried, [".grid"]);
+    assert.equal(api.queuePanel({ id: "needs-attention", title: "Needs attention", items, numbered: true }), markup);
+  }
+  const personal = api.queuePanel({ id: "for-you", title: "For you", items });
+  assert.match(personal, /<div class="grid"><div class="card">/);
+});
+
 test("an unauthenticated initial load keeps Settings, Accounts, and Health navigation available", async () => {
   const message = "GitHub CLI was not found. Install gh or make it available on PATH.";
   const dashboard = {
@@ -1711,7 +1757,7 @@ function createRendererHarness(overrides = {}) {
     console,
   };
 
-  vm.runInNewContext(`${APP_JS}\n;globalThis.__test = {\n  render,\n  withRefresh,\n  load,\n  rescanAccounts,\n  onCardAction,\n  applyPushedState,\n  onUpdateAvailable,\n  onPreferences,\n  onSnapshot,\n  onPollSchedule,\n  applyAvailableUpdate,\n  toggleAutoApply,\n  autoApplyEnabled,\n  openLinkedPr,\n  deleteRepo,\n  persistAccountRepos,\n  draftReposByAcct,\n  editingByAcct,\n  forYouCardActions,\n  focusCardActions,\n  laneCardActions,\n  signalActions,\n  mergeActions,\n  queuePanel,\n  cardActionBtn,\n  issueCard,\n  healthCard,\n  healthView,\n  healthRepositoryGroups,\n  pipelineEditorHtml,\n  addAzurePipeline,\n  removeAzurePipeline,\n  commitHealthOrder,\n  moveHealthSource,\n  dropHealthSource,\n  setHealthDropMarker,\n  wireHealthOrdering,\n  actionKey,\n  inflightActions,\n  setProgress,\n  setState(value) { state = value; },\n  getState() { return state; },\n  getAppliedSeq() { return lastAppliedSeq; },\n  getUpdateAvailable() { return updateAvailable; },\n  setPrefs(value) { prefs = value; },\n  getPrefs() { return prefs; },\n  setHealthOrderSaving(value) { healthOrderSaving = !!value; },\n  setPipelineDrafts(url, branch) { pipelineUrlDraft = url; pipelineBranchDraft = branch; },\n  getPipelineDrafts() { return { url: pipelineUrlDraft, branch: pipelineBranchDraft, error: pipelineError }; },\n  setView(value) { view = value; },\n  setRefreshing(value) { refreshing = !!value; },\n  setRefreshInFlight(value) { refreshInFlight = value; },\n  setLoadError(value) { loadError = value; },\n  getLoadError() { return loadError; },\n};`, sandbox);
+  vm.runInNewContext(`${APP_JS}\n;globalThis.__test = {\n  render,\n  layoutGrids,\n  withRefresh,\n  load,\n  rescanAccounts,\n  onCardAction,\n  applyPushedState,\n  onUpdateAvailable,\n  onPreferences,\n  onSnapshot,\n  onPollSchedule,\n  applyAvailableUpdate,\n  toggleAutoApply,\n  autoApplyEnabled,\n  openLinkedPr,\n  deleteRepo,\n  persistAccountRepos,\n  draftReposByAcct,\n  editingByAcct,\n  forYouCardActions,\n  focusCardActions,\n  laneCardActions,\n  signalActions,\n  mergeActions,\n  queuePanel,\n  cardActionBtn,\n  issueCard,\n  healthCard,\n  healthView,\n  healthRepositoryGroups,\n  pipelineEditorHtml,\n  addAzurePipeline,\n  removeAzurePipeline,\n  commitHealthOrder,\n  moveHealthSource,\n  dropHealthSource,\n  setHealthDropMarker,\n  wireHealthOrdering,\n  actionKey,\n  inflightActions,\n  setProgress,\n  setState(value) { state = value; },\n  getState() { return state; },\n  getAppliedSeq() { return lastAppliedSeq; },\n  getUpdateAvailable() { return updateAvailable; },\n  setPrefs(value) { prefs = value; },\n  getPrefs() { return prefs; },\n  setHealthOrderSaving(value) { healthOrderSaving = !!value; },\n  setPipelineDrafts(url, branch) { pipelineUrlDraft = url; pipelineBranchDraft = branch; },\n  getPipelineDrafts() { return { url: pipelineUrlDraft, branch: pipelineBranchDraft, error: pipelineError }; },\n  setView(value) { view = value; },\n  setRefreshing(value) { refreshing = !!value; },\n  setRefreshInFlight(value) { refreshInFlight = value; },\n  setLoadError(value) { loadError = value; },\n  getLoadError() { return loadError; },\n};`, sandbox);
 
   sandbox.__test.saveSettings = vm.runInNewContext("saveSettings", sandbox);
   return { app, api: sandbox.__test, events, document };

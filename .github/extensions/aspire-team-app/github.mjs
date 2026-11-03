@@ -85,8 +85,17 @@ async function gql(token, query, variables, graphqlUrl = GRAPHQL) {
 // so a pathological repo can't spin the loader indefinitely.
 const MAX_PAGES = 25;
 
+const READINESS_TRANSITIONS = `
+  pageInfo { hasNextPage endCursor }
+  nodes {
+    __typename
+    ... on ConvertToDraftEvent { createdAt }
+    ... on ReadyForReviewEvent { createdAt }
+  }
+`;
+
 const PR_QUERY = `
-query($owner:String!, $name:String!, $after:String) {
+query($owner:String!, $name:String!, $after:String, $includeReadiness:Boolean!) {
   repository(owner:$owner, name:$name) {
     isPrivate
     pullRequests(states:OPEN, first:40, after:$after, orderBy:{field:UPDATED_AT, direction:DESC}) {
@@ -99,6 +108,9 @@ query($owner:String!, $name:String!, $after:String) {
         reviewDecision
         readyForReviewEvents: timelineItems(last:1, itemTypes:[READY_FOR_REVIEW_EVENT]) {
           nodes { ... on ReadyForReviewEvent { createdAt } }
+        }
+        readinessTransitions: timelineItems(first:20, itemTypes:[CONVERT_TO_DRAFT_EVENT, READY_FOR_REVIEW_EVENT]) @include(if:$includeReadiness) {
+          ${READINESS_TRANSITIONS}
         }
         additions deletions changedFiles
         milestone { title }
@@ -116,6 +128,17 @@ query($owner:String!, $name:String!, $after:String) {
             labels(first:15) { nodes { name } }
           }
         }
+      }
+    }
+  }
+}`;
+
+const READINESS_QUERY = `
+query($owner:String!, $name:String!, $number:Int!, $after:String!) {
+  repository(owner:$owner, name:$name) {
+    pullRequest(number:$number) {
+      readinessTransitions: timelineItems(first:100, after:$after, itemTypes:[CONVERT_TO_DRAFT_EVENT, READY_FOR_REVIEW_EVENT]) {
+        ${READINESS_TRANSITIONS}
       }
     }
   }
@@ -143,6 +166,55 @@ query($owner:String!, $name:String!, $after:String) {
 function splitRepo(repo) {
   const [owner, ...rest] = repo.split("/");
   return { owner, name: rest.join("/") };
+}
+
+async function loadFirstReadyForReviewAt(account, owner, name, node) {
+  let connection = node.readinessTransitions;
+  const transitions = [];
+  const cursors = new Set();
+  for (let page = 0; ; page++) {
+    if (!Array.isArray(connection?.nodes) || typeof connection.pageInfo?.hasNextPage !== "boolean") {
+      throw new Error("Missing draft/ready transition history");
+    }
+    transitions.push(...connection.nodes);
+    if (!connection.pageInfo.hasNextPage) break;
+    const after = connection.pageInfo.endCursor;
+    if (!after || cursors.has(after) || page + 1 >= MAX_PAGES) {
+      throw new Error("Incomplete draft/ready transition history");
+    }
+    cursors.add(after);
+    const data = await gql(account.token, READINESS_QUERY, { owner, name, number: node.number, after }, account.graphql);
+    connection = data.repository?.pullRequest?.readinessTransitions;
+  }
+
+  // The filtered timeline is chronological. Ready -> Draft -> Ready means the PR
+  // opened as a draft; Draft -> Ready means it opened ready, so creation wins.
+  // A later draft cycle must never reset its first-readiness priority.
+  // https://docs.github.com/en/graphql/reference/pulls#object-readyforreviewevent
+  let draft = transitions.length ? transitions[0]?.__typename === "ReadyForReviewEvent" : node.isDraft;
+  let firstReadyAt = draft ? null : node.createdAt;
+  let previousTime = Date.parse(node.createdAt);
+  if (!Number.isFinite(previousTime) || typeof node.isDraft !== "boolean") {
+    throw new Error("Invalid PR creation or draft state");
+  }
+  for (const transition of transitions) {
+    const time = Date.parse(transition?.createdAt);
+    const type = transition?.__typename;
+    if (!Number.isFinite(time) || time < previousTime ||
+        (type !== "ReadyForReviewEvent" && type !== "ConvertToDraftEvent") ||
+        (type === "ReadyForReviewEvent") !== draft) {
+      throw new Error("Inconsistent draft/ready transition history");
+    }
+    draft = type === "ConvertToDraftEvent";
+    if (!draft && firstReadyAt === null) firstReadyAt = transition.createdAt;
+    previousTime = time;
+  }
+  // A transition during pagination can disagree with the original PR snapshot.
+  // Retry on refresh instead of assigning a guessed priority to an incomplete view.
+  if (draft !== node.isDraft) {
+    throw new Error("Draft state changed while loading transition history; refresh to retry");
+  }
+  return firstReadyAt;
 }
 
 // ---------------------------------------------------------------------------
@@ -317,6 +389,8 @@ function normalizePr(repo, node, viewers, repoPrivate = false) {
     authorAvatarUrl: node.author?.avatarUrl ?? null,
     createdAt: node.createdAt,
     readyForReviewAt: node.readyForReviewEvents?.nodes?.[0]?.createdAt ?? null,
+    firstReadyForReviewAt: null,
+    firstReadinessError: null,
     updatedAt: node.updatedAt,
     baseRef: node.baseRefName,
     milestone: node.milestone?.title ?? null,
@@ -645,12 +719,8 @@ export function buildNotifications(prs, prefs, dismissed = []) {
   return items;
 }
 
-// The focused queue headline is capped to `limit` actionable cards, but review-debt cards sort
-// last (they carry the oldest activity timestamp) and would be sliced away whenever `limit`
-// fresher PRs exist — leaving their "Address review" button unreachable even though focusTotal
-// still counts them. Keep the freshest `limit` cards plus any review-debt cards that spill past
-// the cap, so the debt action stays reachable. The two slices are disjoint, so no card is
-// duplicated, and focusTotal continues to report the true (uncapped) count.
+// Keep the first `limit` cards in first-readiness order plus any review-debt cards
+// beyond the cap, so their "Address review" action stays reachable.
 export function capFocusKeepingDebt(cards, limit) {
   const head = cards.slice(0, limit);
   const spilloverDebt = cards.slice(limit).filter((c) => c && c.reviewDebt);
@@ -723,12 +793,22 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
             } else {
               let after = null;
               for (let page = 0; page < MAX_PAGES; page++) {
-                const data = await gql(acct.token, PR_QUERY, { owner, name, after }, acct.graphql);
+                const data = await gql(acct.token, PR_QUERY, { owner, name, after, includeReadiness: mode === "review" }, acct.graphql);
                 const repoPrivate = !!data.repository?.isPrivate;
                 const conn = data.repository?.pullRequests;
                 for (const node of conn?.nodes ?? []) {
                   const pr = normalizePr(repo, node, viewers, repoPrivate);
-                  if (!prById.has(pr.url)) prById.set(pr.url, pr);
+                  if (mode === "review") {
+                    try {
+                      pr.firstReadyForReviewAt = await loadFirstReadyForReviewAt(acct, owner, name, node);
+                    } catch (error) {
+                      pr.firstReadinessError = error.message;
+                    }
+                  }
+                  const existing = prById.get(pr.url);
+                  if (!existing || (existing.firstReadinessError && !pr.firstReadinessError)) {
+                    prById.set(pr.url, pr);
+                  }
                 }
                 if (!conn?.pageInfo?.hasNextPage) break;
                 after = conn.pageInfo.endCursor;
@@ -756,6 +836,11 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
     // Drop per-account errors for (host, repo) pairs another active account could read on that same
     // host — a success on a different host must not mask this host's failure.
     const errors = [...new Set(errorsRaw.filter((e) => !okRepos.has(hostRepoKey(e.host, e.repo))).map((e) => e.message))];
+    for (const pr of allPrs) {
+      if (pr.firstReadinessError) {
+        errors.push(`${pr.repository}#${pr.number}: first readiness unavailable; omitted from Needs attention. ${pr.firstReadinessError}`);
+      }
+    }
 
     let lanes;
     if (mode === "issues") lanes = bucketIssues(allIssues, usable[0].login);
@@ -782,8 +867,8 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
       // filter and capFocusKeepingDebt use, so they cannot drift.
       const card = (pr, reason, extra) =>
         Object.assign({ pr, reason: reason || "", signals: signalsFor(pr, reason || ""), reviewDebt: isReviewDebt(pr) }, extra || {});
-      const focusCards = focusAll.map((f) => {
-        return card(f.pullRequest, f.reason, { bucketLabel: f.bucketLabel, bucketTone: f.bucketTone });
+      const focusCards = focusAll.map((f, index) => {
+        return card(f.pullRequest, f.reason, { bucketLabel: f.bucketLabel, bucketTone: f.bucketTone, queuePosition: index + 1 });
       });
       const focus = capFocusKeepingDebt(focusCards, reviewLimit);
       attention = {

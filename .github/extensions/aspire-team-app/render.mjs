@@ -328,6 +328,14 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
    order) instead of multi-column height balancing. */
 .grid.mcol { column-width: auto; display: flex; align-items: flex-start; gap: 12px; }
 .mcol-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; }
+/* The prioritized queue reads across each row, never down masonry columns. */
+.focus-queue {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+  align-items: start; gap: 12px; margin: 0; padding: 2px 0 0; list-style: none;
+}
+.focus-queue > li { min-width: 0; }
+.focus-queue .card { margin-bottom: 0; }
+.queue-position { display: block; margin-bottom: 4px; color: var(--muted); font-size: 12px; font-weight: 600; }
 
 /* Review board section dividers (For you / Needs attention / breakdown / Community). */
 .board-sep {
@@ -2572,9 +2580,19 @@ function queuePanel(opts) {
   const capped = !opts.exactCount && typeof opts.cappedTotal === "number" && opts.cappedTotal > n;
   const metric = capped ? "top " + n + " of " + opts.cappedTotal : n + " shown";
   const cardActions = typeof opts.cardActions === "function" ? opts.cardActions : null;
-  const body = n
-    ? '<div class="grid">' + items.map((it) => (it.pr ? prCard(it, cardActions ? cardActions(it) : null) : issueCard(it))).join("") + "</div>"
-    : '<div class="lane-empty">' + esc(opts.emptyText || "Nothing here right now.") + "</div>";
+  let body;
+  if (n) {
+    const cards = items.map((it, index) => {
+      const card = it.pr ? prCard(it, cardActions ? cardActions(it) : null) : issueCard(it);
+      if (!opts.numbered) return card;
+      const position = it.queuePosition || index + 1;
+      return '<li value="' + position + '"><span class="queue-position">' + position + ".</span>" + card + "</li>";
+    }).join("");
+    body = opts.numbered ? '<ol class="focus-queue" role="list" aria-label="Needs attention, first-readiness order">' + cards + "</ol>"
+      : '<div class="grid">' + cards + "</div>";
+  } else {
+    body = '<div class="lane-empty">' + esc(opts.emptyText || "Nothing here right now.") + "</div>";
+  }
   const collapsed = collapsedLanes.has(opts.id);
   return '<section class="qpanel collapsible' + (collapsed ? " collapsed" : "") + '" data-q="' + esc(opts.id) + '">' +
     '<button class="qhead" data-collapse="' + esc(opts.id) + '" aria-expanded="' + (collapsed ? "false" : "true") + '">' +
@@ -2608,8 +2626,9 @@ function reviewBoardHtml() {
   // 2. Needs attention — the focused, team-managed review queue (the headline).
   html += queuePanel({
     id: "needs-attention", title: "Needs attention", tone: "danger", icon: ICONS.alertSm,
-    subtitle: "One actionable row per PR with fresh activity, waiting on a review or a merge.",
+    subtitle: "First readiness, oldest first. Blocked PRs keep their priority when they return.",
     items: att.focus || [], cappedTotal: att.focusTotal, exactCount: !!att.focusMixed,
+    numbered: true,
     cardActions: focusCardActions,
     emptyText: "Nothing is waiting on a reviewer right now \u00b7 anything blocked sits in the breakdown below.",
   });
