@@ -250,13 +250,18 @@ internal static partial class DotnetProjectBuildCoordinator
             resource,
             static (@event, _) =>
             {
-                var snapshot = @event.ResourceEvent.Snapshot;
-                if (IsSettledBuildSnapshot(snapshot) &&
-                    (snapshot.State?.Text == KnownResourceStates.FailedToStart || snapshot.ExitCode is not 0))
+                var failureState = s_buildFailures.GetValue(@event.Resource, static _ => new BuildFailureState());
+                // An earlier stopped handler can restart the build. The orchestrator publishes Starting before
+                // BeforeResourceStartedEvent advances the attempt, so read the attempt first and then the current
+                // snapshot: a restart is then either visible as a non-terminal state or the snapshot is already the
+                // new attempt's result. Never attribute this event's (possibly stale) snapshot to a later attempt.
+                var attempt = failureState.Attempt;
+                if (@event.Services.GetRequiredService<ResourceNotificationService>()
+                        .TryGetCurrentState(@event.ResourceEvent.ResourceId, out var current) &&
+                    IsFailedBuildSnapshot(current.Snapshot))
                 {
-                    var failureState = s_buildFailures.GetValue(@event.Resource, static _ => new BuildFailureState());
                     // Do not block event dispatch on reading the build output; waiters share the same cached task.
-                    failureState.GetFailureMessage(failureState.Attempt, @event.Services, @event.Resource, snapshot);
+                    failureState.GetFailureMessage(attempt, @event.Services, @event.Resource, current.Snapshot);
                 }
 
                 return Task.CompletedTask;
@@ -370,6 +375,10 @@ internal static partial class DotnetProjectBuildCoordinator
         snapshot.State?.Text == KnownResourceStates.FailedToStart ||
         (KnownResourceStates.TerminalStates.Contains(snapshot.State?.Text) &&
          snapshot.ExitCode is not null);
+
+    private static bool IsFailedBuildSnapshot(CustomResourceSnapshot snapshot) =>
+        IsSettledBuildSnapshot(snapshot) &&
+        (snapshot.State?.Text == KnownResourceStates.FailedToStart || snapshot.ExitCode is not 0);
 
     private static bool IsProjectFile(string path) =>
         ProjectPathResolver.IsSupportedDotnetProjectFile(path);

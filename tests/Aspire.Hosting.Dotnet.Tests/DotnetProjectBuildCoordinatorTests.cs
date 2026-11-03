@@ -1625,6 +1625,72 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task BuildRestartedByEarlierStoppedHandlerReportsOnlyTheNewAttemptFailure()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        builder.Services.AddLogging(logging => logging.AddFakeLogging());
+        var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
+        var project = builder.AddDotnetProject("worker", projectPath, options => options.ExcludeLaunchProfile = true)
+            .WithExplicitStart();
+        await using var app = builder.Build();
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        UseBuildOutput(app, buildResource, "/src/Worker/Program.cs(3,1): error CS1002: ; expected [/src/Worker/Worker.csproj]");
+        await builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(buildResource, app.Services),
+            TestContext.Current.CancellationToken);
+        await app.ResourceNotifications.PublishUpdateAsync(
+            buildResource,
+            snapshot => snapshot with
+            {
+                State = KnownResourceStates.Finished,
+                ExitCode = 1,
+            });
+        Assert.True(app.ResourceNotifications.TryGetCurrentState(buildResource.Name, out var firstStoppedEvent));
+
+        // Simulate an earlier ResourceStoppedEvent handler restarting the build before the coordinator's handler runs.
+        await app.ResourceNotifications.PublishUpdateAsync(
+            buildResource,
+            snapshot => snapshot with
+            {
+                State = KnownResourceStates.Starting,
+                ExitCode = null,
+            });
+        await builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(buildResource, app.Services),
+            TestContext.Current.CancellationToken);
+        await builder.Eventing.PublishAsync(
+            new ResourceStoppedEvent(buildResource, app.Services, firstStoppedEvent),
+            TestContext.Current.CancellationToken);
+
+        await app.ResourceNotifications.PublishUpdateAsync(
+            buildResource,
+            snapshot => snapshot with
+            {
+                State = KnownResourceStates.Finished,
+                ExitCode = 2,
+            });
+        Assert.True(app.ResourceNotifications.TryGetCurrentState(buildResource.Name, out var secondStoppedEvent));
+        await builder.Eventing.PublishAsync(
+            new ResourceStoppedEvent(buildResource, app.Services, secondStoppedEvent),
+            TestContext.Current.CancellationToken);
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
+            builder.Eventing.PublishAsync(
+                new BeforeResourceStartedEvent(project.Resource, app.Services),
+                TestContext.Current.CancellationToken));
+        Assert.Contains("The coordinated .NET build failed with exit code 2.", exception.Message);
+        var appHostError = Assert.Single(
+            app.Services.GetFakeLogCollector().GetSnapshot(),
+            record => record.Level == LogLevel.Error);
+        Assert.Contains("The coordinated .NET build failed with exit code 2.", appHostError.Message);
+    }
+
+    [Fact]
     public async Task CoordinatedBuildPathsUseOnDiskCasing()
     {
         // VS Code can launch the AppHost from a lowercase drive letter on Windows. Blazor WebAssembly builds fail when
