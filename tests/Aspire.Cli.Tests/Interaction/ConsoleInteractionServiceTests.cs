@@ -991,23 +991,28 @@ public class ConsoleInteractionServiceTests
         await Verify(string.Join('\n', lines.Select(line => line.TrimEnd())));
     }
 
-    [Fact]
-    public void DisplayMessage_SourceTrustNoticeHasSingleSpaceAfterEmoji()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void DisplayMessage_SourceTrustNoticeUsesWarningFormatting(bool enableColor)
     {
         var output = new StringBuilder();
         var console = AnsiConsole.Create(new AnsiConsoleSettings
         {
-            Ansi = AnsiSupport.No,
-            ColorSystem = ColorSystemSupport.NoColors,
+            Ansi = enableColor ? AnsiSupport.Yes : AnsiSupport.No,
+            ColorSystem = enableColor ? ColorSystemSupport.Standard : ColorSystemSupport.NoColors,
             Out = new AnsiConsoleOutput(new StringWriter(output)),
             Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
         });
         console.Profile.Width = 200;
         var interactionService = CreateInteractionService(console);
 
-        interactionService.DisplayMessage(KnownEmojis.PoliceCarLight, SharedCommandStrings.SourceTrustWarning, consoleOverride: ConsoleOutput.Error);
+        interactionService.DisplaySourceTrustWarning();
 
-        Assert.Equal($"\U0001F6A8 {SharedCommandStrings.SourceTrustWarning}", output.ToString().TrimEnd());
+        var expected = enableColor
+            ? $"\u001b[91m\U0001F6A8\u001b[0m \u001b[93m{SharedCommandStrings.SourceTrustWarning}\u001b[0m"
+            : $"\U0001F6A8 {SharedCommandStrings.SourceTrustWarning}";
+        Assert.Equal(expected, output.ToString().TrimEnd());
     }
 
     [Fact]

@@ -259,7 +259,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
         Assert.Equal(2, messagesBeforeRegistration.Count);
         var warning = Assert.Single(interaction.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.PoliceCarLight));
-        Assert.Equal(SharedCommandStrings.SourceTrustWarning, warning.Message);
+        Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", warning.Message);
         Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
         Assert.Equal(messagesBeforeRegistration, interaction.DisplayedMessages
             .Where(message => message.Emoji.Equals(KnownEmojis.Information) || message.Emoji.Equals(KnownEmojis.PoliceCarLight))
@@ -762,7 +762,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             message =>
             {
                 Assert.Equal(KnownEmojis.PoliceCarLight, message.Emoji);
-                Assert.Equal(SharedCommandStrings.SourceTrustWarning, message.Message);
+                Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", message.Message);
                 Assert.Equal(ConsoleOutput.Error, message.ConsoleOverride);
             },
             message =>
@@ -817,7 +817,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
                 message =>
                 {
                     Assert.Equal(KnownEmojis.PoliceCarLight, message.Emoji);
-                    Assert.Equal(SharedCommandStrings.SourceTrustWarning, message.Message);
+                    Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", message.Message);
                     Assert.Equal(ConsoleOutput.Error, message.ConsoleOverride);
                 },
                 message =>

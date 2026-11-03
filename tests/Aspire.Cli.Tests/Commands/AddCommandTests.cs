@@ -2365,7 +2365,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                 runner.SearchPackagesAsyncCallback = (dir, query, exactMatch, prerelease, take, skip, nugetConfigFile, useCache, options, cancellationToken) =>
                 {
                     var warning = Assert.Single(interaction.DisplayedMessages,
-                        message => message.Message == SharedCommandStrings.SourceTrustWarning);
+                        message => message.Message == $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]");
                     Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
                     Assert.Null(nugetConfigFile);
                     Assert.True(File.Exists(Path.Combine(dir.FullName, "NuGet.Config")));
@@ -2413,7 +2413,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         Assert.NotEmpty(searchSources);
         Assert.All(searchSources, sources => Assert.Equal([expectedSource], sources));
         Assert.Single(interaction.DisplayedMessages,
-            message => message.Message == SharedCommandStrings.SourceTrustWarning);
+            message => message.Message == $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]");
     }
 
     [Fact]

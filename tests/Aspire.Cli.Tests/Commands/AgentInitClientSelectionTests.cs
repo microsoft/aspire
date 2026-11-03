@@ -391,7 +391,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
             {
                 prompts.Add(prompt);
                 Assert.Equal([AgentConfigurationScope.Project, AgentConfigurationScope.Global], choices.Cast<AgentConfigurationScope>());
-                Assert.Equal([SharedCommandStrings.SourceTrustWarning], riskWarnings);
+                Assert.Equal([$"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]"], riskWarnings);
                 Assert.Empty(homeDirectory.GetFileSystemInfos());
                 return AgentConfigurationScope.Global;
             }
@@ -411,7 +411,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
             [AgentCommandStrings.InitCommand_SelectAgentsPrompt, AgentCommandStrings.InitCommand_SelectSkills,
                 AgentCommandStrings.InitCommand_ConfigureMcpServerPrompt, AgentCommandStrings.InitCommand_SelectScopePrompt],
             prompts);
-        Assert.Equal([SharedCommandStrings.SourceTrustWarning], riskWarnings);
+        Assert.Equal([$"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]"], riskWarnings);
         var copilot = provider.GetServices<IAgentClient>().Single(client =>
             string.Equals(client.Id, "copilot", StringComparisons.AgentClientId));
         Assert.True(copilot.HasIntegrationRegistration(

@@ -30,7 +30,7 @@ public class TemplateEngineFactoryGitTests(ITestOutputHelper outputHelper)
         {
             var warning = Assert.Single(interaction.DisplayedMessages);
             Assert.Equal(KnownEmojis.PoliceCarLight, warning.Emoji);
-            Assert.Equal(SharedCommandStrings.SourceTrustWarning, warning.Message);
+            Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", warning.Message);
             Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
             return run(command, token);
         };
@@ -50,7 +50,7 @@ public class TemplateEngineFactoryGitTests(ITestOutputHelper outputHelper)
 
         Assert.Equal("git-template", Assert.Single(templates).Name);
         var warning = Assert.Single(interaction.DisplayedMessages);
-        Assert.Equal(SharedCommandStrings.SourceTrustWarning, warning.Message);
+        Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", warning.Message);
         Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
     }
 

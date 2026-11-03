@@ -421,7 +421,7 @@ internal sealed class AgentInitCommand : BaseCommand
                 InteractionService.DisplayMessage(KnownEmojis.Information, string.Format(CultureInfo.CurrentCulture,
                     AgentCommandStrings.InitCommand_SkillSources,
                     string.Join(System.Environment.NewLine, sourceUrls.Distinct(StringComparer.Ordinal))));
-                InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight, SharedCommandStrings.SourceTrustWarning, consoleOverride: ConsoleOutput.Error);
+                InteractionService.DisplaySourceTrustWarning();
                 InteractionService.DisplayEmptyLine();
             }
         }

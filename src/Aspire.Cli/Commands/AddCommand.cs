@@ -124,7 +124,7 @@ internal sealed class AddCommand : BaseCommand
                     ExecutionContext.WorkingDirectory);
             if (source is not null)
             {
-                InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight, SharedCommandStrings.SourceTrustWarning, consoleOverride: ConsoleOutput.Error);
+                InteractionService.DisplaySourceTrustWarning();
             }
             addActivity = _profilingTelemetry.StartAddCommand(integrationName, version, source, passedAppHostProjectFile);
 

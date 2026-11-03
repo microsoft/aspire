@@ -554,7 +554,7 @@ internal sealed class ConfigSourceService(
             _sourceTrustWarningDisplayed = true;
         }
 
-        interaction.DisplayMessage(KnownEmojis.PoliceCarLight, SharedCommandStrings.SourceTrustWarning, consoleOverride: ConsoleOutput.Error);
+        interaction.DisplaySourceTrustWarning();
     }
 
     private async Task<ConfigSourceSnapshot> AcquireAsync(

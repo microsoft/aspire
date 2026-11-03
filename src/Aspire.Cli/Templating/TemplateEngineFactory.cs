@@ -147,7 +147,7 @@ internal sealed partial class TemplateEngineFactory(
 
         if (!_sourceTrustWarningDisplayed)
         {
-            interactionService.DisplayMessage(KnownEmojis.PoliceCarLight, SharedCommandStrings.SourceTrustWarning, consoleOverride: ConsoleOutput.Error);
+            interactionService.DisplaySourceTrustWarning();
             _sourceTrustWarningDisplayed = true;
         }
         try

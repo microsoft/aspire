@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Resources;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 
@@ -12,6 +13,11 @@ namespace Aspire.Cli.Utils;
 /// </summary>
 internal static class ConsoleHelpers
 {
+    public static void DisplaySourceTrustWarning(this IInteractionService interactionService)
+    {
+        interactionService.DisplayMessage(KnownEmojis.PoliceCarLight, $"[yellow]{SharedCommandStrings.SourceTrustWarning.EscapeMarkup()}[/]", allowMarkup: true, consoleOverride: ConsoleOutput.Error);
+    }
+
     /// <summary>
     /// Formats an emoji prefix with trailing space for aligned console output.
     /// </summary>

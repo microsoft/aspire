@@ -44,7 +44,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
             {
                 var warning = Assert.Single(interaction.DisplayedMessages);
                 Assert.Equal(KnownEmojis.PoliceCarLight, warning.Emoji);
-                Assert.Equal(SharedCommandStrings.SourceTrustWarning, warning.Message);
+                Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", warning.Message);
                 Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
                 Assert.Equal("https://git.example/configuration", source.Repository);
                 Assert.Equal(path ?? AspireConfigFile.FileName, source.Path);
@@ -881,7 +881,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         {
             prompted = true;
             var warning = Assert.Single(interaction.DisplayedMessages,
-                message => message.Message == SharedCommandStrings.SourceTrustWarning);
+                message => message.Message == $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]");
             Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
             return ConfigSourceStrings.Accept;
         };
@@ -890,7 +890,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
             ReadConfiguration = (_, _) =>
             {
                 Assert.Single(interaction.DisplayedMessages,
-                    message => message.Message == SharedCommandStrings.SourceTrustWarning);
+                    message => message.Message == $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]");
                 return Task.FromResult(("version-1", new JsonObject()));
             }
         };
@@ -910,7 +910,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         Assert.Equal(consent is null, prompted);
         Assert.Equal(consent is false ? 0 : 1, git.Calls);
         var warning = Assert.Single(interaction.DisplayedMessages,
-            message => message.Message == SharedCommandStrings.SourceTrustWarning);
+            message => message.Message == $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]");
         Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
     }
 
@@ -1893,7 +1893,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         Assert.Collection(interaction.DisplayedMessages,
             message =>
             {
-                Assert.Equal(SharedCommandStrings.SourceTrustWarning, message.Message);
+                Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", message.Message);
                 Assert.Equal(ConsoleOutput.Error, message.ConsoleOverride);
             },
             message => Assert.Contains(changed ? ConfigSourceStrings.Refreshed : ConfigSourceStrings.RefreshedUnchanged, message.Message));

@@ -46,7 +46,7 @@ public partial class NewCommandLocalTemplateTests
 
         var prompt = Assert.Single(interaction.BooleanPromptCalls);
         var warning = Assert.Single(interaction.DisplayedMessages);
-        Assert.Equal(SharedCommandStrings.SourceTrustWarning, warning.Message);
+        Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", warning.Message);
         Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
         Assert.False(prompt.DefaultValue);
         Assert.Equal(string.Format(CultureInfo.CurrentCulture, NewCommandStrings.TemplateSourceTrustPrompt, "company", location),
@@ -88,7 +88,7 @@ public partial class NewCommandLocalTemplateTests
         Assert.Equal(CliExitCodes.Success, result);
         Assert.Empty(interaction.BooleanPromptCalls);
         var warning = Assert.Single(interaction.DisplayedMessages);
-        Assert.Equal(SharedCommandStrings.SourceTrustWarning, warning.Message);
+        Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", warning.Message);
         Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
         Assert.Equal("company", Assert.Single(await provider.GetRequiredService<TemplateSourceStore>().ListAsync(null, default)).Key);
     }

@@ -6,5 +6,5 @@ https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v2/
 https://github.com/example/plugins
 https://github.com/example/team
 https://team.example/skills/,
-  Only use sources you trust. Content from these sources can run code on your machine.
+  [yellow]Only use sources you trust. Content from these sources can run code on your machine.[/]
 ]
