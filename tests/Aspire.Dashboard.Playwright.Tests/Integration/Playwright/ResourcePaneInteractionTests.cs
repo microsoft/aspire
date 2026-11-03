@@ -1,4 +1,4 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
@@ -155,9 +155,55 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Dashboard
             await Assertions.Expect(pane.Locator("a[aria-current='true']")).ToHaveCountAsync(2);
 
             // Shift+click selects the rows between the last clicked row (multi-c) and the clicked row.
+            Assert.NotEmpty(await page.EvaluateAsync<string>("""
+                () => {
+                    const range=document.createRange(),selection=window.getSelection();
+                    range.selectNodeContents(document.querySelector('.resource-content'));
+                    selection.removeAllRanges();
+                    selection.addRange(range);
+                    return selection.toString();
+                }
+                """));
             await GetRowLink("multi-a").ClickAsync(new LocatorClickOptions { Modifiers = [KeyboardModifier.Shift] });
             await Assertions.Expect(page).ToHaveURLAsync(new Regex(@"/structuredlogs\?resource=multi-a&resource=multi-b&resource=multi-c$"));
             await Assertions.Expect(title).ToHaveTextAsync(string.Format(CultureInfo.CurrentCulture, Resources.Layout.ResourceHeaderSelectedResources, 3));
+            Assert.Equal(string.Empty, await page.EvaluateAsync<string>("() => window.getSelection().toString()"));
+            Assert.Equal(0, await page.EvaluateAsync<int>("() => window.getSelection().rangeCount"));
+
+            var hint = page.Locator(".resource-selection-hint");
+            await Assertions.Expect(hint).ToBeVisibleAsync();
+            var hintGeometry = await hint.EvaluateAsync<double[]>("""
+                hint => {
+                    const h=hint.getBoundingClientRect(),f=hint.parentElement.getBoundingClientRect();
+                    const groups=[...hint.querySelectorAll('.resource-selection-instruction')].map(e=>e.getBoundingClientRect());
+                    const counts=hint.parentElement.firstElementChild.getBoundingClientRect();
+                    const actions=hint.parentElement.querySelector('.resource-pane-foot-actions').getBoundingClientRect();
+                    return [Math.abs(h.x+h.width/2-f.x-f.width/2),Math.abs(groups[0].y-groups[1].y),
+                        h.height,counts.right<=h.left && actions.left>=h.right ? 1:0];
+                }
+                """);
+            Assert.InRange(hintGeometry[0], 0, .5);
+            Assert.Equal(0, hintGeometry[1]);
+            Assert.InRange(hintGeometry[2], 0, 18);
+            Assert.Equal(1, hintGeometry[3]);
+            await pane.Locator(".resource-pane-canvas-toggle").ClickAsync();
+            await Assertions.Expect(hint).ToBeVisibleAsync();
+            await page.WaitForFunctionAsync("""
+                () => Math.abs(document.querySelector('.resource-pane').getBoundingClientRect().width -
+                    document.querySelector('.resources-layout').getBoundingClientRect().width) < .5
+                """);
+            var footerBounds = await page.Locator(".resource-workspace-foot .resource-pane-foot").BoundingBoxAsync();
+            var hintBounds = await hint.BoundingBoxAsync();
+            Assert.NotNull(footerBounds);
+            Assert.NotNull(hintBounds);
+            Assert.InRange(Math.Abs(hintBounds.X + hintBounds.Width / 2 - footerBounds.X - footerBounds.Width / 2), 0, .5);
+            await Assertions.Expect(hint.Locator("kbd").First).ToHaveTextAsync("Ctrl + click");
+            await Assertions.Expect(hint.Locator("kbd").Last).ToHaveTextAsync("Shift + click");
+            await Assertions.Expect(hint).ToContainTextAsync("Add/remove");
+            await Assertions.Expect(hint).ToContainTextAsync("Select range");
+            await Assertions.Expect(hint).ToHaveAttributeAsync("aria-label", Resources.Layout.ResourcePaneSelectionControlDescription);
+            await pane.Locator(".resource-pane-canvas-toggle").ClickAsync();
+            await Assertions.Expect(hint).ToBeVisibleAsync();
 
             await GetRowLink("multi-b").ClickAsync(new LocatorClickOptions { Modifiers = [KeyboardModifier.ControlOrMeta] });
             await Assertions.Expect(page).ToHaveURLAsync(new Regex(@"/structuredlogs\?resource=multi-a&resource=multi-c$"));
@@ -186,8 +232,7 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Dashboard
             var pane = page.Locator(".resource-pane");
             var resizer = page.GetByRole(AriaRole.Separator, new PageGetByRoleOptions { Name = Resources.Layout.ResourcePaneResize });
             await resizer.DblClickAsync();
-            await page.WaitForTimeoutAsync(1000);
-            var fittedWidth = int.Parse((await resizer.GetAttributeAsync("aria-valuenow"))!, CultureInfo.InvariantCulture);
+            await Assertions.Expect(resizer).ToHaveAttributeAsync("aria-valuenow", "420");
 
             var box = await resizer.BoundingBoxAsync();
             Assert.NotNull(box);
@@ -198,7 +243,7 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Dashboard
             await page.Mouse.MoveAsync(x + 200, y, new MouseMoveOptions { Steps = 5 });
             await page.Mouse.UpAsync();
 
-            var draggedWidth = fittedWidth + 200;
+            const int draggedWidth = 560;
             await Assertions.Expect(resizer).ToHaveAttributeAsync("aria-valuenow", draggedWidth.ToString(CultureInfo.InvariantCulture));
             Assert.Equal(draggedWidth, await GetPaneWidthAsync());
 
@@ -218,10 +263,9 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Dashboard
             await Assertions.Expect(resizer).ToHaveAttributeAsync("aria-valuenow", maximumWidth.ToString(CultureInfo.InvariantCulture));
 
             await resizer.DblClickAsync();
-            await page.WaitForTimeoutAsync(1000);
-            var exactFitWidth = int.Parse((await resizer.GetAttributeAsync("aria-valuenow"))!, CultureInfo.InvariantCulture);
-            Assert.InRange(exactFitWidth, 240, maximumWidth);
-            Assert.Equal(exactFitWidth, await GetPaneWidthAsync());
+            await Assertions.Expect(resizer).ToHaveAttributeAsync("aria-valuenow", "420");
+            Assert.Equal(420, await GetPaneWidthAsync());
+            await AssertStoredWidthAsync("420");
 
             async Task<int> GetPaneWidthAsync() => await pane.EvaluateAsync<int>("e => Math.round(e.getBoundingClientRect().width)");
 

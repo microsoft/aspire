@@ -11,7 +11,8 @@
 
 <PageTitle><ApplicationName AdditionalText="@(Resource is { } r ? GetResourceName(r) : null)" ResourceName="@nameof(Dashboard.Resources.Resources.ResourceOverviewPageTitle)" Loc="@Loc" /></PageTitle>
 
-<div class="resource-overview @(IsTerminalFocused ? "terminal-focused" : null)" tabindex="-1">
+<div class="resource-overview @(IsTerminalFocused ? "terminal-focused" : null)" tabindex="-1"
+     data-resource-name="@Resource?.Name" data-resource-subscription="@_subscribedResourceName">
     @if (ResourcesLayout is null || !ResourcesLayout.IsLoaded)
     {
         <div class="overview-message">
@@ -121,7 +122,7 @@
                     @if (ResourcesLayout is not null)
                     {
                         <div class="overview-status-actions">
-                            @ResourcesLayout.RenderResourceActions(resource, showLabels: true)
+                            @ResourcesLayout.RenderResourceActions(resource, showLabels: true, row: null)
                         </div>
                     }
                 </div>

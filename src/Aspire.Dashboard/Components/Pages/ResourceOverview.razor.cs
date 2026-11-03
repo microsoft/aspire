@@ -1,4 +1,4 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
@@ -388,6 +388,12 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
                 var filterDate = ConsoleLogsManager.GetFilterDate(resourceName);
                 lock (_consoleLock)
                 {
+                    // Cancellation can happen after a batch is delivered but before it
+                    // acquires this lock. Never append it to the next resource's preview.
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        return;
+                    }
                     foreach (var line in batch)
                     {
                         var previewLine = CreatePreviewLine(line);
@@ -417,6 +423,10 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
 
         lock (_consoleLock)
         {
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return;
+            }
             _consoleLogsLoaded = true;
         }
         await InvokeAsync(StateHasChanged).ConfigureAwait(false);
@@ -481,7 +491,7 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
 
         lock (_consoleLock)
         {
-            if (_consoleLogsLoaded)
+            if (cancellationToken.IsCancellationRequested || _consoleLogsLoaded)
             {
                 return;
             }
