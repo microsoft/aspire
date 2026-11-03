@@ -1,0 +1,63 @@
+{
+  "run_id": 41727289711,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/41727289711",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-03T23:07:53Z",
+  "verdict": "transient-infra",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 21729,
+    "title": "Address component governance alerts",
+    "author": "joperezr",
+    "state": "closed",
+    "head_branch": "joperezr/component-governance-updates",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/21729",
+    "merged_at": "2026-11-03T22:03:01Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "d4994d7af558bd42ec3ec36e2499fb4b9ec31ce2",
+    "failed_sha": "7627c790297354afc8cde3bc775dabf67a02860e",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "264c5589a70cd11b0063779810fbdfa2c2b8a5b3",
+        "message": "[telemetry] Sync telemetry with microsoft/aspire-skills#111 (#21723) Sync telemetry with [microsoft/aspire-skills#111](https://github.com/microsoft/aspire-skills/pull/111). - Add the new `aspire-terminals` skill and its four reference files to the shell and PowerShell hook allowlists (and therefore the managed catalog). - Add the missing `wait_for_resources` MCP tool to both compatibility scripts so they match `KnownMcpTools.All`. - Add a catalog regression test against `KnownMcpTools.All` and e",
+        "html_url": "https://github.com/microsoft/aspire/commit/264c5589a70cd11b0063779810fbdfa2c2b8a5b3",
+        "pull_request": {
+          "number": 21723,
+          "title": "[telemetry] Sync telemetry with microsoft/aspire-skills#111",
+          "url": "https://github.com/microsoft/aspire/pull/21723",
+          "merged_at": "2026-11-03T21:30:57Z"
+        }
+      },
+      {
+        "sha": "7627c790297354afc8cde3bc775dabf67a02860e",
+        "message": "Address component governance alerts (#21729) ## Description Addresses component governance alerts by updating dependencies and lockfiles. Updated components: Angular, Azure Identity/MSAL Node, body-parser, dnspython, Guava, launch-editor, Next.js, qs, Vite, and Zod. Validation: targeted builds, tests, and dependency-resolution checks passed. Two playground restores were blocked by package-feed access. Fixes # (issue) ## Checklist - Is this feature complete?   - [x] Yes. Ready to ship.   - [ ] No",
+        "html_url": "https://github.com/microsoft/aspire/commit/7627c790297354afc8cde3bc775dabf67a02860e",
+        "pull_request": {
+          "number": 21729,
+          "title": "Address component governance alerts",
+          "url": "https://github.com/microsoft/aspire/pull/21729",
+          "merged_at": "2026-11-03T22:03:01Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
+      "id": 126239435345,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/41727289711/job/126239435345",
+      "classification": "transient-infra",
+      "reason": "Hosted runner lost communication with the server; no test failures observed.",
+      "failed_steps": []
+    }
+  ],
+  "failed_tests": [],
+  "causes": [
+    "hosted-runner-lost-communication-windows-template-tests"
+  ]
+}

@@ -13,6 +13,13 @@
       "job": "Tests / Package tests - Windows (class, Aspire.Templates.Tests, Templates-BuildAndRunTemplateTests, Templ... / Templates-BuildAndRunTemplateTests (windows-latest)",
       "pr_number": 19848,
       "observed_at": "2026-09-16T01:21:09Z"
+    },
+    {
+      "run_id": 41727289711,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/41727289711",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
+      "observed_at": "2026-11-03T23:07:53Z",
+      "pr_number": 0
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/20165"
