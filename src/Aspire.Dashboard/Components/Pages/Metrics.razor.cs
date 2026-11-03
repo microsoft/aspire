@@ -325,7 +325,7 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
             return;
         }
 
-        if (PinStore.GetPinnedInstruments(instruments).Count > 0)
+        if (PinStore.GetPinnedInstruments(viewModel.PinInstruments ?? instruments).Count > 0)
         {
             viewModel.ShowPinned = true;
             return;
@@ -338,7 +338,7 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
     {
         if (viewModel.SelectedResource.Id is null && _aggregateResources is not null)
         {
-            viewModel.Instruments = GetAggregateInstruments();
+            viewModel.Instruments = viewModel.PinInstruments = GetAggregateInstruments();
             return;
         }
 
@@ -349,11 +349,19 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
             ResourceViewModel.TryGetResourceByName(ResourceName, layout.ResourceByName, out _))
         {
             // A resource from the app model that hasn't sent telemetry has no metrics, rather than being unknown.
-            viewModel.Instruments = [];
+            viewModel.Instruments = viewModel.PinInstruments = [];
             return;
         }
 
-        viewModel.Instruments = selectedInstance != null ? TelemetryRepository.GetInstrumentSummaries(selectedInstance.Value) : null;
+        if (selectedInstance is { } resourceKey)
+        {
+            viewModel.Instruments = TelemetryRepository.GetInstrumentSummaries(resourceKey);
+            viewModel.PinInstruments = GetPinInstruments(resourceKey);
+        }
+        else
+        {
+            viewModel.Instruments = viewModel.PinInstruments = null;
+        }
     }
 
     /// <summary>
@@ -365,6 +373,20 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
 
     private List<OtlpInstrumentSummary> GetAggregateInstruments() =>
         [.. (_aggregateResources ?? []).SelectMany(resource => TelemetryRepository.GetInstrumentSummaries(resource.ResourceKey))];
+
+    private List<OtlpInstrumentSummary> GetPinInstruments(ResourceKey resourceKey)
+    {
+        if (resourceKey.InstanceId is not null)
+        {
+            return TelemetryRepository.GetInstrumentSummaries(resourceKey);
+        }
+
+        // A replica-group summary list is deduplicated by instrument key for the normal meter groups. Query each
+        // emitting resource separately so a pin on a non-first replica still has a matching summary.
+        return [.. _resources
+            .Where(resource => string.Equals(resource.ResourceKey.Name, resourceKey.Name, StringComparison.Ordinal))
+            .SelectMany(resource => TelemetryRepository.GetInstrumentSummaries(resource.ResourceKey))];
+    }
 
     private void UpdateAggregateResources()
     {
@@ -708,6 +730,7 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
         public required SelectViewModel<ResourceTypeDetails> SelectedResource { get; set; }
         public SelectViewModel<TimeSpan> SelectedDuration { get; set; } = null!;
         public List<OtlpInstrumentSummary>? Instruments { get; set; }
+        public List<OtlpInstrumentSummary>? PinInstruments { get; set; }
         public required MetricViewKind? SelectedViewKind { get; set; }
     }
 
@@ -835,7 +858,7 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
         }
 
         var groupInstruments = PageViewModel.ShowPinned
-            ? PinStore.GetPinnedInstruments(instruments)
+            ? PinStore.GetPinnedInstruments(PageViewModel.PinInstruments ?? instruments)
             : [.. instruments.Where(i => i.Parent.Name == PageViewModel.SelectedMeter).OrderBy(i => i.Name, StringComparer.Ordinal)];
 
         return [.. groupInstruments.Where(i => MetricFilter.Matches(i, PageViewModel.TextFilter))];
@@ -905,10 +928,17 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
                     var instruments = selectedResourceKey != null
                         ? TelemetryRepository.GetInstrumentSummaries(selectedResourceKey.Value)
                         : GetAggregateInstruments();
+                    var pinInstruments = selectedResourceKey != null
+                        ? GetPinInstruments(selectedResourceKey.Value)
+                        : instruments;
 
-                    if (PageViewModel.Instruments is null || instruments.Count != PageViewModel.Instruments.Count)
+                    if (PageViewModel.Instruments is null ||
+                        instruments.Count != PageViewModel.Instruments.Count ||
+                        PageViewModel.PinInstruments is null ||
+                        pinInstruments.Count != PageViewModel.PinInstruments.Count)
                     {
                         PageViewModel.Instruments = instruments;
+                        PageViewModel.PinInstruments = pinInstruments;
 
                         // Instruments can arrive after the page loads, e.g. when the resource has just started.
                         SelectDefaultView(PageViewModel);

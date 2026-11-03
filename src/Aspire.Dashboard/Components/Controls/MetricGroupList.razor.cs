@@ -68,7 +68,8 @@ public partial class MetricGroupList : IDisposable
         var filter = PageViewModel.TextFilter;
         var groups = new List<MetricGroup>();
 
-        var pinnedCount = instruments.Count(i => MetricFilter.Matches(i, filter) && PinStore.IsPinned(i.ResourceView.ResourceKey, i.GetKey()));
+        var pinnedCount = (PageViewModel.PinInstruments ?? instruments)
+            .Count(i => MetricFilter.Matches(i, filter) && PinStore.IsPinned(i.ResourceView.ResourceKey, i.GetKey()));
 
         // Keep the pinned group while it's selected, even with no matches, so it doesn't disappear under the user.
         if (pinnedCount > 0 || PageViewModel.ShowPinned)

@@ -1478,8 +1478,8 @@ public partial class MetricsTests : DashboardTestContext
         var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
         await telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
         {
-            CreateResourceMetrics("first"),
-            CreateResourceMetrics("second")
+            CreateReplicaResourceMetrics("first"),
+            CreateReplicaResourceMetrics("second")
         });
         var resourceKey = new ResourceKey("TestApp", InstanceId: null);
         var resources = telemetryRepository.GetResources();
@@ -1508,19 +1508,38 @@ public partial class MetricsTests : DashboardTestContext
             Assert.Equal([new MetricPin(summary.ResourceView.ResourceKey, summary.GetKey())], pinStore.GetPins());
             Assert.Equal([summary], pinStore.GetPinnedInstruments([summary]));
         });
+    }
 
-        static ResourceMetrics CreateResourceMetrics(string instanceId) => new()
+    [Fact]
+    public async Task ReplicaGroupPinnedView_ShowsPinnedNonFirstReplica()
+    {
+        MetricsSetupHelpers.SetupMetricsPage(this);
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
         {
-            Resource = CreateResource(name: "TestApp", instanceId: instanceId),
-            ScopeMetrics =
-            {
-                new ScopeMetrics
-                {
-                    Scope = CreateScope(name: "test-meter"),
-                    Metrics = { CreateSumMetric(metricName: "shared-instrument", startTime: s_testTime.AddMinutes(1)) }
-                }
-            }
-        };
+            CreateReplicaResourceMetrics("first"),
+            CreateReplicaResourceMetrics("second")
+        });
+        Services.GetRequiredService<MetricPinStore>().SetPinned(
+            new ResourceKey("TestApp", "second"),
+            new OtlpInstrumentKey("test-meter", "shared-instrument"),
+            pinned: true);
+
+        Services.GetRequiredService<NavigationManager>()
+            .NavigateTo(DashboardUrls.MetricsUrl(resource: "TestApp", duration: 5, pinned: true));
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var cut = Render<Metrics>(parameters =>
+        {
+            parameters.Add(component => component.ResourceName, "TestApp");
+            parameters.AddCascadingValue(viewport);
+        });
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal("1", cut.Find(".metric-group.pinned .metric-group-count").TextContent);
+            var instrument = Assert.Single(cut.FindComponent<MeterOverview>().Instance.Instruments);
+            Assert.Equal(new ResourceKey("TestApp", "second"), instrument.ResourceView.ResourceKey);
+        });
     }
 
     [Fact]
@@ -2066,6 +2085,19 @@ public partial class MetricsTests : DashboardTestContext
         Assert.Equal(MetricViewKind.Table, viewModel.SelectedViewKind);
         Assert.Equal(TimeSpan.FromMinutes(720), viewModel.SelectedDuration.Id);
     }
+
+    private static ResourceMetrics CreateReplicaResourceMetrics(string instanceId) => new()
+    {
+        Resource = CreateResource(name: "TestApp", instanceId: instanceId),
+        ScopeMetrics =
+        {
+            new ScopeMetrics
+            {
+                Scope = CreateScope(name: "test-meter"),
+                Metrics = { CreateSumMetric(metricName: "shared-instrument", startTime: s_testTime.AddMinutes(1)) }
+            }
+        }
+    };
 
     private sealed class SignalingFakeTimeProvider : FakeTimeProvider
     {
