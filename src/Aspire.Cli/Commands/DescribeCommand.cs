@@ -197,11 +197,17 @@ internal sealed class DescribeCommand : BaseCommand
 
         if (follow)
         {
+            using var followCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            // A host that spawns `describe --follow` (the VS Code extension) can be force-killed before
+            // it runs its own cleanup. Watch that host so an orphaned follower exits instead of waiting
+            // forever for a stdout stream nobody reads; an idle follower otherwise never writes and
+            // never notices the broken pipe.
+            await using var parentWatchdog = ParentProcessWatchdog.StartForCliParent(followCancellationTokenSource);
             try
             {
-                return CommandResult.FromExitCode(await ExecuteWatchAsync(resourceWatcher, dashboardBaseUrl, resourceName, format, includeDisabledCommands, cancellationToken));
+                return CommandResult.FromExitCode(await ExecuteWatchAsync(resourceWatcher, dashboardBaseUrl, resourceName, format, includeDisabledCommands, followCancellationTokenSource.Token));
             }
-            catch (OperationCanceledException ex) when (ex.CancellationToken == cancellationToken || cancellationToken.IsCancellationRequested)
+            catch (OperationCanceledException ex) when (ex.CancellationToken == followCancellationTokenSource.Token || followCancellationTokenSource.IsCancellationRequested)
             {
                 return CommandResult.Success();
             }

@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { ChildProcessWithoutNullStreams } from 'child_process';
-import { spawnCliProcess, terminateCliProcess } from '../utils/process/cliProcess';
+import { spawnCliProcess, terminateCliProcess, getCliParentWatchdogEnvironment } from '../utils/process/cliProcess';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { appHostDescribeMayNotBeSupported, appHostDiscoveryProgress, appHostPathMustBeNonEmptyAbsolute, aspireCliDescribeNotSupported, aspireDescribeMinimumVersion, errorFetchingAppHosts, workspaceViewSelectedMultipleAppHosts, workspaceViewSelectedSingleAppHost } from '../loc/strings';
@@ -1222,6 +1222,7 @@ export class AppHostDataRepository {
         const describeProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
             createProcessGroup: true,
             noExtensionVariables: true,
+            env: getCliParentWatchdogEnvironment(),
             lineCallback: (line) => {
                 if (this._describeStreams.get(appHostPath) !== stream || stream.process !== describeProcess) {
                     return;

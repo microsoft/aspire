@@ -36,12 +36,27 @@ internal static class ParentProcessWatchdog
             KnownConfigNames.CliProcessStarted);
 
     /// <summary>
+    /// Starts monitoring the host application that launched a long-running CLI command
+    /// (<c>ps --follow</c>, <c>describe --follow</c>) when it supplied its identity. The command exits
+    /// when that host disappears so a force-killed launcher (for example the VS Code extension host)
+    /// cannot leave the command running forever.
+    /// </summary>
+    /// <returns>A handle that stops the watchdog when disposed, or <see langword="null"/> when this
+    /// process was not launched by a host that opted into the watchdog.</returns>
+    public static IAsyncDisposable? StartForCliParent(CancellationTokenSource operationCts)
+        => Start(
+            operationCts,
+            KnownConfigNames.CliParentProcessId,
+            stableStartVariable: null,
+            KnownConfigNames.CliParentProcessStarted);
+
+    /// <summary>
     /// Starts monitoring a parent identity supplied through the specified environment variables.
     /// </summary>
     public static IAsyncDisposable? Start(
         CancellationTokenSource operationCts,
         string processIdVariable,
-        string stableStartVariable,
+        string? stableStartVariable,
         string? legacyStartVariable)
     {
         if (!int.TryParse(Environment.GetEnvironmentVariable(processIdVariable), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parentPid))
@@ -72,13 +87,14 @@ internal static class ParentProcessWatchdog
             KnownConfigNames.CliProcessStarted,
             out useRuntimeStartTime);
 
-    private static long? GetExpectedParentStartTimeUnix(
+    internal static long? GetExpectedParentStartTimeUnix(
         Func<string, string?> getEnvironmentVariable,
-        string stableStartVariable,
+        string? stableStartVariable,
         string? legacyStartVariable,
         out bool useRuntimeStartTime)
     {
-        if (ProcessStartTimeHelper.TryParseStartTimeUnixSeconds(getEnvironmentVariable(stableStartVariable)) is { } stableStartTimeUnix)
+        if (stableStartVariable is not null &&
+            ProcessStartTimeHelper.TryParseStartTimeUnixSeconds(getEnvironmentVariable(stableStartVariable)) is { } stableStartTimeUnix)
         {
             useRuntimeStartTime = false;
             return stableStartTimeUnix;
