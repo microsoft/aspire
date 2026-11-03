@@ -20,7 +20,9 @@ using Aspire.Hosting.Utils;
 using Azure.Core;
 using Azure.Provisioning.Resources;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Testing;
 
 namespace Aspire.Hosting.Azure.Tests;
 
@@ -1586,13 +1588,28 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public async Task AzureDevComputeClientKeepsCancellationAfterRejectedCreateDefinite()
     {
-        var handler = new RecordingHandler(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.Forbidden)));
+        var requestCount = 0;
+        var handler = new RecordingHandler(_ =>
+        {
+            Interlocked.Increment(ref requestCount);
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Forbidden));
+        });
+        // Cancel when the client logs the 403 retry warning, after the rejection has been received and
+        // before the retry delay starts. A wall-clock timeout could fire while the request is still in flight.
+        using var cancellationTokenSource = new CancellationTokenSource();
+        var sink = new TestSink();
+        sink.MessageLogged += context =>
+        {
+            if (context.LogLevel == LogLevel.Warning)
+            {
+                cancellationTokenSource.Cancel();
+            }
+        };
         var client = new AzureDevComputeClient(
             new HttpClient(handler),
             new RecordingTokenCredential(),
-            NullLogger.Instance,
+            new TestLogger(nameof(AzureDevComputeClient), sink, enabled: true),
             TimeSpan.FromMinutes(1));
-        using var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromMilliseconds(10));
 
         var exception = await Assert.ThrowsAsync<AzureDevComputeCreateException>(() => client.CreateDiskImageAsync(
             new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
@@ -1603,6 +1620,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
             },
             cancellationTokenSource.Token));
 
+        Assert.Equal(1, requestCount);
         Assert.False(exception.ResponseMayHaveBeenLost);
         Assert.IsType<TaskCanceledException>(exception.OriginalException);
     }

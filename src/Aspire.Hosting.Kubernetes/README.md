@@ -6,7 +6,7 @@ Use this integration to model, configure, and deploy Aspire compute resources to
 
 ### Prerequisites
 
-- [Helm](https://helm.sh/docs/intro/install/) **v4.2.0 or later** on your `PATH`.
+- [Helm](https://helm.sh/docs/intro/install/) **v4.0.0 or later** on your `PATH`.
 
 Aspire shells out to `helm upgrade --install` to deploy the generated chart and validates the Helm version up front, so missing or older installs produce a clear actionable error instead of cryptic flag failures.
 

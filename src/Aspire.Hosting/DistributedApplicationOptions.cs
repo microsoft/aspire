@@ -85,6 +85,13 @@ public sealed class DistributedApplicationOptions
     private string? _globalArtifactsPath;
     private bool _globalArtifactsPathSet;
 
+    /// <summary>
+    /// Indicates that the AppHost is authored in a guest language (TypeScript, Python, etc.). The resolved
+    /// <see cref="Assembly"/> is then the prebuilt AppHost server, whose build configuration must not leak
+    /// into the resources launched by the user's AppHost.
+    /// </summary>
+    internal bool IsGuestAppHost { get; init; }
+
     internal string? ContentRootPath { get; set; }
 
     internal IEnumerable<KeyValuePair<string, string?>>? DefaultConfiguration { get; set; }
@@ -259,11 +266,21 @@ public sealed class DistributedApplicationOptions
 
     private string? ResolveConfiguration()
     {
+        if (IsGuestAppHost)
+        {
+            return null;
+        }
+
         return Assembly?.GetCustomAttribute<AssemblyConfigurationAttribute>()?.Configuration;
     }
 
     private string? ResolveGlobalArtifactsPath()
     {
+        if (IsGuestAppHost)
+        {
+            return null;
+        }
+
         var assemblyMetadata = Assembly?.GetCustomAttributes<AssemblyMetadataAttribute>();
         var artifactsPath = GetMetadataValue(assemblyMetadata, "AppHostGlobalArtifactsPath");
         return string.IsNullOrWhiteSpace(artifactsPath) ? null : artifactsPath;

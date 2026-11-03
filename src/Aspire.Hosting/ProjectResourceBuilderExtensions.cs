@@ -6,7 +6,6 @@
 #pragma warning disable ASPIREPROJECTS001 // WithProjectDefaults is experimental.
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
-using System.Reflection;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Utils;
@@ -555,8 +554,7 @@ public static class ProjectResourceBuilderExtensions
                 $"Pass {nameof(ProjectResourceOptions)} to the method that adds the resource instead.");
         }
 
-        launchDefaults.BuildConfiguration =
-            builder.ApplicationBuilder.AppHostAssembly?.GetCustomAttribute<AssemblyConfigurationAttribute>()?.Configuration;
+        launchDefaults.BuildConfiguration = builder.ApplicationBuilder.Configuration["AppHost:BuildConfiguration"];
 
         var launchConfigurationType = ProjectLaunchConfigurationFactory.GetLaunchConfigurationType(
             builder.Resource,
