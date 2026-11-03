@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Steps depending on per-resource provisioning steps such as `provision-<name>-containerapp` no longer fail with an 'unkno",
+  "mergedAt": "2026-11-03T03:54:32Z",
+  "number": 21511,
+  "runDate": "2026-11-03T06:10:00Z",
+  "status": "included",
+  "title": "Allow pipeline steps to depend on deployment-target steps materialized during before-start"
+}

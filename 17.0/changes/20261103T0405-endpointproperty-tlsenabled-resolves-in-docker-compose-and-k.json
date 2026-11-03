@@ -1,0 +1,21 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [
+    "@johnkaram02"
+  ],
+  "description": "`aspire publish` with the Docker Compose and Kubernetes publishers no longer throws `NotSupportedException` when a reference uses `EndpointProperty.TlsEnabled`; it now resolves to `True` or `False`.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔐",
+  "firstMergedAt": "2026-11-03T04:05:49Z",
+  "lastMergedAt": "2026-11-03T04:05:49Z",
+  "name": "EndpointProperty.TlsEnabled resolves in Docker Compose and Kubernetes",
+  "owner": "mitchdenny",
+  "prs": [
+    21297
+  ]
+}

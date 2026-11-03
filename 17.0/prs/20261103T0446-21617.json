@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only E2E flake fix",
+  "mergedAt": "2026-11-03T04:46:35Z",
+  "number": 21617,
+  "runDate": "2026-11-03T06:10:00Z",
+  "status": "excluded",
+  "title": "Gate JavaScript runtime CLI E2E checks on AppHost readiness"
+}

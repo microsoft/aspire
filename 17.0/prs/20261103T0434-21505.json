@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "TypeScript and other guest AppHosts no longer inherit the prebuilt AppHost server's Release configuration, so .NET proje",
+  "mergedAt": "2026-11-03T04:34:56Z",
+  "number": 21505,
+  "runDate": "2026-11-03T06:10:00Z",
+  "status": "included",
+  "title": "Don't apply the AppHost server's build configuration to guest AppHost projects"
+}

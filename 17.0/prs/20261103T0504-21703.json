@@ -1,0 +1,9 @@
+{
+  "author": "karolz-ms",
+  "comment": "`Aspire.Hosting.Dotnet` now participates in Aspire's normal stable versioning starting with 17.0, allowing stable integr",
+  "mergedAt": "2026-11-03T05:04:24Z",
+  "number": 21703,
+  "runDate": "2026-11-03T06:10:00Z",
+  "status": "included",
+  "title": "Stabilize Aspire.Hosting.Dotnet for Aspire 17"
+}

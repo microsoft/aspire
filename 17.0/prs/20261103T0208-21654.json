@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only E2E flake fix",
+  "mergedAt": "2026-11-03T02:08:37Z",
+  "number": 21654,
+  "runDate": "2026-11-03T06:10:00Z",
+  "status": "excluded",
+  "title": "Fix K8s PV E2E race waiting for recreated StatefulSet pod"
+}

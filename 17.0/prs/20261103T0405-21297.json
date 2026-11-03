@@ -1,0 +1,9 @@
+{
+  "author": "johnkaram02",
+  "comment": "`aspire publish` with the Docker Compose and Kubernetes publishers no longer throws `NotSupportedException` when a refer",
+  "mergedAt": "2026-11-03T04:05:49Z",
+  "number": 21297,
+  "runDate": "2026-11-03T06:10:00Z",
+  "status": "included",
+  "title": "Resolve EndpointProperty.TlsEnabled in Docker Compose and Kubernetes publishers"
+}

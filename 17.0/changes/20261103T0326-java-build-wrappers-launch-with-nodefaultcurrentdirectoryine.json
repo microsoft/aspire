@@ -1,0 +1,21 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [
+    "@flojon"
+  ],
+  "description": "Windows Java Maven/Gradle wrappers are now launched with an explicit `.\\` path, so hosted Java resources and Java AppHosts start even when `NoDefaultCurrentDirectoryInExePath=1` is set.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "☕",
+  "firstMergedAt": "2026-11-03T03:26:59Z",
+  "lastMergedAt": "2026-11-03T03:26:59Z",
+  "name": "Java build wrappers launch with NoDefaultCurrentDirectoryInExePath",
+  "owner": "mitchdenny",
+  "prs": [
+    20895
+  ]
+}

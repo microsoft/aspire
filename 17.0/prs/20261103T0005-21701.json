@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "Internal Aspire Team App tooling; not a shipped product",
+  "mergedAt": "2026-11-03T00:05:46Z",
+  "number": 21701,
+  "runDate": "2026-11-03T06:10:00Z",
+  "status": "excluded",
+  "title": "Fix Aspire Team App CLI discovery in desktop environments"
+}

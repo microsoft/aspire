@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Docker Swarm `UpdateConfig.MaxFailureRatio` is now a `double?` and is emitted as a YAML number instead of a quoted strin",
+  "mergedAt": "2026-11-03T03:46:16Z",
+  "number": 21512,
+  "runDate": "2026-11-03T06:10:00Z",
+  "status": "included",
+  "title": "Serialize Swarm UpdateConfig.MaxFailureRatio as a YAML number"
+}

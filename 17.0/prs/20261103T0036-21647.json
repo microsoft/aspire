@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test/CI-only change",
+  "mergedAt": "2026-11-03T00:36:47Z",
+  "number": 21647,
+  "runDate": "2026-11-03T06:10:00Z",
+  "status": "excluded",
+  "title": "Stop Infrastructure.Tests pwsh processes from racing on the shared startup profile"
+}

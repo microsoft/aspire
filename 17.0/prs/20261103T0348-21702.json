@@ -1,0 +1,9 @@
+{
+  "author": "DamianEdwards",
+  "comment": "Internal Aspire Team App tooling; not a shipped product",
+  "mergedAt": "2026-11-03T03:48:38Z",
+  "number": 21702,
+  "runDate": "2026-11-03T06:10:00Z",
+  "status": "excluded",
+  "title": "Disable session-dependent actions in sidebar Aspire Team App canvases"
+}

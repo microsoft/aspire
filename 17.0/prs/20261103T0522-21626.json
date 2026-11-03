@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "The CLI no longer drops output of an already-exited process when the thread pool is backlogged, which could cause spurio",
+  "mergedAt": "2026-11-03T05:22:14Z",
+  "number": 21626,
+  "runDate": "2026-11-03T06:10:00Z",
+  "status": "included",
+  "title": "Don't discard completed process output when the thread pool is backlogged after exit"
+}

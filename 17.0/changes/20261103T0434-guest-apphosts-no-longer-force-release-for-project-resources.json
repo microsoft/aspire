@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "TypeScript and other guest AppHosts no longer inherit the prebuilt AppHost server's Release configuration, so .NET project resources build and run in Debug like a plain `dotnet run`.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🛠️",
+  "firstMergedAt": "2026-11-03T04:34:56Z",
+  "lastMergedAt": "2026-11-03T04:34:56Z",
+  "name": "Guest AppHosts no longer force Release for project resources",
+  "owner": "davidfowl",
+  "prs": [
+    21505
+  ]
+}

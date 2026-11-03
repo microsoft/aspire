@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": true,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "`aspire agent init` now registers skills through native clients, so the embedded skills bundle, its acquisition/cache code and the `--aspire-source` option were removed. Independently selected CLI tools and explicit MCP configuration remain available.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🧹",
+  "firstMergedAt": "2026-11-03T00:06:44Z",
+  "lastMergedAt": "2026-11-03T00:06:44Z",
+  "name": "Embedded Aspire skills bundle retired",
+  "owner": "ellahathaway",
+  "prs": [
+    20947
+  ]
+}

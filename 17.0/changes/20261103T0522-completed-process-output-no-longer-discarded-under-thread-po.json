@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The CLI no longer drops output of an already-exited process when the thread pool is backlogged, which could cause spurious Git configuration-source check failures on Windows.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🧵",
+  "firstMergedAt": "2026-11-03T05:22:14Z",
+  "lastMergedAt": "2026-11-03T05:22:14Z",
+  "name": "Completed process output no longer discarded under thread-pool backlog",
+  "owner": "davidfowl",
+  "prs": [
+    21626
+  ]
+}

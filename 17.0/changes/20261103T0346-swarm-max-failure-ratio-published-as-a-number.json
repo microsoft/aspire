@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": true,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Docker Swarm `UpdateConfig.MaxFailureRatio` is now a `double?` and is emitted as a YAML number instead of a quoted string that Swarm rejected.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🐝",
+  "firstMergedAt": "2026-11-03T03:46:16Z",
+  "lastMergedAt": "2026-11-03T03:46:16Z",
+  "name": "Swarm max_failure_ratio published as a number",
+  "owner": "davidfowl",
+  "prs": [
+    21512
+  ]
+}

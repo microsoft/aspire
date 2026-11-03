@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "A shared localized warning now appears on stderr when acquiring configuration sources, Git templates, template sources, ",
+  "mergedAt": "2026-11-03T02:06:28Z",
+  "number": 21682,
+  "runDate": "2026-11-03T06:10:00Z",
+  "status": "included",
+  "title": "Address CLI configuration-source threat model follow-ups"
+}

@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "`aspire agent init` now removes stranded telemetry hook temp files and reports the script path when updating it fails.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🧽",
+  "firstMergedAt": "2026-11-03T05:25:16Z",
+  "lastMergedAt": "2026-11-03T05:25:16Z",
+  "name": "Telemetry hook update failures are cleaned up and clearly reported",
+  "owner": "davidfowl",
+  "prs": [
+    21508
+  ]
+}
