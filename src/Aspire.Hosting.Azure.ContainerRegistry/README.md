@@ -67,6 +67,50 @@ Without an explicit registry, the Container Apps environment creates a default r
 The registry is deployment infrastructure and is not provisioned during local runs. `aspire publish` generates its Bicep; `aspire deploy` provisions it and pushes the application's images as part of deployment.
 See the [Container Apps deployment guide](https://aspire.dev/deployment/azure/container-apps/) for Azure settings, deployment, and cleanup.
 
+## Schedule image cleanup
+
+By default, `WithPurgeTask` removes tags only; the underlying manifests and image layers remain.
+To reclaim storage, opt into deleting eligible untagged manifests. Use dry-run mode to review
+the task logs before allowing deletions.
+
+**C#**
+
+```csharp
+registry.WithPurgeTask(new AzureContainerRegistryPurgeTaskOptions
+{
+    Filter = "myapp:.*",
+    Ago = TimeSpan.FromDays(7),
+    Keep = 5,
+    Untagged = true,
+    DryRun = true
+}, "0 1 * * *");
+```
+
+The options type is in the `Aspire.Hosting.Azure` namespace.
+
+**TypeScript**
+
+```typescript
+await registry.withPurgeTask("0 1 * * *", {
+    filter: "myapp:.*",
+    ago: 7 * 24 * 60 * 60 * 1000,
+    keep: 5,
+    untagged: true,
+    dryRun: true
+});
+```
+
+Set `DryRun` / `dryRun` to `false` after reviewing the preview. Manifest deletion works with a
+Basic registry; no Premium SKU or retention policy is required. Previously untagged manifests
+in matching repositories are also eligible, so deletion can break digest-based pulls and
+rollbacks. Shared image layers remain until no retained manifests reference them, and storage
+usage reporting can lag behind deletion.
+
+The purge tool's version determines how age and keep filters apply to untagged manifests.
+Current versions apply `keep` independently to tags and untagged manifests; keeping five
+candidates does not guarantee five deployable application versions. See
+[ACR purge behavior](https://learn.microsoft.com/azure/container-registry/container-registry-auto-purge).
+
 ## Additional documentation
 
 * https://aspire.dev/integrations/gallery/

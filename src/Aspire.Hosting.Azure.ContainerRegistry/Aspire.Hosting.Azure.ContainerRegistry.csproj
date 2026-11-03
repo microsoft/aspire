@@ -19,5 +19,8 @@
     <PackageReference Include="NCrontab.Signed" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Aspire.Hosting.Azure.Tests" />
+  </ItemGroup>
 
 </Project>
