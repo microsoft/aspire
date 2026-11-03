@@ -202,8 +202,8 @@ public partial class TemplateTestsBase
 
             await Task.Delay(500);
 
-            // _testOutput.WriteLine($"Checking for rows again");
-            var rowsLocator = dashboardPageWrapper.Page.Locator(".main-grid tr.resource-row");
+            // The default dashboard view renders resource cards, not grid rows.
+            var rowsLocator = dashboardPageWrapper.Page.Locator("article.resource-card");
             var allRows = await rowsLocator.AllAsync();
             // _testOutput.WriteLine($"found rows#: {allRows.Count}");
             if (allRows.Count == 0)
@@ -214,13 +214,9 @@ public partial class TemplateTestsBase
 
             foreach (var rowLoc in allRows)
             {
-                // get the cells
-                var cellLocs = await rowLoc.Locator("[role='gridcell']").AllAsync();
-
                 // is the resource name expected?
-                var resourceNameCell = cellLocs[0];
-                var resourceName = await resourceNameCell.InnerTextAsync();
-                resourceName = resourceName.Trim();
+                var resourceName = await rowLoc.GetAttributeAsync("aria-label");
+                Assert.NotNull(resourceName);
                 if (!expectedRowsTable.TryGetValue(resourceName, out var expectedRow))
                 {
                     Assert.Fail($"Row with unknown name found: '{resourceName}'. Expected values: {string.Join(", ", expectedRowsTable.Keys.Select(k => $"'{k}'"))}");
@@ -232,7 +228,7 @@ public partial class TemplateTestsBase
 
                 AssertEqual(expectedRow.Name, resourceName, $"Name for '{resourceName}'");
 
-                var stateCell = cellLocs[1];
+                var stateCell = rowLoc.Locator(".state-column-cell");
                 var actualState = await stateCell.InnerTextAsync().ConfigureAwait(false);
                 actualState = actualState.Trim();
                 if (expectedRow.State != actualState && actualState != "Finished" && !actualState.Contains("failed", StringComparison.OrdinalIgnoreCase))
@@ -241,10 +237,7 @@ public partial class TemplateTestsBase
                 }
                 AssertEqual(expectedRow.State, actualState, $"State for {resourceName}");
 
-                // Check 'Source' column
-                var sourceCell = cellLocs[3];
-                // Since this will be the entire command, we can just confirm that the path of the executable contains
-                // the expected source (executable/project)
+                var sourceCell = rowLoc.Locator(".resource-card-source");
                 Assert.Contains(expectedRow.SourceContains, await sourceCell.InnerTextAsync());
 
                 foundRows.Add(expectedRow);
