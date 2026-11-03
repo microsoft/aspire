@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only fix",
+  "mergedAt": "2026-11-03T07:35:56Z",
+  "number": 21574,
+  "runDate": "2026-11-03T12:05:00Z",
+  "status": "excluded",
+  "title": "Fix HistogramAllocationTests phantom allocation from background GC voiding allocation contexts"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "CI workflow change only; no user-facing impact",
+  "mergedAt": "2026-11-03T07:18:17Z",
+  "number": 21608,
+  "runDate": "2026-11-03T12:05:00Z",
+  "status": "excluded",
+  "title": "Pin Windows CI container runtime to Docker to stop DCP wslc probes (#21570)"
+}
