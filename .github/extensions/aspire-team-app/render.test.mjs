@@ -338,6 +338,159 @@ test("cardActionBtn re-renders a disabled button while its action's POST is stil
   assert.doesNotMatch(other, /disabled/);
 });
 
+test("sidebar PR and Health actions have disabled buttons and focusable explanations", () => {
+  const reason = "Agent actions require an active repository session.";
+  const { api } = createRendererHarness({ agentActions: { available: false, reason } });
+  for (const url of ["https://github.com/o/r/pull/1", "https://ghe.example.com/o/r/pull/1"]) {
+    for (const action of [
+      { kind: "review", label: "Review" },
+      { kind: "test", label: "Test" },
+      { kind: "resolve-conflicts", label: "Resolve conflicts" },
+    ]) {
+      const html = api.cardActionBtn({ url, number: 1, repository: "o/r" }, action);
+      assert.equal(html.split(" data-kind=")[0],
+        '<div class="cb-split" role="group" tabindex="0" aria-disabled="true"' +
+        ' aria-label="' + reason + '" aria-describedby="agent-action-tooltip" data-tooltip="' + reason + '"');
+      assert.match(html, /class="card-btn cb-main"[^>]* disabled/);
+      assert.doesNotMatch(html, /cb-caret|cb-menu/);
+    }
+  }
+
+  for (const canOpenRepoSession of [true, false]) {
+    const health = api.healthCard({
+      id: "github:github.com/microsoft/aspire",
+      provider: "github",
+      repository: "microsoft/aspire",
+      state: "failing",
+      reasons: [],
+      canOpenRepoSession,
+    }, 0, 1);
+    assert.match(health, /Diagnose here/);
+    assert.match(health, canOpenRepoSession ? /Fix in repo/ : /Work fix here/);
+    assert.equal((health.match(/aria-disabled="true"/g) ?? []).length, 2);
+    assert.equal((health.match(/class="card-btn cb-main"[^>]* disabled/g) ?? []).length, 2);
+  }
+});
+
+test("sidebar action handlers never post work even when called directly", async () => {
+  const requests = [];
+  const { api } = createRendererHarness({
+    agentActions: { available: false, reason: "An active session is required." },
+    fetch: async (path) => {
+      requests.push(path);
+      return jsonResponse({ dashboard: null, prefs: null });
+    },
+  });
+  const mainBtn = { classList: classList() };
+  const split = {
+    dataset: { kind: "review", prRepo: "o/r", prNumber: "1", prUrl: "https://github.com/o/r/pull/1" },
+    querySelector(selector) { return selector === ".cb-main" ? mainBtn : null; },
+  };
+  await api.onCardAction(split, "new-session");
+  await api.onCardAction(split, "current-session");
+  split.dataset = { kind: "fix-health", sourceId: "github:github.com/o/r" };
+  await api.onCardAction(split, "new-session");
+  assert.deepEqual(requests, ["api/state"]);
+  assert.equal(api.inflightActions.size, 0);
+});
+
+test("agent tooltips follow pointer and focus lifecycles and dismiss stale anchors", () => {
+  const timers = new Map();
+  let nextTimer = 1;
+  const flushTimers = () => {
+    for (const [id, handler] of timers) {
+      timers.delete(id);
+      handler();
+    }
+  };
+  let tooltipHovered = false;
+  const tooltip = {
+    hidden: true,
+    textContent: "",
+    style: {},
+    contains(target) { return target === this; },
+    matches() { return tooltipHovered; },
+    getBoundingClientRect() { return { width: 360, height: 80 }; },
+  };
+  const owner = {
+    dataset: { tooltip: "Open this canvas from a repository session." },
+    closest() { return this; },
+    contains(target) { return target === this; },
+    matches() { return false; },
+    getBoundingClientRect() { return { left: 700, top: 560, bottom: 585 }; },
+  };
+  const { api, events, document } = createRendererHarness({
+    elements: { "agent-action-tooltip": tooltip },
+    setTimeout(handler, delay) {
+      assert.equal(delay, 300);
+      const id = nextTimer++;
+      timers.set(id, handler);
+      return id;
+    },
+    clearTimeout(id) { timers.delete(id); },
+  });
+  const dispatch = (type, event = {}) => {
+    for (const handler of events[type] ?? []) handler(event);
+  };
+
+  dispatch("pointerover", { target: owner });
+  assert.equal(tooltip.hidden, false);
+  assert.equal(tooltip.textContent, owner.dataset.tooltip);
+  assert.deepEqual(tooltip.style, { left: "432px", top: "472px" });
+  dispatch("pointerout", { target: owner, relatedTarget: owner });
+  assert.equal(tooltip.hidden, false);
+  dispatch("pointerout", { target: owner, relatedTarget: null });
+  assert.equal(tooltip.hidden, false, "crossing the gap must not immediately hide the tooltip");
+  tooltipHovered = true;
+  dispatch("pointerover", { target: tooltip });
+  assert.equal(timers.size, 0, "entering the tooltip cancels its pending dismissal");
+  flushTimers();
+  assert.equal(tooltip.hidden, false);
+  tooltipHovered = false;
+  dispatch("pointerout", { target: tooltip, relatedTarget: null });
+  dispatch("pointerover", { target: owner });
+  assert.equal(timers.size, 0, "returning across the gap to the action cancels dismissal");
+  dispatch("pointerout", { target: owner, relatedTarget: tooltip });
+  assert.equal(timers.size, 0, "moving directly to the tooltip needs no dismissal");
+  dispatch("pointerout", { target: tooltip, relatedTarget: null });
+  flushTimers();
+  assert.equal(tooltip.hidden, true);
+
+  document.activeElement = owner;
+  dispatch("focusin", { target: owner });
+  assert.equal(tooltip.hidden, false);
+  dispatch("pointerout", { target: owner, relatedTarget: null });
+  flushTimers();
+  assert.equal(tooltip.hidden, false, "leaving with the pointer must preserve a focused tooltip");
+  document.activeElement = null;
+  tooltipHovered = true;
+  dispatch("focusout", { target: owner, relatedTarget: null });
+  flushTimers();
+  assert.equal(tooltip.hidden, false, "losing focus must preserve a hovered tooltip");
+  tooltipHovered = false;
+  dispatch("pointerout", { target: tooltip, relatedTarget: null });
+  flushTimers();
+  assert.equal(tooltip.hidden, true);
+
+  owner.getBoundingClientRect = () => ({ left: 20, top: 100, bottom: 130 });
+  dispatch("pointerover", { target: owner });
+  assert.deepEqual(tooltip.style, { left: "20px", top: "138px" });
+  for (const type of ["keydown", "scroll", "resize"]) {
+    dispatch("pointerover", { target: owner });
+    dispatch("pointerout", { target: owner, relatedTarget: null });
+    dispatch(type, { key: "Escape" });
+    assert.equal(tooltip.hidden, true, `${type} must dismiss the tooltip`);
+    assert.equal(timers.size, 0, `${type} must cancel delayed dismissal`);
+  }
+
+  dispatch("pointerover", { target: owner });
+  dispatch("pointerout", { target: owner, relatedTarget: null });
+  api.render();
+  assert.equal(tooltip.hidden, true, "render must not leave a tooltip anchored to a removed card");
+  assert.equal(timers.size, 0);
+  assert.match(STYLES, /\.agent-action-tooltip \{[^}]*pointer-events: auto;/);
+});
+
 test("cardActionBtn greys out and spins while refresh finalization is in progress", () => {
   const { api } = createRendererHarness();
   const pr = { url: "https://github.com/o/r/pull/1", number: 1, repository: "o/r", title: "t", author: "a" };
@@ -1366,6 +1519,7 @@ test("Azure pipeline mutations preserve unsaved settings fields across renders",
   const elements = {
     "release-input": { value: "13.4-preview" },
     "s-drafts": { checked: true },
+    "s-detached": { checked: true },
     "n-review": { checked: false },
     "n-ready": { checked: true },
     "n-changes": { checked: false },
@@ -1374,6 +1528,7 @@ test("Azure pipeline mutations preserve unsaved settings fields across renders",
   const resetToPersistedValues = () => {
     elements["release-input"].value = "13.1";
     elements["s-drafts"].checked = false;
+    elements["s-detached"].checked = false;
     elements["n-review"].checked = true;
     elements["n-ready"].checked = false;
     elements["n-changes"].checked = true;
@@ -1415,10 +1570,61 @@ test("Azure pipeline mutations preserve unsaved settings fields across renders",
 
   assert.equal(elements["release-input"].value, "13.4-preview");
   assert.equal(elements["s-drafts"].checked, true);
+  assert.equal(elements["s-detached"].checked, true);
   assert.equal(elements["n-review"].checked, false);
   assert.equal(elements["n-ready"].checked, true);
   assert.equal(elements["n-changes"].checked, false);
   assert.equal(elements["n-ci"].checked, false);
+});
+
+test("settings render the detached opt-in and save its selected value", async () => {
+  let request;
+  const { app, api } = createRendererHarness({
+    elements: {
+      "release-input": { value: "13.5" },
+      "s-drafts": { checked: false },
+      "s-detached": { checked: true },
+      "n-review": { checked: true },
+      "n-ready": { checked: true },
+      "n-changes": { checked: false },
+      "n-ci": { checked: true },
+    },
+    fetch: async (path, options) => {
+      if (String(path) !== "api/prefs") return new Promise(() => {});
+      request = { path: String(path), body: JSON.parse(options.body) };
+      return jsonResponse({ dashboard: healthDashboard([], emptyHealthCounts(), true), prefs: rendererPrefs() });
+    },
+  });
+  api.setState(healthDashboard([], emptyHealthCounts(), true));
+  api.setPrefs(rendererPrefs());
+  api.setView("settings");
+  api.render();
+  assert.match(app.innerHTML, /Create detached sessions/);
+  assert.match(app.innerHTML, /id="s-detached"/);
+  for (const [id, title] of [
+    ["s-drafts", "Show draft PRs"],
+    ["s-detached", "Create detached sessions"],
+    ["n-review", "Review requested"],
+    ["n-ready", "Your PR is ready to merge"],
+    ["n-changes", "Changes requested on your PR"],
+    ["n-ci", "CI failing on your PR"],
+  ]) {
+    assert.ok(app.innerHTML.includes('<span class="tl" id="' + id + '-label">' + title + "</span>"));
+    assert.match(app.innerHTML, new RegExp('<input type="checkbox" id="' + id + '" aria-labelledby="' + id + '-label"'));
+  }
+  assert.match(app.innerHTML, /id="s-detached" aria-labelledby="s-detached-label"  \/>/);
+  assert.match(app.innerHTML, /do not report back here/);
+  assert.match(app.innerHTML, /association is not guaranteed/);
+  await api.saveSettings();
+  assert.deepEqual(request, {
+    path: "api/prefs",
+    body: {
+      release: "13.5",
+      showDrafts: false,
+      detachedSessions: true,
+      notifications: { reviewRequested: true, readyToMerge: true, changesRequested: false, ciFailing: true },
+    },
+  });
 });
 
 test("settings Enter shortcut leaves interactive controls to their native actions", () => {
@@ -1469,12 +1675,16 @@ function healthDashboard(items, counts, authenticated) {
 }
 
 function createRendererHarness(overrides = {}) {
+  const events = {};
+  const addEventListener = (type, handler) => { (events[type] ??= []).push(handler); };
   const app = overrides.app ?? {
     innerHTML: "",
     removeAttribute() {},
     classList: classList(),
   };
   const document = {
+    documentElement: { clientWidth: 800, clientHeight: 600 },
+    activeElement: null,
     getElementById(id) {
       if (id === "app") return app;
       if (id === "loadbar") return overrides.loadbar ?? null;
@@ -1482,11 +1692,12 @@ function createRendererHarness(overrides = {}) {
     },
     querySelector: overrides.querySelector ?? (() => null),
     querySelectorAll: overrides.querySelectorAll ?? (() => []),
-    addEventListener() {},
+    addEventListener,
   };
   const sandbox = {
+    agentActions: overrides.agentActions ?? { available: true, reason: null },
     document,
-    window: { CSS: { escape: cssEscape } },
+    window: { CSS: { escape: cssEscape }, addEventListener },
     CSS: { escape: cssEscape },
     EventSource: function () { throw new Error("disabled"); },
     ResizeObserver: undefined,
@@ -1502,7 +1713,8 @@ function createRendererHarness(overrides = {}) {
 
   vm.runInNewContext(`${APP_JS}\n;globalThis.__test = {\n  render,\n  withRefresh,\n  load,\n  rescanAccounts,\n  onCardAction,\n  applyPushedState,\n  onUpdateAvailable,\n  onPreferences,\n  onSnapshot,\n  onPollSchedule,\n  applyAvailableUpdate,\n  toggleAutoApply,\n  autoApplyEnabled,\n  openLinkedPr,\n  deleteRepo,\n  persistAccountRepos,\n  draftReposByAcct,\n  editingByAcct,\n  forYouCardActions,\n  focusCardActions,\n  laneCardActions,\n  signalActions,\n  mergeActions,\n  queuePanel,\n  cardActionBtn,\n  issueCard,\n  healthCard,\n  healthView,\n  healthRepositoryGroups,\n  pipelineEditorHtml,\n  addAzurePipeline,\n  removeAzurePipeline,\n  commitHealthOrder,\n  moveHealthSource,\n  dropHealthSource,\n  setHealthDropMarker,\n  wireHealthOrdering,\n  actionKey,\n  inflightActions,\n  setProgress,\n  setState(value) { state = value; },\n  getState() { return state; },\n  getAppliedSeq() { return lastAppliedSeq; },\n  getUpdateAvailable() { return updateAvailable; },\n  setPrefs(value) { prefs = value; },\n  getPrefs() { return prefs; },\n  setHealthOrderSaving(value) { healthOrderSaving = !!value; },\n  setPipelineDrafts(url, branch) { pipelineUrlDraft = url; pipelineBranchDraft = branch; },\n  getPipelineDrafts() { return { url: pipelineUrlDraft, branch: pipelineBranchDraft, error: pipelineError }; },\n  setView(value) { view = value; },\n  setRefreshing(value) { refreshing = !!value; },\n  setRefreshInFlight(value) { refreshInFlight = value; },\n  setLoadError(value) { loadError = value; },\n  getLoadError() { return loadError; },\n};`, sandbox);
 
-  return { app, api: sandbox.__test };
+  sandbox.__test.saveSettings = vm.runInNewContext("saveSettings", sandbox);
+  return { app, api: sandbox.__test, events, document };
 }
 
 function dragCard() {
