@@ -66,7 +66,10 @@ internal static class DeploymentE2EAutomatorHelpers
                         TimeSpan.FromSeconds(300));
                 }
 
-                await auto.SourceAspireEnvironmentAsync(counter, includeBundlePath);
+                await auto.RunCommandAsync(
+                    AspireCliShellCommandHelpers.GetSourcePullRequestEnvironmentCommand(prNumber, includeBundlePath),
+                    counter,
+                    TimeSpan.FromSeconds(30));
                 break;
 
             case CliInstallMode.LocalArchive:

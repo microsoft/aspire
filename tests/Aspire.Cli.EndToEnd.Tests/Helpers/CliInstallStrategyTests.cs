@@ -15,6 +15,18 @@ public class CliInstallStrategyTests
         Assert.Equal("123", AspireCliShellCommandHelpers.GetPullRequestInstallArgs(123));
     }
 
+    [Theory]
+    [InlineData(false, "export PATH=\"$HOME/.aspire/dogfood/pr-123/bin:$PATH\" ASPIRE_PLAYGROUND=true TERM=xterm DOTNET_CLI_TELEMETRY_OPTOUT=true DOTNET_SKIP_FIRST_TIME_EXPERIENCE=true DOTNET_GENERATE_ASPNET_CERTIFICATE=false")]
+    [InlineData(true, "export PATH=\"$HOME/.aspire/dogfood/pr-123/bin:$HOME/.aspire/dogfood/pr-123:$PATH\" ASPIRE_PLAYGROUND=true TERM=xterm DOTNET_CLI_TELEMETRY_OPTOUT=true DOTNET_SKIP_FIRST_TIME_EXPERIENCE=true DOTNET_GENERATE_ASPNET_CERTIFICATE=false")]
+    public void GetSourcePullRequestEnvironmentCommand_UsesIsolatedPrInstall(
+        bool includeBundlePath,
+        string expected)
+    {
+        Assert.Equal(
+            expected,
+            AspireCliShellCommandHelpers.GetSourcePullRequestEnvironmentCommand(123, includeBundlePath));
+    }
+
     [Fact]
     public void GetLocalArchiveInstallCommand_FormatsCorrectly()
     {

@@ -7,6 +7,7 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Azure.Storage;
 using Azure.Provisioning;
+using Azure.Provisioning.Expressions;
 using Azure.Provisioning.Storage;
 using Azure.Storage.Blobs;
 using Azure.Storage.Queues;
@@ -20,20 +21,24 @@ namespace Aspire.Hosting;
 public static class AzureStorageExtensions
 {
     private const string SkipApiVersionCheckArgument = "--skipApiVersionCheck";
+    private static readonly RoleDefinition s_fileStorageContributorRole = new(
+        StorageBuiltInRole.StorageFileDataSmbShareContributor.ToString(),
+        StorageBuiltInRole.GetBuiltInRoleName(StorageBuiltInRole.StorageFileDataSmbShareContributor));
 
     /// <summary>
-    /// Adds an Azure Storage resource to the application model. This resource can be used to create Azure blob, table, and queue resources.
+    /// Adds an Azure Storage resource to the application model. This resource can be used to create Azure Blob, Files, Queue, Table, and Data Lake resources.
     /// </summary>
     /// <param name="builder">The builder for the distributed application.</param>
     /// <param name="name">The name of the resource.</param>
     /// <returns></returns>
     /// <remarks>
-    /// By default references to the Azure Storage resource will be assigned the following roles:
-    /// 
-    /// - <see cref="StorageBuiltInRole.StorageBlobDataContributor"/>
-    /// - <see cref="StorageBuiltInRole.StorageTableDataContributor"/>
-    /// - <see cref="StorageBuiltInRole.StorageQueueDataContributor"/>
-    ///
+    /// By default, references to the Azure Storage resource are assigned the following roles:
+    /// <list type="bullet">
+    /// <item><description><see cref="StorageBuiltInRole.StorageBlobDataContributor"/></description></item>
+    /// <item><description><see cref="StorageBuiltInRole.StorageTableDataContributor"/></description></item>
+    /// <item><description><see cref="StorageBuiltInRole.StorageQueueDataContributor"/></description></item>
+    /// </list>
+    /// Adding an Azure Files resource also adds <see cref="StorageBuiltInRole.StorageFileDataSmbShareContributor"/>.
     /// These can be replaced by calling <see cref="WithRoleAssignments{T}(IResourceBuilder{T}, IResourceBuilder{AzureStorageResource}, StorageBuiltInRole[])"/>.
     /// </remarks>
     /// <ats-remarks />
@@ -85,6 +90,17 @@ public static class AzureStorageExtensions
                         Tags = { { "aspire-resource-name", infrastructure.AspireResource.Name } }
                     };
 
+                    if (azureResource.IsFileStorageEnabled)
+                    {
+                        // Azure Files managed identity authentication requires SMB OAuth on the
+                        // account. Shared key access remains disabled by the account default above.
+                        storageAccount.AzureFilesIdentityBasedAuthentication = new FilesIdentityBasedAuthentication
+                        {
+                            DirectoryServiceOptions = DirectoryServiceOption.None,
+                            IsSmbOAuthEnabled = true
+                        };
+                    }
+
                     // When using private endpoints, completely disable public network access.
                     if (hasPrivateEndpoint)
                     {
@@ -98,13 +114,17 @@ public static class AzureStorageExtensions
                 .Concat(azureResource.DataLakeFileSystems.Select(fs => fs.ToProvisioningEntity()))
                 .ToList();
             var cdkQueues = azureResource.Queues.Select(q => q.ToProvisioningEntity()).ToList();
+            var cdkFileShares = azureResource.FileShares
+                .Select(share => share.ToProvisioningEntity(storageAccount.IsExistingResource))
+                .ToList();
 
             // Bicep identifiers must be unique within the module. The child resource identifiers come from
-            // the Aspire resource names, so a container, file system, queue or storage account named "blobs" or
-            // "queues" would otherwise collide with the identifier of the corresponding service.
+            // the Aspire resource names, so a container, file system, queue, file share or storage account named
+            // "blobs", "queues" or "files" would otherwise collide with the identifier of the corresponding service.
             var usedIdentifiers = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { storageAccount.BicepIdentifier };
             usedIdentifiers.UnionWith(cdkBlobContainers.Select(c => c.BicepIdentifier));
             usedIdentifiers.UnionWith(cdkQueues.Select(q => q.BicepIdentifier));
+            usedIdentifiers.UnionWith(cdkFileShares.Select(share => share.BicepIdentifier));
 
             if (cdkBlobContainers.Count > 0)
             {
@@ -139,6 +159,22 @@ public static class AzureStorageExtensions
                 }
             }
 
+            if (cdkFileShares.Count > 0)
+            {
+                var identifier = GetUniqueBicepIdentifier("files", usedIdentifiers);
+                var fileService = storageAccount.IsExistingResource
+                    ? FileService.FromExisting(identifier)
+                    : new FileService(identifier);
+                fileService.Parent = storageAccount;
+                infrastructure.Add(fileService);
+
+                foreach (var cdkFileShare in cdkFileShares)
+                {
+                    cdkFileShare.Parent = fileService;
+                    infrastructure.Add(cdkFileShare);
+                }
+            }
+
             // TODO: When Tables are added, change this check to use Count > 0
             if (azureResource.TableStorageBuilder is not null)
             {
@@ -154,9 +190,11 @@ public static class AzureStorageExtensions
             infrastructure.Add(new ProvisioningOutput("dataLakeEndpoint", typeof(string)) { Value = storageAccount.PrimaryEndpoints.DfsUri.ToBicepExpression() });
             infrastructure.Add(new ProvisioningOutput("queueEndpoint", typeof(string)) { Value = storageAccount.PrimaryEndpoints.QueueUri.ToBicepExpression() });
             infrastructure.Add(new ProvisioningOutput("tableEndpoint", typeof(string)) { Value = storageAccount.PrimaryEndpoints.TableUri.ToBicepExpression() });
+            infrastructure.Add(new ProvisioningOutput("fileEndpoint", typeof(string)) { Value = storageAccount.PrimaryEndpoints.FileUri.ToBicepExpression() });
 
             // We need to output name to externalize role assignments.
             infrastructure.Add(new ProvisioningOutput("name", typeof(string)) { Value = storageAccount.Name.ToBicepExpression() });
+            infrastructure.Add(new ProvisioningOutput("resourceGroupName", typeof(string)) { Value = BicepFunction.GetResourceGroup().Name });
             infrastructure.Add(new ProvisioningOutput("id", typeof(string)) { Value = storageAccount.Id });
         };
 
@@ -188,6 +226,10 @@ public static class AzureStorageExtensions
         if (builder.Resource.IsHnsEnabled)
         {
             throw new InvalidOperationException("Emulator currently does not support data lake.");
+        }
+        if (builder.Resource.IsFileStorageEnabled)
+        {
+            throw new InvalidOperationException("Emulator currently does not support file storage.");
         }
 
         if (builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
@@ -435,6 +477,47 @@ public static class AzureStorageExtensions
     }
 
     /// <summary>
+    /// Adds an Azure Files service resource to the application model.
+    /// </summary>
+    /// <param name="builder">The Azure Files resource builder.</param>
+    /// <param name="name">The name of the Azure Files resource.</param>
+    /// <returns>A builder for the Azure Files resource.</returns>
+    /// <remarks>
+    /// Storage accounts provisioned by Aspire enable SMB OAuth and disable shared key access.
+    /// Existing storage accounts are not modified and must already have the required authentication settings.
+    /// The local Azure Storage emulator does not support Azure Files.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// var files = builder.AddAzureStorage("storage")
+    ///     .AddFiles("files");
+    /// </code>
+    /// </example>
+    [AspireExport]
+    public static IResourceBuilder<AzureFileStorageResource> AddFiles(
+        this IResourceBuilder<AzureStorageResource> builder,
+        [ResourceName] string name)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+
+        if (builder.Resource.IsEmulator)
+        {
+            throw new InvalidOperationException("Emulator currently does not support file storage.");
+        }
+
+        builder.Resource.IsFileStorageEnabled = true;
+        AddFileStorageDefaultRoleAssignment(builder);
+
+        if (string.Equals(name, builder.Resource.Name + "-files", StringComparisons.ResourceName))
+        {
+            return GetFileService(builder);
+        }
+
+        return CreateFileService(builder, name);
+    }
+
+    /// <summary>
     /// Creates a builder for the <see cref="AzureBlobStorageResource"/> which can be referenced to get the Azure Storage blob endpoint for the storage account.
     /// </summary>
     /// <param name="builder">The <see cref="IResourceBuilder{T}"/> for <see cref="AzureStorageResource"/>.</param>
@@ -473,6 +556,15 @@ public static class AzureStorageExtensions
         var name = builder.Resource.Name + "-data-lake";
 
         return builder.Resource.DataLakeStorageBuilder ??= CreateDataLakeService(builder, name);
+    }
+
+    private static IResourceBuilder<AzureFileStorageResource> GetFileService(this IResourceBuilder<AzureStorageResource> builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        var name = builder.Resource.Name + "-files";
+
+        return builder.Resource.FileStorageBuilder ??= CreateFileService(builder, name);
     }
 
     /// <summary>
@@ -538,6 +630,47 @@ public static class AzureStorageExtensions
         var parentBuilder = builder.Resource.ImplicitDataLakeService ??= GetDataLakeService(builder);
         AzureDataLakeStorageFileSystemResource resource = new(name, dataLakeFileSystemName, parentBuilder.Resource);
         builder.Resource.DataLakeFileSystems.Add(resource);
+
+        return builder.ApplicationBuilder
+            .AddResource(resource)
+            .WithIconName("FolderOpen");
+    }
+
+    /// <summary>
+    /// Adds an Azure file share resource to the application model.
+    /// </summary>
+    /// <param name="builder">The Azure Storage resource builder.</param>
+    /// <param name="name">The name of the resource.</param>
+    /// <param name="fileShareName">The name of the Azure file share. Defaults to <paramref name="name"/>.</param>
+    /// <returns>A builder for the Azure file share resource.</returns>
+    /// <remarks>
+    /// When the parent storage account is configured as an existing resource, the generated infrastructure references an existing file share with <paramref name="fileShareName"/> instead of creating one.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// var files = builder.AddAzureStorage("storage")
+    ///     .AddFiles("files");
+    /// var share = files.AddFileShare("media");
+    /// </code>
+    /// </example>
+    [AspireExport]
+    public static IResourceBuilder<AzureFileStorageShareResource> AddFileShare(
+        this IResourceBuilder<AzureFileStorageResource> builder,
+        [ResourceName] string name,
+        string? fileShareName = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+
+        if (builder.Resource.Parent.IsEmulator)
+        {
+            throw new InvalidOperationException("Emulator currently does not support file storage.");
+        }
+
+        fileShareName ??= name;
+
+        AzureFileStorageShareResource resource = new(name, fileShareName, builder.Resource);
+        builder.Resource.Parent.FileShares.Add(resource);
 
         return builder.ApplicationBuilder
             .AddResource(resource)
@@ -840,6 +973,36 @@ public static class AzureStorageExtensions
         return builder.ApplicationBuilder
             .AddResource(resource)
             .WithIconName("HardDrive");
+    }
+
+    private static IResourceBuilder<AzureFileStorageResource> CreateFileService(IResourceBuilder<AzureStorageResource> builder, string name)
+    {
+        var resource = new AzureFileStorageResource(name, builder.Resource);
+
+        return builder.ApplicationBuilder
+            .AddResource(resource)
+            .WithIconName("Folder");
+    }
+
+    private static void AddFileStorageDefaultRoleAssignment(IResourceBuilder<AzureStorageResource> builder)
+    {
+        var annotations = builder.Resource.Annotations
+            .OfType<DefaultRoleAssignmentsAnnotation>()
+            .ToList();
+        if (annotations.Count == 0 || annotations[^1].Roles.Contains(s_fileStorageContributorRole))
+        {
+            return;
+        }
+
+        var roles = annotations[^1].Roles.ToHashSet();
+        roles.Add(s_fileStorageContributorRole);
+
+        foreach (var annotation in annotations)
+        {
+            builder.Resource.Annotations.Remove(annotation);
+        }
+
+        builder.Resource.Annotations.Add(new DefaultRoleAssignmentsAnnotation(roles));
     }
 
     private static IResourceBuilder<AzureTableStorageResource> CreateTableService(IResourceBuilder<AzureStorageResource> builder, string name)

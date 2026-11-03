@@ -84,6 +84,14 @@ internal static class AspireCliShellCommandHelpers
             : $"export PATH=~/.aspire/bin:$PATH {CommonAspireEnvironmentAssignments}";
     }
 
+    internal static string GetSourcePullRequestEnvironmentCommand(int prNumber, bool includeBundlePath)
+    {
+        var installRoot = $"$HOME/.aspire/dogfood/pr-{prNumber}";
+        return includeBundlePath
+            ? $"export PATH=\"{installRoot}/bin:{installRoot}:$PATH\" {CommonAspireEnvironmentAssignments}"
+            : $"export PATH=\"{installRoot}/bin:$PATH\" {CommonAspireEnvironmentAssignments}";
+    }
+
     internal static string GetExtractLocalHiveArchiveCommand(string archivePath)
     {
         return $"mkdir -p ~/.aspire && tar -xzf {QuoteBashArg(archivePath)} -C ~/.aspire 2>/dev/null";

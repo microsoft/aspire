@@ -8,6 +8,12 @@ resource queues 'Microsoft.Storage/storageAccounts@2026-06-01' = {
   }
   location: location
   properties: {
+    azureFilesIdentityBasedAuthentication: {
+      directoryServiceOptions: 'None'
+      smbOAuthSettings: {
+        isSmbOAuthEnabled: true
+      }
+    }
     isHnsEnabled: false
     minimumTlsVersion: 'TLS1_2'
     allowSharedKeyAccess: false
@@ -42,6 +48,16 @@ resource myqueue 'Microsoft.Storage/storageAccounts/queueServices/queues@2026-06
   parent: queues1
 }
 
+resource files1 'Microsoft.Storage/storageAccounts/fileServices@2026-06-01' = {
+  name: 'default'
+  parent: queues
+}
+
+resource files 'Microsoft.Storage/storageAccounts/fileServices/shares@2026-06-01' = {
+  name: 'my-file-share'
+  parent: files1
+}
+
 output blobEndpoint string = queues.properties.primaryEndpoints.blob
 
 output dataLakeEndpoint string = queues.properties.primaryEndpoints.dfs
@@ -50,6 +66,10 @@ output queueEndpoint string = queues.properties.primaryEndpoints.queue
 
 output tableEndpoint string = queues.properties.primaryEndpoints.table
 
+output fileEndpoint string = queues.properties.primaryEndpoints.file
+
 output name string = queues.name
+
+output resourceGroupName string = resourceGroup().name
 
 output id string = queues.id

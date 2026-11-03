@@ -1,0 +1,40 @@
+﻿---
+apiVersion: "apps/v1"
+kind: "StatefulSet"
+metadata:
+  name: "app-statefulset"
+  labels:
+    app.kubernetes.io/name: "{{ .Chart.Name }}"
+    app.kubernetes.io/component: "app"
+    app.kubernetes.io/instance: "{{ .Release.Name }}"
+spec:
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: "{{ .Chart.Name }}"
+        app.kubernetes.io/component: "app"
+        app.kubernetes.io/instance: "{{ .Release.Name }}"
+    spec:
+      serviceAccountName: "app-sa"
+      nodeSelector:
+        agentpool: "workload"
+      containers:
+        - image: "nginx:latest"
+          name: "app"
+          volumeMounts:
+            - name: "media-volume"
+              mountPath: "/srv/media"
+          imagePullPolicy: "IfNotPresent"
+      volumes:
+        - name: "media-volume"
+          persistentVolumeClaim:
+            claimName: "media-volume"
+      securityContext:
+        fsGroup: 2000
+        fsGroupChangePolicy: "OnRootMismatch"
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: "{{ .Chart.Name }}"
+      app.kubernetes.io/component: "app"
+      app.kubernetes.io/instance: "{{ .Release.Name }}"
+  replicas: 1
