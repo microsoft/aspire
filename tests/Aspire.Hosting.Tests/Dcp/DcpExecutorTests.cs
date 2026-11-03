@@ -4834,6 +4834,74 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task StopResourceAsync_ExecutableStoppedBeforeLaunch_ReportedAsFailedToStart_Succeeds()
+    {
+        // DCP reports FailedToStart (a terminal state) when Spec.Stop is set before the process was launched,
+        // e.g. when a resource is stopped right after a restart re-created it. That must count as stopped.
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddExecutable("app", "app.exe", ".");
+
+        var kubernetesService = new TestKubernetesService { StoppedExecutableState = ExecutableState.FailedToStart };
+        using var app = builder.Build();
+        await using var appExecutor = CreateAppExecutor(app.Services.GetRequiredService<DistributedApplicationModel>(), kubernetesService: kubernetesService);
+
+        // A single attempt: the stop outcome is decided by the state DCP reports, not by polling.
+        appExecutor.DeleteResourceRetryPipeline = new ResiliencePipelineBuilder<bool>().Build();
+
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+
+        var dcpExe = Assert.Single(kubernetesService.CreatedResources.OfType<Executable>());
+        var reference = appExecutor.GetResource(dcpExe.Metadata.Name);
+
+        await appExecutor.StopResourceAsync(reference, TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.True(dcpExe.Spec.Stop);
+        Assert.Equal(ExecutableState.FailedToStart, dcpExe.Status?.State);
+    }
+
+    [Fact]
+    public async Task StopResourceAsync_ContainerStoppedBeforeLaunch_ReportedAsFailedToStart_Succeeds()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddContainer("database", "image");
+
+        var kubernetesService = new TestKubernetesService { StoppedContainerState = ContainerState.FailedToStart };
+        using var app = builder.Build();
+        await using var appExecutor = CreateAppExecutor(app.Services.GetRequiredService<DistributedApplicationModel>(), kubernetesService: kubernetesService);
+        appExecutor.DeleteResourceRetryPipeline = new ResiliencePipelineBuilder<bool>().Build();
+
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+
+        var dcpCtr = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
+        var reference = appExecutor.GetResource(dcpCtr.Metadata.Name);
+
+        await appExecutor.StopResourceAsync(reference, TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.True(dcpCtr.Spec.Stop);
+        Assert.Equal(ContainerState.FailedToStart, dcpCtr.Status?.State);
+    }
+
+    [Fact]
+    public async Task StopResourceAsync_ExecutableStillRunning_Throws()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddExecutable("app", "app.exe", ".");
+
+        var kubernetesService = new TestKubernetesService { StoppedExecutableState = ExecutableState.Running };
+        using var app = builder.Build();
+        await using var appExecutor = CreateAppExecutor(app.Services.GetRequiredService<DistributedApplicationModel>(), kubernetesService: kubernetesService);
+        appExecutor.DeleteResourceRetryPipeline = new ResiliencePipelineBuilder<bool>().Build();
+
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+
+        var dcpExe = Assert.Single(kubernetesService.CreatedResources.OfType<Executable>());
+        var reference = appExecutor.GetResource(dcpExe.Metadata.Name);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => appExecutor.StopResourceAsync(reference, TestContext.Current.CancellationToken)).DefaultTimeout();
+        Assert.Equal($"Failed to stop resource '{dcpExe.Metadata.Name}'.", ex.Message);
+    }
+
+    [Fact]
     public async Task ErrorIfResourceNotDeletedBeforeRestart()
     {
         var builder = DistributedApplication.CreateBuilder();

@@ -182,6 +182,11 @@
         <target state="translated">{0}에 대한 AppHost 선택:</target>
         <note />
       </trans-unit>
+      <trans-unit id="SourceTrustWarning">
+        <source>Only use sources you trust. Content from these sources can run code on your machine.</source>
+        <target state="new">Only use sources you trust. Content from these sources can run code on your machine.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="UnrecognizedOptionDidYouMeanFormat">
         <source>Unrecognized option '{0}'. Did you mean '{1}'?</source>
         <target state="translated">인식할 수 없는 옵션 '{0}'입니다. '{1}'을(를) 의도하셨나요?</target>

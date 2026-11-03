@@ -1186,7 +1186,8 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
                         patch = CreatePatch(c, obj => obj.Spec.Stop = true);
                         await _kubernetesService.PatchAsync(c, patch, attemptCancellationToken).ConfigureAwait(false);
                         var cu = await _kubernetesService.GetAsync<Container>(c.Metadata.Name, cancellationToken: attemptCancellationToken).ConfigureAwait(false);
-                        if (cu.Status?.State == ContainerState.Exited)
+                        // DCP reports FailedToStart (terminal) when the stop arrives before the container was launched.
+                        if (cu.Status?.State is ContainerState.Exited or ContainerState.FailedToStart)
                         {
                             _logger.LogDebug("Container '{ResourceName}' was stopped.", resourceReference.DcpResourceName);
                             return true;
@@ -1201,7 +1202,9 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
                         patch = CreatePatch(e, obj => obj.Spec.Stop = true);
                         await _kubernetesService.PatchAsync(e, patch, attemptCancellationToken).ConfigureAwait(false);
                         var eu = await _kubernetesService.GetAsync<Executable>(e.Metadata.Name, cancellationToken: attemptCancellationToken).ConfigureAwait(false);
-                        if (eu.Status?.State == ExecutableState.Finished || eu.Status?.State == ExecutableState.Terminated)
+                        // DCP reports FailedToStart (terminal) when the stop arrives before the process was launched,
+                        // e.g. when a resource is stopped right after a restart re-created it.
+                        if (eu.Status?.State is ExecutableState.Finished or ExecutableState.Terminated or ExecutableState.FailedToStart)
                         {
                             _logger.LogDebug("Executable '{ResourceName}' was stopped.", resourceReference.DcpResourceName);
                             return true;

@@ -9,6 +9,7 @@ using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Agents.ClaudeCode;
 using Aspire.Cli.Agents.Copilot;
 using Aspire.Cli.Agents.OpenCode;
+using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -66,6 +67,7 @@ internal sealed class AgentConfigurationTestContext : IDisposable
         var services = CliTestHelper.CreateServiceCollection(Workspace, output, options =>
         {
             options.CliExecutionContextFactory = _ => ExecutionContext;
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
             configure?.Invoke(options);
         });
         services.AddSingleton<IEnvironment>(Environment);
