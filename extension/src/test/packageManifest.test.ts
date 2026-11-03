@@ -294,6 +294,13 @@ suite('extension/package.json', () => {
         assert.ok(activationEvents.includes('workspaceContains:**/apphost.rs'));
     });
 
+    test('Go AppHost files activate the extension', () => {
+        const manifest = readManifest();
+        const activationEvents = manifest.activationEvents ?? [];
+
+        assert.ok(activationEvents.includes('workspaceContains:**/apphost.go'));
+    });
+
     // A Java-only workspace contains no project file the other activation events match: no .csproj,
     // and `.aspire/` only exists once a restore has already run. Without an explicit Java event the
     // extension never activates on a fresh clone, so the AppHost never appears in the Aspire view
@@ -325,7 +332,7 @@ suite('extension/package.json', () => {
             'aspire-vscode.runAppHostFromExplorer',
             'aspire-vscode.debugAppHostFromExplorer',
         ];
-        const expectedAppHostFiles = ['apphost.ts', 'apphost.mts', 'apphost.cts', 'apphost.js', 'apphost.mjs', 'apphost.cjs', 'apphost.rs', 'apphost.java'];
+        const expectedAppHostFiles = ['apphost.ts', 'apphost.mts', 'apphost.cts', 'apphost.js', 'apphost.mjs', 'apphost.cjs', 'apphost.rs', 'apphost.java', 'apphost.go'];
 
         assert.deepStrictEqual(explorerMenus.map(item => item.command), expectedExplorerCommands);
         assert.deepStrictEqual(

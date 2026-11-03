@@ -59,6 +59,37 @@ Restart the container with the same volume, application name, data directory, an
 
 The AppHost console-log protocol does not identify the AppHost generation that produced a line. Resume prioritizes preserving logs from later AppHost generations, whose line numbers restart at 1. If the Dashboard restarts while the same AppHost remains running, console logs replayed by that AppHost can therefore be persisted again.
 
+### AppHost resource traits and dashboard customizations
+
+Resources can declare non-sensitive metadata as immutable name/value traits. Repeated
+names add multiple values:
+
+```csharp
+builder.AddProject<Projects.Api>("api")
+    .WithTags("Backend", "API")
+    .WithTrait("Owner", "Finance")
+    .WithTrait("Owner", "Platform")
+    .WithDashboardPosition(-10);
+```
+
+`WithTags` accepts a single tag or multiple tags using `params ReadOnlySpan<string>`,
+avoiding a temporary argument array in C#. Polyglot SDKs accept an array of tags.
+It uses the reserved trait `Aspire_Dashboard_Tag`. These tags participate in
+dashboard tag grouping but cannot be removed in the dashboard. User-added tags are
+stored separately in the application settings database, so restarting an AppHost
+does not lose customizations or copy declared tags from a different run.
+
+`WithDashboardPosition` uses `Aspire_Dashboard_Position`; repeated calls replace the
+previous value. Lower positions appear first; defaults can change between runs until
+the user reorders resources. Existing saved dashboard ordering takes precedence. Drag-and-drop ordering is saved
+per application, independently of the run database.
+
+Traits are transported as list-valued resource properties named `resource.trait.<name>`,
+including in recorded snapshots. Trait names are case-sensitive; dashboard tags are
+deduplicated case-insensitively. Tags must have at most 50 characters and use single
+spaces between words. Trait values are visible to dashboard and tooling consumers
+and must not contain secrets.
+
 ## Goals
 
 - Preserve resources, console logs, structured logs, traces, spans, and metrics after an application run ends.

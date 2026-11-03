@@ -1,0 +1,22 @@
+/* The description is localized markdown, so it is styled where it renders rather than rebuilt as markup. Everything is
+   kept compact, so the tab reads as one short piece of text rather than a stack of boxes. */
+
+/* The bullet list names what agents can see, and each item already starts with its own emoji, so the bullets are
+   redundant. */
+.ai-agents-help ::deep ul {
+    padding-inline-start: 0;
+    list-style: none;
+}
+
+.ai-agents-help ::deep h1,
+.ai-agents-help ::deep h2,
+.ai-agents-help ::deep h3 {
+    margin: 16px 0 4px;
+    font-size: var(--fontSizeBase400);
+    font-weight: var(--fontWeightSemibold);
+}
+
+.ai-agents-help ::deep p {
+    margin: 6px 0;
+    line-height: var(--lineHeightBase300);
+}

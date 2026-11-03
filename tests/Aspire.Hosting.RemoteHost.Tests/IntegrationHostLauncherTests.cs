@@ -13,6 +13,11 @@ using Xunit;
 
 namespace Aspire.Hosting.RemoteHost.Tests;
 
+// These tests drive capability discovery over in-memory JSON-RPC with real-time timeouts, so every
+// round trip needs prompt thread pool dispatch. Other classes in this assembly run long synchronous,
+// CPU-bound work on pool threads; on saturated CI machines the pool then injects threads only every few
+// seconds and discovery can exceed its timeout. Run this class without parallel test interference.
+[Collection(nameof(IntegrationHostLauncherTests))]
 public class IntegrationHostLauncherTests
 {
     [Fact]
@@ -279,3 +284,6 @@ public class IntegrationHostLauncherTests
         Assert.True(startInfo.RedirectStandardError);
     }
 }
+
+[CollectionDefinition(nameof(IntegrationHostLauncherTests), DisableParallelization = true)]
+public sealed class IntegrationHostLauncherTestsCollection;

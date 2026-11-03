@@ -107,6 +107,11 @@
         <target state="new">Expected a JSON object. 'createNuGetConfig' must be a Boolean, and 'symbolInfo' must be an object. Symbol entries must be objects, 'isHidden' must be true or false, and 'displayName' must be a string.</target>
         <note />
       </trans-unit>
+      <trans-unit id="InvalidTemplatePromptDefault">
+        <source>Prompt default '{0}' must target an optional, empty-default string parameter and reference its native coalesce symbol, depending only on the project name and regex/coalesce symbols. It cannot also specify a computed value source.</source>
+        <target state="new">Prompt default '{0}' must target an optional, empty-default string parameter and reference its native coalesce symbol, depending only on the project name and regex/coalesce symbols. It cannot also specify a computed value source.</target>
+        <note>{0} is the template parameter name.</note>
+      </trans-unit>
       <trans-unit id="InvalidTemplateValueSource">
         <source>Computed value '{0}' must target a non-reserved string parameter and specify kind 'nugetPackageVersion', a valid 'packageId' and 'versionRange', an optional Boolean 'allowPrerelease', and an optional output-relative 'workingDirectory'.</source>
         <target state="new">Computed value '{0}' must target a non-reserved string parameter and specify kind 'nugetPackageVersion', a valid 'packageId' and 'versionRange', an optional Boolean 'allowPrerelease', and an optional output-relative 'workingDirectory'.</target>

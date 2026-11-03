@@ -15,6 +15,7 @@ From your AppHost directory, add the `Aspire.Hosting.Azure.KeyVault` integration
 
 ```bash
 aspire add Aspire.Hosting.Azure.KeyVault
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Configure Azure Provisioning for local development
@@ -45,7 +46,7 @@ var builder = DistributedApplication.CreateBuilder(args);
 
 var keyVault = builder.AddAzureKeyVault("mykeyvault");
 
-builder.AddProject<Projects.MyApp>("myapp")
+builder.AddDotnetProject("myapp", "../MyApp/MyApp.csproj")
        .WithReference(keyVault);
 ```
 
@@ -90,7 +91,7 @@ var keyVault = builder.AddAzureKeyVault("mykeyvault", (_, construct, kv) => {
 
 });
 
-builder.AddProject<Projects.MyApp>("myapp")
+builder.AddDotnetProject("myapp", "../MyApp/MyApp.csproj")
        .WithReference(keyVault);
 ```
 

@@ -1,0 +1,8 @@
+﻿{
+  "agent_failure_issue.md": "[automated] Original CI run: [40727814372](https://github.com/microsoft/aspire/actions/runs/40727814372)\n\nUpstream report for {workflow_name}.\n\n[Analyzer run]({run_url})\n",
+  "agent_failure_comment.md": "[automated] Original CI run: [40727814372](https://github.com/microsoft/aspire/actions/runs/40727814372)\n\nUpstream report for {workflow_name}.\n\n[Analyzer run]({run_url})\n",
+  "failed_jobs_issue.md": "[automated] Original CI run: [40727814372](https://github.com/microsoft/aspire/actions/runs/40727814372)\n\nUpstream report for {workflow_name}.\n\n[Analyzer run]({run_url})\n",
+  "missing_data_issue.md": "[automated] Original CI run: [40727814372](https://github.com/microsoft/aspire/actions/runs/40727814372)\n\nUpstream report for {workflow_name}.\n\n[Analyzer run]({run_url})\n",
+  "missing_tool_issue.md": "[automated] Original CI run: [40727814372](https://github.com/microsoft/aspire/actions/runs/40727814372)\n\nUpstream report for {workflow_name}.\n\n[Analyzer run]({run_url})\n",
+  "other.md": "Unrelated template\n"
+}

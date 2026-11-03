@@ -112,7 +112,6 @@ internal sealed class NewCommand : BaseCommand
         Options.Add(_agentInitCommand.AgentsOption);
         Options.Add(AgentInitCommand.s_scopeOption);
         Options.Add(AgentInitCommand.s_skillsOption);
-        Options.Add(AgentInitCommand.s_aspireSourceOption);
 
         // Customize description based on whether staging channel is enabled
         var isStagingEnabled = KnownFeatures.IsStagingChannelEnabled(services.Features, configuration)
@@ -629,6 +628,7 @@ internal sealed class NewCommand : BaseCommand
                     missingDirectory));
                 return CommandResult.Failure(CliExitCodes.InvalidCommand);
             }
+            InteractionService.DisplayMessage(KnownEmojis.Warning, SharedCommandStrings.SourceTrustWarning, consoleOverride: ConsoleOutput.Error);
         }
 
         // Resolve which templates are actually available at runtime (performs
@@ -713,7 +713,15 @@ internal sealed class NewCommand : BaseCommand
             Channel = resolvedChannelName,
             Language = selectedLanguageId
         };
-        var templateResult = await template.ApplyTemplateAsync(inputs, parseResult, cancellationToken);
+        TemplateResult templateResult;
+        try
+        {
+            templateResult = await template.ApplyTemplateAsync(inputs, parseResult, cancellationToken);
+        }
+        catch (ProjectUpdaterException ex)
+        {
+            return CommandResult.Failure(CliExitCodes.FailedToCreateNewProject, ex.Message);
+        }
 
         return await CompleteTemplateAsync(templateResult, configSource, parseResult, cancellationToken);
     }
@@ -768,6 +776,10 @@ internal sealed class NewCommand : BaseCommand
         {
             return CommandResult.Failure(ex.ExitCode, ex.Message);
         }
+        catch (ProjectUpdaterException ex)
+        {
+            return CommandResult.Failure(CliExitCodes.FailedToCreateNewProject, ex.Message);
+        }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
         {
             return CommandResult.Failure(CliExitCodes.FailedToCreateNewProject,
@@ -799,10 +811,10 @@ internal sealed class NewCommand : BaseCommand
             InteractionService,
             templateResult.ExitCode,
             workspaceRoot,
+            workspaceRoot,
             agentInitBinding,
             PromptBinding.Create(parseResult, _agentInitCommand.AgentsOption),
             PromptBinding.Create(parseResult, AgentInitCommand.s_skillsOption, CommonAgentApplicators.AspireSkillName),
-            PromptBinding.Create(parseResult, AgentInitCommand.s_aspireSourceOption, AgentInitCommand.DefaultAspireSource),
             PromptBinding.Create(parseResult, AgentInitCommand.s_scopeOption, AgentConfigurationScope.Project),
             cancellationToken);
 

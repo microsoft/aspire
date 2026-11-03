@@ -41,6 +41,24 @@ suite('Debug Adapter Tracker Tests', () => {
         sinon.restore();
     });
 
+    function createAppHostSession(): vscode.DebugSession {
+        return {
+            ...debugSession,
+            configuration: { ...debugSession.configuration, isApphost: true }
+        };
+    }
+
+    function createInitializeResponse() {
+        return {
+            type: 'response',
+            seq: 2,
+            request_seq: 1,
+            success: true,
+            command: 'initialize',
+            body: { supportsConfigurationDoneRequest: true, supportsRestartRequest: true }
+        };
+    }
+
     test('exit code 0 is sent as 0', async () => {
         const disposable = createDebugAdapterTracker(dcpServer as any, 'coreclr');
         const factory = registerFactoryStub.lastCall.args[1];
@@ -777,6 +795,120 @@ suite('Debug Adapter Tracker Tests', () => {
 
         owningDisposable.dispose();
         unrelatedDisposable.dispose();
+    });
+
+    test('apphost sessions that disable direct restart advertise no restart request support', () => {
+        const disposable = createDebugAdapterTracker(dcpServer as any, 'go', {
+            debugSessionId: 'debug-456',
+            disableDirectRestart: true
+        });
+        const factory = registerFactoryStub.lastCall.args[1];
+        const tracker = factory.createDebugAdapterTracker(createAppHostSession());
+        const initializeResponse = createInitializeResponse();
+
+        tracker.onDidSendMessage(initializeResponse);
+
+        assert.deepStrictEqual(initializeResponse.body, {
+            supportsConfigurationDoneRequest: true,
+            supportsRestartRequest: false
+        });
+
+        disposable.dispose();
+    });
+
+    test('apphost sessions keep the adapter restart request support unless direct restart is disabled', () => {
+        const disposable = createDebugAdapterTracker(dcpServer as any, 'coreclr', {
+            debugSessionId: 'debug-456'
+        });
+        const factory = registerFactoryStub.lastCall.args[1];
+        const tracker = factory.createDebugAdapterTracker(createAppHostSession());
+        const initializeResponse = createInitializeResponse();
+
+        tracker.onDidSendMessage(initializeResponse);
+
+        assert.strictEqual(initializeResponse.body.supportsRestartRequest, true);
+
+        disposable.dispose();
+    });
+
+    test('apphost direct restart is only disabled for the tracker that owns its debug session', () => {
+        const owningDisposable = createDebugAdapterTracker(dcpServer as any, 'go', {
+            debugSessionId: 'debug-456',
+            disableDirectRestart: true
+        });
+        const owningFactory = registerFactoryStub.lastCall.args[1];
+        const unrelatedDisposable = createDebugAdapterTracker(dcpServer as any, 'go', {
+            debugSessionId: 'other-session',
+            disableDirectRestart: true
+        });
+        const unrelatedFactory = registerFactoryStub.lastCall.args[1];
+        const appHostSession = createAppHostSession();
+        const unrelatedResponse = createInitializeResponse();
+        const owningResponse = createInitializeResponse();
+
+        unrelatedFactory.createDebugAdapterTracker(appHostSession)?.onDidSendMessage(unrelatedResponse);
+        owningFactory.createDebugAdapterTracker(appHostSession).onDidSendMessage(owningResponse);
+
+        assert.strictEqual(unrelatedResponse.body.supportsRestartRequest, true);
+        assert.strictEqual(owningResponse.body.supportsRestartRequest, false);
+
+        owningDisposable.dispose();
+        unrelatedDisposable.dispose();
+    });
+
+    test('resource sessions keep the adapter restart request support when the apphost disables direct restart', () => {
+        // The tracker for an adapter type is shared by the AppHost and the resources that use the same
+        // adapter, and DCP tracks a resource restart through the adapter's process event.
+        const disposable = createDebugAdapterTracker(dcpServer as any, 'go', {
+            debugSessionId: 'debug-456',
+            disableDirectRestart: true
+        });
+        const factory = registerFactoryStub.lastCall.args[1];
+        const tracker = factory.createDebugAdapterTracker(debugSession);
+        const initializeResponse = createInitializeResponse();
+
+        tracker.onDidSendMessage(initializeResponse);
+
+        assert.strictEqual(initializeResponse.body.supportsRestartRequest, true);
+
+        disposable.dispose();
+    });
+
+    test('apphost direct restart handling leaves every other message untouched', () => {
+        const restartRequested = sinon.stub().returns(true);
+        const disposable = createDebugAdapterTracker(dcpServer as any, 'go', {
+            debugSessionId: 'debug-456',
+            disableDirectRestart: true,
+            onRestartRequested: restartRequested
+        });
+        const factory = registerFactoryStub.lastCall.args[1];
+        const tracker = factory.createDebugAdapterTracker(createAppHostSession());
+        const adapterMessages = [
+            { type: 'response', seq: 3, request_seq: 2, success: true, command: 'launch', body: { supportsRestartRequest: true } },
+            { type: 'response', seq: 4, request_seq: 1, success: false, command: 'initialize', message: 'adapter failed to start' },
+            { type: 'event', seq: 5, event: 'initialized' },
+            { type: 'event', seq: 6, event: 'process', body: { name: 'apphost', systemProcessId: 4242 } },
+            { type: 'request', seq: 7, command: 'runInTerminal', arguments: { args: ['apphost'] } }
+        ];
+        const clientRequests = [
+            { type: 'request', seq: 1, command: 'initialize', arguments: { adapterID: 'go' } },
+            { type: 'request', seq: 2, command: 'launch', arguments: { mode: 'debug' } }
+        ];
+
+        for (const message of adapterMessages) {
+            const expected = JSON.parse(JSON.stringify(message));
+            tracker.onDidSendMessage(message);
+            assert.deepStrictEqual(message, expected);
+        }
+
+        for (const request of clientRequests) {
+            const expected = JSON.parse(JSON.stringify(request));
+            tracker.onWillReceiveMessage(request);
+            assert.deepStrictEqual(request, expected);
+        }
+
+        sinon.assert.notCalled(restartRequested);
+        disposable.dispose();
     });
 
     test('apphost lifecycle events are not sent as DCP run-session notifications', async () => {

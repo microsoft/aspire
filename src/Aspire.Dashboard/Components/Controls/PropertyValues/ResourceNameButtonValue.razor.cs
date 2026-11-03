@@ -54,7 +54,10 @@ public partial class ResourceNameButtonValue
     {
         Debug.Assert(_resource != null, "Should only get here if there is a matched resource.");
 
-        NavigationManager.NavigateTo(DashboardUrls.ResourcesUrl(_resource.Name));
+        // The previous experience keeps main's query-based resource URL, which its resources page supports.
+        NavigationManager.NavigateTo(DashboardExperienceComponents.IsLegacyLocation(NavigationManager)
+            ? DashboardUrls.ResourcesUrl(resource: _resource.Name)
+            : DashboardUrls.ResourceOverviewUrl(_resource.Name));
         return Task.CompletedTask;
     }
 }

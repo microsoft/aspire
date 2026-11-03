@@ -17,6 +17,7 @@ const container = await builder.addContainer("api", "mcr.microsoft.com/dotnet/sa
 const executable = await builder.addExecutable("worker", "dotnet", ".", ["--info"]);
 const endpoint = await container.getEndpoint("http");
 const identity = await builder.addAzureUserAssignedIdentity("identity");
+const vault = await builder.addAzureKeyVault("vault");
 
 // Existing registrations: configuration only, with literal or parameter IDs in any combination.
 const existingEntra = await builder.addExistingEntraApplication("existing-entra", tenantId, exampleClient);
@@ -31,6 +32,7 @@ await existingEntra.withFederatedManagedIdentityCredential(exampleClient, {
     tokenExchangeAuthority: "https://login.microsoftonline.com/",
 });
 await existingEntra.withCertificateFromKeyVault("https://vault.vault.azure.net", "certificate");
+await existingEntra.withCertificateFromKeyVault(vault, "vault-certificate");
 await existingEntra.withCertificateThumbprint("CurrentUser/My", "thumbprint");
 await existingEntra.withCertificateDistinguishedName("CurrentUser/My", "CN=certificate");
 await existingEntra.withCertificateFromFile("/certs/client.pfx", { password: certificatePassword });
@@ -69,6 +71,7 @@ await createdEntra.withRedirectUris(redirectUris);
 await createdEntra.withRedirectUris(redirectHost, { callbackPaths: ["/signin", "/signout"] });
 await createdEntra.withRedirectUris(endpoint, { callbackPaths: ["/signin"] });
 await container.withReference(createdEntra);
+await createdEntra.runWithLocalDeveloperCertificateCredential();
 await createdEntra.publishWithFederatedManagedIdentityCredential();
 await createdEntra.publishWithFederatedManagedIdentityCredential({ identity: container });
 await createdEntra.publishWithFederatedManagedIdentityCredential({ identity });

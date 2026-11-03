@@ -21,6 +21,12 @@ public class InstrumentViewModel
     public string? Theme { get; set; }
     public bool ShowCount { get; set; }
 
+    /// <summary>
+    /// Gets or sets whether a counter shows its running total instead of its change per interval.
+    /// The change per interval is the default: it shows when activity happened, and matches the counter's card.
+    /// </summary>
+    public bool ShowRunningTotal { get; set; }
+
     internal void AddDataUpdateSubscription(Func<Task> subscription)
     {
         ImmutableInterlocked.Update(ref _dataUpdateSubscriptions, static (subscriptions, subscription) => subscriptions.Add(subscription), subscription);

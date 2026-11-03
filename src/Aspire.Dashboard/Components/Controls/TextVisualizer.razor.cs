@@ -39,6 +39,9 @@ public partial class TextVisualizer : ComponentBase, IAsyncDisposable
     public bool DisplayUnformatted { get; set; }
 
     [Parameter]
+    public bool NoWrap { get; set; }
+
+    [Parameter]
     public bool Virtualize { get; set; } = true;
 
     private bool IsUnformatted => DisplayUnformatted || ViewModel.FormatKind is DashboardUIHelpers.PlaintextFormat;

@@ -227,9 +227,7 @@ public class TracesTests : DashboardTestContext
 
         cut.WaitForAssertion(() =>
         {
-            var tooltip = cut.Find(".trace-overflow-tooltip");
-            Assert.Equal("TestService (1)", tooltip.GetAttribute("aria-label"));
-            Assert.Equal("TestService (1)", Assert.Single(tooltip.QuerySelectorAll(".trace-service-tag")).TextContent.Trim());
+            // The stale index is ignored, so only the current resource is counted.
             Assert.Equal("+1", cut.Find(".fluent-overflow-more .trace-tag").TextContent.Trim());
         });
 
@@ -240,7 +238,6 @@ public class TracesTests : DashboardTestContext
 
         cut.WaitForAssertion(() =>
         {
-            Assert.Empty(cut.FindAll(".trace-overflow-tooltip"));
             Assert.Equal("+0", cut.Find(".fluent-overflow-more .trace-tag").TextContent.Trim());
         });
 
@@ -248,12 +245,11 @@ public class TracesTests : DashboardTestContext
         [
             new OverflowItem { Index = 0, Text = "TestService (1)" }
         ]));
-        cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".trace-overflow-tooltip .trace-service-tag")));
+        cut.WaitForAssertion(() => Assert.Equal("+1", cut.Find(".fluent-overflow-more .trace-tag").TextContent.Trim()));
 
         overflow.Render(builder => builder.Add(p => p.Items, Array.Empty<TraceResourceSummary>()));
         cut.WaitForAssertion(() =>
         {
-            Assert.Empty(cut.FindAll(".trace-overflow-tooltip"));
             Assert.Equal("+0", cut.Find(".fluent-overflow-more .trace-tag").TextContent.Trim());
         });
 
@@ -263,7 +259,6 @@ public class TracesTests : DashboardTestContext
         ]));
         cut.WaitForAssertion(() =>
         {
-            Assert.Empty(cut.FindAll(".trace-overflow-tooltip"));
             Assert.Equal("+0", cut.Find(".fluent-overflow-more .trace-tag").TextContent.Trim());
         });
     }

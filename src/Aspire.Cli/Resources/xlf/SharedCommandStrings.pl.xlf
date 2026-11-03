@@ -172,6 +172,11 @@
         <target state="translated">Wybierz hosta aplikacji, aby {0}:</target>
         <note />
       </trans-unit>
+      <trans-unit id="SourceTrustWarning">
+        <source>Only use sources you trust. Content from these sources can run code on your machine.</source>
+        <target state="new">Only use sources you trust. Content from these sources can run code on your machine.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="UnrecognizedOptionDidYouMeanFormat">
         <source>Unrecognized option '{0}'. Did you mean '{1}'?</source>
         <target state="translated">Nierozpoznana opcja: „{0}”. Czy chodziło Ci o element „{1}”?</target>

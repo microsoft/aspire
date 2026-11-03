@@ -22,6 +22,81 @@ public class LogEntriesTests
         logEntries.InsertSorted(logEntry);
     }
 
+    [Theory]
+    [InlineData(int.MaxValue)]
+    [InlineData(300)]
+    [InlineData(40)]
+    public void InsertSortedRange_MatchesInsertingEachEntryInTimestampOrder(int maximumEntryCount)
+    {
+        // Several resources' logs are interleaved: each batch spans the existing entries' time range, including entries
+        // older than every buffered entry and entries with the same timestamp as buffered ones.
+        var random = new Random(1234);
+        var start = new DateTime(2024, 8, 19, 6, 0, 0, DateTimeKind.Utc);
+        var oneByOne = CreateLogEntries(maximumEntryCount, baseLineNumber: 7);
+        var merged = CreateLogEntries(maximumEntryCount, baseLineNumber: 7);
+        var entryId = 0;
+
+        List<(LogEntry OneByOne, LogEntry Merged)> CreateBatch(int count)
+        {
+            var batch = new List<(LogEntry, LogEntry)>();
+            for (var i = 0; i < count; i++)
+            {
+                var line = $"{start.AddSeconds(random.Next(0, 500)):yyyy-MM-ddTHH:mm:ss.fffZ} entry {entryId++}";
+                batch.Add((CreateEntry(line), CreateEntry(line)));
+            }
+            return batch;
+        }
+
+        foreach (var (one, other) in CreateBatch(20))
+        {
+            oneByOne.InsertSorted(one);
+            merged.InsertSorted(other);
+        }
+
+        var total = 20;
+        for (var round = 0; round < 12; round++)
+        {
+            var batch = CreateBatch(random.Next(16, 120));
+            total += batch.Count;
+            foreach (var (entry, _) in batch.OrderBy(pair => pair.OneByOne.Timestamp))
+            {
+                oneByOne.InsertSorted(entry);
+            }
+            merged.InsertSortedRange(batch.Select(pair => pair.Merged).ToList());
+
+            // The same entries are kept, in the same order.
+            Assert.Equal(oneByOne.GetEntries().Select(e => e.RawContent), merged.GetEntries().Select(e => e.RawContent));
+
+            // Entries are numbered by their position in the whole history: consecutive, after the dropped entries.
+            // Inserting one by one numbers the same way until the buffer is full.
+            var expectedFirst = 7 + total - merged.EntriesCount;
+            Assert.Equal(Enumerable.Range(expectedFirst, merged.EntriesCount), merged.GetEntries().Select(e => e.LineNumber));
+            if (total <= maximumEntryCount)
+            {
+                Assert.Equal(oneByOne.GetEntries().Select(e => e.LineNumber), merged.GetEntries().Select(e => e.LineNumber));
+            }
+        }
+
+        static LogEntry CreateEntry(string line) =>
+            new LogParser(ConsoleColor.Black, encodeForHtml: true).CreateLogEntry(line, isErrorOutput: false, resourcePrefix: null);
+    }
+
+    [Fact]
+    public void InsertSortedRange_WithPausedEntries_InsertsEachEntry()
+    {
+        var logEntries = CreateLogEntries();
+        var logParser = new LogParser(ConsoleColor.Black, encodeForHtml: true);
+        logEntries.InsertSorted(logParser.CreateLogEntry("2024-08-19T06:12:30.000Z last", isErrorOutput: false, resourcePrefix: null));
+        logEntries.InsertSorted(LogEntry.CreatePause("resource", new DateTime(2024, 8, 19, 6, 12, 40, DateTimeKind.Utc)));
+
+        logEntries.InsertSortedRange([.. Enumerable.Range(0, 20).Select(i =>
+            logParser.CreateLogEntry($"2024-08-19T06:12:{i:00}.000Z entry {i}", isErrorOutput: false, resourcePrefix: null))]);
+
+        Assert.Equal(22, logEntries.EntriesCount);
+        Assert.Equal(LogEntryType.Pause, logEntries.GetEntries()[^1].Type);
+        Assert.Equal(Enumerable.Range(1, 21), logEntries.GetEntries().Take(21).Select(e => e.LineNumber));
+    }
+
     [Fact]
     public void Clear_AfterEarliestTimestampIndex_Success()
     {

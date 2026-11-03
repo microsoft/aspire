@@ -34,21 +34,6 @@ public sealed class SpanWaterfallViewModel
         }
     }
 
-    public string GetTooltip(List<OtlpResource> allResources)
-    {
-        var tooltip = GetTitle(Span, allResources);
-        if (IsError)
-        {
-            tooltip += Environment.NewLine + "Status = Error";
-        }
-        if (HasUninstrumentedPeer)
-        {
-            tooltip += Environment.NewLine + $"Outgoing call to {UninstrumentedPeer}";
-        }
-
-        return tooltip;
-    }
-
     private void UpdateHidden(bool isParentCollapsed = false)
     {
         IsHidden = isParentCollapsed;

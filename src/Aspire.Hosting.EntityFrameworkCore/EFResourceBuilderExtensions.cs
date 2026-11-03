@@ -4,7 +4,6 @@
 #pragma warning disable ASPIREDOTNETTOOL
 #pragma warning disable ASPIREPROJECTS001
 
-using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.EntityFrameworkCore;
 using Aspire.Hosting.Pipelines;
@@ -147,7 +146,6 @@ public static class EFResourceBuilderExtensions
     /// <param name="name">The name of the migration resource.</param>
     /// <param name="dbContextTypeName">The fully qualified name of the DbContext type.</param>
     /// <returns>An EF migration resource builder for chaining additional configuration.</returns>
-    [Experimental("ASPIREPROJECTS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addEFMigrations dispatcher export.")]
     public static IResourceBuilder<EFMigrationResource> AddEFMigrations(
         this IResourceBuilder<IDotnetProgramResource> builder,
@@ -169,7 +167,6 @@ public static class EFResourceBuilderExtensions
     /// <param name="dbContextTypeName">The fully qualified name of the DbContext type.</param>
     /// <param name="configureToolResource">An optional callback that configures the dotnet-ef tool resource.</param>
     /// <returns>An EF migration resource builder for chaining additional configuration.</returns>
-    [Experimental("ASPIREPROJECTS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Action<IResourceBuilder<DotnetToolResource>> callbacks are not ATS-compatible.")]
     public static IResourceBuilder<EFMigrationResource> AddEFMigrations(
         this IResourceBuilder<IDotnetProgramResource> builder,
@@ -190,7 +187,6 @@ public static class EFResourceBuilderExtensions
     /// <param name="builder">The startup .NET program resource builder.</param>
     /// <param name="name">The name of the migration resource.</param>
     /// <returns>An EF migration resource builder for chaining additional configuration.</returns>
-    [Experimental("ASPIREPROJECTS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addEFMigrations dispatcher export.")]
     public static IResourceBuilder<EFMigrationResource> AddEFMigrations(
         this IResourceBuilder<IDotnetProgramResource> builder,
@@ -209,7 +205,6 @@ public static class EFResourceBuilderExtensions
     /// <param name="name">The name of the migration resource.</param>
     /// <param name="configureToolResource">An optional callback that configures the dotnet-ef tool resource.</param>
     /// <returns>An EF migration resource builder for chaining additional configuration.</returns>
-    [Experimental("ASPIREPROJECTS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Action<IResourceBuilder<DotnetToolResource>> callbacks are not ATS-compatible.")]
     public static IResourceBuilder<EFMigrationResource> AddEFMigrations(
         this IResourceBuilder<IDotnetProgramResource> builder,

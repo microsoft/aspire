@@ -19,9 +19,10 @@ Each criterion is pass/fail. A good aspirification should hit most of these.
 
 ### AppHost wiring
 - [ ] Full project mode used (`.slnx` detected → creates `*.AppHost/` directory with `.csproj`)
-- [ ] BoardApi modeled as `AddProject` with references to Postgres DB and Redis
-- [ ] AdminDashboard modeled as `AddProject` with reference to Postgres DB
-- [ ] MigrationRunner modeled as `AddProject` with reference to Postgres DB
+- [ ] AppHost includes `Aspire.Hosting.Dotnet`; service paths are relative to the AppHost directory
+- [ ] BoardApi modeled as path-based `AddDotnetProject` with references to Postgres DB and Redis
+- [ ] AdminDashboard modeled as path-based `AddDotnetProject` with reference to Postgres DB
+- [ ] MigrationRunner modeled as path-based `AddDotnetProject` with reference to Postgres DB
 - [ ] Frontend modeled (AddViteApp, AddNpmApp, or similar) with reference to BoardApi
 - [ ] BoardData NOT modeled (it's a class library, not a runnable service)
 
@@ -76,7 +77,7 @@ Each criterion is pass/fail. A good aspirification should hit most of these.
 - [ ] `aspire.config.json` created at repo root
 - [ ] api-weather modeled (AddPythonApp or similar) with Redis reference
 - [ ] api-geo modeled (likely AddDockerfile or custom) with HTTP endpoint using `env: "PORT"`
-- [ ] api-events modeled (AddProject for .csproj) with HTTP endpoint
+- [ ] api-events modeled (`addDotnetProject` for the actual .csproj path, with `Aspire.Hosting.Dotnet` available) with HTTP endpoint
 - [ ] Frontend modeled (AddViteApp or AddNpmApp) with references to backend services
 - [ ] Redis modeled as `addRedis` (typed integration, not raw container)
 

@@ -41,6 +41,7 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
 
         var tripwireConfigService = new global::Aspire.Cli.Tests.TestServices.TestConfigurationService
         {
+            SettingsFilePath = Path.Combine(workspace.Path, ".aspire", "settings.global.json"),
             OnGetConfiguration = key =>
             {
                 if (string.Equals(key, "channel", StringComparison.Ordinal))
