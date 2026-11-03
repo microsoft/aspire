@@ -16,24 +16,7 @@ internal sealed partial class AspireCiWorkflowConventions : IGitHubWorkflowConve
 
     public string WorkflowPath => ".github/workflows/ci.yml";
 
-    internal static bool HasCompleteCombinedResults(JsonArray jobs)
-    {
-        var finalJobs = jobs.OfType<JsonObject>().Where(job => Text(job["name"]) == "Tests / Final Test Results").ToArray();
-        if (finalJobs.Length != 1)
-        {
-            return false;
-        }
-        // Upload runs under always(), even when an earlier download failed. Only
-        // successful downloads of all three runner groups establish coverage.
-        var steps = finalJobs[0]["steps"] as JsonArray ?? [];
-        var downloads = steps.Where(step =>
-            (Text(Field(step, "name")) ?? "").StartsWith("Run actions/download-artifact@", StringComparison.Ordinal)).ToArray();
-        var uploads = steps.Where(step => Text(Field(step, "name")) == "Upload test results").ToArray();
-        return downloads.Length == 3 && downloads.All(step => Text(Field(step, "conclusion")) == "success") &&
-            uploads.Length == 1 && Text(Field(uploads[0], "conclusion")) == "success";
-    }
-
-    internal static int CombinedResultSpecificity(TestArtifactExpectation plan, string entry)
+    internal static int GetMatchingTestShortNameLength(TestArtifactExpectation plan, string entry)
     {
         var match = TestArtifactJobNameRegex().Match(plan.JobName);
         if (plan.Format != TestArtifactFormat.Trx || !match.Success)

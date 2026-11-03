@@ -144,7 +144,7 @@ For Aspire CI's .NET jobs, collection first tries `All-TestResults`, which
 contains only TRX reports rather than logs and crash dumps. Reports are matched
 to actionable jobs using the runner directory and test-short-name filename
 contract in `AspireCiWorkflowConventions`. Passing jobs and other runners cannot
-supply their failures or coverage to an actionable job. All target-framework
+supply their failures or coverage to an actionable job. All matching target-framework
 reports for a matched job are retained with the combined artifact's source ID.
 When short names overlap, the longest matching short name owns the report:
 `Hosting-2_*.trx` belongs to `Hosting-2`, not `Hosting`. Equal-specificity
@@ -165,15 +165,19 @@ artifact must also have unambiguous current-attempt metadata; its size need not
 fit the download cap when only the combined TRX is needed. This prevents a new
 aggregate from making an older attempt's results appear current.
 
-Artifact presence alone does not establish completeness. The
-`Tests / Final Test Results` job must have successfully downloaded all three
-runner groups and completed `Upload test results`, and each covered
-job must have nonempty, parseable, unambiguously associated reports. Missing or
-unusable coverage falls back **per job** to its `logs-*` artifact. Usable combined
-observations survive partial aggregation or a failed fallback, but required
-evidence stays unavailable until that job's fallback succeeds. Combined-result
-fallback reasons remain in collection diagnostics without making a successful
-fallback unavailable. Extension E2E Mocha acquisition is unchanged.
+Artifact presence alone does not establish coverage: each job needs nonempty,
+parseable, unambiguously owned reports that pass the provenance checks above.
+Coverage is based on those available reports, not aggregate-job step results or
+a manifest of expected target frameworks. Failed downloads for other runners or
+failed upload-step metadata do not force fallback when this job's reports are
+present and usable.
+
+Missing, ambiguous or unusable reports fall back **per job** to its `logs-*`
+artifact. Usable combined observations survive another unusable report for the
+same job or a failed fallback, but required evidence stays unavailable until
+that job's fallback succeeds. Combined-result fallback reasons remain in
+collection diagnostics without making a successful fallback unavailable.
+Extension E2E Mocha acquisition is unchanged.
 
 Evidence policy is separate from the result format:
 

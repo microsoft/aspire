@@ -45,11 +45,20 @@ public sealed partial class AnalyzeCiFailureWorkflowTests
         Assert.Equal(fallback, calls.Any(call => call.Contains("actions/artifacts/10/zip", StringComparison.Ordinal)));
         if (scenario == "combined-rerun-history-unavailable")
         {
+            Assert.Equal(["api repos/microsoft/aspire/actions/artifacts/10/zip"],
+                calls.Where(call => call.Contains("actions/artifacts/", StringComparison.Ordinal)));
             var diagnostics = JsonNode.Parse(await File.ReadAllTextAsync(DiagnosticSummary))!;
             Assert.Contains(diagnostics["events"]!.AsArray(), item =>
                 item!["action"]!.GetValue<string>() == "combined-results" &&
                 item["result"]!.GetValue<string>() == "fallback" &&
                 item["detail"]!["reason"]!.GetValue<string>().Contains("ownership", StringComparison.OrdinalIgnoreCase));
+        }
+        else
+        {
+            var ownershipRequest = Array.FindIndex(calls, call => call.Contains("actions/runs/123/jobs?filter=all", StringComparison.Ordinal));
+            var combinedDownload = Array.FindIndex(calls, call => call.Contains("actions/artifacts/12/zip", StringComparison.Ordinal));
+            Assert.True(ownershipRequest >= 0 && combinedDownload > ownershipRequest,
+                "Historical producer ownership must be loaded before downloading combined results.");
         }
     }
 
@@ -97,8 +106,8 @@ public sealed partial class AnalyzeCiFailureWorkflowTests
     [InlineData("combined", "complete", false)]
     [InlineData("combined-missing-job", "complete", true)]
     [InlineData("combined-malformed", "complete", true)]
-    [InlineData("combined-partial", "complete", true)]
-    [InlineData("combined-upload-failure", "complete", true)]
+    [InlineData("combined-partial", "complete", false)]
+    [InlineData("combined-upload-failure", "complete", false)]
     [InlineData("combined-stale", "complete", true)]
     [InlineData("combined-wrong-sha", "complete", true)]
     [InlineData("combined-wrong-run", "complete", true)]
@@ -129,37 +138,27 @@ public sealed partial class AnalyzeCiFailureWorkflowTests
         {
             Assert.Contains(failures, failure => failure!["name"]!.GetValue<string>() == "Suite.Case(value: a/b)");
         }
-        if (scenario == "combined")
-        {
-            Assert.Equal(2, failures.Count);
-            Assert.All(failures, failure => Assert.Equal("12", failure!["sources"]![0]!["artifact_id"]!.GetValue<string>()));
-        }
-        if (scenario is "combined-malformed" or "combined-empty" or "combined-partial" or "combined-upload-failure")
-        {
-            var multipleFrameworks = scenario is "combined-partial" or "combined-upload-failure";
-            Assert.Equal(multipleFrameworks ? 2 : 1, failures.Count);
-            Assert.All(failures, failure => Assert.Equal("Suite.Case(value: a/b)", failure!["name"]!.GetValue<string>()));
-            var net10 = Assert.Single(failures, failure => failure!["sources"]!.AsArray().Any(source =>
-                source!["execution_id"]!.GetValue<string>() == "net10-execution"))!;
-            var net10Sources = net10["sources"]!.AsArray();
-            Assert.Equal(["10", "12"], net10Sources.Select(source => source!["artifact_id"]!.GetValue<string>()).Order(StringComparer.Ordinal));
-            Assert.All(net10Sources, source => Assert.Equal("net10-execution", source!["execution_id"]!.GetValue<string>()));
-            if (multipleFrameworks)
-            {
-                var net11 = Assert.Single(failures, failure => failure!["sources"]!.AsArray().Any(source =>
-                    source!["execution_id"]!.GetValue<string>() == "net11-execution"))!;
-                var source = Assert.Single(net11["sources"]!.AsArray())!;
-                Assert.Equal("12", source["artifact_id"]!.GetValue<string>());
-                Assert.Equal("net11-execution", source["execution_id"]!.GetValue<string>());
-            }
-        }
-        if (scenario == "combined-no-fallback")
+        if (scenario is "combined" or "combined-partial" or "combined-upload-failure")
         {
             Assert.Equal(2, failures.Count);
             var sources = failures.Select(failure => Assert.Single(failure!["sources"]!.AsArray())!).ToArray();
             Assert.All(sources, source => Assert.Equal("12", source["artifact_id"]!.GetValue<string>()));
             Assert.Equal(["net10-execution", "net11-execution"],
                 sources.Select(source => source["execution_id"]!.GetValue<string>()).Order(StringComparer.Ordinal));
+        }
+        if (scenario is "combined-malformed" or "combined-empty")
+        {
+            var net10 = Assert.Single(failures)!;
+            Assert.Equal("Suite.Case(value: a/b)", net10["name"]!.GetValue<string>());
+            var net10Sources = net10["sources"]!.AsArray();
+            Assert.Equal(["10", "12"], net10Sources.Select(source => source!["artifact_id"]!.GetValue<string>()).Order(StringComparer.Ordinal));
+            Assert.All(net10Sources, source => Assert.Equal("net10-execution", source!["execution_id"]!.GetValue<string>()));
+        }
+        if (scenario == "combined-no-fallback")
+        {
+            var source = Assert.Single(Assert.Single(failures)!["sources"]!.AsArray())!;
+            Assert.Equal("12", source["artifact_id"]!.GetValue<string>());
+            Assert.Equal("net10-execution", source["execution_id"]!.GetValue<string>());
         }
         var calls = await File.ReadAllLinesAsync(Path.Combine(_workspace.Path, "gh-calls.log"));
         Assert.Equal(fallback && scenario is not "combined-no-fallback" and not "combined-source-stale", calls.Any(call => call.Contains("actions/artifacts/10/zip", StringComparison.Ordinal)));
@@ -1025,7 +1024,7 @@ public sealed partial class AnalyzeCiFailureWorkflowTests
                 {
                     await WriteZipEntryAsync(archive, "ubuntu-latest/testresults/Infrastructure_net10.0_20260904120100.trx", report);
                     await WriteZipEntryAsync(archive, "ubuntu-latest/testresults/Infrastructure_net11.0_20260904120100.trx",
-                        scenario == "combined-malformed" ? "malformed" : scenario == "combined-empty" ? "<TestRun />" :
+                        scenario is "combined-malformed" or "combined-no-fallback" ? "malformed" : scenario == "combined-empty" ? "<TestRun />" :
                         FrameworkResult(scenario == "combined-split-producer" ? "Base.MustNotAppear" : "Suite.Case(value: a/b)", "net11-execution", "Assertion failed"));
                 }
                 if (scenario is "combined-rerun-sibling" or "combined-rerun-sibling-only")
@@ -1078,7 +1077,7 @@ public sealed partial class AnalyzeCiFailureWorkflowTests
                 {
                     ["number"] = index + 4,
                     ["name"] = "Run actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
-                    ["conclusion"] = scenario is "combined-partial" or "combined-no-fallback" && index == 1 ? "failure" : "success",
+                    ["conclusion"] = scenario == "combined-partial" && index == 1 ? "failure" : "success",
                 });
             }
             steps.Add(new JsonObject

@@ -23,7 +23,7 @@ public sealed class AnalyzeCiFailureWorkflowAdapterTests
         var plan = new TestArtifactExpectation("Tests / No-package tests / Infrastructure (ubuntu-latest)",
             "logs-Infrastructure-ubuntu-latest", TestArtifactFormat.Trx, TestEvidencePolicy.Required);
 
-        Assert.Equal(expected, AspireCiWorkflowConventions.CombinedResultSpecificity(plan, entry) > 0);
+        Assert.Equal(expected, AspireCiWorkflowConventions.GetMatchingTestShortNameLength(plan, entry) > 0);
     }
 
     [Theory]

@@ -659,114 +659,7 @@ internal sealed partial class WorkflowRunEvidenceCollector
             var coveredPlans = new HashSet<TestArtifactExpectation>();
             if (_workflow is AspireCiWorkflowConventions && plans.Any(plan => plan.Format == TestArtifactFormat.Trx))
             {
-                var combinedPlan = new TestArtifactExpectation("All-TestResults", "All-TestResults", TestArtifactFormat.Trx, TestEvidencePolicy.Required);
-                try
-                {
-                    var combined = TestResultArtifacts.Select(TestResultArtifacts.ReadArtifacts(artifacts), [combinedPlan],
-                        Text(run["run_started_at"]) ?? "", Text(run["updated_at"]) ?? "", diagnostics: _progress.Diagnostics).Single();
-                    IEnumerable<JsonObject> producerJobs = allJobs.OfType<JsonObject>();
-                    if (runAttempt > 1)
-                    {
-                        // Include cross-attempt producer context defensively when resolving
-                        // ownership of reports carried into a rerun's All-TestResults.
-                        // Historical jobs must never enter the actionable failure inventory.
-                        JsonArray historicalJobs;
-                        try
-                        {
-                            historicalJobs = await gitHub.GetRowsAsync($"repos/{_repository}/actions/runs/{runId.ToString(CultureInfo.InvariantCulture)}/jobs?filter=all", "jobs");
-                            if (historicalJobs.Count == 0 || historicalJobs.Any(job => string.IsNullOrEmpty(Text(Field(job, "name")))))
-                            {
-                                throw new ValidationException("Historical job inventory is empty or contains unnamed producers.");
-                            }
-                        }
-                        catch (Exception error) when (error is ValidationException or JsonException or IOException)
-                        {
-                            throw new ValidationException($"Combined result producer ownership is unavailable: {error.Message}", error);
-                        }
-                        var currentNames = producerJobs.Select(job => Text(job["name"])).ToHashSet(StringComparer.Ordinal);
-                        producerJobs = producerJobs.Concat(historicalJobs.OfType<JsonObject>()
-                            .Where(job => !currentNames.Contains(Text(job["name"])))
-                            .DistinctBy(job => Text(job["name"]), StringComparer.Ordinal));
-                    }
-                    var producers = producerJobs.SelectMany(job => _workflow.DescribeTestArtifacts(job, runAttempt)).ToArray();
-                    var files = new List<(string Entry, string File)>();
-                    if (await AcquireAsync(combined, (entry, file) => files.Add((entry, file)), reportFailure: false))
-                    {
-                        // Include passing producers when checking ownership: similarly named
-                        // jobs must never lend their failures or coverage to an actionable job.
-                        // Hosting-2_*.trx belongs to Hosting-2, not Hosting. Prefer the
-                        // longest matching short name; equally specific producers stay ambiguous.
-                        var owners = files.ToDictionary(file => file.File, file =>
-                        {
-                            var matches = producers.Select(producer => new
-                            {
-                                Plan = producer,
-                                Specificity = AspireCiWorkflowConventions.CombinedResultSpecificity(producer, file.Entry),
-                            }).Where(match => match.Specificity > 0).OrderByDescending(match => match.Specificity).ToArray();
-                            return matches.Length > 0 && (matches.Length == 1 || matches[0].Specificity > matches[1].Specificity)
-                                ? matches[0].Plan : null;
-                        }, StringComparer.Ordinal);
-                        foreach (var plan in plans.Where(plan => plan.Format == TestArtifactFormat.Trx))
-                        {
-                            // A rerun's new aggregate can include logs left by an older attempt.
-                            // Verify the source artifact's attempt window without imposing the
-                            // download limit: oversized logs are precisely why we prefer TRX.
-                            try
-                            {
-                                var source = TestResultArtifacts.Select(TestResultArtifacts.ReadArtifacts(artifacts), [plan],
-                                    Text(run["run_started_at"]) ?? "", Text(run["updated_at"]) ?? "",
-                                    maxArtifactBytes: long.MaxValue, maxTotalBytes: long.MaxValue).Single();
-                                ValidateAssociatedRun(source);
-                            }
-                            catch (Exception error) when (error is ValidationException or InvalidOperationException)
-                            {
-                                _progress.Diagnostics.Record("combined-results", "fallback", new { job = plan.JobName, reason = error.Message });
-                                continue;
-                            }
-                            var matching = files.Where(file => owners[file.File] == plan).ToArray();
-                            var usable = new List<string>();
-                            var complete = matching.Length > 0 &&
-                                AspireCiWorkflowConventions.HasCompleteCombinedResults(allJobs);
-                            foreach (var file in matching)
-                            {
-                                try
-                                {
-                                    var report = TrxReader.DeserializeTrxFile(Path.Combine(_scratch.Results, GetValueText(combined.Artifact.Id), file.File));
-                                    if (report?.Results?.UnitTestResults is not { Count: > 0 } results ||
-                                        results.Any(result => string.IsNullOrWhiteSpace(result.TestName) || string.IsNullOrWhiteSpace(result.Outcome)))
-                                    {
-                                        throw new ValidationException("Combined TRX report has no usable test results.");
-                                    }
-                                    usable.Add(file.File);
-                                }
-                                catch (Exception error) when (error is ValidationException or IOException or InvalidOperationException or System.Xml.XmlException)
-                                {
-                                    complete = false;
-                                    _progress.Diagnostics.Record("combined-results", "unusable-report", new { job = plan.JobName, file = file.File, reason = error.Message });
-                                }
-                            }
-                            if (usable.Count > 0)
-                            {
-                                acquiredArtifacts.Add(new(combined.Artifact, plan) { ResultFiles = usable });
-                            }
-                            if (complete)
-                            {
-                                coveredPlans.Add(plan);
-                            }
-                            _progress.Diagnostics.Record("combined-results", complete ? "covered" : "fallback",
-                                new { job = plan.JobName, matched = matching.Length, usable = usable.Count, reason = complete ? null : "Missing, ambiguous or unusable reports, or incomplete aggregation downloads." });
-                        }
-                    }
-                    else
-                    {
-                        _progress.Diagnostics.Record("combined-results", "fallback",
-                            new { reason = "Combined artifact acquisition failed; see artifact-acquisition diagnostics." });
-                    }
-                }
-                catch (Exception error) when (error is ValidationException or IOException or InvalidOperationException)
-                {
-                    _progress.Diagnostics.Record("combined-results", "fallback", new { reason = error.Message });
-                }
+                await CollectCombinedResultsAsync();
             }
             var fallbackPlans = plans.Where(plan => !coveredPlans.Contains(plan)).ToArray();
             var explainedAbsences = plans.Where(plan => ExplainedRunnerLoss(plan.JobName) &&
@@ -836,6 +729,65 @@ internal sealed partial class WorkflowRunEvidenceCollector
                 else if (selection.RequiresResults)
                 {
                     evidenceState = EvidenceState.Unavailable;
+                }
+            }
+
+            async Task CollectCombinedResultsAsync()
+            {
+                var combinedPlan = new TestArtifactExpectation("All-TestResults", "All-TestResults", TestArtifactFormat.Trx, TestEvidencePolicy.Required);
+                try
+                {
+                    var combined = TestResultArtifacts.Select(TestResultArtifacts.ReadArtifacts(artifacts), [combinedPlan],
+                        Text(run["run_started_at"]) ?? "", Text(run["updated_at"]) ?? "", diagnostics: _progress.Diagnostics).Single();
+                    var producers = await LoadCombinedResultProducersAsync(gitHub, runId, runAttempt, allJobs);
+                    var files = new List<(string EntryPath, string ExtractedFileName)>();
+                    if (await AcquireAsync(combined, (entry, file) => files.Add((entry, file)), reportFailure: false))
+                    {
+                        var owners = files.ToDictionary(file => file.ExtractedFileName,
+                            file => FindCombinedReportOwner(file.EntryPath, producers), StringComparer.Ordinal);
+                        foreach (var plan in plans.Where(plan => plan.Format == TestArtifactFormat.Trx))
+                        {
+                            // A rerun's new aggregate can include logs left by an older attempt.
+                            // Verify the source artifact's attempt window without imposing the
+                            // download limit: oversized logs are precisely why we prefer TRX.
+                            try
+                            {
+                                var source = TestResultArtifacts.Select(TestResultArtifacts.ReadArtifacts(artifacts), [plan],
+                                    Text(run["run_started_at"]) ?? "", Text(run["updated_at"]) ?? "",
+                                    maxArtifactBytes: long.MaxValue, maxTotalBytes: long.MaxValue).Single();
+                                ValidateAssociatedRun(source);
+                            }
+                            catch (Exception error) when (error is ValidationException or InvalidOperationException)
+                            {
+                                _progress.Diagnostics.Record("combined-results", "fallback", new { job = plan.JobName, reason = error.Message });
+                                continue;
+                            }
+                            var matching = files.Where(file => owners[file.ExtractedFileName] == plan)
+                                .Select(file => file.ExtractedFileName).ToArray();
+                            var usable = ReadUsableCombinedReports(plan,
+                                Path.Combine(_scratch.Results, GetValueText(combined.Artifact.Id)), matching);
+                            var complete = matching.Length > 0 && usable.Count == matching.Length;
+                            if (usable.Count > 0)
+                            {
+                                acquiredArtifacts.Add(new(combined.Artifact, plan) { ResultFiles = usable });
+                            }
+                            if (complete)
+                            {
+                                coveredPlans.Add(plan);
+                            }
+                            _progress.Diagnostics.Record("combined-results", complete ? "covered" : "fallback",
+                                new { job = plan.JobName, matched = matching.Length, usable = usable.Count, reason = complete ? null : "Missing, ambiguous or unusable reports." });
+                        }
+                    }
+                    else
+                    {
+                        _progress.Diagnostics.Record("combined-results", "fallback",
+                            new { reason = "Combined artifact acquisition failed; see artifact-acquisition diagnostics." });
+                    }
+                }
+                catch (Exception error) when (error is ValidationException or IOException or InvalidOperationException)
+                {
+                    _progress.Diagnostics.Record("combined-results", "fallback", new { reason = error.Message });
                 }
             }
 
@@ -930,6 +882,80 @@ internal sealed partial class WorkflowRunEvidenceCollector
             var matches = failedJobs.OfType<JsonObject>().Where(job => Text(job["name"]) == jobName).ToArray();
             return matches.Length == 1 && _runnerFailures.ContainsKey(GetValueText(matches[0]["id"]));
         }
+    }
+
+    private async Task<TestArtifactExpectation[]> LoadCombinedResultProducersAsync(
+        AnalysisGitHubClient gitHub,
+        long runId,
+        int runAttempt,
+        JsonArray allJobs)
+    {
+        IEnumerable<JsonObject> producerJobs = allJobs.OfType<JsonObject>();
+        if (runAttempt > 1)
+        {
+            // Include cross-attempt producer context defensively when resolving
+            // ownership of reports carried into a rerun's All-TestResults.
+            // Historical jobs must never enter the actionable failure inventory.
+            JsonArray historicalJobs;
+            try
+            {
+                historicalJobs = await gitHub.GetRowsAsync($"repos/{_repository}/actions/runs/{runId.ToString(CultureInfo.InvariantCulture)}/jobs?filter=all", "jobs");
+                if (historicalJobs.Count == 0 || historicalJobs.Any(job => string.IsNullOrEmpty(Text(Field(job, "name")))))
+                {
+                    throw new ValidationException("Historical job inventory is empty or contains unnamed producers.");
+                }
+            }
+            catch (Exception error) when (error is ValidationException or JsonException or IOException)
+            {
+                throw new ValidationException($"Combined result producer ownership is unavailable: {error.Message}", error);
+            }
+            var currentNames = producerJobs.Select(job => Text(job["name"])).ToHashSet(StringComparer.Ordinal);
+            producerJobs = producerJobs.Concat(historicalJobs.OfType<JsonObject>()
+                .Where(job => !currentNames.Contains(Text(job["name"])))
+                .DistinctBy(job => Text(job["name"]), StringComparer.Ordinal));
+        }
+
+        return producerJobs.SelectMany(job => _workflow.DescribeTestArtifacts(job, runAttempt)).ToArray();
+    }
+
+    private static TestArtifactExpectation? FindCombinedReportOwner(string entryPath, TestArtifactExpectation[] producers)
+    {
+        // Include passing producers when checking ownership: similarly named
+        // jobs must never lend their failures or coverage to an actionable job.
+        // Hosting-2_*.trx belongs to Hosting-2, not Hosting. Prefer the
+        // longest matching short name; equally specific producers stay ambiguous.
+        var matches = producers.Select(producer => new
+        {
+            Plan = producer,
+            MatchingShortNameLength = AspireCiWorkflowConventions.GetMatchingTestShortNameLength(producer, entryPath),
+        }).Where(match => match.MatchingShortNameLength > 0).OrderByDescending(match => match.MatchingShortNameLength).ToArray();
+
+        return matches.Length > 0 && (matches.Length == 1 || matches[0].MatchingShortNameLength > matches[1].MatchingShortNameLength)
+            ? matches[0].Plan : null;
+    }
+
+    private List<string> ReadUsableCombinedReports(TestArtifactExpectation plan, string resultsDirectory, string[] matchingFileNames)
+    {
+        var usable = new List<string>();
+        foreach (var fileName in matchingFileNames)
+        {
+            try
+            {
+                var report = TrxReader.DeserializeTrxFile(Path.Combine(resultsDirectory, fileName));
+                if (report?.Results?.UnitTestResults is not { Count: > 0 } results ||
+                    results.Any(result => string.IsNullOrWhiteSpace(result.TestName) || string.IsNullOrWhiteSpace(result.Outcome)))
+                {
+                    throw new ValidationException("Combined TRX report has no usable test results.");
+                }
+                usable.Add(fileName);
+            }
+            catch (Exception error) when (error is ValidationException or IOException or InvalidOperationException or System.Xml.XmlException)
+            {
+                _progress.Diagnostics.Record("combined-results", "unusable-report", new { job = plan.JobName, file = fileName, reason = error.Message });
+            }
+        }
+
+        return usable;
     }
 
     private void ReportArtifactProblem(AnalysisProblemCategory category, string stage, string message)
