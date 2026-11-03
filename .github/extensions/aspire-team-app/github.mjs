@@ -196,7 +196,7 @@ function isCopilotReviewer(login) {
 }
 function isCopilotLogin(login) {
   const n = String(login || "").toLowerCase();
-  return n === "copilot" || n === "copilot[bot]" || n === "github-copilot[bot]" || n.endsWith("/copilot");
+  return n === "copilot" || n === "copilot-swe-agent" || n === "copilot-swe-agent[bot]" || n === "copilot[bot]" || n === "github-copilot[bot]" || n.endsWith("/copilot");
 }
 
 // Copilot attribution (mirrors GitHubModels.ResolveAuthor): a Copilot-authored PR with
@@ -204,7 +204,7 @@ function isCopilotLogin(login) {
 // human's work rather than a bot.
 function resolveAuthor(login, assignees) {
   if (!isCopilotLogin(login)) return login;
-  const humans = assignees.filter((a) => a && !/\[bot\]$/i.test(a) && a.toLowerCase() !== "copilot");
+  const humans = assignees.filter((a) => a && !/\[bot\]$/i.test(a) && !isCopilotLogin(a));
   return humans.length === 1 ? `${humans[0]}/copilot` : login;
 }
 

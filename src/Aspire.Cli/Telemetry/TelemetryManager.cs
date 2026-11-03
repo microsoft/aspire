@@ -41,19 +41,23 @@ internal sealed class TelemetryManager : IDisposable
 
 #if DEBUG
     // No timeout in debug builds
-    private const int ShutDownTimeoutMilliseconds = -1;
+    private const int DiagnosticShutdownTimeoutMilliseconds = -1;
 #else
     // Chosen to provide time to send remaining telemetry without noticeably delaying exit.
-    private const int ShutDownTimeoutMilliseconds = 200;
+    private const int DiagnosticShutdownTimeoutMilliseconds = 200;
 #endif
     private const int ProfilingForceFlushTimeoutMilliseconds = 5000;
+    private const int ReportedCIShutdownTimeoutMilliseconds = 5000;
+    private const int ReportedFailureShutdownTimeoutMilliseconds = 300;
+    private const string ShutdownDrainBudgetKey = "Azure.Monitor.OpenTelemetry.Exporter.ShutdownDrainBudgetMilliseconds";
+    private const string PersistOnForceFlushSwitchName = "Azure.Monitor.OpenTelemetry.Exporter.PersistOnForceFlush";
+    private const string DisablePersistOnShutdownSwitchName = "Azure.Monitor.OpenTelemetry.Exporter.DisablePersistOnShutdown";
 
     // Agent hooks flush to durable exporter storage before returning. Give persistence its own
     // budget rather than truncating it to the normal Release shutdown window.
     private const int ReportedForceFlushTimeoutMilliseconds = 3000;
 
     private readonly TelemetryConfiguration _telemetryConfiguration;
-    private readonly TelemetryTagsSource _tagsSource;
     private readonly AspireCliTelemetry _telemetry;
     private readonly Func<ResourceBuilder, string, AzureMonitorTelemetryProvider> _createReportedProvider;
     private readonly ILogger<TelemetryManager> _logger;
@@ -67,38 +71,40 @@ internal sealed class TelemetryManager : IDisposable
     /// <summary>
     /// Configures exporter persistence before any providers are created in the CLI process.
     /// </summary>
-    internal static void ConfigureExporterForProcess(bool isAgentTelemetryInvocation)
+    internal static ReportedTelemetryMode ConfigureExporterForProcess(bool isAgentTelemetryInvocation, bool isCIEnvironment)
     {
         // These switches are process-wide, so configure them only at the entry point, not in DI.
-        // Agent hooks must persist before exiting without waiting for ingestion. Keep ordinary
-        // commands' existing shutdown behavior; the exporter owns storage, leases, and retries.
+        // CI cannot rely on a later invocation to drain storage. Agent hooks retain their fast
+        // persistence-before-uploader contract even in CI, rather than waiting on every tool call.
         // https://github.com/Azure/azure-sdk-for-net/blob/Azure.Monitor.OpenTelemetry.Exporter_1.9.0/sdk/monitor/Azure.Monitor.OpenTelemetry.Exporter/README.md#telemetry-delivery-on-shutdown
-        AppContext.SetSwitch("Azure.Monitor.OpenTelemetry.Exporter.PersistOnForceFlush", isAgentTelemetryInvocation);
-        AppContext.SetSwitch("Azure.Monitor.OpenTelemetry.Exporter.DisablePersistOnShutdown", !isAgentTelemetryInvocation);
-        if (isAgentTelemetryInvocation)
+        var mode = (isAgentTelemetryInvocation, isCIEnvironment) switch
         {
-            AppContext.SetData("Azure.Monitor.OpenTelemetry.Exporter.ShutdownDrainBudgetMilliseconds", 0);
-        }
+            (true, _) => ReportedTelemetryMode.Agent,
+            (_, true) => ReportedTelemetryMode.CI,
+            _ => ReportedTelemetryMode.Local
+        };
+        AppContext.SetSwitch(PersistOnForceFlushSwitchName, mode != ReportedTelemetryMode.CI);
+        AppContext.SetSwitch(DisablePersistOnShutdownSwitchName, mode == ReportedTelemetryMode.CI);
+        AppContext.SetData(ShutdownDrainBudgetKey, 0);
+        return mode;
     }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="TelemetryManager"/> class.
     /// </summary>
     /// <param name="telemetryConfiguration">The telemetry configuration.</param>
-    /// <param name="tagsSource">The shared source for background-calculated telemetry tags.</param>
     /// <param name="telemetry">The telemetry service applying the CLI property policy.</param>
     /// <param name="logger">The logger for exporter lifecycle failures.</param>
-    public TelemetryManager(TelemetryConfiguration telemetryConfiguration, TelemetryTagsSource tagsSource, AspireCliTelemetry telemetry, ILogger<TelemetryManager> logger)
+    public TelemetryManager(TelemetryConfiguration telemetryConfiguration, AspireCliTelemetry telemetry, ILogger<TelemetryManager> logger)
     {
         _telemetryConfiguration = telemetryConfiguration;
-        _tagsSource = tagsSource;
         _telemetry = telemetry;
         _logger = logger;
         _createReportedProvider = (resource, storageDirectory) => AzureMonitorTelemetryProvider.Create(
             new ServiceCollection(), resource, AspireCliTelemetry.ReportedActivitySourceName,
             AspireCliTelemetry.EventLogCategoryName, ApplicationInsightsConnectionString, storageDirectory, builder =>
             {
-                builder.AddProcessor(new CliTagEnrichmentProcessor(tagsSource, telemetry));
+                builder.AddProcessor(new ActivityTagEnrichmentProcessor(telemetry));
 #if DEBUG
                 if (telemetryConfiguration.ConsoleExporterLevel == ConsoleExporterLevel.Reported)
                 {
@@ -108,6 +114,7 @@ internal sealed class TelemetryManager : IDisposable
             },
             logging =>
             {
+                logging.AddProcessor(new LogRecordTagEnrichmentProcessor(telemetry));
 #if DEBUG
                 if (telemetryConfiguration.ConsoleExporterLevel == ConsoleExporterLevel.Reported)
                 {
@@ -118,8 +125,8 @@ internal sealed class TelemetryManager : IDisposable
             static _ => { });
     }
 
-    internal TelemetryManager(TelemetryConfiguration telemetryConfiguration, TelemetryTagsSource tagsSource, AspireCliTelemetry telemetry, ILogger<TelemetryManager> logger, Func<ResourceBuilder, string, AzureMonitorTelemetryProvider> createReportedProvider)
-        : this(telemetryConfiguration, tagsSource, telemetry, logger)
+    internal TelemetryManager(TelemetryConfiguration telemetryConfiguration, AspireCliTelemetry telemetry, ILogger<TelemetryManager> logger, Func<ResourceBuilder, string, AzureMonitorTelemetryProvider> createReportedProvider)
+        : this(telemetryConfiguration, telemetry, logger)
     {
         _createReportedProvider = createReportedProvider;
     }
@@ -187,7 +194,6 @@ internal sealed class TelemetryManager : IDisposable
         profilingProvider = null;
         debugDiagnosticProvider = null;
         var telemetryConfiguration = _telemetryConfiguration;
-        var tagsSource = _tagsSource;
 #if DEBUG
         // Preserve the DEBUG-only diagnostic OTLP path for non-profiling diagnostics. When
         // profiling is enabled, the same OTLP endpoint is reserved for the profiling provider
@@ -217,14 +223,14 @@ internal sealed class TelemetryManager : IDisposable
         var diagnosticResource = AddCliService(ResourceBuilder.CreateDefault());
         if (telemetryConfiguration.UseProfilingProvider)
         {
-            profilingProvider = CreateTracerProviderBuilder(ProfilingTelemetry.ActivitySourceName, diagnosticResource, tagsSource, _telemetry)
+            profilingProvider = CreateTracerProviderBuilder(ProfilingTelemetry.ActivitySourceName, diagnosticResource, _telemetry)
                 .AddOtlpExporter()
                 .Build();
         }
 
         if (useDebugDiagnosticProvider)
         {
-            var diagnosticBuilder = CreateTracerProviderBuilder(AspireCliTelemetry.DiagnosticsActivitySourceName, diagnosticResource, tagsSource, _telemetry);
+            var diagnosticBuilder = CreateTracerProviderBuilder(AspireCliTelemetry.DiagnosticsActivitySourceName, diagnosticResource, _telemetry);
 
             if (telemetryConfiguration.ConsoleExporterLevel == ConsoleExporterLevel.Diagnostic)
             {
@@ -240,12 +246,12 @@ internal sealed class TelemetryManager : IDisposable
         }
     }
 
-    private static TracerProviderBuilder CreateTracerProviderBuilder(string sourceName, ResourceBuilder resource, TelemetryTagsSource tagsSource, AspireCliTelemetry telemetry)
+    private static TracerProviderBuilder CreateTracerProviderBuilder(string sourceName, ResourceBuilder resource, AspireCliTelemetry telemetry)
     {
         return Sdk.CreateTracerProviderBuilder()
             .AddSource(sourceName)
             .SetResourceBuilder(resource)
-            .AddProcessor(new CliTagEnrichmentProcessor(tagsSource, telemetry));
+            .AddProcessor(new ActivityTagEnrichmentProcessor(telemetry));
     }
 
     // Environment-derived attributes belong only to diagnostics/profiling, not product export.
@@ -261,12 +267,11 @@ internal sealed class TelemetryManager : IDisposable
     /// Initializes a new instance of the <see cref="TelemetryManager"/> class.
     /// </summary>
     /// <param name="configuration">The configuration to read telemetry settings from.</param>
-    /// <param name="tagsSource">The shared source for background-calculated telemetry tags.</param>
     /// <param name="telemetry">The telemetry service applying the CLI property policy.</param>
     /// <param name="logger">The logger for exporter lifecycle failures.</param>
     /// <param name="args">The command-line arguments.</param>
-    internal TelemetryManager(IConfiguration configuration, TelemetryTagsSource tagsSource, AspireCliTelemetry telemetry, ILogger<TelemetryManager> logger, string[]? args = null)
-        : this(TelemetryConfiguration.Create(configuration, args), tagsSource, telemetry, logger)
+    internal TelemetryManager(IConfiguration configuration, AspireCliTelemetry telemetry, ILogger<TelemetryManager> logger, string[]? args = null)
+        : this(TelemetryConfiguration.Create(configuration, args), telemetry, logger)
     {
     }
 
@@ -374,7 +379,7 @@ internal sealed class TelemetryManager : IDisposable
     /// <summary>
     /// Shuts down initialized telemetry providers, or returns false when initialization was skipped.
     /// </summary>
-    public Task<bool> TryShutdownAsync()
+    public Task<bool> TryShutdownAsync(int exitCode, ReportedTelemetryMode mode)
     {
         lock (_lifecycleLock)
         {
@@ -397,24 +402,58 @@ internal sealed class TelemetryManager : IDisposable
             {
                 // Flush signals independently so adding log export does not extend the exit budget.
                 await Task.WhenAll(
-                    Task.Run(() => profilingProvider?.Shutdown(ShutDownTimeoutMilliseconds)),
-                    Task.Run(() => debugDiagnosticProvider?.Shutdown(ShutDownTimeoutMilliseconds)),
-                    ShutdownReportedProviderAsync(azureMonitorProvider)).ConfigureAwait(false);
+                    Task.Run(() => profilingProvider?.Shutdown(DiagnosticShutdownTimeoutMilliseconds)),
+                    Task.Run(() => debugDiagnosticProvider?.Shutdown(DiagnosticShutdownTimeoutMilliseconds)),
+                    ShutdownReportedProviderAsync(azureMonitorProvider, exitCode, mode)).ConfigureAwait(false);
                 return true;
             });
             return _shutdownTask;
         }
     }
 
-    private async Task ShutdownReportedProviderAsync(AzureMonitorTelemetryProvider? provider)
+    private async Task ShutdownReportedProviderAsync(AzureMonitorTelemetryProvider? provider, int exitCode, ReportedTelemetryMode mode)
     {
         using (provider)
         {
-            if (provider is not null && !await provider.ShutdownAsync(ShutDownTimeoutMilliseconds).ConfigureAwait(false))
+            if (provider is null)
             {
-                _logger.LogWarning("Timed out flushing CLI reported telemetry.");
+                return;
+            }
+
+            var isLocalFailure = mode == ReportedTelemetryMode.Local &&
+                exitCode is not (CliExitCodes.Success or CliExitCodes.Cancelled);
+            var timeout = (mode, isLocalFailure) switch
+            {
+                (ReportedTelemetryMode.CI, _) => ReportedCIShutdownTimeoutMilliseconds,
+                (_, true) => ReportedFailureShutdownTimeoutMilliseconds,
+                _ => Timeout.Infinite
+            };
+            var previousDrainBudget = AppContext.GetData(ShutdownDrainBudgetKey);
+            if (isLocalFailure)
+            {
+                // Match the SDK's initial failure budget: persistence consumes part of this window,
+                // and any remaining time allows an upload attempt. This is not a delivery guarantee.
+                // https://github.com/dotnet/sdk/pull/56274
+                AppContext.SetData(ShutdownDrainBudgetKey, ReportedFailureShutdownTimeoutMilliseconds);
+            }
+            try
+            {
+                // An infinite provider timeout lets local queue persistence finish; the zero drain
+                // budget configured at startup still prevents waiting for network delivery.
+                if (!await provider.ShutdownAsync(timeout).ConfigureAwait(false))
+                {
+                    _logger.LogWarning("Timed out shutting down CLI reported telemetry.");
+                }
+            }
+            finally
+            {
+                if (isLocalFailure)
+                {
+                    AppContext.SetData(ShutdownDrainBudgetKey, previousDrainBudget);
+                }
             }
         }
+
     }
 
     public void Dispose()
@@ -443,4 +482,11 @@ internal sealed class TelemetryManager : IDisposable
         ShuttingDown,
         Disposed
     }
+}
+
+internal enum ReportedTelemetryMode
+{
+    Local,
+    CI,
+    Agent
 }

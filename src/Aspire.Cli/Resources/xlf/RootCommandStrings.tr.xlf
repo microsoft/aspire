@@ -4,7 +4,7 @@
     <body>
       <trans-unit id="BannerArgumentDescription">
         <source>Display the animated Aspire CLI welcome banner</source>
-        <target state="needs-review-translation">Animasyonlu Aspire CLI karşılama başlığını görüntüleyin.</target>
+        <target state="translated">Animasyonlu Aspire CLI karşılama başlığını görüntüleyin</target>
         <note />
       </trans-unit>
       <trans-unit id="BannerVersionFormat">
@@ -19,42 +19,42 @@
       </trans-unit>
       <trans-unit id="CliWaitForDebuggerArgumentDescription">
         <source>Wait for a debugger to attach before executing the command</source>
-        <target state="needs-review-translation">Komutu yürütmeden önce hata ayıklayıcısının eklenmesini bekleyin.</target>
+        <target state="translated">Komutu yürütmeden önce hata ayıklayıcısının eklenmesini bekleyin</target>
         <note />
       </trans-unit>
       <trans-unit id="CompletionScriptDescription">
         <source>Write a shell completion script to standard output</source>
-        <target state="new">Write a shell completion script to standard output</target>
+        <target state="translated">Standart çıkışa bir kabuk tamamlama betiği yazın</target>
         <note />
       </trans-unit>
       <trans-unit id="CompletionShellDescription">
         <source>Shell to generate a script for (bash, fish, pwsh, zsh). Defaults to SHELL, or pwsh on Windows.</source>
-        <target state="new">Shell to generate a script for (bash, fish, pwsh, zsh). Defaults to SHELL, or pwsh on Windows.</target>
+        <target state="translated">Betik oluşturulacak kabuk (bash, fish, pwsh, zsh). Varsayılan olarak SHELL veya Windows’ta pwsh değerini alır.</target>
         <note />
       </trans-unit>
       <trans-unit id="CompletionShellRequired">
         <source>Could not detect a supported shell. Specify bash, fish, pwsh, or zsh: aspire completions script &lt;shell&gt;.</source>
-        <target state="new">Could not detect a supported shell. Specify bash, fish, pwsh, or zsh: aspire completions script &lt;shell&gt;.</target>
+        <target state="translated">Desteklenen bir kabuk algılanamadı. Bash, fish, pwsh veya zsh belirtin: aspire tamamlama betiği &lt;shell&gt;.</target>
         <note />
       </trans-unit>
       <trans-unit id="CompletionsDescription">
         <source>Generate shell completion scripts</source>
-        <target state="new">Generate shell completion scripts</target>
+        <target state="translated">Kabuk tamamlama betikleri oluşturun</target>
         <note />
       </trans-unit>
       <trans-unit id="DebugArgumentDescription">
         <source>Enable debug logging to the console</source>
-        <target state="needs-review-translation">Konsolda hata ayıklama kaydını etkinleştirin.</target>
+        <target state="translated">Konsolda hata ayıklama günlüğüne kaydetme işlevini etkinleştirin</target>
         <note />
       </trans-unit>
       <trans-unit id="DebugLevelArgumentDescription">
         <source>Set the minimum log level for console output (Trace, Debug, Information, Warning, Error, Critical)</source>
-        <target state="new">Set the minimum log level for console output (Trace, Debug, Information, Warning, Error, Critical)</target>
+        <target state="translated">Konsol çıkışı için minimum günlük düzeyini ayarlayın (İzleme, Hata Ayıklama, Bilgi, Uyarı, Hata, Kritik)</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
         <source>The Aspire CLI can be used to create, run, and publish Aspire-based applications</source>
-        <target state="needs-review-translation">Aspire CLI, Aspire tabanlı uygulamalar oluşturmak, çalıştırmak ve yayımlamak için kullanılabilir.</target>
+        <target state="translated">Aspire CLI, Aspire tabanlı uygulamalar oluşturmak, çalıştırmak ve yayımlamak için kullanılabilir</target>
         <note />
       </trans-unit>
       <trans-unit id="FirstTimeUseTelemetryNotice">
@@ -64,37 +64,37 @@
 The Aspire CLI collects usage data. It is collected by Microsoft and is used to help us improve your experience. You can opt out of telemetry by setting the ASPIRE_CLI_TELEMETRY_OPTOUT environment variable to '1' or 'true' using your preferred shell.
 
 Read more about Aspire CLI telemetry: {0}</source>
-        <target state="new">Telemetry
----------
+        <target state="translated">Telemetri
+----------
 
-The Aspire CLI collects usage data. It is collected by Microsoft and is used to help us improve your experience. You can opt out of telemetry by setting the ASPIRE_CLI_TELEMETRY_OPTOUT environment variable to '1' or 'true' using your preferred shell.
+Aspire CLI kullanım verilerini toplar. Kullanım verileri Microsoft tarafından toplanır ve deneyiminizi geliştirmemize yardımcı olması için kullanılır. Telemetriyi geri çevirmek için tercih ettiğiniz kabuğu kullanarak ASPIRE_CLI_TELEMETRY_OPTOUT ortam değişkenini '1' veya 'true' olarak ayarlayabilirsiniz.
 
-Read more about Aspire CLI telemetry: {0}</target>
+Aspire CLI telemetrisi hakkında daha fazla bilgi edinin: {0}</target>
         <note>{0} is a clickable URL</note>
       </trans-unit>
       <trans-unit id="IdentityOverrideNotice">
         <source>Aspire CLI is emulating identity '{0}' version '{1}'. Behavior may differ from the installed build; identity was overridden via environment variables or the install sidecar.</source>
-        <target state="new">Aspire CLI is emulating identity '{0}' version '{1}'. Behavior may differ from the installed build; identity was overridden via environment variables or the install sidecar.</target>
+        <target state="translated">Aspire CLI, kimlik '{0}' sürüm '{1}' öykünüyor. Davranış, yüklü derlemeden farklı olabilir; Kimlik, ortam değişkenleri veya yükleme sepeti aracılığıyla geçersiz kılındı.</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidCompletionRequest">
         <source>Expected [suggest] or [suggest:&lt;cursor&gt;] followed by one command-line string, with the cursor inside that string.</source>
-        <target state="new">Expected [suggest] or [suggest:&lt;cursor&gt;] followed by one command-line string, with the cursor inside that string.</target>
+        <target state="translated">İmleç bu dizenin içinde olacak şekilde, [suggest] veya [suggest:&lt;cursor&gt;] ve ardından bir komut satırı dizesi bekleniyordu.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoLogoArgumentDescription">
         <source>Suppress the startup banner and telemetry notice</source>
-        <target state="needs-review-translation">Başlangıç başlığını ve telemetri bildirimini gizle.</target>
+        <target state="translated">Başlangıç başlığını ve telemetri bildirimini gizleyin</target>
         <note />
       </trans-unit>
       <trans-unit id="NonInteractiveArgumentDescription">
         <source>Run the command in non-interactive mode, disabling all interactive prompts and spinners</source>
-        <target state="new">Run the command in non-interactive mode, disabling all interactive prompts and spinners</target>
+        <target state="translated">Komutu etkileşimli olmayan modda çalıştırarak tüm etkileşimli istemleri ve çarkları devre dışı bırakın</target>
         <note />
       </trans-unit>
       <trans-unit id="WaitForDebuggerArgumentDescription">
         <source>Wait for a debugger to attach before executing the command</source>
-        <target state="needs-review-translation">Komutu yürütmeden önce hata ayıklayıcısının eklenmesini bekleyin.</target>
+        <target state="translated">Komutu yürütmeden önce hata ayıklayıcısının eklenmesini bekleyin</target>
         <note />
       </trans-unit>
       <trans-unit id="WaitingForDebugger">

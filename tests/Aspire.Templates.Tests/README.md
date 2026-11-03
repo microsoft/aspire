@@ -21,6 +21,7 @@ The individual tests need to create projects from templates just like a user wou
 - The .NET 10 SDK comes from `DotNetSdkNet10VersionForTesting` in `eng/Versions.props`; the .NET 11 SDK comes from `global.json`.
 - Templates support only `net10.0` and `net11.0`, defaulting to `net10.0`. Tests provision isolated SDKs in `artifacts/bin/dotnet-10` and `dotnet-11`, plus a .NET 11 SDK with the .NET 10 runtime in `dotnet-tests`.
 - The necessary Aspire components are installed using NuGet packages from `artifacts/packages/*/Shipping`
+- C# AppHosts use explicit `Aspire.Hosting.AppHost` and `Aspire.Hosting.Dotnet` packages. The harness extracts the current-RID Dashboard and orchestration packages and rejects missing native executables. It supplies those real runtime paths and suppresses only the CLI run hook so tests control process lifetime; it does not disable the required bundle. CLI bundle discovery and delegation are covered separately by SDK, CLI, and starter-validation tests.
 - Then, with a custom `nuget.config` which points to the built NuGet packages in `artifacts`, the SDK is configured to use local packages
     - which installs the components using the NuGet packages from the `artifacts` into `artifacts/bin/dotnet-tests`
 - This simulates the SDK being installed on a user's machine, and being independent of the aspire repo.

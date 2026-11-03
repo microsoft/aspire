@@ -19,6 +19,7 @@ internal static class DashboardConfigNames
     public static readonly ConfigName DashboardApplicationName = new("Dashboard:ApplicationName", "ASPIRE_DASHBOARD_APPLICATION_NAME");
     public static readonly ConfigName DashboardDataDirectoryName = new("Dashboard:Data:Directory", "ASPIRE_DASHBOARD_DATA_DIRECTORY");
     public static readonly ConfigName DashboardPersistenceModeName = new("Dashboard:Data:PersistenceMode", "ASPIRE_DASHBOARD_PERSISTENCE_MODE");
+    public static readonly ConfigName DashboardLaunchContextName = new("Dashboard:LaunchContext", "DASHBOARD__LAUNCHCONTEXT");
 
     public static readonly ConfigName DashboardOtlpAuthModeName = new("Dashboard:Otlp:AuthMode", "DASHBOARD__OTLP__AUTHMODE");
     public static readonly ConfigName DashboardOtlpPrimaryApiKeyName = new("Dashboard:Otlp:PrimaryApiKey", "DASHBOARD__OTLP__PRIMARYAPIKEY");
@@ -46,6 +47,7 @@ internal static class DashboardConfigNames
     public static readonly ConfigName ResourceServiceClientCertificateSubjectName = new("Dashboard:ResourceServiceClient:ClientCertificate:Subject", "DASHBOARD__RESOURCESERVICECLIENT__CLIENTCERTIFICATE__SUBJECT");
     public static readonly ConfigName ResourceServiceClientApiKeyName = new("Dashboard:ResourceServiceClient:ApiKey", "DASHBOARD__RESOURCESERVICECLIENT__APIKEY");
     public static readonly ConfigName UIDisableResourceGraphName = new("Dashboard:UI:DisableResourceGraph", "DASHBOARD__UI__DISABLERESOURCEGRAPH");
+    public static readonly ConfigName UIDisableModernDashboardName = new("Dashboard:UI:DisableModernDashboard", "DASHBOARD__UI__DISABLEMODERNDASHBOARD");
     public static readonly ConfigName UIDisableImportName = new("Dashboard:UI:DisableImport", "DASHBOARD__UI__DISABLEIMPORT");
     public static readonly ConfigName UIDisableAgentHelpName = new("Dashboard:UI:DisableAgentHelp", "DASHBOARD__UI__DISABLEAGENTHELP");
 

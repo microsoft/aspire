@@ -533,6 +533,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         }
 
         var (stepsToExecute, stepsByName) = FilterStepsForExecution(allSteps, context);
+        context.SelectedSteps = stepsToExecute.AsReadOnly();
 
         // Build dependency graph and execute with readiness-based scheduler
         await ExecuteStepsAsTaskDag(stepsToExecute, stepsByName, context).ConfigureAwait(false);
@@ -548,7 +549,10 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         string stepName,
         PipelineContext context)
     {
-        var allSteps = await ResolveStepsAsync(context).ConfigureAwait(false);
+        // Validate references only for the steps that will execute. Steps outside the target's
+        // closure may depend on steps that do not exist yet, such as deployment-target provisioning
+        // steps materialized while before-start runs; ExecuteAsync validates the full graph later.
+        var allSteps = await ResolveStepsAsync(context, validateStepReferences: false).ConfigureAwait(false);
 
         if (allSteps.Count == 0)
         {
@@ -565,6 +569,8 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         }
 
         var stepsToExecute = ComputeTransitiveDependencies(targetStep, allStepsByName);
+        ValidateStepReferences(stepsToExecute, allStepsByName);
+        context.SelectedSteps = stepsToExecute.AsReadOnly();
 
         await ExecuteStepsSequentially(stepsToExecute, context).ConfigureAwait(false);
     }
@@ -575,7 +581,13 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
     /// without executing them. The returned list is in collection order; use
     /// <see cref="GetTopologicalOrder"/> to obtain execution order.
     /// </summary>
-    internal async Task<List<PipelineStep>> ResolveStepsAsync(PipelineContext context)
+    /// <param name="context">The pipeline context used to resolve the steps.</param>
+    /// <param name="validateStepReferences">
+    /// <see langword="true"/> to require every DependsOn and RequiredBy reference in the pipeline to name
+    /// a resolved step. <see langword="false"/> skips that check (and RequiredBy references to unresolved
+    /// steps) so the caller can validate only the steps it executes.
+    /// </param>
+    internal async Task<List<PipelineStep>> ResolveStepsAsync(PipelineContext context, bool validateStepReferences = true)
     {
         var annotationSteps = await CollectStepsFromAnnotationsAsync(context).ConfigureAwait(false);
         // Configuration callbacks are run on every resolution, so give them fresh built-in steps instead
@@ -591,11 +603,15 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
             return allSteps;
         }
 
-        ValidateSteps(allSteps);
+        var allStepsByName = ValidateUniqueStepNames(allSteps);
+
+        if (validateStepReferences)
+        {
+            ValidateStepReferences(allSteps, allStepsByName);
+        }
 
         // Convert RequiredBy relationships to DependsOn relationships before filtering
-        var allStepsByName = allSteps.ToDictionary(s => s.Name, StringComparer.Ordinal);
-        NormalizeRequiredByToDependsOn(allSteps, allStepsByName);
+        NormalizeRequiredByToDependsOn(allSteps, allStepsByName, ignoreUnknownRequiredBy: !validateStepReferences);
         AssignDeploymentConcurrencyGroups(context.Model, allSteps);
 
         // Capture resolved pipeline data for diagnostics (before filtering)
@@ -666,7 +682,8 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
     /// </summary>
     private static void NormalizeRequiredByToDependsOn(
         List<PipelineStep> steps,
-        Dictionary<string, PipelineStep> stepsByName)
+        Dictionary<string, PipelineStep> stepsByName,
+        bool ignoreUnknownRequiredBy = false)
     {
         foreach (var step in steps)
         {
@@ -674,6 +691,11 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
             {
                 if (!stepsByName.TryGetValue(requiredByStep, out var requiredByStepObj))
                 {
+                    if (ignoreUnknownRequiredBy)
+                    {
+                        continue;
+                    }
+
                     throw new InvalidOperationException(
                         $"Step '{step.Name}' is required by unknown step '{requiredByStep}'");
                 }
@@ -822,24 +844,31 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         }
     }
 
-    private static void ValidateSteps(IEnumerable<PipelineStep> steps)
+    private static Dictionary<string, PipelineStep> ValidateUniqueStepNames(IEnumerable<PipelineStep> steps)
     {
-        var stepNames = new HashSet<string>(StringComparer.Ordinal);
+        var stepsByName = new Dictionary<string, PipelineStep>(StringComparer.Ordinal);
 
         foreach (var step in steps)
         {
-            if (!stepNames.Add(step.Name))
+            if (!stepsByName.TryAdd(step.Name, step))
             {
                 throw new InvalidOperationException(
                     $"Duplicate step name: '{step.Name}'");
             }
         }
 
+        return stepsByName;
+    }
+
+    private static void ValidateStepReferences(
+        IEnumerable<PipelineStep> steps,
+        Dictionary<string, PipelineStep> stepsByName)
+    {
         foreach (var step in steps)
         {
             foreach (var dependency in step.DependsOnSteps)
             {
-                if (!stepNames.Contains(dependency))
+                if (!stepsByName.ContainsKey(dependency))
                 {
                     throw new InvalidOperationException(
                         $"Step '{step.Name}' depends on unknown step '{dependency}'");
@@ -848,7 +877,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
 
             foreach (var requiredBy in step.RequiredBySteps)
             {
-                if (!stepNames.Contains(requiredBy))
+                if (!stepsByName.ContainsKey(requiredBy))
                 {
                     throw new InvalidOperationException(
                         $"Step '{step.Name}' is required by unknown step '{requiredBy}'");

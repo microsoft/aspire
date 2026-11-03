@@ -67,6 +67,83 @@ public class BicepValueProxyTests
     }
 
     [Fact]
+    public void AssignToAllowsStringParameterExpressionForEnum()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var parameter = builder.AddParameter("sku", "Standard");
+        var proxy = CreateInfrastructure().Create().Parameter(parameter, "sku");
+        var target = new BicepValue<ProvisioningValueType>(ProvisioningValueType.Boolean);
+
+        proxy.AssignTo(target);
+
+        Assert.Equal(BicepValueKind.Expression, ((IBicepValue)target).Kind);
+        Assert.Equal("sku", target.ToBicepExpression().ToString());
+    }
+
+    [Fact]
+    public void ConvertAllowsStringExpressionForEnumAndPreservesSecurity()
+    {
+        var proxy = BicepValueProxy.Create(
+            new BicepValue<string>(new IdentifierExpression("sku")),
+            isSecure: true);
+
+        var converted = BicepValueProxy.Convert<ProvisioningValueType>(proxy);
+
+        Assert.Equal(BicepValueKind.Expression, ((IBicepValue)converted).Kind);
+        Assert.True(((IBicepValue)converted).IsSecure);
+        Assert.Equal("sku", converted.ToBicepExpression().ToString());
+    }
+
+    [Fact]
+    public void AssignToRejectsStringLiteralForEnumWithoutChangingTarget()
+    {
+        var proxy = BicepValueProxy.Create(new BicepValue<string>("Standard"));
+        var target = new BicepValue<ProvisioningValueType>(ProvisioningValueType.Boolean);
+
+        var exception = Assert.Throws<ArgumentException>(() => proxy.AssignTo(target));
+
+        Assert.Equal(
+            "A literal of type String cannot be assigned to a BicepValue<ProvisioningValueType>.",
+            exception.Message);
+        Assert.Equal(ProvisioningValueType.Boolean, target.Value);
+    }
+
+    [Fact]
+    public void UnsetStringProxyIsRejectedForEnumWithoutChangingTarget()
+    {
+        var source = new BicepValue<string>("Standard");
+        source.ClearValue();
+        var proxy = BicepValueProxy.Create(source);
+        var target = new BicepValue<ProvisioningValueType>(ProvisioningValueType.Boolean);
+
+        Assert.Equal(BicepValueKind.Unset, proxy.Kind);
+
+        var exception = Assert.Throws<ArgumentException>(() => proxy.AssignTo(target));
+
+        Assert.Equal(
+            "A value of type String cannot be assigned to a BicepValue<ProvisioningValueType>.",
+            exception.Message);
+        Assert.Equal(BicepValueKind.Literal, ((IBicepValue)target).Kind);
+        Assert.Equal(ProvisioningValueType.Boolean, target.Value);
+        Assert.Throws<ArgumentException>(() => BicepValueProxy.Convert<ProvisioningValueType>(proxy));
+    }
+
+    [Fact]
+    public void ObjectExpressionProxyIsAcceptedForEnum()
+    {
+        var proxy = BicepValueProxy.CreateExpression(new IdentifierExpression("sku"), isSecure: false);
+        var target = new BicepValue<ProvisioningValueType>(ProvisioningValueType.Boolean);
+
+        proxy.AssignTo(target);
+        var converted = BicepValueProxy.Convert<ProvisioningValueType>(proxy);
+
+        Assert.Equal(BicepValueKind.Expression, ((IBicepValue)target).Kind);
+        Assert.Equal("sku", target.ToBicepExpression().ToString());
+        Assert.Equal(BicepValueKind.Expression, ((IBicepValue)converted).Kind);
+        Assert.Equal("sku", converted.ToBicepExpression().ToString());
+    }
+
+    [Fact]
     public void AssignToPreservesSecureMetadata()
     {
         var proxy = BicepValueProxy.Create(

@@ -22,11 +22,11 @@ The main test workflow in `.github/workflows/tests.yml` is organized into these 
 
 2. `build_packages`
    - Produces the shared Aspire package feed used by package-dependent tests
-   - Uses `-p:SkipBundleDeps=true` so it does not duplicate the RID-specific DCP/Dashboard work handled by the CLI archive jobs
+   - Leaves CLI packaging and RID-specific DCP/Dashboard work to the CLI archive jobs
 
 3. `build_cli_archive_linux`, `build_cli_archive_windows`, `build_cli_archive_macos`
    - Build native CLI archives per RID
-   - Build the matching RID-specific DCP and Dashboard packages locally with `BuildBundleDepsOnly`
+   - Build the matching RID-specific DCP and Dashboard packages locally
    - Upload `built-nugets-for-{rid}` artifacts for downstream tests
    - Upload `cli-native-archives-{rid}` artifacts for archive consumers such as polyglot validation
 
@@ -100,15 +100,16 @@ Even though execution is more parallel, the workflow still uses a single `result
 
 That makes Linux the best place to spend extra build capacity: finishing the shared package build and Linux archive earlier directly reduces the time before downstream validation lanes can start.
 
-### 2. `build_packages` skips RID-specific bundle dependencies
+### 2. The shared package build stays package-only
 
-`build_packages` uses `SkipBundleDeps=true`, while the CLI archive jobs use `BuildBundleDepsOnly=true`.
+The shared build produces the common package feed; the per-RID jobs own CLI
+archives, CLI tool and npm packages, and bundle dependencies. This keeps the
+jobs independent and avoids producing CLI payloads twice.
 
-Those two settings work together:
-
-- the shared package build avoids work that would otherwise be duplicated
-- each CLI archive job becomes responsible for the RID-specific dependencies it actually needs
-- package build and archive build can proceed in parallel without racing to produce the same artifacts
+Excluding bundle dependencies alone does not enforce that boundary: CLI
+archive projects are selected independently and can still invoke publishing
+and packaging. Changes to project selection must preserve both sides of the
+boundary, not just remove the CLI from the managed project list.
 
 ### 3. The VS Code extension is built in its dedicated test lane
 
@@ -116,44 +117,30 @@ The extension work now lives in `extension_tests_win` instead of also being fold
 
 That keeps `build_packages` focused on the shared package feed, and because `extension_tests_win` has no dependency on the package or archive jobs it can run independently instead of lengthening those critical paths.
 
-## Supporting workflow details
+## Artifact ownership and consumption
 
-### `build-packages.yml`
+Artifact boundaries follow what downstream jobs consume, rather than
+everything a producer happens to build:
 
-`build_packages` uses:
+| Artifact | Producer | Purpose |
+|---|---|---|
+| `built-nugets` | Shared package build | Common NuGet feed, without CLI payloads |
+| `built-nugets-for-{rid}` | Matching CLI archive job | RID-specific NuGets for the local test feed |
+| `cli-native-archives-{rid}` | Matching CLI archive job | Native CLI for archive consumers and downstream packaging |
+| `cli-npm-packages-{rid}` | Matching CLI archive job | npm pointer and RID tarballs for investigation and manual downloads |
 
-```bash
-./build.sh -restore -build -ci -pack -bl -p:InstallBrowsersForPlaywright=false -p:SkipTestProjects=true -p:SkipPlaygroundProjects=true -p:SkipBundleDeps=true
-```
+Package-dependent tests combine the shared feed with the RID-specific feed
+matching their runner. That is why their dependencies must preserve the OS
+relationship between test lane and CLI archive lane.
 
-`SkipBundleDeps=true` matters because the RID-specific bundle dependencies are produced by the per-OS CLI archive jobs, not by the shared package build.
+npm packaging and verification still run, but their outputs are separate so
+NuGet consumers do not pay to download them. This reduces artifact transfer,
+not native compilation. Keep archive and package consumers explicit rather
+than relying on incidental files in another artifact.
 
-### `build-cli-native-archives.yml`
-
-Each CLI archive job:
-
-1. Builds RID-specific DCP and Dashboard packages locally
-2. Uploads them as `built-nugets-for-{rid}`
-3. Builds the bundle payload
-4. Builds the native CLI archive
-5. Uploads the native archive as `cli-native-archives-{rid}`
-
-This makes the archive job self-sufficient for the RID-specific artifacts it needs.
-
-### Native CLI packaging
-
-The CLI archive jobs also produce RID-specific native CLI artifacts used by tests and downstream packaging. For details about native CLI archive signing, dotnet-tool package construction, and why signed builds consume the signed archive payload, see [Native CLI Packaging](native-cli-packaging.md).
-
-### `run-tests.yml`
-
-When a test lane sets `requiresNugets: true`, `run-tests.yml`:
-
-1. Downloads the shared `built-nugets` artifact
-2. Computes the lane RID from `runner.os`
-3. Downloads `built-nugets-for-{rid}`
-4. Merges those RID-specific packages into the local package feed before running tests
-
-That is why the dependency graph must preserve the OS relationship between test lane and CLI archive lane.
+The workflow files are the source of truth for build arguments and step
+ordering. For the signing and payload constraints behind native packaging,
+see [Native CLI Packaging](native-cli-packaging.md).
 
 ## What to validate when changing this area
 
@@ -179,24 +166,26 @@ When changing the CI structure, verify:
 
 The standalone daily pipeline in `eng/pipelines/azure-pipelines-source-index.yml`
 builds the full repository for source indexing, including managed Dashboard,
-CLI, tests and playground projects. Its build command disables two operations
-that do not contribute managed source coverage:
+CLI, tests and playground projects. It skips native Dashboard publishing and
+packaging, and browser provisioning: neither contributes managed source
+coverage. Managed Dashboard and test compilation remain included.
 
-- `CanPublishDashboardNativeAot=false` disables native Dashboard publishing,
-  NuGet packaging and ZIP staging in `eng/dashboardpack/Common.projitems`.
-  The managed Dashboard project remains selected by `eng/Build.props`.
-- `InstallBrowsersForPlaywright=false` disables browser provisioning in
-  `tests/Shared/Playwright/Playwright.targets`, not compilation of the tests.
+These exclusions are local to the source-index pipeline; other builds retain
+their defaults, and native CLI work remains enabled. A broad native-build
+exclusion is not a substitute because it also removes CLI projects. Likewise,
+repackaging existing native Dashboard outputs is not a way to skip producing
+them: it fails when those outputs are absent.
 
-These are global MSBuild properties passed only by the source-index pipeline;
-other builds retain their defaults. Native CLI work remains enabled.
-`SkipNativeBuild` is deliberately not used because it also removes native CLI
-projects. `SkipDashboardPublish` is not a replacement: it repackages existing
-native outputs and fails when those outputs are absent.
-
-When changing these controls, compare the before/after compiler source inputs
+When changing this boundary, compare the before/after compiler source inputs
 in the build binlogs and the solution generated by the pipeline's `BinLogToSln`
 step. A successful build alone does not establish indexing coverage. Preserve
 the full managed project selection, including tests and playground, and verify
 source-index conversion/upload and CodeQL finalization on an active-scan run.
-The job timeout and CodeQL configuration are unchanged.
+
+## CodeQL pipeline SDK setup
+
+The scheduled CodeQL pipeline relies on the repository's restore bootstrap to
+install the SDK pinned in `global.json`. Keep that responsibility with the
+repository bootstrap: the Azure Pipelines SDK installation task's global-json
+mode excludes prerelease SDKs and can fail before the bootstrap has a chance
+to install the pinned version.

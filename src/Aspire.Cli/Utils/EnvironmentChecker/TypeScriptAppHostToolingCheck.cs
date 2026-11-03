@@ -6,6 +6,8 @@ using System.Text.Json.Nodes;
 using Aspire.Cli.Projects;
 using Microsoft.Extensions.Logging;
 
+using Aspire.Shared;
+
 namespace Aspire.Cli.Utils.EnvironmentChecker;
 
 internal sealed class TypeScriptAppHostToolingCheck : IEnvironmentCheck

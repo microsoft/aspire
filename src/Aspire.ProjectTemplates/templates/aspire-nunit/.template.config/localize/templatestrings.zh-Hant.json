@@ -1,10 +1,10 @@
-﻿{
+{
   "author": "Microsoft",
   "name": "Aspire 測試專案 (NUnit)",
   "description": "包含 Aspire AppHost 專案之 NUnit 整合測試的專案。",
   "symbols/Framework/description": "專案的目標 Framework。",
   "symbols/Framework/choices/net10.0/description": "目標 net10.0",
-  "symbols/Framework/choices/net11.0/description": "Target net11.0",
+  "symbols/Framework/choices/net11.0/description": " 目標 net11.0",
   "symbols/skipRestore/description": "若指定，會在建立時跳過專案的自動還原。",
   "postActions/restore/description": "還原此專案所需的 NuGet 套件。",
   "postActions/restore/manualInstructions/default/text": "執行 'dotnet restore'"

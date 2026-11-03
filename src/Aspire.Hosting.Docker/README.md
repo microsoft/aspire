@@ -10,6 +10,7 @@ From your AppHost directory, add the `Aspire.Hosting.Docker` integration with th
 
 ```bash
 aspire add Aspire.Hosting.Docker
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Usage example
@@ -28,6 +29,8 @@ builder.AddDockerComposeEnvironment("compose");
 await builder.addDockerComposeEnvironment("compose");
 ```
 
+The dashboard container included in the published Compose file opts out of dashboard usage and error telemetry by default (`ASPIRE_DASHBOARD_TELEMETRY_OPTOUT=true`). This does not affect the application's OpenTelemetry data sent to the dashboard.
+
 ### Volumes
 
 Use an environment variable so projects and executables can use a local Aspire store directory while Docker Compose mounts the published named volume:
@@ -35,7 +38,7 @@ Use an environment variable so projects and executables can use a local Aspire s
 **C#**
 
 ```csharp
-builder.AddProject<Projects.Api>("api")
+builder.AddDotnetProject("api", "../Api/Api.csproj")
     .WithVolume("data", "/data", env: "DATA_PATH");
 ```
 

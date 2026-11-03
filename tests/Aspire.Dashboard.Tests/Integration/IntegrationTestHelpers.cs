@@ -3,7 +3,6 @@
 
 using System.Security.Cryptography.X509Certificates;
 using Aspire.Dashboard.Configuration;
-using Aspire.Dashboard.Telemetry;
 using Aspire.Hosting;
 using Grpc.Core;
 using Grpc.Net.Client;
@@ -60,7 +59,7 @@ public static class IntegrationTestHelpers
 
         var initialData = new Dictionary<string, string?>
         {
-            [DashboardTelemetryService.TelemetryOptOutConfigKey] = "true",
+            [KnownConfigNames.DashboardTelemetryOptOut] = "true",
             [DashboardConfigNames.DashboardFrontendUrlName.ConfigKey] = "http://127.0.0.1:0",
             [DashboardConfigNames.DashboardOtlpGrpcUrlName.ConfigKey] = "http://127.0.0.1:0",
             [DashboardConfigNames.DashboardOtlpHttpUrlName.ConfigKey] = "http://127.0.0.1:0",

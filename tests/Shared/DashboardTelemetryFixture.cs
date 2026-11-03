@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Threading.Channels;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Shared.Telemetry;
+using Aspire.Tests.Shared.Telemetry;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Testing;
@@ -12,6 +13,7 @@ using OpenTelemetry;
 using OpenTelemetry.Logs;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
+using Xunit;
 
 namespace Aspire.Dashboard.Tests;
 
@@ -29,8 +31,10 @@ public sealed class DashboardTelemetryFixture : IDisposable
     public TestSink LocalLogSink { get; } = new();
     public DashboardTelemetryConfiguration Configuration { get; }
     public DashboardTelemetryService Telemetry { get; }
+    internal TelemetryTagsSource TagsSource { get; }
 
-    public DashboardTelemetryFixture(bool reportedTelemetryEnabled = true, ActivitySamplingResult sampleResult = ActivitySamplingResult.AllDataAndRecorded, ILogger<DashboardTelemetryService>? logger = null)
+    public DashboardTelemetryFixture(bool reportedTelemetryEnabled = true, ActivitySamplingResult sampleResult = ActivitySamplingResult.AllDataAndRecorded,
+        ILogger<DashboardTelemetryService>? logger = null, bool isCIEnvironment = false)
     {
         Configuration = new() { ReportedTelemetryEnabled = reportedTelemetryEnabled };
         LoggerFactory = Microsoft.Extensions.Logging.LoggerFactory.Create(builder =>
@@ -45,8 +49,11 @@ public sealed class DashboardTelemetryFixture : IDisposable
             ActivityStopped = activity => ActivityChannel.Writer.TryWrite(activity)
         };
         ActivitySource.AddActivityListener(_listener);
+        TagsSource = DashboardTelemetryService.CreateTagsSource(Configuration, LoggerFactory,
+            new TestMachineInformationProvider(), new TestInternalMicrosoftDetector(), isCIEnvironment);
+        TagsSource.TagsTask.GetAwaiter().GetResult();
         Telemetry = new DashboardTelemetryService(logger ?? LoggerFactory.CreateLogger<DashboardTelemetryService>(),
-            Configuration, ActivitySourceName, DiagnosticsActivitySourceName);
+            Configuration, TagsSource, ActivitySourceName, DiagnosticsActivitySourceName);
         ConfigureLogging(Telemetry);
     }
 
@@ -59,7 +66,11 @@ public sealed class DashboardTelemetryFixture : IDisposable
         var logProvider = AzureMonitorTelemetryProvider.Create(new ServiceCollection(), ResourceBuilder.CreateEmpty(),
             DashboardTelemetryService.EventLogCategoryName,
             () => Sdk.CreateTracerProviderBuilder().Build(),
-            provider => provider.AddProcessor(new EventLogProcessor(LogChannel.Writer)));
+            provider =>
+            {
+                provider.AddProcessor(new LogRecordTagEnrichmentProcessor(telemetry));
+                provider.AddProcessor(new EventLogProcessor(LogChannel.Writer));
+            });
         try
         {
             telemetry.SetEventLogger(logProvider.EventLogger);
@@ -70,6 +81,21 @@ public sealed class DashboardTelemetryFixture : IDisposable
             logProvider.Dispose();
             throw;
         }
+    }
+
+    public void AssertAttributes(IReadOnlyList<KeyValuePair<string, object?>> attributes, params KeyValuePair<string, object?>[] eventProperties)
+    {
+        Assert.Equal(Telemetry.GetDefaultProperties().Concat(eventProperties).OrderBy(tag => tag.Key, StringComparer.Ordinal),
+            attributes.OrderBy(tag => tag.Key, StringComparer.Ordinal));
+    }
+
+    internal static DashboardTelemetryService CreateTelemetryService(ILoggerFactory loggerFactory, DashboardTelemetryConfiguration configuration)
+    {
+        var tagsSource = DashboardTelemetryService.CreateTagsSource(configuration, loggerFactory,
+            new TestMachineInformationProvider(), new TestInternalMicrosoftDetector(), isCIEnvironment: false);
+        tagsSource.TagsTask.GetAwaiter().GetResult();
+        return new DashboardTelemetryService(loggerFactory.CreateLogger<DashboardTelemetryService>(), configuration,
+            tagsSource, DashboardTelemetryService.ReportedActivitySourceName, DashboardTelemetryService.DiagnosticsActivitySourceName);
     }
 
     public void Dispose()

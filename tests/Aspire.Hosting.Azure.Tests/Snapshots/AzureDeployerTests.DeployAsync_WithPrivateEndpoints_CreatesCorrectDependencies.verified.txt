@@ -314,7 +314,7 @@ Step: validate-azure-container-apps
     Dependencies: ✓ azure-prepare-resources
 
 Step: validate-azure-login
-    Description: Validates Azure CLI authentication before deployment.
+    Description: Validates Azure authentication before deployment.
     Dependencies: ✓ deploy-prereq
     Resource: azure-environment (AzureEnvironmentResource)
 

@@ -12,19 +12,6 @@ public sealed class BackportWorkflowTests(ITestOutputHelper output)
     private const string WorkflowRelativePath = ".github/workflows/backport.yml";
 
     [Fact]
-    public void JobsUseExactRepositoryOwnerMembership()
-    {
-        var jobs = Mapping(LoadWorkflow(), "jobs");
-
-        Assert.Equal(
-            "github.event_name == 'schedule' && contains(fromJSON('[\"dotnet\", \"microsoft\"]'), github.repository_owner)",
-            Scalar(Mapping(jobs, "cleanup"), "if"));
-        Assert.Equal(
-            "github.event_name == 'issue_comment' && contains(fromJSON('[\"dotnet\", \"microsoft\"]'), github.repository_owner) && github.event.issue.pull_request != '' && contains(github.event.comment.body, '/backport to')",
-            Scalar(Mapping(jobs, "backport"), "if"));
-    }
-
-    [Fact]
     [RequiresTools(["node"])]
     public async Task CleanupCollectsWorkflowRunIdsBeforeDeleting()
     {

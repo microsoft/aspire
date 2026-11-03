@@ -61,6 +61,15 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Hidden by default. Visible when &quot;Show hidden resources&quot; is enabled..
+        /// </summary>
+        public static string HiddenResourceIconTooltip {
+            get {
+                return ResourceManager.GetString("HiddenResourceIconTooltip", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to This container is persistent and won&apos;t be stopped when the app host is shut down..
         /// </summary>
         public static string PersistentContainerIconTooltip {

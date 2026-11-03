@@ -160,6 +160,52 @@ function createTabRegistration() {
     return { calls, scrolls, controls, wrapper, list, tabs, emit, observers, buttonByDirection };
 }
 
+for (const lastTab of [false, true]) {
+    for (const moveFocus of [false, true]) {
+        test(`banner close restores focus after removal with ${lastTab ? "no" : "a"} remaining tab unless focus moves: ${moveFocus}`, () => {
+            const { tabs, observers } = createTabRegistration();
+            const pane = { isConnected: true };
+            const close = {
+                isConnected: true,
+                closest: selector => selector === ".terminal-dock-pane" ? pane
+                    : selector === ".terminal-close-tab" ? close : null,
+            };
+            const collapse = {
+                focus() { document.activeElement = collapse; },
+                closest() { return null; },
+                scrollIntoView() {},
+            };
+            const contains = dockElement.contains;
+            dockElement.contains = element => element === pane || contains(element);
+            const querySelector = dockElement.querySelector;
+            dockElement.querySelector = selector => selector === '.terminal-dock-tab-select[aria-selected="true"]'
+                ? lastTab ? null : tabs[1].tab
+                : selector === ".terminal-dock-collapse" ? collapse : querySelector(selector);
+            const focus = target => {
+                document.activeElement = target;
+                const event = new Event("focusin");
+                Object.defineProperty(event, "target", { value: target });
+                document.dispatchEvent(event);
+            };
+            focus(close);
+            const removalObserver = observers.at(-1);
+            removalObserver.callback();
+            assert.equal(document.activeElement, close, "Focus stays put until watch-driven removal");
+            const elsewhere = { closest: () => null };
+            if (moveFocus) {
+                focus(elsewhere);
+            }
+            close.isConnected = false;
+            pane.isConnected = false;
+            if (!moveFocus) {
+                document.activeElement = document.body;
+            }
+            removalObserver.callback();
+            assert.equal(document.activeElement, moveFocus ? elsewhere : lastTab ? collapse : tabs[1].tab);
+        });
+    }
+}
+
 test("overflow arrows remain visible and disable when tabs fit or the list is removed", () => {
     const { controls, buttonByDirection, emit, scrolls, list, observers } = createTabRegistration();
     assert.equal(controls.hidden, false);

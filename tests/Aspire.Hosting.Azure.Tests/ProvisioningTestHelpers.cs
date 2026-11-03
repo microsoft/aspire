@@ -561,6 +561,8 @@ internal sealed class TestResourceGroupCollection : IResourceGroupCollection
     private readonly Func<string, Dictionary<string, object>>? _deploymentOutputsProvider;
     private readonly TestResourceGroupResource? _resourceGroup;
     public string? LastRequestedResourceGroupName { get; private set; }
+    public int CreateOrUpdateCallCount { get; private set; }
+    public Action? OnCreateOrUpdate { get; set; }
     private readonly bool _resourceGroupLookupReturnsNotFound;
 
     public TestResourceGroupCollection(Dictionary<string, object> deploymentOutputs, TestResourceGroupResource? resourceGroup = null, bool resourceGroupLookupReturnsNotFound = false)
@@ -606,6 +608,8 @@ internal sealed class TestResourceGroupCollection : IResourceGroupCollection
 
     public Task<ArmOperation<IResourceGroupResource>> CreateOrUpdateAsync(WaitUntil waitUntil, string resourceGroupName, ResourceGroupData data, CancellationToken cancellationToken = default)
     {
+        CreateOrUpdateCallCount++;
+        OnCreateOrUpdate?.Invoke();
         IResourceGroupResource resourceGroup;
         if (_deploymentOutputsProvider is not null)
         {
@@ -921,6 +925,7 @@ internal sealed class MockResponse(int status) : Response
 
 internal sealed class TestArmClientProvider : IArmClientProvider
 {
+    private readonly IArmClient? _armClient;
     private readonly Dictionary<string, object>? _deploymentOutputs;
     private readonly Func<string, Dictionary<string, object>>? _deploymentOutputsProvider;
     private readonly TestResourceGroupResource? _resourceGroup;
@@ -936,6 +941,11 @@ internal sealed class TestArmClientProvider : IArmClientProvider
     public TestArmClientProvider(Dictionary<string, object> deploymentOutputs)
     {
         _deploymentOutputs = deploymentOutputs;
+    }
+
+    public TestArmClientProvider(IArmClient armClient)
+    {
+        _armClient = armClient;
     }
 
     public TestArmClientProvider(Func<string, Dictionary<string, object>> deploymentOutputsProvider)
@@ -979,6 +989,10 @@ internal sealed class TestArmClientProvider : IArmClientProvider
 
     public IArmClient GetArmClient(TokenCredential credential, string subscriptionId)
     {
+        if (_armClient is not null)
+        {
+            return _armClient;
+        }
         if (_deploymentOutputsProvider is not null)
         {
             return new TestArmClient(_deploymentOutputsProvider);
@@ -1069,9 +1083,9 @@ internal sealed class TestAzurePrincipalProvider : IAzurePrincipalProvider
     }
 }
 
-internal sealed class TestTokenCredentialProvider : ITokenCredentialProvider
+internal sealed class TestTokenCredentialProvider(TokenCredential? credential = null) : ITokenCredentialProvider
 {
-    public TokenCredential TokenCredential => new TestTokenCredential();
+    public TokenCredential TokenCredential { get; } = credential ?? new TestTokenCredential();
 }
 
 /// <summary>

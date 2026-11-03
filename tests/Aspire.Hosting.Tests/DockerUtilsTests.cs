@@ -23,7 +23,7 @@ public class DockerUtilsTests
     }
 
     [Fact]
-    public void AttemptDeleteDockerVolume_WhenRuntimeIsUnavailable_ReportsSkippedCleanup()
+    public void AttemptDeleteDockerVolume_WhenConfiguredRuntimeIsUnsupported_ReportsSkippedCleanup()
     {
         const string MissingRuntime = "aspire-missing-container-runtime";
         var options = new RemoteInvokeOptions();
@@ -36,8 +36,9 @@ public class DockerUtilsTests
 
             DockerUtils.AttemptDeleteDockerVolume("test-volume");
 
+            var exception = Assert.Throws<ArgumentException>(() => ContainerRuntimeDetector.GetProbe(MissingRuntime));
             Assert.Equal(
-                $"Failed to delete the volume named 'test-volume': the container runtime configured by {KnownConfigNames.ContainerRuntime} ('{MissingRuntime}') is not available.",
+                $"Failed to delete the volume named 'test-volume': container runtime detection failed with ArgumentException: {exception.Message}",
                 output.ToString().Trim());
         }, options).Dispose();
     }

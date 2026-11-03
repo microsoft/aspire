@@ -5,13 +5,20 @@ using Aspire.Cli.Agents;
 
 namespace Aspire.Cli.Tests.TestServices;
 
-internal sealed class TestAgentEnvironmentDetector(params AgentEnvironmentApplicator[] applicators) : IAgentEnvironmentDetector
+internal sealed class TestAgentEnvironmentDetector : IAgentEnvironmentDetector
 {
-    public Task<AgentEnvironmentApplicator[]> DetectAsync(
+    private int _scanCount;
+
+    public int ScanCount => _scanCount;
+
+    public AgentEnvironment DetectedEnvironments { get; init; }
+
+    public Task<AgentEnvironment> DetectAsync(
         AgentEnvironmentScanContext context,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return Task.FromResult(applicators);
+        Interlocked.Increment(ref _scanCount);
+        return Task.FromResult(DetectedEnvironments);
     }
 }

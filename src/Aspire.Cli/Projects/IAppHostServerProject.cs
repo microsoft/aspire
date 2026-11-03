@@ -29,9 +29,9 @@ internal sealed record AppHostServerPrepareResult(
 /// <param name="OutputCollector">Captured stdout/stderr for failure display.</param>
 /// <param name="Execution">
 /// The started <see cref="IProcessExecution"/> that owns the server child. Callers observe state
-/// (<see cref="IProcessExecution.HasExited"/>, <see cref="IProcessExecution.ExitCode"/>,
-/// <see cref="IProcessExecution.ProcessId"/>), drive its lifetime via
-/// <see cref="IProcessExecution.WaitForExitAsync(CancellationToken)"/> (which runs the shared
+/// (<see cref="Aspire.Shared.IChildProcess.HasExited"/>, <see cref="Aspire.Shared.IChildProcess.ExitCode"/>,
+/// <see cref="Aspire.Shared.IChildProcess.ProcessId"/>), drive its lifetime via
+/// <see cref="Aspire.Shared.IChildProcess.WaitForExitAsync(CancellationToken)"/> (which runs the shared
 /// shutdown ladder on cancellation), and dispose it via
 /// <see cref="System.IAsyncDisposable.DisposeAsync"/>.
 /// </param>
@@ -91,6 +91,7 @@ internal interface IAppHostServerProject
     /// <param name="integrations">The integration references (NuGet packages and/or project references) required by the app host.</param>
     /// <param name="requestedChannel">The package channel to use for this prepare operation, or <see langword="null" /> to use the project configuration.</param>
     /// <param name="packageSourceOverride">Optional package source to prefer for Aspire package restore.</param>
+    /// <param name="packageSourceOverridePattern">Optional package pattern whose restore is owned by <paramref name="packageSourceOverride"/>.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The preparation result indicating success/failure and any output.</returns>
     Task<AppHostServerPrepareResult> PrepareAsync(
@@ -98,6 +99,7 @@ internal interface IAppHostServerProject
         IEnumerable<IntegrationReference> integrations,
         string? requestedChannel = null,
         string? packageSourceOverride = null,
+        string? packageSourceOverridePattern = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>

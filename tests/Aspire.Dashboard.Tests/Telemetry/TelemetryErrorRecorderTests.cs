@@ -22,7 +22,7 @@ public class TelemetryErrorRecorderTests
 
         recorder.RecordError("Test message", exception);
 
-        AssertError(Assert.Single(ReadErrors(fixture)), exception);
+        AssertError(fixture, Assert.Single(ReadErrors(fixture)), exception);
     }
 
     [Fact]
@@ -48,10 +48,10 @@ public class TelemetryErrorRecorderTests
         recorder.RecordError("Test message", aggregate);
 
         Assert.Collection(ReadErrors(fixture),
-            log => AssertError(log, exception),
-            log => AssertError(log, differentType),
-            log => AssertError(log, differentMessage),
-            log => AssertError(log, differentStack));
+            log => AssertError(fixture, log, exception),
+            log => AssertError(fixture, log, differentType),
+            log => AssertError(fixture, log, differentMessage),
+            log => AssertError(fixture, log, differentStack));
     }
 
     [Fact]
@@ -64,7 +64,7 @@ public class TelemetryErrorRecorderTests
 
         recorder.RecordError("Test message", aggregate);
 
-        AssertError(Assert.Single(ReadErrors(fixture)), exception);
+        AssertError(fixture, Assert.Single(ReadErrors(fixture)), exception);
     }
 
     [Theory]
@@ -78,7 +78,7 @@ public class TelemetryErrorRecorderTests
 
         recorder.RecordError("Test message", exception);
 
-        AssertError(Assert.Single(ReadErrors(fixture)), exception);
+        AssertError(fixture, Assert.Single(ReadErrors(fixture)), exception);
     }
 
     [Fact]
@@ -93,8 +93,8 @@ public class TelemetryErrorRecorderTests
         recorder.RecordError("Test message", aggregate);
 
         Assert.Collection(ReadErrors(fixture),
-            log => AssertError(log, exception),
-            log => AssertError(log, exception));
+            log => AssertError(fixture, log, exception),
+            log => AssertError(fixture, log, exception));
     }
 
     [Theory]
@@ -125,7 +125,7 @@ public class TelemetryErrorRecorderTests
         }
 
         Assert.Empty(fixture.LocalLogSink.Writes);
-        AssertError(Assert.Single(ReadErrors(fixture)), exception);
+        AssertError(fixture, Assert.Single(ReadErrors(fixture)), exception);
     }
 
     [Fact]
@@ -150,18 +150,16 @@ public class TelemetryErrorRecorderTests
         return exception;
     }
 
-    internal static void AssertError(TestDashboardTelemetryLog log, Exception exception)
+    internal static void AssertError(DashboardTelemetryFixture fixture, TestDashboardTelemetryLog log, Exception exception)
     {
         Assert.Equal(TelemetryEventKeys.Error, log.Message);
         Assert.Equal(LogLevel.Information, log.Level);
         Assert.Equal(DashboardTelemetryService.EventLogCategoryName, log.CategoryName);
-        Assert.Collection(log.Attributes.OrderBy(attribute => attribute.Key, StringComparer.Ordinal),
-            attribute => Assert.Equal(TelemetryPropertyKeys.DashboardBuildId, attribute.Key),
-            attribute => Assert.Equal(new KeyValuePair<string, object?>(TelemetryPropertyKeys.ExceptionRuntimeVersion, VersionHelpers.RuntimeVersion?.ToString() ?? string.Empty), attribute),
-            attribute => Assert.Equal(new KeyValuePair<string, object?>(TelemetryPropertyKeys.ExceptionType, exception.GetType().FullName), attribute),
-            attribute => Assert.Equal(TelemetryPropertyKeys.DashboardVersion, attribute.Key),
-            attribute => Assert.Equal(new KeyValuePair<string, object?>("microsoft.operation_name", TelemetryEventKeys.Error), attribute),
-            attribute => Assert.Equal(new KeyValuePair<string, object?>("{OriginalFormat}", TelemetryEventKeys.Error), attribute));
+        fixture.AssertAttributes(log.Attributes,
+            new(TelemetryPropertyKeys.ExceptionType, exception.GetType().FullName),
+            new("microsoft.operation_name", TelemetryEventKeys.Error),
+            new(TelemetryPropertyKeys.ExceptionRuntimeVersion, VersionHelpers.RuntimeVersion?.ToString() ?? string.Empty),
+            new("{OriginalFormat}", TelemetryEventKeys.Error));
     }
 
     private static List<TestDashboardTelemetryLog> ReadErrors(DashboardTelemetryFixture fixture)

@@ -26,6 +26,35 @@ namespace Aspire.Dashboard.Tests.Model;
 public sealed class DashboardCommandExecutorTests
 {
     [Theory]
+    [InlineData(ResourceCommandResponseKind.Succeeded, true)]
+    [InlineData(ResourceCommandResponseKind.Failed, false)]
+    [InlineData(ResourceCommandResponseKind.Cancelled, false)]
+    public async Task ExecuteAsync_ReportsWhetherTheCommandSucceeded(ResourceCommandResponseKind kind, bool expected)
+    {
+        var client = new TestDashboardClient(isEnabled: true,
+            executeResourceCommand: (_, _, _, _, _) => Task.FromResult(new ResourceCommandResponseViewModel { Kind = kind }));
+        var executor = CreateExecutor(client, out _, out _);
+        var command = CreateCommand();
+        var resource = ModelTestHelpers.CreateResource(resourceName: "api", commands: [command]);
+
+        Assert.Equal(expected, await executor.ExecuteAsync(resource, command, r => r.DisplayName));
+        Assert.False(executor.IsExecuting(resource.Name, command.Name));
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_DoesNotReportSuccessWhenExecutionThrows()
+    {
+        var client = new TestDashboardClient(isEnabled: true,
+            executeResourceCommand: (_, _, _, _, _) => Task.FromException<ResourceCommandResponseViewModel>(new InvalidOperationException("Command failed")));
+        var executor = CreateExecutor(client, out _, out _);
+        var command = CreateCommand();
+        var resource = ModelTestHelpers.CreateResource(resourceName: "api", commands: [command]);
+
+        Assert.False(await executor.ExecuteAsync(resource, command, r => r.DisplayName));
+        Assert.False(executor.IsExecuting(resource.Name, command.Name));
+    }
+
+    [Theory]
     [InlineData(true, false)]
     [InlineData(true, true)]
     [InlineData(false, false)]
@@ -248,7 +277,7 @@ public sealed class DashboardCommandExecutorTests
     private static DashboardCommandExecutor CreateExecutor(TestDashboardClient dashboardClient, out Aspire.Dashboard.Model.INotificationService notificationService, out TestNotificationService toastService)
     {
         var telemetryService = new DashboardTelemetryService(NullLogger<DashboardTelemetryService>.Instance,
-            new DashboardTelemetryConfiguration { ReportedTelemetryEnabled = false });
+            new DashboardTelemetryConfiguration { ReportedTelemetryEnabled = false }, NullLoggerFactory.Instance);
 
         return CreateExecutor(dashboardClient, telemetryService, out notificationService, out toastService);
     }

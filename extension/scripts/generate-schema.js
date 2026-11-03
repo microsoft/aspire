@@ -49,7 +49,10 @@ try {
     console.log(`  - ${configInfo.LocalSettingsSchema.Properties.length} top-level properties`);
 
     // Generate global settings schema (excludes local-only properties like appHostPath)
-    const globalSchema = generateJsonSchema(configInfo, configInfo.GlobalSettingsSchema, {
+    const globalSchema = generateJsonSchema({
+        ...configInfo,
+        AvailableFeatures: configInfo.AvailableFeatures.filter(feature => !feature.ProjectOnly)
+    }, configInfo.GlobalSettingsSchema, {
         id: 'https://json.schemastore.org/aspire-global-settings.json',
         title: 'Aspire Global Settings',
         description: 'Aspire CLI global configuration file (~/.aspire/settings.json)'
@@ -117,6 +120,7 @@ function normalizeConfigInfo(configInfo) {
                 Name: readString(feature.Name ?? feature.name, 'availableFeatures[].name'),
                 Description: readString(feature.Description ?? feature.description, 'availableFeatures[].description'),
                 DefaultValue: readBoolean(feature.DefaultValue ?? feature.defaultValue, 'availableFeatures[].defaultValue'),
+                ProjectOnly: feature.ProjectOnly ?? feature.projectOnly ?? false,
             })),
         LocalSettingsSchema: normalizeSettingsSchema(configInfo.LocalSettingsSchema ?? configInfo.localSettingsSchema, 'localSettingsSchema'),
         GlobalSettingsSchema: normalizeSettingsSchema(configInfo.GlobalSettingsSchema ?? configInfo.globalSettingsSchema, 'globalSettingsSchema'),
@@ -215,6 +219,29 @@ function createPropertySchema(prop, configInfo) {
                     default: feature.DefaultValue
                 };
             }
+        } else if (prop.Name === 'packages' && prop.AdditionalPropertiesType === 'object') {
+            // PackageEntry's converter accepts null / "" / "1.2.3" / "../My.Hosting.csproj"
+            // or { "source": "npm", "path": "./integration/host.mts" }. Reflection
+            // exposes CLR Source/Version/Path instead of this wire shape.
+            schema.additionalProperties = {
+                anyOf: [
+                    { type: ['string', 'null'] },
+                    {
+                        type: 'object',
+                        properties: {
+                            source: { type: 'string', enum: ['nuget', 'project', 'npm'] },
+                            version: { type: ['string', 'null'] },
+                            path: { type: 'string' }
+                        },
+                        required: ['source'],
+                        allOf: [{
+                            if: { properties: { source: { enum: ['project', 'npm'] } } },
+                            then: { required: ['path'] }
+                        }],
+                        additionalProperties: false
+                    }
+                ]
+            };
         } else if (prop.SubProperties && prop.SubProperties.length > 0) {
             if (prop.AdditionalPropertiesType === 'object') {
                 // Dictionary with complex values (e.g., profiles)

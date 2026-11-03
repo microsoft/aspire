@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Threading.Channels;
+using Aspire.Hosting.Orchestrator;
 using Aspire.Hosting.Testing;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
@@ -1325,7 +1326,8 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
             new DistributedApplicationOptions(),
             services,
             builder.Configuration,
-            services.GetRequiredService<IInteractionFileUploadStore>()));
+            services.GetRequiredService<IInteractionFileUploadStore>(),
+            services.GetRequiredService<InteractionServiceConsumerState>()));
 
         var textDefinition = new InteractionInput
         {
@@ -1743,7 +1745,16 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         var projectPath = CreateBuildOutputTestProject(workspace.WorkspaceRoot.FullName, rebuildOutputMarker);
 
         using var builder = CreateBuilder();
+#pragma warning disable CS0618 // Retain supported legacy project command invocation.
         var project = builder.AddProject("myProject", projectPath, options => options.ExcludeLaunchProfile = true);
+#pragma warning restore CS0618
+
+        // The project itself is launched with `dotnet run`, which also builds it. Whether that build reaches
+        // the counting target depends on how quickly the rebuild command stops the process (slow on Windows),
+        // so tag the rebuilder's `dotnet build` and count only builds started by the rebuild command.
+        builder.CreateResourceBuilder<ProjectRebuilderResource>($"{project.Resource.Name}-rebuilder")
+            .WithEnvironment(RebuildCommandBuildEnvironmentVariable, "true");
+
         using var app = builder.Build();
 
         await app.StartAsync().DefaultTimeout(TimeSpan.FromMinutes(2));
@@ -1760,14 +1771,82 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(CommandResultFormat.Text, result.Data.Format);
         Assert.Contains("[build] Building project...", result.Data.Value);
         Assert.Contains(rebuildOutputMarker, result.Data.Value);
-        var firstBuildCount = File.ReadAllLines(buildCountPath).Length;
+        Assert.Single(File.ReadAllLines(buildCountPath));
 
         var secondResult = await app.ResourceCommands.ExecuteCommandAsync(project.Resource, KnownResourceCommands.RebuildCommand).DefaultTimeout(TimeSpan.FromMinutes(2));
 
         Assert.True(secondResult.Success);
         Assert.NotNull(secondResult.Data);
         Assert.Contains(rebuildOutputMarker, secondResult.Data.Value);
-        Assert.Equal(firstBuildCount + 1, File.ReadAllLines(buildCountPath).Length);
+        Assert.Equal(2, File.ReadAllLines(buildCountPath).Length);
+
+        // The second rebuild runs right after the first one restarted the project, so the project can still be
+        // starting (Starting, or no state yet from the re-created DCP executable) when it is stopped. It must be launched again rather than left in a stale Starting state.
+        // The test program exits immediately, so it ends up Finished once it has run.
+        using var finishedCts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
+        await resourceNotificationService.WaitForResourceAsync(project.Resource.Name, KnownResourceStates.Finished, finishedCts.Token).DefaultTimeout(TimeSpan.FromMinutes(2));
+    }
+
+    [Fact]
+    public async Task ExecuteCommandAsync_RebuildCommand_RestoresInactiveReplicaWhenSiblingIsRestarted()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var projectPath = CreateBuildOutputTestProject(workspace.WorkspaceRoot.FullName, "ASPIRE_REBUILD_OUTPUT_MARKER");
+
+        using var builder = CreateBuilder();
+#pragma warning disable CS0618 // Retain supported legacy project command invocation.
+        var keepAlivePath = Path.Combine(workspace.WorkspaceRoot.FullName, "keep-alive.txt");
+        var project = builder.AddProject("myProject", projectPath, options => options.ExcludeLaunchProfile = true)
+            .WithReplicas(2)
+            .WithEnvironment(KeepAliveFileEnvironmentVariable, keepAlivePath);
+#pragma warning restore CS0618
+
+        using var app = builder.Build();
+
+        await app.StartAsync().DefaultTimeout(TimeSpan.FromMinutes(2));
+
+        var resourceNotificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+        var orchestrator = app.Services.GetRequiredService<ApplicationOrchestrator>();
+        var replicaNames = project.Resource.GetResolvedResourceNames();
+        Assert.Equal(2, replicaNames.Length);
+
+        // Without the keep-alive file the test program exits immediately, so both replicas end up Finished.
+        using (var finishedCts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration))
+        {
+            foreach (var replicaName in replicaNames)
+            {
+                await resourceNotificationService.WaitForResourceAsync(project.Resource.Name, e => e.ResourceId == replicaName && e.Snapshot.State?.Text == KnownResourceStates.Finished, finishedCts.Token).DefaultTimeout(TimeSpan.FromMinutes(2));
+            }
+        }
+
+        // Start only the second replica and keep it running, so the rebuild restarts it while the first one is inactive.
+        File.WriteAllText(keepAlivePath, string.Empty);
+        try
+        {
+            using (var restartCts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration))
+            {
+                await orchestrator.StartResourceAsync(replicaNames[1], restartCts.Token).DefaultTimeout(TimeSpan.FromMinutes(2));
+                await resourceNotificationService.WaitForResourceAsync(project.Resource.Name, e => e.ResourceId == replicaNames[1] && e.Snapshot.State?.Text == KnownResourceStates.Running, restartCts.Token).DefaultTimeout(TimeSpan.FromMinutes(2));
+            }
+
+            Assert.True(resourceNotificationService.TryGetCurrentState(replicaNames[1], out var activeReplica));
+            Assert.Equal(KnownResourceStates.Running, activeReplica.Snapshot.State?.Text);
+
+            var result = await app.ResourceCommands.ExecuteCommandAsync(project.Resource, KnownResourceCommands.RebuildCommand).DefaultTimeout(TimeSpan.FromMinutes(2));
+            Assert.True(result.Success, result.Message);
+
+            // The inactive replica must be restored rather than left in Building, even though its sibling was restarted.
+            Assert.True(resourceNotificationService.TryGetCurrentState(replicaNames[0], out var inactiveReplica));
+            Assert.Equal(KnownResourceStates.Finished, inactiveReplica.Snapshot.State?.Text);
+
+            // The active replica was restarted with the rebuilt binary.
+            using var runningCts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
+            await resourceNotificationService.WaitForResourceAsync(project.Resource.Name, e => e.ResourceId == replicaNames[1] && e.Snapshot.State?.Text == KnownResourceStates.Running, runningCts.Token).DefaultTimeout(TimeSpan.FromMinutes(2));
+        }
+        finally
+        {
+            File.Delete(keepAlivePath);
+        }
     }
 
     [Fact]
@@ -1804,6 +1883,9 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(CommandResultFormat.Text, result.Data.Format);
     }
 
+    private const string RebuildCommandBuildEnvironmentVariable = "ASPIRE_TEST_REBUILD_COMMAND_BUILD";
+    private const string KeepAliveFileEnvironmentVariable = "ASPIRE_TEST_KEEP_ALIVE_FILE";
+
     private static string CreateBuildOutputTestProject(string directoryPath, string buildOutputMarker)
     {
         var projectPath = Path.Combine(directoryPath, "BuildOutputProject.csproj");
@@ -1820,15 +1902,22 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
               </PropertyGroup>
 
               <Target Name="EmitAspireRebuildOutputMarker" AfterTargets="Build">
-                <WriteLinesToFile File="$(MSBuildProjectDirectory)/build-count.txt" Lines="built" Overwrite="false" />
+                <WriteLinesToFile Condition="'$({{RebuildCommandBuildEnvironmentVariable}})' == 'true'" File="$(MSBuildProjectDirectory)/build-count.txt" Lines="built" Overwrite="false" />
                 <Message Importance="High" Text="{{buildOutputMarker}}" />
               </Target>
             </Project>
             """);
 
         File.WriteAllText(programPath,
-            """
+            $$"""
             Console.WriteLine("Hello from rebuild test project.");
+
+            // Stay running while the test's keep-alive file exists, so the process can be observed as active.
+            var keepAlivePath = Environment.GetEnvironmentVariable("{{KeepAliveFileEnvironmentVariable}}");
+            while (!string.IsNullOrEmpty(keepAlivePath) && File.Exists(keepAlivePath))
+            {
+                Thread.Sleep(100);
+            }
             """);
 
         return projectPath;

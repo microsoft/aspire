@@ -28,6 +28,7 @@ permissions:
 jobs:
   build_cli_e2e_image:
     name: Build CLI E2E Docker image
+    if: ${{ github.repository == 'microsoft/aspire' }}
     uses: ./.github/workflows/build-cli-e2e-image.yml
     with:
       includePolyglotImages: false
@@ -35,6 +36,7 @@ jobs:
   smoke-test:
     name: CLI Smoke Test (${{ inputs.quality || 'dev' }})
     needs: build_cli_e2e_image
+    if: ${{ github.repository == 'microsoft/aspire' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -251,7 +253,7 @@ jobs:
     name: Create Issue on Failure
     needs: [smoke-test]
     runs-on: ubuntu-latest
-    if: ${{ failure() && github.event_name == 'schedule' && github.repository_owner == 'microsoft' }}
+    if: ${{ failure() && github.event_name == 'schedule' && github.repository == 'microsoft/aspire' }}
     permissions:
       contents: read   # checkout to require the local .js modules
       actions: read    # download-artifact

@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Shared.Telemetry;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -312,8 +313,8 @@ public class AspireCliTelemetryTests
 
         var tags = await fixture.Telemetry.GetDefaultTagsAsync();
 
-        var expectedOsName = AspireCliTelemetry.GetOsName();
-        var expectedOsType = AspireCliTelemetry.GetOsType();
+        var expectedOsName = OperatingSystemTelemetry.GetOsName();
+        var expectedOsType = OperatingSystemTelemetry.GetOsType();
         Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.OsName && (string?)t.Value == expectedOsName);
         Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.OsVersion && t.Value is string s && s == Environment.OSVersion.Version.ToString());
         Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.OsType && (string?)t.Value == expectedOsType);
@@ -1011,6 +1012,19 @@ public class AspireCliTelemetryTests
         { [("QWEN_CODE", "1")], "qwen" },
         { [("DROID_CLI", "true")], "droid" },
         { [("OPENCODE_AI", "1")], "opencode" },
+        { [("OPENCODE_AI", "")], null },
+        { [("OPENCODE", "1")], "opencode" },
+        { [("OPENCODE", "0")], null },
+        { [("OPENCODE", "true")], null },
+        { [("OPENCODE", "")], null },
+        { [("OPENCODE", null)], null },
+        { [("OPENCODE_PID", "1234")], "opencode" },
+        { [("OPENCODE_PID", "anything")], "opencode" },
+        { [("OPENCODE_PID", "")], "opencode" },
+        { [("OPENCODE_PID", null)], null },
+        { [("OPENCODE_AI", "1"), ("OPENCODE", "1"), ("OPENCODE_PID", "1234")], "opencode" },
+        { [("OPENCODE", "0"), ("OPENCODE_PID", "1234")], "opencode" },
+        { [("OPENCODE", "1"), ("AGENT_CLI", "1")], "opencode, generic_agent" },
         { [("ZED_ENVIRONMENT", "1")], "zed" },
         { [("ZED_TERM", "1")], "zed" },
         { [("KIMI_CLI", "true")], "kimi" },

@@ -4,6 +4,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPERSISTENCE001 // Persistence annotation APIs are experimental.
+#pragma warning disable ASPIREEXTENSION001 // Debug support annotations are experimental.
 
 using System.Diagnostics.CodeAnalysis;
 using System.Net.Http.Headers;
@@ -12,6 +13,8 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Ats;
@@ -35,6 +38,18 @@ public static class ResourceBuilderExtensions
     private const string PersistenceExperimentalDiagnosticId = "ASPIREPERSISTENCE001";
     private static readonly MethodInfo s_dispatchCustomWithReferenceMethod = typeof(ResourceBuilderExtensions).GetMethod(nameof(DispatchCustomWithReference), BindingFlags.NonPublic | BindingFlags.Static)!;
 
+    // Mirrors the ATS marshaller's JSON options (camelCase, string enums, millisecond durations, cycle-safe) so that a
+    // typed annotation written from C# produces the exact JSON shape that the generated TypeScript
+    // DTO interfaces expect, and vice versa. Aspire.Hosting cannot reference the marshaller (it lives
+    // in the higher-level Aspire.Hosting.RemoteHost), so the options are duplicated here intentionally.
+    private static readonly JsonSerializerOptions s_annotationJsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        Converters = { new JsonStringEnumConverter(), new TimeSpanMillisecondsJsonConverter() },
+        ReferenceHandler = ReferenceHandler.IgnoreCycles
+    };
+
     /// <summary>
     /// Configures a resource to use a session lifetime.
     /// </summary>
@@ -48,7 +63,7 @@ public static class ResourceBuilderExtensions
     /// <code language="csharp">
     /// var builder = DistributedApplication.CreateBuilder(args);
     ///
-    /// builder.AddProject&lt;Projects.ApiService&gt;("api")
+    /// builder.AddDotnetProject("api", "../ApiService/ApiService.csproj")
     ///        .WithSessionLifetime();
     ///
     /// builder.Build().Run();
@@ -80,7 +95,7 @@ public static class ResourceBuilderExtensions
     /// <code language="csharp">
     /// var builder = DistributedApplication.CreateBuilder(args);
     ///
-    /// builder.AddProject&lt;Projects.ApiService&gt;("api")
+    /// builder.AddDotnetProject("api", "../ApiService/ApiService.csproj")
     ///        .WithPersistentLifetime();
     ///
     /// builder.Build().Run();
@@ -151,7 +166,7 @@ public static class ResourceBuilderExtensions
     /// <code language="csharp">
     /// var builder = DistributedApplication.CreateBuilder(args);
     ///
-    /// builder.AddProject&lt;Projects.ApiService&gt;("api")
+    /// builder.AddDotnetProject("api", "../ApiService/ApiService.csproj")
     ///        .WithParentProcessLifetime(parentProcessId: 1234);
     ///
     /// builder.Build().Run();
@@ -689,6 +704,241 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(args);
 
         return builder.WithArgs(context => context.Args.AddRange(args));
+    }
+
+    // The exported annotation capabilities below intentionally target IResource (not IResourceBuilder<T>).
+    // ATS has no method overloading, so the scanner can only project one capability per (target type,
+    // method name) pair. The capability dispatcher can bridge an incoming resource builder handle down to
+    // its underlying resource (see PolyglotCapabilityInvocationException.TryConvertHandle), but it cannot
+    // bridge a bare resource handle up to a builder. Deferred run-time callbacks (for example, an args or
+    // Dockerfile-builder callback) are handed a resource handle, not a builder, so a builder-targeted
+    // capability would fail those calls with a TYPE_MISMATCH. Targeting IResource makes the single exported
+    // capability usable from both build-time builder handles and run-time resource handles.
+    //
+    // The builder-targeted overloads are kept as non-exported C# conveniences for ergonomic authoring and
+    // chaining; only the IResource overloads carry [AspireExport].
+
+    /// <summary>
+    /// Stores a serialized ATS annotation payload on a resource builder, replacing any existing annotation with the same ID.
+    /// </summary>
+    /// <typeparam name="T">The resource type.</typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="annotationId">The stable annotation identifier.</param>
+    /// <param name="json">The serialized JSON payload.</param>
+    /// <returns>The resource builder.</returns>
+    internal static IResourceBuilder<T> WithSerializedAnnotation<T>(this IResourceBuilder<T> builder, string annotationId, string json)
+        where T : IResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        builder.Resource.WithSerializedAnnotation(annotationId, json);
+
+        return builder;
+    }
+
+    /// <summary>
+    /// Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+    /// </summary>
+    /// <param name="resource">The resource.</param>
+    /// <param name="annotationId">The stable annotation identifier.</param>
+    /// <param name="json">The serialized JSON payload.</param>
+    /// <returns>The resource.</returns>
+    /// <ats-returns>The resource.</ats-returns>
+    [AspireExport]
+    internal static IResource WithSerializedAnnotation(this IResource resource, string annotationId, string json)
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+        ArgumentException.ThrowIfNullOrWhiteSpace(annotationId);
+        ArgumentNullException.ThrowIfNull(json);
+
+        RemoveSerializedAnnotation(resource, annotationId);
+        resource.Annotations.Add(new AtsAnnotation(annotationId, json));
+
+        return resource;
+    }
+
+    /// <summary>
+    /// Gets a serialized ATS annotation payload from a resource builder.
+    /// </summary>
+    /// <typeparam name="T">The resource type.</typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="annotationId">The stable annotation identifier.</param>
+    /// <returns>The serialized JSON payload.</returns>
+    internal static string GetSerializedAnnotation<T>(this IResourceBuilder<T> builder, string annotationId)
+        where T : IResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return GetSerializedAnnotation(builder.Resource, annotationId);
+    }
+
+    /// <summary>
+    /// Gets a serialized ATS annotation payload from a resource.
+    /// </summary>
+    /// <param name="resource">The resource.</param>
+    /// <param name="annotationId">The stable annotation identifier.</param>
+    /// <returns>The serialized JSON payload.</returns>
+    [AspireExport]
+    internal static string GetSerializedAnnotation(this IResource resource, string annotationId)
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+        ArgumentException.ThrowIfNullOrWhiteSpace(annotationId);
+
+        return TryGetSerializedAnnotation(resource, annotationId)
+            ?? throw new InvalidOperationException($"Resource '{resource.Name}' does not contain an annotation with ID '{annotationId}'.");
+    }
+
+    /// <summary>
+    /// Determines whether a resource builder has a serialized ATS annotation with the specified ID.
+    /// </summary>
+    /// <typeparam name="T">The resource type.</typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="annotationId">The stable annotation identifier.</param>
+    /// <returns><see langword="true"/> if the annotation exists; otherwise, <see langword="false"/>.</returns>
+    internal static bool HasSerializedAnnotation<T>(this IResourceBuilder<T> builder, string annotationId)
+        where T : IResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return HasSerializedAnnotation(builder.Resource, annotationId);
+    }
+
+    /// <summary>
+    /// Determines whether a resource has a serialized ATS annotation with the specified ID.
+    /// </summary>
+    /// <param name="resource">The resource.</param>
+    /// <param name="annotationId">The stable annotation identifier.</param>
+    /// <returns><see langword="true"/> if the annotation exists; otherwise, <see langword="false"/>.</returns>
+    [AspireExport]
+    internal static bool HasSerializedAnnotation(this IResource resource, string annotationId)
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+        ArgumentException.ThrowIfNullOrWhiteSpace(annotationId);
+
+        return TryGetSerializedAnnotation(resource, annotationId) is not null;
+    }
+
+    /// <summary>
+    /// Stores a typed ATS annotation on a resource, serializing the payload declared by <paramref name="definition"/>.
+    /// </summary>
+    /// <typeparam name="T">The resource type.</typeparam>
+    /// <typeparam name="TData">The annotation payload type.</typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="definition">The annotation declaration.</param>
+    /// <param name="data">The annotation payload.</param>
+    /// <returns>The resource builder.</returns>
+    internal static IResourceBuilder<T> WithAnnotation<T, TData>(this IResourceBuilder<T> builder, AnnotationDefinition<TData> definition, TData data)
+        where T : IResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(definition);
+        ArgumentNullException.ThrowIfNull(data);
+
+        var json = JsonSerializer.Serialize(data, s_annotationJsonOptions);
+
+        return builder.WithSerializedAnnotation(definition.Id, json);
+    }
+
+    /// <summary>
+    /// Gets a typed ATS annotation from a resource builder, deserializing the payload declared by <paramref name="definition"/>.
+    /// </summary>
+    /// <typeparam name="T">The resource type.</typeparam>
+    /// <typeparam name="TData">The annotation payload type.</typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="definition">The annotation declaration.</param>
+    /// <returns>The deserialized annotation payload.</returns>
+    internal static TData GetAnnotation<T, TData>(this IResourceBuilder<T> builder, AnnotationDefinition<TData> definition)
+        where T : IResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return GetAnnotation(builder.Resource, definition);
+    }
+
+    /// <summary>
+    /// Gets a typed ATS annotation from a resource, deserializing the payload declared by <paramref name="definition"/>.
+    /// </summary>
+    /// <typeparam name="TData">The annotation payload type.</typeparam>
+    /// <param name="resource">The resource.</param>
+    /// <param name="definition">The annotation declaration.</param>
+    /// <returns>The deserialized annotation payload.</returns>
+    internal static TData GetAnnotation<TData>(this IResource resource, AnnotationDefinition<TData> definition)
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+        ArgumentNullException.ThrowIfNull(definition);
+
+        var json = resource.GetSerializedAnnotation(definition.Id);
+
+        return JsonSerializer.Deserialize<TData>(json, s_annotationJsonOptions)
+            ?? throw new InvalidOperationException($"Annotation '{definition.Id}' on resource '{resource.Name}' deserialized to null.");
+    }
+
+    /// <summary>
+    /// Attempts to get a typed ATS annotation from a resource, deserializing the payload declared by <paramref name="definition"/>.
+    /// </summary>
+    /// <typeparam name="TData">The annotation payload type.</typeparam>
+    /// <param name="resource">The resource.</param>
+    /// <param name="definition">The annotation declaration.</param>
+    /// <param name="data">When this method returns <see langword="true"/>, the deserialized annotation payload.</param>
+    /// <returns><see langword="true"/> if the annotation exists; otherwise, <see langword="false"/>.</returns>
+    internal static bool TryGetAnnotation<TData>(this IResource resource, AnnotationDefinition<TData> definition, [NotNullWhen(true)] out TData? data)
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+        ArgumentNullException.ThrowIfNull(definition);
+
+        var json = TryGetSerializedAnnotation(resource, definition.Id);
+        if (json is null)
+        {
+            data = default;
+            return false;
+        }
+
+        data = JsonSerializer.Deserialize<TData>(json, s_annotationJsonOptions)
+            ?? throw new InvalidOperationException($"Annotation '{definition.Id}' on resource '{resource.Name}' deserialized to null.");
+
+        return true;
+    }
+
+    /// <summary>
+    /// Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+    /// </summary>
+    /// <typeparam name="T">The resource type.</typeparam>
+    /// <param name="builder">The resource builder for a resource implementing <see cref="IResourceWithArgs"/>.</param>
+    /// <param name="args">The arguments to be passed to the resource when it is started.</param>
+    /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
+    internal static IResourceBuilder<T> WithArgsReplace<T>(this IResourceBuilder<T> builder, params string[] args) where T : IResourceWithArgs
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(args);
+
+        return builder.WithArgs(context =>
+        {
+            context.Args.Clear();
+            context.Args.AddRange(args);
+        });
+    }
+
+    private static string? TryGetSerializedAnnotation(IResource resource, string annotationId)
+    {
+        return resource.Annotations
+            .OfType<AtsAnnotation>()
+            .LastOrDefault(annotation => string.Equals(annotation.AnnotationId, annotationId, StringComparison.Ordinal))
+            ?.Json;
+    }
+
+    private static void RemoveSerializedAnnotation(IResource resource, string annotationId)
+    {
+        var existingAnnotations = resource.Annotations
+            .OfType<AtsAnnotation>()
+            .Where(annotation => string.Equals(annotation.AnnotationId, annotationId, StringComparison.Ordinal))
+            .ToArray();
+
+        foreach (var annotation in existingAnnotations)
+        {
+            resource.Annotations.Remove(annotation);
+        }
     }
 
     /// <summary>
@@ -2004,7 +2254,7 @@ public static class ResourceBuilderExtensions
     /// <example>
     /// Update all displayed URLs to have display text:
     /// <code lang="C#">
-    /// var frontend = builder.AddProject&lt;Projects.Frontend&gt;("frontend")
+    /// var frontend = builder.AddDotnetProject("frontend", "../Frontend/Frontend.csproj")
     ///                       .WithUrls(c =>
     ///                       {
     ///                           foreach (var url in c.Urls)
@@ -2020,7 +2270,7 @@ public static class ResourceBuilderExtensions
     /// <example>
     /// Update endpoint URLs to use a custom host name based on the resource name:
     /// <code lang="C#">
-    /// var frontend = builder.AddProject&lt;Projects.Frontend&gt;("frontend")
+    /// var frontend = builder.AddDotnetProject("frontend", "../Frontend/Frontend.csproj")
     ///                       .WithUrls(c =>
     ///                       {
     ///                           foreach (var url in c.Urls)
@@ -2087,14 +2337,14 @@ public static class ResourceBuilderExtensions
     /// <example>
     /// Add a static URL to be displayed for the resource:
     /// <code lang="C#">
-    /// var frontend = builder.AddProject&lt;Projects.Frontend&gt;("frontend")
+    /// var frontend = builder.AddDotnetProject("frontend", "../Frontend/Frontend.csproj")
     ///                       .WithUrl("https://example.com/", "Home");
     /// </code>
     /// </example>
     /// <example>
     /// Update all displayed URLs to use the specified path and (optional) display text:
     /// <code lang="C#">
-    /// var frontend = builder.AddProject&lt;Projects.Frontend&gt;("frontend")
+    /// var frontend = builder.AddDotnetProject("frontend", "../Frontend/Frontend.csproj")
     ///                       .WithUrl("/home", "Home");
     /// </code>
     /// </example>
@@ -2228,14 +2478,14 @@ public static class ResourceBuilderExtensions
     /// <example>
     /// Customize the URL for the "https" endpoint to use the link text "Home":
     /// <code lang="C#">
-    /// var frontend = builder.AddProject&lt;Projects.Frontend&gt;("frontend")
+    /// var frontend = builder.AddDotnetProject("frontend", "../Frontend/Frontend.csproj")
     ///                       .WithUrlForEndpoint("https", url => url.DisplayText = "Home");
     /// </code>
     /// </example>
     /// <example>
     /// Customize the URL for the "https" endpoint to deep to the "/home" path:
     /// <code lang="C#">
-    /// var frontend = builder.AddProject&lt;Projects.Frontend&gt;("frontend")
+    /// var frontend = builder.AddDotnetProject("frontend", "../Frontend/Frontend.csproj")
     ///                       .WithUrlForEndpoint("https", url => url.Url = "/home");
     /// </code>
     /// </example>
@@ -2290,7 +2540,7 @@ public static class ResourceBuilderExtensions
     /// <example>
     /// Add a URL for the "https" endpoint that deep-links to an admin page with the text "Admin":
     /// <code lang="C#">
-    /// var frontend = builder.AddProject&lt;Projects.Frontend&gt;("frontend")
+    /// var frontend = builder.AddDotnetProject("frontend", "../Frontend/Frontend.csproj")
     ///                       .WithUrlForEndpoint("https", ep => new() { Url = "/admin", DisplayText = "Admin" });
     /// </code>
     /// </example>
@@ -2475,7 +2725,7 @@ public static class ResourceBuilderExtensions
     /// <code lang="C#">
     /// var builder = DistributedApplication.CreateBuilder(args);
     /// var messaging = builder.AddRabbitMQ("messaging");
-    /// builder.AddProject&lt;Projects.MyApp&gt;("myapp")
+    /// builder.AddDotnetProject("myapp", "../MyApp/MyApp.csproj")
     ///        .WithReference(messaging)
     ///        .WaitFor(messaging);
     /// </code>
@@ -2535,7 +2785,7 @@ public static class ResourceBuilderExtensions
     /// <code lang="C#">
     /// var builder = DistributedApplication.CreateBuilder(args);
     /// var messaging = builder.AddRabbitMQ("messaging");
-    /// builder.AddProject&lt;Projects.MyApp&gt;("myapp")
+    /// builder.AddDotnetProject("myapp", "../MyApp/MyApp.csproj")
     ///        .WithReference(messaging)
     ///        .WaitFor(messaging, WaitBehavior.StopOnResourceUnavailable);
     /// </code>
@@ -2600,7 +2850,7 @@ public static class ResourceBuilderExtensions
     /// <code lang="C#">
     /// var builder = DistributedApplication.CreateBuilder(args);
     /// var messaging = builder.AddRabbitMQ("messaging");
-    /// builder.AddProject&lt;Projects.MyApp&gt;("myapp")
+    /// builder.AddDotnetProject("myapp", "../MyApp/MyApp.csproj")
     ///        .WithReference(messaging)
     ///        .WaitForStart(messaging);
     /// </code>
@@ -2658,7 +2908,7 @@ public static class ResourceBuilderExtensions
     /// <code lang="C#">
     /// var builder = DistributedApplication.CreateBuilder(args);
     /// var messaging = builder.AddRabbitMQ("messaging");
-    /// builder.AddProject&lt;Projects.MyApp&gt;("myapp")
+    /// builder.AddDotnetProject("myapp", "../MyApp/MyApp.csproj")
     ///        .WithReference(messaging)
     ///        .WaitForStart(messaging, WaitBehavior.StopOnResourceUnavailable);
     /// </code>
@@ -2731,7 +2981,7 @@ public static class ResourceBuilderExtensions
     /// <code lang="C#">
     /// var builder = DistributedApplication.CreateBuilder(args);
     /// var pgsql = builder.AddPostgres("postgres");
-    /// builder.AddProject&lt;Projects.CleanUpDatabase&gt;("dbcleanuptool")
+    /// builder.AddDotnetProject("dbcleanuptool", "../CleanUpDatabase/CleanUpDatabase.csproj")
     ///        .WithReference(pgsql)
     ///        .WithExplicitStart();
     /// </code>
@@ -2763,9 +3013,9 @@ public static class ResourceBuilderExtensions
     /// <code lang="C#">
     /// var builder = DistributedApplication.CreateBuilder(args);
     /// var pgsql = builder.AddPostgres("postgres");
-    /// var dbprep = builder.AddProject&lt;Projects.DbPrepApp&gt;("dbprep")
+    /// var dbprep = builder.AddDotnetProject("dbprep", "../DbPrepApp/DbPrepApp.csproj")
     ///                     .WithReference(pgsql);
-    /// builder.AddProject&lt;Projects.DatabasePrepTool&gt;("dbpreptool")
+    /// builder.AddDotnetProject("dbpreptool", "../DatabasePrepTool/DatabasePrepTool.csproj")
     ///        .WithReference(pgsql)
     ///        .WaitForCompletion(dbprep);
     /// </code>
@@ -2824,7 +3074,7 @@ public static class ResourceBuilderExtensions
     /// var pg = builder.AddPostgres("pg")
     ///                 .WithHealthCheck("mycheck");
     ///
-    /// builder.AddProject&lt;Projects.MyApp&gt;("myapp")
+    /// builder.AddDotnetProject("myapp", "../MyApp/MyApp.csproj")
     ///        .WithReference(pg)
     ///        .WaitFor(pg); // This will result in waiting for the building check, and the
     ///                      // custom check defined in the code.
@@ -2871,9 +3121,9 @@ public static class ResourceBuilderExtensions
     /// "/health" path on the backend server.
     /// <code lang="C#">
     /// var builder = DistributedApplication.CreateBuilder(args);
-    /// var backend = builder.AddProject&lt;Projects.Backend&gt;("backend")
+    /// var backend = builder.AddDotnetProject("backend", "../Backend/Backend.csproj")
     ///                      .WithHttpHealthCheck("/health");
-    /// builder.AddProject&lt;Projects.Frontend&gt;("frontend")
+    /// builder.AddDotnetProject("frontend", "../Frontend/Frontend.csproj")
     ///        .WithReference(backend).WaitFor(backend);
     /// </code>
     /// </example>
@@ -2913,9 +3163,9 @@ public static class ResourceBuilderExtensions
     /// "/health" path on the backend server.
     /// <code lang="C#">
     /// var builder = DistributedApplication.CreateBuilder(args);
-    /// var backend = builder.AddProject&lt;Projects.Backend&gt;("backend");
-    /// backend.WithHttpHealthCheck(() => backend.GetEndpoint("https"), path: "/health")
-    /// builder.AddProject&lt;Projects.Frontend&gt;("frontend")
+    /// var backend = builder.AddDotnetProject("backend", "../Backend/Backend.csproj");
+    /// backend.WithHttpHealthCheck(() => backend.GetEndpoint("https"), path: "/health");
+    /// builder.AddDotnetProject("frontend", "../Frontend/Frontend.csproj")
     ///        .WithReference(backend).WaitFor(backend);
     /// </code>
     /// </example>
@@ -2993,9 +3243,9 @@ public static class ResourceBuilderExtensions
     /// "/health" path on the backend server.
     /// <code lang="C#">
     /// var builder = DistributedApplication.CreateBuilder(args);
-    /// var backend = builder.AddProject&lt;Projects.Backend&gt;("backend")
+    /// var backend = builder.AddDotnetProject("backend", "../Backend/Backend.csproj")
     ///                      .WithHttpsHealthCheck("/health");
-    /// builder.AddProject&lt;Projects.Frontend&gt;("frontend")
+    /// builder.AddDotnetProject("frontend", "../Frontend/Frontend.csproj")
     ///        .WithReference(backend).WaitFor(backend);
     /// </code>
     /// </example>
@@ -3684,7 +3934,7 @@ public static class ResourceBuilderExtensions
     /// <example>
     /// Adds a command to the project resource that when invoked sends an HTTP POST request to the path <c>/clear-cache</c>.
     /// <code lang="csharp">
-    /// var apiService = builder.AddProject&gt;MyApiService&gt;("api")
+    /// var apiService = builder.AddDotnetProject("api", "../MyApiService/MyApiService.csproj")
     ///     .WithHttpCommand("/clear-cache", "Clear cache");
     /// </code>
     /// </example>
@@ -3693,8 +3943,8 @@ public static class ResourceBuilderExtensions
     /// The request's headers are configured to include an <c>X-Admin-Key</c> header for verification.
     /// <code lang="csharp">
     /// var adminKey = builder.AddParameter("admin-key");
-    /// var apiService = builder.AddProject&gt;MyApiService&gt;("api")
-    ///     .WithHttpsEndpoint("admin")
+    /// var apiService = builder.AddDotnetProject("api", "../MyApiService/MyApiService.csproj")
+    ///     .WithHttpsEndpoint(name: "admin")
     ///     .WithEnvironment("ADMIN_KEY", adminKey)
     ///     .WithHttpCommand("/reset-db", "Reset database",
     ///                      endpointName: "admin",
@@ -3779,9 +4029,9 @@ public static class ResourceBuilderExtensions
     /// Adds commands to a project resource that when invoked sends an HTTP POST request to an endpoint on a separate load generator resource, to generate load against the
     /// resource the command was executed against.
     /// <code lang="csharp">
-    /// var loadGenerator = builder.AddProject&gt;LoadGenerator&gt;("load");
+    /// var loadGenerator = builder.AddDotnetProject("load", "../LoadGenerator/LoadGenerator.csproj");
     /// var loadGeneratorEndpoint = loadGenerator.GetEndpoint("https");
-    /// var customerService = builder.AddProject&gt;CustomerService&gt;("customer-service")
+    /// var customerService = builder.AddDotnetProject("customer-service", "../CustomerService/CustomerService.csproj")
     ///     .WithHttpCommand("/stress?resource=customer-service&amp;requests=1000", "Apply load (1000)", endpointSelector: () => loadGeneratorEndpoint)
     ///     .WithHttpCommand("/stress?resource=customer-service&amp;requests=5000", "Apply load (5000)", endpointSelector: () => loadGeneratorEndpoint);
     /// loadGenerator.WithReference(customerService);
@@ -4158,7 +4408,7 @@ public static class ResourceBuilderExtensions
     ///     Args = args,
     ///     TrustDeveloperCertificate = false,
     /// });
-    /// var project = builder.AddProject&lt;MyService&gt;("my-service")
+    /// var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
     ///    .WithDeveloperCertificateTrust(true);
     /// </code>
     /// </example>
@@ -4269,6 +4519,43 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(callback);
 
         return builder.WithAnnotation(new CertificateTrustConfigurationCallbackAnnotation(callback), ResourceAnnotationMutationBehavior.Replace);
+    }
+
+    /// <summary>
+    /// Configures environment variables that point to Aspire-managed certificate trust paths.
+    /// </summary>
+    /// <typeparam name="TResource">The type of the resource.</typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="certificateBundleEnvironmentVariable">The environment variable that receives the certificate bundle path.</param>
+    /// <param name="certificateDirectoriesEnvironmentVariable">The optional environment variable that receives the certificate directories path.</param>
+    /// <returns>The updated resource builder.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
+    internal static IResourceBuilder<TResource> WithCertificateTrustEnvironment<TResource>(
+        this IResourceBuilder<TResource> builder,
+        string certificateBundleEnvironmentVariable,
+        string? certificateDirectoriesEnvironmentVariable = null)
+        where TResource : IResourceWithArgs, IResourceWithEnvironment
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrWhiteSpace(certificateBundleEnvironmentVariable);
+
+        if (certificateDirectoriesEnvironmentVariable is not null)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(certificateDirectoriesEnvironmentVariable);
+        }
+
+        return builder.WithCertificateTrustConfiguration(context =>
+        {
+            context.EnvironmentVariables[certificateBundleEnvironmentVariable] = context.CertificateBundlePath;
+
+            if (certificateDirectoriesEnvironmentVariable is not null)
+            {
+                context.EnvironmentVariables[certificateDirectoriesEnvironmentVariable] = context.CertificateDirectoriesPath;
+            }
+
+            return Task.CompletedTask;
+        });
     }
 
     /// <summary>
@@ -4548,8 +4835,8 @@ public static class ResourceBuilderExtensions
     /// This example shows adding a relationship between two resources.
     /// <code lang="C#">
     /// var builder = DistributedApplication.CreateBuilder(args);
-    /// var backend = builder.AddProject&lt;Projects.Backend&gt;("backend");
-    /// var manager = builder.AddProject&lt;Projects.Manager&gt;("manager")
+    /// var backend = builder.AddDotnetProject("backend", "../Backend/Backend.csproj");
+    /// var manager = builder.AddDotnetProject("manager", "../Manager/Manager.csproj")
     ///                      .WithRelationship(backend.Resource, "Manager");
     /// </code>
     /// </example>
@@ -4709,9 +4996,9 @@ public static class ResourceBuilderExtensions
     /// This example shows adding a relationship between two resources.
     /// <code lang="C#">
     /// var builder = DistributedApplication.CreateBuilder(args);
-    /// var backend = builder.AddProject&lt;Projects.Backend&gt;("backend");
+    /// var backend = builder.AddDotnetProject("backend", "../Backend/Backend.csproj");
     ///
-    /// var frontend = builder.AddProject&lt;Projects.Manager&gt;("frontend")
+    /// var frontend = builder.AddDotnetProject("frontend", "../Manager/Manager.csproj")
     ///                      .WithParentRelationship(backend);
     /// </code>
     /// </example>
@@ -4741,9 +5028,9 @@ public static class ResourceBuilderExtensions
     /// This example shows adding a relationship between two resources.
     /// <code lang="C#">
     /// var builder = DistributedApplication.CreateBuilder(args);
-    /// var backend = builder.AddProject&lt;Projects.Backend&gt;("backend");
+    /// var backend = builder.AddDotnetProject("backend", "../Backend/Backend.csproj");
     ///
-    /// var frontend = builder.AddProject&lt;Projects.Manager&gt;("frontend")
+    /// var frontend = builder.AddDotnetProject("frontend", "../Manager/Manager.csproj")
     ///                      .WithParentRelationship(backend.Resource);
     /// </code>
     /// </example>
@@ -4777,7 +5064,7 @@ public static class ResourceBuilderExtensions
     ///
     /// var parameter = builder.AddParameter("parameter");
     ///
-    /// var backend = builder.AddProject&lt;Projects.Backend&gt;("backend");
+    /// var backend = builder.AddDotnetProject("backend", "../Backend/Backend.csproj")
     ///                      .WithChildRelationship(parameter);
     /// </code>
     /// </example>
@@ -4811,7 +5098,7 @@ public static class ResourceBuilderExtensions
     ///
     /// var parameter = builder.AddParameter("parameter");
     ///
-    /// var backend = builder.AddProject&lt;Projects.Backend&gt;("backend");
+    /// var backend = builder.AddDotnetProject("backend", "../Backend/Backend.csproj")
     ///                     .WithChildRelationship(parameter.Resource);
     /// </code>
     /// </example>
@@ -4850,7 +5137,7 @@ public static class ResourceBuilderExtensions
     /// <example>
     /// Set a custom service to use a specific icon with Regular variant:
     /// <code lang="C#">
-    /// var service = builder.AddProject&lt;Projects.MyService&gt;("service")
+    /// var service = builder.AddDotnetProject("service", "../MyService/MyService.csproj")
     ///     .WithIconName("CloudArrowUp", IconVariant.Regular);
     /// </code>
     /// </example>
@@ -5139,6 +5426,44 @@ public static class ResourceBuilderExtensions
     }
 
     /// <summary>
+    /// Adds VS Code-compatible debug metadata for an executable resource.
+    /// </summary>
+    /// <typeparam name="T">The resource type.</typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="launchConfigurationType">The launch configuration type understood by the extension.</param>
+    /// <param name="scriptPath">The script path, relative to the executable working directory when not rooted.</param>
+    /// <param name="runtimeExecutable">The optional runtime executable to use in the launch configuration.</param>
+    /// <param name="launchMethod">The optional launch method to use in the launch configuration.</param>
+    /// <returns>The resource builder.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
+    internal static IResourceBuilder<T> WithExecutableDebugSupport<T>(
+        this IResourceBuilder<T> builder,
+        string launchConfigurationType,
+        string scriptPath,
+        string? runtimeExecutable = null,
+        string? launchMethod = null)
+        where T : ExecutableResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrWhiteSpace(launchConfigurationType);
+        ArgumentException.ThrowIfNullOrWhiteSpace(scriptPath);
+
+        var workingDirectory = Path.GetFullPath(builder.Resource.WorkingDirectory);
+
+        return builder.WithDebugSupport(
+            mode => new AtsExecutableLaunchConfiguration(launchConfigurationType)
+            {
+                Mode = mode,
+                ScriptPath = Path.GetFullPath(scriptPath, workingDirectory),
+                RuntimeExecutable = runtimeExecutable ?? launchConfigurationType,
+                WorkingDirectory = workingDirectory,
+                LaunchMethod = launchMethod ?? "direct"
+            },
+            launchConfigurationType);
+    }
+
+    /// <summary>
     /// Adds a HTTP probe to the resource.
     /// </summary>
     /// <typeparam name="T">Type of resource.</typeparam>
@@ -5159,12 +5484,12 @@ public static class ResourceBuilderExtensions
     /// <example>
     /// For example add a probe to a resource in this way:
     /// <code lang="C#">
-    /// var service = builder.AddProject&lt;Projects.MyService&gt;("service")
+    /// var service = builder.AddDotnetProject("service", "../MyService/MyService.csproj")
     ///     .WithHttpProbe(ProbeType.Liveness, "/health");
     /// </code>
     /// Is the same of writing:
     /// <code lang="C#">
-    /// var service = builder.AddProject&lt;Projects.MyService&gt;("service")
+    /// var service = builder.AddDotnetProject("service", "../MyService/MyService.csproj")
     ///     .WithHttpProbe(ProbeType.Liveness, "/health")
     ///     .WithHttpHealthCheck("/health");
     /// </code>
@@ -5217,12 +5542,12 @@ public static class ResourceBuilderExtensions
     /// <example>
     /// For example add a probe to a resource in this way:
     /// <code lang="C#">
-    /// var service = builder.AddProject&lt;Projects.MyService&gt;("service")
+    /// var service = builder.AddDotnetProject("service", "../MyService/MyService.csproj")
     ///     .WithHttpProbe(ProbeType.Liveness, "/health");
     /// </code>
     /// Is the same of writing:
     /// <code lang="C#">
-    /// var service = builder.AddProject&lt;Projects.MyService&gt;("service")
+    /// var service = builder.AddDotnetProject("service", "../MyService/MyService.csproj")
     ///     .WithHttpProbe(ProbeType.Liveness, "/health")
     ///     .WithHttpHealthCheck("/health");
     /// </code>
@@ -5534,5 +5859,26 @@ public static class ResourceBuilderExtensions
         {
             context.Options.RemoteImageTag = remoteImageTag;
         });
+    }
+
+    private sealed class AtsExecutableLaunchConfiguration(string type)
+    {
+        [JsonPropertyName("type")]
+        public string Type { get; } = type;
+
+        [JsonPropertyName("mode")]
+        public string Mode { get; init; } = string.Empty;
+
+        [JsonPropertyName("script_path")]
+        public string ScriptPath { get; init; } = string.Empty;
+
+        [JsonPropertyName("runtime_executable")]
+        public string RuntimeExecutable { get; init; } = string.Empty;
+
+        [JsonPropertyName("working_directory")]
+        public string WorkingDirectory { get; init; } = string.Empty;
+
+        [JsonPropertyName("launch_method")]
+        public string LaunchMethod { get; init; } = string.Empty;
     }
 }

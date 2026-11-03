@@ -13,6 +13,7 @@ permissions:
 jobs:
   extension_changelog_finalized:
     name: Extension changelog finalized
+    if: ${{ github.repository == 'microsoft/aspire' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code

@@ -26,9 +26,10 @@ public class AzureContainerRegistryResource : AzureProvisioningResource, IAzureC
     {
         Annotations.Add(new PipelineStepAnnotation((factoryContext) =>
         {
-            var loginStep = new PipelineStep
+            var loginStep = new AzureAuthenticatedPipelineStep
             {
                 Name = $"login-to-acr-{name}",
+                TokenScopes = [AcrLoginService.AcrScope],
                 Action = context => AzureContainerRegistryHelpers.LoginToRegistryAsync(this, context),
                 Tags = ["acr-login"],
                 RequiredBySteps = [WellKnownPipelineSteps.PushPrereq],

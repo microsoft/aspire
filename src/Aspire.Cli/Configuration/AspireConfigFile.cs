@@ -5,6 +5,7 @@ using System.ComponentModel;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Documentation.ApiDocs;
 using Aspire.Cli.Documentation.Docs;
 using Aspire.Cli.Resources;
@@ -55,12 +56,18 @@ namespace Aspire.Cli.Configuration;
 internal sealed class AspireConfigFile
 {
     public const string FileName = "aspire.config.json";
+    public const string TemplateSourcesSectionName = "templateSources";
 
     /// <summary>
     /// The JSON Schema URL for this configuration file.
     /// </summary>
     [JsonPropertyName("$schema")]
     public string? Schema { get; set; }
+
+    [JsonPropertyName(ConfigSource.SectionName)]
+    [Description("The Git repository, configuration path, optional branch or commit, and version last applied to this app, or an explicit opt-out.")]
+    [LocalAspireJsonConfigurationProperty]
+    public ConfigSource? ConfigSource { get; set; }
 
     /// <summary>
     /// AppHost entry point configuration.
@@ -110,6 +117,10 @@ internal sealed class AspireConfigFile
     [Description("Documentation source overrides for aspire docs and aspire docs api. Leave these unset to use the built-in aspire.dev sources.")]
     public AspireConfigDocs? Docs { get; set; }
 
+    [JsonPropertyName(SkillSource.SectionName)]
+    [Description("Named agent skill sources, merged across configuration layers. The built-in default source remains enabled unless explicitly disabled.")]
+    public Dictionary<string, SkillSource>? SkillSources { get; set; }
+
     /// <summary>
     /// Developer certificate configuration.
     /// </summary>
@@ -134,9 +145,38 @@ internal sealed class AspireConfigFile
     /// <summary>
     /// Package references for non-first-class languages.
     /// </summary>
+    /// <remarks>
+    /// Each entry value is either a <b>string</b> (short form, NuGet version or a legacy
+    /// <c>.csproj</c> path; empty means the SDK version) or an <b>object</b> (long form, carries
+    /// a <c>source</c> discriminator and per-source fields).
+    ///
+    /// <para>String form examples:</para>
+    /// <code>
+    /// "Aspire.Hosting.Redis": "",          // NuGet, SDK version
+    /// "Aspire.Hosting.Kafka": "9.2.0"      // NuGet, explicit version
+    /// </code>
+    ///
+    /// <para>Object form examples:</para>
+    /// <code>
+    /// "Aspire.Hosting.Redis":   { "source": "nuget",   "version": "9.2.0" }
+    /// "Aspire.Hosting.Local":   { "source": "project", "path": "../Local/Local.csproj" }
+    /// "@spike/aspire-kafka":    { "source": "npm",     "path": "./kafka-integration/host.ts" }
+    /// </code>
+    ///
+    /// Dispatched per-source by <see cref="GetIntegrationReferences"/>. Adding a new ecosystem
+    /// means one new <see cref="IntegrationSource"/> value plus one parsing branch here.
+    /// </remarks>
     [JsonPropertyName("packages")]
-    [Description("Package references for non-first-class languages. Key is package name, value is version. A value ending in \".csproj\" is treated as a project reference.")]
-    public Dictionary<string, string>? Packages { get; set; }
+    [Description("Package references for the AppHost. Value is either a string (NuGet, short form — empty = SDK version, otherwise explicit version) or an object with a required \"source\" discriminator (\"nuget\", \"project\", or \"npm\") and per-source fields (version for nuget, path for project/npm).")]
+    public Dictionary<string, PackageEntry>? Packages { get; set; }
+
+    [JsonPropertyName(TemplateSourcesSectionName)]
+    [Description("Named global template sources. Each source specifies an absolute local path or a Git repository with optional ref and path.")]
+    public Dictionary<string, AspireConfigTemplateSource?>? TemplateSources { get; set; }
+
+    // Unmodeled settings must survive typed load/save cycles.
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 
     /// <summary>
     /// Loads aspire.config.json from the specified directory.
@@ -168,13 +208,14 @@ internal sealed class AspireConfigFile
     /// <summary>
     /// Saves aspire.config.json to the specified directory.
     /// Uses relaxed JSON escaping so non-ASCII characters (CJK, etc.) are preserved as-is.
+    /// The file is written with the OS line break and a final newline.
     /// </summary>
     public void Save(string directory)
     {
         Directory.CreateDirectory(directory);
         var filePath = Path.Combine(directory, FileName);
         var json = JsonSerializer.Serialize(this, JsonSourceGenerationContext.RelaxedEscaping.AspireConfigFile);
-        File.WriteAllText(filePath, json);
+        File.WriteAllText(filePath, ConfigurationHelper.EnsureFinalNewline(json));
     }
 
     /// <summary>
@@ -328,12 +369,14 @@ internal sealed class AspireConfigFile
     }
 
     /// <summary>
-    /// Adds a package reference, updating the version if it already exists.
+    /// Adds or updates a NuGet package reference. Always writes a NuGet entry — the object
+    /// form is reserved for entries that can't be expressed as a bare version (project
+    /// references, npm integrations) and is written by hand.
     /// </summary>
     public void AddOrUpdatePackage(string packageId, string version)
     {
         Packages ??= [];
-        Packages[packageId] = version;
+        Packages[packageId] = PackageEntry.Nuget(version);
     }
 
     /// <summary>
@@ -350,13 +393,12 @@ internal sealed class AspireConfigFile
     }
 
     /// <summary>
-    /// Gets all integration references (both NuGet packages and project references)
-    /// including the base Aspire.Hosting package.
-    /// A value ending in ".csproj" is treated as a project reference; otherwise as a NuGet version.
-    /// Empty package versions are resolved to the effective SDK version.
+    /// Gets all integration references including the base <c>Aspire.Hosting</c> package.
+    /// Per-entry string-or-object parsing is handled by <see cref="PackageEntryConverter"/>;
+    /// this method just materializes each <see cref="PackageEntry"/> into an
+    /// <see cref="IntegrationReference"/> with absolute paths resolved against
+    /// <paramref name="configDirectory"/>.
     /// </summary>
-    /// <param name="defaultSdkVersion">Default SDK version to use when not configured.</param>
-    /// <param name="configDirectory">The directory containing aspire.config.json, used to resolve relative project paths.</param>
     public IEnumerable<IntegrationReference> GetIntegrationReferences(string defaultSdkVersion, string configDirectory)
     {
         var sdkVersion = GetEffectiveSdkVersion(defaultSdkVersion);
@@ -369,7 +411,7 @@ internal sealed class AspireConfigFile
             yield break;
         }
 
-        foreach (var (packageName, value) in Packages)
+        foreach (var (packageName, entry) in Packages)
         {
             // Skip base packages and SDK-only packages
             if (string.Equals(packageName, "Aspire.Hosting", StringComparison.OrdinalIgnoreCase) ||
@@ -378,26 +420,23 @@ internal sealed class AspireConfigFile
                 continue;
             }
 
-            var trimmedValue = value?.Trim();
+            yield return entry.Source switch
+            {
+                IntegrationSource.Nuget => IntegrationReference.FromPackage(
+                    packageName,
+                    string.IsNullOrWhiteSpace(entry.Version) ? sdkVersion : entry.Version),
 
-            if (string.IsNullOrEmpty(trimmedValue))
-            {
-                // NuGet package reference with no explicit version — fall back to the SDK version
-                yield return IntegrationReference.FromPackage(packageName, sdkVersion);
-                continue;
-            }
+                IntegrationSource.Project => IntegrationReference.FromProject(
+                    packageName,
+                    Path.GetFullPath(Path.Combine(configDirectory, entry.Path!))),
 
-            if (trimmedValue.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
-            {
-                // Project reference — resolve relative path to absolute
-                var absolutePath = Path.GetFullPath(Path.Combine(configDirectory, trimmedValue));
-                yield return IntegrationReference.FromProject(packageName, absolutePath);
-            }
-            else
-            {
-                // NuGet package reference with explicit version
-                yield return IntegrationReference.FromPackage(packageName, trimmedValue);
-            }
+                IntegrationSource.Npm => IntegrationReference.FromNpm(
+                    packageName,
+                    Path.GetFullPath(Path.Combine(configDirectory, entry.Path!))),
+
+                _ => throw new InvalidOperationException(
+                    $"Package '{packageName}' has unhandled source '{entry.Source}'.")
+            };
         }
     }
 
@@ -431,7 +470,22 @@ internal sealed class AspireConfigFile
 
             config.Channel = settings.Channel;
             config.Features = settings.Features;
-            config.Packages = settings.Packages;
+            config.SkillSources = settings.SkillSources;
+
+            // Legacy settings.json stored packages as Dictionary<string,string> with an
+            // ad-hoc ".csproj" suffix for project references. Translate to strong entries.
+            if (settings.Packages is not null)
+            {
+                config.Packages = new Dictionary<string, PackageEntry>();
+                foreach (var (name, value) in settings.Packages)
+                {
+                    var trimmed = value?.Trim();
+                    config.Packages[name] = trimmed is not null &&
+                                            trimmed.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase)
+                        ? PackageEntry.Project(trimmed)
+                        : PackageEntry.Nuget(string.IsNullOrEmpty(trimmed) ? null : trimmed);
+                }
+            }
         }
 
         config.Profiles = profiles;
@@ -535,6 +589,21 @@ internal sealed class AspireConfigApiDocs
     [JsonPropertyName("sitemapUrl")]
     [Description($"""Optional override for the API sitemap consumed by aspire docs api. Defaults to {ApiDocsSourceConfiguration.DefaultSitemapUrl}.""")]
     public string? SitemapUrl { get; set; }
+}
+
+/// <summary>
+/// Template source within aspire.config.json.
+/// </summary>
+internal sealed class AspireConfigTemplateSource
+{
+    [JsonPropertyName("path")]
+    public string? Path { get; set; }
+
+    [JsonPropertyName("repository")]
+    public string? Repository { get; set; }
+
+    [JsonPropertyName("ref")]
+    public string? Ref { get; set; }
 }
 
 /// <summary>

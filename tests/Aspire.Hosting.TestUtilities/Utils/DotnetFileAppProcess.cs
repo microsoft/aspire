@@ -63,13 +63,15 @@ internal static class DotnetFileAppProcess
         Action<string>? onOutputData = null,
         Action<string>? onErrorData = null,
         bool throwOnNonZeroReturnCode = false,
-        int? retainedOutputLineCount = null)
+        int? retainedOutputLineCount = null,
+        Action<int>? onStart = null)
     {
         return new ProcessSpec(ExecutablePath)
         {
             ArgumentList = CreateArguments(appPath, arguments),
             OnOutputData = onOutputData,
             OnErrorData = onErrorData,
+            OnStart = onStart,
             ThrowOnNonZeroReturnCode = throwOnNonZeroReturnCode,
             ResolveExecutablePath = true,
             RetainedOutputLineCount = retainedOutputLineCount

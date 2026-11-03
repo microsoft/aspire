@@ -3,8 +3,9 @@
 
 using System.ComponentModel;
 using System.Diagnostics;
+#if NETFRAMEWORK
 using System.Globalization;
-using System.Text;
+#endif
 using Microsoft.Build.Framework;
 
 namespace Aspire.Hosting.Tasks;
@@ -15,8 +16,6 @@ namespace Aspire.Hosting.Tasks;
 public sealed class RunAspireCliCommand : Microsoft.Build.Utilities.Task
 {
     private const string ArgumentValueMetadataName = "Value";
-    private const string CommandShimPathEnvironmentVariable = "__ASPIRE_MSBUILD_COMMAND_PATH";
-    private const string CommandShimArgumentEnvironmentVariablePrefix = "__ASPIRE_MSBUILD_COMMAND_ARGUMENT_";
     private const int ProcessTerminationTimeoutMilliseconds = 5_000;
 
     /// <summary>
@@ -56,6 +55,12 @@ public sealed class RunAspireCliCommand : Microsoft.Build.Utilities.Task
     /// </summary>
     [Output]
     public string? FailureMessage { get; set; }
+
+    /// <summary>
+    /// Gets the captured standard output and standard error for inclusion in setup failure diagnostics.
+    /// </summary>
+    [Output]
+    public string ConsoleOutput { get; set; } = string.Empty;
 
     /// <summary>
     /// Overrides process termination for tests that must keep a process alive after termination is requested.
@@ -139,34 +144,14 @@ public sealed class RunAspireCliCommand : Microsoft.Build.Utilities.Task
 
     private ProcessStartInfo CreateStartInfo(IReadOnlyList<string> arguments)
     {
-        var startInfo = IsWindowsCommandShim(FileName)
-            ? new ProcessStartInfo(GetCommandProcessorPath(), BuildCommandProcessorArguments(arguments.Count))
-            : new ProcessStartInfo(FileName);
-
-        startInfo.CreateNoWindow = true;
-        startInfo.RedirectStandardOutput = true;
-        startInfo.RedirectStandardError = true;
-        startInfo.UseShellExecute = false;
-
-        if (IsWindowsCommandShim(FileName))
+        var startInfo = new ProcessStartInfo
         {
-            SetEnvironmentVariable(startInfo, CommandShimPathEnvironmentVariable, FileName);
-            for (var index = 0; index < arguments.Count; index++)
-            {
-                SetEnvironmentVariable(startInfo, $"{CommandShimArgumentEnvironmentVariablePrefix}{index}", arguments[index]);
-            }
-        }
-        else
-        {
-#if NETFRAMEWORK
-            startInfo.Arguments = string.Join(" ", arguments.Select(QuoteWindowsArgument));
-#else
-            foreach (var argument in arguments)
-            {
-                startInfo.ArgumentList.Add(argument);
-            }
-#endif
-        }
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false
+        };
+        ProcessStartInfoHelper.SetCommand(startInfo, FileName, arguments, Path.DirectorySeparatorChar == '\\');
 
         return startInfo;
     }
@@ -281,6 +266,7 @@ public sealed class RunAspireCliCommand : Microsoft.Build.Utilities.Task
     {
         if (!string.IsNullOrEmpty(output))
         {
+            ConsoleOutput += output + (output.EndsWith("\n", StringComparison.Ordinal) ? string.Empty : Environment.NewLine);
             // Setup output is diagnostic only. Logging it as a message prevents a recovered attempt
             // from becoming a warning-as-error failure because the tool wrote warning-like text.
             Log.LogMessage(MessageImportance.Low, "{0}", output);
@@ -327,80 +313,4 @@ public sealed class RunAspireCliCommand : Microsoft.Build.Utilities.Task
         return string.IsNullOrEmpty(value) ? argument.ItemSpec : value;
     }
 
-    private static bool IsWindowsCommandShim(string path)
-    {
-        return Path.DirectorySeparatorChar == '\\'
-            && (path.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase)
-                || path.EndsWith(".bat", StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static string GetCommandProcessorPath()
-    {
-        return Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe";
-    }
-
-    private static string BuildCommandProcessorArguments(int argumentCount)
-    {
-        var command = new StringBuilder($"\"%{CommandShimPathEnvironmentVariable}%\"");
-
-        for (var index = 0; index < argumentCount; index++)
-        {
-            command.Append(" \"%");
-            command.Append(CommandShimArgumentEnvironmentVariablePrefix);
-            command.Append(index.ToString(CultureInfo.InvariantCulture));
-            command.Append("%\"");
-        }
-
-        // Expand each child-only variable once. cmd.exe does not recursively expand percent-delimited
-        // text introduced by an environment variable, so literal %NAME% path segments remain intact.
-        return $"/D /V:OFF /S /C \"{command}\"";
-    }
-
-    private static void SetEnvironmentVariable(ProcessStartInfo startInfo, string name, string value)
-    {
-#if NETFRAMEWORK
-        startInfo.EnvironmentVariables[name] = value;
-#else
-        startInfo.Environment[name] = value;
-#endif
-    }
-
-#if NETFRAMEWORK
-    private static string QuoteWindowsArgument(string argument)
-    {
-        if (argument.Length > 0 && !argument.Any(static character => char.IsWhiteSpace(character) || character == '"'))
-        {
-            return argument;
-        }
-
-        var result = new StringBuilder(argument.Length + 2);
-        result.Append('"');
-        var backslashCount = 0;
-
-        foreach (var character in argument)
-        {
-            if (character == '\\')
-            {
-                backslashCount++;
-                continue;
-            }
-
-            if (character == '"')
-            {
-                result.Append('\\', (backslashCount * 2) + 1);
-                result.Append('"');
-                backslashCount = 0;
-                continue;
-            }
-
-            result.Append('\\', backslashCount);
-            backslashCount = 0;
-            result.Append(character);
-        }
-
-        result.Append('\\', backslashCount * 2);
-        result.Append('"');
-        return result.ToString();
-    }
-#endif
 }

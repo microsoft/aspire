@@ -198,12 +198,13 @@ const tabNavigationRegistrations = new WeakMap();
 
 export function registerTabNavigation(dockElement, dotNetRef) {
     unregisterTabNavigation(dockElement);
-    let focusedTabGroup = null;
+    let focusedCloseTarget = null;
     const disposeTabStrip = registerTabStrip(dockElement, dotNetRef);
 
     const onFocusIn = (event) => {
-        const group = event.target.closest?.('.terminal-dock-tab');
-        focusedTabGroup = group && dockElement.contains(group) ? group : null;
+        const group = event.target.closest?.('.terminal-dock-tab')
+            ?? (event.target.closest?.('.terminal-close-tab') ? event.target.closest('.terminal-dock-pane') : null);
+        focusedCloseTarget = group && dockElement.contains(group) ? group : null;
     };
 
     // Automatic activation follows https://www.w3.org/WAI/ARIA/apg/patterns/tabs/.
@@ -250,14 +251,14 @@ export function registerTabNavigation(dockElement, dotNetRef) {
     };
 
     // Removal is confirmed by the watch stream, not by the close RPC finishing. A focused node's removal leaves
-    // focus on the document body, so remember the group until the DOM update arrives. Moving elsewhere while a
-    // close is pending clears it; unrelated metadata updates must not steal focus from a terminal or the page.
+    // focus on the document body, so remember the tab group or banner's pane until the DOM update arrives.
+    // Moving elsewhere while a close is pending clears it; unrelated metadata updates must not steal focus.
     const observer = new MutationObserver(() => {
-        if (!focusedTabGroup || focusedTabGroup.isConnected) {
+        if (!focusedCloseTarget || focusedCloseTarget.isConnected) {
             return;
         }
 
-        focusedTabGroup = null;
+        focusedCloseTarget = null;
         if (!dockElement.isConnected || dockElement.inert) {
             return;
         }

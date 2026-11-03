@@ -71,12 +71,17 @@ internal sealed class CSharpProjectFile(string sdk = "Microsoft.NET.Sdk")
 
         foreach (var integrationReference in integrationReferences)
         {
-            if (integrationReference.IsProjectReference)
+            if (integrationReference.Source is IntegrationSource.Npm)
+            {
+                continue;
+            }
+
+            if (integrationReference.Source is IntegrationSource.Project)
             {
                 if (addedIntegrations.Add(integrationReference.Name))
                 {
                     AddProjectReference(
-                        integrationReference.ProjectPath!,
+                        integrationReference.Path!,
                         isAspireProjectResource,
                         referenceOutputAssembly,
                         privateReference,
@@ -89,23 +94,25 @@ internal sealed class CSharpProjectFile(string sdk = "Microsoft.NET.Sdk")
             if (integrationReference.Name.StartsWith("Aspire.Hosting", StringComparison.OrdinalIgnoreCase) &&
                 !integrationReference.DisableLocalProjectSubstitution)
             {
-                if (TryGetRepositoryProject(repoRoot, integrationReference.Name, out var projectPath) &&
-                    addedIntegrations.Add(integrationReference.Name))
+                if (TryGetRepositoryProject(repoRoot, integrationReference.Name, out var projectPath))
                 {
-                    AddProjectReference(
-                        projectPath,
-                        isAspireProjectResource,
-                        referenceOutputAssembly,
-                        privateReference,
-                        addedProjectPaths);
-                }
+                    if (addedIntegrations.Add(integrationReference.Name))
+                    {
+                        AddProjectReference(
+                            projectPath,
+                            isAspireProjectResource,
+                            referenceOutputAssembly,
+                            privateReference,
+                            addedProjectPaths);
+                    }
 
-                continue;
+                    continue;
+                }
             }
 
             if (integrationReference.Version is null)
             {
-                throw new InvalidOperationException($"Integration '{integrationReference.Name}' is neither a project reference nor a package reference (both Version and ProjectPath are null).");
+                throw new InvalidOperationException($"Integration '{integrationReference.Name}' has a null Version.");
             }
 
             PackageReferences.Add(new CSharpPackageReference(integrationReference.Name, integrationReference.Version, packageVersionAttributeName));

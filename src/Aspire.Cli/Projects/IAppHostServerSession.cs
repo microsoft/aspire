@@ -83,6 +83,9 @@ internal interface IAppHostServerSessionFactory
     /// that session is started, queried over RPC, and disposed within a single operation. The
     /// <c>aspire run</c> path supplies the real signaler/window and isolates the console so a user
     /// Ctrl+C reaches the CLI and drives the shared shutdown ladder rather than the child directly.
+    /// A bootstrap session borrows the prepared project (<paramref name="ownsProject"/> is
+    /// <see langword="false"/>); its preparation assets and bundle lease must survive until
+    /// the caller finishes the final execution session.
     /// </remarks>
     IAppHostServerSession Create(
         IAppHostServerProject appHostServerProject,
@@ -91,5 +94,6 @@ internal interface IAppHostServerSessionFactory
         IProcessTreeGracefulShutdownSignaler? gracefulShutdownSignaler,
         IGracefulShutdownWindow? shutdownService,
         bool isolateConsole,
+        bool ownsProject,
         CancellationToken stopRequested);
 }

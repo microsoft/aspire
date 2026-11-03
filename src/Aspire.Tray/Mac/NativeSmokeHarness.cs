@@ -26,15 +26,7 @@ internal sealed class NativeSmokeHarness
     {
         ProcessStartTimeUnixMilliseconds = 1_700_000_000_003
     };
-    private readonly AppHostInfo _trackingFirst = new("/smoke/TrackingFirst/AppHost.cs", 41004, null)
-    {
-        ProcessStartTimeUnixMilliseconds = 1_700_000_000_004
-    };
-    private readonly AppHostInfo _trackingOther = new("/smoke/TrackingOther/AppHost.cs", 41005, null)
-    {
-        ProcessStartTimeUnixMilliseconds = 1_700_000_000_005
-    };
-    private readonly CancellationTokenSource _trackingShutdown = new();
+    private readonly CancellationTokenSource _shutdown = new();
     private readonly TrayController _controller;
     private readonly DirectoryInfo _directory = Directory.CreateTempSubdirectory("aspire-tray-smoke-");
     private readonly AppHostInfo _savedHost;
@@ -43,16 +35,10 @@ internal sealed class NativeSmokeHarness
     private int _phase;
     private int _dashboardCalls;
     private int _documentationCalls;
-    private int _confirmations;
     private bool _finished;
-    private bool _trackingInProgress;
-    private bool _trackingRefreshVerified;
-    private Task? _trackingWorker;
     private Task? _restoreTask;
-    private int _clearConfirmations;
-    private int _removeConfirmations;
+    private AppHostMenuItem? _staleFirst;
     private bool _inspectionMode;
-    private bool _settingsSmokeInProgress;
     private readonly bool _interactiveSmokeRequested;
 
     private NativeSmokeHarness(bool interactiveSmoke)
@@ -79,20 +65,20 @@ internal sealed class NativeSmokeHarness
         // The normal tray's single-instance lock is intentionally not acquired: deterministic
         // smoke never uses real AppHost actions and may coexist with the user's running tray.
         using var application = new MacTrayApplication(_controller, "AspireTray.Smoke",
-            _startupSettings, OpenDashboard, ConfirmStop, ConfirmAction, CopyPath);
+            _startupSettings, OpenDashboard, CopyPath);
         _application = application;
         try
         {
-            Require(!application.WaitUntilReadyAsync(_trackingShutdown.Token).IsCompleted,
+            Require(!application.WaitUntilReadyAsync(_shutdown.Token).IsCompleted,
                 "Readiness was acknowledged before the native event loop ran.");
-            application.MenuUpdated += Advance;
+            application.StateRendered += Advance;
             _client.StopStarted = application.RequestRefresh;
             _client.StartStarted = application.RequestRefresh;
             application.SetSmokeDeadline(seconds, OnTimeout);
             if (Environment.GetEnvironmentVariable("ASPIRE_TRAY_SMOKE_VERIFY_CLI") == "1")
             {
                 // Optional real discovery is read-only. It owns a separate watcher, and its
-                // identities are never fed into the fake action client or native menu.
+                // identities are never fed into the fake action client or the panel.
                 _discovery = new(new CliAppHostClient(cliPath));
                 _discovery.Changed += application.RequestRefresh;
                 _discovery.Start();
@@ -102,20 +88,9 @@ internal sealed class NativeSmokeHarness
         }
         finally
         {
-            application.MenuUpdated -= Advance;
-            _trackingShutdown.Cancel();
-            try
-            {
-                _trackingWorker?.GetAwaiter().GetResult();
-            }
-            catch (OperationCanceledException) when (_trackingShutdown.IsCancellationRequested)
-            {
-            }
-            catch (Exception ex)
-            {
-                Console.Error.WriteLine($"Native tracking worker failed ({ex.GetType().Name}).");
-            }
-            _trackingShutdown.Dispose();
+            application.StateRendered -= Advance;
+            _shutdown.Cancel();
+            _shutdown.Dispose();
             if (_discovery is not null)
             {
                 _discovery.Changed -= application.RequestRefresh;
@@ -129,7 +104,7 @@ internal sealed class NativeSmokeHarness
 
     private void Advance(TrayViewState state)
     {
-        if (_finished || _settingsSmokeInProgress)
+        if (_finished)
         {
             return;
         }
@@ -145,303 +120,164 @@ internal sealed class NativeSmokeHarness
 
     private void AdvanceCore(TrayViewState state)
     {
-        Require(_application.WaitUntilReadyAsync(_trackingShutdown.Token).IsCompletedSuccessfully,
+        Require(_application.WaitUntilReadyAsync(_shutdown.Token).IsCompletedSuccessfully,
             "The native event loop did not acknowledge readiness.");
-        var menu = _application.InspectMenu();
-        Require(menu.AutosaveName == "AspireTray.Smoke", "Smoke must not share the production item's saved placement.");
-        Require(menu.HasTemplateIcon && menu.HasIconOnlyTitle && menu.HasExpectedConnectionBadge && menu.HasNoItemTooltips
-            && menu.HasCommandQ && menu.DispatcherSupportsAllModes, "Icon, tooltip, keyboard, or dispatcher contract failed.");
-        Require(menu.ItemCount == menu.Rows.Count + 6 + (menu.StatusNotice is null ? 0 : 1), "Unexpected menu structure.");
-        if (menu.StatusNotice is not null)
-        {
-            Require(menu.StatusNotice == state.Status, "Status notice was not updated.");
-        }
-        Require(menu.Rows.All(row => row.HasActionIcons && row.HasCorrectActions), "Missing native action/icon.");
+        var panel = _application.InspectPanelForSmoke();
+        Require(panel.AutosaveName == "AspireTray.Smoke", "Smoke must not share the production item's saved placement.");
+        Require(panel.HasTemplateIcon && panel.HasIconOnlyTitle && panel.HasExpectedConnectionBadge && panel.HasNoMenu
+            && panel.DispatcherSupportsAllModes, "Icon, status item, or dispatcher contract failed.");
         var connectionDescription = state.Discovery switch
         {
             DiscoveryState.Connecting => "Connecting to discovery",
-            DiscoveryState.Live => state.HasActiveAppHosts ? "AppHosts running" : "No AppHosts running",
+            DiscoveryState.Live when !state.HasActiveAppHosts => "No AppHosts running",
+            DiscoveryState.Live => TrayIconStatusRules.Get(state) == TrayIconStatus.Attention ? "AppHosts need attention" : "AppHosts running",
             _ => "Discovery unavailable"
         };
-        Require(menu.AccessibilityLabel == $"Aspire, {connectionDescription}, {state.Status}",
-            "The tray must distinguish idle, active, connecting, and disconnected states for accessibility.");
-        _application.VerifyCopyMenusForSmoke();
-
-        if (_trackingInProgress)
-        {
-            if (menu.IsInMenuTrackingMode
-                && state.AppHosts.Single(row => row.Id == _trackingFirst.Id).IsStopping && _client.HasStop(_trackingFirst.Id))
-            {
-                VerifyRows(state, menu);
-                Require(!menu.Rows.Single(row => row.Id == _trackingFirst.Id).CanStop
-                    && menu.Rows.Single(row => row.Id == _trackingOther.Id).CanStop,
-                    "The native tracked menu did not preserve the other host's Stop control.");
-                if (!_trackingRefreshVerified)
-                {
-                    _application.CompleteRealMenuTrackingForSmoke();
-                    _trackingRefreshVerified = true;
-                }
-            }
-            return;
-        }
+        Require(panel.AccessibilityLabel == $"Aspire, {connectionDescription}, {state.Status}",
+            "The tray must distinguish idle, running, attention, connecting, and disconnected states for accessibility.");
 
         // Each phase publishes once through the same asynchronous controller used in production.
-        // MenuUpdated is raised only by the native main-loop source; no timer polls for progress.
+        // StateRendered is raised only by the native main-loop source; no timer polls for progress.
         switch (_phase)
         {
             case 0:
-                Require(menu.HasEmptyPlaceholder, "Connecting placeholder missing.");
+                Require(state.Discovery == DiscoveryState.Connecting && panel.HeaderStatus == "Connecting…"
+                    && panel.EmptyTitle == "Looking for AppHosts…", "Connecting presentation failed.");
                 _phase++;
                 Publish([], DiscoveryState.Live);
                 break;
             case 1:
-                Require(state.Discovery == DiscoveryState.Live && menu.HasEmptyPlaceholder, "Empty live presentation failed.");
+                Require(state.Discovery == DiscoveryState.Live && panel.EmptyTitle == "No AppHosts running", "Empty live presentation failed.");
                 _phase++;
                 Publish([], DiscoveryState.Disconnected);
                 break;
             case 2:
-                Require(state.Discovery == DiscoveryState.Disconnected && menu.HasEmptyPlaceholder, "Disconnected presentation failed.");
+                Require(state.Discovery == DiscoveryState.Disconnected && panel.HeaderStatus == "Reconnecting…"
+                    && panel.EmptyTitle == "AppHosts unavailable", "Disconnected presentation failed.");
                 _phase++;
                 Publish([_first, _second, _third]);
                 break;
             case 3:
-                VerifyRows(state, menu);
-                Require(!menu.Rows.Single(row => row.Id == _second.Id).CanOpenDashboard, "Missing dashboard is enabled.");
-                _application.PerformDashboardForSmoke(_first.Id);
-                Require(_dashboardCalls == 1, "Dashboard did not use the real native callback.");
-                _application.PerformStopForSmoke(_first.Id);
-                Require(_confirmations == 1 && _client.StopCount == 0
-                    && _controller.ConfirmStop && _savedStateStore.Load().ConfirmStop,
-                    "Cancel sent a stop request or persisted the selected suppression checkbox.");
-                VerifyCopy(_first.AppHostPath);
-                _application.SetTrackingForSmoke(null, open: true);
-                _application.SetTrackingForSmoke(_first.Id, open: true);
+                VerifyRows(state, panel);
+                Require(!Row(panel, _second).CanOpenDashboard, "Missing dashboard is enabled.");
+                _application.ClickPanelForSmoke(PanelTargetKind.Dashboard, _first.Id);
+                Require(_dashboardCalls == 1, "Dashboard did not use the panel's native callback.");
+                VerifyCopy(_first.Id, _first.AppHostPath);
+                _application.VerifyActionListForSmoke(_second.Id);
                 _phase++;
-                Publish([_third, _first, _second]);
+                _application.ClickPanelForSmoke(PanelTargetKind.Stop, _first.Id);
                 break;
             case 4:
-                Require(menu.Rows.Select(row => row.Id).SequenceEqual(new[] { _first.Id, _second.Id, _third.Id }),
-                    "An actively tracked menu was reordered.");
-                _phase++;
-                _application.PerformStopForSmoke(_first.Id);
-                break;
-            case 5:
                 if (!state.AppHosts.Single(row => row.Id == _first.Id).IsStopping || !_client.HasStop(_first.Id))
                 {
                     return;
                 }
-                VerifyRows(state, menu);
-                Require(!menu.Rows.Single(row => row.Id == _first.Id).CanStop
-                    && menu.Rows.Where(row => row.Id != _first.Id).All(row => row.CanStop),
+                VerifyRows(state, panel);
+                Require(!Row(panel, _first).CanStop && panel.Rows.Where(row => row.Id != _first.Id).All(row => row.CanStop),
                     "Stopping one host disabled another host.");
                 _phase++;
-                _application.PerformStopForSmoke(_third.Id);
+                // Stop the next one the way VoiceOver does.
+                _application.PressPanelForSmoke(PanelTargetKind.Stop, _third.Id);
                 break;
-            case 6:
+            case 5:
                 if (!state.AppHosts.Single(row => row.Id == _third.Id).IsStopping || !_client.HasStop(_third.Id))
                 {
                     return;
                 }
-                VerifyRows(state, menu);
-                Require(menu.Rows.Single(row => row.Id == _second.Id).CanStop, "A second stop disabled the remaining host.");
+                VerifyRows(state, panel);
+                Require(Row(panel, _second).CanStop, "A second stop disabled the remaining host.");
+                _staleFirst = state.AppHosts.Single(row => row.Id == _first.Id);
                 _phase++;
                 Publish([_third, Replacement(_first), _second]);
                 break;
-            case 7:
-                Require(menu.Rows.Select(row => row.Id).SequenceEqual(new[] { _first.Id, _second.Id, _third.Id }),
-                    "A tracked row was replaced.");
-                Require(!menu.Rows.Single(row => row.Id == _first.Id).Enabled, "The removed lifetime is still enabled.");
-                _application.PerformStaleStopForSmoke(_first.Id);
-                Require(_confirmations == 3, "A stale action created a confirmation alert.");
-                _phase++;
-                _application.PerformStopForSmoke(_second.Id);
-                break;
-            case 8:
-                Require(!menu.Rows.Single(row => row.Id == _second.Id).Enabled, "A lifetime replaced during confirmation is still enabled.");
-                Require(_confirmations == 4, "Modal confirmation callback missing.");
-                Require(_controller.ConfirmStop && _savedStateStore.Load().ConfirmStop,
-                    "A lifetime rejected after confirmation must not persist suppression.");
+            case 6:
+                if (!state.AppHosts.Any(row => row.Id == Replacement(_first).Id))
+                {
+                    return;
+                }
+                // Stopping isn't confirmed, so nothing stands between a click and the request. An
+                // action from a scene drawn before the lifetime was replaced must still be rejected.
+                var stopsBeforeStaleAction = _client.StopCount;
+                _application.RunPanelActionForSmoke(new(PanelActionKind.Stop, _staleFirst));
+                Require(_client.StopCount == stopsBeforeStaleAction, "A stale panel action stopped a replacement lifetime.");
                 _phase++;
                 _client.Complete(_first.Id, new(StopOutcome.Stopped, 0));
                 _client.Complete(_third.Id, new(StopOutcome.Failed, 7));
                 break;
-            case 9:
+            case 7:
                 if (state.AppHosts.Single(row => row.Id == _third.Id).IsStopping)
                 {
                     return;
                 }
-                var failed = menu.Rows.Single(row => row.Id == _third.Id);
-                Require(failed.CanStop && (failed.Subtitle ?? failed.Title).Contains("Unable to stop AppHost", StringComparison.Ordinal),
+                var failed = Row(panel, _third);
+                Require(failed.CanStop && failed.Name.Contains("Unable to stop AppHost", StringComparison.Ordinal),
                     "Per-host failure was not shown or retry was disabled.");
                 Require(_client.StoppedIds.ToHashSet().SetEquals([_first.Id, _third.Id]), "Stable identity routed to the wrong AppHost.");
                 _phase++;
-                _application.SetTrackingForSmoke(null, open: false);
+                Publish([_third, Replacement(_first), _second], DiscoveryState.Disconnected);
                 break;
-            case 10:
-                Require(menu.Rows.Select(row => row.Id).SequenceEqual(new[] { _first.Id, _second.Id, _third.Id }),
-                    "Closing the parent replaced an open submenu.");
-                _phase++;
-                _application.SetTrackingForSmoke(_first.Id, open: false);
-                break;
-            case 11:
-                Require(menu.Rows.Select(row => row.Id).SequenceEqual(new[] { _third.Id, Replacement(_first).Id, Replacement(_second).Id }),
-                    "Deferred menu rebuild did not apply the latest identities/order.");
-                VerifyRows(state, menu);
-                _phase++;
-                Publish([_third, Replacement(_first), Replacement(_second)], DiscoveryState.Disconnected);
-                break;
-            case 12:
-                Require(menu.Rows.All(row => !row.CanOpenDashboard && !row.CanStop), "Disconnected actions are still enabled.");
-                VerifyRows(state, menu);
+            case 8:
+                Require(panel.Rows.Count == 3 && panel.Rows.All(row => !row.CanOpenDashboard && !row.CanStop),
+                    "Disconnected actions are still enabled.");
                 _phase++;
                 Publish([], DiscoveryState.Live);
                 break;
-            case 13:
-                Require(menu.HasEmptyPlaceholder, "Final empty state was not rendered.");
-                _phase++;
-                Publish([_trackingFirst, _trackingOther]);
-                break;
-            case 14:
-                VerifyRows(state, menu);
-                _application.RetainStopSenderForSmoke(_trackingOther.Id);
-                _trackingInProgress = true;
-                _application.BeginRealMenuTrackingForSmoke(
-                    () => _trackingWorker = Task.Run(() => _controller.RequestStop(_trackingFirst.Id), _trackingShutdown.Token),
-                    FinishRealTracking);
-                break;
-            case 15:
-                if (state.AppHosts.Single(row => row.Id == _trackingFirst.Id).IsStopping)
-                {
-                    return;
-                }
-                VerifyRows(state, menu);
-                _phase++;
-                Publish([_trackingOther, _trackingFirst]);
-                break;
-            case 16:
-                Require(menu.Rows.Select(row => row.Id).SequenceEqual(new[] { _trackingOther.Id, _trackingFirst.Id })
-                    && _application.RetainedStopSenderIsFromPreviousMenuForSmoke(_trackingOther.Id),
-                    "The delayed-action test did not replace the closed native menu.");
-                _phase++;
-                var confirmationsBeforeDelayedAction = _confirmations;
-                _application.PerformRetainedStopForSmoke();
-                Require(_confirmations == confirmationsBeforeDelayedAction + 1
-                    && _controller.State.AppHosts.Single(row => row.Id == _trackingOther.Id).IsStopping,
-                    "A valid delayed action lost or changed its selected identity after menuDidClose.");
-                break;
-            case 17:
-                if (!state.AppHosts.Single(row => row.Id == _trackingOther.Id).IsStopping || !_client.HasStop(_trackingOther.Id))
-                {
-                    return;
-                }
-                VerifyRows(state, menu);
-                Require(!_controller.ConfirmStop && !_savedStateStore.Load().ConfirmStop,
-                    "An accepted stop did not persist Don't ask again.");
-                Require(menu.Rows.Single(row => row.Id == _trackingFirst.Id).CanStop,
-                    "The delayed action stopped or disabled the wrong AppHost.");
-                _phase++;
-                Publish([Replacement(_trackingOther), _trackingFirst]);
-                break;
-            case 18:
-                var confirmationsBeforeStaleAction = _confirmations;
-                _application.PerformRetainedStopForSmoke();
-                Require(_confirmations == confirmationsBeforeStaleAction
-                    && !_client.HasStop(Replacement(_trackingOther).Id)
-                    && _controller.State.AppHosts.Single(row => row.Id == Replacement(_trackingOther).Id).CanStop,
-                    "The old native sender was re-targeted to a replacement process lifetime.");
-                _application.ReleaseRetainedStopSenderForSmoke();
-                _application.PerformStopForSmoke(Replacement(_trackingOther).Id);
-                Require(_confirmations == confirmationsBeforeStaleAction
-                    && _controller.State.AppHosts.Single(row => row.Id == Replacement(_trackingOther).Id).IsStopping,
-                    "A subsequent valid stop must skip only the opted-out warning.");
-                _phase++;
-                _client.Complete(_trackingOther.Id, new(StopOutcome.Failed, 7));
-                Publish([], DiscoveryState.Live);
-                break;
-            case 19:
-                Require(menu.HasEmptyPlaceholder, "The real tracking pass did not clean up.");
-                if (!_client.HasStop(Replacement(_trackingOther).Id))
-                {
-                    return;
-                }
+            case 9:
+                Require(panel.EmptyTitle == "No AppHosts running", "Final empty state was not rendered.");
                 if (_discovery is not null && _discovery.State.Discovery != DiscoveryState.Live)
                 {
                     return;
                 }
+                _application.VerifyActivationForSmoke();
                 _phase++;
                 _application.HideStatusItemForSmoke();
-                _application.SetTrackingForSmoke(null, open: true);
-                _restoreTask = _application.RestoreIconAsync(_trackingShutdown.Token);
+                _restoreTask = _application.RestoreIconAsync(_shutdown.Token);
                 // WaitAsync's completion can run after the UI has finished restoration.
                 // Resume inspection from that acknowledgement, not from the same refresh.
                 _restoreTask.ConfigureAwait(false).GetAwaiter().OnCompleted(_application.RequestRefresh);
                 break;
-            case 20:
-                Require(!menu.IsStatusItemVisible && _restoreTask is { IsCompleted: false },
-                    "Restoring the icon mutated a tracked native menu or acknowledged before restoration.");
-                _phase++;
-                _application.SetTrackingForSmoke(null, open: false);
-                break;
-            case 21:
+            case 10:
                 if (_restoreTask is { IsCompleted: false })
                 {
                     return;
                 }
                 var restoredPlacement = _application.HasRestoredPlacementForSmoke();
-                Require(menu.IsStatusItemVisible && _restoreTask is { IsCompletedSuccessfully: true }
-                    && restoredPlacement,
-                    $"Icon restoration incomplete: visible={menu.IsStatusItemVisible}, acknowledgement={_restoreTask?.Status}, recoveryPreference={restoredPlacement}.");
-                _application.VerifyInformationItemsForSmoke();
+                Require(panel.IsStatusItemVisible && _restoreTask is { IsCompletedSuccessfully: true } && restoredPlacement,
+                    $"Icon restoration incomplete: visible={panel.IsStatusItemVisible}, acknowledgement={_restoreTask?.Status}, recoveryPreference={restoredPlacement}.");
                 _application.VerifyStatusArtworkForSmoke();
-                // NSButton's native click animation can pump a nested run loop. Continue
-                // rendering real updates, but do not re-enter this synchronous test phase.
-                _settingsSmokeInProgress = true;
-                try
-                {
-                    _application.VerifySettingsForSmoke(_startupSettings);
-                }
-                finally
-                {
-                    _settingsSmokeInProgress = false;
-                }
-                Require(_documentationCalls == 1, "Root documentation did not use the native callback.");
+                _application.ClickPanelForSmoke(PanelTargetKind.Documentation);
+                Require(_documentationCalls == 1, "Documentation did not use the panel's native callback.");
                 _controller.ClearRecent();
                 _phase++;
                 Publish([_savedHost]);
                 break;
-            case 22:
-                VerifyRows(state, menu);
-                VerifyCopy(_savedHost.AppHostPath);
-                _application.RetainCopySenderForSmoke(_savedHost.AppHostPath);
-                Require(menu.Rows.Single().Health == AppHostHealth.Healthy && menu.StatusNotice is null,
-                    "Healthy resources should show a checkmark without a redundant header.");
-                _application.PerformPinForSmoke(_savedHost.AppHostPath, useContextMenu: true);
-                _application.SetTrackingForSmoke(null, open: true);
+            case 11:
+                VerifyRows(state, panel);
+                VerifyCopy(_savedHost.Id, _savedHost.AppHostPath);
+                Require(Row(panel, _savedHost).Name.Contains("Running", StringComparison.Ordinal) && panel.Notice is null,
+                    "Healthy resources should read as running without a notice.");
+                _application.PickRowActionForSmoke(_savedHost.Id, PanelTargetKind.TogglePin);
+                Require(_controller.State.AppHosts.Single().IsPinned, "Pin from the action list did not persist.");
                 _phase++;
                 Publish([_savedHost with { Health = AppHostHealth.Warning }]);
                 break;
-            case 23:
-                Require(menu.Rows.Single() is { Health: AppHostHealth.Warning, PinTitle: "Unpin AppHost" },
-                    "Waiting resource state or pin action did not update during menu tracking.");
-                _phase++;
-                Publish([_savedHost with { Health = AppHostHealth.Unhealthy }]);
-                break;
-            case 24:
-                Require(menu.Rows.Single().Health == AppHostHealth.Unhealthy, "Failed resources did not update the native status icon.");
-                _application.SetTrackingForSmoke(null, open: false);
+            case 12:
+                Require(Row(panel, _savedHost).Name.Contains("Needs attention", StringComparison.Ordinal),
+                    "Waiting resources did not update the row.");
                 _phase++;
                 Publish([]);
                 break;
-            case 25:
-                Require(menu.Rows.Single() is { Health: AppHostHealth.Unknown, CanStart: true, CanStop: false },
-                    "An offline pin should remain available with a neutral icon and explicit Start.");
-                Require(menu.RecentPaths.Count == 0, "Pinned AppHost was also listed in Open Recent.");
-                VerifyCopy(_savedHost.AppHostPath);
-                VerifyRetainedCopy();
+            case 13:
+                var offline = state.AppHosts.Single();
+                Require(offline is { IsRunning: false, CanStart: true, IsPinned: true }
+                    && panel.Rows.Single() is { Section: PanelSection.Pinned, CanStart: true, CanStop: false },
+                    "An offline pin should remain available in Pinned with an explicit Start.");
+                Require(state.RecentAppHosts.Count == 0, "Pinned AppHost was also listed in Recent.");
+                VerifyCopy(offline.Id, _savedHost.AppHostPath);
                 _phase++;
-                _application.PerformStartForSmoke(_savedHost.AppHostPath);
+                _application.ClickPanelForSmoke(PanelTargetKind.Start, offline.Id);
                 break;
-            case 26:
+            case 14:
                 if (_client.StartCount == 0)
                 {
                     return;
@@ -449,73 +285,79 @@ internal sealed class NativeSmokeHarness
                 _phase++;
                 Publish([_savedHost]);
                 break;
-            case 27:
-                Require(menu.Rows.Single() is { Health: AppHostHealth.Healthy, CanStop: true, CanStart: false },
+            case 15:
+                Require(panel.Rows.Single() is { Section: PanelSection.Running, CanStop: true, CanStart: false },
                     "A started pin did not become a live row.");
-                Require(menu.RecentPaths.Count == 0, "A running AppHost appeared in Open Recent.");
+                Require(state.RecentAppHosts.Count == 0, "A running AppHost appeared in Recent.");
+                _application.PickRowActionForSmoke(_savedHost.Id, PanelTargetKind.TogglePin);
                 _phase++;
-                _application.PerformPinForSmoke(_savedHost.AppHostPath, useContextMenu: false);
                 Publish([]);
                 break;
-            case 28:
-                Require(menu.Rows.Count == 0 && menu.RecentPaths.Contains(_savedHost.AppHostPath),
-                    "A stopped unpinned AppHost was not retained in Open Recent.");
-                var recentBeforeCancel = menu.RecentPaths.ToArray();
+            case 16:
+                var recent = state.RecentAppHosts.SingleOrDefault(host => host.Id.AppHostPath == _savedHost.AppHostPath);
+                Require(state.AppHosts.Count == 0 && recent is not null, "A stopped unpinned AppHost was not retained in Recent.");
                 _application.VerifyInaccessibleRecentProjectForSmoke(_savedHost.AppHostPath);
-                Require(_removeConfirmations == 0, "An inaccessible project prompted to remove recent history.");
-                VerifyCopy(_savedHost.AppHostPath);
+                VerifyCopy(recent!.Id, _savedHost.AppHostPath);
                 _failCopy = true;
                 var copiedBeforeFailure = _copiedPaths.Count;
-                _application.PerformCopyForSmoke(_savedHost.AppHostPath);
-                Require(_copiedPaths.Count == copiedBeforeFailure && _controller.State.Status == "Clipboard unavailable in smoke.",
+                _application.PickRowActionForSmoke(recent.Id, PanelTargetKind.CopyPath);
+                Require(_copiedPaths.Count == copiedBeforeFailure && _controller.State.Notice == "Clipboard unavailable in smoke.",
                     "Copy failure must be reported instead of pretending the clipboard was updated.");
                 _failCopy = false;
-                _application.PerformClearRecentForSmoke();
-                Require(_controller.State.RecentAppHosts.Select(host => host.Id.AppHostPath).SequenceEqual(recentBeforeCancel),
+                // Clear asks inline: Cancel keeps the list, Clear empties it.
+                _application.ClickPanelForSmoke(PanelTargetKind.ClearRecent);
+                Require(_application.InspectPanelForSmoke().Confirmation == PanelConfirmKind.ClearRecent, "Clear did not ask inline.");
+                _application.ClickPanelForSmoke(PanelTargetKind.ConfirmCancel);
+                Require(_controller.State.RecentAppHosts.Count == 1 && _application.InspectPanelForSmoke().Confirmation is null,
                     "Cancel cleared recent history.");
+                _application.ClickPanelForSmoke(PanelTargetKind.ClearRecent);
+                var again = _application.InspectPanelForSmoke();
+                Require(again.Confirmation == PanelConfirmKind.ClearRecent,
+                    $"Clear did not ask inline the second time: {again.Confirmation}; {_application.DescribePanelForSmoke()}");
                 _phase++;
-                _application.PerformClearRecentForSmoke();
+                _application.ClickPanelForSmoke(PanelTargetKind.ConfirmAccept);
                 break;
-            case 29:
-                Require(menu.RecentPaths.Count == 0 && !menu.CanClearRecent && _clearConfirmations == 2,
-                    "Confirmed Clear did not empty recent history.");
+            case 17:
+                Require(state.RecentAppHosts.Count == 0 && !state.CanClearRecent, "Confirmed Clear did not empty recent history.");
                 _phase++;
                 Publish([_first]);
                 Publish([]);
                 break;
-            case 30:
-                Require(menu.RecentPaths.Contains(_first.AppHostPath), "Missing-path recent fixture was not listed.");
-                VerifyCopy(_first.AppHostPath);
+            case 18:
+                var missing = state.RecentAppHosts.Single(host => host.Id.AppHostPath == _first.AppHostPath);
+                // Its source file never existed: Show in Finder and Start both offer to remove it inline
+                // instead of launching anything.
+                _application.PickRowActionForSmoke(missing.Id, PanelTargetKind.ShowInFolder);
+                Require(_application.InspectPanelForSmoke().Confirmation == PanelConfirmKind.RemoveMissing,
+                    "Show in Finder on a missing AppHost did not offer to remove it.");
+                _application.ClickPanelForSmoke(PanelTargetKind.ConfirmCancel, missing.Id);
+                Require(_controller.State.RecentAppHosts.Count == 1, "Cancel removed a missing recent AppHost.");
+                _application.ClickPanelForSmoke(PanelTargetKind.Start, missing.Id);
+                Require(_application.InspectPanelForSmoke().Confirmation == PanelConfirmKind.RemoveMissing && _client.StartCount == 1,
+                    "Start on a missing AppHost did not offer to remove it, or attempted a launch.");
                 _phase++;
-                _application.PerformStartForSmoke(_first.AppHostPath);
+                _application.ClickPanelForSmoke(PanelTargetKind.ConfirmAccept, missing.Id);
                 break;
-            case 31:
-                Require(_removeConfirmations == 1 && menu.RecentPaths.Count == 0 && _client.StartCount == 1,
-                    "Missing recent AppHost was not removed safely, or attempted a launch.");
+            case 19:
+                Require(state.RecentAppHosts.Count == 0 && _client.StartCount == 1, "Missing recent AppHost was not removed safely.");
                 _phase++;
                 Publish([_savedHost]);
                 _controller.SetPinned(_savedHost.AppHostPath, true);
                 Publish([]);
                 break;
-            case 32:
-                Require(menu.Rows.Single() is { CanStart: true, PinTitle: "Unpin AppHost" },
-                    "Missing-pin removal fixture was not initially available.");
+            case 20:
+                Require(state.AppHosts.Single() is { CanStart: true, IsPinned: true }, "Missing-pin removal fixture was not initially available.");
                 File.Delete(_savedHost.AppHostPath);
                 _phase++;
-                _application.SetTrackingForSmoke(null, open: true);
-                _application.RequestRefresh();
+                _application.ReopenPanelForSmoke();
                 break;
-            case 33:
-                Require(state.AppHosts.Count == 0 && state.RecentAppHosts.Count == 0 && !menu.Rows.Single().Enabled,
-                    "A missing pin was not removed, or its stale tracked action remained enabled.");
-                VerifyRetainedCopy();
-                _application.ReleaseRetainedCopySenderForSmoke();
-                _phase++;
-                _application.SetTrackingForSmoke(null, open: false);
-                break;
-            case 34:
-                Require(menu.Rows.Count == 0 && menu.RecentPaths.Count == 0 && menu.HasEmptyPlaceholder,
-                    "A deleted pin remained in the native menu or returned through recent history.");
+            case 21:
+                if (state.AppHosts.Count != 0)
+                {
+                    return;
+                }
+                Require(state.RecentAppHosts.Count == 0 && panel.EmptyTitle == "No AppHosts running",
+                    "A deleted pin remained in the panel or returned through recent history.");
                 File.WriteAllText(_savedHost.AppHostPath, "// Native smoke fixture; never executed.");
                 var warning = CreatePreviewHost(_first, AppHostHealth.Warning);
                 var unhealthy = CreatePreviewHost(_second, AppHostHealth.Unhealthy);
@@ -528,23 +370,20 @@ internal sealed class NativeSmokeHarness
                 _controller.SetPinned(notStarted.AppHostPath, true);
                 Publish([_savedHost, warning, unhealthy]);
                 break;
-            case 35:
-                VerifyRows(state, menu);
-                Require(menu.Rows.Count == 4 && state.AppHosts.Single(host => host.Title == "Not started")
-                    is { IsRunning: false, CanStart: true, Health: AppHostHealth.Unknown },
-                    "The preview must include a stopped pin with a neutral stop-circle symbol.");
-                Require(!_controller.ConfirmStop && !_savedStateStore.Load().ConfirmStop
-                    && _clearConfirmations == 2 && _removeConfirmations == 1,
-                    "Stop-warning opt-out must survive other actions without suppressing Clear or missing-file confirmations.");
-                // Interactive preview should still expose the real alert for manual inspection.
-                _controller.SetConfirmStop(true);
+            case 22:
+                VerifyRows(state, panel);
+                Require(panel.Rows.Count == 4 && state.AppHosts.Single(host => host.Title == "Not started")
+                    is { IsRunning: false, CanStart: true },
+                    "The preview must include a stopped pin.");
+                Console.WriteLine("Flyout " + _application.VerifyPanelForSmoke(
+                    Environment.GetEnvironmentVariable("ASPIRE_TRAY_SMOKE_PANEL_CAPTURE_DIR") is { Length: > 0 } capture ? capture : null) + ".");
                 _finished = true;
-                Console.WriteLine($"Native smoke passed: 36 phases; adaptive 1x/2x brand mask; distinct active/idle/connecting/disconnected icons; semantic health symbols and accessibility; exact Unicode Copy Path in live/pinned/recent menus, retained senders and missing files, clipboard failure reporting (injected, real clipboard untouched); Stop checkbox/default/cancel/stale-lifetime safety, persisted opt-out and repeat skip; context pin/unpin; missing-pin pruning; explicit start; filtered recents; unsuppressed clear/remove dialogs; distinct Documentation/Settings; native startup Settings and callbacks; identity and tracking regressions; CLI discovery: {(_discovery is null ? "not requested" : "live")}.");
+                Console.WriteLine($"Native smoke passed: 23 phases; every status item activation opens the flyout (left, right, keyboard and VoiceOver with focus, AXPress) and none attaches a menu; Command-comma Settings; panel open/size/Escape and Settings view; action list items, keyboard and VoiceOver; monochrome 1x/2x logo template; idle/running/attention/dimmed status dot; exact Unicode Copy path for live/pinned/recent rows and clipboard failure reporting (injected, real clipboard untouched); unconfirmed Stop by click and AXPress with stale-lifetime safety; pin/unpin from the action list; missing-pin pruning; explicit start; inline Clear and missing-file removal; Documentation; CLI discovery: {(_discovery is null ? "not requested" : "live")}.");
                 if (_interactiveSmokeRequested)
                 {
                     _inspectionMode = true;
                     _application.EnableInteractiveSmoke();
-                    Console.WriteLine("Native smoke inspection is ready with fake AppHosts. Use Quit Aspire to close it.");
+                    Console.WriteLine("Native smoke inspection is ready with fake AppHosts. Use Quit in the panel to close it.");
                     break;
                 }
                 _application.FinishSmoke(success: true);
@@ -560,28 +399,6 @@ internal sealed class NativeSmokeHarness
         return host with { AppHostPath = path, Health = health };
     }
 
-    private void FinishRealTracking(bool deadlineFired)
-    {
-        _trackingInProgress = false;
-        if (_finished)
-        {
-            return;
-        }
-        try
-        {
-            Require(deadlineFired, "The real menu closed before its scheduled main-thread callback.");
-            Require(_trackingWorker is { IsCompletedSuccessfully: true } && _trackingRefreshVerified,
-                "No worker-published per-host update was rendered while the real menu was tracking.");
-            Console.WriteLine("Real native menu tracking verified: worker progress rendered in NSEventTrackingRunLoopMode; other Stop enabled; menu auto-closed.");
-            _phase++;
-            _client.Complete(_trackingFirst.Id, new(StopOutcome.Failed, 7));
-        }
-        catch (Exception ex)
-        {
-            FailSmoke(ex);
-        }
-    }
-
     private void FailSmoke(Exception exception)
     {
         _finished = true;
@@ -589,27 +406,22 @@ internal sealed class NativeSmokeHarness
         _application.FinishSmoke(success: false);
     }
 
-    private void VerifyRows(TrayViewState state, NativeMenuInspection menu)
+    /// <summary>Checks that the panel lists every current AppHost once, in its section, with its actions' state.</summary>
+    private static void VerifyRows(TrayViewState state, NativePanelInspection panel)
     {
-        foreach (var native in menu.Rows)
+        Require(panel.Rows.Count(row => row.Section != PanelSection.Recent) == state.AppHosts.Count, "The panel must list every AppHost.");
+        foreach (var native in panel.Rows.Where(row => row.Section != PanelSection.Recent))
         {
             var row = state.AppHosts.Single(host => host.Id == native.Id);
-            Require(native.Title == (native.Subtitle is null ? $"{row.Title} - {row.Subtitle}" : row.Title)
-                && (native.Subtitle is null || native.Subtitle == row.Subtitle), "Native title/subtitle mismatch.");
-            var healthDescription = !row.IsRunning ? "AppHost stopped" : row.Health switch
-            {
-                AppHostHealth.Healthy => "All resources healthy",
-                AppHostHealth.Warning => "Resources waiting or degraded",
-                AppHostHealth.Unhealthy => "Resources failed or unhealthy",
-                _ => "Resource health unavailable"
-            };
-            Require(native.AccessibilityLabel == $"{row.DisplayName}, {healthDescription}, {row.Subtitle}, AppHost actions",
-                "Accessibility label mismatch.");
+            Require(native.Section == (row.Id.AppHostPid != 0 ? PanelSection.Running : PanelSection.Pinned), "AppHost listed in the wrong section.");
+            Require(native.Name.StartsWith($"{row.DisplayName}, ", StringComparison.Ordinal), "Row accessible name mismatch.");
             Require(native.CanOpenDashboard == row.CanOpenDashboard && native.CanStop == row.CanStop
-                && native.StopTitle == (row.IsStopping ? "Stopping AppHost..."
-                    : _controller.ConfirmStop ? "Stop AppHost\u2026" : "Stop AppHost"), "Native action state mismatch.");
+                && native.CanStart == row.CanStart, "Panel action state mismatch.");
         }
     }
+
+    private static PanelRowInspection Row(NativePanelInspection panel, AppHostInfo host)
+        => panel.Rows.Single(row => row.Id.AppHostPath == host.AppHostPath && row.Section != PanelSection.Recent);
 
     private void OpenDashboard(Uri uri)
     {
@@ -622,32 +434,6 @@ internal sealed class NativeSmokeHarness
         _dashboardCalls++;
     }
 
-    private StopConfirmationResult ConfirmStop(StopConfirmation confirmation)
-    {
-        Require(confirmation.ButtonCount == 2 && confirmation.CancelIsDefault
-            && confirmation.StopRequiresExplicitChoice && confirmation.HasColorIcon && confirmation.HasStandardButtonContrast
-            && confirmation.ShowsSuppressionButton && confirmation.SuppressionTitle == "Don't ask again"
-            && !confirmation.SuppressionIsChecked,
-            "The real NSAlert has an unsafe default or is missing its unchecked suppression control.");
-        var selected = _controller.RequireLiveInstance(confirmation.AppHost);
-        Require(confirmation.Message == $"Stop {AppHostPresentation.GetTitle(selected)}?"
-            && confirmation.Detail == $"Only this AppHost instance (PID {selected.AppHostPid}) will be stopped. Persistent resources are left running.",
-            "Stop must show a friendly title, PID and consequence, not the AppHost path.");
-        _confirmations++;
-        if (_confirmations == 1)
-        {
-            return new(false, true);
-        }
-        if (confirmation.AppHost == _second.Id)
-        {
-            // Acknowledge the replacement on the watcher's thread before returning from the
-            // actual confirmation hook. RequestStop must reject the old lifetime afterwards.
-            Publish([_third, Replacement(_first), Replacement(_second)]);
-            return new(true, true);
-        }
-        return new(true, confirmation.AppHost == _trackingOther.Id);
-    }
-
     private void CopyPath(string path)
     {
         // Both deterministic and interactive smoke must leave the user's clipboard intact.
@@ -658,34 +444,12 @@ internal sealed class NativeSmokeHarness
         _copiedPaths.Add(path);
     }
 
-    private void VerifyCopy(string path)
+    private void VerifyCopy(AppHostId id, string path)
     {
         var count = _copiedPaths.Count;
-        _application.PerformCopyForSmoke(path);
+        _application.PickRowActionForSmoke(id, PanelTargetKind.CopyPath);
         Require(_copiedPaths.Count == count + 1 && _copiedPaths[^1] == Path.GetDirectoryName(path),
-            "Copy Path did not copy the exact containing folder through its native callback.");
-    }
-
-    private void VerifyRetainedCopy()
-    {
-        var count = _copiedPaths.Count;
-        _application.PerformRetainedCopyForSmoke();
-        Require(_copiedPaths.Count == count + 1 && _copiedPaths[^1] == Path.GetDirectoryName(_savedHost.AppHostPath),
-            "A retained Copy Path sender lost its original containing folder.");
-    }
-
-    private bool ConfirmAction(TrayConfirmation confirmation)
-    {
-        Require(confirmation.CancelIsDefault && confirmation.ActionRequiresExplicitChoice, "Saved-state dialog has an unsafe default.");
-        if (confirmation.ActionTitle == "Clear")
-        {
-            Require(confirmation.Message == "Do you want to clear all recently opened AppHosts?"
-                && confirmation.Detail == "This action is irreversible.\n\nPinned AppHosts will be kept.", "Clear confirmation text mismatch.");
-            return ++_clearConfirmations > 1;
-        }
-        Require(confirmation.ActionTitle == "Remove", "Unexpected native confirmation.");
-        _removeConfirmations++;
-        return true;
+            "Copy path did not copy the exact containing folder through the panel.");
     }
 
     private void Publish(IReadOnlyList<AppHostInfo> hosts, DiscoveryState discovery = DiscoveryState.Live)

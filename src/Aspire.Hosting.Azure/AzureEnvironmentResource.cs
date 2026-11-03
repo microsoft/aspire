@@ -9,6 +9,7 @@ using Aspire.Hosting.Azure.Provisioning.Internal;
 using Aspire.Hosting.Pipelines;
 using Azure;
 using Azure.Core;
+using Azure.Identity;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -96,10 +97,11 @@ public sealed class AzureEnvironmentResource : Resource
             };
             steps.Add(publishStep);
 
-            var validateStep = new PipelineStep
+            var validateStep = new AzureAuthenticatedPipelineStep
             {
                 Name = "validate-azure-login",
-                Description = "Validates Azure CLI authentication before deployment.",
+                TokenScopes = ["https://management.azure.com/.default"],
+                Description = "Validates Azure authentication before deployment.",
                 Action = ctx => ValidateAzureLoginAsync(ctx),
                 RequiredBySteps = [WellKnownPipelineSteps.Deploy],
                 DependsOnSteps = [WellKnownPipelineSteps.DeployPrereq]
@@ -193,27 +195,44 @@ public sealed class AzureEnvironmentResource : Resource
 
     private static async Task ValidateAzureLoginAsync(PipelineStepContext context)
     {
+        // Tenant selection must finish before acquiring the deployment's tokens: changing
+        // TenantId recreates the default credential and can select a different CLI account.
+        if (context.Services.GetRequiredService<IProvisioningContextProvider>() is PublishModeProvisioningContextProvider provisioningContextProvider)
+        {
+            await provisioningContextProvider.RetrieveAzureProvisioningOptions(context.CancellationToken).ConfigureAwait(false);
+        }
+
         var tokenCredentialProvider = context.Services.GetRequiredService<ITokenCredentialProvider>();
+        var credential = tokenCredentialProvider.TokenCredential;
+        var scopes = context.PipelineContext.SelectedSteps
+            .OfType<AzureAuthenticatedPipelineStep>()
+            .SelectMany(step => step.TokenScopes)
+            .Distinct(StringComparer.Ordinal);
 
-        try
+        // AzureCliCredential requests each audience from the CLI, whose persisted token
+        // cache can reuse these tokens after the federated assertion expires. This does
+        // not renew the assertion or guarantee caching for custom credentials.
+        // See https://github.com/Azure/azure-cli/issues/28708.
+        foreach (var scope in scopes)
         {
-            var tokenRequest = new TokenRequestContext(["https://management.azure.com/.default"]);
-            await tokenCredentialProvider.TokenCredential.GetTokenAsync(tokenRequest, context.CancellationToken)
-                .ConfigureAwait(false);
+            try
+            {
+                await credential.GetTokenAsync(new TokenRequestContext([scope]), context.CancellationToken).ConfigureAwait(false);
+            }
+            catch (AuthenticationFailedException ex)
+            {
+                await context.ReportingStep.CompleteAsync(
+                    new MarkdownString($"Azure authentication failed for token scope `{scope}`. Please run `az login` or refresh the configured credential before deploying. Learn more at [Azure CLI documentation](https://learn.microsoft.com/cli/azure/authenticate-azure-cli)."),
+                    CompletionState.CompletedWithError,
+                    context.CancellationToken).ConfigureAwait(false);
+                throw new AuthenticationFailedException($"Azure authentication failed for token scope '{scope}'. Refresh the configured credential before deploying.", ex);
+            }
+        }
 
-            await context.ReportingStep.CompleteAsync(
-                "Azure CLI authentication validated successfully",
-                CompletionState.Completed,
-                context.CancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception)
-        {
-            await context.ReportingStep.CompleteAsync(
-                new MarkdownString("Azure CLI authentication failed. Please run `az login` to authenticate before deploying. Learn more at [Azure CLI documentation](https://learn.microsoft.com/cli/azure/authenticate-azure-cli)."),
-                CompletionState.CompletedWithError,
-                context.CancellationToken).ConfigureAwait(false);
-            throw;
-        }
+        await context.ReportingStep.CompleteAsync(
+            "Azure authentication validated successfully",
+            CompletionState.Completed,
+            context.CancellationToken).ConfigureAwait(false);
     }
 
     private static async Task DestroyAzureResourcesAsync(PipelineStepContext context)

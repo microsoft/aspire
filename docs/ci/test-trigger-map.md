@@ -79,6 +79,12 @@ The map stays small by keeping each dependency in the layer that can prove it:
 - docs and other no-CI files are dropped up front by `prefilter`, reading the
   CI skip-gate patterns file.
 
+`THIRD-PARTY-NOTICES.TXT` is prefiltered like README files: it is packaged as
+license text, not compiled or read by tests. A Layer 2 `ignore` entry would not
+be sufficient because Layer 1 sees it as a packed `None` item in every packable
+project. Notice-only changes skip main CI; accompanying source and build changes
+still select their normal validation.
+
 ## Target vocabulary
 
 | Target | Maps to |
@@ -101,6 +107,50 @@ The map stays small by keeping each dependency in the layer that can prove it:
 
 Unconditional baseline builds are not selector targets. Gated reusable
 workflows are routed to the target they implement or serve.
+
+### Independent native hosting lane
+
+[`native-hosting-validation.yml`](../../.github/workflows/native-hosting-validation.yml)
+is a dedicated PR/push/manual workflow, not a `tests.yml` selector target. Its
+path filters conservatively cover all `src/**` and `eng/**`, root build/restore
+inputs, shared test inputs, and `tests/Aspire.Hosting.Native.Core.Tests/**`.
+The TypeScript Polyglot AppHost manifest copied into the CLI fixture is also
+explicitly routed to this lane.
+This deliberately includes transitive build dependencies and runtime-only
+generated SDK, CLI, Dashboard, and smoke fixtures without maintaining another
+project dependency list. Its workflow is classified in `ignore`; the general
+workflow rule still selects infrastructure validation for the workflow file.
+The harness script is classified in `ignore` because the dedicated lane, not
+the infrastructure test suite, executes it.
+
+The lane runs the published Native AOT executable smoke and all six TypeScript
+smoke entry points using fresh generated SDK output, real Docker/DCP workloads,
+the repo-built CLI/Dashboard, and headless Chromium. Building `AotSmoke` through
+a project reference is not a substitute for executing this lane. Its existing
+cleanup assertions remain enabled. Evidence is uploaded even on failure.
+
+Both Linux and Windows run a fresh, opted-in TypeScript AppHost through the
+repo-built CLI and published server, including `aspire describe` over the
+existing CLI backchannels and clean guest/server exit. Windows additionally
+exercises authenticated named-pipe RPC and listener ownership.
+
+Run the same harness locally with Node.js 24+, Docker, and Native AOT build
+prerequisites:
+
+```bash
+bash eng/scripts/test-native-hosting.sh linux-x64
+# On an Apple Silicon host:
+bash eng/scripts/test-native-hosting.sh osx-arm64
+```
+
+The harness restores the repository, builds CLI/Dashboard in Debug using the
+default framework, publishes server/smoke in Release for net11, and installs
+isolated npm/browser dependencies under `artifacts/native-hosting/ci` without
+editing repository manifests. It executes RPC, runtime, workloads, revisions,
+CLI, and auxiliary protocol/command scenarios; workload/revision/CLI scenarios
+require the actual browser Dashboard. Logs and AppHost proof JSON are retained.
+After pushing changes, inspect this workflow's real run and uploaded evidence;
+local script or routing-test success alone does not prove GitHub CI passed.
 
 ## Rule categories
 
@@ -160,6 +210,7 @@ Some regular PR-CI infrastructure is narrower than `ALL`:
 .github/actions/enumerate-tests/**      -> DOTNET_TESTS
 .github/actions/check-changed-files/**  -> test:Infrastructure.Tests
 .github/actions/select-tests/**         -> test:Infrastructure.Tests
+eng/github-ci/resolve-comparison-base.sh -> test:Infrastructure.Tests
 .github/actions/setup-deno/**           -> test:Aspire.Hosting.JavaScript.Tests + job:extension-e2e
 ```
 
@@ -200,6 +251,11 @@ the selector treats them all identically.
 
 Highlights:
 
+- **RESX metadata inputs** — the resource metadata tests read seven production
+  project configurations and top-level resource filenames at runtime. Explicit
+  paths select `Infrastructure.Tests` in addition to graph-owned consumers.
+  Keep these paths aligned with the scenarios in `ResourceGeneratorMetadataTests`;
+  the shared `Directory.Build.targets` is already covered by the `ALL` rule.
 - **convention misses** — `src/Aspire.Hosting.Azure.*/**` →
   `test:Aspire.Hosting.Azure.Tests`, and
   `src/Aspire.Hosting.Integration.Analyzers/**` →
@@ -225,6 +281,14 @@ Highlights:
   `Infrastructure.Tests` guard instead of the expensive extension E2E matrix.
   Dedicated package-input directories use broad `/**` rules when enumerating
   files or RIDs would let a newly added input silently miss its consumers.
+
+Native Dashboard validation is a custom job, not an MSBuild test-project
+selection. Its path rule explicitly covers the native browser fixture's shared
+timeout input (`tests/Shared/AsyncTestHelpers.cs`) and telemetry input
+(`tests/Shared/Telemetry/TelemetryTestHelpers.cs`). Layer 1 selects the managed
+consumers of those files but does not select the packaged native Dashboard job.
+Keep these direct runtime dependencies in the native path rule rather than
+deriving native validation from every change to the browser test project.
 
 ### Project rules (`affected_project_rules`)
 
@@ -274,8 +338,20 @@ intentionally in scope.
 target includes only consumers that run in regular PR CI; quarantined, disabled,
 and outerloop-only scenarios do not justify an edge to that target. Adding or
 removing `QuarantinedTest`, `ActiveIssue`, or `OuterloopTest` on a runtime
-consumer requires auditing the exact map edge and updating focused regression
-coverage when eligibility changes.
+consumer requires auditing the exact map edge. Update the map and focused
+regression coverage when the required target set changes; another eligible
+scenario may still require the same edge.
+
+For example, if the last regular-PR E2E scenario using a package becomes
+quarantined, that package no longer justifies a curated runtime-only edge to the
+job. If another eligible scenario uses it, retain the edge. This audit does not
+change Layer 1 project-reference dependencies.
+
+Do not add project or path entries just because a project contains quarantined
+tests, or to select a quarantine workload. Discovery and scheduling of those
+workloads should be automated separately rather than maintaining a project
+inventory here. Real regular-PR dependencies and inputs to quarantine-runner
+infrastructure are different concerns and retain their actual consumer routes.
 
 This distinction is especially important for class-sharded E2E targets. The
 [issue #19879 audit](https://github.com/microsoft/aspire/issues/19879) found
@@ -287,16 +363,18 @@ four measured runs, plus its Docker image build. Representative CI runs are
 and
 [33414997820](https://github.com/microsoft/aspire/actions/runs/33414997820).
 
-Audit the complete curated consumer and path lists against the consuming
-workflow whenever routing or runtime consumption changes. Do not duplicate the
-whole list in a test: it cannot detect a consumer missing from both copies and
-encourages mechanically accepting over-selection. Tests are regression guards
-for distinct routing boundaries:
+Audit the complete affected consumer lists and corresponding loose-input routes
+against their consuming workflows and execution lanes whenever routing or runtime
+consumption changes. This does not require auditing unrelated map sections.
+Do not duplicate the whole list in a test: it cannot detect a consumer missing
+from both copies and encourages mechanically accepting over-selection. Tests
+are regression guards for distinct routing boundaries:
 
 - add a representative positive for each new or narrowed edge;
 - record deliberately excluded consumers in focused negative cases; and
-- add a structural assertion when the same consumer list is intentionally
-  duplicated across `path_rules` and `affected_project_rules`.
+- audit intentionally duplicated consumer lists for consistency and exercise
+  selector behavior through both `path_rules` and `affected_project_rules`,
+  rather than asserting equality of configuration lists.
 
 Treat a widened or relaxed negative expectation as a reason to re-check which
 artifacts the workflow downloads and which lanes execute it.
@@ -336,6 +414,10 @@ boundary, without enumerating every implementation dependency.
 
 ## Maintenance
 
+Agents authoring or reviewing selection changes should first read the scoped
+[test-selection checklist](../../.github/instructions/test-trigger-map.instructions.md).
+This section is the detailed routing contract and maintenance reference.
+
 The map is hand-curated; there is no generator. Do not add a rule only because a
 file changed or a verifier failed. First trace the file to the work that consumes
 it.
@@ -344,9 +426,19 @@ it.
    - If a project in the `Aspire.slnx`-rooted `ProjectGraph` evaluates the file
      and MSBuild expresses the dependency, Layer 1 owns it. Do not add a manual
      rule for a new `ProjectReference`, linked file, or ordinary project input.
+     Verify evaluated items, imports, and consumer edges rather than assuming
+     coverage from a path under `src/` or a directory containing a .NET project.
+     Excluded assets, runtime-read files, and non-.NET inputs can still need
+     curated routes. The selector's project-directory ownership heuristic only
+     suppresses fallback; it does not establish graph attribution.
    - Otherwise it is a Layer 2 blind spot. Common examples are workflow
      implementations, scripts invoked by CI, and configuration read directly by
      a test or job.
+   - Check Layer 2 conventions and overlapping rules before adding explicit
+     paths. A test project's own directory already selects that test by
+     convention. Keep an explicit entry only if it adds consumers or serves
+     another necessary routing purpose, not merely to confirm existing
+     selection. Apply the same check when removing redundant entries.
 2. **Identify the actual consumer.** Follow script invocations, reusable-workflow
    calls, project imports, and job `needs:` edges. Determine whether the consumer
    is a selector-gated PR test/job, an unconditional or dedicated workflow, a
@@ -362,6 +454,16 @@ it.
    - use `affected_project_rules` only when an affected production/non-test project
      implies work beyond the graph-selected tests, and `derived_targets` only
      when selecting one test inherently requires another target;
+   - group related inputs with the same target set in one rule's `paths` or
+     `projects` list, rather than creating a rule per file or dependency.
+     Keep separate rules
+     when consumers or routing constraints differ. A reviewer should be able to
+     scan a logical dependency list and spot incorrect or missing members; use
+     one shared reason and short comments for non-obvious dependencies rather
+     than a separate entry and reason for each member. Reuse an existing target
+     group for the same consumer set; introduce a new group only for a
+     meaningful, reused set. Preserve routing boundaries rather than broadening
+     globs solely to shorten the map;
    - keep `reason` to a short description of what the rule covers or why the
      target consumes the input. Add detail only for a non-obvious relationship
      or constraint. The `targets` field is the source of truth for the target
@@ -374,16 +476,58 @@ it.
    `run_*` output in `tests.yml`, a gate that consumes that output, and a route
    from any reusable workflow that implements the job. Targets outside those PR
    gates must remain advisory rather than appearing as PR-runnable work.
+   `RealWorkflowJobGatesReachProductionSelectorBooleans` discovers `run_*`
+   references in job-level `if:` conditions,
+   checks their job dependencies and setup-output mappings, and runs the
+   production selector against the real map to verify the referenced booleans
+   exist. YAML parsing handles comments and scalar quoting; expression
+   recognition supports whitespace and multiline values, dot access, and
+   static single-quoted bracket access such as
+   `needs['setup_for_tests'].outputs['run_polyglot']`. String literals are not
+   output references. It resolves
+   `fromJSON(steps.<step>.outputs.selection).run_*` mappings using the same
+   normalization. Unsupported `run_*` references and dynamic `needs` output
+   access fail with diagnostics rather than silently disappearing from
+   coverage. Step-level conditions are outside this check's scan scope.
+   This checks wiring consistency, not GitHub expression evaluation or actual
+   workflow execution.
 5. **Add focused regressions for the routing boundary.**
+   - retain broad Layer 1 integration coverage that exercises actual graph
+     attribution and verifies dependent .NET test projects are selected;
    - curated routing changes use the real map with a representative positive
      and focused negatives for deliberate exclusions;
-   - intentionally duplicated consumer lists get a structural equality check;
+   - special routes such as CLI-bundle consumers and Polyglot validation need
+     one or two representative inputs per distinct mechanism, not a source-file
+     inventory. Keep graph, path, affected-project, exclusion, and failure-path
+     coverage distinct even when selected targets overlap;
+   - intentionally duplicated consumer lists are audited for consistency and
+     exercised through each routing mechanism, not compared for equality;
+   - prefer independent consumer-discovery checks when reliable workflow
+     dependencies, evaluated project metadata, or fixture declarations expose
+     the relationship. Compare discovered consumers with production selection
+     so future additions are protected without a copied inventory, and retain
+     existing checks of this kind. Guard against empty or incomplete discovery,
+     document recognized dependency/gate forms, and cover representative
+     formatting and unsupported-reference cases;
+   - representation-only regrouping reuses existing cases that exercise the
+     affected routes. Compare expanded selections before and after cleanup;
+     do not add assertions about rule counts, ordering, group names, or
+     configuration-list equality. Identical targets alone do not justify
+     merging rules with different purposes or routing constraints;
+   - filtering-sensitive inputs exercise the production changed-file prefilter.
+     Selector-only tests establish routing after filtering, not admission
+     through the upstream workflow skip gate; validate that gate separately;
    - selector-engine behavior uses focused synthetic maps in
      `SelectTestsAcceptanceTests.cs`;
    - CLI rendering and side-channel behavior belongs in
      `SelectTestsCliTests.cs`;
-   - action or workflow-gate contracts belong in `SelectTestsWorkflowTests.cs`
-     or an exact real-workflow invariant.
+   - action or workflow-gate behavior is validated through actual entry points
+     where practical and in the consuming CI workflow, not through assertions
+     on workflow source text.
+
+Before removing a case, identify the retained assertion that catches its intended
+regression. Where no equivalent behavioral check exists, state the gap rather
+than claiming that a passing smaller suite proves coverage is unchanged.
 
 After restoring the repository, run the focused selector suite:
 
@@ -421,13 +565,14 @@ carry it forward. Never silently regenerate it.
   the kill switch err toward `ALL`; otherwise the selector relies on Layer 1 for
   `src` coverage and the convention backstop for non-MSBuild files.
 - **Independent workflow targets.** `deployment-e2e`,
-  `Aspire.Deployment.EndToEnd.Tests`, `Aspire.EndToEnd.Tests`, and
-  `Aspire.Oracle.EntityFrameworkCore.Tests` are not in the regular PR matrix
-  today; their rules give the *would-be* trigger paths. Their own schedules,
-  dispatches, or narrow PR workflow triggers decide whether they run. Comments
-  and job summaries list them separately from work the PR selector can actually
-  run. The API/ATS baseline regeneration workflows are independently scheduled
-  or dispatched and ignored as selector targets, as described in `ignore` above.
+  `Aspire.Dashboard.Playwright.Tests`, `Aspire.Deployment.EndToEnd.Tests`,
+  `Aspire.EndToEnd.Tests`, and `Aspire.Oracle.EntityFrameworkCore.Tests` are not
+  in the regular PR matrix today; their rules give the *would-be* trigger paths.
+  Their own schedules, dispatches, or narrow PR workflow triggers decide whether
+  they run. Comments and job summaries list them separately from work the PR
+  selector can actually run. The API/ATS baseline regeneration workflows are
+  independently scheduled or dispatched and ignored as selector targets, as
+  described in `ignore` above.
 - **Integration dirs with no test.** `src/Aspire.Hosting.Orleans`,
   `Aspire.Hosting.AppHost`, and `Aspire.Hosting.Tasks` have no dedicated test
   project. Their MSBuild files are owned by Layer 1, and their non-MSBuild files

@@ -1,0 +1,13 @@
+{
+  "name": "nuxt-aspire-apphost",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "vscode-jsonrpc": "8.2.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.0"
+  }
+}

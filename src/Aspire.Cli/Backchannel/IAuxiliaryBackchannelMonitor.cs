@@ -35,7 +35,7 @@ internal interface IAuxiliaryBackchannelMonitor
     Task ScanAsync(CancellationToken cancellationToken = default, bool pruneOrphanedSockets = true, bool throwOnDiscoveryFailure = false);
 
     /// <summary>
-    /// Watches for AppHost connection changes and yields the full active connection set after each change.
+    /// Yields the initial active connection set and subsequent connection reference changes.
     /// </summary>
     /// <param name="cancellationToken">A cancellation token.</param>
     /// <param name="readOnly">Whether to avoid filesystem cleanup and report discovery failures instead of ignoring them.</param>

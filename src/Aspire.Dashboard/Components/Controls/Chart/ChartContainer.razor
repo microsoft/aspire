@@ -1,5 +1,6 @@
 ﻿@namespace Aspire.Dashboard.Components
 
+@using Aspire.Dashboard.Components.Controls.Chart
 @using Aspire.Dashboard.Resources
 @using Metrics = Aspire.Dashboard.Components.Pages.Metrics
 @inject IStringLocalizer<ControlsStrings> Loc
@@ -12,10 +13,37 @@ else
 {
     <div class="metrics-chart">
         <div class="metrics-chart-header">
-            <h3>@_instrument.Summary.Name</h3>
+            <div class="metrics-chart-title">
+                @if (BackLabel is not null && OnBackAsync is not null)
+                {
+                    @* Same square icon button style as the pin, so the title row's actions read as one set. *@
+                    <FluentButton Class="aspire-button metrics-chart-back"
+                                  Appearance="ButtonAppearance.Default"
+                                  IconOnly="true"
+                                  IconStart="@(new Icons.Regular.Size16.ChevronLeft())"
+                                  OnClick="@OnBackAsync"
+                                  data-tooltip="@BackLabel"
+                                  aria-label="@BackLabel" />
+                }
+                <h3>@_instrument.Summary.Name</h3>
+                <MetricPinButton InstrumentKey="@_instrument.Summary.GetKey()" Bordered="true" />
+            </div>
             <p>@_instrument.Summary.Description</p>
 
-            @if (_instrument.HasOverflow)
+            @if (_instrumentViewModel.HasIncompatibleHistogramBounds)
+            {
+                <div class="block-warning" role="status">
+                    <div class="block-warning-icon">
+                        <FluentIcon Value="new Icons.Filled.Size16.Warning()" Color="Color.Warning" />
+                    </div>
+
+                    <div class="block-warning-message">
+                        @Loc[nameof(ControlsStrings.ChartContainerIncompatibleHistogramBounds)]
+                    </div>
+                </div>
+            }
+
+            @if (_instrumentViewModel.HasOverflow)
             {
                 <div class="block-warning">
                     <div class="block-warning-icon">
@@ -38,8 +66,8 @@ else
                        Header="@Loc[nameof(ControlsStrings.ChartContainerGraphTab)]"
                        IconStart="@(new Icons.Regular.Size24.DataArea())">
                 <div class="metrics-chart-container metric-tab">
-                    <PlotlyChart InstrumentViewModel="_instrumentViewModel" Duration="Duration" Resources="Resources" DataEndTime="_dataEndTime" />
-                    <ChartFilters @key="(MeterName, InstrumentName)" InstrumentType="_instrument.Summary.Type" ShowCount="_instrumentViewModel.ShowCount" ShowCountChanged="ShowCountChangedAsync" DimensionFilters="@DimensionFilters" OnDimensionValuesChanged="DimensionValuesChangedAsync" />
+                    <PlotlyChart InstrumentViewModel="_instrumentViewModel" Duration="Duration" Resources="Resources" DataEndTime="_dataEndTime" InstrumentChanged="StateHasChanged" />
+                    <ChartFilters @key="(MeterName, InstrumentName)" InstrumentType="_instrument.Summary.Type" ShowCount="_instrumentViewModel.ShowCount" ShowCountChanged="ShowCountChangedAsync" IsCounter="@(ShowChangePerIntervalOption && ChartDataCalculator.IsMonotonicCounter(_instrument.Summary))" ShowChangePerInterval="@(!_instrumentViewModel.ShowRunningTotal)" ShowChangePerIntervalChanged="ShowChangePerIntervalChangedAsync" DimensionFilters="@DimensionFilters" OnDimensionValuesChanged="DimensionValuesChangedAsync" />
                 </div>
             </FluentTab>
             <FluentTab HeaderClass="tab-label"
@@ -48,8 +76,8 @@ else
                        Header="@Loc[nameof(ControlsStrings.ChartContainerTableTab)]"
                        IconStart="@(new Icons.Regular.Size24.Table())">
                 <div class="metrics-chart-container metric-tab">
-                    <MetricTable InstrumentViewModel="_instrumentViewModel" Duration="Duration" Resources="Resources" DataEndTime="_dataEndTime" />
-                    <ChartFilters @key="(MeterName, InstrumentName)" InstrumentType="_instrument.Summary.Type" ShowCount="_instrumentViewModel.ShowCount" ShowCountChanged="ShowCountChangedAsync" DimensionFilters="@DimensionFilters" OnDimensionValuesChanged="DimensionValuesChangedAsync" />
+                    <MetricTable InstrumentViewModel="_instrumentViewModel" Duration="Duration" Resources="Resources" DataEndTime="_dataEndTime" InstrumentChanged="StateHasChanged" />
+                    <ChartFilters @key="(MeterName, InstrumentName)" InstrumentType="_instrument.Summary.Type" ShowCount="_instrumentViewModel.ShowCount" ShowCountChanged="ShowCountChangedAsync" IsCounter="@(ShowChangePerIntervalOption && ChartDataCalculator.IsMonotonicCounter(_instrument.Summary))" ShowChangePerInterval="@(!_instrumentViewModel.ShowRunningTotal)" ShowChangePerIntervalChanged="ShowChangePerIntervalChangedAsync" DimensionFilters="@DimensionFilters" OnDimensionValuesChanged="DimensionValuesChangedAsync" />
                 </div>
             </FluentTab>
         </FluentTabs>

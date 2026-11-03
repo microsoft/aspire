@@ -9,7 +9,7 @@ on:
       configuration:
         required: false
         type: string
-        default: Debug
+        default: Release
       targets:
         description: >
           JSON array of target objects to build. Each object must have 'os', 'runner', and 'rids' keys.
@@ -31,6 +31,7 @@ jobs:
 
   build_cli_archives:
     name: Build CLI (${{ matrix.targets.rids }})
+    if: ${{ github.repository == 'microsoft/aspire' }}
     runs-on: ${{ matrix.targets.runner }}
     strategy:
       matrix:
@@ -50,13 +51,17 @@ jobs:
     # CLI's IdentityChannelReader can return the channel verbatim, with no
     # separate parse of the version suffix at runtime.
     env:
+      # Keep caller-supplied values out of script source; consume them as data in PowerShell.
+      BUILD_CONFIGURATION: ${{ inputs.configuration }}
+      TARGET_RIDS: ${{ matrix.targets.rids }}
+      VERSION_OVERRIDE_ARG: ${{ inputs.versionOverrideArg }}
       ASPIRE_CLI_CHANNEL: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || (startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/heads/internal/release/')) && 'staging' || github.ref == 'refs/heads/main' && 'local' || 'daily' }}
 
     steps:
       - name: Configure NuGet package cache (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
-        run: Write-Output "NUGET_PACKAGES=${{ github.workspace }}/.nuget/packages" >> $env:GITHUB_ENV
+        run: Write-Output "NUGET_PACKAGES=$env:GITHUB_WORKSPACE/.nuget/packages" >> $env:GITHUB_ENV
 
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -81,75 +86,95 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $buildLog = '${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/BuildBundleDeps.log'
+          $buildLog = "$env:GITHUB_WORKSPACE/artifacts/log/$env:BUILD_CONFIGURATION/BuildBundleDeps.log"
+          # Repository cleanup can remove artifacts/log while the build is streaming output.
+          $temporaryLog = Join-Path '${{ runner.temp }}' 'BuildBundleDeps.log'
+          # Overrides contain multiple MSBuild switches; split them into arguments without evaluating them as code.
+          $versionOverrideArgs = @($env:VERSION_OVERRIDE_ARG -split '\s+' | Where-Object { $_ })
           & '${{ runner.os == 'Windows' && './build.cmd' || './build.sh' }}' `
             -ci `
             -restore `
             -build `
             -pack `
-            -configuration '${{ inputs.configuration }}' `
-            '/bl:${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/BuildBundleDeps.binlog' `
+            -configuration $env:BUILD_CONFIGURATION `
+            "/bl:$env:GITHUB_WORKSPACE/artifacts/log/$env:BUILD_CONFIGURATION/BuildBundleDeps.binlog" `
             /p:ContinuousIntegrationBuild=true `
             /p:BuildBundleDepsOnly=true `
-            /p:TargetRids=${{ matrix.targets.rids }} `
-            /p:AspireCliChannel=${{ env.ASPIRE_CLI_CHANNEL }} `
-            ${{ inputs.versionOverrideArg }} 2>&1 | Tee-Object -FilePath $buildLog
-          if ($LASTEXITCODE -ne 0) {
-            exit $LASTEXITCODE
-          }
+            "/p:TargetRids=$env:TARGET_RIDS" `
+            "/p:AspireCliChannel=$env:ASPIRE_CLI_CHANNEL" `
+            @versionOverrideArgs 2>&1 | Tee-Object -FilePath $temporaryLog
+          $buildExitCode = $LASTEXITCODE
+          New-Item -ItemType Directory -Force -Path (Split-Path $buildLog -Parent) | Out-Null
+          Copy-Item -LiteralPath $temporaryLog -Destination $buildLog
+          exit $buildExitCode
 
       - name: Verify Native AOT Dashboard warnings
         shell: pwsh
         run: >
           ./eng/scripts/verify-native-dashboard-warnings.ps1
-          -BuildLog "${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/BuildBundleDeps.log"
+          -BuildLog "$env:GITHUB_WORKSPACE/artifacts/log/$env:BUILD_CONFIGURATION/BuildBundleDeps.log"
 
       - name: Build bundle payload archive
         # SkipNativeBuild skips only the outer CLI. Bundle.proj still publishes
         # native tray payloads on Windows/macOS and verifies the actual archive.
+        shell: pwsh
+        # Overrides contain multiple MSBuild switches; split them into arguments without evaluating them as code.
         run: >
+          $versionOverrideArgs = @($env:VERSION_OVERRIDE_ARG -split '\s+' | Where-Object { $_ })
+
           ${{ runner.os == 'Windows' && './dotnet.cmd' || './dotnet.sh' }}
           msbuild
           eng/Bundle.proj
           /restore
-          /p:Configuration=${{ inputs.configuration }}
-          /p:TargetRid=${{ matrix.targets.rids }}
+          "/p:Configuration=$env:BUILD_CONFIGURATION"
+          "/p:TargetRid=$env:TARGET_RIDS"
           /p:BundleVersion=ci-bundlepayload
           /p:SkipNativeBuild=true
           /p:ContinuousIntegrationBuild=true
-          /bl:${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/BundlePayload.binlog
-          ${{ inputs.versionOverrideArg }}
+          "/bl:$env:GITHUB_WORKSPACE/artifacts/log/$env:BUILD_CONFIGURATION/BundlePayload.binlog"
+          @versionOverrideArgs
+
+      - name: Smoke test bundled Native AOT TerminalHost
+        if: ${{ !contains(matrix.targets.rids, 'musl') && ((runner.arch == 'ARM64' && endsWith(matrix.targets.rids, 'arm64')) || (runner.arch == 'X64' && endsWith(matrix.targets.rids, 'x64'))) }}
+        shell: pwsh
+        run: >
+          ./eng/scripts/test-native-terminalhost.ps1
+          -TerminalHostPath "$env:GITHUB_WORKSPACE/artifacts/bundle/$env:TARGET_RIDS/terminalhost/Aspire.TerminalHost${{ runner.os == 'Windows' && '.exe' || '' }}"
 
       - name: Build CLI packages
+        shell: pwsh
+        # Overrides contain multiple MSBuild switches; split them into arguments without evaluating them as code.
         run: >
+          $versionOverrideArgs = @($env:VERSION_OVERRIDE_ARG -split '\s+' | Where-Object { $_ })
+
           ${{ runner.os == 'Windows' && './build.cmd' || './build.sh' }}
           -ci
           -build
           -pack
           -restore
-          -configuration ${{ inputs.configuration }}
-          /bl:${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/BuildCli.binlog
+          -configuration $env:BUILD_CONFIGURATION
+          "/bl:$env:GITHUB_WORKSPACE/artifacts/log/$env:BUILD_CONFIGURATION/BuildCli.binlog"
           /p:ContinuousIntegrationBuild=true
           /p:SkipManagedBuild=true
-          /p:TargetRids=${{ matrix.targets.rids }}
-          /p:BundlePayloadPath=${{ github.workspace }}/artifacts/bundle/aspire-ci-bundlepayload-${{ matrix.targets.rids }}.tar.gz
-          /p:AspireCliChannel=${{ env.ASPIRE_CLI_CHANNEL }}
-          ${{ inputs.versionOverrideArg }}
+          "/p:TargetRids=$env:TARGET_RIDS"
+          "/p:BundlePayloadPath=$env:GITHUB_WORKSPACE/artifacts/bundle/aspire-ci-bundlepayload-$env:TARGET_RIDS.tar.gz"
+          "/p:AspireCliChannel=$env:ASPIRE_CLI_CHANNEL"
+          @versionOverrideArgs
 
       - name: Verify CLI tool nupkg
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
 
-          $rid = '${{ matrix.targets.rids }}'
+          $rid = $env:TARGET_RIDS
           $archiveExtension = if ($rid.StartsWith('win-')) { 'zip' } else { 'tar.gz' }
-          $archive = @(Get-ChildItem -Path 'artifacts/packages/${{ inputs.configuration }}' -Filter "aspire-cli-$rid-*.$archiveExtension" -Recurse -File -ErrorAction SilentlyContinue)
+          $archive = @(Get-ChildItem -Path "artifacts/packages/$env:BUILD_CONFIGURATION" -Filter "aspire-cli-$rid-*.$archiveExtension" -Recurse -File -ErrorAction SilentlyContinue)
           if ($archive.Count -ne 1) {
             throw "Expected exactly one CLI archive for $rid, but found $($archive.Count): $($archive.FullName -join ', ')"
           }
 
           eng/scripts/verify-cli-tool-nupkg.ps1 `
-            -PackagesDir artifacts/packages/${{ inputs.configuration }} `
+            -PackagesDir "artifacts/packages/$env:BUILD_CONFIGURATION" `
             -Rid $rid `
             -ArchivePath $archive[0].FullName
 
@@ -242,15 +267,15 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
 
-          $rid = '${{ matrix.targets.rids }}'
+          $rid = $env:TARGET_RIDS
           $archiveExtension = if ($rid.StartsWith('win-')) { 'zip' } else { 'tar.gz' }
-          $archive = @(Get-ChildItem -Path 'artifacts/packages/${{ inputs.configuration }}' -Filter "aspire-cli-$rid-*.$archiveExtension" -Recurse -File -ErrorAction SilentlyContinue)
+          $archive = @(Get-ChildItem -Path "artifacts/packages/$env:BUILD_CONFIGURATION" -Filter "aspire-cli-$rid-*.$archiveExtension" -Recurse -File -ErrorAction SilentlyContinue)
           if ($archive.Count -ne 1) {
             throw "Expected exactly one CLI archive for $rid, but found $($archive.Count): $($archive.FullName -join ', ')"
           }
 
           eng/scripts/verify-cli-npm-package.ps1 `
-            -PackagesDir artifacts/packages/${{ inputs.configuration }} `
+            -PackagesDir "artifacts/packages/$env:BUILD_CONFIGURATION" `
             -Rid $rid `
             -ArchivePath $archive[0].FullName
 
@@ -263,7 +288,14 @@ jobs:
             artifacts/packages/${{ inputs.configuration }}/Shipping/Aspire.Hosting.Orchestration.${{ matrix.targets.rids }}.*.nupkg
             artifacts/packages/${{ inputs.configuration }}/Shipping/Aspire.Dashboard.Sdk.${{ matrix.targets.rids }}.*.nupkg
             artifacts/packages/${{ inputs.configuration }}/Shipping/Aspire.Cli.*.nupkg
-            artifacts/packages/${{ inputs.configuration }}/Shipping/microsoft-aspire-cli*.tgz
+          if-no-files-found: error
+          retention-days: 15
+
+      - name: Upload CLI npm packages
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cli-npm-packages-${{ matrix.targets.rids }}
+          path: artifacts/packages/${{ inputs.configuration }}/Shipping/microsoft-aspire-cli*.tgz
           if-no-files-found: error
           retention-days: 15
 

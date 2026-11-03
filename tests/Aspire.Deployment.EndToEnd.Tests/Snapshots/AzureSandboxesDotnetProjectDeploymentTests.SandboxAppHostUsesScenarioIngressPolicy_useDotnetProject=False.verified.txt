@@ -1,0 +1,30 @@
+﻿#:sdk Aspire.AppHost.Sdk
+
+using Aspire.Hosting.Azure;
+
+var builder = DistributedApplication.CreateBuilder(args);
+
+builder.AddAzureSandboxGroup("env");
+
+var blobs = builder.AddAzureStorage("storage")
+    .AddBlobs("blobs");
+
+builder.AddProject("frontend", "Frontend/Frontend.csproj")
+    .WithExternalHttpEndpoints();
+
+builder.AddProject("anonymous", "Storage/Storage.csproj")
+    .WithExternalHttpEndpoints()
+    .WithReference(blobs)
+    .PublishAsAzureSandbox(new AzureSandboxOptions
+    {
+        Endpoints =
+        [
+            new AzureSandboxEndpointOptions
+            {
+                Name = "http",
+                Anonymous = true
+            }
+        ]
+    });
+
+builder.Build().Run();

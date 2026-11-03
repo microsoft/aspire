@@ -158,6 +158,12 @@ public class ExpressionResolverTests
     [InlineData(true, false, "http://127.0.0.1:18889", "http://host.docker.internal:18889")]
     [InlineData(false, false, "http://[::1]:18889", "http://[::1]:18889")]
     [InlineData(true, false, "http://[::1]:18889", "http://host.docker.internal:18889")]
+    [InlineData(false, true, "http://foo.dev.localhost:18889", "http://foo.dev.localhost:18889")]
+    [InlineData(true, true, "http://foo.dev.localhost:18889", "http://host.docker.internal:18889")]
+    [InlineData(false, false, "http://foo.dev.localhost:18889/path", "http://foo.dev.localhost:18889/path")]
+    [InlineData(true, false, "http://foo.dev.localhost:18889/path", "http://host.docker.internal:18889/path")]
+    [InlineData(true, false, "http://foo.localhost:18889", "http://host.docker.internal:18889")]
+    [InlineData(true, false, "http://notlocalhost:18889", "http://notlocalhost:18889")]
     public async Task HostUrlPropertyGetsResolved(bool targetIsContainer, bool withTunnel, string hostUrlVal, string expectedValue)
     {
         var builder = DistributedApplication.CreateBuilder();
@@ -243,6 +249,29 @@ public class ExpressionResolverTests
 
         var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(test.Resource, DistributedApplicationOperation.Run, testServiceProvider).DefaultTimeout();
         Assert.Equal(expectedValue, config["OTEL_EXPORTER_OTLP_ENDPOINT"]);
+    }
+
+    [Fact]
+    public async Task HostUrlInOtlpExporterEndpointUsesFallbackHostWhenDcpReportsEmptyHostName()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        var test = builder.AddContainer("testSource", "someimage")
+            .WithOtlpExporter();
+
+        // This is what DCP reports when querying the container runtime times out.
+        var dcpInfo = new DcpInfo
+        {
+            VersionString = DcpVersion.Dev.ToString(),
+            Version = DcpVersion.Dev,
+            Containers = new DcpContainersInfo { Runtime = "", HostName = "", Error = "context deadline exceeded" }
+        };
+        var serviceProvider = new TestServiceProvider(dcpInfo: dcpInfo)
+            .AddService(Options.Create(new DcpOptions()))
+            .AddService(new DistributedApplicationModel(builder.Resources));
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(test.Resource, DistributedApplicationOperation.Run, serviceProvider).DefaultTimeout();
+        Assert.Equal("http://host.docker.internal:18889", config["OTEL_EXPORTER_OTLP_ENDPOINT"]);
     }
 
     [Fact]

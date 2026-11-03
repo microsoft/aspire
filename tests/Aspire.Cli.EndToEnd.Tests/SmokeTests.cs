@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using Aspire.Cli.EndToEnd.Tests.Helpers;
 using Hex1b;
 using Hex1b.Automation;
@@ -210,14 +209,14 @@ public sealed class SmokeTests(ITestOutputHelper output)
         await auto.AspireNewCSharpEmptyAppHostAsync(projectName, counter, channel: "stable");
 
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, projectName, "apphost.cs");
-        var appHostSdkVersion = GetAppHostSdkVersion(appHostPath);
-        if (appHostSdkVersion.Contains('-', StringComparison.Ordinal) ||
-            appHostSdkVersion.Contains('+', StringComparison.Ordinal))
+        var appHostVersion = CliE2ETestHelpers.GetAppHostVersion(File.ReadAllText(appHostPath));
+        if (appHostVersion.Contains('-', StringComparison.Ordinal) ||
+            appHostVersion.Contains('+', StringComparison.Ordinal))
         {
-            throw new InvalidOperationException($"Expected stable Aspire.AppHost.Sdk version, got '{appHostSdkVersion}' in {appHostPath}.");
+            throw new InvalidOperationException($"Expected stable AppHost version, got '{appHostVersion}' in {appHostPath}.");
         }
 
-        output.WriteLine($"Stable AppHost SDK version: {appHostSdkVersion}");
+        output.WriteLine($"Stable AppHost version: {appHostVersion}");
 
         await auto.RunCommandAsync($"cd {projectName}", counter);
         await auto.AspireStartAsync(counter);
@@ -339,20 +338,6 @@ public sealed class SmokeTests(ITestOutputHelper output)
             exception.Message);
         Assert.True(runCancellation.IsCancellationRequested);
         Assert.False(pendingRun.Task.IsCompleted);
-    }
-
-    private static string GetAppHostSdkVersion(string appHostPath)
-    {
-        if (!File.Exists(appHostPath))
-        {
-            throw new FileNotFoundException($"Expected AppHost file to exist: {appHostPath}", appHostPath);
-        }
-
-        var appHostContent = File.ReadAllText(appHostPath);
-        var match = Regex.Match(appHostContent, @"(?m)^#:\s*sdk\s+Aspire\.AppHost\.Sdk@(?<version>\S+)\s*$");
-        return match.Success
-            ? match.Groups["version"].Value
-            : throw new InvalidOperationException($"Could not find Aspire.AppHost.Sdk directive in {appHostPath}.");
     }
 
     private static string GetStableTypeScriptAppHostFileName(string configPath)

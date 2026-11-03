@@ -43,9 +43,8 @@ internal sealed class DcpOptions
 
     /// <summary>
     /// Optional invocation args that must be prepended when launching <see cref="TerminalHostPath"/>.
-    /// In the CLI bundle case the path is the multi-mode <c>aspire-managed</c> exe and this is set
-    /// to <c>"terminalhost"</c> so the dispatcher routes to <c>TerminalHostApp.RunAsync</c>.
-    /// Empty for the standalone per-RID NuGet package and inner-loop cases.
+    /// Set to <c>"terminalhost"</c> when using the managed compatibility forwarder.
+    /// Empty for the standalone Native AOT bundle executable and managed inner-loop builds.
     /// </summary>
     public string? TerminalHostInvocationArgs { get; set; }
 
@@ -93,6 +92,29 @@ internal sealed class DcpOptions
     public int KubernetesConfigReadRetryCount { get; set; } = 300;
 
     public int KubernetesConfigReadRetryIntervalMilliseconds { get; set; } = 100;
+
+    /// <summary>
+    /// Additional time added to <see cref="KubernetesApiTimeout"/> before the first successful API operation.
+    /// The combined budget covers client setup and the API operation.
+    /// Defaults to 20 seconds and is configured through <c>DcpPublisher:KubernetesInitializationAdditionalTimeout</c>.
+    /// Must be non-negative, and the combined budget must not exceed ten minutes.
+    /// </summary>
+    public TimeSpan KubernetesInitializationAdditionalTimeout { get; set; } = TimeSpan.FromSeconds(20);
+
+    /// <summary>
+    /// The base API operation budget, extended by <see cref="KubernetesInitializationAdditionalTimeout"/> until the first successful API operation.
+    /// Applies to connection establishment rather than stream lifetime for watches and logs.
+    /// Defaults to 40 seconds and is configured through <c>DcpPublisher:KubernetesApiTimeout</c>.
+    /// Valid values range from one second to ten minutes.
+    /// </summary>
+    public TimeSpan KubernetesApiTimeout { get; set; } = TimeSpan.FromSeconds(40);
+
+    /// <summary>
+    /// The total budget for creating a DCP object, including client setup, retries, and reconciliation after ambiguous failures.
+    /// Defaults to two minutes and is configured through <c>DcpPublisher:KubernetesCreateRecoveryTimeout</c>.
+    /// Valid values range from one second to ten minutes.
+    /// </summary>
+    public TimeSpan KubernetesCreateRecoveryTimeout { get; set; } = TimeSpan.FromMinutes(2);
 
     /// <summary>
     /// The duration to wait for the container runtime to become healthy before aborting startup.
@@ -180,7 +202,32 @@ internal class ValidateDcpOptions(DistributedApplicationExecutionContext executi
             builder.AddError("The proxyless endpoint port range start must be less than or equal to the range end.", nameof(options.ProxylessEndpointPortRangeStart));
         }
 
+        var apiTimeoutValid = ValidateKubernetesTimeout(builder, options.KubernetesApiTimeout, nameof(options.KubernetesApiTimeout), "API");
+        ValidateKubernetesTimeout(builder, options.KubernetesCreateRecoveryTimeout, nameof(options.KubernetesCreateRecoveryTimeout), "create recovery");
+
+        if (options.KubernetesInitializationAdditionalTimeout < TimeSpan.Zero)
+        {
+            builder.AddError("The Kubernetes additional initialization timeout must be non-negative.", nameof(options.KubernetesInitializationAdditionalTimeout));
+        }
+        // Compare the remaining headroom rather than adding potentially overflowing configuration values.
+        else if (apiTimeoutValid &&
+            options.KubernetesInitializationAdditionalTimeout > TimeSpan.FromMinutes(10) - options.KubernetesApiTimeout)
+        {
+            builder.AddError("The combined Kubernetes API and additional initialization timeouts must not exceed ten minutes.", nameof(options.KubernetesInitializationAdditionalTimeout));
+        }
+
         return builder.Build();
+    }
+
+    private static bool ValidateKubernetesTimeout(ValidateOptionsResultBuilder builder, TimeSpan timeout, string propertyName, string description)
+    {
+        if (timeout < TimeSpan.FromSeconds(1) || timeout > TimeSpan.FromMinutes(10))
+        {
+            builder.AddError($"The Kubernetes {description} timeout must be between one second and ten minutes.", propertyName);
+            return false;
+        }
+
+        return true;
     }
 }
 
@@ -259,15 +306,15 @@ internal class ConfigureDefaultDcpOptions(
             options.TerminalHostPath = GetMetadataValue(assemblyMetadata, TerminalHostPathMetadataKey);
         }
 
-        // Terminal Host invocation args (used when the binary is the multi-mode aspire-managed exe in the bundle).
+        // An explicitly empty override clears dispatcher arguments baked in by an older SDK.
         var configTerminalHostInvocationArgs = configuration[BundleDiscovery.TerminalHostInvocationArgsEnvVar];
-        if (!string.IsNullOrEmpty(configTerminalHostInvocationArgs))
+        if (configTerminalHostInvocationArgs is not null)
         {
             options.TerminalHostInvocationArgs = configTerminalHostInvocationArgs;
         }
-        else if (!string.IsNullOrEmpty(dcpPublisherConfiguration[nameof(options.TerminalHostInvocationArgs)]))
+        else if (dcpPublisherConfiguration[nameof(options.TerminalHostInvocationArgs)] is { } configuredInvocationArgs)
         {
-            options.TerminalHostInvocationArgs = dcpPublisherConfiguration[nameof(options.TerminalHostInvocationArgs)];
+            options.TerminalHostInvocationArgs = configuredInvocationArgs;
         }
         else
         {
@@ -335,6 +382,9 @@ internal class ConfigureDefaultDcpOptions(
 
         options.KubernetesConfigReadRetryCount = dcpPublisherConfiguration.GetValue(nameof(options.KubernetesConfigReadRetryCount), options.KubernetesConfigReadRetryCount);
         options.KubernetesConfigReadRetryIntervalMilliseconds = dcpPublisherConfiguration.GetValue(nameof(options.KubernetesConfigReadRetryIntervalMilliseconds), options.KubernetesConfigReadRetryIntervalMilliseconds);
+        options.KubernetesInitializationAdditionalTimeout = dcpPublisherConfiguration.GetValue(nameof(options.KubernetesInitializationAdditionalTimeout), options.KubernetesInitializationAdditionalTimeout);
+        options.KubernetesApiTimeout = dcpPublisherConfiguration.GetValue(nameof(options.KubernetesApiTimeout), options.KubernetesApiTimeout);
+        options.KubernetesCreateRecoveryTimeout = dcpPublisherConfiguration.GetValue(nameof(options.KubernetesCreateRecoveryTimeout), options.KubernetesCreateRecoveryTimeout);
 
         if (!string.IsNullOrEmpty(dcpPublisherConfiguration[nameof(options.ResourceNameSuffix)]))
         {

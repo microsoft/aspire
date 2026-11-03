@@ -299,6 +299,16 @@ public partial class AzureKubernetesEnvironmentResource :
     internal AzureContainerRegistryResource? DefaultContainerRegistry { get; set; }
 
     /// <summary>
+    /// Gets or sets the identity used by the AKS control plane.
+    /// </summary>
+    internal AzureUserAssignedIdentityResource? ControlPlaneIdentity { get; set; }
+
+    /// <summary>
+    /// Gets or sets the identity used by kubelets to pull container images.
+    /// </summary>
+    internal AzureUserAssignedIdentityResource? KubeletIdentity { get; set; }
+
+    /// <summary>
     /// Gets the load balancer resources registered against this AKS environment via
     /// <see cref="AzureKubernetesEnvironmentExtensions.AddLoadBalancer"/>. Used by
     /// the Bicep emission to synthesize per-LB role assignments granting the
@@ -322,12 +332,8 @@ public partial class AzureKubernetesEnvironmentResource :
     internal bool ApplicationLoadBalancerEnabled { get; set; }
 
     /// <summary>
-    /// Whether the cluster needs to be emitted using a preview Bicep API version because
-    /// it depends on <c>ingressProfile.gatewayAPI</c> or <c>ingressProfile.applicationLoadBalancer</c>,
-    /// neither of which is in any stable AKS API version yet (latest stable
-    /// <c>2026-01-01</c> doesn't have them; <c>gatewayAPI</c> first appears in
-    /// <c>2025-08-02-preview</c>, <c>applicationLoadBalancer</c> in
-    /// <c>2025-09-02-preview</c>).
+    /// Whether the cluster needs a preview Bicep API version for
+    /// <c>ingressProfile.applicationLoadBalancer</c>. Gateway API is supported by the stable API.
     /// </summary>
-    internal bool RequiresPreviewIngressApi => GatewayApiEnabled || ApplicationLoadBalancerEnabled;
+    internal bool RequiresPreviewIngressApi => ApplicationLoadBalancerEnabled;
 }

@@ -32,6 +32,7 @@ permissions:
 jobs:
   validate:
     name: Validate
+    if: ${{ github.repository == 'microsoft/aspire' }}
     runs-on: ${{ inputs.runner }}
     # Shared budget for every caller of this reusable workflow. The validation script can spend
     # up to four startup waits (run + start for two templates) and three resource waits, which is

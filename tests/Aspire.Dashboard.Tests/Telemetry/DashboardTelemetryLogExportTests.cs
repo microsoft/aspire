@@ -40,7 +40,8 @@ public class DashboardTelemetryLogExportTests
             builder.AddProvider(new TestLoggerProvider(sink));
         });
         services.AddSingleton(new DashboardTelemetryConfiguration { ReportedTelemetryEnabled = true });
-        services.AddSingleton<DashboardTelemetryService>();
+        services.AddSingleton(services => DashboardTelemetryFixture.CreateTelemetryService(
+            services.GetRequiredService<ILoggerFactory>(), services.GetRequiredService<DashboardTelemetryConfiguration>()));
         var exporter = new TestDashboardTelemetryLogExporter();
 
         using (var serviceProvider = services.BuildServiceProvider())
@@ -51,6 +52,7 @@ public class DashboardTelemetryLogExportTests
             using var logProvider = AzureMonitorTelemetryProvider.Create(new ServiceCollection(), ResourceBuilder.CreateEmpty(),
                 DashboardTelemetryService.EventLogCategoryName, () => Sdk.CreateTracerProviderBuilder().Build(), provider =>
             {
+                provider.AddProcessor(new LogRecordTagEnrichmentProcessor(telemetry));
                 provider.AddProcessor(processor);
                 Assert.Same(provider, processor.ParentProvider);
                 Assert.Same(provider, exporter.ParentProvider);
@@ -84,11 +86,12 @@ public class DashboardTelemetryLogExportTests
             Assert.Equal(LogLevel.Information, log.Level);
             Assert.Equal(activity.TraceId, log.TraceId);
             Assert.Equal(activity.SpanId, log.SpanId);
-            Assert.Collection(log.Attributes.OrderBy(t => t.Key, StringComparer.Ordinal),
-                tag => Assert.Equal(TelemetryPropertyKeys.DashboardBuildId, tag.Key),
-                tag => Assert.Equal(TelemetryPropertyKeys.DashboardVersion, tag.Key),
-                tag => Assert.Equal(new KeyValuePair<string, object?>("microsoft.operation_name", TelemetryEventKeys.ComponentInitialize), tag),
-                tag => Assert.Equal(new KeyValuePair<string, object?>("{OriginalFormat}", TelemetryEventKeys.ComponentInitialize), tag));
+            Assert.Equal(telemetry.GetDefaultProperties().Concat(
+                [
+                    new KeyValuePair<string, object?>("microsoft.operation_name", TelemetryEventKeys.ComponentInitialize),
+                    new KeyValuePair<string, object?>("{OriginalFormat}", TelemetryEventKeys.ComponentInitialize)
+                ]).OrderBy(tag => tag.Key, StringComparer.Ordinal),
+                log.Attributes.OrderBy(tag => tag.Key, StringComparer.Ordinal));
             Assert.False(exporter.LogChannel.Reader.TryPeek(out _));
             Assert.Equal(suppressProductCategory
                 ? ["Ordinary framework log", "Raw framework error"]

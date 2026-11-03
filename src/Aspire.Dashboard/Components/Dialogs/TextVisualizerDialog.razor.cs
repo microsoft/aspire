@@ -18,6 +18,7 @@ public partial class TextVisualizerDialog : ComponentBase
     private List<SelectViewModel<string>> _options = null!;
     private SelectViewModel<string> _selectedFormat = null!;
     private bool _isLoading = true;
+    private bool _noWrap;
     private MarkdownProcessor? _markdownProcessor;
     private TextVisualizerDialogViewModel? _previousContent;
     internal TextVisualizerViewModel TextVisualizerViewModel { get; set; } = default!;
@@ -119,6 +120,8 @@ public partial class TextVisualizerDialog : ComponentBase
 
     private void OnSelectedFormatChanged() => ChangeFormat(_selectedFormat.Id);
 
+    private void ToggleWordWrap() => _noWrap = !_noWrap;
+
     internal void ChangeFormat(string? newFormat)
     {
         _selectedFormat = GetSelectedFormatOption(newFormat);
@@ -142,7 +145,10 @@ public partial class TextVisualizerDialog : ComponentBase
         };
 
         return await options.DialogService.ShowDialogAsync<TextVisualizerDialog>(
-            new TextVisualizerDialogViewModel(options.Value, options.ValueDescription, options.ContainsSecret, options.DownloadFileName, options.FixedFormat, options.InitialFormat), parameters);
+            new TextVisualizerDialogViewModel(options.Value, options.ValueDescription, options.ContainsSecret, options.DownloadFileName, options.FixedFormat, options.InitialFormat)
+            {
+                MarkdownDescription = options.MarkdownDescription
+            }, parameters);
     }
 
     private async Task DownloadAsync()

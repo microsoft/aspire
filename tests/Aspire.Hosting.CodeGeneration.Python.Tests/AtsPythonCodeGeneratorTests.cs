@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using System.Reflection;
+using System.Text;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.RemoteHost;
 using Aspire.TestUtilities;
@@ -277,7 +278,7 @@ public class AtsPythonCodeGeneratorTests
         var aspirePy = files["aspire_app.py"];
 
         Assert.Contains("app_host_file_path: str | None = None", aspirePy);
-        Assert.Contains("effective_options['AppHostFilePath'] = app_host_file_path", aspirePy);
+        Assert.Contains("effective_options['appHostFilePath'] = app_host_file_path", aspirePy);
         Assert.Contains("app_host_file_path = os.environ.get('ASPIRE_APPHOST_FILEPATH')", aspirePy);
     }
 
@@ -357,6 +358,202 @@ public class AtsPythonCodeGeneratorTests
     [Fact]
     [RequiresTools(["python3"])]
     [SkipOnPlatform(TestPlatforms.Windows, "Uses the Unix Python executable.")]
+    public Task GeneratedTerminalCallback_ReturnsMutatedDtoOnUnix()
+        => GeneratedTerminalCallback_ReturnsMutatedDto("python3");
+
+    [Fact]
+    [RequiresTools(["python"])]
+    [SkipOnPlatform(TestPlatforms.Linux | TestPlatforms.OSX | TestPlatforms.FreeBSD, "Uses the Windows Python executable.")]
+    public Task GeneratedTerminalCallback_ReturnsMutatedDtoOnWindows()
+        => GeneratedTerminalCallback_ReturnsMutatedDto("python");
+
+    private Task GeneratedTerminalCallback_ReturnsMutatedDto(string pythonExecutable)
+    {
+        var context = CreateContextFromBothAssemblies();
+        var files = _generator.GenerateDistributedApplication(new AtsContext
+        {
+            Capabilities = context.Capabilities,
+            HandleTypes = context.HandleTypes,
+            EnumTypes = context.EnumTypes,
+            DtoTypes =
+            [
+                .. context.DtoTypes,
+                new AtsDtoTypeInfo
+                {
+                    Name = "ATerminalKeywordOptions",
+                    TypeId = "Tests/ATerminalKeywordOptions",
+                    Properties =
+                    [
+                        new AtsDtoPropertyInfo
+                        {
+                            Name = "Global",
+                            Type = new AtsTypeRef
+                            {
+                                TypeId = context.DtoTypes.Single(t => t.Name == "TerminalOptions").TypeId,
+                                Category = AtsTypeCategory.Dto
+                            }
+                        }
+                    ]
+                }
+            ]
+        });
+        return ExecuteGeneratedPythonAsync(pythonExecutable, files["aspire_app.py"],
+            """
+            import json
+            import typing
+            import aspire_app
+
+            assert typing.get_type_hints(aspire_app.TerminalOptions) == {"columns": int, "rows": int}
+            assert typing.get_type_hints(aspire_app.ATerminalKeywordOptions) == {"global": aspire_app.TerminalOptions}
+            assert aspire_app.ATerminalKeywordOptions.__optional_keys__ == {"global"}
+            client = aspire_app.AspireClient("unused")
+            handle = aspire_app.Handle({"$handle": "resource", "$type": "Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecutableResource"})
+            results = []
+
+            def configure(options):
+                assert options == {"columns": 132, "rows": 50}
+                options["columns"] = 200
+
+            def invoke_capability(capability_id, args, kwargs=None):
+                assert capability_id == "Aspire.Hosting/withTerminal"
+                if "configure" in args:
+                    callback = client._callback_registry[args["configure"]]
+                    payload = json.loads('{"p0":{"columns":132,"rows":50}}')
+                    result = callback(payload, client)
+                    assert json.loads(json.dumps(result)) == {"p0": {"columns": 200}}
+                    results.append(result)
+                return args["builder"]
+
+            client.invoke_capability = invoke_capability
+            resource = aspire_app.ExecutableResource(handle, client)
+            assert resource.with_terminal() is resource
+            assert resource.with_terminal(configure=configure) is resource
+            aspire_app.ExecutableResource(handle, client, terminal=configure)
+            assert len(results) == 2
+
+            for callback, expected in [
+                (lambda options: None, {}),
+                (lambda options: options.__setitem__("columns", 132), {"columns": 132}),
+                (lambda options: options.update(rows=50), {"rows": 50}),
+                (lambda options: options.setdefault("columns", 200), {}),
+            ]:
+                callback_id = client.register_callback(callback, dto_writeback=True)
+                actual = client._callback_registry[callback_id]({"p0": {"columns": 132, "rows": 50}}, client)
+                assert actual == {"p0": expected}, actual
+
+            def configure_nested(options):
+                options["nested"]["name"] = "updated"
+                options["values"].append(2)
+            callback_id = client.register_callback(configure_nested, dto_writeback=True)
+            actual = client._callback_registry[callback_id]({"p0": {"nested": {"name": "original"}, "values": [1], "untouched": True}}, client)
+            assert actual == {"p0": {"nested": {"name": "updated"}, "values": [1, 2]}}, actual
+
+            # A nullable value-returning callback must still return null, not its arguments.
+            callback_id = client.register_callback(lambda value: None)
+            assert client._callback_registry[callback_id]({"p0": {"value": 1}}, client) is None
+
+            # Builder defaults must use the same wire names as the generated options DTO.
+            aspire_app._get_client = lambda **kwargs: client
+            aspire_app.DistributedApplicationBuilder = lambda client, options: options
+            options = {
+                "args": ["explicit"],
+                "projectDirectory": "/explicit",
+                "appHostFilePath": "/explicit/apphost.py",
+            }
+            actual = aspire_app.create_builder(
+                options=options.copy(),
+                container_registry_override="registry",
+                disable_dashboard=True,
+                dashboard_application_name="terminal",
+                allow_unsecured_transport=True,
+                enable_resource_logging=True,
+            )
+            assert actual == {
+                **options,
+                "containerRegistryOverride": "registry",
+                "disableDashboard": True,
+                "dashboardApplicationName": "terminal",
+                "allowUnsecuredTransport": True,
+                "enableResourceLogging": True,
+            }, actual
+            """);
+    }
+
+    [Fact]
+    [RequiresTools(["python3"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "Uses the Unix Python executable.")]
+    public Task GeneratedAksNodePoolCallbacks_ReturnMutatedDtosOnUnix()
+        => GeneratedAksNodePoolCallbacks_ReturnMutatedDtos("python3");
+
+    [Fact]
+    [RequiresTools(["python"])]
+    [SkipOnPlatform(TestPlatforms.Linux | TestPlatforms.OSX | TestPlatforms.FreeBSD, "Uses the Windows Python executable.")]
+    public Task GeneratedAksNodePoolCallbacks_ReturnMutatedDtosOnWindows()
+        => GeneratedAksNodePoolCallbacks_ReturnMutatedDtos("python");
+
+    private Task GeneratedAksNodePoolCallbacks_ReturnMutatedDtos(string pythonExecutable)
+    {
+        var context = AtsCapabilityScanner.ScanAssemblies(
+        [
+            typeof(DistributedApplication).Assembly,
+            typeof(global::Aspire.Hosting.Kubernetes.KubernetesNodePoolResource).Assembly,
+            typeof(global::Aspire.Hosting.Azure.Kubernetes.AksNodePoolConfig).Assembly
+        ]).ToAtsContext();
+        var files = _generator.GenerateDistributedApplication(context);
+        return ExecuteGeneratedPythonAsync(pythonExecutable, files["aspire_app.py"],
+            """
+            import json
+            import typing
+            import aspire_app
+
+            assert typing.get_type_hints(aspire_app.AksNodePoolConfig) == {
+                "name": str, "vmSize": str, "minCount": int, "maxCount": int,
+                "mode": aspire_app.AksNodePoolMode, "osSku": str | None
+            }
+            client = aspire_app.AspireClient("unused")
+            handle = aspire_app.Handle({"$handle": "aks", "$type": "Aspire.Hosting.Azure.Kubernetes/Aspire.Hosting.Azure.Kubernetes.AzureKubernetesEnvironmentResource"})
+            results = []
+
+            def configure(options):
+                assert options["name"] in ("system", "workers")
+                assert options["mode"] == ("System" if options["name"] == "system" else "User")
+                assert options["vmSize"] == "Standard_D2s_v5"
+                assert options["minCount"] == 1 and options["maxCount"] == 3
+                assert options["osSku"] is None
+                options["minCount"] = 2
+                options["maxCount"] = 5
+                options["osSku"] = "AzureLinux"
+
+            def invoke_capability(capability_id, args, kwargs=None):
+                assert capability_id in (
+                    "Aspire.Hosting.Azure.Kubernetes/withSystemNodePool",
+                    "Aspire.Hosting.Azure.Kubernetes/addNodePool",
+                )
+                callback = client._callback_registry[args["configure"]]
+                name = args.get("name", "system")
+                mode = "System" if name == "system" else "User"
+                payload = json.loads(json.dumps({"p0": {
+                    "name": name, "vmSize": "Standard_D2s_v5", "minCount": 1,
+                    "maxCount": 3, "mode": mode, "osSku": None
+                }}))
+                result = callback(payload, client)
+                assert json.loads(json.dumps(result)) == {"p0": {
+                    "minCount": 2, "maxCount": 5, "osSku": "AzureLinux"
+                }}
+                results.append(result)
+                return args["builder"]
+
+            client.invoke_capability = invoke_capability
+            resource = aspire_app.AzureKubernetesEnvironmentResource(handle, client)
+            assert resource.with_system_node_pool(configure) is resource
+            resource.add_node_pool("workers", configure)
+            assert len(results) == 2
+            """);
+    }
+
+    [Fact]
+    [RequiresTools(["python3"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "Uses the Unix Python executable.")]
     public Task GeneratedCallback_WrapsGenericResourceBuilderHandleOnUnix()
         => GeneratedCallback_WrapsGenericResourceBuilderHandle("python3");
 
@@ -366,73 +563,246 @@ public class AtsPythonCodeGeneratorTests
     public Task GeneratedCallback_WrapsGenericResourceBuilderHandleOnWindows()
         => GeneratedCallback_WrapsGenericResourceBuilderHandle("python");
 
+    [Fact]
+    [RequiresTools(["python3"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "Uses the Unix Python executable.")]
+    public Task GeneratedConstructor_PreservesFalsyOptionsOnUnix()
+        => GeneratedConstructor_PreservesFalsyOptions("python3");
+
+    [Fact]
+    [RequiresTools(["python"])]
+    [SkipOnPlatform(TestPlatforms.Linux | TestPlatforms.OSX | TestPlatforms.FreeBSD, "Uses the Windows Python executable.")]
+    public Task GeneratedConstructor_PreservesFalsyOptionsOnWindows()
+        => GeneratedConstructor_PreservesFalsyOptions("python");
+
+    [Fact]
+    [RequiresTools(["python3"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "Uses the Unix Python executable.")]
+    public Task GeneratedNullableReturns_PreserveJsonNullOnUnix()
+        => GeneratedNullableReturns_PreserveJsonNull("python3");
+
+    [Fact]
+    [RequiresTools(["python"])]
+    [SkipOnPlatform(TestPlatforms.Linux | TestPlatforms.OSX | TestPlatforms.FreeBSD, "Uses the Windows Python executable.")]
+    public Task GeneratedNullableReturns_PreserveJsonNullOnWindows()
+        => GeneratedNullableReturns_PreserveJsonNull("python");
+
+    [Fact]
+    [RequiresTools(["python3"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "Uses the Unix Python executable.")]
+    public Task GeneratedCode_PreservesUnicodeWithLegacyStdinEncodingOnUnix()
+        => GeneratedCode_PreservesUnicodeWithLegacyStdinEncoding("python3");
+
+    [Fact]
+    [RequiresTools(["python"])]
+    [SkipOnPlatform(TestPlatforms.Linux | TestPlatforms.OSX | TestPlatforms.FreeBSD, "Uses the Windows Python executable.")]
+    public Task GeneratedCode_PreservesUnicodeWithLegacyStdinEncodingOnWindows()
+        => GeneratedCode_PreservesUnicodeWithLegacyStdinEncoding("python");
+
+    private Task GeneratedCode_PreservesUnicodeWithLegacyStdinEncoding(string pythonExecutable)
+    {
+        var files = _generator.GenerateDistributedApplication(CreateContextFromTestAssembly());
+        return ExecuteGeneratedPythonAsync(pythonExecutable, files["aspire_app.py"],
+            """
+            import sys
+            import aspire_app
+
+            assert sys.stdin.encoding == "cp1252"
+            assert aspire_app.TestConfigs.UnicodeGreeting == "\u4f60\u597d\u3053\u3093\u306b\u3061\u306f"
+            """,
+            standardIoEncoding: "cp1252:surrogateescape");
+    }
+
+    private Task GeneratedNullableReturns_PreserveJsonNull(string pythonExecutable)
+    {
+        var files = _generator.GenerateDistributedApplication(CreateContextFromBothAssemblies());
+        return ExecuteGeneratedPythonAsync(pythonExecutable, files["aspire_app.py"],
+            """
+            import json
+            import typing
+            import aspire_app
+
+            client = aspire_app.AspireClient("unused")
+            handle = aspire_app.Handle({"$handle": "resource", "$type": "unused"})
+            context = aspire_app.TestReturnValueContext(handle, client)
+            parameter = aspire_app.ParameterResource(handle, client)
+
+            for method in (
+                context.get_nullable_string,
+                context.get_nullable_string_task,
+                context.get_nullable_string_value_task,
+                parameter.try_get_current_value,
+            ):
+                assert typing.get_type_hints(method)["return"] == str | None
+                for response in ('null', '""', '"value"'):
+                    client.invoke_capability = lambda *args, **kwargs: json.loads(response)
+                    assert method() == json.loads(response)
+
+            for method in (context.get_string, context.get_string_task, context.get_string_value_task):
+                assert typing.get_type_hints(method)["return"] is str
+            """);
+    }
+
+    private Task GeneratedConstructor_PreservesFalsyOptions(string pythonExecutable)
+    {
+        var files = _generator.GenerateDistributedApplication(CreateContextFromBothAssemblies());
+        return ExecuteGeneratedPythonAsync(pythonExecutable, files["aspire_app.py"],
+            """
+            import aspire_app
+
+            client = aspire_app.AspireClient("unused")
+            invocations = []
+
+            def invoke_capability(capability_id, args, kwargs=None):
+                invocations.append((capability_id, args))
+                resource_types = {
+                    "Aspire.Hosting/addParameter": "Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource",
+                    "Aspire.Hosting.CodeGeneration.Python.Tests/addTestRedis":
+                        "Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestRedisResource",
+                }
+                if capability_id in resource_types:
+                    return aspire_app._wrap_if_handle(
+                        {"$handle": "resource", "$type": resource_types[capability_id]}, client, kwargs
+                    )
+                return args["builder"]
+
+            client.invoke_capability = invoke_capability
+            builder = aspire_app.DistributedApplicationBuilder(client, {})
+
+            for value in (False, True):
+                invocations.clear()
+                builder.add_parameter("api-key", required=value)
+                assert [call[0] for call in invocations] == [
+                    "Aspire.Hosting/addParameter",
+                    "Aspire.Hosting/withRequired",
+                ], invocations
+                assert invocations[1][1]["required"] is value, invocations
+
+            for options in ({}, {"required": None}, {"optional": None}, {"optional": False}):
+                invocations.clear()
+                builder.add_parameter("api-key", **options)
+                assert [call[0] for call in invocations] == ["Aspire.Hosting/addParameter"], invocations
+
+            invocations.clear()
+            builder.add_parameter("api-key", optional=True)
+            assert [call[0] for call in invocations] == [
+                "Aspire.Hosting/addParameter",
+                "Aspire.Hosting/withOptional",
+            ], invocations
+
+            invocations.clear()
+            builder.add_parameter("api-key", description="")
+            assert invocations[-1][0] == "Aspire.Hosting/withDescription", invocations
+            assert invocations[-1][1]["description"] == "", invocations
+
+            invocations.clear()
+            builder.add_test_redis("cache", image_tag="")
+            assert invocations[-1][0] == "Aspire.Hosting/withImageTag", invocations
+            assert invocations[-1][1]["tag"] == "", invocations
+
+            invocations.clear()
+            aspire_app.ProjectResource(
+                aspire_app.Handle({"$handle": "project", "$type": "unused"}),
+                client,
+                replicas=0,
+            )
+            assert len(invocations) == 1, invocations
+            assert invocations[0][0] == "Aspire.Hosting/withReplicas", invocations
+            assert invocations[0][1]["replicas"] == 0, invocations
+
+            for value in (False, None):
+                invocations.clear()
+                builder.add_test_redis("cache", optional_string=value, persistence=value)
+                assert [call[0] for call in invocations] == [
+                    "Aspire.Hosting.CodeGeneration.Python.Tests/addTestRedis",
+                ], invocations
+
+            for value in ({}, True):
+                invocations.clear()
+                builder.add_test_redis("cache", optional_string=value)
+                assert [call[0] for call in invocations] == [
+                    "Aspire.Hosting.CodeGeneration.Python.Tests/addTestRedis",
+                    "Aspire.Hosting.CodeGeneration.Python.Tests/withOptionalString",
+                ], invocations
+            """);
+    }
+
     private async Task GeneratedCallback_WrapsGenericResourceBuilderHandle(string pythonExecutable)
     {
         var files = _generator.GenerateDistributedApplication(CreateContextFromTestAssembly());
-        var tempDirectory = Directory.CreateTempSubdirectory();
-        try
+        await ExecuteGeneratedPythonAsync(pythonExecutable, files["aspire_app.py"],
+            """
+            import aspire_app
+
+            client = aspire_app.AspireClient("unused")
+            invocations = []
+
+            def invoke_capability(capability_id, args, kwargs=None):
+                invocations.append(capability_id)
+                if capability_id.endswith("/withPythonBuilderCallback"):
+                    callback = client._callback_registry[args["configure"]]
+                    callback({
+                        "p0": {
+                            "$handle": "callback-resource",
+                            "$type": "Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceBuilder`1[[Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestRedisResource, Aspire.Hosting.CodeGeneration.Python.Tests, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]"
+                        }
+                    }, client)
+                return args["builder"]
+
+            client.invoke_capability = invoke_capability
+            resource = aspire_app.TestRedisResource(
+                aspire_app.Handle({
+                    "$handle": "resource",
+                    "$type": "Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestRedisResource"
+                }),
+                client
+            )
+            resource.with_python_builder_callback(lambda configured: configured.with_persistence())
+
+            assert invocations == [
+                "Aspire.Hosting.CodeGeneration.Python.Tests/withPythonBuilderCallback",
+                "Aspire.Hosting.CodeGeneration.Python.Tests/withPersistence",
+            ]
+            """);
+    }
+
+    private static async Task ExecuteGeneratedPythonAsync(string pythonExecutable, string module, string script, string? standardIoEncoding = null)
+    {
+        using var process = new Process();
+        process.StartInfo = new ProcessStartInfo(pythonExecutable)
         {
-            var modulePath = Path.Combine(tempDirectory.FullName, "aspire_app.py");
-            var testPath = Path.Combine(tempDirectory.FullName, "test_callback.py");
-            await File.WriteAllTextAsync(modulePath, files["aspire_app.py"]);
-            await File.WriteAllTextAsync(
-                testPath,
-                """
-                import aspire_app
-
-                client = aspire_app.AspireClient("unused")
-                invocations = []
-
-                def invoke_capability(capability_id, args, kwargs=None):
-                    invocations.append(capability_id)
-                    if capability_id.endswith("/withPythonBuilderCallback"):
-                        callback = client._callback_registry[args["configure"]]
-                        callback({
-                            "p0": {
-                                "$handle": "callback-resource",
-                                "$type": "Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceBuilder`1[[Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestRedisResource, Aspire.Hosting.CodeGeneration.Python.Tests, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]"
-                            }
-                        }, client)
-                    return args["builder"]
-
-                client.invoke_capability = invoke_capability
-                resource = aspire_app.TestRedisResource(
-                    aspire_app.Handle({
-                        "$handle": "resource",
-                        "$type": "Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestRedisResource"
-                    }),
-                    client
-                )
-                resource.with_python_builder_callback(lambda configured: configured.with_persistence())
-
-                assert invocations == [
-                    "Aspire.Hosting.CodeGeneration.Python.Tests/withPythonBuilderCallback",
-                    "Aspire.Hosting.CodeGeneration.Python.Tests/withPersistence",
-                ]
-                """);
-
-            using var process = new Process();
-            process.StartInfo = new ProcessStartInfo(pythonExecutable)
-            {
-                WorkingDirectory = tempDirectory.FullName,
-                RedirectStandardError = true,
-                RedirectStandardOutput = true,
-                UseShellExecute = false
-            };
-            process.StartInfo.ArgumentList.Add(testPath);
-            process.Start();
-            var standardOutput = process.StandardOutput.ReadToEndAsync();
-            var standardError = process.StandardError.ReadToEndAsync();
-            await process.WaitForExitAsync();
-
-            Assert.True(
-                process.ExitCode == 0,
-                $"Python callback validation failed.{Environment.NewLine}{await standardOutput}{await standardError}");
-        }
-        finally
+            RedirectStandardInput = true,
+            StandardInputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+            RedirectStandardError = true,
+            RedirectStandardOutput = true,
+            UseShellExecute = false
+        };
+        if (standardIoEncoding is not null)
         {
-            tempDirectory.Delete(recursive: true);
+            process.StartInfo.Environment["PYTHONIOENCODING"] = standardIoEncoding;
         }
+        process.StartInfo.ArgumentList.Add("-c");
+        process.StartInfo.ArgumentList.Add(
+            """
+            import sys
+            import types
+
+            module = types.ModuleType("aspire_app")
+            sys.modules["aspire_app"] = module
+            # Compile source bytes as UTF-8, independent of the platform's stdin text encoding.
+            exec(compile(sys.stdin.buffer.read(), "aspire_app.py", "exec"), module.__dict__)
+
+            """ + Environment.NewLine + script);
+        process.Start();
+        var standardOutput = process.StandardOutput.ReadToEndAsync();
+        var standardError = process.StandardError.ReadToEndAsync();
+        await process.StandardInput.WriteAsync(module);
+        process.StandardInput.Close();
+        await process.WaitForExitAsync();
+
+        Assert.True(
+            process.ExitCode == 0,
+            $"Python validation failed.{Environment.NewLine}{await standardOutput}{await standardError}");
     }
 
     private static List<AtsCapabilityInfo> ScanCapabilitiesFromTestAssembly()

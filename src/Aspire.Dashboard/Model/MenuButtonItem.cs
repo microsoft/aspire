@@ -32,10 +32,39 @@ public class MenuButtonItem
     /// but ignore <see cref="OnClick"/> and are skipped by keyboard navigation.
     /// </summary>
     public bool IsHeader { get; set; }
+    /// <summary>
+    /// Whether the item is a non-interactive label for a group of related items within the menu
+    /// (e.g. "State" above a set of state filters). Unlike <see cref="IsHeader"/>, a group header
+    /// doesn't label the menu as a whole and can appear multiple times.
+    /// </summary>
+    public bool IsGroupHeader { get; set; }
+    /// <summary>
+    /// Whether the item is non-interactive placeholder text shown under a group header when the group
+    /// has no items (e.g. "No existing recordings").
+    /// </summary>
+    public bool IsEmptyGroupText { get; set; }
     public List<MenuButtonItem>? NestedMenuItems { get; set; }
     public string? Text { get; set; }
+    /// <summary>
+    /// Tooltip text. Null uses the item text; an empty string disables the tooltip.
+    /// </summary>
     public string? Tooltip { get; set; }
+    /// <summary>
+    /// Optional secondary text displayed in a muted style at the end of the item, before any
+    /// secondary action (e.g. the duration of a recording).
+    /// </summary>
+    public string? Description { get; set; }
+    /// <summary>
+    /// Optional number displayed in a pill at the end of the item (e.g. how many resources a filter value matches).
+    /// </summary>
+    public int? Count { get; set; }
     public Icon? Icon { get; set; }
+    /// <summary>
+    /// Optional icon displayed inline before the text, in addition to the
+    /// <see cref="Icon"/> that indicates its checked state.
+    /// </summary>
+    public Icon? StartIcon { get; set; }
+    public Color StartIconColor { get; set; } = Color.Primary;
     public Icon? SecondaryActionIcon { get; set; }
     public string? SecondaryActionAriaLabel { get; set; }
     public Func<Task>? OnSecondaryActionClick { get; set; }
@@ -52,6 +81,12 @@ public class MenuButtonItem
     /// checkable role, in which case it drives the reflected <c>aria-checked</c> state.
     /// </summary>
     public bool Checked { get; set; }
+    /// <summary>
+    /// Optional callback for a <see cref="MenuItemRole.Checkbox"/> item that toggles independently.
+    /// When set, the item reports both checking and unchecking, and the menu stays open so several
+    /// items can be toggled in a row. The menu items are regenerated after the callback completes.
+    /// </summary>
+    public Func<bool, Task>? OnCheckedChanged { get; set; }
     public Func<Task>? OnClick { get; set; }
     public bool IsDisabled { get; set; }
     /// <summary>

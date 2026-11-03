@@ -698,6 +698,15 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
             };
             tar.WriteEntry(managedEntry);
 
+            foreach (var file in TerminalHostPayload.GetRequiredFiles(System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier))
+            {
+                using var content = new MemoryStream(System.Text.Encoding.UTF8.GetBytes("terminal-host"));
+                tar.WriteEntry(new PaxTarEntry(TarEntryType.RegularFile, $"aspire-payload/terminalhost/{file}")
+                {
+                    DataStream = content
+                });
+            }
+
             // dashboard/ directory, executable, and static assets.
             tar.WriteEntry(new PaxTarEntry(TarEntryType.Directory, $"aspire-payload/{BundleDiscovery.DashboardDirectoryName}/"));
             var dashboardEntry = new PaxTarEntry(

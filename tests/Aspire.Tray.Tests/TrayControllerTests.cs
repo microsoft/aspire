@@ -16,14 +16,33 @@ public class TrayControllerTests
         await using var lifetime = controller.ConfigureAwait(true);
         Assert.Equal(DiscoveryState.Connecting, controller.State.Discovery);
         Assert.Equal("Connecting to Aspire...", controller.State.Status);
+        Assert.Null(controller.State.Notice);
         controller.Start();
 
         client.Publish(new([], DiscoveryState.Live));
         await WaitForStateAsync(controller, state => state.Discovery == DiscoveryState.Live);
         Assert.Equal("No AppHosts running", controller.State.Status);
+        Assert.Null(controller.State.Notice);
         client.Publish(new([], DiscoveryState.Disconnected));
         await WaitForStateAsync(controller, state => state.Discovery == DiscoveryState.Disconnected);
-        Assert.Equal("Discovery unavailable. Reconnecting...", controller.State.Status);
+        Assert.Equal("Discovery is unavailable. Reconnecting\u2026", controller.State.Status);
+        Assert.Equal("Discovery is unavailable. Reconnecting\u2026", controller.State.Notice);
+    }
+
+    [Theory]
+    [InlineData((int)DiscoveryState.Incompatible, "This tray does not match the installed Aspire CLI. Use the matching Aspire build.")]
+    [InlineData((int)DiscoveryState.LimitExceeded, "Discovery limit exceeded: too many AppHosts or too much metadata.")]
+    public async Task DiscoveryProblemsSetTheNotice(int discovery, string expected)
+    {
+        var client = new TestAppHostClient();
+        var controller = new TrayController(client);
+        await using var lifetime = controller.ConfigureAwait(true);
+        controller.Start();
+
+        client.Publish(new([], (DiscoveryState)discovery));
+        await WaitForStateAsync(controller, state => state.Discovery == (DiscoveryState)discovery);
+
+        Assert.Equal(expected, controller.State.Notice);
     }
 
     [Fact]

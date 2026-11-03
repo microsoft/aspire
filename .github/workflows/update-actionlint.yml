@@ -33,7 +33,7 @@ jobs:
   check:
     name: Check for a newer actionlint
     runs-on: ubuntu-latest
-    if: ${{ github.repository_owner == 'microsoft' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'validate') }}
+    if: ${{ github.repository == 'microsoft/aspire' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'validate') }}
     outputs:
       updated: ${{ steps.check.outputs.updated }}
       previous-version: ${{ steps.check.outputs.previous-version }}
@@ -68,7 +68,7 @@ jobs:
     name: Propose actionlint update
     needs: check
     runs-on: ubuntu-latest
-    if: ${{ github.repository_owner == 'microsoft' && github.ref_name == github.event.repository.default_branch && needs.check.outputs.updated == 'true' && (github.event_name == 'schedule' || inputs.mode == 'propose') }}
+    if: ${{ github.repository == 'microsoft/aspire' && github.ref_name == github.event.repository.default_branch && needs.check.outputs.updated == 'true' && (github.event_name == 'schedule' || inputs.mode == 'propose') }}
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -119,7 +119,7 @@ jobs:
     name: Create Issue on Failure
     needs: [check, update]
     runs-on: ubuntu-latest
-    if: ${{ failure() && github.event_name == 'schedule' && github.repository_owner == 'microsoft' }}
+    if: ${{ failure() && github.event_name == 'schedule' && github.repository == 'microsoft/aspire' }}
     permissions:
       contents: read   # checkout to require the local .js modules
       issues: write

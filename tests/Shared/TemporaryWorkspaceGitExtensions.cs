@@ -17,13 +17,18 @@ public static class TemporaryWorkspaceGitExtensions
         await RunGitAsync(workspace.Path, workspace.TestOutputHelper, ["init"], cancellationToken);
     }
 
-    internal static async Task RunGitAsync(string workingDirectory, ITestOutputHelper outputHelper, string[] arguments, CancellationToken cancellationToken)
+    internal static Task RunGitAsync(string workingDirectory, ITestOutputHelper outputHelper, string[] arguments, CancellationToken cancellationToken)
+        => RunGitAsync(workingDirectory, outputHelper, arguments, cancellationToken, TimeSpan.FromSeconds(30));
+
+    internal static async Task RunGitAsync(
+        string workingDirectory, ITestOutputHelper outputHelper, string[] arguments,
+        CancellationToken cancellationToken, TimeSpan timeoutDuration)
     {
         var command = $"git {string.Join(' ', arguments)}";
         var stopwatch = Stopwatch.StartNew();
         outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] Starting '{command}' in '{workingDirectory}'");
 
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        using var timeout = new CancellationTokenSource(timeoutDuration);
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, TestContext.Current.CancellationToken, timeout.Token);
         using var process = new Process
         {
@@ -95,7 +100,8 @@ public static class TemporaryWorkspaceGitExtensions
                 outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] '{command}' (PID {process.Id}) {(timeout.IsCancellationRequested ? "timed out" : "was canceled")} after {stopwatch.Elapsed}");
                 if (timeout.IsCancellationRequested && !cancellationToken.IsCancellationRequested && !TestContext.Current.CancellationToken.IsCancellationRequested)
                 {
-                    throw new TimeoutException($"'{command}' in '{workingDirectory}' (PID {process.Id}) timed out after 30 seconds.");
+                    throw new TimeoutException(FormattableString.Invariant(
+                        $"'{command}' in '{workingDirectory}' (PID {process.Id}) timed out after {timeoutDuration.TotalSeconds} seconds."));
                 }
             }
             else

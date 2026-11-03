@@ -12,7 +12,7 @@ internal interface IAppHostClient
 
 internal readonly record struct AppHostId(string AppHostPath, int AppHostPid, long? ProcessStartTimeUnixMilliseconds)
 {
-    // Identity matching follows the platform, but paths also reach menus, the clipboard,
+    // Identity matching follows the platform, but paths also reach the panel, the clipboard,
     // and CLI arguments. Keep their original casing rather than storing an uppercased key.
     public bool Equals(AppHostId other)
         => TrayAppHostPath.Comparer.Equals(AppHostPath, other.AppHostPath)
@@ -88,7 +88,11 @@ internal sealed record TrayViewState(
 {
     public IReadOnlyList<AppHostMenuItem> RecentAppHosts { get; init; } = [];
     public bool CanClearRecent { get; init; }
+
+    /// <summary>
+    /// A problem worth a banner in the panel: a storage or pin-probe failure, a failed action,
+    /// or discovery being unavailable. Null when everything works, unlike <see cref="Status"/>.
+    /// </summary>
+    public string? Notice { get; init; }
     public bool HasActiveAppHosts { get; init; } = AppHosts.Any(host => host.IsRunning || host.IsStarting);
-    public bool ShowStatus { get; init; } = AppHosts.Count == 0 || Discovery != DiscoveryState.Live
-        || AppHosts.Any(host => host.Error is not null);
 }

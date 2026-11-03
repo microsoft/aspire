@@ -1,0 +1,18 @@
+﻿---
+apiVersion: "v1"
+kind: "PersistentVolumeClaim"
+metadata:
+  name: "data"
+  annotations:
+    example.com/retention: "retain"
+  labels:
+    stage: "second"
+spec:
+  storageClassName: ""
+  volumeMode: "Filesystem"
+  volumeName: "replacement-volume"
+  accessModes:
+    - "ReadWriteMany"
+  resources:
+    requests:
+      storage: "20Gi"

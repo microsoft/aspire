@@ -4,10 +4,31 @@ import * as path from 'path';
 import {
     getLaunchConfigurationExecutablePaths,
     getLaunchConfigurationTargetPath,
+    type AzureFunctionsNodeLaunchConfiguration,
     type ExecutableLaunchConfiguration,
 } from '../dcp/types';
 
 suite('DCP launch configuration types', () => {
+    test('derives Node Functions resource target paths from the app directory', () => {
+        for (const language of ['typescript', 'javascript'] as const) {
+            for (const [appDirectory, expected] of [
+                ['/workspace/functions', '/workspace/functions'],
+                ['', undefined],
+                ['   ', undefined],
+            ] as const) {
+                const configuration: AzureFunctionsNodeLaunchConfiguration = {
+                    type: 'azure-functions-node',
+                    app_directory: appDirectory,
+                    command: 'func',
+                    language,
+                    worker_runtime: 'node',
+                };
+
+                assert.strictEqual(getLaunchConfigurationTargetPath(configuration), expected);
+            }
+        }
+    });
+
     test('derives resource target paths only from stable structured launch fields', () => {
         const cases: readonly [unknown, string | undefined][] = [
             [{ type: 'project', project_path: '/workspace/Api/Api.csproj' }, '/workspace/Api/Api.csproj'],

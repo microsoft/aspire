@@ -297,6 +297,81 @@ public sealed class ParseResultHelperTests : IDisposable
     }
 
     [Fact]
+    public void GetLoggableArguments_RedactsCredentialBearingRecognizedOptionValue()
+    {
+        var source = string.Concat(
+            "https://",
+            "credential-user:credential-password",
+            "@source.example/v3/index.json?token=query-secret#fragment-secret");
+        var parseResult = _command.Parse(["add", "Aspire.Hosting.Redis", "--source", source]);
+
+        Assert.Equal(
+            "add Aspire.Hosting.Redis --source https://***@source.example/v3/index.json",
+            ParseResultHelper.GetLoggableArguments(parseResult));
+    }
+
+    [Fact]
+    public void GetLoggableArguments_RedactsCredentialBearingEqualsOptionValue()
+    {
+        var source = string.Concat(
+            "https://",
+            "credential-user:credential-password",
+            "@source.example/v3/index.json?token=query-secret#fragment-secret");
+        var parseResult = _command.Parse(["add", "Aspire.Hosting.Redis", $"--source={source}"]);
+
+        Assert.Equal(
+            "add Aspire.Hosting.Redis --source https://***@source.example/v3/index.json",
+            ParseResultHelper.GetLoggableArguments(parseResult));
+    }
+
+    [Fact]
+    public void GetLoggableArguments_RedactsCredentialBearingShortOptionValue()
+    {
+        var source = string.Concat(
+            "https://",
+            "credential-user:credential-password",
+            "@source.example/v3/index.json?token=query-secret#fragment-secret");
+        var parseResult = _command.Parse(["add", "Aspire.Hosting.Redis", "-s", source]);
+
+        Assert.Equal(
+            "add Aspire.Hosting.Redis -s https://***@source.example/v3/index.json",
+            ParseResultHelper.GetLoggableArguments(parseResult));
+    }
+
+    [Fact]
+    public void GetLoggableArguments_PreservesPlainHttpOptionValue()
+    {
+        const string source = "https://source.example/v3/index.json";
+        var parseResult = _command.Parse(["add", "Aspire.Hosting.Redis", "--source", source]);
+
+        Assert.Equal(
+            $"add Aspire.Hosting.Redis --source {source}",
+            ParseResultHelper.GetLoggableArguments(parseResult));
+    }
+
+    [Fact]
+    public void GetLoggableArguments_FailsClosedForMalformedHttpOptionValue()
+    {
+        var source = string.Concat("https://", "credential-user:p#word", "@source.example/");
+        var parseResult = _command.Parse(["add", "Aspire.Hosting.Redis", "--source", source]);
+
+        Assert.Equal(
+            "add Aspire.Hosting.Redis --source <unparseable http source>",
+            ParseResultHelper.GetLoggableArguments(parseResult));
+    }
+
+    [Fact]
+    public void GetLoggableArguments_PreservesLocalSourceOptionValue()
+    {
+        const string source = "local-packages";
+        var parseResult = _command.Parse(["add", "Aspire.Hosting.Redis", "--source", source]);
+
+        Assert.Equal(
+            $"add Aspire.Hosting.Redis --source {source}",
+            ParseResultHelper.GetLoggableArguments(parseResult));
+    }
+
+    [Fact]
     public void GetLoggableArguments_ReturnsEmptyStringForBareInvocation()
     {
         Assert.Equal(string.Empty, ParseResultHelper.GetLoggableArguments(_command.Parse([])));

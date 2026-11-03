@@ -4,17 +4,17 @@
     <body>
       <trans-unit id="Description">
         <source>List running AppHosts</source>
-        <target state="needs-review-translation">列出正在运行的 Aspire AppHost。</target>
+        <target state="translated">列出正在运行的 AppHost</target>
         <note />
       </trans-unit>
       <trans-unit id="FollowOptionDescription">
         <source>Keep running and emit updates as running AppHosts change. JSON output uses newline-delimited changed AppHost records by default, or full snapshots with --output snapshot.</source>
-        <target state="new">Keep running and emit updates as running AppHosts change. JSON output uses newline-delimited changed AppHost records by default, or full snapshots with --output snapshot.</target>
+        <target state="translated">持续运行，并在正在运行的 AppHost 发生变化时输出更新。JSON 输出默认采用以换行符分隔的已更改 AppHost 记录; 使用 --output snapshot 可输出完整快照。</target>
         <note />
       </trans-unit>
       <trans-unit id="FollowRequiresJson">
         <source>The --follow option only supports JSON output. Use --format json.</source>
-        <target state="new">The --follow option only supports JSON output. Use --format json.</target>
+        <target state="translated">--follow 选项仅支持 JSON 输出。使用 --format json。</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderCliPid">
@@ -39,27 +39,27 @@
       </trans-unit>
       <trans-unit id="HeaderSdk">
         <source>SDK</source>
-        <target state="new">SDK</target>
+        <target state="translated">SDK</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidOutputMode">
         <source>The --output option must be default or snapshot.</source>
-        <target state="new">The --output option must be default or snapshot.</target>
+        <target state="translated">--output 选项必须为 default 或 snapshot。</target>
         <note />
       </trans-unit>
       <trans-unit id="JsonOptionDescription">
         <source>Output format (Table or Json)</source>
-        <target state="needs-review-translation">以 JSON 格式输出。</target>
+        <target state="translated">输出格式(表格或 Json)</target>
         <note />
       </trans-unit>
       <trans-unit id="OutputOptionDescription">
         <source>Output mode: default preserves the standard AppHost output; snapshot emits full AppHost snapshots with resource health, heartbeats, and errors. Snapshot requires --follow --format json.</source>
-        <target state="new">Output mode: default preserves the standard AppHost output; snapshot emits full AppHost snapshots with resource health, heartbeats, and errors. Snapshot requires --follow --format json.</target>
+        <target state="translated">输出模式: 默认保留标准的 AppHost 输出; snapshot 输出包含资源运行状况、检测信号和错误的完整 AppHost 快照。Snapshot 需要 --follow --format json。</target>
         <note />
       </trans-unit>
       <trans-unit id="SnapshotRequiresFollowJson">
         <source>The --output snapshot option requires --follow --format json.</source>
-        <target state="new">The --output snapshot option requires --follow --format json.</target>
+        <target state="translated">--output snapshot 选项需要同时使用 --follow 和 --format json。</target>
         <note />
       </trans-unit>
       <trans-unit id="UnknownPath">

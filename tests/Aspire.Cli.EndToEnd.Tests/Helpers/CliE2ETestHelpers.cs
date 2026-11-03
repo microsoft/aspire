@@ -25,9 +25,39 @@ internal static class CliE2ETestHelpers
     internal const string RequirePolyglotImageEnvironmentVariableName = "ASPIRE_E2E_REQUIRE_POLYGLOT_IMAGE";
     internal const string PolyglotJavaImageEnvironmentVariableName = "ASPIRE_E2E_POLYGLOT_JAVA_IMAGE";
     internal const string RequirePolyglotJavaImageEnvironmentVariableName = "ASPIRE_E2E_REQUIRE_POLYGLOT_JAVA_IMAGE";
+    internal const string PolyglotGoImageEnvironmentVariableName = "ASPIRE_E2E_POLYGLOT_GO_IMAGE";
+    internal const string RequirePolyglotGoImageEnvironmentVariableName = "ASPIRE_E2E_REQUIRE_POLYGLOT_GO_IMAGE";
     internal const string CliVersionOutputDirEnvironmentVariableName = "ASPIRE_E2E_CLI_VERSION_OUTPUT_DIR";
     internal const string ContainerCliVersionOutputDir = "/tmp/aspire-cli-versions";
     private static readonly Regex s_commitShaPattern = new("^[0-9a-fA-F]{40}$", RegexOptions.Compiled);
+
+    internal static string GetAppHostVersion(string content)
+    {
+        string? version;
+        if (content.TrimStart().StartsWith('<'))
+        {
+            var project = XDocument.Parse(content);
+            version = project.Descendants("PackageReference")
+                .Where(reference => string.Equals(reference.Attribute("Include")?.Value, "Aspire.Hosting.AppHost", StringComparison.OrdinalIgnoreCase))
+                .Select(reference => reference.Attribute("Version")?.Value)
+                .FirstOrDefault();
+            if (string.IsNullOrWhiteSpace(version))
+            {
+                var sdk = project.Root?.Attribute("Sdk")?.Value;
+                const string prefix = "Aspire.AppHost.Sdk/";
+                version = sdk?.StartsWith(prefix, StringComparison.Ordinal) == true ? sdk[prefix.Length..] : null;
+            }
+        }
+        else
+        {
+            var match = Regex.Match(content, @"(?m)^[ \t]*#:[ \t]*(?:package[ \t]+Aspire\.Hosting\.AppHost|sdk[ \t]+Aspire\.AppHost\.Sdk)@(?<version>[^ \t\r\n]+)[ \t]*\r?$");
+            version = match.Success ? match.Groups["version"].Value : null;
+        }
+
+        return !string.IsNullOrWhiteSpace(version)
+            ? version
+            : throw new InvalidOperationException("Could not find an explicit AppHost package or retained SDK version.");
+    }
 
     /// <summary>
     /// Gets whether the tests are running in CI (GitHub Actions) vs locally.
@@ -164,6 +194,11 @@ internal static class CliE2ETestHelpers
         /// Docker + Node.js + Java (no .NET SDK). For Java polyglot AppHost tests.
         /// </summary>
         PolyglotJava,
+
+        /// <summary>
+        /// Docker + Node.js + Go (no .NET SDK). For Go polyglot AppHost tests.
+        /// </summary>
+        PolyglotGo,
     }
 
     private const string PolyglotBaseImageName = "aspire-e2e-polyglot-base";
@@ -203,7 +238,8 @@ internal static class CliE2ETestHelpers
         var dockerfilePath = GetDockerfilePath(repoRoot, variant);
         var prebuiltImageName = GetPrebuiltImageName(variant);
 
-        if (variant is DockerfileVariant.PolyglotJava && prebuiltImageName is null)
+        // The Java and Go variants extend the shared polyglot base image, which must exist locally before their Dockerfiles build.
+        if (variant is (DockerfileVariant.PolyglotJava or DockerfileVariant.PolyglotGo) && prebuiltImageName is null)
         {
             EnsurePolyglotBaseImage(repoRoot, output);
         }
@@ -305,6 +341,11 @@ internal static class CliE2ETestHelpers
             throw new InvalidOperationException($"{PolyglotJavaImageEnvironmentVariableName} must be set when the prebuilt CLI E2E Java image is required.");
         }
 
+        if (variant is DockerfileVariant.PolyglotGo && IsPolyglotGoImageRequired())
+        {
+            throw new InvalidOperationException($"{PolyglotGoImageEnvironmentVariableName} must be set when the prebuilt CLI E2E Go image is required.");
+        }
+
         options.DockerfilePath = GetDockerfilePath(repoRoot, variant);
         options.BuildContext = repoRoot;
     }
@@ -316,6 +357,7 @@ internal static class CliE2ETestHelpers
             DockerfileVariant.DotNet => DotNetImageEnvironmentVariableName,
             DockerfileVariant.Polyglot => PolyglotImageEnvironmentVariableName,
             DockerfileVariant.PolyglotJava => PolyglotJavaImageEnvironmentVariableName,
+            DockerfileVariant.PolyglotGo => PolyglotGoImageEnvironmentVariableName,
             _ => throw new ArgumentOutOfRangeException(nameof(variant)),
         };
 
@@ -330,6 +372,7 @@ internal static class CliE2ETestHelpers
             DockerfileVariant.DotNet => "Dockerfile.e2e",
             DockerfileVariant.Polyglot => "Dockerfile.e2e-polyglot-base",
             DockerfileVariant.PolyglotJava => "Dockerfile.e2e-polyglot-java",
+            DockerfileVariant.PolyglotGo => "Dockerfile.e2e-polyglot-go",
             _ => throw new ArgumentOutOfRangeException(nameof(variant)),
         };
 
@@ -349,6 +392,11 @@ internal static class CliE2ETestHelpers
     private static bool IsPolyglotJavaImageRequired()
     {
         return IsImageRequired(RequirePolyglotJavaImageEnvironmentVariableName);
+    }
+
+    private static bool IsPolyglotGoImageRequired()
+    {
+        return IsImageRequired(RequirePolyglotGoImageEnvironmentVariableName);
     }
 
     private static bool IsImageRequired(string environmentVariableName)

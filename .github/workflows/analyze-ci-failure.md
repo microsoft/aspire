@@ -24,7 +24,7 @@ jobs:
   collect-data:
     runs-on: ubuntu-latest
     if: >-
-      github.repository_owner == 'microsoft'
+      github.repository == 'microsoft/aspire'
       && (
         github.event_name == 'workflow_dispatch'
         || (

@@ -1,13 +1,23 @@
 ﻿@description('The location for the resource(s) to be deployed.')
 param location string = resourceGroup().location
 
-param subnetId string
+param aks_control_plane_identity_outputs_principalname string
 
-param acrName string
+param aks_kubelet_identity_outputs_principalname string
+
+param subnetId string
 
 param vnet_outputs_name string
 
-resource aks 'Microsoft.ContainerService/managedClusters@2025-09-02-preview' = {
+resource aks_control_plane_identity 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' existing = {
+  name: aks_control_plane_identity_outputs_principalname
+}
+
+resource aks_kubelet_identity 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' existing = {
+  name: aks_kubelet_identity_outputs_principalname
+}
+
+resource aks 'Microsoft.ContainerService/managedClusters@2026-07-02-preview' = {
   name: take('aks-${uniqueString(resourceGroup().id)}', 63)
   tags: {
     'aspire-resource-name': 'aks'
@@ -17,7 +27,6 @@ resource aks 'Microsoft.ContainerService/managedClusters@2025-09-02-preview' = {
     dnsPrefix: 'aks-dns'
     agentPoolProfiles: [
       {
-        name: 'system'
         count: 1
         vmSize: 'Standard_D2s_v5'
         vnetSubnetID: subnetId
@@ -26,6 +35,7 @@ resource aks 'Microsoft.ContainerService/managedClusters@2025-09-02-preview' = {
         minCount: 1
         enableAutoScaling: true
         mode: 'System'
+        name: 'system'
       }
     ]
     oidcIssuerProfile: {
@@ -33,6 +43,13 @@ resource aks 'Microsoft.ContainerService/managedClusters@2025-09-02-preview' = {
     }
     networkProfile: {
       networkPlugin: 'azure'
+    }
+    identityProfile: {
+      kubeletidentity: {
+        resourceId: aks_kubelet_identity.id
+        clientId: aks_kubelet_identity.properties.clientId
+        objectId: aks_kubelet_identity.properties.principalId
+      }
     }
     securityProfile: {
       workloadIdentity: {
@@ -50,25 +67,14 @@ resource aks 'Microsoft.ContainerService/managedClusters@2025-09-02-preview' = {
   }
   sku: {
     name: 'Base'
-    tier: 'Free'
+    tier: 'Standard'
   }
   identity: {
-    type: 'SystemAssigned'
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${aks_control_plane_identity.id}': { }
+    }
   }
-}
-
-resource acr 'Microsoft.ContainerRegistry/registries@2025-04-01' existing = {
-  name: acrName
-}
-
-resource acrPullRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(acr.id, aks.id, subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d'))
-  properties: {
-    principalId: aks.properties.identityProfile.kubeletidentity.objectId
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d')
-    principalType: 'ServicePrincipal'
-  }
-  scope: acr
 }
 
 resource vnet 'Microsoft.Network/virtualNetworks@2025-05-01' existing = {

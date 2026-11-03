@@ -9,6 +9,7 @@ on:
 
 jobs:
   prepare_installer_artifacts:
+    if: ${{ github.repository == 'microsoft/aspire' }}
     name: Prepare ${{ inputs.installer == 'winget' && 'WinGet manifests' || 'Homebrew cask' }}
     runs-on: ${{ inputs.installer == 'winget' && 'windows-latest' || 'macos-latest' }}
     steps:

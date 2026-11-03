@@ -388,11 +388,8 @@ suite('Aspire tree action command E2E', function () {
                 60000,
                 terminalBefore);
 
-            // e2e-terminal is registered with .WithTerminal(), so the real Aspire CLI surfaces
-            // terminal.enabled and terminal.replicaIndex over the backchannel. Opening its terminal
-            // must therefore append --replica derived from that metadata, unlike e2e-worker above
-            // which has no terminal annotation and emits no --replica. This proves the terminal
-            // properties flow end-to-end through a real CLI process and drive the Open terminal action.
+            // A terminal-enabled resource uses its exact snapshot instance ID. The CLI capability
+            // controls whether the extension must also pass the legacy replica-index option.
             const terminalResourceState = await waitForResourceState('e2e-terminal', ['Running'], 180000);
             const terminalResource = findResource(terminalResourceState.state, 'e2e-terminal');
             assert.ok(terminalResource, 'Expected e2e-terminal to be present after AppHost startup.');
@@ -401,13 +398,22 @@ suite('Aspire tree action command E2E', function () {
             before = getCommandInvocationCount('aspire-vscode.openResourceTerminal');
             await executeE2eControlCommand({ name: 'openResourceTerminal', appHostPath, resourceName: terminalResourceName });
             await waitForCommandOutcome('aspire-vscode.openResourceTerminal', 'success', 60000, before);
-            await waitForTerminalCommand(
+            const terminalCommand = await waitForTerminalCommand(
                 event => event.subcommand.includes(`terminal attach ${quoteExpectedShellArg(terminalResourceName)}`)
-                    && event.subcommand.includes('--replica')
                     && event.executionSuppressed,
                 'open terminal-enabled resource terminal command',
                 60000,
                 terminalBefore);
+            if (process.env.ASPIRE_EXTENSION_E2E_SKIP_CURRENT_CLI_REGRESSIONS !== 'true') {
+                const commandPrefix = `terminal attach ${quoteExpectedShellArg(terminalResourceName)} --apphost `;
+                assert.ok(terminalCommand.subcommand.startsWith(commandPrefix));
+                const appHostArgument = terminalCommand.subcommand.slice(commandPrefix.length);
+                const expectedAppHostArgument = quoteExpectedShellArg(appHostPath);
+                // VS Code URIs and CLI discovery can use different casing for Windows paths.
+                assert.strictEqual(
+                    process.platform === 'win32' ? appHostArgument.toLowerCase() : appHostArgument,
+                    process.platform === 'win32' ? expectedAppHostArgument.toLowerCase() : expectedAppHostArgument);
+            }
         } finally {
             await setTerminalCommandExecutionSuppressedForE2E(false);
         }

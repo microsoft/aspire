@@ -6,10 +6,12 @@ using System.Net.Sockets;
 using System.Text.Json;
 using Aspire.Hosting.RemoteHost.Ats;
 using Aspire.Hosting.RemoteHost.Diagnostics;
+using Aspire.Shared;
 using Aspire.Tests.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using StreamJsonRpc;
 using Xunit;
@@ -22,6 +24,8 @@ public sealed class JsonRpcAuthenticationTests(ITestOutputHelper outputHelper)
     {
         { "cancelToken", ["ct_missing"] },
         { "invokeCapability", ["test-capability", null] },
+        { "registerAsIntegrationHost", ["registration"] },
+        { "invokeGuestCallback", ["callback", null] },
         { "getCapabilities", [] },
         { "generateCode", ["TypeScript"] },
         { "scaffoldAppHost", ["TypeScript", "/tmp/apphost", "AppHost"] },
@@ -144,6 +148,39 @@ public sealed class JsonRpcAuthenticationTests(ITestOutputHelper outputHelper)
         Assert.Equal(originalMode, File.GetUnixFileMode(target.FullName));
     }
 
+    [Fact]
+    public async Task ConnectionSetupFailure_ClosesClientStreamAndLogsError()
+    {
+        using var workspace = CreateSocketWorkspace();
+        var socketPath = OperatingSystem.IsWindows()
+            ? $"aspire-remotehost-test-{Guid.NewGuid():N}"
+            : Path.Combine(workspace.Path, "rpc", "rpc.sock");
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["REMOTE_APP_HOST_SOCKET_PATH"] = socketPath
+        }).Build();
+        using var services = new ServiceCollection().BuildServiceProvider();
+        var logger = new RecordingLogger<JsonRpcServer>();
+        using var server = new JsonRpcServer(
+            configuration,
+            services.GetRequiredService<IServiceScopeFactory>(),
+            logger,
+            new RemoteHostProfilingTelemetry(configuration));
+
+        await server.StartAsync(TestContext.Current.CancellationToken);
+        await using var stream = await RemoteHostTestServer.ConnectToServerAsync(socketPath, TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, await stream.ReadAsync(new byte[1], TestContext.Current.CancellationToken).AsTask()
+            .WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
+        var entry = Assert.Single(logger.Entries, entry => entry.Level >= LogLevel.Warning);
+        Assert.Equal(LogLevel.Error, entry.Level);
+        var error = Assert.IsType<InvalidOperationException>(entry.Exception);
+        Assert.Equal($"No service for type '{typeof(RemoteAppHostService).FullName}' has been registered.", error.Message);
+        Assert.Matches("^Client [0-9a-f]{8} unexpected error$", entry.Message);
+
+        await server.StopAsync(TestContext.Current.CancellationToken);
+    }
+
     private TemporaryWorkspace CreateSocketWorkspace()
     {
         // The default workspace path includes the assembly name and can exceed Unix socket
@@ -187,6 +224,11 @@ public sealed class JsonRpcAuthenticationTests(ITestOutputHelper outputHelper)
             });
 
             ConfigureServices(builder.Services);
+            builder.ConfigureContainer(new DefaultServiceProviderFactory(new ServiceProviderOptions
+            {
+                ValidateOnBuild = true,
+                ValidateScopes = true
+            }));
 
             var host = builder.Build();
             await host.StartAsync();
@@ -230,6 +272,14 @@ public sealed class JsonRpcAuthenticationTests(ITestOutputHelper outputHelper)
             services.AddSingleton<Language.LanguageSupportResolver>();
             services.AddScoped<Language.LanguageService>();
 
+            // CodeGenerationService depends on ExternalCapabilityRegistry + IntegrationHostLauncher
+            services.AddSingleton<Ats.ExternalCapabilityRegistry>();
+            services.AddSingleton<Language.IntegrationHostLauncher>();
+            services.AddSingleton(sp => new Language.IntegrationHostConfiguration(sp.GetRequiredService<IConfiguration>()));
+            services.AddSingleton<Language.IntegrationHostProcessLauncher>();
+            services.AddSingleton<IChildProcessFactory, ChildProcessFactory>();
+            services.AddSingleton(TimeProvider.System);
+
             services.AddScoped<JsonRpcAuthenticationState>();
             services.AddScoped<HandleRegistry>();
             services.AddScoped<CancellationTokenRegistry>();
@@ -242,7 +292,7 @@ public sealed class JsonRpcAuthenticationTests(ITestOutputHelper outputHelper)
             services.AddScoped<RemoteAppHostService>();
         }
 
-        private static async Task<Stream> ConnectToServerAsync(string socketPath, CancellationToken cancellationToken)
+        public static async Task<Stream> ConnectToServerAsync(string socketPath, CancellationToken cancellationToken)
         {
             using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
             using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);

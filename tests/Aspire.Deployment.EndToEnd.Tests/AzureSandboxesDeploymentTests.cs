@@ -2,9 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
-using System.Net.Http.Headers;
 using Aspire.Deployment.EndToEnd.Tests.Helpers;
-using Azure.Core;
 using Hex1b;
 using Hex1b.Automation;
 using Xunit;
@@ -147,32 +145,33 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
                 counter,
                 TimeSpan.FromSeconds(30));
 
-            output.WriteLine("Step 7: Verifying the explicitly exposed Entra-protected endpoint...");
+            output.WriteLine(useDotnetProject
+                ? "Step 7: Verifying the anonymous frontend endpoint..."
+                : "Step 7: Verifying the explicitly exposed Entra-protected endpoint...");
             await auto.RunCommandAsync(
-                VerifyDotNetSandboxDeploymentCommand(stateMarkerFile, defaultUrlFile, "frontend", anonymous: false),
+                VerifyDotNetSandboxDeploymentCommand(
+                    stateMarkerFile, defaultUrlFile, "frontend", anonymous: useDotnetProject, ExpectedDotNetResponseText),
                 counter,
                 TimeSpan.FromMinutes(7));
 
             output.WriteLine("Step 8: Verifying the anonymous endpoint reaches Azure Blob Storage using its Sandbox managed identity...");
             await auto.RunCommandAsync(
-                VerifyDotNetSandboxDeploymentCommand(stateMarkerFile, anonymousUrlFile, "anonymous", anonymous: true),
+                VerifyDotNetSandboxDeploymentCommand(
+                    stateMarkerFile, anonymousUrlFile, "anonymous", anonymous: true, ExpectedDotNetStorageResponseText),
                 counter,
                 TimeSpan.FromMinutes(7));
 
             deploymentUrls["frontend"] = File.ReadAllText(defaultUrlFile).Trim();
             deploymentUrls["anonymous"] = File.ReadAllText(anonymousUrlFile).Trim();
 
-            // The anonymous check above exercises Blob write/read. Fresh source markers additionally
-            // distinguish these images from a previously running deployment. A proxy 401/403 is not
-            // proof that the protected .NET workload booted, so require its authenticated body too.
+            // Fresh source markers distinguish these images from a previously running deployment.
+            // Project V2 uses anonymous ingress so workload verification does not depend on
+            // authenticating the CI deployment principal through the sandbox's Entra ingress.
             if (useDotnetProject)
             {
-                var token = await AzureAuthenticationHelpers.GetAzureCredential().GetTokenAsync(
-                    new TokenRequestContext(["https://management.azuredevcompute.io/.default"]), cancellationToken);
                 await DotnetProjectDeploymentHelpers.VerifyResponseAsync(
                     $"{deploymentUrls["frontend"].TrimEnd('/')}/deployment-marker",
-                    $"{ExpectedDotNetResponseText} {marker}", cancellationToken,
-                    new AuthenticationHeaderValue("Bearer", token.Token));
+                    $"{ExpectedDotNetResponseText} {marker}", cancellationToken);
             }
 
             await DotnetProjectDeploymentHelpers.VerifyResponseAsync(
@@ -454,7 +453,7 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
             """);
     }
 
-    private static void WriteDotNetSandboxAppHost(
+    internal static void WriteDotNetSandboxAppHost(
         TemporaryWorkspace workspace,
         string projectName,
         string defaultServiceName,
@@ -471,6 +470,22 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
         WriteDotNetSandboxService(projectDir, defaultServiceName, useBlobStorage: false, marker);
         WriteDotNetSandboxService(projectDir, anonymousServiceName, useBlobStorage: true, marker);
         var addProject = useDotnetProject ? "AddDotnetProject" : "AddProject";
+        var frontendSandboxConfiguration = useDotnetProject
+            ? """
+
+                .PublishAsAzureSandbox(new AzureSandboxOptions
+                {
+                    Endpoints =
+                    [
+                        new AzureSandboxEndpointOptions
+                        {
+                            Name = "http",
+                            Anonymous = true
+                        }
+                    ]
+                })
+            """
+            : string.Empty;
 
         File.WriteAllText(appHostFilePath, $$"""
             {{appHostDirectives}}
@@ -485,7 +500,7 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
                 .AddBlobs("blobs");
 
             builder.{{addProject}}("frontend", "{{defaultServiceName}}/{{defaultServiceName}}.csproj")
-                .WithExternalHttpEndpoints();
+                .WithExternalHttpEndpoints(){{frontendSandboxConfiguration}};
 
             builder.{{addProject}}("anonymous", "{{anonymousServiceName}}/{{anonymousServiceName}}.csproj")
                 .WithExternalHttpEndpoints()
@@ -590,7 +605,8 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
         string stateMarkerFile,
         string urlFile,
         string resourceName,
-        bool anonymous)
+        bool anonymous,
+        string expectedResponseText)
     {
         var statePrefix = $"Azure:Sandboxes:{resourceName}-sandbox-container:Ports";
         var accessPolicyCheck = anonymous
@@ -601,7 +617,7 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
               "for i in $(seq 1 18); do " +
               "STATUS=$(curl -sS -o aspire-sandbox-dotnet-curl.body -w '%{http_code}' \"$URL\" --max-time 10 2>aspire-sandbox-dotnet-curl.err) && " +
               "BODY=$(cat aspire-sandbox-dotnet-curl.body) && " +
-              $"[ \"$STATUS\" = \"200\" ] && [ \"$BODY\" = {BashQuote(ExpectedDotNetStorageResponseText)} ] && {{ echo \"  Anonymous .NET endpoint wrote and read an Azure blob using managed identity (attempt $i)\"; success=1; break; }}; " +
+              $"[ \"$STATUS\" = \"200\" ] && [ \"$BODY\" = {BashQuote(expectedResponseText)} ] && {{ echo \"  Anonymous .NET endpoint returned the expected response (attempt $i)\"; success=1; break; }}; " +
               "echo \"  Attempt $i failed with HTTP ${STATUS:-curl-error}; retrying in 10s...\"; sleep 10; " +
               "done; "
             : "success=0 && " +

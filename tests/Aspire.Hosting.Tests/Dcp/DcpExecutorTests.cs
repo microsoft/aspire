@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable CS0618 // Retain legacy project launch, watch, custom-debug, and subtype compatibility.
 #pragma warning disable ASPIREEXTENSION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIRECERTIFICATES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
@@ -57,7 +58,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             events: events);
         await executor.RunApplicationAsync().DefaultTimeout();
 
-        using var restartCts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        using var restartCts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
         var restartRequested = 0;
         events.Subscribe<OnResourceChangedContext>(async context =>
         {
@@ -81,7 +82,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         previous.Status = new ExecutableStatus { State = ExecutableState.Finished, ExitCode = 0 };
         kubernetesService.PushResourceModified(previous);
 
-        await restartCompleted.Task.DefaultTimeout(TimeSpan.FromSeconds(25));
+        await restartCompleted.Task.DefaultTimeout(TestConstants.LongTimeoutDuration);
         var replacement = GetCreatedExecutablesForResource(kubernetesService, "program").Last();
         Assert.NotEqual(previous.Metadata.Uid, replacement.Metadata.Uid);
     }
@@ -4830,6 +4831,74 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var envVarVal = dcpCtr.Spec.Env?.Single(v => v.Name == "PORT_AND_PROTOCOL_SET").Value;
         Assert.False(string.IsNullOrWhiteSpace(envVarVal));
         Assert.Equal(desiredTargetPort, int.Parse(envVarVal, CultureInfo.InvariantCulture));
+    }
+
+    [Fact]
+    public async Task StopResourceAsync_ExecutableStoppedBeforeLaunch_ReportedAsFailedToStart_Succeeds()
+    {
+        // DCP reports FailedToStart (a terminal state) when Spec.Stop is set before the process was launched,
+        // e.g. when a resource is stopped right after a restart re-created it. That must count as stopped.
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddExecutable("app", "app.exe", ".");
+
+        var kubernetesService = new TestKubernetesService { StoppedExecutableState = ExecutableState.FailedToStart };
+        using var app = builder.Build();
+        await using var appExecutor = CreateAppExecutor(app.Services.GetRequiredService<DistributedApplicationModel>(), kubernetesService: kubernetesService);
+
+        // A single attempt: the stop outcome is decided by the state DCP reports, not by polling.
+        appExecutor.DeleteResourceRetryPipeline = new ResiliencePipelineBuilder<bool>().Build();
+
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+
+        var dcpExe = Assert.Single(kubernetesService.CreatedResources.OfType<Executable>());
+        var reference = appExecutor.GetResource(dcpExe.Metadata.Name);
+
+        await appExecutor.StopResourceAsync(reference, TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.True(dcpExe.Spec.Stop);
+        Assert.Equal(ExecutableState.FailedToStart, dcpExe.Status?.State);
+    }
+
+    [Fact]
+    public async Task StopResourceAsync_ContainerStoppedBeforeLaunch_ReportedAsFailedToStart_Succeeds()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddContainer("database", "image");
+
+        var kubernetesService = new TestKubernetesService { StoppedContainerState = ContainerState.FailedToStart };
+        using var app = builder.Build();
+        await using var appExecutor = CreateAppExecutor(app.Services.GetRequiredService<DistributedApplicationModel>(), kubernetesService: kubernetesService);
+        appExecutor.DeleteResourceRetryPipeline = new ResiliencePipelineBuilder<bool>().Build();
+
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+
+        var dcpCtr = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
+        var reference = appExecutor.GetResource(dcpCtr.Metadata.Name);
+
+        await appExecutor.StopResourceAsync(reference, TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.True(dcpCtr.Spec.Stop);
+        Assert.Equal(ContainerState.FailedToStart, dcpCtr.Status?.State);
+    }
+
+    [Fact]
+    public async Task StopResourceAsync_ExecutableStillRunning_Throws()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddExecutable("app", "app.exe", ".");
+
+        var kubernetesService = new TestKubernetesService { StoppedExecutableState = ExecutableState.Running };
+        using var app = builder.Build();
+        await using var appExecutor = CreateAppExecutor(app.Services.GetRequiredService<DistributedApplicationModel>(), kubernetesService: kubernetesService);
+        appExecutor.DeleteResourceRetryPipeline = new ResiliencePipelineBuilder<bool>().Build();
+
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+
+        var dcpExe = Assert.Single(kubernetesService.CreatedResources.OfType<Executable>());
+        var reference = appExecutor.GetResource(dcpExe.Metadata.Name);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => appExecutor.StopResourceAsync(reference, TestContext.Current.CancellationToken)).DefaultTimeout();
+        Assert.Equal($"Failed to stop resource '{dcpExe.Metadata.Name}'.", ex.Message);
     }
 
     [Fact]
@@ -9704,13 +9773,16 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         }
     }
 
-    [Fact]
-    public async Task ContainerHostUrlWithoutMatchingHostEndpointUsesContainerHostBridge()
+    [Theory]
+    [InlineData("localhost")]
+    [InlineData("frontend.dev.localhost")]
+    [InlineData("Frontend.Dev.Localhost")]
+    public async Task ContainerHostUrlWithoutMatchingHostEndpointUsesContainerHostBridge(string host)
     {
         var builder = DistributedApplication.CreateBuilder();
 
         builder.AddContainer("aContainer", "image")
-            .WithEnvironment("URL", new HostUrl("https://localhost:17092/path"));
+            .WithEnvironment("URL", new HostUrl($"https://{host}:17092/path"));
 
         var kubernetesService = new TestKubernetesService();
         using var app = builder.Build();
@@ -9733,8 +9805,10 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             s => s.Metadata.Annotations.ContainsKey(CustomResource.ContainerTunnelInstanceName));
     }
 
-    [Fact]
-    public async Task ContainerHostUrlMatchingHostEndpointUsesTunnelPort()
+    [Theory]
+    [InlineData("localhost")]
+    [InlineData("frontend.dev.localhost")]
+    public async Task ContainerHostUrlMatchingHostEndpointUsesTunnelPort(string host)
     {
         var builder = DistributedApplication.CreateBuilder();
 
@@ -9742,7 +9816,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             .WithEndpoint(name: "http", targetPort: 1234, port: 5678, isProxied: true);
 
         builder.AddContainer("aContainer", "image")
-            .WithEnvironment("URL", new HostUrl("https://localhost:5678/path"));
+            .WithEnvironment("URL", new HostUrl($"https://{host}:5678/path"));
 
         var kubernetesService = new TestKubernetesService();
         using var app = builder.Build();
@@ -11428,7 +11502,13 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var dcpDependencyCheckService = new TestDcpDependencyCheckService();
 
         var appResources = new DcpAppResourceStore();
-        var proxylessEndpointPortAllocator = new ProxylessEndpointPortAllocator(Options.Create(dcpOptions));
+        // These executors are never disposed, so keep their reservations out of the process-wide registry.
+        var proxylessEndpointPortAllocator = new ProxylessEndpointPortAllocator(
+            dcpOptions.ProxylessEndpointPortRangeStart,
+            dcpOptions.ProxylessEndpointPortRangeEnd,
+            Random.Shared,
+            ProxylessEndpointPortAllocator.TryProbePort,
+            new ProxylessEndpointPortReservations());
         var applicationOptions = distributedApplicationOptions ?? new DistributedApplicationOptions();
         var containerNetworkEndpointProvisioner = new ContainerNetworkEndpointProvisioner(
             configuration,
@@ -11779,3 +11859,4 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
 }
+#pragma warning restore CS0618

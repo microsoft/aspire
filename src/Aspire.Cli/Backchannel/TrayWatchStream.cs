@@ -86,7 +86,9 @@ internal sealed class TrayWatchStream(
                 {
                     if (!await pendingRead.ConfigureAwait(false))
                     {
-                        return CliExitCodes.FailedToFindProject;
+                        // Discovery failures arrive as terminal error updates.
+                        // Channel completion is normal shutdown, including cancellation.
+                        return CliExitCodes.Success;
                     }
 
                     if (updates.Reader.TryRead(out var update))

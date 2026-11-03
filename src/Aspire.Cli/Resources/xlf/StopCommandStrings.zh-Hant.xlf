@@ -4,127 +4,127 @@
     <body>
       <trans-unit id="AllOptionDescription">
         <source>Stop all running AppHosts</source>
-        <target state="new">Stop all running AppHosts</target>
+        <target state="translated">停止所有執行中的 AppHost</target>
         <note />
       </trans-unit>
       <trans-unit id="AmbiguousAppHostPid">
         <source>Multiple AppHost connections match PID {0}. No AppHosts were stopped.</source>
-        <target state="new">Multiple AppHost connections match PID {0}. No AppHosts were stopped.</target>
+        <target state="translated">多個 AppHost 連線符合 PID {0}。未停止任何 AppHost。</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostIdentifierWithProcessId">
         <source>{0} (PID {1})</source>
-        <target state="new">{0} (PID {1})</target>
+        <target state="translated">{0} (PID {1})</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostNotRunningAtPathWithPid">
         <source>No running AppHost at '{0}' with PID {1} was found. No AppHosts were stopped.</source>
-        <target state="new">No running AppHost at '{0}' with PID {1} was found. No AppHosts were stopped.</target>
+        <target state="translated">在 '{0}' 找不到具有 PID {1} 的執行中 AppHost。未停止任何 AppHost。</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostNotRunningWithPid">
         <source>No running AppHost with PID {0} was found. No AppHosts were stopped.</source>
-        <target state="new">No running AppHost with PID {0} was found. No AppHosts were stopped.</target>
+        <target state="translated">找不到具有 PID {0} 的執行中 AppHost。未停止任何 AppHost。</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostStoppedSuccessfully">
         <source>{0} stopped successfully.</source>
-        <target state="new">{0} stopped successfully.</target>
+        <target state="translated">已成功停止 {0}。</target>
         <note />
       </trans-unit>
       <trans-unit id="CleaningPersistentResources">
         <source>Cleaning up persistent resources for {0}...</source>
-        <target state="new">Cleaning up persistent resources for {0}...</target>
+        <target state="translated">正在清除 {0} 的持續性資源...</target>
         <note />
       </trans-unit>
       <trans-unit id="CouldNotDetermineAppHostPath">
         <source>Could not determine the AppHost project path.</source>
-        <target state="new">Could not determine the AppHost project path.</target>
+        <target state="translated">無法判斷 AppHost 專案路徑。</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpCleanupCompatibilityCheckFailed">
         <source>Could not inspect the AppHost project to verify persistent resource cleanup compatibility. Persistent resource cleanup will still be attempted.</source>
-        <target state="new">Could not inspect the AppHost project to verify persistent resource cleanup compatibility. Persistent resource cleanup will still be attempted.</target>
+        <target state="translated">無法檢查 AppHost 專案以確認持續性資源清除相容性。仍然會嘗試持續性資源清除。</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpCleanupExitCode">
         <source>DCP cleanup exited with code {0}.</source>
-        <target state="new">DCP cleanup exited with code {0}.</target>
+        <target state="translated">DCP 清除已結束，代碼為 {0}。</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpCleanupFailed">
         <source>Failed to clean up persistent resources for {0}. {1}</source>
-        <target state="new">Failed to clean up persistent resources for {0}. {1}</target>
+        <target state="translated">無法清除 {0} 的持續性資源。{1}</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpCleanupUnavailable">
         <source>Could not find the DCP executable needed to clean up persistent resources.</source>
-        <target state="new">Could not find the DCP executable needed to clean up persistent resources.</target>
+        <target state="translated">找不到清除持續性資源所需的 DCP 可執行檔。</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpCleanupUnsupportedAppHostVersion">
         <source>This AppHost uses Aspire.Hosting {0}, which might not support persistent resource cleanup. Persistent resource cleanup requires Aspire.Hosting {1} or later, or an AppHost configured to use the Aspire CLI bundle. Persistent resource cleanup will still be attempted.</source>
-        <target state="new">This AppHost uses Aspire.Hosting {0}, which might not support persistent resource cleanup. Persistent resource cleanup requires Aspire.Hosting {1} or later, or an AppHost configured to use the Aspire CLI bundle. Persistent resource cleanup will still be attempted.</target>
+        <target state="translated">此 AppHost 使用 Aspire.Hosting {0}，這可能不支援持續性資源清除。持續性資源清除需要 Aspire.Hosting {1} 或更新版本，或 AppHost 已設定為使用 Aspire CLI 搭售方案。仍然會嘗試持續性資源清除。</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpVolumeCleanupUnsupportedAppHostVersion">
         <source>This AppHost uses Aspire.Hosting {0}, which might not support persistent volume cleanup. Persistent volume cleanup requires Aspire.Hosting {1} or later, or an AppHost configured to use the Aspire CLI bundle. Persistent volume cleanup will still be attempted.</source>
-        <target state="new">This AppHost uses Aspire.Hosting {0}, which might not support persistent volume cleanup. Persistent volume cleanup requires Aspire.Hosting {1} or later, or an AppHost configured to use the Aspire CLI bundle. Persistent volume cleanup will still be attempted.</target>
+        <target state="translated">此 AppHost 使用 Aspire.Hosting {0}，這可能不支援持續性磁碟區清除。持續性磁碟區清除需要 Aspire.Hosting {1} 或更新版本，或 AppHost 已設定為使用 Aspire CLI 搭售方案。仍然會嘗試持續性磁碟區清除。</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
         <source>Stop a running AppHost</source>
-        <target state="needs-review-translation">停止正在執行的 Aspire apphost。</target>
+        <target state="translated">停止執行中的 AppHost</target>
         <note />
       </trans-unit>
       <trans-unit id="FailedToStopAppHost">
         <source>Failed to stop {0}.</source>
-        <target state="new">Failed to stop {0}.</target>
+        <target state="translated">無法停止 {0}。</target>
         <note />
       </trans-unit>
       <trans-unit id="ForceOptionDescription">
         <source>Stop the AppHost and clean up its persistent resources, preserving volumes by default</source>
-        <target state="new">Stop the AppHost and clean up its persistent resources, preserving volumes by default</target>
+        <target state="translated">停止 AppHost 並清除其持續性資源，預設會保留磁碟區</target>
         <note />
       </trans-unit>
       <trans-unit id="FoundRunningAppHost">
         <source>Found running AppHost: {0}</source>
-        <target state="new">Found running AppHost: {0}</target>
+        <target state="translated">找到執行中 AppHost: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="MultipleAppHostsNonInteractive">
         <source>Multiple AppHosts are running. Use {0} to specify which one to stop, or use {1} to stop all of them.</source>
-        <target state="new">Multiple AppHosts are running. Use {0} to specify which one to stop, or use {1} to stop all of them.</target>
+        <target state="translated">多個 AppHost 正在執行。請使用 {0} 指定要停止的 AppHost，或使用 {1} 停止全部。</target>
         <note />
       </trans-unit>
       <trans-unit id="MultipleAppHostsRunning">
         <source>Multiple AppHosts are running. Use --apphost to specify which one to stop, or select one:</source>
-        <target state="needs-review-translation">多個 AppHost 正在執行。請使用 --apphost 指定要停止的 AppHost，或從中選取一個:</target>
+        <target state="translated">多個 AppHost 正在執行。請使用 --apphost 指定要停止的 AppHost，或從中選取一個:</target>
         <note />
       </trans-unit>
       <trans-unit id="PersistentResourcesCleaned">
         <source>Persistent resources for {0} cleaned up.</source>
-        <target state="new">Persistent resources for {0} cleaned up.</target>
+        <target state="translated">已清除 {0} 的持續性資源。</target>
         <note />
       </trans-unit>
       <trans-unit id="PidMustBePositive">
         <source>The --pid option must be a positive integer.</source>
-        <target state="new">The --pid option must be a positive integer.</target>
+        <target state="translated">--pid 選項必須是正整數。</target>
         <note />
       </trans-unit>
       <trans-unit id="PidOptionDescription">
         <source>Stop only the AppHost with this positive process ID (not the CLI process ID). With --apphost, the project file path must also match exactly. Cannot be combined with --all or --force.</source>
-        <target state="new">Stop only the AppHost with this positive process ID (not the CLI process ID). With --apphost, the project file path must also match exactly. Cannot be combined with --all or --force.</target>
+        <target state="translated">只停止具有正流程識別碼 (而非 CLI 流程識別碼) 的 AppHost。使用 --apphost 時，專案檔案路徑也必須完全相符。無法與 --all 或 --force 結合。</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
         <source>The path to the Aspire AppHost project file or a directory to search</source>
-        <target state="needs-review-translation">Aspire AppHost 專案檔案的路徑。</target>
+        <target state="translated">要搜尋的 Aspire AppHost 專案檔案或目錄路徑</target>
         <note />
       </trans-unit>
       <trans-unit id="ProtocolRequiresExactIdentity">
         <source>The experimental tray protocol requires --protocol-version 1 --format json --apphost with an absolute file path, a positive --pid, and a positive --started-at in Unix milliseconds. --all and --force are not allowed.</source>
-        <target state="new">The experimental tray protocol requires --protocol-version 1 --format json --apphost with an absolute file path, a positive --pid, and a positive --started-at in Unix milliseconds. --all and --force are not allowed.</target>
+        <target state="translated">實驗性系統匣通訊協定需要 --protocol-version 1 --format json --apphost，其具有絕對檔案路徑、正 --pid 和正 --started-at (以 Unix 毫秒為單位)。不允許 --all 和 --force。</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAppHostAction">
@@ -134,12 +134,12 @@
       </trans-unit>
       <trans-unit id="SendingStopSignal">
         <source>Sending stop signal to {0}...</source>
-        <target state="new">Sending stop signal to {0}...</target>
+        <target state="translated">正在將停止訊號傳送至 {0}...</target>
         <note />
       </trans-unit>
       <trans-unit id="StoppingAppHost">
         <source>Stopping {0}...</source>
-        <target state="new">Stopping {0}...</target>
+        <target state="translated">正在停止 {0}...</target>
         <note />
       </trans-unit>
       <trans-unit id="AllAndProjectMutuallyExclusive">
@@ -149,17 +149,17 @@
       </trans-unit>
       <trans-unit id="UnknownAspireHostingVersion">
         <source>an unknown version</source>
-        <target state="new">an unknown version</target>
+        <target state="translated">未知的版本</target>
         <note />
       </trans-unit>
       <trans-unit id="VolumesOptionDescription">
         <source>Also remove persistent volumes created by Aspire (requires --force)</source>
-        <target state="new">Also remove persistent volumes created by Aspire (requires --force)</target>
+        <target state="translated">也會移除由 Aspire 建立的永續性磁碟區 (需要 --force)</target>
         <note />
       </trans-unit>
       <trans-unit id="VolumesRequiresForce">
         <source>The {0} option requires the {1} option.</source>
-        <target state="new">The {0} option requires the {1} option.</target>
+        <target state="translated">{0} 選項需要 {1} 選項。</target>
         <note />
       </trans-unit>
     </body>

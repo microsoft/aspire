@@ -22,13 +22,21 @@ two conclusions where no job (and so no in-pipeline reporter) runs.
 ### Why quarantine is infra-only
 
 `tests-quarantine.yml` passes `ignoreTestFailures: true`. In `run-tests.yml` that
-appends `|| true` to the test step and then only checks that `.trx` files with a
-nonzero test count were produced. So **failing quarantined tests never red the
-run** — they are flaky by definition. A *failed* quarantine run therefore always
-means infrastructure broke, and only an `infra` issue is filed.
+captures the test-runner exit code, makes known test outcomes non-blocking, and
+then verifies that the outcome and result evidence are valid. A project/OS
+combination with no matching quarantined tests is accepted because
+`tests-quarantine.yml` explicitly passes `allowZeroTests: true`; the verifier
+still requires a valid zero-test TRX. The specialized trait filter makes that
+empty lane expected.
+So **failing quarantined tests never red the run** — they are flaky by
+definition. A *failed* quarantine run therefore always means infrastructure
+broke, and only an `infra` issue is filed.
 
-`tests-outerloop.yml` does not ignore test failures, so a failed outerloop run is
-classified by inspecting the produced `.trx`:
+`tests-outerloop.yml` generally treats test failures as gating. Individual test
+projects can opt into non-gating test outcomes with
+`NonBlockingTestFailures`; their results remain visible in the job summary and
+artifacts but are excluded from the scheduled failure issue. A failed outerloop
+run is classified from the remaining gating `.trx` results:
 
 - failed test names present → `test-failures`
 - clean extraction, zero failed → `infra` (the run broke before/around test
@@ -48,7 +56,8 @@ PR-triggered runs from the `paths:` filter never file issues), and only for
 `microsoft/aspire`.
 
 For outerloop it downloads the runner's `logs-*` artifacts (which contain the
-`.trx` files) and runs:
+`.trx` files), removes artifacts marked as project-level non-gating results, and
+runs:
 
 ```bash
 GenerateTestSummary <all-logs> --failed-tests-json <out>

@@ -21,7 +21,7 @@ internal static class MetricsSetupHelpers
     public static void SetupChartContainer(BunitContext context)
     {
         var metricTableModule = context.JSInterop.SetupModule("/Components/Controls/Chart/MetricTable.razor.js");
-        metricTableModule.SetupVoid("announceDataGridRows", _ => true);
+        metricTableModule.SetupVoid("announceDataGridRows", _ => true).SetVoidResult();
 
         FluentUISetupHelpers.SetupFluentTab(context);
         FluentUISetupHelpers.SetupFluentOverflow(context);
@@ -32,14 +32,21 @@ internal static class MetricsSetupHelpers
     internal static void SetupPlotlyChart(BunitContext context)
     {
         var module = context.JSInterop.SetupModule("/js/app-metrics.js");
-        module.SetupVoid("initializeChart", _ => true);
-        module.SetupVoid("updateChart", _ => true);
+        module.SetupVoid("initializeChart", _ => true).SetVoidResult();
+        module.SetupVoid("updateChart", _ => true).SetVoidResult();
 
         context.Services.AddSingleton<IInstrumentUnitResolver, TestInstrumentUnitResolver>();
     }
 
     internal static void SetupMetricsPage(BunitContext context, ISessionStorage? sessionStorage = null)
     {
+        var metricsModule = context.JSInterop.SetupModule("/Components/Pages/Metrics.razor.js");
+        metricsModule.Setup<bool>("registerMetricsSplitter", _ => true).SetResult(true);
+        metricsModule.SetupVoid("unregisterMetricsSplitter", _ => true).SetVoidResult();
+
+        var meterOverviewModule = context.JSInterop.SetupModule("/Components/Controls/Chart/MeterOverview.razor.js");
+        meterOverviewModule.SetupModule("observeCards", _ => true).SetupVoid("dispose", _ => true).SetVoidResult();
+
         FluentUISetupHelpers.SetupFluentDivider(context);
         FluentUISetupHelpers.SetupFluentInputLabel(context);
         FluentUISetupHelpers.SetupFluentDataGrid(context);

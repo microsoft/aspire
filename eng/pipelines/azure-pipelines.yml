@@ -337,7 +337,7 @@ extends:
           parameters:
             LclSource: lclFilesfromPackage
             LclPackageId: 'LCL-JUNO-PROD-ASPIRE'
-            CreatePr: false
+            CreatePr: true
             GitHubOrg: microsoft
             MirrorRepo: aspire
             MirrorBranch: main

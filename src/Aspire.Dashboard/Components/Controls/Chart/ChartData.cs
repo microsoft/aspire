@@ -5,6 +5,7 @@ namespace Aspire.Dashboard.Components.Controls.Chart;
 
 internal sealed class ChartData
 {
+    public bool HasIncompatibleHistogramBounds { get; init; }
     public required List<ChartTrace> Traces { get; init; }
     public required List<DateTimeOffset> XValues { get; init; }
     public required List<ChartExemplar> Exemplars { get; init; }

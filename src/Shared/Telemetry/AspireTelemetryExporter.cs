@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Azure.Monitor.OpenTelemetry.Exporter;
-using OpenTelemetry;
 using OpenTelemetry.Logs;
 using OpenTelemetry.Trace;
 
@@ -41,10 +40,13 @@ internal static class AspireTelemetryExporter
         string storageDirectory,
         Action<AzureMonitorExporterOptions>? configure = null)
     {
-        var exporterOptions = new AzureMonitorExporterOptions();
-        ConfigureExporter(exporterOptions, connectionString, storageDirectory);
-        configure?.Invoke(exporterOptions);
-        return options.AddProcessor(new BatchLogRecordExportProcessor(new AzureMonitorLogExporter(exporterOptions)));
+        // The exporter-specific batch processor implements shutdown and force-flush persistence.
+        // https://github.com/Azure/azure-sdk-for-net/blob/Azure.Monitor.OpenTelemetry.Exporter_1.9.0/sdk/monitor/Azure.Monitor.OpenTelemetry.Exporter/README.md#telemetry-delivery-on-shutdown
+        return options.AddAzureMonitorLogExporter(exporterOptions =>
+        {
+            ConfigureExporter(exporterOptions, connectionString, storageDirectory);
+            configure?.Invoke(exporterOptions);
+        });
     }
 
     internal static void ConfigureExporter(AzureMonitorExporterOptions options, string connectionString, string storageDirectory)
@@ -53,6 +55,9 @@ internal static class AspireTelemetryExporter
         options.EnableLiveMetrics = false;
         options.EnableStandardMetrics = false;
         options.EnablePerformanceCounters = false;
+        // Product usage/error events must be reported regardless of ambient trace sampling.
+        options.EnableTraceBasedLogsSampler = false;
+        options.Retry.NetworkTimeout = TimeSpan.FromSeconds(5);
         // These options do not disable Statsbeat's separate hosting metadata collection/export.
         // TODO: Disable Statsbeat for product exporters when a public per-exporter API is available,
         // without changing process-wide environment variables: https://github.com/Azure/azure-sdk-for-net/issues/63651.

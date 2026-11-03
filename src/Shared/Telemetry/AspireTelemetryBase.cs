@@ -133,13 +133,7 @@ public abstract class AspireTelemetryBase : IDisposable
         var tags = CreateProperties(properties);
         List<KeyValuePair<string, object?>> attributes =
         [
-            // Azure Monitor stringifies log attributes with Convert.ToString, which turns a string[]
-            // into "System.String[]". Join collections after privacy filtering; span tags stay typed.
-            // https://github.com/Azure/azure-sdk-for-net/blob/Azure.Monitor.OpenTelemetry.Exporter_1.9.0/sdk/monitor/Azure.Monitor.OpenTelemetry.Exporter/src/Internals/LogsHelper.cs
-            .. tags.Select(tag => new KeyValuePair<string, object?>(tag.Key,
-                tag.Value is IEnumerable<string> values
-                    ? string.Join(",", values)
-                    : tag.Value)),
+            .. tags.Select(tag => new KeyValuePair<string, object?>(tag.Key, SerializeLogProperty(tag.Value))),
             new("{OriginalFormat}", eventName),
             // Azure Monitor reads OperationName from this attribute, not EventId.Name.
             // https://github.com/Azure/azure-sdk-for-net/blob/main/sdk/monitor/Azure.Monitor.OpenTelemetry.Exporter/src/Internals/LogsHelper.cs
@@ -252,6 +246,24 @@ public abstract class AspireTelemetryBase : IDisposable
     /// </summary>
     /// <returns>The default tags.</returns>
     protected abstract IReadOnlyList<KeyValuePair<string, object?>> GetDefaultTags();
+
+    /// <summary>
+    /// Gets default metadata for an activity, including any operation-specific exclusions.
+    /// </summary>
+    internal virtual IEnumerable<KeyValuePair<string, object?>> GetActivityDefaultTags(Activity activity) => GetDefaultTags();
+
+    /// <summary>
+    /// Gets default metadata after applying the product's privacy policy.
+    /// </summary>
+    internal ActivityTagsCollection GetDefaultProperties() => CreateProperties(properties: null);
+
+    internal static object? SerializeLogProperty(object? value)
+    {
+        // Azure Monitor stringifies log attributes with Convert.ToString, which turns a string[]
+        // into "System.String[]". Join collections after privacy filtering; span tags stay typed.
+        // https://github.com/Azure/azure-sdk-for-net/blob/Azure.Monitor.OpenTelemetry.Exporter_1.9.0/sdk/monitor/Azure.Monitor.OpenTelemetry.Exporter/src/Internals/LogsHelper.cs
+        return value is IEnumerable<string> values ? string.Join(",", values) : value;
+    }
 
     /// <summary>
     /// Determines whether a property may be reported and sanitizes its value.

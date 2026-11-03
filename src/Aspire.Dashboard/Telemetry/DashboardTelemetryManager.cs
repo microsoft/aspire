@@ -4,6 +4,7 @@
 using Aspire.Shared;
 using Aspire.Shared.Telemetry;
 using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 
 namespace Aspire.Dashboard.Telemetry;
 
@@ -13,6 +14,7 @@ namespace Aspire.Dashboard.Telemetry;
 internal sealed class DashboardTelemetryManager : IHostedService, IAsyncDisposable
 {
     private const string ApplicationInsightsConnectionString = "InstrumentationKey=3be364e3-d9eb-436a-983e-0a681d5af691;IngestionEndpoint=https://centralus-2.in.applicationinsights.azure.com/;LiveEndpoint=https://centralus.livediagnostics.monitor.azure.com/;ApplicationId=83cb9aa6-6ebc-4c33-b434-8d348004bde1";
+    private const int ShutdownTimeoutMilliseconds = 5000;
 
     private readonly Lock _lock = new();
     private readonly DashboardTelemetryConfiguration _configuration;
@@ -34,7 +36,10 @@ internal sealed class DashboardTelemetryManager : IHostedService, IAsyncDisposab
         _telemetry = telemetry;
         _createProvider = (resource, storageDirectory) => AzureMonitorTelemetryProvider.Create(
             new ServiceCollection(), resource, DashboardTelemetryService.ReportedActivitySourceName,
-            DashboardTelemetryService.EventLogCategoryName, ApplicationInsightsConnectionString, storageDirectory);
+            DashboardTelemetryService.EventLogCategoryName, ApplicationInsightsConnectionString, storageDirectory,
+            builder => builder.AddProcessor(new ActivityTagEnrichmentProcessor(telemetry)),
+            logging => logging.AddProcessor(new LogRecordTagEnrichmentProcessor(telemetry)),
+            static _ => { });
     }
 
     internal DashboardTelemetryManager(
@@ -106,6 +111,8 @@ internal sealed class DashboardTelemetryManager : IHostedService, IAsyncDisposab
     }
 
     /// <inheritdoc />
+    // Cancelling the wait would not stop the synchronous SDK drain. Complete its bounded
+    // persistence and disposal even when the host's graceful shutdown deadline has expired.
     public Task StopAsync(CancellationToken cancellationToken) => ShutdownAsync();
 
     /// <inheritdoc />
@@ -132,7 +139,9 @@ internal sealed class DashboardTelemetryManager : IHostedService, IAsyncDisposab
     {
         using (provider)
         {
-            if (provider is not null && !await provider.ShutdownAsync(timeoutMilliseconds: 5000).ConfigureAwait(false))
+            // Unlike a short-lived CLI command, retain the exporter's default two-second drain
+            // opportunity after persistence, within the five-second provider shutdown window.
+            if (provider is not null && !await provider.ShutdownAsync(ShutdownTimeoutMilliseconds).ConfigureAwait(false))
             {
                 _logger.LogWarning("Timed out flushing dashboard product telemetry.");
             }

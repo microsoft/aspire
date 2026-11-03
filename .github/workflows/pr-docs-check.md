@@ -29,7 +29,7 @@ on:
 
 if: >-
   (github.event.pull_request.merged == true || github.event_name == 'workflow_dispatch')
-  && github.repository_owner == 'microsoft'
+  && github.repository == 'microsoft/aspire'
 
 # Cap the number of agent turns. `max-turns` is the supported field; the older
 # `max-runs` alias is deprecated and rejected under strict compilation. It
