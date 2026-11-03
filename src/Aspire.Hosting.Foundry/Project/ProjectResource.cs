@@ -98,9 +98,9 @@ public class AzureCognitiveServicesProjectResource :
 
     private void ValidateComputeResourcesAreHostedAgents(DistributedApplicationModel model)
     {
-        var unregisteredComputeResources = model.Resources
-            .OfType<IComputeResource>()
+        var unregisteredComputeResources = model.GetComputeResources()
             .Where(resource => resource.GetComputeEnvironment() == this)
+            .Where(resource => resource.RequiresImageBuildAndPush())
             .Where(resource => resource.GetDeploymentTargetAnnotation(this)?.DeploymentTarget is not AzureHostedAgentResource)
             .ToList();
 

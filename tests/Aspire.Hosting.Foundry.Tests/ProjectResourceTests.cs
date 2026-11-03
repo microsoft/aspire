@@ -143,6 +143,31 @@ public class ProjectResourceTests
     }
 
     [Fact]
+    public async Task AddProject_WithPrebuiltContainer_DoesNotRequireHostedAgentRegistrationDuringBeforeStart()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddFoundry("account")
+            .AddProject("my-project");
+        builder.AddContainer("prebuilt", "prebuilt:1");
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+    }
+
+    [Fact]
+    public async Task AddProject_WithExcludedContainer_DoesNotRequireHostedAgentRegistrationDuringBeforeStart()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddFoundry("account")
+            .AddProject("my-project");
+        builder.AddContainer("local-tool", "local-tool:1")
+            .ExcludeFromManifest();
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+    }
+
+    [Fact]
     public void ConnectionStringExpression_HasCorrectFormat()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
