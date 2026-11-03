@@ -1,0 +1,16 @@
+{
+  "id": "hosting-testing-dashboardtestingbuildertests-interactivity-timeout-windows",
+  "type": "flaky-test",
+  "title": "Flaky: DashboardTestingBuilderTests.DashboardTestingPreservesInteractivityAfterAppHostStart times out on Windows",
+  "test_name": "Aspire.Hosting.Testing.Tests.DashboardTestingBuilderTests.DashboardTestingPreservesInteractivityAfterAppHostStart(creationSurface: Type)",
+  "error_pattern": "System.TimeoutException : The operation at /_/tests/Aspire.Hosting.Testing.Tests/DashboardTestingBuilderTests.cs:129 timed out after reaching the limit of 60000ms.\nHosting failed to start: TaskCanceledException at Aspire.Hosting.Dcp.DcpExecutor.RunApplicationAsync",
+  "occurrences": [
+    {
+      "run_id": 41543065562,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/41543065562",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Testing.Tests, Hosting.Testing, Hosting.Testing, tests/... / Hosting.Testing (windows-latest)",
+      "pr_number": 0,
+      "observed_at": "2026-11-03T00:32:26Z"
+    }
+  ]
+}

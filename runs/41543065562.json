@@ -1,0 +1,274 @@
+{
+  "run_id": 41543065562,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/41543065562",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-03T00:32:26Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 21477,
+    "title": "Isolate OpenAI model WaitFor test from live status.openai.com health check",
+    "author": "davidfowl",
+    "state": "closed",
+    "head_branch": "agent/fix-openai-model-statuspage-flake",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/21477",
+    "merged_at": "2026-11-02T23:08:34Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "1d3c45f9a299c30d46fc3166148902d466043df2",
+    "failed_sha": "a99015e0a24f659bd4a1b87765ab4c3f9db96686",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "a8dff1cee6a428a0e5eff5dbdf7bf258f6cc32d0",
+        "message": "Only show 'Stopping Aspire' when canceling aspire run (#21561) Co-authored-by: davidfowl <95136+davidfowl@users.noreply.github.com> Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com> Co-authored-by: James Newton-King <james@newtonking.com>",
+        "html_url": "https://github.com/microsoft/aspire/commit/a8dff1cee6a428a0e5eff5dbdf7bf258f6cc32d0",
+        "pull_request": {
+          "number": 21561,
+          "title": "Only show 'Stopping Aspire' when canceling aspire run",
+          "url": "https://github.com/microsoft/aspire/pull/21561",
+          "merged_at": "2026-11-02T05:29:25Z"
+        }
+      },
+      {
+        "sha": "ae2c92730f335db41c02dffb22fdfc83793e231d",
+        "message": "Unquarantine 2 CLI E2E tests that pass 100% in the quarantine lane (#21649) ## Description This unquarantines 2 CLI E2E tests that have passed 100% of the time in the quarantined-tests lane over the last 14 days. No product or test logic changes: the PR only removes `[QuarantinedTest]` and the now-unused `using Aspire.TestUtilities;` directives. Quarantine-lane evidence comes from `tests-quarantine.yml` scheduled runs created 2026-10-18 to 2026-11-01. I parsed each run's Final Results table (174",
+        "html_url": "https://github.com/microsoft/aspire/commit/ae2c92730f335db41c02dffb22fdfc83793e231d",
+        "pull_request": {
+          "number": 21649,
+          "title": "Unquarantine 2 CLI E2E tests that pass 100% in the quarantine lane",
+          "url": "https://github.com/microsoft/aspire/pull/21649",
+          "merged_at": "2026-11-02T06:25:05Z"
+        }
+      },
+      {
+        "sha": "7961070663e774084a46b4ee908ea4c0149db633",
+        "message": "Support config source adoption and explicit project opt-out (#21678)",
+        "html_url": "https://github.com/microsoft/aspire/commit/7961070663e774084a46b4ee908ea4c0149db633",
+        "pull_request": {
+          "number": 21678,
+          "title": "Support config source adoption and explicit project opt-out",
+          "url": "https://github.com/microsoft/aspire/pull/21678",
+          "merged_at": "2026-11-02T08:31:25Z"
+        }
+      },
+      {
+        "sha": "1afc0d0ee72484a35e189eafaec0ae9f409e5cc7",
+        "message": "Limit configuration sources to project-local settings (#21679)",
+        "html_url": "https://github.com/microsoft/aspire/commit/1afc0d0ee72484a35e189eafaec0ae9f409e5cc7",
+        "pull_request": {
+          "number": 21679,
+          "title": "Limit configuration sources to project-local settings",
+          "url": "https://github.com/microsoft/aspire/pull/21679",
+          "merged_at": "2026-11-02T09:59:35Z"
+        }
+      },
+      {
+        "sha": "2137ceca1d3baa8bcabd5036f3974f1538f92c1a",
+        "message": "Fix array-aware CLI configuration editing (#21572)",
+        "html_url": "https://github.com/microsoft/aspire/commit/2137ceca1d3baa8bcabd5036f3974f1538f92c1a",
+        "pull_request": {
+          "number": 21572,
+          "title": "Fix array-aware CLI configuration editing",
+          "url": "https://github.com/microsoft/aspire/pull/21572",
+          "merged_at": "2026-11-02T12:35:27Z"
+        }
+      },
+      {
+        "sha": "9f0961d0c7173732f45ce88d571c8b53f8059934",
+        "message": "Reject registration-only configuration on existing Entra references (#21493) ## Description Registration-only Entra configuration currently accepts existing registrations and silently does nothing, leaving applications to fail later during authentication. Fail at the configuration call instead, with guidance for configuring the registration manually. Guard redirect URIs, owners, ID-token issuance, pre-authorization, admin consent, and the default application ID URI. Align existing role, certific",
+        "html_url": "https://github.com/microsoft/aspire/commit/9f0961d0c7173732f45ce88d571c8b53f8059934",
+        "pull_request": {
+          "number": 21493,
+          "title": "Reject registration-only configuration on existing Entra references",
+          "url": "https://github.com/microsoft/aspire/pull/21493",
+          "merged_at": "2026-11-02T15:21:50Z"
+        }
+      },
+      {
+        "sha": "3d42183549d7fc8e4817e5c98c8d427ebd20e464",
+        "message": "Support configurable named skill sources (#21364) ## Description Allow teams to configure multiple named skill sources instead of always registering only `microsoft/aspire-skills`. This builds on #20946 and lets shared `configSource` configuration distribute skill-source settings. - Add `skillSources` configuration with per-source repositories, marketplace/plugin names, refs, and OpenCode catalogs. Keep the built-in source unless it is explicitly disabled or overridden. - Merge named sources acr",
+        "html_url": "https://github.com/microsoft/aspire/commit/3d42183549d7fc8e4817e5c98c8d427ebd20e464",
+        "pull_request": {
+          "number": 21364,
+          "title": "Support configurable named skill sources",
+          "url": "https://github.com/microsoft/aspire/pull/21364",
+          "merged_at": "2026-11-02T16:28:36Z"
+        }
+      },
+      {
+        "sha": "b58809d3eeae94db4cb5b8b839b9232fc59434de",
+        "message": "Support Key Vault resource references for Entra certificate credentials (#21425) ## Description Entra certificate credentials can now use a Key Vault resource already modeled in the AppHost instead of requiring a hard-coded vault URL. The URI remains a deferred resource reference during local run and publish, including the Key Vault emulator endpoint in run mode. A literal vault URL is still accepted for vaults managed outside the AppHost. The same exported method accepts either a URL or a Key V",
+        "html_url": "https://github.com/microsoft/aspire/commit/b58809d3eeae94db4cb5b8b839b9232fc59434de",
+        "pull_request": {
+          "number": 21425,
+          "title": "Support Key Vault resource references for Entra certificate credentials",
+          "url": "https://github.com/microsoft/aspire/pull/21425",
+          "merged_at": "2026-11-02T17:34:47Z"
+        }
+      },
+      {
+        "sha": "25935214f31928dd58118449a2fe2f96da09ac70",
+        "message": "Accept natural ps leader exit racing a failed Windows taskkill (Fixes #20869) (#21595) ## Description Fixes the intermittent VS Code extension E2E (Windows, apphost-tree) failure `owns at most one ps follower…`. The test reports `Timed out after 30000ms waiting for 1 owned ps follower(s)` and the state error `Failed to stop the previous AppHost watcher: Error: taskkill for aspire ps exited with code 255 while PID N remained live.` ### Denominator (ci.yml, 2026-10-29 13:00Z → 10-31 13:23Z, 388 ru",
+        "html_url": "https://github.com/microsoft/aspire/commit/25935214f31928dd58118449a2fe2f96da09ac70",
+        "pull_request": {
+          "number": 21595,
+          "title": "Accept natural ps leader exit racing a failed Windows taskkill (Fixes #20869)",
+          "url": "https://github.com/microsoft/aspire/pull/21595",
+          "merged_at": "2026-11-02T18:45:57Z"
+        }
+      },
+      {
+        "sha": "42793ba28262d772539c5da685d90a78e0f0a16c",
+        "message": "Fix flaky IntegrationHostLauncherTests discovery timeout on Windows (#21428) ## Description Fixes the intermittent Windows CI failure of `Aspire.Hosting.RemoteHost.Tests.IntegrationHostLauncherTests.InitializeHostsAsync_WaitsForEveryRegistrationBeforeDiscovery`. The test fails with `TimeoutException` at `initialization.WaitAsync(10s)` after about 11s. It failed on the first attempt of 3 main-branch runs in the last 72 hours: [40554609235](https://github.com/microsoft/aspire/actions/runs/40554609",
+        "html_url": "https://github.com/microsoft/aspire/commit/42793ba28262d772539c5da685d90a78e0f0a16c",
+        "pull_request": {
+          "number": 21428,
+          "title": "Fix flaky IntegrationHostLauncherTests discovery timeout on Windows",
+          "url": "https://github.com/microsoft/aspire/pull/21428",
+          "merged_at": "2026-11-02T18:53:26Z"
+        }
+      },
+      {
+        "sha": "00d1e6694a7fd94f0a7ee2fc48aa7ad2faef14c2",
+        "message": "Target dashboard resource cards in DashboardUrlTests breakpoint test (#21656) ## Description `DashboardUrlTests.DashboardDisplaysResourceUpdatesWhileAppHostIsPausedAtBreakpoint` has failed in every scheduled Outerloop run on `main` since #21412 (\"Modernize the dashboard experience\") made the Cards layout the default resources view. Before #21412 it passed 12 of 12 runs; since then it has failed 2 of 2 ([41158473015](https://github.com/microsoft/aspire/actions/runs/41158473015), [41263841334](htt",
+        "html_url": "https://github.com/microsoft/aspire/commit/00d1e6694a7fd94f0a7ee2fc48aa7ad2faef14c2",
+        "pull_request": {
+          "number": 21656,
+          "title": "Target dashboard resource cards in DashboardUrlTests breakpoint test",
+          "url": "https://github.com/microsoft/aspire/pull/21656",
+          "merged_at": "2026-11-02T19:13:50Z"
+        }
+      },
+      {
+        "sha": "0efbfcb095bf85ccf89678193d64b46022e7657e",
+        "message": "Make WithBindMount idempotent and fail fast on conflicting mount targets (#21546) ## Description `WithBindMount` always appended a new `ContainerMountAnnotation`, even when the resource already had a mount at that target. Duplicates went straight to DCP, and Docker refused to create the container with `Duplicate mount point: <target>`. You hit this easily with layered extension methods, or by adding a mount from a `BeforeResourceStartedEvent` handler. That handler runs again on every restart, so",
+        "html_url": "https://github.com/microsoft/aspire/commit/0efbfcb095bf85ccf89678193d64b46022e7657e",
+        "pull_request": {
+          "number": 21546,
+          "title": "Make WithBindMount idempotent and fail fast on conflicting mount targets",
+          "url": "https://github.com/microsoft/aspire/pull/21546",
+          "merged_at": "2026-11-02T19:24:17Z"
+        }
+      },
+      {
+        "sha": "1b2640341430f83d74c472de559bcf780ebc4c3c",
+        "message": "Treat DCP FailedToStart as stopped and restart Starting/no-state replicas after rebuild (#21597) ## Description This PR changes how a resource stop is detected, and it also changes the rebuild command's lifecycle policy. 1. **Stop detection.** `DcpExecutor.StopResourceAsync` treats DCP's `FailedToStart` state as stopped, for both Executables and Containers. 2. **Rebuild restart policy** (`ShouldRestartAfterRebuild`, `GetReplicaActionAfterRebuild`). After a successful build, the rebuild command r",
+        "html_url": "https://github.com/microsoft/aspire/commit/1b2640341430f83d74c472de559bcf780ebc4c3c",
+        "pull_request": {
+          "number": 21597,
+          "title": "Treat DCP FailedToStart as stopped and restart Starting/no-state replicas after rebuild",
+          "url": "https://github.com/microsoft/aspire/pull/21597",
+          "merged_at": "2026-11-02T22:04:44Z"
+        }
+      },
+      {
+        "sha": "d2da9d6cc1a5e140196f2fd4022ba42d7e070bea",
+        "message": "Add explicit Entra app-role assignments for managed identities (#21498) ## Description Enable microservices to call an Entra-protected API directly as their user-assigned managed identities, with explicit application-role assignments. Callers do not need a separate app registration or federated identity credential. Adds two `PublishWithAppRoleAssignment` overloads: one accepts an explicit UAMI resource; the other uses a compute resource's attached or automatically provisioned identity. Both are ",
+        "html_url": "https://github.com/microsoft/aspire/commit/d2da9d6cc1a5e140196f2fd4022ba42d7e070bea",
+        "pull_request": {
+          "number": 21498,
+          "title": "Add explicit Entra app-role assignments for managed identities",
+          "url": "https://github.com/microsoft/aspire/pull/21498",
+          "merged_at": "2026-11-02T22:08:55Z"
+        }
+      },
+      {
+        "sha": "9d8eb409082ec68ce74364b5b233cbf135f2c18c",
+        "message": "Wait for each distinct dependency once to avoid duplicate 'Waiting for resource' logs (#21569) ## Description A resource that waits on several child resources of the same parent (for example two databases on one server, or the Cosmos DB playground's database and containers) waited on the parent, and logged \"Waiting for resource …\" / \"Finished waiting …\", once per child. Fixes #21563 ### Root cause `WaitFor(child)` also adds a `WaitAnnotation` for the child's parent (`ResourceBuilderExtensions.Wa",
+        "html_url": "https://github.com/microsoft/aspire/commit/9d8eb409082ec68ce74364b5b233cbf135f2c18c",
+        "pull_request": {
+          "number": 21569,
+          "title": "Wait for each distinct dependency once to avoid duplicate 'Waiting for resource' logs",
+          "url": "https://github.com/microsoft/aspire/pull/21569",
+          "merged_at": "2026-11-02T22:17:03Z"
+        }
+      },
+      {
+        "sha": "b85918b3123c8da3d1650588513da22995b18f52",
+        "message": "Gate the shared ps refresh in the apphost-tree loading E2E test (#21630) ## Description Fixes #21095 `Aspire AppHost tree E2E global refresh clears loading after switching to the workspace view` failed on Windows with `Timed out after 30000ms waiting for workspace view to retain the shared ps refresh loading state` (`isRepositoryLoading: false`). **Root cause (from CI evidence):** the test kept the shared `ps` refresh in flight with a fixed 3s `ps` delay (`writeDelayedPsCliWrapper(3_000)`). It t",
+        "html_url": "https://github.com/microsoft/aspire/commit/b85918b3123c8da3d1650588513da22995b18f52",
+        "pull_request": {
+          "number": 21630,
+          "title": "Gate the shared ps refresh in the apphost-tree loading E2E test",
+          "url": "https://github.com/microsoft/aspire/pull/21630",
+          "merged_at": "2026-11-02T22:36:54Z"
+        }
+      },
+      {
+        "sha": "5a5f7656dd2141c5251cad10ccf34415dfe08e31",
+        "message": "Fail fast when a VS Code E2E AppHost debug session ends before startup (#21629) ## Description Fixes #21378 In the VS Code `apphost-lifecycle-tools` E2E shard, an AppHost crash is reported only as `E2eProcessError ... timed out after 2400000ms` followed by \"Mocha failure details were not available in mocha.json.\" The test harness hides the real failure. **Evidence (ci.yml attempt 1, Linux `apphost-lifecycle-tools`):** - Failures: 2/426 jobs from 2026-10-25 to 2026-11-01: main run [40745948349](h",
+        "html_url": "https://github.com/microsoft/aspire/commit/5a5f7656dd2141c5251cad10ccf34415dfe08e31",
+        "pull_request": {
+          "number": 21629,
+          "title": "Fail fast when a VS Code E2E AppHost debug session ends before startup",
+          "url": "https://github.com/microsoft/aspire/pull/21629",
+          "merged_at": "2026-11-02T22:54:19Z"
+        }
+      },
+      {
+        "sha": "a99015e0a24f659bd4a1b87765ab4c3f9db96686",
+        "message": "Isolate OpenAI model WaitFor test from live status.openai.com health check (#21477) ## Description Fixes the root cause of the quarantined flaky test `OpenAIFunctionalTests.DependentResourceWaitsForOpenAIModelResourceWithHealthCheckToBeHealthy` (#10977). ### Root cause `ResourceHealthCheckService` evaluates health checks with `TryGetAnnotationsIncludingAncestorsOfType<HealthCheckAnnotation>`. The `chat` model resource therefore also inherits the parent OpenAI resource's default `resource_check`.",
+        "html_url": "https://github.com/microsoft/aspire/commit/a99015e0a24f659bd4a1b87765ab4c3f9db96686",
+        "pull_request": {
+          "number": 21477,
+          "title": "Isolate OpenAI model WaitFor test from live status.openai.com health check",
+          "url": "https://github.com/microsoft/aspire/pull/21477",
+          "merged_at": "2026-11-02T23:08:34Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.Testing.Tests, Hosting.Testing, Hosting.Testing, tests/... / Hosting.Testing (windows-latest)",
+      "id": 125616626654,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/41543065562/job/125616626654",
+      "classification": "flaky-test",
+      "reason": "Single test 60s timeout on Windows during app host start",
+      "failed_steps": [
+        "Run tests (Windows)"
+      ]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.DevTunnels.Tests, Hosting.DevTunnels, Hosting.DevTunnel... / Hosting.DevTunnels (ubuntu-latest)",
+      "id": 125616647301,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/41543065562/job/125616647301",
+      "classification": "flaky-test",
+      "reason": "Single test ObjectDisposedException flake, matches prior cause",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.DevTunnels.Tests.DevTunnelMonitorTests.AnotherHostCannotEstablishUnknownLocalReadiness",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.DevTunnels.Tests, Hosting.DevTunnels, Hosting.DevTunnel... / Hosting.DevTunnels (ubuntu-latest)",
+      "error": "System.ObjectDisposedException : Cannot access a disposed object.\nObject name: 'IServiceProvider'.",
+      "stack_trace": "at Microsoft.Extensions.DependencyInjection.ServiceLookup.ThrowHelper.ThrowObjectDisposedException()\n   at Microsoft.Extensions.DependencyInjection.ServiceLookup.ServiceProviderEngineScope.GetService(Type serviceType)\n   at Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService(IServiceProvider provider, Type serviceType)\n   at Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService[T](IServiceProvider provider)\n   at Aspire.Hosting.DevTunnelsResourceBuilderExtensions.<>c__DisplayClass15_0.<AddDevTunnelPort>b__5(UpdateCommandStateContext context) in /_/src/Aspire.Hosting.DevTunnels/DevTunnelResourceBuilderExtensions.cs:line 647\n   at Aspire.Hosting.ApplicationModel.ResourceNotificationService.UpdateCommands(IResource resource, CustomResourceSnapshot previousState) in /_/src/Aspire.Hosting/ApplicationModel/ResourceNotificationService.cs:line 1170\n   at Aspire.Hosting.ApplicationModel.ResourceNotificationService.PublishUpdateAsync(IResource resource, String resourceId, Func`2 stateFactory) in /_/src/Aspire.Hosting/ApplicationModel/ResourceNotificationService.cs:line 908\n   at Aspire.Hosting.ApplicationModel.ResourceNotificationService.PublishUpdateAsync(IResource resource, Func`2 stateFactory) in /_/src/Aspire.Hosting/ApplicationModel/ResourceNotificationService.cs:line 1292\n   at Aspire.Hosting.DevTunnelsResourceBuilderExtensions.UpdatePortAccessAsync(DevTunnelPortResource portResource, ResourceNotificationService notifications, ResourceLoggerService logs, DateTimeOffset now) in /_/src/Aspire.Hosting.DevTunnels/DevTunnelResourceBuilderExtensions.cs:line 811\n   at Aspire.Hosting.DevTunnels.DevTunnelMonitor.<>c__DisplayClass40_0.<<RefreshAccessAsync>b__0>d.MoveNext() in /_/src/Aspire.Hosting.DevTunnels/DevTunnelMonitor.cs:line 356\n--- End of stack trace from previous location ---\n   at Aspire.Hosting.DevTunnels.DevTunnelMonitor.<>c__DisplayClass55_0`1.<<InvokeAsync>b__0>d.MoveNext() in /_/src/As",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Intermittent ObjectDisposedException; recurring known flake"
+    },
+    {
+      "name": "Aspire.Hosting.Testing.Tests.DashboardTestingBuilderTests.DashboardTestingPreservesInteractivityAfterAppHostStart(creationSurface: Type)",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Testing.Tests, Hosting.Testing, Hosting.Testing, tests/... / Hosting.Testing (windows-latest)",
+      "error": "System.TimeoutException : The operation at /_/tests/Aspire.Hosting.Testing.Tests/DashboardTestingBuilderTests.cs:129 timed out after reaching the limit of 60000ms.",
+      "stack_trace": "at Microsoft.AspNetCore.InternalTesting.AsyncTestHelpers.TimeoutAfter(Task task, TimeSpan timeout, String filePath, Int32 lineNumber) in /_/tests/Shared/AsyncTestHelpers.cs:line 201\n   at Aspire.Hosting.Testing.Tests.DashboardTestingBuilderTests.DashboardTestingPreservesInteractivityAfterAppHostStart(CreationSurface creationSurface) in /_/tests/Aspire.Hosting.Testing.Tests/DashboardTestingBuilderTests.cs:line 129\n   at Aspire.Hosting.Testing.Tests.DashboardTestingBuilderTests.DashboardTestingPreservesInteractivityAfterAppHostStart(CreationSurface creationSurface) in /_/tests/Aspire.Hosting.Testing.Tests/DashboardTestingBuilderTests.cs:line 132\n   at Aspire.Hosting.Testing.Tests.DashboardTestingBuilderTests.DashboardTestingPreservesInteractivityAfterAppHostStart(CreationSurface creationSurface) in /_/tests/Aspire.Hosting.Testing.Tests/DashboardTestingBuilderTests.cs:line 132\n--- End of stack trace from previous location ---",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "60s timeout on Windows during app host start; single test failure"
+    }
+  ],
+  "causes": [
+    "devtunnels-devtunnelmonitor-anotherhostcannotestablishunknownlocalreadiness-objectdisposed",
+    "hosting-testing-dashboardtestingbuildertests-interactivity-timeout-windows"
+  ]
+}
