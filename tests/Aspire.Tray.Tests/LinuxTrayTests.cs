@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.ComponentModel;
+using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text;
 using Aspire.Shared;
@@ -224,6 +225,72 @@ public class LinuxTrayTests
 
         application.UpdateAvailability(watcherConnected: false, hostRegistered: true);
         Assert.False(application.IsAvailable);
+    }
+
+    [Fact]
+    public async Task RepeatedStartRestoresAvailabilityWithoutOpeningAPanel()
+    {
+        await using var controller = new TrayController(new TestAppHostClient());
+        using var application = new LinuxTrayApplication(controller, new MemoryTrayStartupSettings());
+        application.UpdateAvailability(watcherConnected: true, hostRegistered: true);
+
+        var restored = application.RestoreAsync(CancellationToken.None);
+        application.ProcessPending();
+        await restored;
+
+        Assert.True(application.IsAvailable);
+    }
+
+    [Fact]
+    public async Task RestoreDuringShutdownCompletesWithAnError()
+    {
+        await using var controller = new TrayController(new TestAppHostClient());
+        using var application = new LinuxTrayApplication(controller, new MemoryTrayStartupSettings());
+        application.UpdateAvailability(watcherConnected: true, hostRegistered: true);
+        var restored = application.RestoreAsync(CancellationToken.None);
+        application.RequestQuit();
+
+        application.ProcessPending();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => restored);
+    }
+
+    [Fact]
+    public void MissingProjectAndExistingProjectAreDistinguished()
+    {
+        using var directory = new TestTrayStateDirectory();
+        var path = directory.CreateAppHost("apphost.cs");
+
+        Assert.True(LinuxTrayApplication.ProjectFileExists(path));
+        File.Delete(path);
+        Assert.False(LinuxTrayApplication.ProjectFileExists(path));
+    }
+
+    [Fact(Skip = "Uses Unix directory permissions.", SkipUnless = nameof(SupportsLinux))]
+    [SupportedOSPlatform("linux")]
+    public async Task InaccessibleProjectsDoNotOfferToRemoveSavedPreferences()
+    {
+        using var directory = new TestTrayStateDirectory();
+        var path = directory.CreateAppHost("restricted/apphost.cs");
+        var parent = Path.GetDirectoryName(path)!;
+        var mode = File.GetUnixFileMode(parent);
+        var store = new FileTraySavedStateStore(directory.StatePath);
+        store.Save(TraySavedState.Empty.Remember(path));
+        await using var controller = new TrayController(new TestAppHostClient(), store);
+        using var application = new LinuxTrayApplication(controller, new MemoryTrayStartupSettings());
+        var host = Assert.Single(controller.State.RecentAppHosts);
+        try
+        {
+            File.SetUnixFileMode(parent, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+
+            Assert.Throws<UnauthorizedAccessException>(() => LinuxTrayApplication.ProjectFileExists(path));
+            Assert.Throws<UnauthorizedAccessException>(() => application.Execute(new("", LinuxTrayAction.Folder, host)));
+            Assert.Equal([new SavedAppHost(path, false, true)], store.Load().AppHosts);
+        }
+        finally
+        {
+            File.SetUnixFileMode(parent, mode);
+        }
     }
 
     [Fact]
@@ -597,6 +664,40 @@ public class LinuxTrayTests
         File.Delete(lockPath);
         File.CreateSymbolicLink(lockPath, installation.MacCli);
         Assert.Throws<Win32Exception>(() => LinuxTrayRuntime.TryAcquire(directory));
+    }
+
+    [Theory]
+    [InlineData(Architecture.X64, false, 0xA0042)]
+    [InlineData(Architecture.X64, true, 0xA0442)]
+    [InlineData(Architecture.Arm64, false, 0x88042)]
+    [InlineData(Architecture.Arm64, true, 0x88442)]
+    [SupportedOSPlatform("linux")]
+    public void RuntimeFileFlagsUseTheArchitectureSpecificNoFollowFlag(Architecture architecture, bool append, int expected)
+    {
+        Assert.Equal(expected, LinuxTrayRuntime.GetPrivateFileFlags(architecture, append));
+    }
+
+    [Fact(Skip = "Uses Unix symbolic links.", SkipUnless = nameof(SupportsLinux))]
+    [SupportedOSPlatform("linux")]
+    public void RuntimeAllowsAliasedHomesButRejectsASymlinkedRuntimeDirectory()
+    {
+        using var installation = new TestTrayStartupInstallation();
+        var home = Path.Combine(installation.Root, "home");
+        var alias = Path.Combine(installation.Root, "alias");
+        Directory.CreateDirectory(home);
+        Directory.CreateSymbolicLink(alias, home);
+        var runtime = Path.Combine(alias, ".aspire", "tray", "runtime");
+        using (var owner = LinuxTrayRuntime.TryAcquire(runtime))
+        {
+            Assert.NotNull(owner);
+            Assert.Null(LinuxTrayRuntime.TryAcquire(Path.Combine(home, ".aspire", "tray", "runtime")));
+        }
+        var linkedRuntime = Path.Combine(installation.Root, "linked-runtime");
+        Directory.CreateSymbolicLink(linkedRuntime, runtime);
+        var mode = File.GetUnixFileMode(runtime);
+
+        Assert.Throws<IOException>(() => LinuxTrayRuntime.TryAcquire(linkedRuntime));
+        Assert.Equal(mode, File.GetUnixFileMode(runtime));
     }
 
     [Fact(Skip = "Uses Linux launch paths.", SkipUnless = nameof(SupportsLinux))]

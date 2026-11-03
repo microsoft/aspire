@@ -41,20 +41,34 @@ internal static partial class LinuxTrayRuntime
 
     private static void PrepareDirectory(string directory)
     {
-        for (var entry = new DirectoryInfo(directory); entry is not null; entry = entry.Parent)
+        // The user profile and .aspire can be intentional aliases (for example
+        // dotfile-managed homes). Only our dedicated runtime directory must not
+        // redirect permission changes; runtime files are opened with O_NOFOLLOW.
+        if (new DirectoryInfo(directory).LinkTarget is not null)
         {
-            if (entry.LinkTarget is not null)
-            {
-                throw new IOException("The tray runtime directory must not contain symbolic links.");
-            }
+            throw new IOException("The tray runtime directory must not be a symbolic link.");
         }
         DirectoryHelper.CreateWithOwnerOnlyPermissions(directory);
+    }
+
+    internal static int GetPrivateFileFlags(Architecture architecture, bool append)
+    {
+        // Linux's ARM64 UAPI overrides the asm-generic O_NOFOLLOW value.
+        // https://github.com/torvalds/linux/blob/master/arch/arm64/include/uapi/asm/fcntl.h
+        var noFollow = architecture switch
+        {
+            Architecture.X64 => 0x20000,
+            Architecture.Arm64 => 0x8000,
+            _ => throw new PlatformNotSupportedException("Aspire Tray requires Linux x64 or ARM64.")
+        };
+
+        return 2 | 0x40 | noFollow | 0x80000 | (append ? 0x400 : 0);
     }
 
     private static SafeFileHandle OpenPrivateFile(string path, bool append)
     {
         // Linux O_RDWR | O_CREAT | O_NOFOLLOW | O_CLOEXEC; reject substituted links.
-        var descriptor = open(path, 2 | 0x40 | 0x20000 | 0x80000 | (append ? 0x400 : 0), 0x180);
+        var descriptor = open(path, GetPrivateFileFlags(RuntimeInformation.ProcessArchitecture, append), 0x180);
         if (descriptor < 0)
         {
             throw new Win32Exception(Marshal.GetLastPInvokeError(), "Could not open the tray runtime file.");

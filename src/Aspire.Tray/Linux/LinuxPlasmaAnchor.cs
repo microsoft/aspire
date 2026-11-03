@@ -14,9 +14,10 @@ internal static partial class LinuxPlasmaAnchor
         && desktop?.Split(':', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Any(value => value.Equals("KDE", StringComparison.OrdinalIgnoreCase)) == true;
 
-    internal static PanelRect Translate(PanelRect anchor)
+    internal static Task<PanelRect> TranslateAsync(PanelRect anchor)
     {
-        var outputs = ParseOutputs(ReadOutputInformation());
+        // Capture GTK objects on the UI thread. The bounded KWin call and its
+        // diagnostic parser run off-thread so stop/input remain responsive.
         var display = LinuxPanelNative.gdk_display_get_default();
         var primary = LinuxPanelNative.gdk_display_get_primary_monitor(display);
         var monitors = Enumerable.Range(0, LinuxPanelNative.gdk_display_get_n_monitors(display)).Select(index =>
@@ -37,7 +38,7 @@ internal static partial class LinuxPlasmaAnchor
             }
         }
 
-        return Map(anchor, outputs, monitors, UsesNativeCoordinates(), position);
+        return Task.Run(() => Map(anchor, ParseOutputs(ReadOutputInformation()), monitors, UsesNativeCoordinates(), position));
     }
 
     internal static PanelRect Map(PanelRect anchor, IReadOnlyList<Output> outputs, IReadOnlyList<Monitor> monitors,
@@ -271,7 +272,7 @@ internal static partial class LinuxPlasmaAnchor
         try
         {
             // Read current output geometry on activation, not a cached primary
-            // output. Do not start a compositor or wait indefinitely on the UI thread.
+            // output. Do not start a compositor or wait indefinitely.
             var reply = g_dbus_connection_call_sync(connection, "org.kde.KWin", "/KWin", "org.kde.KWin",
                 "supportInformation", 0, 0, 1, 1000, 0, out error);
             if (reply == 0)

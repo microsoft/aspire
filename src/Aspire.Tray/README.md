@@ -132,6 +132,9 @@ or buffer-scale changes dismiss it, and the next activation uses the new setting
 On Plasma Wayland, tray activation coordinates are translated using KWin's current
 per-output geometry and scale, including when the tray itself runs under XWayland.
 Changing the primary monitor does not reuse an old output's coordinate mapping.
+The bounded KWin lookup runs off the GTK thread. If it fails, the panel opens on
+the primary output with a warning instead of making Settings and Quit inaccessible.
+Repeating `aspire tray start` restores the icon without opening the panel.
 
 The GNOME native menu follows the shared flyout's information hierarchy: an Aspire header
 with the same overall status summary, **RUNNING** and **PINNED** sections when nonempty,
@@ -139,6 +142,9 @@ a counted **Recently opened** submenu when history is available, and Settings,
 Documentation, and Quit actions. AppHost submenus keep dashboard and start/stop actions
 first, followed by Open in, file-manager reveal, copy path, and pinning.
 Quitting closes only the tray; AppHosts keep running.
+On GNOME Wayland, **Copy path** opens a native dialog with a selectable path and
+a **Copy** button. Copying from this focused window satisfies Mutter's clipboard
+focus requirement; the desktop-owned tray menu cannot claim the clipboard itself.
 
 Menus expose health as colored dots (a gray square for stopped projects) and text
 (including unknown, waiting/degraded, and unhealthy). Documentation and Settings

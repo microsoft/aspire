@@ -24,6 +24,7 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
     private nint _watcher;
     private nint _menu;
     private uint _timer;
+    private uint _idle;
     private nint _dialog;
     private int _quitRequested;
     private bool _quitting;
@@ -119,26 +120,33 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
         var restored = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         _pending.Enqueue(() =>
         {
-            if (token.IsCancellationRequested)
+            try
             {
-                restored.TrySetCanceled(token);
-            }
-            else if (!IsAvailable)
-            {
-                restored.TrySetException(new InvalidOperationException("No registered StatusNotifierHost is available for the tray. Enable the desktop's tray support."));
-            }
-            else
-            {
-                if (_panel is not null)
+                if (token.IsCancellationRequested)
                 {
-                    _panel.Show();
+                    restored.TrySetCanceled(token);
+                }
+                else if (IsQuitting || !IsAvailable)
+                {
+                    restored.TrySetException(new InvalidOperationException("No registered StatusNotifierHost is available for the tray. Enable the desktop's tray support."));
                 }
                 else
                 {
-                    Gtk.app_indicator_set_status(_indicator, 0);
-                    Gtk.app_indicator_set_status(_indicator, 1);
+                    // Repeated start restores the status item, not an input-grabbing
+                    // popup. Only an explicit desktop activation should open the panel.
+                    _panelIcon?.PollRegistration();
+                    if (_indicator != 0)
+                    {
+                        Gtk.app_indicator_set_status(_indicator, 0);
+                        Gtk.app_indicator_set_status(_indicator, 1);
+                    }
+                    restored.TrySetResult();
                 }
-                restored.TrySetResult();
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"Tray icon restoration failed ({ex.GetType().Name}).");
+                restored.TrySetException(ex);
             }
         });
         await restored.Task.WaitAsync(token).ConfigureAwait(false);
@@ -216,7 +224,7 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static int Tick(nint data)
+    private static unsafe int Tick(nint data)
     {
         var app = s_current!;
         try
@@ -238,7 +246,14 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
             {
                 app._panel?.Hide();
             }
-            app.ProcessPending();
+            if (app._idle == 0 && !app._pending.IsEmpty)
+            {
+                // A queued action can run gtk_dialog_run's nested main loop.
+                // Dispatch it from a separate source so Tick remains available
+                // to cancel dialogs on stop/SIGTERM (sources do not reenter).
+                // https://docs.gtk.org/glib/method.Source.set_can_recurse.html
+                app._idle = Gtk.g_idle_add((nint)(delegate* unmanaged[Cdecl]<nint, int>)&DispatchPending, 0);
+            }
             if (!app.IsQuitting)
             {
                 if (!app._ready.Task.IsCompleted && Stopwatch.GetElapsedTime(app._started) > TimeSpan.FromSeconds(8))
@@ -255,6 +270,25 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
             app.Quit();
         }
         return 1;
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static int DispatchPending(nint data)
+    {
+        var app = s_current!;
+        app._idle = 0;
+        try
+        {
+            app.ProcessPending();
+        }
+        catch (Exception ex)
+        {
+            app._failure = ex;
+            app._ready.TrySetException(ex);
+            app.Quit();
+        }
+
+        return 0;
     }
 
     private void Refresh()
@@ -436,12 +470,14 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
     {
         var host = item.Host;
         if (item.Action is LinuxTrayAction.Start or LinuxTrayAction.Folder or LinuxTrayAction.OpenIn
-            && !File.Exists(host!.Id.AppHostPath))
+            && !ProjectFileExists(host!.Id.AppHostPath))
         {
-            if (!host.IsRunning && !host.IsPinned && Confirm("AppHost file not found",
-                "Remove this missing project from recently opened?", "Remove"))
+            if (!host.IsRunning && !host.IsPinned)
             {
-                controller.RemoveRecent(host.Id.AppHostPath);
+                if (Confirm("AppHost file not found", "Remove this missing project from recently opened?", "Remove"))
+                {
+                    controller.RemoveRecent(host.Id.AppHostPath);
+                }
             }
             else
             {
@@ -473,8 +509,7 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
                 _desktopTasks.Add(RevealFileAsync(host!.Id.AppHostPath));
                 break;
             case LinuxTrayAction.CopyPath:
-                Gtk.gtk_clipboard_set_text(Gtk.gtk_clipboard_get(Gtk.gdk_atom_intern("CLIPBOARD", 0)),
-                    Path.GetDirectoryName(host!.Id.AppHostPath)!, -1);
+                CopyPath(Path.GetDirectoryName(host!.Id.AppHostPath)!);
                 break;
             case LinuxTrayAction.OpenIn:
                 var application = item.Application ?? throw new InvalidOperationException("The selected application is no longer available.");
@@ -496,6 +531,17 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
                 Quit();
                 break;
         }
+    }
+
+    internal static bool ProjectFileExists(string path)
+    {
+        if (TrayAppHostPath.IsMissing(path))
+        {
+            return false;
+        }
+        TrayAppHostPath.RequireExistingFile(path);
+
+        return true;
     }
 
     private async Task RevealFileAsync(string path)
@@ -569,7 +615,7 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
                 break;
             default:
                 if (action.Kind is PanelActionKind.Start or PanelActionKind.OpenIn or PanelActionKind.ShowInFolder
-                    && !File.Exists(action.Host!.Id.AppHostPath))
+                    && !ProjectFileExists(action.Host!.Id.AppHostPath))
                 {
                     if (action.Recent)
                     {
@@ -704,6 +750,47 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
         }
     }
 
+    private void CopyPath(string path)
+    {
+        if (_panel is not null || !LinuxDesktopEnvironment.IsWayland)
+        {
+            SetClipboardText(path);
+            return;
+        }
+
+        // The native menu belongs to gnome-shell, not this client. Mutter rejects
+        // clipboard selection from a client without keyboard focus. A user action
+        // in our own dialog supplies that focus instead of silently losing the copy.
+        // https://gitlab.gnome.org/GNOME/mutter/-/blob/main/src/wayland/meta-wayland-data-device.c
+        var dialog = CreateDialog("Copy AppHost path", "Copy the AppHost folder path to the clipboard.");
+        try
+        {
+            var entry = Gtk.gtk_entry_new();
+            Gtk.gtk_entry_set_text(entry, path);
+            Gtk.gtk_editable_set_editable(entry, 0);
+            Gtk.gtk_editable_select_region(entry, 0, -1);
+            Gtk.gtk_container_add(Gtk.gtk_dialog_get_content_area(dialog), entry);
+            Gtk.gtk_dialog_add_button(dialog, "Cancel", -6);
+            Gtk.gtk_dialog_add_button(dialog, "Copy", -3);
+            Gtk.gtk_dialog_set_default_response(dialog, -3);
+            if (RunDialog(dialog) == -3)
+            {
+                if (Gtk.gtk_window_has_toplevel_focus(dialog) == 0)
+                {
+                    throw new InvalidOperationException("Focus the Copy AppHost path window and try again.");
+                }
+                SetClipboardText(path);
+            }
+        }
+        finally
+        {
+            Gtk.gtk_widget_destroy(dialog);
+        }
+    }
+
+    private static void SetClipboardText(string text)
+        => Gtk.gtk_clipboard_set_text(Gtk.gtk_clipboard_get(Gtk.gdk_atom_intern("CLIPBOARD", 0)), text, -1);
+
     private void ShowSettings()
     {
         var state = startup.Read();
@@ -740,6 +827,10 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
         if (_timer != 0)
         {
             Gtk.g_source_remove(_timer);
+        }
+        if (_idle != 0)
+        {
+            Gtk.g_source_remove(_idle);
         }
         _panelIcon?.Dispose();
         _panel?.Dispose();

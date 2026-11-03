@@ -88,9 +88,15 @@ internal static partial class Gtk
     [LibraryImport(GtkLibrary, StringMarshalling = StringMarshalling.Utf8)] internal static partial nint gtk_check_button_new_with_label(string label);
     [LibraryImport(GtkLibrary)] internal static partial int gtk_toggle_button_get_active(nint button);
     [LibraryImport(GtkLibrary)] internal static partial nint gtk_clipboard_get(nint selection);
+    [LibraryImport(GtkLibrary)] internal static partial nint gtk_entry_new();
+    [LibraryImport(GtkLibrary, StringMarshalling = StringMarshalling.Utf8)] internal static partial void gtk_entry_set_text(nint entry, string text);
+    [LibraryImport(GtkLibrary)] internal static partial void gtk_editable_set_editable(nint editable, int editableState);
+    [LibraryImport(GtkLibrary)] internal static partial void gtk_editable_select_region(nint editable, int start, int end);
+    [LibraryImport(GtkLibrary)] internal static partial int gtk_window_has_toplevel_focus(nint window);
     [LibraryImport("libgdk-3.so.0", StringMarshalling = StringMarshalling.Utf8)] internal static partial nint gdk_atom_intern(string name, int onlyIfExists);
     [LibraryImport(GtkLibrary, StringMarshalling = StringMarshalling.Utf8)] internal static partial void gtk_clipboard_set_text(nint clipboard, string text, int length);
     [LibraryImport("libglib-2.0.so.0")] internal static partial uint g_timeout_add(uint interval, nint callback, nint data);
+    [LibraryImport("libglib-2.0.so.0")] internal static partial uint g_idle_add(nint callback, nint data);
     [LibraryImport("libglib-2.0.so.0")] internal static partial int g_source_remove(uint source);
     [LibraryImport("libgobject-2.0.so.0", StringMarshalling = StringMarshalling.Utf8)] internal static partial ulong g_signal_connect_data(nint instance, string signal, nint callback, nint data, nint destroy, int flags);
     [LibraryImport("libgobject-2.0.so.0")] internal static partial void g_object_unref(nint instance);

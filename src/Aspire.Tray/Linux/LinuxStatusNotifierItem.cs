@@ -56,6 +56,8 @@ internal sealed partial class LinuxStatusNotifierItem : IDisposable
     private string? _registeringOwner;
     private Exception? _failure;
     private bool _disposed;
+    private string? _retryOwner;
+    private long _retryAfter;
 
     internal unsafe LinuxStatusNotifierItem(nint watcher, string icon, Action<int, int> activate)
     {
@@ -116,7 +118,8 @@ internal sealed partial class LinuxStatusNotifierItem : IDisposable
             return;
         }
         _registeredOwner = null;
-        if (owner is null || owner == _registeringOwner)
+        if (owner is null || owner == _registeringOwner
+            || (owner == _retryOwner && Environment.TickCount64 < _retryAfter))
         {
             return;
         }
@@ -276,14 +279,26 @@ internal sealed partial class LinuxStatusNotifierItem : IDisposable
                 Gtk.g_variant_unref(reply);
             }
             FreeError(error);
-            if (!item._disposed && item.GetWatcherOwner() == request.Owner)
+            if (item._registeringOwner == request.Owner)
             {
                 item._registeringOwner = null;
+            }
+            if (!item._disposed && item.GetWatcherOwner() == request.Owner)
+            {
                 if (reply == 0)
                 {
-                    throw new InvalidOperationException("The StatusNotifierWatcher rejected the native tray icon's registration.");
+                    // A slow/restarting watcher can reject or time out one request.
+                    // Keep the item exported and retry; initial readiness remains
+                    // bounded by the application's existing startup deadline.
+                    Console.Error.WriteLine("The desktop tray watcher could not register Aspire. Retrying.");
+                    item._retryOwner = request.Owner;
+                    item._retryAfter = Environment.TickCount64 + 1000;
                 }
-                item._registeredOwner = request.Owner;
+                else
+                {
+                    item._retryOwner = null;
+                    item._registeredOwner = request.Owner;
+                }
             }
         }
         catch (Exception ex)

@@ -55,6 +55,9 @@ internal static partial class LinuxDesktopEnvironment
     internal static bool IsX11Composited() => gdk_screen_is_composited(
         gdk_display_get_default_screen(LinuxPanelNative.gdk_display_get_default())) != 0;
 
+    internal static bool IsWayland => Marshal.PtrToStringUTF8(
+        g_type_name_from_instance(LinuxPanelNative.gdk_display_get_default())) == "GdkWaylandDisplay";
+
     [LibraryImport("libgobject-2.0.so.0")] private static partial nint g_type_name_from_instance(nint instance);
     [LibraryImport("libgdk-3.so.0")] private static partial nint gdk_display_get_default_screen(nint display);
     [LibraryImport("libgdk-3.so.0")] private static partial int gdk_screen_is_composited(nint screen);

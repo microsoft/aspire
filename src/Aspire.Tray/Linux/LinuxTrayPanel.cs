@@ -32,6 +32,8 @@ internal sealed class LinuxTrayPanel : IDisposable
     private bool _grabbed;
     private long _hiddenAt;
     private bool _disposed;
+    private Task<PanelRect>? _anchorRequest;
+    private bool _openAfterAnchor;
 
     internal bool Visible { get; private set; }
 
@@ -48,6 +50,41 @@ internal sealed class LinuxTrayPanel : IDisposable
 
     internal void Poll()
     {
+        if (_anchorRequest is { IsCompleted: true } request)
+        {
+            _anchorRequest = null;
+            PanelRect? anchor = null;
+            try
+            {
+                anchor = request.GetAwaiter().GetResult();
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or IOException or UnauthorizedAccessException)
+            {
+                Console.Error.WriteLine($"Tray icon positioning failed ({ex.GetType().Name}).");
+                if (_openAfterAnchor)
+                {
+                    // Accurate anchoring is optional; Settings, Quit and the error
+                    // notice must remain reachable when KWin metadata is unavailable.
+                    _controller.ReportActionError("Could not locate the tray icon. The panel was opened on the primary output.");
+                }
+            }
+            if (_openAfterAnchor)
+            {
+                try
+                {
+                    _hasAnchor = false;
+                    if (anchor is { } bounds)
+                    {
+                        SetAnchor(bounds);
+                    }
+                    Show();
+                }
+                catch (Exception ex) when (ex is InvalidOperationException or IOException or UnauthorizedAccessException)
+                {
+                    ReportFailure(ex);
+                }
+            }
+        }
         if (Visible)
         {
             if (_backend == LinuxPanelBackend.X11 && !LinuxDesktopEnvironment.IsX11Composited())
@@ -83,31 +120,29 @@ internal sealed class LinuxTrayPanel : IDisposable
 
     internal void Activate(int x, int y)
     {
-        if (Visible || Environment.TickCount64 - _hiddenAt < 250)
+        if (Visible || _openAfterAnchor || Environment.TickCount64 - _hiddenAt < 250)
         {
             Hide();
             return;
         }
         try
         {
-            SetActivationAnchor(x, y);
-            Toggle();
+            if (LinuxPlasmaAnchor.IsRequired(Environment.GetEnvironmentVariable("XDG_CURRENT_DESKTOP"),
+                Environment.GetEnvironmentVariable("XDG_SESSION_TYPE")))
+            {
+                _anchorRequest ??= LinuxPlasmaAnchor.TranslateAsync(new(x, y, 0, 0));
+                _openAfterAnchor = true;
+            }
+            else
+            {
+                SetAnchor(new(x, y, 0, 0));
+                Show();
+            }
         }
         catch (Exception ex) when (ex is InvalidOperationException or IOException or UnauthorizedAccessException)
         {
             ReportFailure(ex);
         }
-    }
-
-    private void SetActivationAnchor(int x, int y)
-    {
-        var anchor = new PanelRect(x, y, 0, 0);
-        if (LinuxPlasmaAnchor.IsRequired(Environment.GetEnvironmentVariable("XDG_CURRENT_DESKTOP"),
-            Environment.GetEnvironmentVariable("XDG_SESSION_TYPE")))
-        {
-            anchor = LinuxPlasmaAnchor.Translate(anchor);
-        }
-        SetAnchor(anchor);
     }
 
     internal LinuxTrayPanel(TrayController controller, IReadOnlyList<LinuxFolderApplication> applications,
@@ -127,6 +162,7 @@ internal sealed class LinuxTrayPanel : IDisposable
 
     internal void Show()
     {
+        _openAfterAnchor = false;
         if (LinuxDesktopEnvironment.RequirePanelBackend() != _backend)
         {
             throw new InvalidOperationException("The desktop display backend changed. Restart Aspire Tray.");
@@ -173,6 +209,7 @@ internal sealed class LinuxTrayPanel : IDisposable
 
     private void Hide(bool restoreFocus)
     {
+        _openAfterAnchor = false;
         if (!Visible)
         {
             return;
@@ -756,6 +793,17 @@ internal sealed class LinuxTrayPanel : IDisposable
         }
         Hide();
         _disposed = true;
+        if (_anchorRequest is { } request)
+        {
+            // The worker owns no GTK objects. Do not delay shutdown for a lookup;
+            // observe failures without retaining or reopening the disposed panel.
+            _ = request.ContinueWith(static completed =>
+            {
+                Console.Error.WriteLine($"Tray icon positioning failed during shutdown ({completed.Exception!.GetBaseException().GetType().Name}).");
+            }, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+            _anchorRequest = null;
+        }
         DestroySurfaces();
         if (_logo != 0)
         {
