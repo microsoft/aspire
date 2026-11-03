@@ -180,8 +180,16 @@ public sealed class KubernetesDeployWithProjectPersistentVolumeTests(ITestOutput
             // marker file should still be there. This proves the mount-path overload
             // wires through the same PVC binding as the name-match overload, and that
             // the project's StatefulSet promotion preserves the volume across restarts.
+            // Investigation only: stop the controller before deletion, confirm the
+            // replacement is absent, then resume it eight seconds after deletion.
+            // Both validation arms get this identical delay; all original assertions remain.
+            await auto.RunCommandAsync(
+                $$"""kubectl() { if [ "$1" = delete ] && [ "$2" = pod ] && [ "$3" = server-statefulset-0 ]; then local node='{{clusterName}}-control-plane' controller pid rc remaining; controller=$(docker exec "$node" crictl ps --name kube-controller-manager -q) && test -n "$controller" && pid=$(docker exec "$node" crictl inspect "$controller" | jq -er '.info.pid') && docker exec "$node" sh -c 'kill -STOP "$1"' sh "$pid" || return; echo CONTROL_PAUSED; command kubectl "$@"; rc=$?; if [ "$rc" -eq 0 ]; then remaining=$(command kubectl get pod server-statefulset-0 -n '{{k8sNamespace}}' --ignore-not-found -o name); rc=$?; if [ "$rc" -eq 0 ] && [ -z "$remaining" ]; then echo CONTROL_ABSENCE_CONFIRMED; else echo CONTROL_ABSENCE_CHECK_FAILED; rc=1; fi; fi; (sleep 8; docker exec "$node" sh -c 'kill -CONT "$1"' sh "$pid" && echo CONTROL_RESUMED) > /tmp/aspire-controller-resume.log 2>&1 < /dev/null & echo CONTROL_RESUME_SCHEDULED; return "$rc"; fi; command kubectl "$@"; }""",
+                counter, TimeSpan.FromSeconds(60));
+
             output.WriteLine("Phase 2: delete server-statefulset-0 and wait for K8s to recreate it");
             await auto.RestartStatefulSetPodAsync(counter, k8sNamespace, "server-statefulset-0");
+            await auto.RunCommandAsync("cat /tmp/aspire-controller-resume.log && grep -qx CONTROL_RESUMED /tmp/aspire-controller-resume.log", counter, TimeSpan.FromSeconds(30));
 
             // === Phase 3: read marker — the durability proof ===
             await PortForwardServerAsync(auto, counter, k8sNamespace, LocalPort);
