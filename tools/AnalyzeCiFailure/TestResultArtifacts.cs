@@ -196,6 +196,7 @@ internal sealed record WorkflowArtifact(JsonNode? Id, string? Name, JsonNode? Si
 /// <summary>Binds a selected artifact to its producing expectation, format and result requirements.</summary>
 internal sealed record SelectedTestArtifact(WorkflowArtifact Artifact, TestArtifactExpectation Expectation)
 {
+    internal IReadOnlyList<string>? ResultFiles { get; init; }
     internal string JobName => Expectation.JobName;
     internal TestArtifactFormat Format => Expectation.Format;
     internal bool RequiresResults => Expectation.RequiresResults;

@@ -140,6 +140,41 @@ named artifacts. Each archive can also contain multiple TRX files, including
 different target frameworks. Selection and availability checks use every
 job/artifact expectation; finding one artifact cannot satisfy another.
 
+For Aspire CI's .NET jobs, collection first tries `All-TestResults`, which
+contains only TRX reports rather than logs and crash dumps. Reports are matched
+to actionable jobs using the runner directory and test-short-name filename
+contract in `AspireCiWorkflowConventions`. Passing jobs and other runners cannot
+supply their failures or coverage to an actionable job. All target-framework
+reports for a matched job are retained with the combined artifact's source ID.
+When short names overlap, the longest matching short name owns the report:
+`Hosting-2_*.trx` belongs to `Hosting-2`, not `Hosting`. Equal-specificity
+producers remain ambiguous and cannot supply observations or coverage. Reports
+owned by another producer neither satisfy nor invalidate the current job's
+coverage.
+For reruns, producer ownership also includes jobs from all run attempts, fetched
+through the bounded, paginated `jobs?filter=all` endpoint. Repeated historical
+job names count as one producer, with current-attempt metadata taking precedence.
+This prevents an earlier sibling such as `Hosting-Collection` from lending its
+reports to the rerun's `Hosting` job. Historical jobs are ownership context only,
+not additional actionable failures. If historical ownership cannot be collected,
+combined observations are not accepted and collection falls back to job artifacts.
+
+The combined artifact must pass the same run/SHA, attempt-window, metadata,
+download and ZIP checks as individual artifacts. Each producing `logs-*`
+artifact must also have unambiguous current-attempt metadata; its size need not
+fit the download cap when only the combined TRX is needed. This prevents a new
+aggregate from making an older attempt's results appear current.
+
+Artifact presence alone does not establish completeness. The
+`Tests / Final Test Results` job must have successfully downloaded all three
+runner groups and completed `Upload test results`, and each covered
+job must have nonempty, parseable, unambiguously associated reports. Missing or
+unusable coverage falls back **per job** to its `logs-*` artifact. Usable combined
+observations survive partial aggregation or a failed fallback, but required
+evidence stays unavailable until that job's fallback succeeds. Combined-result
+fallback reasons remain in collection diagnostics without making a successful
+fallback unavailable. Extension E2E Mocha acquisition is unchanged.
+
 Evidence policy is separate from the result format:
 
 | Policy | Download resource limits | Missing or unreadable results |
@@ -149,7 +184,7 @@ Evidence policy is separate from the result format:
 | `RequiredForInterruptedExecution` | Remaining capacity | Test evidence unavailable, including omission due to limits |
 
 These are inherited safety limits, not financial or analysis quotas: at most
-20 selected artifacts, 100 MiB per archive, 1 GiB cumulative downloaded archives,
+20 acquired/attempted artifacts, 100 MiB per archive, 1 GiB cumulative downloaded archives,
 10,000 ZIP entries per archive, and 1 GiB cumulative expanded result data.
 Required evidence is selected first. In the remaining capacity, results needed
 to establish an interrupted execution's outcome take precedence over optional
@@ -163,7 +198,7 @@ and block publication, but successfully captured observations remain in the
 bundle and summary. A malformed file does not discard other files in its archive,
 and conflicting copies exclude that execution rather than unrelated failures.
 Failed downloads and failed extractions consume the same shared budgets as
-successful acquisitions.
+successful acquisitions, including combined-artifact attempts before fallback.
 TRX reports are processed across all selected archives; copied executions are
 deduplicated only within the same producing job and execution ID, with matching
 raw diagnostics. Distinct target-framework executions remain distinct.
@@ -190,8 +225,10 @@ execution errors identify the job, execution and source artifacts. Text stays
 bounded, redacted and inert in workflow logs, and the same failures are captured
 in the collection problems. A setup or unexplained acquisition failure leaves evidence unavailable, never
 complete merely because no reports were read.
-Result-file names in diagnostics are generated safe extraction names, not
-original ZIP-entry paths; the artifact ID identifies the archive to inspect.
+Result-file names in evidence and diagnostics are generated safe extraction
+names, not original ZIP-entry paths; the artifact ID identifies the archive to
+inspect. Validated entry paths are used only during combined-result association,
+never as filesystem destinations.
 
 To adapt collection to another GitHub workflow:
 

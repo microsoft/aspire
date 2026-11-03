@@ -75,6 +75,7 @@ internal static class TestFailureReader
             }
 
             var files = Directory.GetFiles(directory, artifact.Format == TestArtifactFormat.Trx ? "*.trx" : "*.json")
+                .Where(file => artifact.ResultFiles is null || artifact.ResultFiles.Contains(Path.GetFileName(file), StringComparer.Ordinal))
                 .Order(StringComparer.Ordinal).ToArray();
             if (artifact.RequiresResults && files.Length == 0)
             {

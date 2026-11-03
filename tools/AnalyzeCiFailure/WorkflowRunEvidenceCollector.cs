@@ -219,7 +219,7 @@ internal sealed partial class WorkflowRunEvidenceCollector
 
         // Download and parse bounded test artifacts; supported test-evidence failures may degrade diagnosis.
         progress.Stage = "test-evidence";
-        await DownloadAndExtractTestResultArtifactsAsync(gitHub, run, failedJobs, runId, runAttempt);
+        await DownloadAndExtractTestResultArtifactsAsync(gitHub, run, failedJobs, allJobs, runId, runAttempt);
         ImmutableArray<CollectedTestFailure> failures = [];
         if (_selectedArtifacts.Count > 0)
         {
@@ -271,7 +271,8 @@ internal sealed partial class WorkflowRunEvidenceCollector
                 foreach (var conflict in conflicts)
                 {
                     var artifact = _selectedArtifacts.Single(selection =>
-                        GitHubJson.ReadRequiredId(selection.Artifact.Id) == conflict.Last().Source.ArtifactId);
+                        GitHubJson.ReadRequiredId(selection.Artifact.Id) == conflict.Last().Source.ArtifactId &&
+                        selection.JobName == conflict.Last().JobName);
                     ReportArtifactProblem(
                         AnalysisProblemCategory.TestEvidence,
                         "parsing",
@@ -625,6 +626,7 @@ internal sealed partial class WorkflowRunEvidenceCollector
         AnalysisGitHubClient gitHub,
         JsonObject run,
         JsonArray failedJobs,
+        JsonArray allJobs,
         long runId,
         int runAttempt)
     {
@@ -648,6 +650,126 @@ internal sealed partial class WorkflowRunEvidenceCollector
                     plans.Add(plan);
                 }
             }
+            Directory.CreateDirectory(zipDirectory);
+            long remainingExpandedBytes = 1073741824;
+            long remainingDownloadedBytes = 1073741824;
+            var acquisitionCount = 0;
+            var acquiredArtifacts = new List<SelectedTestArtifact>();
+            _selectedArtifacts = acquiredArtifacts;
+            var coveredPlans = new HashSet<TestArtifactExpectation>();
+            if (_workflow is AspireCiWorkflowConventions && plans.Any(plan => plan.Format == TestArtifactFormat.Trx))
+            {
+                var combinedPlan = new TestArtifactExpectation("All-TestResults", "All-TestResults", TestArtifactFormat.Trx, TestEvidencePolicy.Required);
+                try
+                {
+                    var combined = TestResultArtifacts.Select(TestResultArtifacts.ReadArtifacts(artifacts), [combinedPlan],
+                        Text(run["run_started_at"]) ?? "", Text(run["updated_at"]) ?? "", diagnostics: _progress.Diagnostics).Single();
+                    IEnumerable<JsonObject> producerJobs = allJobs.OfType<JsonObject>();
+                    if (runAttempt > 1)
+                    {
+                        // Attempt-scoped jobs omit siblings that were not rerun, but their
+                        // reports can remain in All-TestResults (e.g. Hosting-Collection
+                        // also matches Hosting's filename prefix). Ownership needs history;
+                        // historical jobs must never enter the actionable failure inventory.
+                        JsonArray historicalJobs;
+                        try
+                        {
+                            historicalJobs = await gitHub.GetRowsAsync($"repos/{_repository}/actions/runs/{runId.ToString(CultureInfo.InvariantCulture)}/jobs?filter=all", "jobs");
+                            if (historicalJobs.Count == 0 || historicalJobs.Any(job => string.IsNullOrEmpty(Text(Field(job, "name")))))
+                            {
+                                throw new ValidationException("Historical job inventory is empty or contains unnamed producers.");
+                            }
+                        }
+                        catch (Exception error) when (error is ValidationException or JsonException or IOException)
+                        {
+                            throw new ValidationException($"Combined result producer ownership is unavailable: {error.Message}", error);
+                        }
+                        var currentNames = producerJobs.Select(job => Text(job["name"])).ToHashSet(StringComparer.Ordinal);
+                        producerJobs = producerJobs.Concat(historicalJobs.OfType<JsonObject>()
+                            .Where(job => !currentNames.Contains(Text(job["name"])))
+                            .DistinctBy(job => Text(job["name"]), StringComparer.Ordinal));
+                    }
+                    var producers = producerJobs.SelectMany(job => _workflow.DescribeTestArtifacts(job, runAttempt)).ToArray();
+                    var files = new List<(string Entry, string File)>();
+                    if (await AcquireAsync(combined, (entry, file) => files.Add((entry, file)), reportFailure: false))
+                    {
+                        // Include passing producers when checking ownership: similarly named
+                        // jobs must never lend their failures or coverage to an actionable job.
+                        // Hosting-2_*.trx belongs to Hosting-2, not Hosting. Prefer the
+                        // longest matching short name; equally specific producers stay ambiguous.
+                        var owners = files.ToDictionary(file => file.File, file =>
+                        {
+                            var matches = producers.Select(producer => new
+                            {
+                                Plan = producer,
+                                Specificity = AspireCiWorkflowConventions.CombinedResultSpecificity(producer, file.Entry),
+                            }).Where(match => match.Specificity > 0).OrderByDescending(match => match.Specificity).ToArray();
+                            return matches.Length > 0 && (matches.Length == 1 || matches[0].Specificity > matches[1].Specificity)
+                                ? matches[0].Plan : null;
+                        }, StringComparer.Ordinal);
+                        foreach (var plan in plans.Where(plan => plan.Format == TestArtifactFormat.Trx))
+                        {
+                            // A rerun's new aggregate can include logs left by an older attempt.
+                            // Verify the source artifact's attempt window without imposing the
+                            // download limit: oversized logs are precisely why we prefer TRX.
+                            try
+                            {
+                                var source = TestResultArtifacts.Select(TestResultArtifacts.ReadArtifacts(artifacts), [plan],
+                                    Text(run["run_started_at"]) ?? "", Text(run["updated_at"]) ?? "",
+                                    maxArtifactBytes: long.MaxValue, maxTotalBytes: long.MaxValue).Single();
+                                ValidateAssociatedRun(source);
+                            }
+                            catch (Exception error) when (error is ValidationException or InvalidOperationException)
+                            {
+                                _progress.Diagnostics.Record("combined-results", "fallback", new { job = plan.JobName, reason = error.Message });
+                                continue;
+                            }
+                            var matching = files.Where(file => owners[file.File] == plan).ToArray();
+                            var usable = new List<string>();
+                            var complete = matching.Length > 0 &&
+                                AspireCiWorkflowConventions.HasCompleteCombinedResults(allJobs);
+                            foreach (var file in matching)
+                            {
+                                try
+                                {
+                                    var report = TrxReader.DeserializeTrxFile(Path.Combine(_scratch.Results, GetValueText(combined.Artifact.Id), file.File));
+                                    if (report?.Results?.UnitTestResults is not { Count: > 0 } results ||
+                                        results.Any(result => string.IsNullOrWhiteSpace(result.TestName) || string.IsNullOrWhiteSpace(result.Outcome)))
+                                    {
+                                        throw new ValidationException("Combined TRX report has no usable test results.");
+                                    }
+                                    usable.Add(file.File);
+                                }
+                                catch (Exception error) when (error is ValidationException or IOException or InvalidOperationException or System.Xml.XmlException)
+                                {
+                                    complete = false;
+                                    _progress.Diagnostics.Record("combined-results", "unusable-report", new { job = plan.JobName, file = file.File, reason = error.Message });
+                                }
+                            }
+                            if (usable.Count > 0)
+                            {
+                                acquiredArtifacts.Add(new(combined.Artifact, plan) { ResultFiles = usable });
+                            }
+                            if (complete)
+                            {
+                                coveredPlans.Add(plan);
+                            }
+                            _progress.Diagnostics.Record("combined-results", complete ? "covered" : "fallback",
+                                new { job = plan.JobName, matched = matching.Length, usable = usable.Count, reason = complete ? null : "Missing, ambiguous or unusable reports, or incomplete aggregation downloads." });
+                        }
+                    }
+                    else
+                    {
+                        _progress.Diagnostics.Record("combined-results", "fallback",
+                            new { reason = "Combined artifact acquisition failed; see artifact-acquisition diagnostics." });
+                    }
+                }
+                catch (Exception error) when (error is ValidationException or IOException or InvalidOperationException)
+                {
+                    _progress.Diagnostics.Record("combined-results", "fallback", new { reason = error.Message });
+                }
+            }
+            var fallbackPlans = plans.Where(plan => !coveredPlans.Contains(plan)).ToArray();
             var explainedAbsences = plans.Where(plan => ExplainedRunnerLoss(plan.JobName) &&
                 !artifacts.OfType<JsonObject>().Any(artifact => Text(artifact["name"]) == plan.ArtifactName &&
                     (Text(artifact["created_at"]) is not { } created ||
@@ -656,7 +778,7 @@ internal sealed partial class WorkflowRunEvidenceCollector
             var selectionProblems = new HashSet<TestArtifactExpectation>();
             var selectedTestArtifacts = TestResultArtifacts.SelectAvailable(
                 TestResultArtifacts.ReadArtifacts(artifacts),
-                plans,
+                fallbackPlans,
                 Text(run["run_started_at"]) ?? "",
                 Text(run["updated_at"]) ?? "",
                 _progress.Diagnostics,
@@ -677,10 +799,10 @@ internal sealed partial class WorkflowRunEvidenceCollector
             _progress.Diagnostics.Record(
                 "artifact-selection",
                 "selected",
-                new { available = artifacts.Count, planned = plans.Count, selected = selectedTestArtifacts.Count });
+                new { available = artifacts.Count, planned = plans.Count, selected = acquiredArtifacts.Count + selectedTestArtifacts.Count });
             foreach (var plan in plans)
             {
-                var selected = selectedTestArtifacts.Where(selection => selection.Expectation == plan).ToArray();
+                var selected = acquiredArtifacts.Concat(selectedTestArtifacts).Where(selection => selection.Expectation == plan).ToArray();
                 _progress.Diagnostics.Record(
                     "artifact-plan",
                     selected.Length == 0 ? "missing-or-ineligible" : "matched",
@@ -691,12 +813,10 @@ internal sealed partial class WorkflowRunEvidenceCollector
                         ids = selected.Select(selection => GetValueText(selection.Artifact.Id)).ToArray()
                     });
             }
-            var acquiredArtifacts = new List<SelectedTestArtifact>();
-            _selectedArtifacts = acquiredArtifacts;
-            var selectedArtifacts = TestResultArtifacts.SerializeSelection(selectedTestArtifacts);
+            var selectedArtifacts = TestResultArtifacts.SerializeSelection(acquiredArtifacts.Concat(selectedTestArtifacts));
             CaptureDiagnostic("selected-test-result-artifacts.json", selectedArtifacts);
             evidenceState = selectedArtifacts.Count == 0 ? EvidenceState.NotApplicable : EvidenceState.Complete;
-            foreach (var plan in plans.Where(plan => plan.RequiresResults &&
+            foreach (var plan in fallbackPlans.Where(plan => plan.RequiresResults &&
                 !selectedTestArtifacts.Any(artifact => artifact.Expectation == plan) && !explainedAbsences.Contains(plan)))
             {
                 evidenceState = EvidenceState.Unavailable;
@@ -708,28 +828,31 @@ internal sealed partial class WorkflowRunEvidenceCollector
                     $"Structured test results are unavailable; {TestResultArtifacts.Describe(plan)}");
                 }
             }
-            Directory.CreateDirectory(zipDirectory);
-            long remainingExpandedBytes = 1073741824;
-            long remainingDownloadedBytes = 1073741824;
             foreach (var selection in selectedTestArtifacts)
+            {
+                if (await AcquireAsync(selection, extractedFile: null, reportFailure: true))
+                {
+                    acquiredArtifacts.Add(selection);
+                }
+                else if (selection.RequiresResults)
+                {
+                    evidenceState = EvidenceState.Unavailable;
+                }
+            }
+
+            async Task<bool> AcquireAsync(SelectedTestArtifact selection, Action<string, string>? extractedFile, bool reportFailure)
             {
                 var artifactId = GetValueText(selection.Artifact.Id);
                 var format = EnumText(selection.Format);
                 var zipPath = Path.Combine(zipDirectory, artifactId + ".zip");
                 try
                 {
-                    if (remainingExpandedBytes <= 0 || remainingDownloadedBytes <= 0)
+                    if (remainingExpandedBytes <= 0 || remainingDownloadedBytes <= 0 || acquisitionCount >= 20)
                     {
                         throw new ValidationException("The shared artifact acquisition budget has been exhausted.");
                     }
-                    var artifactMetadata = artifacts.First(candidate => ReadNormalizedNumber(Field(candidate, "id")) == ReadNormalizedNumber(selection.Artifact.Id));
-                    if (Field(artifactMetadata, "workflow_run") is JsonObject associatedRun)
-                    {
-                        if (!(ReadNormalizedNumber(associatedRun["id"]) == ReadNormalizedNumber(run["id"]) && Text(associatedRun["head_sha"]) == Text(run["head_sha"])))
-                        {
-                            throw new ValidationException("Test result artifact does not match the trusted run and SHA");
-                        }
-                    }
+                    acquisitionCount++;
+                    ValidateAssociatedRun(selection);
                     try
                     {
                         await gitHub.DownloadFileAsync(
@@ -747,23 +870,24 @@ internal sealed partial class WorkflowRunEvidenceCollector
                         remainingExpandedBytes,
                         (long)double.Parse(GetValueText(selection.Artifact.SizeInBytes), CultureInfo.InvariantCulture),
                         format,
-                        count => remainingExpandedBytes -= count);
-                    acquiredArtifacts.Add(selection);
+                        count => remainingExpandedBytes -= count,
+                        extractedFile);
                     _progress.Diagnostics.Record("artifact-acquisition", "extracted", new { id = artifactId, format });
+                    return true;
                 }
                 catch (Exception ex) when (ex is ValidationException or IOException or InvalidDataException)
                 {
                     _progress.Diagnostics.Record("artifact-acquisition", "failed", new { id = artifactId, format, reason = ex.Message });
-                    ReportArtifactProblem(
-                        selection.RequiresResults
-                        ? AnalysisProblemCategory.TestEvidence : AnalysisProblemCategory.OptionalContext,
-                        "artifacts",
-                        $"Unable to extract test results artifact: {DiagnosticTextSanitizer.Sanitize(ex.Message, limit: 200)}; " +
-                        $"{TestResultArtifacts.Describe(selection.Expectation)} id={artifactId}");
-                    if (selection.RequiresResults)
+                    if (reportFailure)
                     {
-                        evidenceState = EvidenceState.Unavailable;
+                        ReportArtifactProblem(
+                            selection.RequiresResults
+                            ? AnalysisProblemCategory.TestEvidence : AnalysisProblemCategory.OptionalContext,
+                            "artifacts",
+                            $"Unable to extract test results artifact: {DiagnosticTextSanitizer.Sanitize(ex.Message, limit: 200)}; " +
+                            $"{TestResultArtifacts.Describe(selection.Expectation)} id={artifactId}");
                     }
+                    return false;
                 }
                 finally
                 {
@@ -773,6 +897,22 @@ internal sealed partial class WorkflowRunEvidenceCollector
                     {
                         remainingDownloadedBytes -= new FileInfo(zipPath).Length;
                     }
+                }
+
+            }
+
+            void ValidateAssociatedRun(SelectedTestArtifact selection)
+            {
+                var matchingMetadata = artifacts.Where(candidate => ReadNormalizedNumber(Field(candidate, "id")) == ReadNormalizedNumber(selection.Artifact.Id)).ToArray();
+                if (matchingMetadata.Length != 1)
+                {
+                    throw new ValidationException("Repeated artifact ID cannot identify exactly one artifact.");
+                }
+                var artifactMetadata = matchingMetadata[0];
+                if (Field(artifactMetadata, "workflow_run") is JsonObject associatedRun &&
+                    !(ReadNormalizedNumber(associatedRun["id"]) == ReadNormalizedNumber(run["id"]) && Text(associatedRun["head_sha"]) == Text(run["head_sha"])))
+                {
+                    throw new ValidationException("Test result artifact does not match the trusted run and SHA");
                 }
             }
         }

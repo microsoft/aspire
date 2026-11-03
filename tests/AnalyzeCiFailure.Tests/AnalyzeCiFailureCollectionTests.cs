@@ -14,6 +14,136 @@ namespace Infrastructure.Tests;
 /// <summary>Exercises workflow-run admission, evidence acquisition and incomplete-result handling through the CLI.</summary>
 public sealed partial class AnalyzeCiFailureWorkflowTests
 {
+    [Theory]
+    [InlineData("combined-rerun-sibling", false)]
+    [InlineData("combined-rerun-sibling-only", true)]
+    [InlineData("combined-rerun-history-unavailable", true)]
+    [InlineData("combined-rerun-duplicate-name", false)]
+    [InlineData("combined-rerun-equal-specificity", true)]
+    [RequiresTools(["bash", "git"])]
+    public async Task RerunCombinedResultsRequireOwnershipAcrossAllAttempts(string scenario, bool fallback)
+    {
+        var result = await RunCollectionAsync(scenario);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        var evidence = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(EvidenceDirectory, "evidence.json")))!;
+        Assert.Equal("complete", evidence["test_evidence"]!["state"]!.GetValue<string>());
+        Assert.Equal("77", Assert.Single(evidence["jobs"]!.AsArray())!["id"]!.GetValue<string>());
+        var failures = evidence["test_evidence"]!["failures"]!.AsArray();
+        Assert.NotEmpty(failures);
+        Assert.All(failures, failure =>
+        {
+            Assert.Equal("77", failure!["job_id"]!.GetValue<string>());
+            Assert.Equal("Suite.Case(value: a/b)", failure["name"]!.GetValue<string>());
+        });
+        if (scenario is "combined-rerun-sibling-only" or "combined-rerun-history-unavailable" or "combined-rerun-equal-specificity")
+        {
+            Assert.Equal("10", Assert.Single(failures)!["sources"]![0]!["artifact_id"]!.GetValue<string>());
+        }
+        var calls = await File.ReadAllLinesAsync(Path.Combine(_workspace.Path, "gh-calls.log"));
+        Assert.Contains(calls, call => call.Contains("actions/runs/123/jobs?filter=all", StringComparison.Ordinal));
+        Assert.Equal(fallback, calls.Any(call => call.Contains("actions/artifacts/10/zip", StringComparison.Ordinal)));
+        if (scenario == "combined-rerun-history-unavailable")
+        {
+            var diagnostics = JsonNode.Parse(await File.ReadAllTextAsync(DiagnosticSummary))!;
+            Assert.Contains(diagnostics["events"]!.AsArray(), item =>
+                item!["action"]!.GetValue<string>() == "combined-results" &&
+                item["result"]!.GetValue<string>() == "fallback" &&
+                item["detail"]!["reason"]!.GetValue<string>().Contains("ownership", StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "git"])]
+    public async Task CombinedResultsPreferTheSpecificSplitProducerOverItsPassingBase()
+    {
+        var result = await RunCollectionAsync("combined-split-producer");
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        var evidence = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(EvidenceDirectory, "evidence.json")))!;
+        Assert.Equal("complete", evidence["test_evidence"]!["state"]!.GetValue<string>());
+        Assert.Equal("77", Assert.Single(evidence["jobs"]!.AsArray())!["id"]!.GetValue<string>());
+        var failure = Assert.Single(evidence["test_evidence"]!["failures"]!.AsArray())!;
+        Assert.Equal("Suite.Case(value: a/b)", failure["name"]!.GetValue<string>());
+        Assert.Equal("77", failure["job_id"]!.GetValue<string>());
+        Assert.Equal("12", failure["sources"]![0]!["artifact_id"]!.GetValue<string>());
+        var calls = await File.ReadAllLinesAsync(Path.Combine(_workspace.Path, "gh-calls.log"));
+        Assert.Equal(["api repos/microsoft/aspire/actions/artifacts/12/zip"],
+            calls.Where(call => call.Contains("actions/artifacts/", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "git"])]
+    public async Task CombinedCoverageOnlySkipsTheCoveredJobsLogArtifact()
+    {
+        var result = await RunCollectionAsync("combined-two-jobs");
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        var evidence = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(EvidenceDirectory, "evidence.json")))!;
+        Assert.Equal("complete", evidence["test_evidence"]!["state"]!.GetValue<string>());
+        var failures = evidence["test_evidence"]!["failures"]!.AsArray();
+        Assert.Equal(3, failures.Count);
+        Assert.Equal(2, failures.Count(failure => failure!["job_id"]!.GetValue<string>() == "77"));
+        var other = Assert.Single(failures, failure => failure!["job_id"]!.GetValue<string>() == "79")!;
+        Assert.Equal("Other.Failure", other["name"]!.GetValue<string>());
+        Assert.Equal("11", other["sources"]![0]!["artifact_id"]!.GetValue<string>());
+        var calls = await File.ReadAllLinesAsync(Path.Combine(_workspace.Path, "gh-calls.log"));
+        Assert.Equal(
+            ["api repos/microsoft/aspire/actions/artifacts/12/zip", "api repos/microsoft/aspire/actions/artifacts/11/zip"],
+            calls.Where(call => call.Contains("actions/artifacts/", StringComparison.Ordinal)));
+    }
+
+    [Theory]
+    [InlineData("combined", "complete", false)]
+    [InlineData("combined-missing-job", "complete", true)]
+    [InlineData("combined-malformed", "complete", true)]
+    [InlineData("combined-partial", "complete", true)]
+    [InlineData("combined-upload-failure", "complete", true)]
+    [InlineData("combined-stale", "complete", true)]
+    [InlineData("combined-wrong-sha", "complete", true)]
+    [InlineData("combined-wrong-run", "complete", true)]
+    [InlineData("combined-ambiguous", "complete", true)]
+    [InlineData("combined-invalid-zip", "complete", true)]
+    [InlineData("combined-empty", "complete", true)]
+    [InlineData("combined-source-stale", "unavailable", true)]
+    [InlineData("combined-no-fallback", "unavailable", true)]
+    [RequiresTools(["bash", "git"])]
+    public async Task CollectionPrefersCombinedResultsAndFallsBackForUncoveredJobs(string scenario, string state, bool fallback)
+    {
+        var result = await RunCollectionAsync(scenario);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        var evidence = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(EvidenceDirectory, "evidence.json")))!;
+        Assert.Equal(state, evidence["test_evidence"]!["state"]!.GetValue<string>());
+        if (state == "complete")
+        {
+            Assert.Empty(evidence["test_evidence"]!["problems"]!.AsArray());
+        }
+        var failures = evidence["test_evidence"]!["failures"]!.AsArray();
+        Assert.All(failures, failure => Assert.Equal("77", failure!["job_id"]!.GetValue<string>()));
+        if (scenario == "combined-source-stale")
+        {
+            Assert.Empty(failures);
+        }
+        else
+        {
+            Assert.Contains(failures, failure => failure!["name"]!.GetValue<string>() == "Suite.Case(value: a/b)");
+        }
+        if (scenario == "combined")
+        {
+            Assert.Equal(2, failures.Count);
+            Assert.All(failures, failure => Assert.Equal("12", failure!["sources"]![0]!["artifact_id"]!.GetValue<string>()));
+        }
+        if (scenario is "combined-malformed" or "combined-partial" or "combined-no-fallback" or "combined-empty")
+        {
+            Assert.Contains(failures, failure => failure!["sources"]!.AsArray().Any(source => source!["artifact_id"]!.GetValue<string>() == "12"));
+        }
+        var calls = await File.ReadAllLinesAsync(Path.Combine(_workspace.Path, "gh-calls.log"));
+        Assert.Equal(fallback && scenario is not "combined-no-fallback" and not "combined-source-stale", calls.Any(call => call.Contains("actions/artifacts/10/zip", StringComparison.Ordinal)));
+        Assert.Contains(calls, call => call.Contains("actions/artifacts/12/zip", StringComparison.Ordinal) ||
+            scenario is "combined-stale" or "combined-wrong-sha" or "combined-wrong-run" or "combined-ambiguous");
+    }
+
     [Fact]
     [RequiresTools(["bash", "git"])]
     public async Task CompletedJobsCannotClaimRunnerLossFromMatchingWorkflowAnnotations()
@@ -648,7 +778,8 @@ public sealed partial class AnalyzeCiFailureWorkflowTests
         var responses = Directory.CreateDirectory(Path.Combine(_workspace.Path, "responses")).FullName;
         var runnerFailure = scenario.StartsWith("runner-", StringComparison.Ordinal);
         var mocha = scenario.Contains("mocha", StringComparison.Ordinal) || runnerFailure;
-        var jobName = scenario == "cancelled-build" ? "Build" :
+        var jobName = scenario == "combined-split-producer" ? "Tests / No-package tests / Infrastructure-Collection (ubuntu-latest)" :
+            scenario == "cancelled-build" ? "Build" :
             scenario == "runner-confirmed-loss-completed-missing-artifact" ? "Tests / No-package tests / Infrastructure (ubuntu-latest)" :
             mocha ? "Tests / VS Code extension E2E (Linux, debug)" : "Tests / No-package tests / Infrastructure (ubuntu-latest)";
         var run = new JsonObject
@@ -797,7 +928,8 @@ public sealed partial class AnalyzeCiFailureWorkflowTests
         var artifact = new JsonObject
         {
             ["id"] = 10,
-            ["name"] = mocha ? "extension-e2e-diagnostics-linux-x64-debug-attempt2" : "logs-Infrastructure-ubuntu-latest",
+            ["name"] = mocha ? "extension-e2e-diagnostics-linux-x64-debug-attempt2" :
+                scenario == "combined-split-producer" ? "logs-Infrastructure-Collection-ubuntu-latest" : "logs-Infrastructure-ubuntu-latest",
             ["expired"] = false,
             ["created_at"] = "2026-09-04T12:01:00Z",
             ["size_in_bytes"] = new FileInfo(zip).Length,
@@ -823,7 +955,7 @@ public sealed partial class AnalyzeCiFailureWorkflowTests
                 artifacts.Add(artifact.DeepClone());
             }
         }
-        if (scenario.StartsWith("runner-confirmed-loss-", StringComparison.Ordinal))
+        if (scenario.StartsWith("runner-confirmed-loss-", StringComparison.Ordinal) || scenario == "combined-two-jobs")
         {
             var otherZip = Path.Combine(responses, "other.zip");
             using (var archive = ZipFile.Open(otherZip, ZipArchiveMode.Create))
@@ -851,6 +983,128 @@ public sealed partial class AnalyzeCiFailureWorkflowTests
             }
             await File.WriteAllTextAsync(Path.Combine(responses, "jobs.json"), pages.ToJsonString());
         }
+        if (scenario.StartsWith("combined", StringComparison.Ordinal))
+        {
+            var combinedZip = Path.Combine(responses, "combined.zip");
+            using (var archive = ZipFile.Open(combinedZip, ZipArchiveMode.Create))
+            {
+                var report = FrameworkResult(scenario == "combined-split-producer" ? "Base.MustNotAppear" : "Suite.Case(value: a/b)", "net10-execution", "Assertion failed");
+                await WriteZipEntryAsync(archive, "windows-latest/testresults/Infrastructure_net10.0_20260904120100.trx",
+                    FrameworkResult("PassingJob.MustNotAppear", "windows-execution", "other OS"));
+                if (scenario != "combined-two-jobs")
+                {
+                    await WriteZipEntryAsync(archive, "ubuntu-latest/testresults/Other_net10.0_20260904120100.trx",
+                        FrameworkResult("Other.MustNotAppear", "other-execution", "other job"));
+                }
+                if (scenario is not "combined-missing-job" and not "combined-rerun-sibling-only")
+                {
+                    await WriteZipEntryAsync(archive, "ubuntu-latest/testresults/Infrastructure_net10.0_20260904120100.trx", report);
+                    await WriteZipEntryAsync(archive, "ubuntu-latest/testresults/Infrastructure_net11.0_20260904120100.trx",
+                        scenario == "combined-malformed" ? "malformed" : scenario == "combined-empty" ? "<TestRun />" :
+                        FrameworkResult(scenario == "combined-split-producer" ? "Base.MustNotAppear" : "Suite.Case(value: a/b)", "net11-execution", "Assertion failed"));
+                }
+                if (scenario is "combined-rerun-sibling" or "combined-rerun-sibling-only")
+                {
+                    await WriteZipEntryAsync(archive, "ubuntu-latest/testresults/Infrastructure-Collection_net10.0_20260904115900.trx",
+                        FrameworkResult("Sibling.MustNotAppear", "sibling-execution", "earlier attempt"));
+                }
+                if (scenario == "combined-split-producer")
+                {
+                    await WriteZipEntryAsync(archive, "ubuntu-latest/testresults/Infrastructure-Collection_net10.0_20260904120100.trx",
+                        FrameworkResult("Suite.Case(value: a/b)", "split-execution", "Assertion failed"));
+                }
+            }
+            if (scenario == "combined-invalid-zip")
+            {
+                await File.WriteAllTextAsync(combinedZip, "not a ZIP");
+            }
+            var combined = new JsonObject
+            {
+                ["id"] = 12, ["name"] = "All-TestResults", ["expired"] = false,
+                ["created_at"] = scenario == "combined-stale" ? "2026-09-04T11:01:00Z" : "2026-09-04T12:01:00Z",
+                ["size_in_bytes"] = new FileInfo(combinedZip).Length,
+                ["workflow_run"] = new JsonObject { ["id"] = scenario == "combined-wrong-run" ? 999 : 123, ["head_sha"] = scenario == "combined-wrong-sha" ? "wrong-sha" : "failed-sha" },
+            };
+            artifacts.Add(combined);
+            if (scenario == "combined-ambiguous")
+            {
+                artifacts.Add(combined.DeepClone());
+            }
+            if (scenario == "combined-source-stale")
+            {
+                artifact["created_at"] = "2026-09-04T11:01:00Z";
+            }
+            if (scenario is "combined" or "combined-no-fallback" or "combined-two-jobs" or "combined-rerun-duplicate-name" or "combined-split-producer")
+            {
+                artifact["size_in_bytes"] = 145396275;
+            }
+            var pages = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(responses, "jobs.json")))!;
+            pages[1]!["jobs"]![0]!["steps"] = new JsonArray(
+                new JsonObject { ["number"] = 1, ["name"] = "Set up job", ["conclusion"] = "success" },
+                new JsonObject { ["number"] = 2, ["name"] = "Fail if any dependent jobs failed", ["conclusion"] = "failure" },
+                new JsonObject { ["number"] = 3, ["name"] = "Complete job", ["conclusion"] = "success" });
+            var steps = new JsonArray(
+                new JsonObject { ["number"] = 1, ["name"] = "Set up job", ["conclusion"] = "success" },
+                new JsonObject { ["number"] = 2, ["name"] = "Checkout code", ["conclusion"] = "success" },
+                new JsonObject { ["number"] = 3, ["name"] = "Create test results directory", ["conclusion"] = "success" });
+            for (var index = 0; index < 3; index++)
+            {
+                steps.Add(new JsonObject
+                {
+                    ["number"] = index + 4,
+                    ["name"] = "Run actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+                    ["conclusion"] = scenario is "combined-partial" or "combined-no-fallback" && index == 1 ? "failure" : "success",
+                });
+            }
+            steps.Add(new JsonObject
+            {
+                ["number"] = 7, ["name"] = "Upload test results",
+                ["conclusion"] = scenario == "combined-upload-failure" ? "failure" : "success",
+            });
+            steps.Add(new JsonObject { ["number"] = 8, ["name"] = "Generate test results summary", ["conclusion"] = "success" });
+            steps.Add(new JsonObject { ["number"] = 9, ["name"] = "Generate CI timeline", ["conclusion"] = "success" });
+            steps.Add(new JsonObject { ["number"] = 10, ["name"] = "Fail if any dependency failed", ["conclusion"] = "failure" });
+            steps.Add(new JsonObject { ["number"] = 11, ["name"] = "Post Checkout code", ["conclusion"] = "success" });
+            steps.Add(new JsonObject { ["number"] = 12, ["name"] = "Complete job", ["conclusion"] = "success" });
+            pages[1]!["jobs"]!.AsArray().Add(new JsonObject
+            {
+                ["id"] = 80, ["name"] = "Tests / Final Test Results", ["conclusion"] = "failure", ["steps"] = steps,
+            });
+            if (scenario == "combined-split-producer")
+            {
+                pages[0]!["jobs"]!.AsArray().Add(new JsonObject
+                {
+                    ["id"] = 79, ["name"] = "Tests / No-package tests / Infrastructure (ubuntu-latest)",
+                    ["conclusion"] = "success", ["steps"] = new JsonArray(),
+                });
+            }
+            await File.WriteAllTextAsync(Path.Combine(responses, "jobs.json"), pages.ToJsonString());
+            var historical = pages.DeepClone();
+            if (scenario.StartsWith("combined-rerun-", StringComparison.Ordinal))
+            {
+                var previous = pages[0]!["jobs"]![0]!.DeepClone();
+                previous["id"] = 70;
+                previous["run_attempt"] = 1;
+                historical[1]!["jobs"]!.AsArray().Add(previous);
+                if (scenario is "combined-rerun-sibling" or "combined-rerun-sibling-only")
+                {
+                    historical[1]!["jobs"]!.AsArray().Add(new JsonObject
+                    {
+                        ["id"] = 71, ["run_attempt"] = 1, ["name"] = "Tests / No-package tests / Infrastructure-Collection (ubuntu-latest)",
+                        ["conclusion"] = "failure", ["steps"] = new JsonArray(),
+                    });
+                }
+                if (scenario == "combined-rerun-equal-specificity")
+                {
+                    historical[1]!["jobs"]!.AsArray().Add(new JsonObject
+                    {
+                        ["id"] = 71, ["run_attempt"] = 1, ["name"] = "Tests / Package tests - Linux / Infrastructure (ubuntu-latest)",
+                        ["conclusion"] = "failure", ["steps"] = new JsonArray(),
+                    });
+                }
+            }
+            await File.WriteAllTextAsync(Path.Combine(responses, "historical-jobs.json"), historical.ToJsonString());
+        }
         await File.WriteAllTextAsync(
             Path.Combine(responses, "artifacts.json"),
             new JsonArray(new JsonObject { ["artifacts"] = artifacts }, new JsonObject { ["artifacts"] = new JsonArray() }).ToJsonString());
@@ -873,6 +1127,13 @@ public sealed partial class AnalyzeCiFailureWorkflowTests
                   exit 1
                 fi
                 cat responses/jobs.json
+                ;;
+              *"actions/runs/123/jobs?filter=all"*)
+                if [ "$PR_SCENARIO" = combined-rerun-history-unavailable ]; then
+                  printf '%s' 'gh: Server Error (HTTP 502)' >&2
+                  exit 1
+                fi
+                cat responses/historical-jobs.json
                 ;;
               *"actions/runs/123/attempts/2") cat responses/run.json ;;
               *"actions/runs/123") cat responses/run.json ;;
@@ -923,6 +1184,7 @@ public sealed partial class AnalyzeCiFailureWorkflowTests
                 if [ "$PR_SCENARIO" = runner-download-failure ]; then printf '%s\n' 'injected download failure' >&2; exit 23; fi
                 cat responses/results.zip ;;
               *"actions/artifacts/11/zip") cat responses/other.zip ;;
+              *"actions/artifacts/12/zip") cat responses/combined.zip ;;
               *) printf 'Unexpected gh arguments: %s\n' "$*" >&2; exit 99 ;;
             esac
             """);
