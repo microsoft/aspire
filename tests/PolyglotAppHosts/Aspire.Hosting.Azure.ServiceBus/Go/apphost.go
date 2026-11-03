@@ -9,13 +9,17 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	// ── 1. AddAzureServiceBus ──────────────────────────────────────────────────
 	serviceBus := builder.AddAzureServiceBus("messaging")
+	_ = serviceBus.ConfigureInfrastructure(func(infrastructure aspire.AzureResourceInfrastructure) {
+		namespace := infrastructure.GetServiceBusNamespace()
+		namespace.Tags().Set("provisioning-proxy", "go")
+	})
 	if serviceBus.Err() != nil {
-		log.Fatalf(aspire.FormatError(serviceBus.Err()))
+		log.Fatal(aspire.FormatError(serviceBus.Err()))
 	}
 
 	// ── 2. RunAsEmulator — with ConfigureContainer callback ────────────────────
@@ -27,7 +31,7 @@ func main() {
 			},
 		})
 	if emulatorBus.Err() != nil {
-		log.Fatalf(aspire.FormatError(emulatorBus.Err()))
+		log.Fatal(aspire.FormatError(emulatorBus.Err()))
 	}
 
 	// ── 3. AddServiceBusQueue — factory method returns Queue type ──────────────
@@ -35,7 +39,7 @@ func main() {
 		QueueName: aspire.StringPtr("orders-queue"),
 	})
 	if queue.Err() != nil {
-		log.Fatalf(aspire.FormatError(queue.Err()))
+		log.Fatal(aspire.FormatError(queue.Err()))
 	}
 
 	// ── 4. AddServiceBusTopic — factory method returns Topic type ──────────────
@@ -43,7 +47,7 @@ func main() {
 		TopicName: aspire.StringPtr("events-topic"),
 	})
 	if topic.Err() != nil {
-		log.Fatalf(aspire.FormatError(topic.Err()))
+		log.Fatal(aspire.FormatError(topic.Err()))
 	}
 
 	// ── 5. AddServiceBusSubscription — factory on Topic returns Subscription ───
@@ -51,7 +55,7 @@ func main() {
 		SubscriptionName: aspire.StringPtr("audit-sub"),
 	})
 	if subscription.Err() != nil {
-		log.Fatalf(aspire.FormatError(subscription.Err()))
+		log.Fatal(aspire.FormatError(subscription.Err()))
 	}
 
 	_ = queue.Parent()
@@ -162,26 +166,26 @@ func main() {
 		WithProperties(func(_ aspire.AzureServiceBusSubscriptionResource) {})
 
 	if serviceBus.Err() != nil {
-		log.Fatalf(aspire.FormatError(serviceBus.Err()))
+		log.Fatal(aspire.FormatError(serviceBus.Err()))
 	}
 	if emulatorBus.Err() != nil {
-		log.Fatalf(aspire.FormatError(emulatorBus.Err()))
+		log.Fatal(aspire.FormatError(emulatorBus.Err()))
 	}
 	if queue.Err() != nil {
-		log.Fatalf(aspire.FormatError(queue.Err()))
+		log.Fatal(aspire.FormatError(queue.Err()))
 	}
 	if topic.Err() != nil {
-		log.Fatalf(aspire.FormatError(topic.Err()))
+		log.Fatal(aspire.FormatError(topic.Err()))
 	}
 	if subscription.Err() != nil {
-		log.Fatalf(aspire.FormatError(subscription.Err()))
+		log.Fatal(aspire.FormatError(subscription.Err()))
 	}
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	if err := app.Run(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 }

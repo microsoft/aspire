@@ -4,7 +4,7 @@
     <body>
       <trans-unit id="Description">
         <source>Execute a specific pipeline step and its dependencies</source>
-        <target state="needs-review-translation">执行特定的管道步骤及其依赖项。(预览版)</target>
+        <target state="translated">执行特定的管道步骤及其依赖项</target>
         <note />
       </trans-unit>
       <trans-unit id="GeneratingArtifacts">
@@ -14,7 +14,7 @@
       </trans-unit>
       <trans-unit id="ListStepsRequiresStep">
         <source>The 'step' argument is required when using --list-steps. Example: 'aspire do deploy --list-steps'. Common starting steps are 'build', 'publish' and 'deploy'. See https://aspire.dev/reference/cli/commands/aspire-do/ for the full list of pipeline steps.</source>
-        <target state="new">The 'step' argument is required when using --list-steps. Example: 'aspire do deploy --list-steps'. Common starting steps are 'build', 'publish' and 'deploy'. See https://aspire.dev/reference/cli/commands/aspire-do/ for the full list of pipeline steps.</target>
+        <target state="translated">使用 --list-steps 时，需要 'step' 参数。例如: 'aspire do deploy --list-steps'。常见的起始步骤包括 'build'、'publish' 和 'deploy'。有关管道步骤的完整列表，请参阅 https://aspire.dev/reference/cli/commands/aspire-do/。</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationCanceled">
@@ -34,17 +34,17 @@
       </trans-unit>
       <trans-unit id="OutputPathArgumentDescription">
         <source>The optional output path for artifacts</source>
-        <target state="needs-review-translation">工件的可选输出路径。</target>
+        <target state="translated">工件的可选输出路径</target>
         <note />
       </trans-unit>
       <trans-unit id="StepArgumentDescription">
         <source>The name of the step to execute</source>
-        <target state="needs-review-translation">要执行的步骤名称。</target>
+        <target state="translated">要执行的步骤的名称</target>
         <note />
       </trans-unit>
       <trans-unit id="StepArgumentRequired">
         <source>The 'step' argument is required.</source>
-        <target state="new">The 'step' argument is required.</target>
+        <target state="translated">'step' 参数是必需的。</target>
         <note />
       </trans-unit>
     </body>

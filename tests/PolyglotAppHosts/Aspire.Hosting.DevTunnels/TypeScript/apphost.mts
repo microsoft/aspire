@@ -56,4 +56,9 @@ await tunnel5.withTunnelReferenceAnonymous(web5Endpoint, true);
 await builder.addDevTunnel("chained-tunnel")
     .withAnonymousAccess();
 
+// Test 11: Idle expiration in hours
+await builder.addDevTunnel("expiring-tunnel")
+    .withExpiration(24)
+    .withTunnelReferenceAll(web, false);
+
 await builder.build().run();

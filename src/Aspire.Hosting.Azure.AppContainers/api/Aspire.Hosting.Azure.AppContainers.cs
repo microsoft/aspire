@@ -48,6 +48,10 @@ namespace Aspire.Hosting
 
         [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AppContainers.AzureContainerAppEnvironmentResource> WithHttpsUpgrade(this ApplicationModel.IResourceBuilder<Azure.AppContainers.AzureContainerAppEnvironmentResource> builder, bool upgrade = true) { throw null; }
+
+        [AspireExport]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREACANAMING002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public static ApplicationModel.IResourceBuilder<Azure.AppContainers.AzureContainerAppEnvironmentResource> WithUniqueResourceNaming(this ApplicationModel.IResourceBuilder<Azure.AppContainers.AzureContainerAppEnvironmentResource> builder) { throw null; }
     }
 
     public static partial class AzureContainerAppProjectExtensions
@@ -60,7 +64,6 @@ namespace Aspire.Hosting
     public static partial class ContainerAppExtensions
     {
         [AspireExport]
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREACADOMAINS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public static void ConfigureCustomDomain(this global::Azure.Provisioning.AppContainers.ContainerApp app, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> customDomain, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> certificateName) { }
 
         [AspireExportIgnore(Reason = "Polyglot app hosts use the internal publishAsAzureContainerAppJob dispatcher export.")]

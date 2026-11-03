@@ -40,7 +40,8 @@ namespace Aspire.Hosting.Backchannel;
 /// before the first connection would otherwise be absent from the history and leak from a lagging snapshot. To close
 /// that cold-start residual, <c>ParameterProcessor</c> also records secret values into this history at the moment it
 /// assigns or replaces them (see its <c>SecretRedactionHistory</c> wiring), independent of any connection. Values
-/// that never flow through the parameter processor still rely on connection-time observation.
+/// that never flow through the parameter processor are recorded during sensitive environment-value
+/// resolution or connection-time observation.
 /// </para>
 /// </remarks>
 internal sealed class SecretRedactionHistory
@@ -79,8 +80,8 @@ internal sealed class SecretRedactionHistory
 
     /// <summary>
     /// Merges <paramref name="values"/> into the history without allocating a snapshot. Used to record secret values
-    /// as they are assigned (see <c>ParameterProcessor</c>), where the caller only writes and never needs to read the
-    /// set back.
+    /// as they are assigned or sensitive environment values are resolved, where the caller only writes and never
+    /// needs to read the set back.
     /// </summary>
     public void AddValues(IEnumerable<string> values)
     {

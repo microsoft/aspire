@@ -5,6 +5,17 @@ void main() throws Exception {
         var kusto = builder.addAzureKustoCluster("kusto").runAsEmulator((emulator) -> {
                 emulator.withHostPort(8088.0);
             });
+        kusto.configureInfrastructure(infrastructure -> {
+            var cluster = infrastructure.getKustoCluster();
+            cluster.setIsStreamingIngestEnabled(true);
+            var _streamingIngest = cluster.isStreamingIngestEnabled();
+            var database = infrastructure.addKustoReadWriteDatabase("proxyDatabase");
+            database.setParent(cluster);
+            database.setName("ProxyDatabase");
+            var _databaseName = database.name();
+            // Exercise the derived AddTo export; adding to the same infrastructure is idempotent.
+            database.addTo(infrastructure);
+        });
         var defaultDatabase = kusto.addReadWriteDatabase("samples");
         var customDatabase = kusto.addReadWriteDatabase("analytics", "AnalyticsDb");
         defaultDatabase.withCreationScript(".create database Samples ifnotexists");

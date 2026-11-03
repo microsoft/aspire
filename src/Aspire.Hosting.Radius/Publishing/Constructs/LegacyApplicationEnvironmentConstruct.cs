@@ -13,14 +13,16 @@ namespace Aspire.Hosting.Radius.Publishing.Constructs;
 /// <summary>
 /// Represents a legacy <c>Applications.Core/environments@2023-10-01-preview</c>
 /// resource in the Bicep AST. Used as a parent for <c>Applications.*</c> portable
-/// resources whose UDT counterparts are not yet GA (Redis, Mongo, RabbitMQ,
-/// Dapr state store, Dapr pubsub).
+/// resources with no deployable UDT counterpart (Mongo and SQL Server, whose UDTs ship in the
+/// 0.60 Bicep extension but have no published Kubernetes recipe, and the Dapr building blocks,
+/// which have no <c>Radius.*</c> namespace at all).
 /// </summary>
 /// <remarks>
 /// Legacy environments carry recipes inline under <c>properties.recipes</c>
 /// (nested <c>type → recipeName → { templateKind, templatePath }</c>) — the
-/// legacy schema keeps the original key names. The new <c>recipeKind</c> /
-/// <c>recipeLocation</c> keys are only used by <c>Radius.Core/recipePacks</c>.
+/// legacy schema keeps the original key names, unchanged in Radius 0.60. The
+/// <c>Radius.Core/recipePacks</c> keys (<c>kind</c> / <c>source</c> as of 0.60)
+/// are only used there.
 /// </remarks>
 [Experimental("ASPIRERADIUS004", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class LegacyApplicationEnvironmentConstruct : ProvisionableResource

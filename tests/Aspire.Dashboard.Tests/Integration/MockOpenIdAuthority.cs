@@ -5,10 +5,12 @@ using System.Globalization;
 using System.Net;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
@@ -23,84 +25,87 @@ internal static class MockOpenIdAuthority
     /// </summary>
     public static async Task<Authority> CreateAsync()
     {
-        var webHost = new WebHostBuilder()
-            .ConfigureServices(services => services.AddRouting())
-            .UseKestrel(options =>
+        var host = new HostBuilder()
+            .ConfigureWebHost(webBuilder =>
             {
-                // Bind to loopback on a random available port
-                options.Listen(IPAddress.Loopback, 0);
-            })
-            .Configure(app =>
-            {
-                // Based on code from https://github.com/dotnet/aspnetcore/blob/3f99d45b0b7d8f0427a3d98acc63098694613362/src/Components/test/testassets/Components.TestServer/RemoteAuthenticationStartup.cs#L37-L94
+                webBuilder.ConfigureServices(services => services.AddRouting())
+                    .UseKestrel(options =>
+                    {
+                        // Bind to loopback on a random available port
+                        options.Listen(IPAddress.Loopback, 0);
+                    })
+                    .Configure(app =>
+                    {
+                        // Based on code from https://github.com/dotnet/aspnetcore/blob/3f99d45b0b7d8f0427a3d98acc63098694613362/src/Components/test/testassets/Components.TestServer/RemoteAuthenticationStartup.cs#L37-L94
 
-                app.UseRouting();
-                app.UseEndpoints(endpoints =>
-                {
-                    var issuer = "";
-                    var lastCode = "";
-                    var jwtHandler = new JsonWebTokenHandler();
-
-                    endpoints.MapGet(
-                        ".well-known/openid-configuration",
-                        (HttpRequest request, [FromHeader] string host) =>
+                        app.UseRouting();
+                        app.UseEndpoints(endpoints =>
                         {
-                            issuer = $"{(request.IsHttps ? "https" : "http")}://{host}";
-                            return Results.Json(new
-                            {
-                                issuer,
-                                authorization_endpoint = $"{issuer}/authorize",
-                                token_endpoint = $"{issuer}/token",
-                            });
-                        });
+                            var issuer = "";
+                            var lastCode = "";
+                            var jwtHandler = new JsonWebTokenHandler();
 
-                    endpoints.MapGet(
-                        "authorize",
-                        (string redirect_uri, string? state, string? prompt, bool? preservedExtraQueryParams) =>
-                        {
-                            // Require interaction so silent sign-in does not skip RedirectToLogin.razor.
-                            if (prompt == "none")
-                            {
-                                return Results.Redirect($"{redirect_uri}?error=interaction_required&state={state}");
-                            }
-
-                            // Verify that the extra query parameters added by RedirectToLogin.razor are preserved.
-                            if (preservedExtraQueryParams != true)
-                            {
-                                return Results.Redirect($"{redirect_uri}?error=invalid_request&error_description=extraQueryParams%20not%20preserved&state={state}");
-                            }
-
-                            lastCode = Random.Shared.Next().ToString(CultureInfo.InvariantCulture);
-                            return Results.Redirect($"{redirect_uri}?code={lastCode}&state={state}");
-                        });
-
-                    endpoints.MapPost(
-                        "token",
-                        ([FromForm] string code) =>
-                        {
-                            if (string.IsNullOrEmpty(lastCode) && code != lastCode)
-                            {
-                                return Results.BadRequest("Bad code");
-                            }
-
-                            return Results.Json(new
-                            {
-                                token_type = "Bearer",
-                                scope = "openid profile",
-                                expires_in = 3600,
-                                id_token = jwtHandler.CreateToken(new SecurityTokenDescriptor
+                            endpoints.MapGet(
+                                ".well-known/openid-configuration",
+                                (HttpRequest request, [FromHeader] string host) =>
                                 {
-                                    Issuer = issuer,
-                                    Audience = "s6BhdRkqt3",
-                                    Claims = new Dictionary<string, object>
+                                    issuer = $"{(request.IsHttps ? "https" : "http")}://{host}";
+                                    return Results.Json(new
                                     {
-                                        ["sub"] = "248289761001",
-                                        ["name"] = "Jane Doe",
-                                    },
-                                }),
-                            });
-                        }).DisableAntiforgery();
-                });
+                                        issuer,
+                                        authorization_endpoint = $"{issuer}/authorize",
+                                        token_endpoint = $"{issuer}/token",
+                                    });
+                                });
+
+                            endpoints.MapGet(
+                                "authorize",
+                                (string redirect_uri, string? state, string? prompt, bool? preservedExtraQueryParams) =>
+                                {
+                                    // Require interaction so silent sign-in does not skip RedirectToLogin.razor.
+                                    if (prompt == "none")
+                                    {
+                                        return Results.Redirect($"{redirect_uri}?error=interaction_required&state={state}");
+                                    }
+
+                                    // Verify that the extra query parameters added by RedirectToLogin.razor are preserved.
+                                    if (preservedExtraQueryParams != true)
+                                    {
+                                        return Results.Redirect($"{redirect_uri}?error=invalid_request&error_description=extraQueryParams%20not%20preserved&state={state}");
+                                    }
+
+                                    lastCode = Random.Shared.Next().ToString(CultureInfo.InvariantCulture);
+                                    return Results.Redirect($"{redirect_uri}?code={lastCode}&state={state}");
+                                });
+
+                            endpoints.MapPost(
+                                "token",
+                                ([FromForm] string code) =>
+                                {
+                                    if (string.IsNullOrEmpty(lastCode) && code != lastCode)
+                                    {
+                                        return Results.BadRequest("Bad code");
+                                    }
+
+                                    return Results.Json(new
+                                    {
+                                        token_type = "Bearer",
+                                        scope = "openid profile",
+                                        expires_in = 3600,
+                                        id_token = jwtHandler.CreateToken(new SecurityTokenDescriptor
+                                        {
+                                            Issuer = issuer,
+                                            Audience = "s6BhdRkqt3",
+                                            Claims = new Dictionary<string, object>
+                                            {
+                                                ["sub"] = "248289761001",
+                                                ["name"] = "Jane Doe",
+                                            },
+                                        }),
+                                    });
+                                }).DisableAntiforgery();
+                        });
+                    });
             })
             .ConfigureLogging(logging =>
             {
@@ -109,13 +114,13 @@ internal static class MockOpenIdAuthority
             })
             .Build();
 
-        await webHost.StartAsync();
+        await host.StartAsync();
 
-        return new Authority(webHost, url: GetBoundAddress());
+        return new Authority(host, url: GetBoundAddress());
 
         string GetBoundAddress()
         {
-            var serverAddress = webHost.ServerFeatures.Get<IServerAddressesFeature>();
+            var serverAddress = host.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>();
 
             Assert.NotNull(serverAddress);
 
@@ -127,14 +132,14 @@ internal static class MockOpenIdAuthority
         }
     }
 
-    public sealed class Authority(IWebHost webHost, string url) : IAsyncDisposable
+    public sealed class Authority(IHost host, string url) : IAsyncDisposable
     {
         public string Url => url;
 
         public async ValueTask DisposeAsync()
         {
-            await webHost.StopAsync();
-            webHost.Dispose();
+            await host.StopAsync();
+            host.Dispose();
         }
     }
 }

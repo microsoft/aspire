@@ -1,8 +1,8 @@
-<Project Sdk="Aspire.AppHost.Sdk/!!REPLACE_WITH_LATEST_VERSION!!">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AspireUseCliBundle>true</AspireUseCliBundle>
@@ -10,7 +10,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\XmlEncodedProjectName.Server\XmlEncodedProjectName.Server.csproj" />
+    <PackageReference Include="Aspire.Hosting.AppHost" Version="!!REPLACE_WITH_LATEST_VERSION!!" />
+    <PackageReference Include="Aspire.Hosting.Dotnet" Version="!!REPLACE_WITH_LATEST_VERSION!!" />
   </ItemGroup>
 
   <ItemGroup>

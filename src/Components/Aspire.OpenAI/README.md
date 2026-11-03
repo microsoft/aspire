@@ -95,6 +95,12 @@ builder.AddOpenAIClient("openaiConnectionName", configureOptions: options => opt
 
 ## AppHost extensions
 
+The .NET service example requires `Aspire.Hosting.Dotnet` in the AppHost:
+
+```dotnetcli
+dotnet add package Aspire.Hosting.Dotnet
+```
+
 There is no specific AppHost extension corresponding to the OpenAI integration. Instead a connection string resource can be registered:
 
 In the _AppHost.cs_ file of `AppHost`, add an OpenAI REST API connection string name:
@@ -102,7 +108,7 @@ In the _AppHost.cs_ file of `AppHost`, add an OpenAI REST API connection string 
 ```csharp
 var openai = builder.AddConnectionString("openai");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(openai);
 ```
 
@@ -113,6 +119,8 @@ builder.AddOpenAIClient("openai");
 ```
 
 ## Experimental Telemetry
+
+The `AddChatClient` and `AddEmbeddingGenerator` helpers enable Microsoft.Extensions.AI tracing and metrics. `DisableTracing` and `DisableMetrics` independently disable the corresponding OpenTelemetry subscriptions; disabling tracing alone retains metrics.
 
 OpenAI telemetry support is experimental, the shape of traces may change in the future without notice.
 It can be enabled by invoking

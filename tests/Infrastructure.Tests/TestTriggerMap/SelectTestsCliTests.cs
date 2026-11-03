@@ -2,7 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Xunit;
+using YamlDotNet.RepresentationModel;
 
 namespace Infrastructure.Tests.TestTriggerMap;
 
@@ -73,6 +75,79 @@ public sealed class SelectTestsCliTests
             Assert.Equal(0, exitCode);
             Assert.False(File.Exists(propsPath));
             Assert.Equal("", output()["project_override_props"]);
+        });
+    }
+
+    [Fact]
+    public void ExplainWritesTheComputedSummaryToStandardOutput()
+    {
+        RunInTempRepo((repoRoot, propsPath, _) =>
+        {
+            var changed = WriteChangedFiles(repoRoot, "trigger.txt");
+            var previousOut = Console.Out;
+            using var output = new StringWriter();
+            Console.SetOut(output);
+            try
+            {
+                Selection.Run(Options(repoRoot, propsPath, changedFilesPath: changed, skipLayer1: true, explain: true));
+            }
+            finally
+            {
+                Console.SetOut(previousOut);
+            }
+
+            Assert.Contains("## SelectTests", output.ToString());
+            Assert.Contains("trigger.txt", output.ToString());
+            Assert.Contains("## SelectTests", File.ReadAllText(Path.Combine(repoRoot, "summary")));
+        });
+    }
+
+    [Fact]
+    public void ExplainIncludesTransitiveDerivedJobDependencies()
+    {
+        RunInTempRepo((repoRoot, propsPath, _) =>
+        {
+            var changed = WriteChangedFiles(repoRoot, "other.txt");
+            var previousOut = Console.Out;
+            using var output = new StringWriter();
+            Console.SetOut(output);
+            try
+            {
+                Selection.Run(Options(repoRoot, propsPath, changedFilesPath: changed, skipLayer1: true, explain: true));
+            }
+            finally
+            {
+                Console.SetOut(previousOut);
+            }
+
+            var explanation = output.ToString();
+            Assert.Contains("job:derived-only-job", explanation);
+            Assert.Contains("derived from selected test `Aspire.Cli.Tests`", explanation);
+        });
+    }
+
+    [Fact]
+    public void ExplainDoesNotDuplicateSummaryToStandardError()
+    {
+        RunInTempRepo((repoRoot, propsPath, _) =>
+        {
+            var changed = WriteChangedFiles(repoRoot, "trigger.txt");
+            var previousSummary = Environment.GetEnvironmentVariable("GITHUB_STEP_SUMMARY");
+            var previousError = Console.Error;
+            Environment.SetEnvironmentVariable("GITHUB_STEP_SUMMARY", null);
+            using var error = new StringWriter();
+            Console.SetError(error);
+            try
+            {
+                Selection.Run(Options(repoRoot, propsPath, changedFilesPath: changed, skipLayer1: true, explain: true));
+            }
+            finally
+            {
+                Console.SetError(previousError);
+                Environment.SetEnvironmentVariable("GITHUB_STEP_SUMMARY", previousSummary);
+            }
+
+            Assert.Empty(error.ToString());
         });
     }
 
@@ -338,7 +413,7 @@ public sealed class SelectTestsCliTests
                 Assert.Contains("**would**", comment);
                 Assert.Contains("under enforcement", comment);
                 Assert.Contains("regular PR test matrix and PR-gated jobs", comment);
-                Assert.Contains("Advisory-only targets are reported here but are not scheduled through the regular PR matrix or job gates", comment);
+                Assert.DoesNotContain("Advisory-only targets", comment);
                 Assert.DoesNotContain("do not run on PRs", comment);
             }
             finally
@@ -382,9 +457,9 @@ public sealed class SelectTestsCliTests
                 var comment = File.ReadAllText(commentPath);
                 Assert.Contains("### Selected PR test projects (1 / 1)", comment);
                 Assert.Contains("### Selected PR jobs (1)", comment);
-                Assert.Contains("### Advisory workflow impact (2)", comment);
-                Assert.Contains("`Aspire.EndToEnd.Tests` *(outerloop-only)*", comment);
-                Assert.Contains("`deployment-e2e` *(schedule/dispatch-only)*", comment);
+                Assert.DoesNotContain("Advisory workflow impact", comment);
+                Assert.DoesNotContain("deployment-e2e", comment);
+                Assert.Contains("How these were chosen", comment);
 
                 var summary = File.ReadAllText(Path.Combine(repoRoot, "summary"));
                 Assert.Contains("- selected PR test projects: 1 / 1", summary);
@@ -434,8 +509,8 @@ public sealed class SelectTestsCliTests
 
                 var comment = File.ReadAllText(commentPath);
                 Assert.Contains("**Selects the full PR test matrix + all PR-gated jobs (ALL)**", comment);
-                Assert.Contains("### Advisory workflow impact (2)", comment);
-                Assert.Contains("Advisory-only targets are reported here but are not scheduled through the regular PR matrix or job gates", comment);
+                Assert.DoesNotContain("Advisory workflow impact", comment);
+                Assert.DoesNotContain("deployment-e2e", comment);
                 Assert.DoesNotContain("do not run on PRs", comment);
             }
             finally
@@ -510,12 +585,9 @@ public sealed class SelectTestsCliTests
 
                 var comment = File.ReadAllText(commentPath);
                 Assert.Contains("### Selected PR test projects (1 / 1)", comment);
-                Assert.Contains(
-                    $"### Advisory workflow impact ({expectedAdvisoryProjects.Count})",
-                    comment);
                 foreach (var project in expectedAdvisoryProjects)
                 {
-                    Assert.Contains($"`{project}`", comment);
+                    Assert.DoesNotContain($"`{project}`", comment);
                 }
             }
             finally
@@ -575,6 +647,43 @@ public sealed class SelectTestsCliTests
             finally
             {
                 Environment.SetEnvironmentVariable("SELECT_TESTS_JSON_FILE", previous);
+            }
+        });
+    }
+
+    [Theory]
+    [InlineData("tests/Shared/AsyncTestHelpers.cs")]
+    [InlineData("tests/Shared/Telemetry/TelemetryTestHelpers.cs")]
+    public void NativeDashboardSharedHelpersSelectNativeValidationInEnforceMode(string path)
+    {
+        RunInTempRepo((temporaryRoot, propsPath, output) =>
+        {
+            var changed = WriteChangedFiles(temporaryRoot, path);
+            var jsonPath = Path.Combine(temporaryRoot, "selection.json");
+            var previousJson = Environment.GetEnvironmentVariable("SELECT_TESTS_JSON_FILE");
+            Environment.SetEnvironmentVariable("SELECT_TESTS_JSON_FILE", jsonPath);
+            try
+            {
+                var options = Options(RepoRoot.Path, propsPath, changedFilesPath: changed, enforce: true) with
+                {
+                    MapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml")
+                };
+
+                Assert.Equal(0, Selection.Run(options));
+                Assert.Equal("true", output()["run_native_dashboard_validation"]);
+
+                using var json = JsonDocument.Parse(File.ReadAllText(jsonPath));
+                var selection = json.RootElement;
+                Assert.False(selection.GetProperty("selectsAll").GetBoolean());
+                Assert.Empty(selection.GetProperty("unattributedFiles").EnumerateArray());
+                Assert.Equal(
+                    ["job:native-dashboard-validation"],
+                    selection.GetProperty("jobs").EnumerateArray()
+                        .Select(job => job.GetProperty("name").GetString()));
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("SELECT_TESTS_JSON_FILE", previousJson);
             }
         });
     }
@@ -706,6 +815,199 @@ public sealed class SelectTestsCliTests
             Assert.Contains("run_group_job", keys);
             Assert.Contains("run_derived_only_job", keys);
         });
+    }
+
+    // Discover run_* references in tests.yml's job-level conditions so new gates
+    // are checked without a copied inventory. Verify their dependency/output wiring
+    // and force-all selector booleans to catch gates that would silently skip work.
+    // This checks consistency, not step-level conditions or workflow execution.
+    [Fact]
+    public void RealWorkflowJobGatesReachProductionSelectorBooleans()
+    {
+        var workflow = File.ReadAllText(Path.Combine(RepoRoot.Path, ".github", "workflows", "tests.yml"));
+
+        RunInTempRepo((_, propsPath, output) =>
+        {
+            var options = Options(RepoRoot.Path, propsPath, skipLayer1: true, forceAll: true, enforce: true) with
+            {
+                MapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml")
+            };
+            Assert.Equal(0, Selection.Run(options));
+            using var selection = JsonDocument.Parse(output()["selection"]);
+            AssertWorkflowJobGates(workflow, selection.RootElement);
+        });
+    }
+
+    // Equivalent YAML/expression spellings must resolve to the same selector gate.
+    // These fixtures vary whitespace, multiline values, quoting, bracket access,
+    // and dependency syntax; reference-like text inside strings must be ignored.
+    // They test the checker, not GitHub Actions expression execution.
+    [Theory]
+    [InlineData("needs.setup.outputs.run_group_job", "${{ fromJSON(steps.select.outputs.selection).run_group_job }}", "setup")]
+    [InlineData(">-\n${{\n  !cancelled() &&\n  needs . setup . outputs . run_group_job\n}}",
+        "|-\n${{ fromJSON (\n  steps . select . outputs . selection\n) . run_group_job }}", "[setup]")]
+    [InlineData("\"${{ needs['setup'].outputs['run_group_job'] }}\"",
+        "\"${{ fromJSON(steps['select'].outputs['selection'])['run_group_job'] }}\"", "setup")]
+    [InlineData("'${{ needs[''setup''][''outputs''][''run_group_job''] }}'",
+        "'${{ fromJSON(steps[''select''][''outputs''][''selection''])[''run_group_job''] }}'", "[setup]")]
+    [InlineData("needs.setup.outputs.run_group_job && contains('needs.other.outputs.run_fake', 'run_')",
+        "${{ fromJSON(steps.select.outputs.selection).run_group_job }}", "setup")]
+    [InlineData("needs.setup.outputs.run_group_job && contains('it''s run_fake', 'run_') # ordinary YAML comment",
+        "${{ fromJSON(steps.select.outputs.selection).run_group_job }} # another YAML comment", "[setup]")]
+    public void WorkflowJobGatesAcceptFormattingAndStaticAccessForms(string condition, string mapping, string needs)
+    {
+        AssertFixtureWorkflowJobGates(condition, mapping, needs);
+    }
+
+    // Exercise the checker with small YAML fixtures, not an actual Actions run.
+    // Unsupported or dynamic references must report incomplete discovery, even
+    // alongside a recognized gate. Quoted reference-like text must not satisfy
+    // the requirement to discover a real gate. Check the specific diagnostic so
+    // an unrelated fixture failure cannot make these negative cases pass.
+    [Theory]
+    [InlineData("fromJSON(needs.setup.outputs.selection).run_group_job",
+        "${{ fromJSON(steps.select.outputs.selection).run_group_job }}", "consumer contains an unrecognized run_* gate expression")]
+    [InlineData("needs.setup.outputs.run_group_job-extra",
+        "${{ fromJSON(steps.select.outputs.selection).run_group_job }}", "consumer contains an unrecognized run_* gate expression")]
+    [InlineData("needs['setup']['outputs']['run_group_job-extra']",
+        "${{ fromJSON(steps.select.outputs.selection).run_group_job }}", "consumer contains an unrecognized run_* gate expression")]
+    [InlineData("needs.setup.outputs.run_group_job || needs.setup.outputs.run_group_job-extra",
+        "${{ fromJSON(steps.select.outputs.selection).run_group_job }}", "consumer contains an unrecognized run_* gate expression")]
+    [InlineData("needs.setup.outputs.run_group_job || needs['setup']['outputs']['run_group_job-extra']",
+        "${{ fromJSON(steps.select.outputs.selection).run_group_job }}", "consumer contains an unrecognized run_* gate expression")]
+    [InlineData("needs.setup.outputs.run_group_job-",
+        "${{ fromJSON(steps.select.outputs.selection).run_group_job }}", "consumer contains an unrecognized run_* gate expression")]
+    [InlineData("needs.setup.outputs.run_group_job || needs.setup.outputs.run_missingJob",
+        "${{ fromJSON(steps.select.outputs.selection).run_group_job }}", "consumer contains an unrecognized run_* gate expression")]
+    [InlineData("needs.setup.outputs.run_group_job || needs['setup']['outputs']['run_missingJob']",
+        "${{ fromJSON(steps.select.outputs.selection).run_group_job }}", "consumer contains an unrecognized run_* gate expression")]
+    [InlineData("needs.setup.outputs.run_group_job || needs.setup.outputs.run_-extra",
+        "${{ fromJSON(steps.select.outputs.selection).run_group_job }}", "consumer contains an unrecognized run_* gate expression")]
+    [InlineData("needs.setup.outputs.run_group_job || needs['setup']['outputs']['run_-extra']",
+        "${{ fromJSON(steps.select.outputs.selection).run_group_job }}", "consumer contains an unrecognized run_* gate expression")]
+    [InlineData("needs.setup.outputs.run_group_job || needs.setup.outputs.run_",
+        "${{ fromJSON(steps.select.outputs.selection).run_group_job }}", "consumer contains an unrecognized run_* gate expression")]
+    [InlineData("needs.setup.outputs.run_group_job || needs['setup']['outputs']['run_']",
+        "${{ fromJSON(steps.select.outputs.selection).run_group_job }}", "consumer contains an unrecognized run_* gate expression")]
+    [InlineData("needs.setup.outputs[inputs.gate]",
+        "${{ fromJSON(steps.select.outputs.selection).run_group_job }}", "consumer contains a dynamic needs reference")]
+    [InlineData("needs.setup.outputs.run_group_job || needs.setup.outputs[inputs.gate]",
+        "${{ fromJSON(steps.select.outputs.selection).run_group_job }}", "consumer contains a dynamic needs reference")]
+    [InlineData("needs.setup.outputs.run_group_job || needs[inputs.producer].outputs[inputs.gate]",
+        "${{ fromJSON(steps.select.outputs.selection).run_group_job }}", "consumer contains a dynamic needs reference")]
+    [InlineData("needs.setup.outputs.run_group_job || needs.setup[inputs.section][inputs.gate]",
+        "${{ fromJSON(steps.select.outputs.selection).run_group_job }}", "consumer contains a dynamic needs reference")]
+    [InlineData("needs.setup.outputs.run_group_job || needs.*.outputs[inputs.gate]",
+        "${{ fromJSON(steps.select.outputs.selection).run_group_job }}", "consumer contains a dynamic needs reference")]
+    [InlineData("contains('needs.setup.outputs.run_group_job', 'run_')",
+        "${{ fromJSON(steps.select.outputs.selection).run_group_job }}", "No selector job gates were discovered")]
+    [InlineData("needs.setup.outputs.run_group_job",
+        "${{ fromJSON(steps.select.outputs.selection)[inputs.gate] }}", "setup.run_group_job has an unrecognized selector output mapping")]
+    public void WorkflowJobGatesRejectUnsupportedOrVacuousDiscovery(string condition, string mapping, string diagnostic)
+    {
+        var exception = Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => AssertFixtureWorkflowJobGates(condition, mapping, "setup"));
+        Assert.StartsWith(diagnostic, exception.Message);
+    }
+
+    private static void AssertFixtureWorkflowJobGates(string condition, string mapping, string needs)
+    {
+        var workflow = $$"""
+            jobs:
+              setup:
+                outputs:
+                  run_group_job: {{mapping.Replace("\n", "\n        ", StringComparison.Ordinal)}}
+                steps:
+                  - id: select
+                    uses: ./.github/actions/select-tests
+              consumer:
+                needs: {{needs}}
+                if: {{condition.Replace("\n", "\n      ", StringComparison.Ordinal)}}
+            """;
+
+        RunInTempRepo((repoRoot, propsPath, output) =>
+        {
+            Assert.Equal(0, Selection.Run(Options(repoRoot, propsPath, skipLayer1: true, forceAll: true, enforce: true)));
+            using var selection = JsonDocument.Parse(output()["selection"]);
+            AssertWorkflowJobGates(workflow, selection.RootElement);
+        });
+    }
+
+    private static void AssertWorkflowJobGates(string yaml, JsonElement selection)
+    {
+        using var reader = new StringReader(yaml);
+        var workflow = new YamlStream();
+        workflow.Load(reader);
+        var root = Assert.IsType<YamlMappingNode>(workflow.Documents[0].RootNode);
+        var jobs = Assert.IsType<YamlMappingNode>(root.Children[new YamlScalarNode("jobs")]);
+        var gates = new List<(string Job, string Producer, string Gate)>();
+
+        foreach (var (jobId, jobNode) in jobs.Children)
+        {
+            var job = Assert.IsType<YamlMappingNode>(jobNode);
+            if (!job.Children.TryGetValue(new YamlScalarNode("if"), out var condition))
+            {
+                continue;
+            }
+
+            var normalized = NormalizeWorkflowExpression(condition.ToString());
+            Assert.False(Regex.IsMatch(normalized, @"\bneeds(?:\.(?:[a-zA-Z0-9_-]+|\*))*\["),
+                $"{jobId} contains a dynamic needs reference that gate discovery cannot resolve: {condition}");
+            // Count unsupported names too (run_missingJob, run_-extra, run_) so they
+            // cannot disappear from discovery alongside a valid selector gate.
+            var gateNames = Regex.Matches(normalized, @"\brun_[a-zA-Z0-9_-]*");
+            var references = Regex.Matches(normalized, @"\bneeds\.([a-zA-Z0-9_-]+)\.outputs\.(run_[a-z0-9_]+)(?![a-zA-Z0-9_-])");
+            Assert.True(gateNames.Count == references.Count,
+                $"{jobId} contains an unrecognized run_* gate expression: {condition}");
+
+            gates.AddRange(references.Select(match =>
+                (jobId.ToString(), match.Groups[1].Value, match.Groups[2].Value)));
+        }
+
+        Assert.True(gates.Count > 0, "No selector job gates were discovered.");
+
+        foreach (var (jobId, producerId, gate) in gates)
+        {
+            var consumer = Assert.IsType<YamlMappingNode>(jobs.Children[new YamlScalarNode(jobId)]);
+            Assert.True(consumer.Children.TryGetValue(new YamlScalarNode("needs"), out var needs),
+                $"{jobId} reads {producerId}.{gate}, but has no job dependencies.");
+            var dependencies = needs is YamlScalarNode scalar
+                ? [scalar.ToString()]
+                : Assert.IsType<YamlSequenceNode>(needs).Children.Select(node => node.ToString()).ToArray();
+            Assert.Contains(producerId, dependencies);
+
+            Assert.True(jobs.Children.TryGetValue(new YamlScalarNode(producerId), out var producerNode),
+                $"{jobId} reads {gate} from missing job {producerId}.");
+            var producer = Assert.IsType<YamlMappingNode>(producerNode);
+            var outputs = Assert.IsType<YamlMappingNode>(producer.Children[new YamlScalarNode("outputs")]);
+            Assert.True(outputs.Children.TryGetValue(new YamlScalarNode(gate), out var expression),
+                $"{jobId} reads {producerId}.{gate}, but that job does not publish it.");
+
+            var mapping = Regex.Match(NormalizeWorkflowExpression(expression.ToString()),
+                @"^\$\{\{fromJSON\(steps\.([a-zA-Z0-9_-]+)\.outputs\.selection\)\.(run_[a-z0-9_]+)\}\}$");
+            Assert.True(mapping.Success, $"{producerId}.{gate} has an unrecognized selector output mapping: {expression}");
+            Assert.Equal(gate, mapping.Groups[2].Value);
+
+            var steps = Assert.IsType<YamlSequenceNode>(producer.Children[new YamlScalarNode("steps")]);
+            var step = Assert.Single(steps.Children.OfType<YamlMappingNode>(), step =>
+                step.Children.TryGetValue(new YamlScalarNode("id"), out var id)
+                && id.ToString() == mapping.Groups[1].Value);
+            Assert.Equal("./.github/actions/select-tests", step.Children[new YamlScalarNode("uses")].ToString());
+            Assert.True(selection.TryGetProperty(gate, out var value),
+                $"{jobId} reads {gate}, but the production selector does not emit it.");
+            Assert.Equal(JsonValueKind.True, value.ValueKind);
+        }
+    }
+
+    private static string NormalizeWorkflowExpression(string expression)
+    {
+        // Normalize static ['property'] access to .property and remove whitespace.
+        // Mask whole string literals first, including escaped quotes ('it''s run_fake'),
+        // so text such as 'needs.other.outputs.run_fake' is never discovered as a gate.
+        // https://docs.github.com/en/actions/reference/workflows-and-actions/expressions#literals
+        return Regex.Replace(expression, @"'(?:[^']|'')*'|\[\s*'(?<property>[a-zA-Z_][a-zA-Z0-9_-]*)'\s*\]|\s+", match =>
+            match.Groups["property"].Success ? "." + match.Groups["property"].Value
+            : char.IsWhiteSpace(match.Value[0]) ? ""
+            : "''");
     }
 
     // P0-3b. The job gates ship as ONE `selection` output holding a JSON object of real booleans, not
@@ -867,11 +1169,28 @@ public sealed class SelectTestsCliTests
             var unrelatedSha = RunGit(repoRoot, "rev-parse", "HEAD");
 
             var propsPath = Path.Combine(repoRoot, "BeforeBuildProps.props");
-            var exit = Selection.Run(Options(repoRoot, propsPath, from: unrelatedSha, to: baseSha, skipLayer1: true, enforce: true));
+            var previousOut = Console.Out;
+            using var consoleOutput = new StringWriter();
+            Console.SetOut(consoleOutput);
+            int exit;
+            try
+            {
+                exit = Selection.Run(Options(repoRoot, propsPath, from: unrelatedSha, to: baseSha, skipLayer1: true, enforce: true));
+            }
+            finally
+            {
+                Console.SetOut(previousOut);
+            }
 
             Assert.Equal(0, exit);
             // ALL selected -> enforce writes no restriction props, so enumerate-tests runs everything.
             Assert.False(File.Exists(propsPath));
+
+            // The warning is part of the selector contract, but capture it so an intentionally simulated
+            // failure does not become a real warning annotation when this test runs in GitHub Actions.
+            Assert.Contains("::warning::SelectTests:", consoleOutput.ToString());
+            Assert.Contains("no common ancestor", consoleOutput.ToString());
+            Assert.Contains("Falling back to running ALL tests", consoleOutput.ToString());
 
             // The fallback is recorded in the run summary (the durable record historical audits read),
             // naming the merge-base as the cause.
@@ -1186,7 +1505,8 @@ public sealed class SelectTestsCliTests
         bool forceAll = false,
         bool enforce = false,
         string? slnxPath = null,
-        string? forceAllReason = null) =>
+        string? forceAllReason = null,
+        bool explain = false) =>
         new(
             RepoRoot: repoRoot,
             MapPath: Path.Combine(repoRoot, "map.yml"),
@@ -1198,7 +1518,8 @@ public sealed class SelectTestsCliTests
             ForceAll: forceAll,
             Enforce: enforce,
             BeforeBuildProps: propsPath,
-            ForceAllReason: forceAllReason);
+            ForceAllReason: forceAllReason,
+            Explain: explain);
 
     private static string WriteChangedFiles(string repoRoot, params string[] paths)
     {

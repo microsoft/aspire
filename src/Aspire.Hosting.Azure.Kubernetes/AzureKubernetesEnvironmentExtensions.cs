@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES001 // Pipeline step types used for push/deploy dependency wiring
-#pragma warning disable ASPIREAZURE001 // AzureEnvironmentResource.ProvisionInfrastructureStepName for pipeline ordering
 #pragma warning disable ASPIREAZURE003 // AzureSubnetResource used in WithSubnet extensions
 
 using Aspire.Hosting.ApplicationModel;
@@ -40,6 +38,8 @@ public static class AzureKubernetesEnvironmentExtensions
     /// This method internally creates a Kubernetes environment for Helm-based deployment
     /// and provisions an AKS cluster via Azure Bicep. It combines the functionality of
     /// <c>AddKubernetesEnvironment</c> with Azure-specific provisioning.
+    /// The cluster uses the Standard control-plane tier by default, which includes an uptime SLA
+    /// and a cluster-management charge. Use <c>ConfigureInfrastructure</c> to select a different tier.
     /// </remarks>
     /// <example>
     /// <code>
@@ -60,7 +60,8 @@ public static class AzureKubernetesEnvironmentExtensions
             o => o.SupportsTargetedRoleAssignments = true);
 
         // Create the unified AKS environment resource
-        var resource = new AzureKubernetesEnvironmentResource(name, ConfigureAksInfrastructure);
+        var resource = new AzureKubernetesEnvironmentResource(name,
+            ConfigureAksInfrastructure);
 
         // Create the inner KubernetesEnvironmentResource directly so it can hold
         // Kubernetes-specific state without surfacing as a second environment in
@@ -94,10 +95,77 @@ public static class AzureKubernetesEnvironmentExtensions
         resource.Annotations.Add(new ContainerRegistryReferenceAnnotation(defaultRegistry.Resource));
         k8sEnvBuilder.WithAnnotation(new ContainerRegistryReferenceAnnotation(defaultRegistry.Resource));
 
-        // Wire ACR name as a parameter on the AKS resource so the Bicep module
-        // can create an AcrPull role assignment for the kubelet identity.
-        // The publishing context will wire this as a parameter in main.bicep.
-        resource.Parameters["acrName"] = defaultRegistry.Resource.NameOutputReference;
+        var controlPlaneIdentity = builder.CreateResourceBuilder(new AzureUserAssignedIdentityResource($"{name}-control-plane-identity"));
+        var kubeletIdentity = builder.CreateResourceBuilder(new AzureUserAssignedIdentityResource($"{name}-kubelet-identity"));
+        resource.ControlPlaneIdentity = controlPlaneIdentity.Resource;
+        resource.KubeletIdentity = kubeletIdentity.Resource;
+        resource.References.Add(controlPlaneIdentity.Resource);
+        resource.References.Add(kubeletIdentity.Resource);
+
+        // A pre-created kubelet identity outside the node resource group requires this grant
+        // before cluster creation. Explicit identity references also propagate role prerequisites.
+        // https://learn.microsoft.com/azure/aks/pre-created-kubelet-managed-identity
+        controlPlaneIdentity.WithAnnotation(new RoleAssignmentAnnotation(kubeletIdentity.Resource,
+            new HashSet<RoleDefinition>
+            {
+                new(ArmBuiltInRole.ManagedIdentityOperator.ToString(), ArmBuiltInRole.GetBuiltInRoleName(ArmBuiltInRole.ManagedIdentityOperator))
+            }));
+
+        var identitiesPrepared = false;
+        builder.Pipeline.AddStep(
+            name: $"prepare-aks-identities-{name}",
+            action: context =>
+            {
+                if (identitiesPrepared || resource.IsExcludedFromPublish())
+                {
+                    return Task.CompletedTask;
+                }
+
+                foreach (var identity in new[] { controlPlaneIdentity.Resource, kubeletIdentity.Resource })
+                {
+                    if (context.Model.Resources.Any(existing => StringComparer.OrdinalIgnoreCase.Equals(existing.Name, identity.Name)))
+                    {
+                        throw new DistributedApplicationException($"The AKS environment '{name}' requires the resource name '{identity.Name}' for its managed identity.");
+                    }
+                }
+
+                // Configuration callbacks can set the cluster's scope. Resolve it before preparing
+                // identity roles without caching the template: publishing must regenerate it after
+                // workload identities have been prepared.
+                using var template = resource.GetBicepTemplateFile();
+                controlPlaneIdentity.Resource.Scope = resource.Scope;
+                kubeletIdentity.Resource.Scope = resource.Scope;
+
+                // Resolve the final registry and subnet selections after model configuration.
+                // Standard Azure role preparation handles assignment scope and deployment ordering.
+                if (resource.TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out var registryReference) &&
+                    registryReference.Registry is AzureContainerRegistryResource registry)
+                {
+                    kubeletIdentity.WithRoleAssignments(builder.CreateResourceBuilder(registry), ContainerRegistryBuiltInRole.AcrPull);
+                }
+
+                var subnets = resource.NodePoolSubnets.Values.AsEnumerable();
+                if (resource.TryGetLastAnnotation<AksSubnetAnnotation>(out var subnet))
+                {
+                    subnets = subnets.Append(subnet.SubnetId);
+                }
+
+                foreach (var network in subnets.Select(subnet => subnet.Resource).Distinct())
+                {
+                    controlPlaneIdentity.WithAnnotation(new RoleAssignmentAnnotation((AzureProvisioningResource)network,
+                        new HashSet<RoleDefinition>
+                        {
+                            new("4d97b98b-1d4f-4787-a291-c67834d212e7", "NetworkContributor")
+                        }));
+                }
+
+                context.Model.Resources.Add(controlPlaneIdentity.Resource);
+                context.Model.Resources.Add(kubeletIdentity.Resource);
+                identitiesPrepared = true;
+
+                return Task.CompletedTask;
+            },
+            requiredBy: AzureEnvironmentResource.PrepareResourcesStepName);
 
         // Ensure push steps wait for ALL Azure provisioning to complete. Push steps
         // call registry.Endpoint.GetValueAsync() which awaits the BicepOutputReference
@@ -160,7 +228,7 @@ public static class AzureKubernetesEnvironmentExtensions
     /// var gpuPool = aks.AddNodePool("gpu", "Standard_NC6s_v3", 0, 5);
     /// </code>
     /// </example>
-    [AspireExport]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the node pool configuration callback overload.")]
     public static IResourceBuilder<AksNodePoolResource> AddNodePool(
         this IResourceBuilder<AzureKubernetesEnvironmentResource> builder,
         [ResourceName] string name,
@@ -175,7 +243,51 @@ public static class AzureKubernetesEnvironmentExtensions
         ArgumentOutOfRangeException.ThrowIfNegative(maxCount);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(minCount, maxCount);
 
-        var config = new AksNodePoolConfig(name, vmSize, minCount, maxCount, AksNodePoolMode.User);
+        return builder.AddNodePool(name, options =>
+        {
+            options.VmSize = vmSize;
+            options.MinCount = minCount;
+            options.MaxCount = maxCount;
+        });
+    }
+
+    /// <summary>
+    /// Adds a node pool to the AKS cluster using a configuration callback.
+    /// </summary>
+    /// <param name="builder">The AKS environment resource builder.</param>
+    /// <param name="name">The name of the node pool.</param>
+    /// <param name="configure">A callback to configure VM size, autoscaling, and OS SKU.</param>
+    /// <returns>The resource builder for the new node pool.</returns>
+    /// <remarks>
+    /// The callback receives the node pool configuration with default VM size and node counts.
+    /// Configuration remains mutable and is validated during infrastructure generation.
+    /// Omitting the OS SKU leaves AKS to choose its default.
+    /// The returned resource can be used to schedule workloads on this pool.
+    /// </remarks>
+    /// <exception cref="ArgumentNullException">The builder or callback is null.</exception>
+    /// <exception cref="ArgumentException">The name is empty or whitespace.</exception>
+    /// <example>
+    /// <code>
+    /// var workers = aks.AddNodePool("workers", pool =>
+    /// {
+    ///     pool.MinCount = 0;
+    ///     pool.MaxCount = 5;
+    ///     pool.OsSku = "AzureLinux";
+    /// });
+    /// </code>
+    /// </example>
+    [AspireExport(RunSyncOnBackgroundThread = true)]
+    public static IResourceBuilder<AksNodePoolResource> AddNodePool(
+        this IResourceBuilder<AzureKubernetesEnvironmentResource> builder,
+        [ResourceName] string name,
+        Action<AksNodePoolConfig> configure)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentNullException.ThrowIfNull(configure);
+
+        var config = new AksNodePoolConfig(name, "Standard_D2s_v5", 1, 3, AksNodePoolMode.User);
+        configure(config);
         builder.Resource.NodePools.Add(config);
 
         var nodePool = new AksNodePoolResource(name, config, builder.Resource);
@@ -215,7 +327,7 @@ public static class AzureKubernetesEnvironmentExtensions
     ///     .WithSystemNodePool("Standard_B2s", minCount: 2, maxCount: 5);
     /// </code>
     /// </example>
-    [AspireExport]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the system node pool configuration callback overload.")]
     public static IResourceBuilder<AzureKubernetesEnvironmentResource> WithSystemNodePool(
         this IResourceBuilder<AzureKubernetesEnvironmentResource> builder,
         string vmSize = "Standard_D2s_v5",
@@ -228,11 +340,63 @@ public static class AzureKubernetesEnvironmentExtensions
         ArgumentOutOfRangeException.ThrowIfLessThan(maxCount, 1);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(minCount, maxCount);
 
-        // Remove existing system pool(s) and replace with the new configuration
+        return builder.WithSystemNodePool(options =>
+        {
+            options.VmSize = vmSize;
+            options.MinCount = minCount;
+            options.MaxCount = maxCount;
+        });
+    }
+
+    /// <summary>
+    /// Replaces the system node pool using a configuration callback.
+    /// </summary>
+    /// <param name="builder">The AKS environment resource builder.</param>
+    /// <param name="configure">A callback to configure VM size, autoscaling, and OS SKU.</param>
+    /// <returns>The AKS environment resource builder for chaining.</returns>
+    /// <remarks>
+    /// Each call replaces the previous system pool configuration, starting with default VM size and node counts.
+    /// Configuration remains mutable and is validated during infrastructure generation.
+    /// Omitting the OS SKU leaves AKS to choose its default.
+    /// </remarks>
+    /// <exception cref="ArgumentNullException">The builder or callback is null.</exception>
+    /// <example>
+    /// <code>
+    /// var aks = builder.AddAzureKubernetesEnvironment("aks")
+    ///     .WithSystemNodePool(pool =>
+    ///     {
+    ///         pool.VmSize = "Standard_D2as_v5";
+    ///         pool.OsSku = "AzureLinux";
+    ///     });
+    /// </code>
+    /// </example>
+    [AspireExport(RunSyncOnBackgroundThread = true)]
+    public static IResourceBuilder<AzureKubernetesEnvironmentResource> WithSystemNodePool(
+        this IResourceBuilder<AzureKubernetesEnvironmentResource> builder,
+        Action<AksNodePoolConfig> configure)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(configure);
+
+        var config = new AksNodePoolConfig("system", "Standard_D2s_v5", 1, 3, AksNodePoolMode.System);
+        configure(config);
         builder.Resource.NodePools.RemoveAll(p => p.Mode is AksNodePoolMode.System);
-        builder.Resource.NodePools.Insert(0, new AksNodePoolConfig("system", vmSize, minCount, maxCount, AksNodePoolMode.System));
+        builder.Resource.NodePools.Insert(0, config);
 
         return builder;
+    }
+
+    private static void ValidateNodePoolConfig(AksNodePoolConfig config)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(config.VmSize, nameof(config.VmSize));
+        var minimumCount = config.Mode is AksNodePoolMode.System ? 1 : 0;
+        ArgumentOutOfRangeException.ThrowIfLessThan(config.MinCount, minimumCount, nameof(config.MinCount));
+        ArgumentOutOfRangeException.ThrowIfLessThan(config.MaxCount, minimumCount, nameof(config.MaxCount));
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(config.MinCount, config.MaxCount, nameof(config.MinCount));
+        if (config.OsSku is not null)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(config.OsSku, nameof(config.OsSku));
+        }
     }
 
     /// <summary>
@@ -353,10 +517,6 @@ public static class AzureKubernetesEnvironmentExtensions
         builder.Resource.KubernetesEnvironment.Annotations.Add(
             new ContainerRegistryReferenceAnnotation(registry.Resource));
 
-        // Update the acrName parameter to reference the explicit registry's output
-        // (replaces the default ACR reference set during AddAzureKubernetesEnvironment)
-        builder.Resource.Parameters["acrName"] = registry.Resource.NameOutputReference;
-
         return builder;
     }
 
@@ -385,9 +545,9 @@ public static class AzureKubernetesEnvironmentExtensions
     /// <para>
     /// Calling this method opts the AKS cluster into the managed Gateway API installation
     /// (<c>ingressProfile.gatewayAPI.installation = 'Standard'</c>) and the AGC ALB controller
-    /// add-on (<c>ingressProfile.applicationLoadBalancer.enabled = true</c>). Both properties
-    /// only exist in preview AKS Bicep API versions (oldest covering both: <c>2025-09-02-preview</c>),
-    /// so this implicitly bumps the cluster's emitted API version. Subscriptions/regions where
+    /// add-on (<c>ingressProfile.applicationLoadBalancer.enabled = true</c>). The application
+    /// load balancer property requires a preview AKS Bicep API version, so this implicitly
+    /// uses <c>2026-07-02-preview</c> for the cluster's emitted API version. Subscriptions/regions where
     /// the AKS preview features <c>Microsoft.ContainerService/AKSGatewayAPIPreview</c> and
     /// <c>Microsoft.ContainerService/AKSAppGatewayContainersPreview</c> are not registered will
     /// see deployment failures.
@@ -521,11 +681,32 @@ public static class AzureKubernetesEnvironmentExtensions
             Sku = new ManagedClusterSku
             {
                 Name = ManagedClusterSkuName.Base,
-                Tier = ManagedClusterSkuTier.Free
+                Tier = ManagedClusterSkuTier.Standard
             },
             DnsPrefix = $"{aksResource.Name}-dns",
             Tags = { { "aspire-resource-name", aksResource.Name } }
         };
+
+        if (aksResource.ControlPlaneIdentity is { } controlPlaneIdentity &&
+            aksResource.KubeletIdentity is { } kubeletIdentity)
+        {
+            var controlPlane = (UserAssignedIdentity)controlPlaneIdentity.AddAsExistingResource(infrastructure);
+            var kubelet = (UserAssignedIdentity)kubeletIdentity.AddAsExistingResource(infrastructure);
+            aks.ClusterIdentity = new ManagedClusterIdentity
+            {
+                IdentityType = ManagedServiceIdentityType.UserAssigned,
+                UserAssignedIdentities =
+                {
+                    [BicepFunction.Interpolate($"{controlPlane.Id}").Compile().ToString()] = new ManagedServiceIdentityUserAssignedIdentitiesValue()
+                }
+            };
+            aks.IdentityProfile["kubeletidentity"] = new ContainerServiceUserAssignedIdentity
+            {
+                ResourceId = kubelet.Id,
+                ClientId = kubelet.ClientId,
+                ObjectId = kubelet.PrincipalId
+            };
+        }
 
         if (aksResource.KubernetesVersion is not null)
         {
@@ -556,6 +737,8 @@ public static class AzureKubernetesEnvironmentExtensions
 
         foreach (var pool in aksResource.NodePools)
         {
+            ValidateNodePoolConfig(pool);
+
             var mode = pool.Mode switch
             {
                 AksNodePoolMode.System => AgentPoolMode.System,
@@ -574,6 +757,12 @@ public static class AzureKubernetesEnvironmentExtensions
                 Mode = mode,
                 OSType = ContainerServiceOSType.Linux,
             };
+
+            if (pool.OsSku is not null)
+            {
+                // Use a literal expression so newer Azure SKUs are not limited by the SDK's enum.
+                agentPool.OSSku = new StringLiteralExpression(pool.OsSku);
+            }
 
             // Per-pool subnet override, else environment default
             if (poolSubnetParams.TryGetValue(pool.Name, out var poolSubnetParam))
@@ -650,56 +839,25 @@ public static class AzureKubernetesEnvironmentExtensions
 
         infrastructure.Add(aks);
 
-        // Surface the preview-only ingress profile properties for AGC / managed Gateway API.
-        // We bump to the oldest preview API version that has both gatewayAPI and
-        // applicationLoadBalancer; the injection itself is reflection-based because the
-        // Azure.Provisioning.ContainerService types that own these properties are internal.
-        // The xmldoc on AksPreviewIngressProfileInjector documents the public DefineProperty /
-        // DefineModelProperty alternatives that were tried and empirically ruled out.
-        if (aksResource.RequiresPreviewIngressApi)
+        if (aksResource.GatewayApiEnabled || aksResource.ApplicationLoadBalancerEnabled)
         {
-            aks.ResourceVersion = "2025-09-02-preview";
-            AksPreviewIngressProfileInjector.Inject(
-                aks,
-                gatewayApi: aksResource.GatewayApiEnabled,
-                applicationLoadBalancer: aksResource.ApplicationLoadBalancerEnabled);
-        }
-
-        // ACR pull role assignment for kubelet identity
-        if (aksResource.DefaultContainerRegistry is not null || aksResource.TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out _))
-        {
-            var acrNameParam = new ProvisioningParameter("acrName", typeof(string));
-            infrastructure.Add(acrNameParam);
-
-            var acr = ContainerRegistryService.FromExisting("acr");
-            acr.Name = acrNameParam;
-            infrastructure.Add(acr);
-
-            // AcrPull role: 7f951dda-4ed3-4680-a7ca-43fe172d538d
-            var acrPullRoleId = BicepFunction.GetSubscriptionResourceId(
-                "Microsoft.Authorization/roleDefinitions",
-                "7f951dda-4ed3-4680-a7ca-43fe172d538d");
-
-            // Access kubelet identity objectId via property path
-            var kubeletObjectId = new MemberExpression(
-                new MemberExpression(
-                    new MemberExpression(
-                        new MemberExpression(
-                            new IdentifierExpression(aks.BicepIdentifier),
-                            "properties"),
-                        "identityProfile"),
-                    "kubeletidentity"),
-                "objectId");
-
-            var roleAssignment = new RoleAssignment("acrPullRole")
+            // Only applicationLoadBalancer requires the latest preview counterpart of
+            // the SDK's stable API version. Gateway API alone uses the stable default.
+            if (aksResource.RequiresPreviewIngressApi)
             {
-                Name = BicepFunction.CreateGuid(acr.Id, aks.Id, acrPullRoleId),
-                Scope = new IdentifierExpression(acr.BicepIdentifier),
-                RoleDefinitionId = acrPullRoleId,
-                PrincipalId = kubeletObjectId,
-                PrincipalType = RoleManagementPrincipalType.ServicePrincipal
-            };
-            infrastructure.Add(roleAssignment);
+                aks.ResourceVersion = "2026-07-02-preview";
+            }
+
+            var ingressProfile = new AksPreviewIngressProfile();
+            if (aksResource.GatewayApiEnabled)
+            {
+                ingressProfile.GatewayApiInstallation = ManagedGatewayType.Standard;
+            }
+            if (aksResource.ApplicationLoadBalancerEnabled)
+            {
+                ingressProfile.ApplicationLoadBalancerEnabled = true;
+            }
+            aks.IngressProfile = ingressProfile;
         }
 
         // AGC ALB controller subnet role assignments. AKS auto-creates a managed identity

@@ -8,6 +8,18 @@ const kusto = await builder.addAzureKustoCluster("kusto").runAsEmulator({
     }
 });
 
+await kusto.configureInfrastructure(async infrastructure => {
+    const cluster = await infrastructure.getKustoCluster();
+    await cluster.isStreamingIngestEnabled.set(true);
+    const _streamingIngest = await cluster.isStreamingIngestEnabled.get();
+    const database = await infrastructure.addKustoReadWriteDatabase("proxyDatabase");
+    await database.parent.set(cluster);
+    await database.name.set("ProxyDatabase");
+    const _databaseName = await database.name.get();
+    // AddTo is also exported on derived resources; re-adding to the same infrastructure is idempotent.
+    await database.addTo(infrastructure);
+});
+
 const defaultDatabase = await kusto.addReadWriteDatabase("samples");
 const customDatabase = await kusto.addReadWriteDatabase("analytics", { databaseName: "AnalyticsDb" });
 

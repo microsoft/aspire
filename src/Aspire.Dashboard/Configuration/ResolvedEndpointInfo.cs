@@ -31,7 +31,8 @@ public record ResolvedEndpointInfo(BindingAddress BindingAddress, IPEndPoint End
         static bool IsAnyIPHost(string host)
         {
             // It's ok to use IPAddress.ToString here because the string is cached inside IPAddress.
-            return host == "*" || host == "+" || host == IPAddress.Any.ToString() || host == IPAddress.IPv6Any.ToString();
+            // BindingAddress retains the brackets in an IPv6 URL host, for example http://[::]:4317.
+            return host is "*" or "+" or "[::]" || host == IPAddress.Any.ToString() || host == IPAddress.IPv6Any.ToString();
         }
     }
 }

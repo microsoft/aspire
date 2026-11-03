@@ -1,12 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Microsoft.AspNetCore.InternalTesting;
-using Microsoft.Extensions.Configuration;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.OpenCode;
-using Aspire.Cli.Agents.Playwright;
-using Aspire.Cli.Tests.TestServices;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Semver;
 
@@ -14,107 +11,63 @@ namespace Aspire.Cli.Tests.Agents;
 
 public class OpenCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
 {
-    [Fact]
-    public async Task ApplyAsync_WithMalformedOpenCodeJsonc_ThrowsInvalidOperationException()
+    [Theory]
+    [InlineData("opencode.json", "{ invalid json content")]
+    [InlineData("opencode.json", "")]
+    [InlineData("opencode.json", """{"mcp":{"aspire":{"command":["custom-aspire"]}}}""")]
+    [InlineData("opencode.jsonc", "{ invalid json content")]
+    [InlineData("opencode.jsonc", "")]
+    [InlineData("opencode.jsonc", """{"mcp":{"aspire":{"command":["custom-aspire"]}}}""")]
+    public async Task ScanAsync_WithProjectConfiguration_DetectsOpenCodeWithoutParsingOrModifyingFile(string fileName, string content)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-
-        // Create a malformed opencode.jsonc at the workspace root
-        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, "opencode.jsonc");
-        await File.WriteAllTextAsync(configPath, "{ invalid json content");
-
-        var openCodeCliRunner = new FakeOpenCodeCliRunner(new SemVersion(1, 0, 0));
-        var scanner = new OpenCodeAgentEnvironmentScanner(openCodeCliRunner, CreatePlaywrightCliInstaller(), NullLogger<OpenCodeAgentEnvironmentScanner>.Instance);
-        var context = CreateScanContext(workspace.WorkspaceRoot);
-
-        await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
-
-        // The scan should succeed (HasServerConfigured catches JsonException)
-        Assert.NotEmpty(context.Applicators);
-        var aspireApplicator = context.Applicators.First(a => a.Description.Contains("Aspire MCP"));
-
-        // Applying should throw with a descriptive message
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => aspireApplicator.ApplyAsync(CancellationToken.None)).DefaultTimeout();
-        Assert.Contains(configPath, ex.Message);
-        Assert.Contains("malformed JSON", ex.Message);
-    }
-
-    [Fact]
-    public async Task ApplyAsync_WithEmptyOpenCodeJsonc_ThrowsInvalidOperationException()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-
-        // Create an empty opencode.jsonc
-        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, "opencode.jsonc");
-        await File.WriteAllTextAsync(configPath, "");
-
-        var openCodeCliRunner = new FakeOpenCodeCliRunner(new SemVersion(1, 0, 0));
-        var scanner = new OpenCodeAgentEnvironmentScanner(openCodeCliRunner, CreatePlaywrightCliInstaller(), NullLogger<OpenCodeAgentEnvironmentScanner>.Instance);
-        var context = CreateScanContext(workspace.WorkspaceRoot);
-
-        await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
-
-        Assert.NotEmpty(context.Applicators);
-        var aspireApplicator = context.Applicators.First(a => a.Description.Contains("Aspire MCP"));
-
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => aspireApplicator.ApplyAsync(CancellationToken.None)).DefaultTimeout();
-        Assert.Contains(configPath, ex.Message);
-    }
-
-    [Fact]
-    public async Task ApplyAsync_WithMalformedOpenCodeJsonc_DoesNotOverwriteFile()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-
-        // Create a malformed opencode.jsonc with content the user may want to preserve
-        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, "opencode.jsonc");
-        var originalContent = "{ \"mcp\": { \"my-server\": { \"command\": [\"test\"] } }";
-        await File.WriteAllTextAsync(configPath, originalContent);
-
-        var openCodeCliRunner = new FakeOpenCodeCliRunner(new SemVersion(1, 0, 0));
-        var scanner = new OpenCodeAgentEnvironmentScanner(openCodeCliRunner, CreatePlaywrightCliInstaller(), NullLogger<OpenCodeAgentEnvironmentScanner>.Instance);
-        var context = CreateScanContext(workspace.WorkspaceRoot);
-
-        await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
-
-        Assert.NotEmpty(context.Applicators);
-        var aspireApplicator = context.Applicators.First(a => a.Description.Contains("Aspire MCP"));
-
-        await Assert.ThrowsAsync<InvalidOperationException>(
-            () => aspireApplicator.ApplyAsync(CancellationToken.None)).DefaultTimeout();
-
-        // The original file content should be preserved
-        var currentContent = await File.ReadAllTextAsync(configPath);
-        Assert.Equal(originalContent, currentContent);
-    }
-
-    private static AgentEnvironmentScanContext CreateScanContext(
-        DirectoryInfo workingDirectory)
-    {
-        return new AgentEnvironmentScanContext
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, fileName);
+        await File.WriteAllTextAsync(configPath, content);
+        var runner = new FakeOpenCodeCliRunner(null);
+        var scanner = new OpenCodeAgentEnvironmentScanner(runner, NullLogger<OpenCodeAgentEnvironmentScanner>.Instance);
+        var context = new AgentEnvironmentScanContext
         {
-            WorkingDirectory = workingDirectory,
-            RepositoryRoot = workingDirectory
+            WorkingDirectory = workspace.WorkspaceRoot,
+            RepositoryRoot = workspace.WorkspaceRoot
         };
+
+        var environments = await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(AgentEnvironment.OpenCode, environments);
+        Assert.False(runner.WasCalled);
+        Assert.Equal(content, await File.ReadAllTextAsync(configPath));
     }
 
-    private static PlaywrightCliInstaller CreatePlaywrightCliInstaller()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ScanAsync_WithoutProjectConfiguration_ProbesCliWithoutCreatingFile(bool cliInstalled)
     {
-        return new PlaywrightCliInstaller(
-            new FakeNpmRunner(),
-            new FakeNpmProvenanceChecker(),
-            new FakePlaywrightCliRunner(),
-            new TestInteractionService(),
-            new ConfigurationBuilder().Build(),
-            NullLogger<PlaywrightCliInstaller>.Instance);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var runner = new FakeOpenCodeCliRunner(cliInstalled ? new SemVersion(1, 0, 0) : null);
+        var scanner = new OpenCodeAgentEnvironmentScanner(runner, NullLogger<OpenCodeAgentEnvironmentScanner>.Instance);
+        var context = new AgentEnvironmentScanContext
+        {
+            WorkingDirectory = workspace.WorkspaceRoot,
+            RepositoryRoot = workspace.WorkspaceRoot
+        };
+        var before = Directory.GetFileSystemEntries(workspace.WorkspaceRoot.FullName, "*", SearchOption.AllDirectories);
+
+        var environments = await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(cliInstalled ? AgentEnvironment.OpenCode : AgentEnvironment.None, environments);
+        Assert.True(runner.WasCalled);
+        Assert.Equal(before, Directory.GetFileSystemEntries(workspace.WorkspaceRoot.FullName, "*", SearchOption.AllDirectories));
     }
 
     private sealed class FakeOpenCodeCliRunner(SemVersion? version) : IOpenCodeCliRunner
     {
+        public bool WasCalled { get; private set; }
+
         public Task<SemVersion?> GetVersionAsync(CancellationToken cancellationToken)
         {
+            WasCalled = true;
+
             return Task.FromResult(version);
         }
     }

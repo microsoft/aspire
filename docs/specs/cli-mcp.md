@@ -172,6 +172,36 @@ The MCP server uses a dual-mechanism approach for discovering and connecting to 
 
 ## Tools & Capabilities
 
+### CLI-backed resource discovery
+
+The current CLI implements `list_resources` directly against the selected AppHost's
+backchannel. It accepts optional `offset` (a nonnegative integer, default `0`) and
+`limit` (an integer from `1` through `64`, default `64`).
+
+Resources are ordered by their exact runtime name, using ordinal comparison. Hidden
+resources and resources excluded from MCP are filtered before pagination. The
+response retains the JSON resource array under `# RESOURCE DATA` and adds a JSON
+object under `# PAGINATION` containing `offset`, `limit`, `total`, and `next_offset`.
+`next_offset` is omitted on the final page. An offset beyond the current resource
+count returns an empty array with no next offset. Continue with the returned
+`next_offset` and the same `limit`; each call reads current state, so restart at
+offset `0` if resources are added or removed while paging. Dependencies and
+relationships can refer to resources on other pages.
+
+Each resource's `commands` object is keyed by the exact names accepted by
+`execute_resource_command`. It includes enabled and disabled API-visible commands,
+their state, bounded descriptions, and `argument_inputs`: names, input types,
+required/disabled flags, text length constraints, choice options, and dynamic
+loading dependencies. Hidden and UI-only commands are omitted. Command and argument
+identifiers, choice keys, and their collections remain complete so callers can
+construct an invocation; use a smaller resource `limit` for resources with extensive
+command metadata.
+
+The MCP projection never includes current/default input values, placeholders,
+environment values, or arbitrary resource properties. Choice options are emitted
+only for choice inputs, never secret inputs. Descriptions and choice labels are
+limited to 256 Unicode scalar values.
+
 ### MVP Approach
 
 **Static tool list matching Dashboard**: The CLI MCP server exposes the **same tools** as the Dashboard MCP server, forwarding invocations to the Dashboard for execution.

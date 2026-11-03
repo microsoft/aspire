@@ -3,7 +3,7 @@
 
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
-using Microsoft.AspNetCore.Mvc;
+using Aspire.Dashboard.Utils;
 using OpenTelemetry.Proto.Collector.Trace.V1;
 
 namespace Aspire.Dashboard.Otlp;

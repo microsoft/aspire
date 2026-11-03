@@ -12,6 +12,8 @@
   <ItemGroup>
     <Compile Include="..\Common\HealthChecksExtensions.cs" Link="HealthChecksExtensions.cs" />
     <Compile Include="..\Common\ConfigurationSchemaAttributes.cs" Link="ConfigurationSchemaAttributes.cs" />
+    <Compile Include="..\Common\ConnectionStringConfigurationExtensions.cs" Link="ConnectionStringConfigurationExtensions.cs" />
+    <Compile Include="$(SharedDir)EnvironmentVariableNameEncoder.cs" Link="EnvironmentVariableNameEncoder.cs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -28,7 +30,7 @@
     <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.AutoActivation" />
     <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" />
-    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Condition="'$(TargetFramework)' == 'net10.0'" />
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
     <PackageReference Include="StackExchange.Redis" />
   </ItemGroup>

@@ -7,14 +7,14 @@ import { extensionLogOutputChannel } from "../../utils/logging";
 import { ResourceDebuggerExtension } from "../debuggerExtensions";
 import { getJavaScriptRuntimeDisplayName, getJavaScriptRuntimeTargetPath, jsRuntimeBaseFileTypes, launchMethodDirect, launchMethodPackageManager, resolveJavaScriptLaunchMethod } from "./javascriptRuntime";
 
-// Deno exposes a V8 inspector; --inspect-wait blocks execution until a debugger attaches (unlike
-// --inspect-brk it guarantees no early code — including module top-level — runs before attach, which
-// is what makes IDE attach reliable).
+// Deno exposes a V8 inspector. Use --inspect-brk for IDE launches so the runtime remains paused at
+// the first line while js-debug configures user breakpoints. js-debug's simple-port launch path sets
+// continueOnAttach, so it resumes automatically after configuration without surfacing the entry pause.
 const denoInspectorHost = '127.0.0.1';
 const reservedDenoInspectorPorts = new Set<number>();
 
-// Deno sub-commands that accept runtime flags (so --inspect-wait must be inserted AFTER this token,
-// not before it — `deno --inspect-wait run` is invalid).
+// Deno sub-commands that accept runtime flags (so --inspect-brk must be inserted AFTER this token,
+// not before it — `deno --inspect-brk run` is invalid).
 const denoSubcommandsAcceptingRuntimeFlags = new Set(['run', 'serve', 'test', 'bench']);
 const denoFlagsWithSeparateValue = new Set(['--cert', '--config', '--env-file', '--import-map', '--lock', '--location', '--v8-flags']);
 
@@ -174,7 +174,7 @@ function registerDenoInspectorPortRelease(port: number, launchOptions: LaunchOpt
 }
 
 /**
- * Injects `--inspect-wait` into a Deno argument vector so VS Code's built-in js-debug (pwa-node) can
+ * Injects `--inspect-brk` into a Deno argument vector so VS Code's built-in js-debug (pwa-node) can
  * attach. The flag is placed immediately after a leading sub-command that accepts runtime flags
  * (run/serve/test/bench) so it is parsed as a runtime flag rather than a script argument. `deno task`
  * does not accept inspector flags, so debug task launches fail fast instead of starting a
@@ -182,7 +182,7 @@ function registerDenoInspectorPortRelease(port: number, launchOptions: LaunchOpt
  * with a concrete nonzero port is preserved; a bare flag or port 0 is rewritten with an allocated
  * port so js-debug has a usable attach target.
  */
-async function withDenoInspectWait(args: string[], config: JavaScriptRuntimeLaunchConfiguration, launchOptions: LaunchOptions): Promise<{ runtimeArgs: string[]; port?: number }> {
+async function withDenoInspector(args: string[], config: JavaScriptRuntimeLaunchConfiguration, launchOptions: LaunchOptions): Promise<{ runtimeArgs: string[]; port?: number }> {
     if (!launchOptions.debug) {
         return { runtimeArgs: [...args] };
     }
@@ -209,7 +209,7 @@ async function withDenoInspectWait(args: string[], config: JavaScriptRuntimeLaun
     registerDenoInspectorPortRelease(port, launchOptions);
     const runtimeArgs = [...args];
     const insertAt = runtimeArgs.length > 0 && denoSubcommandsAcceptingRuntimeFlags.has(runtimeArgs[0]) ? 1 : 0;
-    runtimeArgs.splice(insertAt, 0, `--inspect-wait=${denoInspectorHost}:${port}`);
+    runtimeArgs.splice(insertAt, 0, `--inspect-brk=${denoInspectorHost}:${port}`);
     return { runtimeArgs, port };
 }
 
@@ -247,12 +247,12 @@ export const denoDebuggerExtension: ResourceDebuggerExtension = {
             throw new Error(denoTaskDebuggingUnsupported);
         }
 
-        const { runtimeArgs, port } = await withDenoInspectWait(args ?? [], config, launchOptions);
+        const { runtimeArgs, port } = await withDenoInspector(args ?? [], config, launchOptions);
         debugConfiguration.runtimeArgs = runtimeArgs;
 
         if (port !== undefined) {
             // attachSimplePort tells js-debug to spawn the runtime and then attach to this inspector port
-            // rather than expecting a Node bootstrap. Paired with --inspect-wait this is the reliable
+            // rather than expecting a Node bootstrap. Paired with --inspect-brk this is the reliable
             // Deno attach path.
             debugConfiguration.attachSimplePort = port;
         }

@@ -9,7 +9,7 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	milvus := builder.AddMilvus("milvus")
@@ -21,7 +21,7 @@ func main() {
 
 	db := milvus.AddDatabase("mydb")
 	if err = db.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	milvus.AddDatabase("db2", &aspire.AddDatabaseOptions{DatabaseName: aspire.StringPtr("customdb")})
@@ -55,7 +55,7 @@ func main() {
 	api.WithReference(db)
 	api.WithReference(milvus)
 	if err = api.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	_ = milvus.PrimaryEndpoint()
@@ -67,14 +67,14 @@ func main() {
 	_, _ = milvus.Databases()
 
 	if err = milvus.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	if err := app.Run(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 }

@@ -151,19 +151,22 @@ try {
     Expand-Nupkg $ridPackage $ridExtract
     Expand-Nupkg $pointerPackage $pointerExtract
 
-    # Discover the TFM from the nupkg layout (tools/<tfm>/<rid>/) rather than
-    # hardcoding it. dotnet pack produces exactly one tfm directory per RID nupkg.
+    # The RID package must use the TFM-agnostic tools/any/<rid>/ layout. eng/clipack packs it as
+    # self-contained for exactly this reason: a tools/<tfm>/ folder such as tools/net11.0/ can only be
+    # installed by an SDK at least that new, so older SDKs (e.g. .NET 10) fail `dotnet tool install`
+    # with "Settings file 'DotnetToolSettings.xml' was not found in the package". The packaging
+    # workflows run with the repo's (newer) SDK, so this layout check is the guard against regressing.
+    $tfm = 'any'
     $toolsDir = Join-Path $ridExtract 'tools'
     if (-not (Test-Path -LiteralPath $toolsDir -PathType Container)) {
         throw "RID package $($ridPackage.Name) is missing the 'tools/' directory."
     }
-    $tfmDirs = Get-ChildItem -Path $toolsDir -Directory -ErrorAction SilentlyContinue
-    if (-not $tfmDirs -or $tfmDirs.Count -ne 1) {
-        $found = if ($tfmDirs) { ($tfmDirs.Name -join ', ') } else { '(none)' }
-        throw "RID package $($ridPackage.Name) must contain exactly one tools/<tfm>/ directory; found: $found."
+    $tfmDirs = @(Get-ChildItem -Path $toolsDir -Directory -ErrorAction SilentlyContinue)
+    if ($tfmDirs.Count -ne 1 -or $tfmDirs[0].Name -ne $tfm) {
+        $found = if ($tfmDirs.Count -gt 0) { ($tfmDirs.Name -join ', ') } else { '(none)' }
+        throw "RID package $($ridPackage.Name) must contain exactly one 'tools/$tfm/' directory so any SDK version can install it; found: $found. Ensure the RID-specific tool is packed with SelfContained=true (see _PackRidSpecificDotnetTool in eng/clipack/Common.projitems)."
     }
-    $tfm = $tfmDirs[0].Name
-    Write-Step "Detected TFM: $tfm"
+    Write-Step "RID package uses the TFM-agnostic 'tools/$tfm/$Rid/' layout."
 
     $binaryName = if ($Rid -like 'win-*') { 'aspire.exe' } else { 'aspire' }
     $toolBinary = Get-ChildItem -Path $ridExtract -Recurse -File -Filter $binaryName -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -204,7 +207,7 @@ try {
     }
 
     # The install-source sidecar (.aspire-install.json) MUST live next to the
-    # binary in the RID-specific nupkg at tools/<tfm>/<rid>/. The CLI reads it
+    # binary in the RID-specific nupkg at tools/any/<rid>/. The CLI reads it
     # to identify the install source; a missing sidecar leaves
     # 'aspire update --self' unable to delegate.
     $expectedSidecarPath = "tools/$tfm/$Rid/.aspire-install.json"
@@ -257,9 +260,15 @@ try {
         throw "Pointer package $($pointerPackage.Name) is missing a nuspec."
     }
 
-    $pointerToolSettings = Get-ChildItem -Path $pointerExtract -Recurse -File -Filter 'DotnetToolSettings.xml' -ErrorAction SilentlyContinue | Select-Object -First 1
+    # The pointer package must also be TFM-agnostic (tools/any/any/) so any SDK version can resolve it
+    # to the RID-specific package.
+    $expectedPointerToolSettingsPath = 'tools/any/any/DotnetToolSettings.xml'
+    $pointerToolSettings = Get-Item -LiteralPath (Join-Path $pointerExtract $expectedPointerToolSettingsPath.Replace('/', [System.IO.Path]::DirectorySeparatorChar)) -ErrorAction SilentlyContinue
     if (-not $pointerToolSettings) {
-        throw "Pointer package $($pointerPackage.Name) is missing DotnetToolSettings.xml."
+        $foundPointerToolSettings = Get-ChildItem -Path $pointerExtract -Recurse -File -Filter 'DotnetToolSettings.xml' -ErrorAction SilentlyContinue |
+            ForEach-Object { $_.FullName.Substring($pointerExtract.Length + 1).Replace('\', '/') }
+        $found = if ($foundPointerToolSettings) { $foundPointerToolSettings -join ', ' } else { '(none)' }
+        throw "Pointer package $($pointerPackage.Name) must contain '$expectedPointerToolSettingsPath'; found: $found."
     }
 
     $pointerToolSettingsXml = [xml](Get-Content -Path $pointerToolSettings.FullName -Raw)

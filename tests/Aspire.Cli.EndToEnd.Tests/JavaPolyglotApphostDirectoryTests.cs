@@ -57,7 +57,7 @@ public sealed class JavaPolyglotApphostDirectoryTests(ITestOutputHelper output)
         await auto.WaitUntilTextAsync("Created AppHost.java", timeout: TimeSpan.FromMinutes(2));
         await auto.DeclineAgentInitPromptAsync(counter);
 
-        await auto.TypeAsync("npm create -y vite@latest viteapp -- --template vanilla-ts --no-interactive");
+        await auto.TypeAsync(ViteTestHelpers.GetCreateCommand("viteapp"));
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 

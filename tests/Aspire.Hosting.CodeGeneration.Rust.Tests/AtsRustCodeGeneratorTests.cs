@@ -1,10 +1,12 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Reflection;
 using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.RemoteHost;
+using Aspire.TestUtilities;
 using Aspire.TypeSystem;
 using Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes;
 
@@ -40,6 +42,104 @@ public class AtsRustCodeGeneratorTests
 
         await Verify(files["aspire.rs"], extension: "rs")
             .UseFileName("AtsGeneratedAspire");
+    }
+
+    [Fact]
+    [RequiresTools(["cargo"])]
+    public async Task GeneratedTerminalCallback_SupportsDefaultsAndCamelCaseDtos()
+    {
+        var directory = Directory.CreateTempSubdirectory();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+        try
+        {
+            var files = _generator.GenerateDistributedApplication(CreateContextFromBothAssemblies());
+            foreach (var (name, content) in files)
+            {
+                await File.WriteAllTextAsync(Path.Combine(directory.FullName, name), content, timeout.Token);
+            }
+            await File.WriteAllTextAsync(Path.Combine(directory.FullName, "Cargo.toml"), """
+                [package]
+                name = "terminal_callback_probe"
+                version = "0.1.0"
+                edition = "2021"
+
+                [lib]
+                path = "mod.rs"
+
+                [[test]]
+                name = "terminal"
+                path = "terminal.rs"
+
+                [dependencies]
+                serde = { version = "1.0", features = ["derive"] }
+                serde_json = "1.0"
+                lazy_static = "1.4"
+                """, timeout.Token);
+            await File.WriteAllTextAsync(Path.Combine(directory.FullName, "terminal.rs"), """
+                use terminal_callback_probe::{ExecutableResource, TerminalOptions};
+                use serde_json::json;
+
+                // Compile default-preserving and configured callbacks without a running AppHost.
+                fn configure_resource(resource: &ExecutableResource) {
+                    let _ = resource.with_terminal(|_| serde_json::Value::Null);
+                    let _ = resource.with_terminal(|args| {
+                        let mut options: TerminalOptions = serde_json::from_value(args[0].clone()).unwrap();
+                        options.columns = 200.0;
+                        json!({"p0": options.to_map()})
+                    });
+                }
+
+                #[test]
+                fn terminal_dto_round_trip() {
+                    let mut options: TerminalOptions = serde_json::from_value(
+                        json!({"columns": 132, "rows": 50})
+                    ).unwrap();
+                    assert_eq!(options.columns, 132.0);
+                    assert_eq!(options.rows, 50.0);
+                    options.columns = 200.0;
+                    let expected = json!({"columns": 200.0, "rows": 50.0});
+                    assert_eq!(serde_json::to_value(options.to_map()).unwrap(), expected);
+                    assert_eq!(serde_json::to_value(&options).unwrap(), expected);
+
+                    // Exported-value metadata still uses CLR names.
+                    let exported: TerminalOptions = serde_json::from_value(
+                        json!({"Columns": 132, "Rows": 50})
+                    ).unwrap();
+                    assert_eq!(exported.rows, 50.0);
+                }
+                """, timeout.Token);
+            using var process = new Process
+            {
+                StartInfo = new ProcessStartInfo("cargo")
+                {
+                    WorkingDirectory = directory.FullName,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    ArgumentList = { "test", "--quiet", "--test", "terminal" }
+                }
+            };
+            process.Start();
+            var stdout = process.StandardOutput.ReadToEndAsync(timeout.Token);
+            var stderr = process.StandardError.ReadToEndAsync(timeout.Token);
+            try
+            {
+                await process.WaitForExitAsync(timeout.Token);
+                Assert.True(process.ExitCode == 0, $"Rust terminal callback test failed:{Environment.NewLine}{await stdout}{await stderr}");
+            }
+            finally
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                    await process.WaitForExitAsync();
+                }
+            }
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
     }
 
     [Fact]

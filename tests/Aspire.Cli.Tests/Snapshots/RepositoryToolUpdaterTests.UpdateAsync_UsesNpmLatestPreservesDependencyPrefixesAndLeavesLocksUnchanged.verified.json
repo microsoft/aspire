@@ -1,0 +1,25 @@
+﻿{
+  "name": "app",
+  "private": true,
+  "scripts": {
+    "start": "aspire run",
+    "other": "echo untouched"
+  },
+  "dependencies": {
+    "@microsoft/aspire-cli": "13.4.0",
+    "other-package": "^2.0.0"
+  },
+  "devDependencies": {
+    "@microsoft/aspire-cli": "^13.4.0",
+    "typescript": "~5.9.0"
+  },
+  "optionalDependencies": {
+    "@microsoft/aspire-cli": "~13.4.0"
+  },
+  "custom": {
+    "keep": [
+      "one",
+      "two"
+    ]
+  }
+}

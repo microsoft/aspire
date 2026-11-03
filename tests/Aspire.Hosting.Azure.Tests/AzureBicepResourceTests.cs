@@ -1,9 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES001
-#pragma warning disable ASPIREAZURE001
-
 using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
@@ -18,7 +15,7 @@ public class AzureBicepResourceTests(ITestOutputHelper outputHelper)
     [Fact]
     public void AddBicepResource()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
 
         var bicepResource = builder.AddBicepTemplateString("mytemplate", "content")
                                    .WithParameter("param1", "value1")
@@ -74,7 +71,7 @@ public class AzureBicepResourceTests(ITestOutputHelper outputHelper)
     [MemberData(nameof(AzureExtensions))]
     public void AzureExtensionsAutomaticallyAddAzureProvisioning(Func<IDistributedApplicationBuilder, IResourceBuilder<IResource>> addAzureResource)
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
         addAzureResource(builder);
 
         var app = builder.Build();
@@ -86,7 +83,7 @@ public class AzureBicepResourceTests(ITestOutputHelper outputHelper)
     [MemberData(nameof(AzureExtensions))]
     public void BicepResourcesAreIdempotent(Func<IDistributedApplicationBuilder, IResourceBuilder<IResource>> addAzureResource)
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
         var azureResourceBuilder = addAzureResource(builder);
 
         if (azureResourceBuilder.Resource is not AzureProvisioningResource bicepResource)
@@ -107,7 +104,7 @@ public class AzureBicepResourceTests(ITestOutputHelper outputHelper)
     [MemberData(nameof(AzureExtensionsWithHyphen))]
     public void AzureResourcesProduceValidBicep(Func<IDistributedApplicationBuilder, IResourceBuilder<IResource>> addAzureResource)
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
         var azureResourceBuilder = addAzureResource(builder);
 
         if (azureResourceBuilder.Resource is not AzureProvisioningResource bicepResource)
@@ -124,7 +121,7 @@ public class AzureBicepResourceTests(ITestOutputHelper outputHelper)
     [Fact]
     public void GetOutputReturnsOutputValue()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
 
         var bicepResource = builder.AddBicepTemplateString("templ", "content");
 
@@ -136,7 +133,7 @@ public class AzureBicepResourceTests(ITestOutputHelper outputHelper)
     [Fact]
     public void GetSecretOutputReturnsSecretOutputValue()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
 
         var bicepResource = builder.AddBicepTemplateString("templ", "content");
 
@@ -150,7 +147,7 @@ public class AzureBicepResourceTests(ITestOutputHelper outputHelper)
     [Fact]
     public void GetOutputValueThrowsIfNoOutput()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
 
         var bicepResource = builder.AddBicepTemplateString("templ", "content");
 
@@ -160,7 +157,7 @@ public class AzureBicepResourceTests(ITestOutputHelper outputHelper)
     [Fact]
     public void GetSecretOutputValueThrowsIfNoOutput()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
 
         var bicepResource = builder.AddBicepTemplateString("templ", "content");
 
@@ -172,7 +169,7 @@ public class AzureBicepResourceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AssertManifestLayout()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
 
         var param = builder.AddParameter("p1");
 
@@ -217,7 +214,7 @@ public class AzureBicepResourceTests(ITestOutputHelper outputHelper)
     public async Task BicepResourceHasPipelineStepAnnotationWithCorrectConfiguration()
     {
         // Arrange
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
         var bicepResource = builder.AddBicepTemplateString("myresource", "content");
 
         // Act - Get the annotation

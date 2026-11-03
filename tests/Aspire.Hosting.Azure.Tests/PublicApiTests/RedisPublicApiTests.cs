@@ -8,7 +8,7 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests.PublicApiTests;
 
-public class RedisPublicApiTests
+public class RedisPublicApiTests(ITestOutputHelper testOutputHelper)
 {
     [Theory]
     [InlineData(false)]
@@ -85,7 +85,7 @@ public class RedisPublicApiTests
     [InlineData(true)]
     public void AddAzureRedisShouldThrowWhenNameIsNullOrEmpty(bool isNull)
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var name = isNull ? null! : string.Empty;
 
         var action = () => builder.AddAzureRedis(name);

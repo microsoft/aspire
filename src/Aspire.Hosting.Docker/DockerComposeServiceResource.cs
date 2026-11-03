@@ -1,8 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIRECONTAINERRUNTIME001
+#pragma warning disable ASPIREPROJECTS001
 
 using System.Globalization;
 using System.Text;
@@ -135,7 +135,7 @@ public class DockerComposeServiceResource : Resource, IResourceWithParent<Docker
     {
         // If the resource has a Dockerfile build annotation, we don't have the image name
         // it will come as a parameter
-        if (resourceInstance.TryGetLastAnnotation<DockerfileBuildAnnotation>(out _) || resourceInstance is ProjectResource)
+        if (resourceInstance.RequiresImageBuild())
         {
             containerImageName = this.AsContainerImagePlaceholder();
             return true;
@@ -187,7 +187,7 @@ public class DockerComposeServiceResource : Resource, IResourceWithParent<Docker
             foreach (var waitAnnotation in waitAnnotations)
             {
                 // We can only wait on other compose services
-                if (waitAnnotation.Resource is ProjectResource || waitAnnotation.Resource.IsContainer())
+                if (waitAnnotation.Resource.SupportsDotnetProgramPublishing() || waitAnnotation.Resource.IsContainer())
                 {
                     // https://docs.docker.com/compose/how-tos/startup-order/#control-startup
                     composeService.DependsOn[waitAnnotation.Resource.Name.ToLowerInvariant()] = new()

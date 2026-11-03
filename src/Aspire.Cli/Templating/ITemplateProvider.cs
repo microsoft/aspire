@@ -18,8 +18,10 @@ internal interface ITemplateProvider
     /// Gets templates available to the <c>aspire new</c> command, performing any
     /// necessary runtime availability checks.
     /// </summary>
+    /// <param name="source">The template source, or null for built-in templates.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
     /// <returns>The templates available for project creation.</returns>
-    Task<IEnumerable<ITemplate>> GetTemplatesAsync(CancellationToken cancellationToken = default);
+    Task<IEnumerable<ITemplate>> GetTemplatesAsync(TemplateSource? source, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Gets templates available to the <c>aspire init</c> command.

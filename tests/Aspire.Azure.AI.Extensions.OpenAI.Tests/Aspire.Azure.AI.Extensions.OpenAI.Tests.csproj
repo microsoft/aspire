@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>$(AllTargetFrameworks)</TargetFrameworks>
+    <NoWarn>$(NoWarn);OPENAI001</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Include="$(RepoRoot)src\Components\Aspire.Azure.AI.Extensions.OpenAI\ConfigurationSchema.json" CopyToOutputDirectory="PreserveNewest" />
+    <Compile Include="..\Shared\FoundryClientTestHelpers.cs" Link="TestServices\FoundryClientTestHelpers.cs" />
+    <ProjectReference Include="..\..\src\Components\Aspire.Azure.AI.Extensions.OpenAI\Aspire.Azure.AI.Extensions.OpenAI.csproj" />
+    <ProjectReference Include="..\Aspire.Components.Common.TestUtilities\Aspire.Components.Common.TestUtilities.csproj" />
+  </ItemGroup>
+</Project>

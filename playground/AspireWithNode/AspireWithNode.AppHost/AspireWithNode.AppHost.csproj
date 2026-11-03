@@ -4,13 +4,14 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
   <ItemGroup>
     <AspireProjectOrPackageReference Include="Aspire.Hosting.AppHost" />
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.Dotnet" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Docker" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.JavaScript" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Redis" />

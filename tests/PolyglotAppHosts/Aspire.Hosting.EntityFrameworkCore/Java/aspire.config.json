@@ -4,9 +4,10 @@
     "language": "java"
   },
   "features": {
-    "experimentalPolyglot:java": true
+    "experimentalPolyglotJava": true
   },
   "packages": {
-    "Aspire.Hosting.EntityFrameworkCore": ""
+    "Aspire.Hosting.EntityFrameworkCore": "",
+    "Aspire.Hosting.Dotnet": ""
   }
 }

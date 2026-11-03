@@ -18,6 +18,7 @@ public sealed class ResourceMenuBuilder
 {
     private static readonly Icon s_viewDetailsIcon = new Icons.Regular.Size16.Info();
     private static readonly Icon s_consoleLogsIcon = new Icons.Regular.Size16.SlideText();
+    private static readonly Icon s_terminalIcon = new Icons.Regular.Size20.WindowConsole();
     private static readonly Icon s_structuredLogsIcon = new Icons.Regular.Size16.SlideTextSparkle();
     private static readonly Icon s_tracesIcon = new Icons.Regular.Size16.GanttChart();
     private static readonly Icon s_metricsIcon = new Icons.Regular.Size16.ChartMultiple();
@@ -31,6 +32,7 @@ public sealed class ResourceMenuBuilder
     private readonly DashboardDataSource _dataSource;
     private readonly IStringLocalizer<ControlsStrings> _controlLoc;
     private readonly IStringLocalizer<Resources.Resources> _loc;
+    private readonly IStringLocalizer<TerminalStrings> _terminalLoc;
     private readonly IconResolver _iconResolver;
     private readonly DashboardDialogService _dialogService;
     private readonly IDashboardClient _dashboardClient;
@@ -43,6 +45,7 @@ public sealed class ResourceMenuBuilder
         DashboardDataSource dataSource,
         IStringLocalizer<ControlsStrings> controlLoc,
         IStringLocalizer<Resources.Resources> loc,
+        IStringLocalizer<TerminalStrings> terminalLoc,
         IconResolver iconResolver,
         DashboardDialogService dialogService,
         IDashboardClient dashboardClient)
@@ -51,6 +54,7 @@ public sealed class ResourceMenuBuilder
         _dataSource = dataSource;
         _controlLoc = controlLoc;
         _loc = loc;
+        _terminalLoc = terminalLoc;
         _iconResolver = iconResolver;
         _dialogService = dialogService;
         _dashboardClient = dashboardClient;
@@ -67,6 +71,7 @@ public sealed class ResourceMenuBuilder
         EventCallback<CommandViewModel> commandSelected,
         Func<ResourceViewModel, CommandViewModel, bool> isCommandExecuting,
         bool showViewDetails,
+        bool showTerminalItem,
         bool showConsoleLogsItem,
         bool showUrls)
     {
@@ -80,18 +85,14 @@ public sealed class ResourceMenuBuilder
             });
         }
 
+        if (showTerminalItem && CanViewTerminal(resource))
+        {
+            menuItems.Add(CreateTerminalMenuItem(resource, resourceByName));
+        }
+
         if (showConsoleLogsItem)
         {
-            menuItems.Add(new MenuButtonItem
-            {
-                Text = _loc[nameof(Resources.Resources.ResourceActionConsoleLogsText)],
-                Icon = s_consoleLogsIcon,
-                OnClick = () =>
-                {
-                    _navigationManager.NavigateTo(DashboardUrls.ConsoleLogsUrl(resource: ResourceViewModel.GetResourceName(resource, resourceByName)));
-                    return Task.CompletedTask;
-                }
-            });
+            menuItems.Add(CreateConsoleLogsMenuItem(resource, resourceByName));
         }
 
         menuItems.Add(new MenuButtonItem
@@ -145,6 +146,46 @@ public sealed class ResourceMenuBuilder
         }
     }
 
+    internal MenuButtonItem CreateViewOutputMenuItem(ResourceViewModel resource, IDictionary<string, ResourceViewModel> resourceByName)
+    {
+        return CanViewTerminal(resource)
+            ? CreateTerminalMenuItem(resource, resourceByName)
+            : CreateConsoleLogsMenuItem(resource, resourceByName);
+    }
+
+    private bool CanViewTerminal(ResourceViewModel resource)
+    {
+        return _dashboardClient.IsEnabled && !_dashboardClient.IsReadOnly && resource.HasTerminal();
+    }
+
+    private MenuButtonItem CreateTerminalMenuItem(ResourceViewModel resource, IDictionary<string, ResourceViewModel> resourceByName)
+    {
+        return new MenuButtonItem
+        {
+            Text = _terminalLoc[nameof(TerminalStrings.TerminalTitle)],
+            Icon = s_terminalIcon,
+            OnClick = () =>
+            {
+                _navigationManager.NavigateTo(DashboardUrls.TerminalsUrl(resource: ResourceViewModel.GetResourceName(resource, resourceByName)));
+                return Task.CompletedTask;
+            }
+        };
+    }
+
+    private MenuButtonItem CreateConsoleLogsMenuItem(ResourceViewModel resource, IDictionary<string, ResourceViewModel> resourceByName)
+    {
+        return new MenuButtonItem
+        {
+            Text = _loc[nameof(Resources.Resources.ResourceActionConsoleLogsText)],
+            Icon = s_consoleLogsIcon,
+            OnClick = () =>
+            {
+                _navigationManager.NavigateTo(DashboardUrls.ConsoleLogsUrl(resource: ResourceViewModel.GetResourceName(resource, resourceByName)));
+                return Task.CompletedTask;
+            }
+        };
+    }
+
     private void AddUrlMenuItems(List<MenuButtonItem> menuItems, ResourceViewModel resource)
     {
         var urls = ResourceUrlHelpers.GetUrls(resource, includeInternalUrls: false, includeNonEndpointUrls: true)
@@ -186,20 +227,7 @@ public sealed class ResourceMenuBuilder
 
     private static MenuButtonItem CreateUrlMenuItem(DisplayedUrl url)
     {
-        // Opens the URL in a new window when clicked.
-        // It's important that this is done in the onclick event so the browser popup allows it.
-        return new MenuButtonItem
-        {
-            Text = url.Text,
-            Tooltip = url.Url,
-            Icon = s_linkIcon,
-            AdditionalAttributes = new Dictionary<string, object>
-            {
-                ["data-openbutton"] = "true",
-                ["data-url"] = url.Url!,
-                ["data-target"] = "_blank"
-            }
-        };
+        return MenuButtonItem.CreateExternalLink(url.Text, url.Url!, s_linkIcon, tooltip: url.Url);
     }
 
     private void AddTelemetryMenuItems(List<MenuButtonItem> menuItems, ResourceViewModel resource, IDictionary<string, ResourceViewModel> resourceByName)

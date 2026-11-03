@@ -67,7 +67,9 @@ internal static class AspireCliShellCommandHelpers
     private static readonly string[] s_configureLocalHiveCommands =
     [
         "aspire config set channel local -g",
-        "SDK_VER=$(ls ~/.aspire/hives/local/packages/Aspire.Hosting.*.nupkg 2>/dev/null | head -1 | sed 's/.*Aspire\\.Hosting\\.//;s/\\.nupkg//') && aspire config set sdk.version \"$SDK_VER\" -g"
+        // The CLI identity takes precedence over user configuration. Override all identity fields so
+        // archive builds stamped as daily still scaffold projects from the local package directory.
+        "SDK_VER=$(ls ~/.aspire/hives/local/packages/Aspire.Hosting.*.nupkg 2>/dev/null | head -1 | sed 's/.*Aspire\\.Hosting\\.//;s/\\.nupkg//') && aspire config set sdk.version \"$SDK_VER\" -g && export ASPIRE_CLI_CHANNEL=local ASPIRE_CLI_VERSION=\"$SDK_VER\" ASPIRE_CLI_PACKAGES=\"$HOME/.aspire/hives/local/packages\""
     ];
 
     internal static string GetPrepareAspireEnvironmentCommand()
@@ -268,6 +270,22 @@ internal sealed class CliInstallStrategy
     /// Used by post-install verification to assert the correct CLI binary was installed.
     /// </summary>
     public string? ExpectedVersion { get; }
+
+    /// <summary>
+    /// Gets the package hive label selected by the local-archive installer.
+    /// </summary>
+    public string LocalArchiveHiveLabel
+    {
+        get
+        {
+            if (Mode != CliInstallMode.LocalArchive)
+            {
+                throw new InvalidOperationException($"{nameof(LocalArchiveHiveLabel)} is only available for {nameof(CliInstallMode.LocalArchive)} strategies.");
+            }
+
+            return CliPackageDiscovery.GetHiveLabel(ExpectedVersion);
+        }
+    }
 
     /// <summary>
     /// Gets whether the Docker dotnet tool install command needs the generated NuGet.config for internal/prerelease feeds.

@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
 #pragma warning disable ASPIREAZURE003
 
 using Aspire.Hosting.Utils;
@@ -8,12 +9,12 @@ using static Aspire.Hosting.Utils.AzureManifestUtils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureSqlDeploymentScriptTests
+public class AzureSqlDeploymentScriptTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public async Task SqlWithPrivateEndpoint_AutoCreatesBothSubnetAndStorage()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
         builder.AddAzureContainerAppEnvironment("env");
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
@@ -33,7 +34,7 @@ public class AzureSqlDeploymentScriptTests
     [Fact]
     public async Task SqlWithPrivateEndpoint_ExplicitSubnet_AutoCreatesStorage()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
         builder.AddAzureContainerAppEnvironment("env");
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
@@ -55,7 +56,7 @@ public class AzureSqlDeploymentScriptTests
     [Fact]
     public async Task SqlWithPrivateEndpoint_ExplicitStorage_AutoCreatesSubnet()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
         builder.AddAzureContainerAppEnvironment("env");
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
@@ -78,7 +79,7 @@ public class AzureSqlDeploymentScriptTests
     [Fact]
     public async Task SqlWithPrivateEndpoint_BothExplicitSubnetAndStorage()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
         builder.AddAzureContainerAppEnvironment("env");
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
@@ -103,7 +104,7 @@ public class AzureSqlDeploymentScriptTests
     [Fact]
     public async Task SqlWithPrivateEndpoint_StorageBeforePrivateEndpoint()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
         builder.AddAzureContainerAppEnvironment("env");
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
@@ -127,7 +128,7 @@ public class AzureSqlDeploymentScriptTests
     [Fact]
     public async Task SqlWithPrivateEndpoint_SubnetBeforePrivateEndpoint()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
         builder.AddAzureContainerAppEnvironment("env");
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
@@ -151,7 +152,7 @@ public class AzureSqlDeploymentScriptTests
     [Fact]
     public async Task SqlWithPrivateEndpoint_ClearDefaultRoleAssignments_RemovesDeploymentScriptInfra()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
         builder.AddAzureContainerAppEnvironment("env");
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
@@ -172,7 +173,7 @@ public class AzureSqlDeploymentScriptTests
     [Fact]
     public async Task SqlWithPrivateEndpoint_UserDelegatedAdminScriptSubnet_KeepsSingleAciDelegation()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
         builder.AddAzureContainerAppEnvironment("env");
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
@@ -208,3 +209,4 @@ public class AzureSqlDeploymentScriptTests
     }
 }
 
+#pragma warning restore CS0618

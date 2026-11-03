@@ -2,32 +2,23 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
+using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Resources;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
-using Microsoft.FluentUI.AspNetCore.Components;
-using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components;
 
 public partial class ResourceActions : ComponentBase
 {
-    private static readonly Icon s_consoleLogsIcon = new Icons.Regular.Size16.SlideText();
-
     private AspireMenuButton? _menuButton;
 
     [Inject]
     public required ResourceMenuBuilder ResourceMenuBuilder { get; init; }
 
     [Inject]
-    public required IStringLocalizer<Resources.Resources> Loc { get; init; }
-
-    [Inject]
     public required IStringLocalizer<ControlsStrings> ControlLoc { get; init; }
-
-    [Inject]
-    public required NavigationManager NavigationManager { get; init; }
 
     [Inject]
     public required IconResolver IconResolver { get; init; }
@@ -53,6 +44,9 @@ public partial class ResourceActions : ComponentBase
     [Parameter]
     public required ConcurrentDictionary<string, ResourceViewModel> ResourceByName { get; set; }
 
+    [Parameter]
+    public bool CardMode { get; set; }
+
     [CascadingParameter]
     public required ViewportInformation ViewportInformation { get; set; }
 
@@ -62,10 +56,11 @@ public partial class ResourceActions : ComponentBase
     {
         _highlightedCommands.Clear();
 
-        // If display is desktop then we display highlighted commands next to the ... button.
-        if (ViewportInformation.IsDesktop)
+        // Cards use labeled actions at every viewport size. Rows keep their compact desktop-only icons.
+        if (CardMode || ViewportInformation.IsDesktop)
         {
-            _highlightedCommands.AddRange(Resource.Commands.Where(c => c.IsHighlighted && c.State != CommandViewModelState.Hidden).Take(MaxHighlightedCount));
+            var maxCount = CardMode ? 2 : MaxHighlightedCount;
+            _highlightedCommands.AddRange(Resource.Commands.Where(c => c.IsHighlighted && c.State != CommandViewModelState.Hidden).Take(maxCount));
         }
     }
 
@@ -80,9 +75,24 @@ public partial class ResourceActions : ComponentBase
             CommandSelected,
             IsCommandExecuting,
             showViewDetails: true,
+            showTerminalItem: true,
             showConsoleLogsItem: true,
             showUrls: false);
 
         return menuItems;
+    }
+
+    private string GetCardCommandText(CommandViewModel command)
+    {
+        if (string.Equals(command.Name, CommandViewModel.SetParameterCommand, StringComparisons.CommandName))
+        {
+            return ControlLoc[Resource.IsRunningState()
+                ? nameof(ControlsStrings.ParameterEditShortAction)
+                : nameof(ControlsStrings.ParameterSetShortAction)];
+        }
+
+        return string.Equals(command.Name, CommandViewModel.DeleteParameterCommand, StringComparisons.CommandName)
+            ? ControlLoc[nameof(ControlsStrings.ParameterDeleteShortAction)]
+            : command.GetDisplayName();
     }
 }

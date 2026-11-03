@@ -15,7 +15,7 @@ internal sealed class DcpWorkloadCleanupService(
     CliExecutionContext executionContext,
     ILogger<DcpWorkloadCleanupService> logger)
 {
-    public async Task<DcpWorkloadCleanupResult> CleanupAsync(string workloadId, CancellationToken cancellationToken)
+    public async Task<DcpWorkloadCleanupResult> CleanupAsync(string workloadId, bool deleteVolumes, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workloadId);
 
@@ -38,9 +38,12 @@ internal sealed class DcpWorkloadCleanupService(
                 return DcpWorkloadCleanupResult.NotFound();
             }
 
+            string[] arguments = deleteVolumes
+                ? ["cleanup", "--volumes", workloadId]
+                : ["cleanup", workloadId];
             var (exitCode, output, error) = await layoutProcessRunner.RunAsync(
                 dcpPath,
-                ["cleanup", workloadId],
+                arguments,
                 workingDirectory: executionContext.WorkingDirectory.FullName,
                 ct: cancellationToken).ConfigureAwait(false);
 

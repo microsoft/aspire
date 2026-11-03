@@ -14,6 +14,7 @@ From your AppHost directory, add the `Aspire.Hosting.EntityFrameworkCore` integr
 
 ```bash
 aspire add Aspire.Hosting.EntityFrameworkCore
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Usage example
@@ -23,16 +24,22 @@ In the AppHost, add EF migrations to a project resource:
 **C#**
 
 ```csharp
-var api = builder.AddProject<Projects.Api>("api");
+var api = builder.AddDotnetProject("api", "../Api/Api.csproj");
 
 // Add EF migrations for a specific DbContext
 var apiMigrations = api.AddEFMigrations("api-migrations", "MyApp.Data.MyDbContext");
 ```
 
+The four generalized `AddEFMigrations` forms (with or without a context name and tool callback) accept
+`IDotnetProgramResource` builders without `ASPIREPROJECTS001`, including V2 and retained legacy project
+resources. Each returns `IResourceBuilder<EFMigrationResource>`, not a project builder.
+SDK-style C#, F#, and VB project files are supported. File-based C# apps are not supported because the
+EF Core CLI requires a project file for its `--project` and `--startup-project` arguments.
+
 **TypeScript**
 
 ```typescript
-const api = await builder.addProject("api", "../Api");
+const api = await builder.addDotnetProject("api", "../Api/Api.csproj");
 
 // Add EF migrations for a specific DbContext
 const apiMigrations = await api.addEFMigrations("api-migrations", "MyApp.Data.MyDbContext");
@@ -62,7 +69,7 @@ The EF migration command-line tool is downloaded and executed on demand when com
 You can customize the migration tool version, package sources, or allow prerelease versions:
 
 ```csharp
-var api = builder.AddProject<Projects.Api>("api");
+var api = builder.AddDotnetProject("api", "../Api/Api.csproj");
 
 // Use a specific migration tool version
 var apiMigrations = api.AddEFMigrations("api-migrations", "MyApp.Data.MyDbContext",
@@ -70,14 +77,22 @@ var apiMigrations = api.AddEFMigrations("api-migrations", "MyApp.Data.MyDbContex
     {
         tool.WithToolVersion("10.0.0");
     });
+```
 
+Alternatively, allow prerelease versions:
+
+```csharp
 // Allow prerelease versions
 var apiMigrations = api.AddEFMigrations("api-migrations", "MyApp.Data.MyDbContext",
     configureToolResource: tool =>
     {
         tool.WithToolPrerelease();
     });
+```
 
+Or use a custom package source:
+
+```csharp
 // Use a custom package source
 var apiMigrations = api.AddEFMigrations("api-migrations", "MyApp.Data.MyDbContext",
     configureToolResource: tool =>
@@ -91,14 +106,14 @@ var apiMigrations = api.AddEFMigrations("api-migrations", "MyApp.Data.MyDbContex
 You can configure migrations to run automatically when the AppHost starts:
 
 ```csharp
-var api = builder.AddProject<Projects.Api>("api");
+var api = builder.AddDotnetProject("api", "../Api/Api.csproj");
 
 // Add EF migrations and run on startup
 var apiMigrations = api.AddEFMigrations("api-migrations", "MyApp.Data.MyDbContext")
     .RunDatabaseUpdateOnStart();
 
 // Other resources can wait for migrations to complete
-var worker = builder.AddProject<Projects.Worker>("worker")
+var worker = builder.AddDotnetProject("worker", "../Worker/Worker.csproj")
                     .WaitForCompletion(apiMigrations);
 ```
 
@@ -124,18 +139,28 @@ var apiMigrations = api.AddEFMigrations("api-migrations", "MyApp.Data.MyDbContex
 When migrations are in a different project than the startup project, use `WithMigrationsProject`:
 
 ```csharp
-var startup = builder.AddProject<Projects.Api>("api");
+var startup = builder.AddDotnetProject("api", "../Api/Api.csproj");
 
 var apiMigrations = startup.AddEFMigrations("api-migrations", "MyApp.Data.MyDbContext")
-    .WithMigrationsProject<Projects.Data>();
+    .WithMigrationsProject("../Data/Data.csproj");
 ```
+
+Ensure `Data` is built by the startup project's normal references or explicitly before run-mode EF
+commands. The path overload sets the migrations path; it does not register build readiness or
+preserve a resource's configured providers.
+
+The existing `WithMigrationsProject<Projects.Data>()` form is still valid when its metadata producer
+and required project/build references are retained. It is not an obsolete `AddProject` overload.
+Do not delete those references merely because the startup resource now uses a path. Likewise, a
+polyglot resource-backed migrations-project argument preserves identity, providers, and coordinated
+build readiness that a path alone cannot replace. See the [migration guide](../../docs/migrate-from-addproject.md#a-separate-migrations-project).
 
 ### Multiple DbContexts
 
 You can add migrations for multiple DbContexts in the same project:
 
 ```csharp
-var api = builder.AddProject<Projects.Api>("api");
+var api = builder.AddDotnetProject("api", "../Api/Api.csproj");
 
 var userMigrations = api.AddEFMigrations("user-migrations", "MyApp.Data.UserDbContext");
 var orderMigrations = api.AddEFMigrations("order-migrations", "MyApp.Data.OrderDbContext");
@@ -146,11 +171,13 @@ var orderMigrations = api.AddEFMigrations("order-migrations", "MyApp.Data.OrderD
 Configure migration script or bundle generation during publishing:
 
 ```csharp
-// Generate a SQL migration script during publish
 var apiMigrations = api.AddEFMigrations("api-migrations", "MyApp.Data.MyDbContext")
     .PublishAsMigrationScript();
+```
 
-// Or generate a self-contained migration bundle executable
+Or generate a self-contained migration bundle executable instead:
+
+```csharp
 var apiMigrations = api.AddEFMigrations("api-migrations", "MyApp.Data.MyDbContext")
     .PublishAsMigrationBundle();
 ```
@@ -167,7 +194,7 @@ Azure Functions, etc.) deploys exactly like any other container you add to the A
 
 ```csharp
 var db  = builder.AddPostgres("pg").AddDatabase("appdb");
-var api = builder.AddProject<Projects.Api>("api").WithReference(db);
+var api = builder.AddDotnetProject("api", "../Api/Api.csproj").WithReference(db);
 
 var apiMigrations = api.AddEFMigrations("api-migrations", "MyApp.Data.MyDbContext")
     .WaitFor(db)                                    // required — see below
@@ -245,6 +272,47 @@ for your deployment flow:
 ```
 
 Similarly you can use `PublishAsMigrationScript()` if you also want a raw SQL script produced.
+
+## Resource identity and direct construction
+
+Use `apiMigrations.Resource.StartupProjectResource` for the startup program across both resource
+models. The already-obsolete `ProjectResource` property retains its legacy return type and throws
+when the startup resource is V2.
+
+Both `EFMigrationResource(string, ProjectResource, string?)` and the public generalized
+`EFMigrationResource(string, IDotnetProgramResource, string?)` constructor create **data only**.
+The generalized constructor is non-experimental, but neither constructor registers a resource or
+provides `AddEFMigrations`' duplicate checks, tool initialization, environment copying, dashboard
+commands, parent relationship, or pipeline setup. Use the factory for a working integration:
+
+```csharp
+using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.EntityFrameworkCore;
+
+IResourceBuilder<EFMigrationResource> migrations =
+    api.AddEFMigrations("api-migrations", "MyApp.Data.MyDbContext");
+IDotnetProgramResource startup = migrations.Resource.StartupProjectResource;
+```
+
+## Coordinated builds and custom build inputs
+
+With `AddDotnetProject`, local EF operations wait for the coordinated build to finish successfully before
+starting `dotnet-ef`. This includes automatic startup migrations and dashboard commands. The wait is for build
+output, not for the application to start, so `api.WaitFor(migrations)` remains supported.
+
+EF operations do **not** forward Aspire-specific `WithBuildEnvironment` customizations as MSBuild global
+properties to `dotnet-ef`. When the startup or a known migrations project has `WithBuildEnvironment`,
+`WithDotnetProgramBuildEnvironment`, or custom build-property metadata, each requested EF operation logs a
+warning and continues. This also applies to script and bundle generation during publishing.
+
+Waiting for the build does not guarantee that EF selects the same assemblies: EF may use suitable output,
+select different or stale output, or fail because its expected output is missing. Ordinary run-mode commands
+retain `--no-build`; publish-time script and bundle generation allow EF to build the participating projects.
+Actual EF failures still fail the operation, including automatic migrations and publishing steps.
+
+Where equivalent, move the required settings into shared project-file or `Directory.Build.props` configuration
+so both evaluations agree. Runtime `WithEnvironment` is not equivalent to MSBuild global properties, especially
+when the project assigns a property unconditionally. The warning does not resolve this compatibility risk.
 
 ## Additional documentation
 

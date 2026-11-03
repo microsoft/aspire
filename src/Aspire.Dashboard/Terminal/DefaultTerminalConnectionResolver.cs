@@ -7,10 +7,10 @@ using Hex1b;
 namespace Aspire.Dashboard.Terminal;
 
 /// <summary>
-/// Resolves per-replica HMP v1 producer streams by walking the live resource
-/// snapshot stream from <see cref="IDashboardClient"/>. The dashboard receives
+/// Resolves per-replica HMP v1 producer streams from the live resource
+/// snapshots in <see cref="IDashboardClient"/>. The dashboard receives
 /// the consumer UDS path inside each replica snapshot's properties; this
-/// resolver looks up the requested resource by display name + replica index and
+/// resolver looks up the requested resource by its unique instance name and
 /// connects to the matching local socket.
 /// </summary>
 /// <remarks>
@@ -19,15 +19,9 @@ namespace Aspire.Dashboard.Terminal;
 /// secret (the user already controls the AppHost process and can read or write
 /// anything in its temp directory), but the path never reaches the browser via
 /// the terminal WebSocket because the proxy takes only
-/// <c>resource</c>/<c>replica</c> identifiers.</para>
-/// <para>The resolver intentionally does <i>not</i> use Hex1b's
-/// <c>WithHmp1UdsClient</c> builder. That builder is for in-process Hex1b
-/// applications that want to <i>embed</i> the HMP1 stream into a Hex1b
-/// terminal (the CLI's <c>aspire terminal attach</c> path does exactly that).
-/// The dashboard never instantiates a Hex1b terminal — it is a byte-level
-/// proxy between the browser's HMP1 client and the remote terminal host —
-/// so the resolver only needs the raw stream and reaches for the lower-level
-/// <see cref="Hmp1Transports.ConnectUnixSocket"/> helper instead.</para>
+/// a <c>resource</c> instance identifier.</para>
+/// <para>The resolver opens only the transport. The WebSocket handler owns
+/// the HMP1 consumer and its per-browser HWT1 presentation lifetime.</para>
 /// </remarks>
 internal sealed class DefaultTerminalConnectionResolver : ITerminalConnectionResolver
 {
@@ -38,41 +32,15 @@ internal sealed class DefaultTerminalConnectionResolver : ITerminalConnectionRes
         _client = client ?? throw new ArgumentNullException(nameof(client));
     }
 
-    public async Task<Stream?> ConnectAsync(string resourceName, int replicaIndex, CancellationToken cancellationToken)
+    public async Task<Stream?> ConnectAsync(string resourceName, CancellationToken cancellationToken)
     {
         if (!_client.IsEnabled)
         {
             return null;
         }
 
-        // Locate the replica snapshot for (resourceName, replicaIndex). DCP names
-        // each replica with a random suffix (e.g. myapp-abc123), but every snapshot
-        // also carries the user-facing display name and the stable terminal
-        // properties stamped by DashboardServiceData. We match by display name +
-        // replica index rather than by the synthetic snapshot name.
-        ResourceViewModel? match = null;
-        foreach (var resource in _client.GetResources())
-        {
-            if (!string.Equals(resource.DisplayName, resourceName, StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            if (!resource.HasTerminal())
-            {
-                continue;
-            }
-
-            if (!resource.TryGetTerminalReplicaInfo(out var index, out _) || index != replicaIndex)
-            {
-                continue;
-            }
-
-            match = resource;
-            break;
-        }
-
-        if (match is null)
+        var match = _client.GetResource(resourceName);
+        if (match is null || !match.HasTerminal())
         {
             return null;
         }

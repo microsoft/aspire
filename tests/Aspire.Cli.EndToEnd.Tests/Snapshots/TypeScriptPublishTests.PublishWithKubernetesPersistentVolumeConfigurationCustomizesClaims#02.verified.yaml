@@ -1,0 +1,17 @@
+﻿---
+apiVersion: "v1"
+kind: "PersistentVolumeClaim"
+metadata:
+  name: "parameterized"
+  annotations:
+    backup.example.com/tier: "{{ .Values.parameters.parameterized.backuptier }}"
+  labels:
+    example.com/retention: "retain"
+spec:
+  storageClassName: "{{ .Values.parameters.parameterized.storageclass }}"
+  volumeMode: "Filesystem"
+  accessModes:
+    - "ReadWriteOnce"
+  resources:
+    requests:
+      storage: "{{ .Values.parameters.parameterized.capacity }}"

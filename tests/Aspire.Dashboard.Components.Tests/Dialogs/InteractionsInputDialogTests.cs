@@ -2,20 +2,15 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Components.Dialogs;
-using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Interaction;
-using Aspire.Dashboard.Tests;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.DashboardService.Proto.V1;
-using Aspire.Tests.Shared;
 using Bunit;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Forms;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
 
@@ -91,6 +86,50 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
         await cut.InvokeAsync(() => viewModel.OnInteractionUpdated!());
 
         Assert.Equal(initialIds, cut.FindAll(".interaction-input [id]").Select(element => element.Id).ToArray());
+    }
+
+    [Theory]
+    [InlineData(InputType.Text, false, "fluent-text-input")]
+    [InlineData(InputType.SecretText, false, "fluent-text-input")]
+    [InlineData(InputType.Choice, false, "fluent-dropdown")]
+    [InlineData(InputType.Choice, true, "fluent-dropdown")]
+    [InlineData(InputType.Boolean, false, "fluent-checkbox")]
+    [InlineData(InputType.Number, false, "fluent-text-input")]
+    [InlineData(InputType.File, false, "fluent-button")]
+    public async Task Render_OnlyFirstInputHasAutofocus(InputType inputType, bool allowCustomChoice, string expectedElement)
+    {
+        var getCut = SetUpDialog(out var dialogService);
+        var interaction = new WatchInteractionsResponseUpdate
+        {
+            InteractionId = 1,
+            InputsDialog = new InteractionInputsDialog()
+        };
+        foreach (var name in new[] { "first", "second" })
+        {
+            interaction.InputsDialog.InputItems.Add(new InteractionInput
+            {
+                Name = name,
+                Label = name,
+                InputType = inputType,
+                AllowCustomChoice = allowCustomChoice
+            });
+        }
+        var viewModel = new InteractionsInputsDialogViewModel
+        {
+            Interaction = interaction,
+            Message = string.Empty,
+            DashboardClient = new TestDashboardClient(),
+            OnSubmitCallback = (_, _) => Task.CompletedTask
+        };
+
+        await dialogService.ShowDialogAsync<InteractionsInputDialog>(viewModel, new DialogParameters { Title = "Inputs" });
+        var cut = getCut();
+        var fields = cut.FindComponents<InteractionInputField>();
+
+        var autofocused = Assert.Single(fields[0].FindAll("[autofocus]"));
+        Assert.Equal(expectedElement, autofocused.LocalName);
+        Assert.Empty(fields[1].FindAll("[autofocus]"));
+        Assert.DoesNotContain(JSInterop.Invocations, i => i.Identifier == "Blazor._internal.domWrapper.focus");
     }
 
     [Theory]
@@ -690,12 +729,10 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
         }
     }
 
-    private Func<IRenderedFragment> SetUpDialog(out DashboardDialogService dialogService)
+    private Func<IRenderedComponent<IComponent>> SetUpDialog(out DashboardDialogService dialogService)
     {
-        FluentUISetupHelpers.SetupDialogInfrastructure(this);
         FluentUISetupHelpers.SetupFluentInputLabel(this);
         FluentUISetupHelpers.SetupFluentTextField(this);
-        FluentUISetupHelpers.SetupFluentButton(this);
         FluentUISetupHelpers.SetupFluentInputFile(this);
         FluentUISetupHelpers.SetupFluentList(this);
         FluentUISetupHelpers.SetupFluentCombobox(this);
@@ -703,28 +740,7 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
         var module = JSInterop.SetupModule("./Components/Dialogs/InteractionsInputDialog.razor.js");
         module.SetupVoid("togglePasswordVisibility", _ => true);
 
-        IRenderedFragment? cut = null;
-        TestDialogService? testDialogService = null;
-        testDialogService = new TestDialogService((content, _) =>
-        {
-            cut = RenderComponent<CascadingValue<IDialogInstance>>(builder =>
-            {
-                builder.Add(p => p.Value, testDialogService!.LastInstance!);
-                builder.AddChildContent<InteractionsInputDialog>(childBuilder =>
-                {
-                    childBuilder.Add(p => p.Content, Assert.IsType<InteractionsInputsDialogViewModel>(content));
-                });
-            });
-            return Task.CompletedTask;
-        });
-        Services.RemoveAll<IDialogService>();
-        Services.AddSingleton<IDialogService>(testDialogService);
-
-        dialogService = new DashboardDialogService(
-            testDialogService,
-            new TestStringLocalizer<Aspire.Dashboard.Resources.Dialogs>(),
-            Services.GetRequiredService<DimensionManager>());
-        return () => cut ?? throw new InvalidOperationException("The dialog was not rendered.");
+        return InteractionsSetupHelpers.SetupDialog<InteractionsInputDialog, InteractionsInputsDialogViewModel>(this, p => p.Content, out dialogService);
     }
 
     private static InteractionsInputsDialogViewModel CreateSecretTextViewModel()

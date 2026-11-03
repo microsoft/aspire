@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES001
-#pragma warning disable ASPIREAZURE001
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using System.Diagnostics.CodeAnalysis;
@@ -23,11 +21,26 @@ namespace Aspire.Hosting.Azure.AppContainers;
 /// </summary>
 #pragma warning disable CS0618 // Type or member is obsolete
 public class AzureContainerAppEnvironmentResource :
-    AzureProvisioningResource, IAzureComputeEnvironmentResource, IComputeEnvironmentWithVolumeMounts, IAzureContainerRegistry, IAzureDelegatedSubnetResource
+    AzureProvisioningResource, IAzureComputeEnvironmentResource, IComputeEnvironmentWithVolumeMounts, IAzureContainerRegistry, IAzureInternalIngressResource, IAzureCdnPrivateLinkTarget
 #pragma warning restore CS0618 // Type or member is obsolete
 {
     /// <inheritdoc />
     string IAzureDelegatedSubnetResource.DelegatedSubnetServiceName => AzureSubnetServiceDelegations.ContainerAppEnvironments;
+
+    /// <inheritdoc />
+    ReferenceExpression IAzureInternalIngressResource.DefaultDomain => ReferenceExpression.Create($"{ContainerAppDomain}");
+
+    /// <inheritdoc />
+    ReferenceExpression IAzureInternalIngressResource.StaticIp => ReferenceExpression.Create($"{ContainerAppStaticIp}");
+
+    /// <inheritdoc />
+    BicepOutputReference IAzureCdnPrivateLinkTarget.Id => ContainerAppEnvironmentId;
+
+    /// <inheritdoc />
+    BicepOutputReference IAzureCdnPrivateLinkTarget.Location => ContainerAppLocation;
+
+    /// <inheritdoc />
+    string IAzureCdnPrivateLinkTarget.PrivateLinkGroupId => "managedEnvironments";
 
     /// <summary>
     /// Initializes a new instance of the <see cref="AzureContainerAppEnvironmentResource"/> class.
@@ -247,9 +260,35 @@ public class AzureContainerAppEnvironmentResource :
 
     /// <summary>
     /// Gets or sets a value indicating whether the Aspire dashboard should be included in the container app environment.
-    /// Default is true.
+    /// Defaults to enabled for standard environments and disabled for Express environments.
     /// </summary>
-    internal bool EnableDashboard { get; set; } = true;
+    internal bool EnableDashboard
+    {
+        get => _enableDashboard ?? !IsExpress;
+        set => _enableDashboard = value;
+    }
+
+    private bool? _enableDashboard;
+
+    internal bool IsExpress { get; set; }
+
+    /// <summary>
+    /// Gets a value indicating whether the environment is the target of a private link, such as an Azure Front Door
+    /// Private Link connection. Public network access is disabled for such an environment, so apps in the
+    /// environment are reachable only through the private link.
+    /// </summary>
+    internal bool IsPublicNetworkAccessDisabled => this.HasAnnotationOfType<PrivateEndpointTargetAnnotation>();
+
+    internal void ValidatePublicEndpointReference(EndpointReference endpointReference)
+    {
+        if (!endpointReference.EndpointAnnotation.IsExternal)
+        {
+            throw new InvalidOperationException(
+                $"Azure Container Apps Express environment '{Name}' cannot reference internal endpoint " +
+                $"'{endpointReference.EndpointName}' on resource '{endpointReference.Resource.Name}'. " +
+                "Use WithExternalHttpEndpoints() to explicitly enable public HTTPS ingress, or use a standard Azure Container Apps environment.");
+        }
+    }
 
     /// <summary>
     /// Gets or sets a value indicating whether HTTP endpoints should be preserved as HTTP instead of being upgraded to HTTPS.
@@ -266,6 +305,18 @@ public class AzureContainerAppEnvironmentResource :
     /// Gets the default domain associated with the Container App Environment.
     /// </summary>
     internal BicepOutputReference ContainerAppDomain => new("AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN", this);
+
+    /// <summary>
+    /// Gets the private static IP address associated with an internal Container App Environment.
+    /// </summary>
+    internal BicepOutputReference ContainerAppStaticIp => new("AZURE_CONTAINER_APPS_ENVIRONMENT_STATIC_IP", this);
+
+    /// <summary>
+    /// Gets the Azure region of the Container App Environment.
+    /// </summary>
+    internal BicepOutputReference ContainerAppLocation => new(LocationOutputName, this);
+
+    internal const string LocationOutputName = "AZURE_CONTAINER_APPS_ENVIRONMENT_LOCATION";
 
     /// <summary>
     /// Gets the name of the associated Azure Container Registry.
@@ -346,6 +397,14 @@ public class AzureContainerAppEnvironmentResource :
     [Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public ReferenceExpression GetHostAddressExpression(EndpointReference endpointReference)
     {
+        if (IsExpress)
+        {
+            // Express apps are reachable only over public ingress, so there is no ".internal"
+            // hostname to fall back to. Reject the reference instead of emitting a private
+            // hostname that would not resolve.
+            ValidatePublicEndpointReference(endpointReference);
+        }
+
         var resource = endpointReference.Resource;
 
         var builder = new ReferenceExpressionBuilder();

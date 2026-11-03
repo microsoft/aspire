@@ -29,12 +29,12 @@
       </trans-unit>
       <trans-unit id="ConsoleLogsNoLogsFound">
         <source>No logs found</source>
-        <target state="new">No logs found</target>
+        <target state="translated">Aucun journal trouvé</target>
         <note />
       </trans-unit>
       <trans-unit id="ConsoleLogsNoLogsMatchFilter">
         <source>No logs match the filter</source>
-        <target state="new">No logs match the filter</target>
+        <target state="translated">Aucun journal ne correspond au filtre</target>
         <note />
       </trans-unit>
       <trans-unit id="ConsoleLogsNoResourceSelected">
@@ -49,7 +49,7 @@
       </trans-unit>
       <trans-unit id="ConsoleLogsNotCapturedForRun">
         <source>Console logs weren't captured for this run. Console logs are only captured if this page is visited while the AppHost is running.</source>
-        <target state="new">Console logs weren't captured for this run. Console logs are only captured if this page is visited while the AppHost is running.</target>
+        <target state="translated">Les journaux de la console n’ont pas été capturés pour cette exécution. Les journaux de la console ne sont capturés que si cette page est consultée alors que l'AppHost est en cours d'exécution.</target>
         <note />
       </trans-unit>
       <trans-unit id="ConsoleLogsPageTitle">
@@ -79,7 +79,7 @@
       </trans-unit>
       <trans-unit id="ConsoleLogsTextFilter">
         <source>Console logs filter</source>
-        <target state="new">Console logs filter</target>
+        <target state="translated">Filtre des journaux de la console</target>
         <note />
       </trans-unit>
       <trans-unit id="ConsoleLogsTimestampHide">
@@ -101,16 +101,6 @@
         <source>Unknown state</source>
         <target state="translated">État inconnu</target>
         <note />
-      </trans-unit>
-      <trans-unit id="ConsoleLogsViewConsoleOption">
-        <source>Console logs</source>
-        <target state="new">Console logs</target>
-        <note>Option in the View dropdown that shows the resource's console logs.</note>
-      </trans-unit>
-      <trans-unit id="ConsoleLogsViewTerminalOption">
-        <source>Terminal</source>
-        <target state="new">Terminal</target>
-        <note>Option in the View dropdown that shows the resource's interactive terminal.</note>
       </trans-unit>
       <trans-unit id="ConsoleLogsWatchingLogs">
         <source>Watching logs...</source>
@@ -134,28 +124,8 @@
       </trans-unit>
       <trans-unit id="PauseInProgressText">
         <source>Console logs capture paused at {0}</source>
-        <target state="new">Console logs capture paused at {0}</target>
+        <target state="translated">La capture des journaux de la console est suspendue à {0}</target>
         <note>{0} is a time</note>
-      </trans-unit>
-      <trans-unit id="TerminalToolbarDecreaseFontSize">
-        <source>Decrease font size</source>
-        <target state="new">Decrease font size</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="TerminalToolbarGridSize">
-        <source>Terminal dimensions</source>
-        <target state="new">Terminal dimensions</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="TerminalToolbarGridSizeAuto">
-        <source>Fit</source>
-        <target state="new">Fit</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="TerminalToolbarIncreaseFontSize">
-        <source>Increase font size</source>
-        <target state="new">Increase font size</target>
-        <note />
       </trans-unit>
     </body>
   </file>

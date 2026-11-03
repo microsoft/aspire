@@ -1,8 +1,8 @@
 <Project>
   <PropertyGroup>
     <IsAspireHost>true</IsAspireHost>
-    <AspireUseCliBundle>false</AspireUseCliBundle>
-    <NoWarn>$(NoWarn);ASPIRE010</NoWarn>
+    <AspireUseCliBundle>true</AspireUseCliBundle>
+    <_AspireSuppressCliRunHook>true</_AspireSuppressCliRunHook>
   </PropertyGroup>
 
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />

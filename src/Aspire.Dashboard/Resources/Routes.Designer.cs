@@ -10,8 +10,8 @@
 
 namespace Aspire.Dashboard.Resources {
     using System;
-    
-    
+
+
     /// <summary>
     ///   A strongly-typed resource class, for looking up localized strings, etc.
     /// </summary>
@@ -19,19 +19,19 @@ namespace Aspire.Dashboard.Resources {
     // class via a tool like ResGen or Visual Studio.
     // To add or remove a member, edit your .ResX file then rerun ResGen
     // with the /str option, or rebuild your VS project.
-    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "17.0.0.0")]
+    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "18.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     public class Routes {
-        
+
         private static global::System.Resources.ResourceManager resourceMan;
-        
+
         private static global::System.Globalization.CultureInfo resourceCulture;
-        
+
         [global::System.Diagnostics.CodeAnalysis.SuppressMessageAttribute("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode")]
         internal Routes() {
         }
-        
+
         /// <summary>
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
@@ -45,7 +45,7 @@ namespace Aspire.Dashboard.Resources {
                 return resourceMan;
             }
         }
-        
+
         /// <summary>
         ///   Overrides the current thread's CurrentUICulture property for all
         ///   resource lookups using this strongly typed resource class.
@@ -59,7 +59,7 @@ namespace Aspire.Dashboard.Resources {
                 resourceCulture = value;
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Request ID:.
         /// </summary>
@@ -68,7 +68,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ErrorHandlerPageRequestId", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to An error occurred while processing your request.
         /// </summary>
@@ -77,7 +77,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ErrorHandlerPageSubtitle", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Error.
         /// </summary>
@@ -86,7 +86,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ErrorHandlerPageTitle", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Not found.
         /// </summary>
@@ -95,7 +95,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("NotFoundDescription", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to The page you requested could not be found.
         /// </summary>
@@ -104,7 +104,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("NotFoundDetails", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Not found.
         /// </summary>

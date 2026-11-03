@@ -28,22 +28,22 @@ max-daily-ai-credits: -1
 #      ensures the companion feedback issue exists.
 #
 # Data flows fetch-data → agent via the changelog-data
-# artifact. Agent → publish uses the framework's built-in
-# safe-output artifact passing.
+# artifact. Agent → publish uses an explicit changelog-output
+# artifact for the generated body and memory files.
 #
 # ──────────────────────────────────────────────────────────
 # To change the target milestone, update the MILESTONE value
 # in the env block below, then run:
-#   gh aw compile
+#   gh aw compile --schedule-seed microsoft/aspire
 # ──────────────────────────────────────────────────────────
 
 env:
   PRODUCT: "Aspire"
   REPO: "microsoft/aspire"
   DOCS_REPO: "microsoft/aspire.dev"
-  MILESTONE_START: "2026-08-19"
-  MILESTONE: "13.6"
-  PREVIOUS_MILESTONE: "13.5"
+  MILESTONE_START: "2026-09-30"
+  MILESTONE: "17.0"
+  PREVIOUS_MILESTONE: "13.6"
   RELEASE_NOTES_URL: "https://aka.ms/aspire/update-latest"
   BATCH_SIZE: "20"
 
@@ -54,6 +54,7 @@ on:
 
 jobs:
   fetch-data:
+    if: github.repository == 'microsoft/aspire'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -109,7 +110,7 @@ jobs:
             # PR number from the filename instead of reading every JSON file (which
             # can fail when the glob expands to hundreds of arguments).
             if [ -d "$PRS_DIR" ]; then
-              PRS_LISTING=$(ls "$PRS_DIR" 2>/dev/null \
+              PRS_LISTING=$(find "$PRS_DIR" -maxdepth 1 -type f -printf '%f\n' \
                 | sed -n 's/.*-\([0-9]*\)\.json$/\1/p' \
                 | jq -Rs '[split("\n") | .[] | select(. != "") | tonumber]')
               if echo "$PRS_LISTING" | jq -e 'type == "array" and length > 0' >/dev/null 2>&1; then
@@ -120,7 +121,7 @@ jobs:
 
             DOCS_PRS_DIR="$MEMORY_DIR/prs-docs"
             if [ -d "$DOCS_PRS_DIR" ]; then
-              DOCS_PRS_LISTING=$(ls "$DOCS_PRS_DIR" 2>/dev/null \
+              DOCS_PRS_LISTING=$(find "$DOCS_PRS_DIR" -maxdepth 1 -type f -printf '%f\n' \
                 | sed -n 's/.*-\([0-9]*\)\.json$/\1/p' \
                 | jq -Rs '[split("\n") | .[] | select(. != "") | tonumber]')
               if echo "$DOCS_PRS_LISTING" | jq -e 'type == "array" and length > 0' >/dev/null 2>&1; then
@@ -312,13 +313,13 @@ jobs:
           rm -rf "$WIKI_TMP"
 
           echo "has_work=$HAS_WORK" >> "$GITHUB_OUTPUT"
-      - uses: actions/upload-artifact@v4.6.2
+      - uses: actions/upload-artifact@v7.0.1
         if: steps.fetch.outputs.has_work == 'true'
         with:
           name: changelog-data
           path: /tmp/gh-aw/
 
-if: github.repository_owner == 'microsoft' && needs.fetch-data.outputs.has-work == 'true'
+if: github.repository == 'microsoft/aspire' && needs.fetch-data.outputs.has-work == 'true'
 
 permissions:
   contents: read
@@ -349,7 +350,15 @@ safe-outputs:
       env:
         GH_TOKEN: ${{ github.token }}
       steps:
+        - name: Download changelog files
+          id: download-changelog
+          uses: actions/download-artifact@v8.0.1
+          with:
+            name: changelog-output
+            path: ${{ runner.temp }}/changelog-output
         - name: Publish changelog and update memory branch
+          env:
+            CHANGELOG_DIR: ${{ steps.download-changelog.outputs.download-path }}
           run: |
             set -euo pipefail
 
@@ -359,8 +368,7 @@ safe-outputs:
               exit 1
             fi
 
-            ARTIFACT_DIR=$(dirname "$OUTPUT_FILE")
-            BODY_FILE="$ARTIFACT_DIR/agent/new-body.md"
+            BODY_FILE="$CHANGELOG_DIR/new-body.md"
             if [ ! -f "$BODY_FILE" ]; then
               echo "::error::Changelog body not found at $BODY_FILE"
               exit 1
@@ -436,7 +444,7 @@ safe-outputs:
             fi
 
             # ── 2. Push state to memory branch ──
-            MEMORY_DIR="$ARTIFACT_DIR/agent/memory/$MILESTONE"
+            MEMORY_DIR="$CHANGELOG_DIR/memory/$MILESTONE"
             if [ -d "$MEMORY_DIR" ]; then
               if ! git clone --depth 1 --branch "$MEMORY_BRANCH" \
                   "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" \
@@ -487,10 +495,21 @@ safe-outputs:
 timeout-minutes: 30
 
 steps:
-  - uses: actions/download-artifact@v4.3.0
+  - uses: actions/download-artifact@v8.0.1
     with:
       name: changelog-data
       path: /tmp/gh-aw/
+
+# Custom agent files are not included in gh-aw's diagnostic agent artifact.
+post-steps:
+  - name: Upload changelog files
+    uses: actions/upload-artifact@v7.0.1
+    with:
+      name: changelog-output
+      path: |
+        /tmp/gh-aw/agent/new-body.md
+        /tmp/gh-aw/agent/memory/${{ env.MILESTONE }}/
+      if-no-files-found: error
 
 ---
 
@@ -502,7 +521,7 @@ previous entries. A companion feedback issue collects editorial comments.
 
 <!-- Keep the hardcoded values below in sync with the env block above. -->
 > **Note:** `${PRODUCT}`, `${REPO}`, `${DOCS_REPO}`, `${MILESTONE_START}`, `${MILESTONE}`, `${PREVIOUS_MILESTONE}`, `${RELEASE_NOTES_URL}`, and `${BATCH_SIZE}` refer to values set in the workflow's
-> `env` block (currently **`Aspire`**, **`microsoft/aspire`**, **`microsoft/aspire.dev`**, **`2026-08-19`**, **`13.6`**, **`13.5`**, **`https://aka.ms/aspire/update-latest`**, and **`20`**). All file names,
+> `env` block (currently **`Aspire`**, **`microsoft/aspire`**, **`microsoft/aspire.dev`**, **`2026-09-30`**, **`17.0`**, **`13.6`**, **`https://aka.ms/aspire/update-latest`**, and **`20`**). All file names,
 > titles, and references below derive from those values.
 
 ## Important: available tools

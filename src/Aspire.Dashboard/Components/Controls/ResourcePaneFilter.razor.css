@@ -1,0 +1,193 @@
+﻿.resource-pane-filter {
+    display: contents;
+}
+
+.resource-pane-filter ::deep .resource-filter-popover::part(dialog) {
+    position-anchor: var(--resource-filter-anchor);
+    /* Fluent sets the dialog insets inline; the anchor position must override them. */
+    top: anchor(bottom) !important;
+    left: anchor(left) !important;
+    right: auto !important;
+    bottom: auto !important;
+    margin-top: 6px;
+    position-try-fallbacks: flip-block, flip-inline;
+    box-sizing: border-box;
+    width: min(320px, calc(100vw - 24px));
+    max-width: none;
+    max-height: none;
+    padding: 0;
+    overflow: hidden;
+    cursor: default;
+}
+
+.resource-filter {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.resource-filter-header {
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr);
+    align-items: center;
+    box-sizing: border-box;
+    min-height: 36px;
+    margin-bottom: 4px;
+    padding: 0 8px 4px 4px;
+    border-bottom: var(--strokeWidthThin) solid var(--colorNeutralStroke2);
+    color: var(--colorNeutralForeground3);
+    font-size: var(--fontSizeBase300);
+    font-weight: var(--fontWeightSemibold);
+    line-height: 20px;
+}
+
+.resource-filter-header ::deep .resource-filter-header-icon {
+    grid-column: 1;
+    justify-self: center;
+}
+
+.resource-filter-header-title {
+    grid-column: 2;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Reset and OK are always visible below the list, so closing the popover never needs a scroll. */
+.resource-filter-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 10px 12px;
+    border-top: 1px solid var(--colorNeutralStroke2);
+}
+/* The list scrolls inside the popover, so a long list of values never runs off the bottom of the window. */
+.resource-filter-body {
+    /* Use the height the window has below the filter button; the list scrolls only once that is used up. */
+    max-height: max(200px, calc(100dvh - 280px));
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    /* Reserve the scrollbar's space even when there is no scrollbar, so a section opening or a filter changing the
+       height never reflows the content when a scrollbar appears. */
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+    scrollbar-color: var(--colorNeutralStroke1) transparent;
+    padding: 6px 4px 8px 8px;
+}
+
+/* Each group is a block with room above and below. The separator is a hairline between blocks, and the header's
+   hover tint sits inside the block with a margin to the lines, so it never touches them. */
+.resource-filter-group {
+    padding-block: 2px;
+}
+
+.resource-filter-group + .resource-filter-group {
+    margin-top: 6px;
+    padding-top: 8px;
+    border-top: 1px solid var(--colorNeutralStroke2);
+}
+
+.resource-filter-group-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 32px;
+    padding: 0 8px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--colorNeutralForeground1);
+    font: inherit;
+    font-size: var(--fontSizeBase300);
+    font-weight: var(--fontWeightSemibold);
+    text-align: start;
+    cursor: pointer;
+    transition: background-color 120ms ease;
+}
+
+/* A faint tint of the text color reads the same on light and dark themes, unlike a neutral surface token. */
+.resource-filter-group-header:hover {
+    background: light-dark(var(--colorNeutralBackground1Hover), color-mix(in srgb, var(--aspire-control-background) 88%, var(--colorNeutralForeground1)));
+}
+
+.resource-filter-group-header:active {
+    background: color-mix(in srgb, var(--colorNeutralForeground1) 11%, transparent);
+}
+
+.resource-filter-group-header:focus-visible {
+    outline: 2px solid var(--colorStrokeFocus2);
+    outline-offset: -2px;
+}
+
+.resource-filter-chevron {
+    display: inline-flex;
+    color: var(--colorNeutralForeground2);
+    transition: transform 120ms ease;
+}
+
+.resource-filter-chevron.collapsed {
+    transform: rotate(-90deg);
+}
+
+.resource-filter-group-name {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+/* Says at a glance that the group filters something, without opening it. */
+.resource-filter-group-summary {
+    flex: none;
+    padding: 0 8px;
+    border-radius: 10px;
+    background: var(--resource-brand-soft);
+    color: var(--colorNeutralForeground1);
+    font-size: var(--fontSizeBase200);
+    font-weight: var(--fontWeightSemibold);
+    line-height: 18px;
+}
+.resource-filter-options {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 2px 4px 6px 8px;
+}
+
+.resource-filter-options ::deep fluent-field {
+    min-width: 0;
+    margin-block: 0;
+}
+
+.resource-filter-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-width: 0;
+}
+
+.resource-filter-option ::deep fluent-field {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.resource-filter-option ::deep label[slot="label"] {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.resource-filter-count {
+    flex: none;
+    min-width: 20px;
+    padding: 0 6px;
+    border-radius: 10px;
+    background: var(--colorNeutralBackground3);
+    color: var(--colorNeutralForeground2);
+    font-size: var(--fontSizeBase200);
+    line-height: 18px;
+    text-align: center;
+}

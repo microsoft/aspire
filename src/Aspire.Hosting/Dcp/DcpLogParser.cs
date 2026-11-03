@@ -156,8 +156,9 @@ internal static class DcpLogParser
     /// Formats a system-level log message by parsing JSON metadata and applying the [sys] prefix format.
     /// </summary>
     /// <param name="message">The raw message which may contain a text portion and JSON metadata.</param>
+    /// <param name="additionalFields">Additional fields to append after the message and any fields extracted from JSON metadata.</param>
     /// <returns>The formatted message with [sys] prefix and human-readable format.</returns>
-    public static string FormatSystemLog(string message)
+    public static string FormatSystemLog(string message, IReadOnlyList<KeyValuePair<string, string?>>? additionalFields = null)
     {
         const string SystemLogPrefix = "[sys] ";
 
@@ -165,8 +166,7 @@ internal static class DcpLogParser
         var jsonStart = message.IndexOf('\t');
         if (jsonStart < 0)
         {
-            // No JSON metadata, return message as-is with [sys] prefix
-            return $"{SystemLogPrefix}{message}";
+            return FormatSystemLogMessage(message, additionalFields);
         }
 
         var textPart = message[..jsonStart];
@@ -178,75 +178,92 @@ internal static class DcpLogParser
             using var doc = JsonDocument.Parse(jsonPart);
             var root = doc.RootElement;
 
-            // Build the formatted message
-            var sb = new StringBuilder();
-            sb.Append(SystemLogPrefix);
-
-            // Add the text part if it exists
-            if (!string.IsNullOrWhiteSpace(textPart))
+            // Process failures are emitted as:
+            //   Failed to start a process\t{"Cmd":"pwsh","Args":[],"error":"..."}
+            var fields = new List<KeyValuePair<string, string?>>
             {
-                sb.Append(textPart);
-            }
-
-            // Extract and add JSON fields in a loop
-            var fields = new (string Name, string? Value)[]
-            {
-                ("Cmd", root.TryGetProperty("Cmd", out var cmdProp) ? cmdProp.GetString() : null),
-                ("Args", root.TryGetProperty("Args", out var argsProp) ? argsProp.ToString() : null),
-                ("ContainerName", root.TryGetProperty("ContainerName", out var containerNameProp) ? containerNameProp.GetString() : null),
-                ("ContainerId", root.TryGetProperty("ContainerID", out var containerIdProp) ? containerIdProp.GetString() : null),
-                ("Error", root.TryGetProperty("error", out var errorProp) ? errorProp.GetString() : null)
+                new("Cmd", root.TryGetProperty("Cmd", out var cmdProp) ? cmdProp.GetString() : null),
+                new("Args", root.TryGetProperty("Args", out var argsProp) ? argsProp.ToString() : null),
+                new("ContainerName", root.TryGetProperty("ContainerName", out var containerNameProp) ? containerNameProp.GetString() : null),
+                new("ContainerId", root.TryGetProperty("ContainerID", out var containerIdProp) ? containerIdProp.GetString() : null)
             };
 
+            if (additionalFields is not null)
+            {
+                fields.AddRange(additionalFields);
+            }
+
+            fields.Add(new("Error", root.TryGetProperty("error", out var errorProp) ? errorProp.GetString() : null));
+
+            return FormatSystemLogMessage(
+                string.IsNullOrWhiteSpace(textPart) ? string.Empty : textPart,
+                fields);
+        }
+        catch
+        {
+            // Preserve malformed metadata for diagnostics while still adding caller-provided context.
+            return FormatSystemLogMessage(message, additionalFields);
+        }
+
+        static string FormatSystemLogMessage(
+            string text,
+            IEnumerable<KeyValuePair<string, string?>>? fields)
+        {
+            var sb = new StringBuilder();
+            sb.Append(SystemLogPrefix);
+            sb.Append(text);
+
             var hasAddedField = false;
+            if (fields is null)
+            {
+                return sb.ToString();
+            }
+
             foreach (var (name, value) in fields)
             {
-                if (!string.IsNullOrWhiteSpace(value))
+                if (string.IsNullOrWhiteSpace(value))
                 {
-                    // Handle multi-line values
-                    if (value.Contains('\n'))
-                    {
-                        if (sb.Length > SystemLogPrefix.Length || hasAddedField)
-                        {
-                            sb.Append(':');
-                        }
-                        sb.Append('\n');
-                        // Prefix each line with [sys]
-                        var lines = value.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-                        for (int i = 0; i < lines.Length; i++)
-                        {
-                            sb.Append(SystemLogPrefix);
-                            sb.Append(lines[i].Trim());
-                            // Only add newline if not the last line
-                            if (i < lines.Length - 1)
-                            {
-                                sb.Append('\n');
-                            }
-                        }
-                    }
-                    else
-                    {
-                        // Add delimiter
-                        if (sb.Length > SystemLogPrefix.Length)
-                        {
-                            sb.Append(hasAddedField ? ", " : ": ");
-                        }
+                    continue;
+                }
 
-                        // Add field in format "Name = Value"
-                        sb.Append(name);
-                        sb.Append(" = ");
-                        sb.Append(value);
-                        hasAddedField = true;
+                // Handle multi-line values
+                if (value.Contains('\n'))
+                {
+                    if (sb.Length > SystemLogPrefix.Length || hasAddedField)
+                    {
+                        sb.Append(':');
                     }
+                    sb.Append('\n');
+                    // Prefix each line with [sys]
+                    var lines = value.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+                    for (int i = 0; i < lines.Length; i++)
+                    {
+                        sb.Append(SystemLogPrefix);
+                        sb.Append(lines[i].Trim());
+                        // Only add newline if not the last line
+                        if (i < lines.Length - 1)
+                        {
+                            sb.Append('\n');
+                        }
+                    }
+                }
+                else
+                {
+                    // Add delimiter
+                    if (sb.Length > SystemLogPrefix.Length)
+                    {
+                        sb.Append(hasAddedField ? ", " : ": ");
+                    }
+
+                    // Add field in format "Name = Value"
+                    sb.Append(name);
+                    sb.Append(" = ");
+                    sb.Append(value);
+                    hasAddedField = true;
                 }
             }
 
             return sb.ToString();
-        }
-        catch
-        {
-            // If JSON parsing fails, return the original message with [sys] prefix
-            return $"{SystemLogPrefix}{message}";
         }
     }
 }

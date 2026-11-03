@@ -10,8 +10,25 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Backchannel;
 
-public class ExtensionBackchannelTests(ITestOutputHelper outputHelper)
+public class ExtensionBackchannelTests(ITestOutputHelper outputHelper) : IDisposable
 {
+    private readonly ConsoleCancellationManager _cancellationManager = new(Timeout.InfiniteTimeSpan);
+
+    [Fact]
+    public async Task StopCliAsync_CancelsTheRunningCommand()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        _cancellationManager.SetStartedHandler(Task.CompletedTask);
+        var rpcTarget = new ExtensionRpcTarget(
+            new ConfigurationBuilder().Build(),
+            workspace.CreateExecutionContext(),
+            _cancellationManager);
+
+        await rpcTarget.StopCliAsync();
+
+        Assert.True(_cancellationManager.IsCancellationRequested);
+    }
+
     [Fact]
     public async Task ConnectAsync_WhenConnectionSetupFails_PropagatesFailureAndAllowsRetry()
     {
@@ -146,7 +163,9 @@ public class ExtensionBackchannelTests(ITestOutputHelper outputHelper)
         Assert.Equal(2, connectAttempts);
     }
 
-    private static ExtensionBackchannel CreateBackchannel(
+    public void Dispose() => _cancellationManager.Dispose();
+
+    private ExtensionBackchannel CreateBackchannel(
         string endpoint,
         CliExecutionContext executionContext,
         Func<CancellationToken, Task>? connectCoreAsyncOverride = null)
@@ -159,7 +178,11 @@ public class ExtensionBackchannelTests(ITestOutputHelper outputHelper)
             })
             .Build();
 
-        return new ExtensionBackchannel(NullLogger<ExtensionBackchannel>.Instance, new ExtensionRpcTarget(configuration, executionContext), configuration, connectCoreAsyncOverride);
+        return new ExtensionBackchannel(
+            NullLogger<ExtensionBackchannel>.Instance,
+            new ExtensionRpcTarget(configuration, executionContext, _cancellationManager),
+            configuration,
+            connectCoreAsyncOverride);
     }
 
 }

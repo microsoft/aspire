@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 
 namespace Aspire.Hosting.Pipelines;
@@ -9,7 +8,6 @@ namespace Aspire.Hosting.Pipelines;
 /// <summary>
 /// Provides extension methods for adding pipeline steps to resources.
 /// </summary>
-[Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public static class PipelineStepFactoryExtensions
 {
     /// <summary>

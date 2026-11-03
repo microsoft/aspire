@@ -11,6 +11,7 @@ import { AppHostDiscoveryService } from '../utils/appHostDiscovery';
 import { AppHostLaunchService } from '../services/AppHostLaunchService';
 import * as cliPathModule from '../utils/cliPath';
 import { noAppHostInWorkspace } from '../loc/strings';
+import { csharpExtensionId } from '../capabilities';
 
 import { removeDirectorySafely } from './testHelpers';
 function createEditor(filePath: string): vscode.TextEditor {
@@ -81,6 +82,24 @@ suite('AspireEditorCommandProvider', () => {
         activeEditorStub.restore();
         removeDirectorySafely(tempDir);
     });
+
+    for (const fileExtension of ['.csproj', '.fsproj', '.vbproj', '.VBPROJ']) {
+        test(`enables editor Run/Debug for ${fileExtension} with the coreclr debugger installed`, async () => {
+            const extensionStub = sinon.stub(vscode.extensions, 'getExtension').callsFake(extensionId =>
+                extensionId === csharpExtensionId ? { id: extensionId } as vscode.Extension<unknown> : undefined);
+            const projectPath = path.join(tempDir, `AppHost${fileExtension}`);
+            activeEditor = createEditor(projectPath);
+            const provider = new AspireEditorCommandProvider(createAppHostDiscoveryService(projectPath), createLaunchService());
+            try {
+                await provider.processDocument(activeEditor.document);
+
+                assert.ok(executeCommandStub.calledWith('setContext', 'aspire.editorSupportsRunDebug', true));
+            } finally {
+                provider.dispose();
+                extensionStub.restore();
+            }
+        });
+    }
 
     test('returns containing project file when active editor is SDK-style AppHost Program.cs', async () => {
         const appHostDirectory = path.join(tempDir, 'AppHost');
@@ -190,7 +209,10 @@ suite('AspireEditorCommandProvider', () => {
 
             assert.ok(startDebuggingStub.calledOnce);
             const launchConfiguration = startDebuggingStub.firstCall.args[1] as vscode.DebugConfiguration;
-            assert.strictEqual(launchConfiguration.program, appHostPath);
+            // The launch binds its configuration to the physical AppHost it resolved, so where the
+            // temp directory is itself a link - macOS reports /var as a link to /private/var - the
+            // configuration carries the canonical path rather than the spelling discovery returned.
+            assert.strictEqual(launchConfiguration.program, fs.realpathSync.native(appHostPath));
             assert.strictEqual(launchConfiguration.command, 'run');
             assert.strictEqual(launchConfiguration.noDebug, true);
             assert.strictEqual(showErrorMessageStub.called, false);
@@ -228,7 +250,7 @@ suite('AspireEditorCommandProvider', () => {
             await provider.tryExecuteRunAppHost(true, vscode.Uri.file(appHostBPath));
 
             const launchConfiguration = startDebuggingStub.firstCall.args[1] as vscode.DebugConfiguration;
-            assert.strictEqual(launchConfiguration.program, appHostBPath);
+            assert.strictEqual(launchConfiguration.program, fs.realpathSync.native(appHostBPath));
         }
         finally {
             provider.dispose();
@@ -258,7 +280,7 @@ suite('AspireEditorCommandProvider', () => {
 
             assert.ok(startDebuggingStub.calledOnce);
             const launchConfiguration = startDebuggingStub.firstCall.args[1] as vscode.DebugConfiguration;
-            assert.strictEqual(launchConfiguration.program, workspaceAppHostPath);
+            assert.strictEqual(launchConfiguration.program, fs.realpathSync.native(workspaceAppHostPath));
         }
         finally {
             provider.dispose();

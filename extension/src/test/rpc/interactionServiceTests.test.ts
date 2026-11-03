@@ -160,6 +160,88 @@ suite('InteractionService endpoints', () => {
 		showQuickPickStub.restore();
 	});
 
+	// promptForSelections
+	test('promptForSelections preselects CLI defaults', async () => {
+		const testInfo = await createTestRpcServer();
+		const showQuickPickStub = sinon.stub(vscode.window, 'showQuickPick').resolves([
+			{ label: 'Aspire skill', picked: true },
+		] as never);
+
+		try {
+			const result = await testInfo.interactionService.promptForSelections(
+				'Select skills:',
+				['Aspire skill', 'Playwright CLI'],
+				['Aspire skill']);
+
+			const quickPickItems = showQuickPickStub.firstCall.args[0] as readonly vscode.QuickPickItem[];
+			assert.deepStrictEqual(quickPickItems, [
+				{ label: 'Aspire skill', picked: true },
+				{ label: 'Playwright CLI', picked: false },
+			]);
+			assert.deepStrictEqual(result, ['Aspire skill']);
+		}
+		finally {
+			showQuickPickStub.restore();
+		}
+	});
+
+	test('promptForSelections returns the user changed selections', async () => {
+		const testInfo = await createTestRpcServer();
+		const showQuickPickStub = sinon.stub(vscode.window, 'showQuickPick').resolves([
+			{ label: 'Playwright CLI', picked: false },
+		] as never);
+
+		try {
+			const result = await testInfo.interactionService.promptForSelections(
+				'Select skills:',
+				['Aspire skill', 'Playwright CLI'],
+				['Aspire skill']);
+
+			assert.deepStrictEqual(result, ['Playwright CLI']);
+		}
+		finally {
+			showQuickPickStub.restore();
+		}
+	});
+
+	test('promptForSelections returns null when user cancels', async () => {
+		const testInfo = await createTestRpcServer();
+		const showQuickPickStub = sinon.stub(vscode.window, 'showQuickPick').resolves(undefined);
+
+		try {
+			const result = await testInfo.interactionService.promptForSelections(
+				'Select skills:',
+				['Aspire skill'],
+				['Aspire skill']);
+
+			assert.strictEqual(result, null);
+		}
+		finally {
+			showQuickPickStub.restore();
+		}
+	});
+
+	test('promptForSelections supports older CLI calls without defaults', async () => {
+		const testInfo = await createTestRpcServer();
+		const showQuickPickStub = sinon.stub(vscode.window, 'showQuickPick').resolves([] as never);
+
+		try {
+			const result = await testInfo.interactionService.promptForSelections(
+				'Select skills:',
+				['Aspire skill', 'Playwright CLI']);
+
+			const quickPickItems = showQuickPickStub.firstCall.args[0] as readonly vscode.QuickPickItem[];
+			assert.deepStrictEqual(quickPickItems, [
+				{ label: 'Aspire skill', picked: false },
+				{ label: 'Playwright CLI', picked: false },
+			]);
+			assert.deepStrictEqual(result, []);
+		}
+		finally {
+			showQuickPickStub.restore();
+		}
+	});
+
 	test('startDebugSession forwards CLI environment to the debug configuration', async () => {
 		const testInfo = await createTestRpcServer();
 		const startDebuggingStub = sinon.stub(vscode.debug, 'startDebugging').resolves(true);
@@ -250,6 +332,7 @@ suite('InteractionService endpoints', () => {
 					tryReserveExternalLaunch: () => 'reservation-1',
 					validateOrReacquireExternalLaunchReservation: (_appHostPath, reservationId) => reservationId,
 					replaceExternalLaunchReservation: () => 'reservation-1',
+					markLaunchAttemptFailureRecorded: () => { },
 					releaseExternalLaunchReservation: () => { },
 					tryReserveExternalOperation: () => 'operation-1',
 					validateOrReacquireExternalOperationReservation: (_appHostPath, reservationId) => reservationId,
@@ -897,7 +980,7 @@ suite('InteractionService endpoints', () => {
 			});
 
 			assert.strictEqual(openDashboardStub.callCount, 1);
-			assert.deepStrictEqual(openDashboardStub.getCall(0).args, ['http://codespaces/login?t=codespaces-secret', 'openExternalBrowser']);
+			assert.deepStrictEqual(openDashboardStub.getCall(0).args, ['http://codespaces/login?t=codespaces-secret', 'openExternalBrowser', false]);
 		}
 		finally {
 			sandbox.restore();
@@ -957,7 +1040,7 @@ suite('InteractionService endpoints', () => {
 			});
 
 			assert.strictEqual(openDashboardStub.callCount, 1);
-			assert.deepStrictEqual(openDashboardStub.getCall(0).args, ['http://localhost/login?t=base-secret', 'integratedBrowser']);
+			assert.deepStrictEqual(openDashboardStub.getCall(0).args, ['http://localhost/login?t=base-secret', 'integratedBrowser', false]);
 		}
 		finally {
 			sandbox.restore();
@@ -985,7 +1068,7 @@ suite('InteractionService endpoints', () => {
 			});
 
 			assert.strictEqual(openDashboardStub.callCount, 1);
-			assert.deepStrictEqual(openDashboardStub.getCall(0).args, ['http://localhost/login?t=base-secret', 'integratedBrowser']);
+			assert.deepStrictEqual(openDashboardStub.getCall(0).args, ['http://localhost/login?t=base-secret', 'integratedBrowser', false]);
 		}
 		finally {
 			sandbox.restore();

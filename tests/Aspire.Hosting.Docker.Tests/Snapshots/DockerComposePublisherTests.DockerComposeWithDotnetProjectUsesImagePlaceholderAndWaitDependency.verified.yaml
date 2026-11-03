@@ -1,0 +1,19 @@
+﻿services:
+  api:
+    image: "${API_IMAGE}"
+    environment:
+      OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY: "in_memory"
+    networks:
+      - "aspire"
+  worker:
+    image: "${WORKER_IMAGE}"
+    environment:
+      OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY: "in_memory"
+    depends_on:
+      api:
+        condition: "service_started"
+    networks:
+      - "aspire"
+networks:
+  aspire:
+    driver: "bridge"

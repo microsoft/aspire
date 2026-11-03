@@ -38,6 +38,7 @@ git checkout tags/Instrumentation.StackExchangeRedis-1.16.0-beta.1
     - `PropertyFetcher.cs`
     - `SemanticConventions.cs`
 - In `StackExchangeRedisConnectionInstrumentation.cs` ensure that the activity source name is overridden to `OpenTelemetry.Instrumentation.StackExchangeRedis`.
+- Alias `ActivitySourceFactory` to `OpenTelemetry.Trace.ActivitySourceFactory` in that file to avoid the .NET 11 `System.Diagnostics.ActivitySourceFactory` name collision.
 
 ## Customizations
 

@@ -4,6 +4,7 @@ on:
   # Use pull_request_target to run in the context of the base branch
   # This allows commenting on PRs from forks
   pull_request_target:
+    # zizmor: ignore[dangerous-triggers] - the workflow never checks out or executes pull request code
     types: [opened, reopened, synchronize]
     branches:
       - 'main'
@@ -19,7 +20,7 @@ on:
 jobs:
   add-dogfood-comment:
     # Only run on the dotnet org to avoid running on forks
-    if: ${{ github.repository_owner == 'microsoft' }}
+    if: ${{ github.repository == 'microsoft/aspire' }}
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write

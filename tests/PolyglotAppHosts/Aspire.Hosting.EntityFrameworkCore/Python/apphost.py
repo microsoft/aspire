@@ -5,8 +5,10 @@ from aspire_app import create_builder
 
 with create_builder() as builder:
     api = builder.add_project("api", "./src/Api")
+    dotnet_api = builder.add_dotnet_project("dotnet-api", "./src/Api/Api.csproj")
     api_migrations = builder.add_project("api-migrations-project", "./src/Api.Migrations")
 
+    dotnet_api.add_ef_migrations("dotnet-api-migrations")
     api.add_ef_migrations("api-migrations").with_migrations_project(migrations_project="./src/Api.Migrations")
     api.add_ef_migrations(
         "api-dbcontext-migrations",

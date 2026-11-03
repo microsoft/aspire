@@ -14,14 +14,16 @@ namespace Aspire.Cli.EndToEnd.Tests.Helpers;
 internal sealed class TerminalRun : IAsyncDisposable
 {
     private readonly Task _pendingRun;
+    private readonly CancellationTokenSource _runCancellation;
     private readonly Hex1bTerminalAutomator _automator;
     private readonly SequenceCounter _counter;
     private readonly TemporaryWorkspace _workspace;
     private readonly ITestOutputHelper _output;
 
-    internal TerminalRun(Task pendingRun, Hex1bTerminalAutomator automator, SequenceCounter counter, TemporaryWorkspace workspace, ITestOutputHelper output)
+    internal TerminalRun(Task pendingRun, CancellationTokenSource runCancellation, Hex1bTerminalAutomator automator, SequenceCounter counter, TemporaryWorkspace workspace, ITestOutputHelper output)
     {
         _pendingRun = pendingRun;
+        _runCancellation = runCancellation;
         _automator = automator;
         _counter = counter;
         _workspace = workspace;
@@ -30,14 +32,17 @@ internal sealed class TerminalRun : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        // Capture diagnostics (best effort)
+        using var runCancellation = _runCancellation;
+
+        // Capture diagnostics (best effort). The helper bounds its prompt wait; awaiting it directly
+        // avoids abandoning an automator operation that could overlap with the exit input below.
         try
         {
             await _automator.CaptureAspireDiagnosticsAsync(_counter, _workspace);
         }
-        catch
+        catch (Exception ex)
         {
-            // Best effort diagnostics capture — don't mask the original test failure.
+            WriteTestOutput($"[TerminalRun] Could not capture diagnostics before shutdown: {ex.Message}");
         }
 
         // Exit the terminal (best effort)
@@ -51,14 +56,15 @@ internal sealed class TerminalRun : IAsyncDisposable
             // Best effort exit — the terminal may already be closed.
         }
 
-        // Wait for the terminal process to finish
+        // A timed-out command can leave the shell busy, so the queued exit may never execute.
+        // Cancel the terminal run after a grace period rather than hiding the original test failure.
         try
         {
-            await _pendingRun;
+            await WaitForExitAsync(_pendingRun, runCancellation, TimeSpan.FromSeconds(15));
         }
-        catch
+        catch (Exception ex)
         {
-            // Best effort — if the test body threw, we don't want to mask it.
+            WriteTestOutput($"[TerminalRun] Terminal shutdown did not complete normally: {ex.Message}");
         }
 
         // Copy workspace diagnostics to the host-side testresults directory so they appear
@@ -72,6 +78,33 @@ internal sealed class TerminalRun : IAsyncDisposable
         catch
         {
             // Best effort — don't mask the original test failure.
+        }
+    }
+
+    internal static async Task WaitForExitAsync(Task pendingRun, CancellationTokenSource runCancellation, TimeSpan timeout)
+    {
+        try
+        {
+            await pendingRun.WaitAsync(timeout);
+        }
+        catch (TimeoutException)
+        {
+            runCancellation.Cancel();
+
+            try
+            {
+                await pendingRun.WaitAsync(timeout);
+            }
+            catch (OperationCanceledException) when (runCancellation.IsCancellationRequested)
+            {
+            }
+            catch (TimeoutException ex)
+            {
+                throw new TimeoutException(
+                    "The terminal did not exit after cancellation. Stopped waiting so the original test failure can be reported. " +
+                    "Check the terminal recording for the command that stopped making progress.",
+                    ex);
+            }
         }
     }
 

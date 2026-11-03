@@ -7,7 +7,7 @@ using Azure.Provisioning.AppContainers;
 
 namespace Aspire.Hosting.Azure.Tests.PublicApiTests;
 
-public class AppContainersPublicApiTests
+public class AppContainersPublicApiTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void PublishAsAzureContainerAppShouldThrowWhenContainerIsNull()
@@ -24,7 +24,7 @@ public class AppContainersPublicApiTests
     [Fact]
     public void PublishAsAzureContainerAppShouldThrowWhenConfigureIsNull()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var container = builder.AddContainer("api", "myimage");
         Action<AzureResourceInfrastructure, ContainerApp> configure = null!;
 
@@ -60,7 +60,7 @@ public class AppContainersPublicApiTests
     [Fact]
     public void PublishAsAzureContainerAppForExecutableShouldThrowWhenConfigureIsNull()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var executable = builder.AddExecutable("api", "node.exe", Environment.CurrentDirectory);
         Action<AzureResourceInfrastructure, ContainerApp> configure = null!;
 
@@ -101,8 +101,10 @@ public class AppContainersPublicApiTests
     [Fact]
     public void PublishAsAzureContainerAppForProjectShouldThrowWhenConfigureIsNull()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+#pragma warning disable CS0618 // Retain published legacy ProjectResource overload and return-type validation.
         var project = builder.AddProject<ProjectA>("serviceA", o => o.ExcludeLaunchProfile = true);
+#pragma warning restore CS0618
         Action<AzureResourceInfrastructure, ContainerApp> configure = null!;
 
         var action = () => project.PublishAsAzureContainerApp(configure);
@@ -114,7 +116,7 @@ public class AppContainersPublicApiTests
     [Fact]
     public void ConfigureCustomDomainShouldThrowWhenAppIsNull()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         ContainerApp app = null!;
         var customDomain = builder.AddParameter("customDomain");
         var certificateName = builder.AddParameter("certificateName");
@@ -128,7 +130,7 @@ public class AppContainersPublicApiTests
     [Fact]
     public void ConfigureCustomDomainShouldThrowWhenCustomDomainIsNull()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var app = new ContainerApp("app");
         IResourceBuilder<ParameterResource> customDomain = null!;
         var certificateName = builder.AddParameter("certificateName");
@@ -142,7 +144,7 @@ public class AppContainersPublicApiTests
     [Fact]
     public void ConfigureCustomDomainShouldThrowWhenCertificateNameIsNull()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var app = new ContainerApp("app");
         var customDomain = builder.AddParameter("customDomain");
         IResourceBuilder<ParameterResource> certificateName = null!;

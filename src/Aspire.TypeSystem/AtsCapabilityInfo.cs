@@ -290,6 +290,11 @@ public sealed class AtsCapabilityInfo
     public AtsDocumentationInfo? Documentation { get; init; }
 
     /// <summary>
+    /// Gets or sets whether this capability is experimental.
+    /// </summary>
+    public bool IsExperimental { get; init; }
+
+    /// <summary>
     /// Gets or sets whether this capability is obsolete.
     /// </summary>
     public bool IsObsolete { get; init; }

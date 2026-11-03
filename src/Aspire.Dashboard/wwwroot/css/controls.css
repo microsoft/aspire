@@ -1,3 +1,7 @@
+fluent-overflow::part(items) {
+    flex-grow: 0;
+}
+
 fluent-button {
     --aspire-button-background: var(--colorNeutralBackground1);
     --aspire-button-foreground: var(--colorNeutralForeground1);
@@ -33,18 +37,18 @@ fluent-button:not([appearance]) {
 /* Fluent v5 renamed v4's Accent appearance to Primary. Preserve the final-v4 color recipe for every primary action. */
 
 fluent-button[appearance="primary"] {
-    background-color: var(--aspire-button-background);
-    color: var(--aspire-button-foreground);
+    background-color: var(--aspire-button-background) !important;
+    color: var(--aspire-button-foreground) !important;
 }
 
 fluent-button[appearance="primary"]:hover {
-    background-color: var(--accent-button-hover-background);
-    color: var(--accent-button-hover-foreground);
+    background-color: var(--accent-button-hover-background) !important;
+    color: var(--accent-button-hover-foreground) !important;
 }
 
 fluent-button[appearance="primary"]:active {
-    background-color: var(--accent-button-pressed-background);
-    color: var(--accent-button-pressed-foreground);
+    background-color: var(--accent-button-pressed-background) !important;
+    color: var(--accent-button-pressed-foreground) !important;
 }
 
 fluent-button[appearance="primary"] .copy-icon,
@@ -122,6 +126,15 @@ fluent-text-input:is([disabled], :disabled)::part(control) {
 
 fluent-dropdown > [slot="control"] {
     align-self: center;
+}
+
+fluent-dropdown > button[slot="control"] {
+    /* Prevent the selected text from expanding a FluentField grid track past the dropdown width. */
+    width: 0;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 /* Fluent's placeholder state follows option selection, which can be empty even when a combobox has custom text. */
@@ -257,6 +270,18 @@ fluent-drawer fluent-drawer-body > [slot="close"] fluent-button::part(control) {
     background-color: var(--aspire-button-background);
 }
 
+/* The explicit background-color above overrides fluent-button's own hover/pressed shading,
+   so icon-only buttons need their own state colors to still read as interactive. */
+.aspire-icon-button:hover,
+.aspire-icon-button:hover::part(control) {
+    --aspire-button-background: var(--colorSubtleBackgroundHover);
+}
+
+.aspire-icon-button:active,
+.aspire-icon-button:active::part(control) {
+    --aspire-button-background: var(--colorSubtleBackgroundPressed);
+}
+
 .aspire-link-button,
 .aspire-link-button::part(control),
 .button-hyperlink,
@@ -338,7 +363,16 @@ fluent-field.aspire-checkbox {
 }
 
 fluent-field.aspire-checkbox:has(> fluent-checkbox[disabled]) {
-    opacity: 0.3;
+    color: var(--colorNeutralForegroundDisabled);
+}
+
+fluent-field.aspire-checkbox > fluent-checkbox[disabled] {
+    --colorNeutralStrokeDisabled: var(--colorNeutralForegroundDisabled);
+    cursor: not-allowed;
+}
+
+fluent-field.aspire-checkbox:has(> fluent-checkbox[disabled]) > label {
+    cursor: not-allowed;
 }
 
 fluent-field.aspire-checkbox:not(:has(> fluent-checkbox[disabled])) > label {
@@ -360,6 +394,14 @@ fluent-field.aspire-checkbox > fluent-checkbox {
     font-size: var(--fontSizeBase300);
     line-height: var(--lineHeightBase300);
     margin: 0;
+}
+
+/* The help dialog's height follows the selected tab. A dialog is centered vertically, so a taller tab would move the
+   tab row up from under the pointer in the middle of the click that selected it. The click would then land on the
+   dialog's backdrop and dismiss it. Anchoring the top edge lets the height change without moving the tabs. */
+fluent-dialog#HelpDialog::part(dialog) {
+    margin-top: min(80px, 8vh);
+    margin-bottom: auto;
 }
 
 fluent-dialog-body fluent-radio {
@@ -450,18 +492,23 @@ fluent-dropdown fluent-option {
 }
 
 fluent-dropdown fluent-option[selected],
-fluent-dropdown fluent-option:hover,
-fluent-dropdown fluent-option:state(active),
-fluent-dropdown fluent-option:focus-visible {
+fluent-dropdown fluent-option:not(:state(disabled)):hover,
+fluent-dropdown fluent-option:not(:state(disabled)):state(active),
+fluent-dropdown fluent-option:not(:state(disabled)):focus-visible {
     color: var(--aspire-dropdown-option-foreground);
     background-color: var(--aspire-dropdown-option-selected-background);
+}
+
+fluent-dropdown fluent-option:state(disabled) {
+    cursor: not-allowed;
+    opacity: var(--disabled-opacity);
 }
 
 fluent-dropdown fluent-option:state(active) {
     border: none;
 }
 
-fluent-dropdown fluent-option[selected]:hover {
+fluent-dropdown fluent-option[selected]:not(:state(disabled)):hover {
     background-color: var(--aspire-dropdown-option-selected-hover-background);
 }
 
@@ -469,8 +516,12 @@ fluent-dropdown fluent-option::part(content) {
     transform: translateX(-20px);
 }
 
+/* Fluent's selected checkmark is inside shadow DOM and uses currentColor. Make the host
+   transparent to hide it globally, then restore the option text through its exposed part. */
 fluent-dropdown fluent-option[selected],
-fluent-dropdown fluent-option[selected]:hover {
+fluent-dropdown fluent-option[selected]:not(:state(disabled)):hover,
+fluent-dropdown fluent-option[selected]:not(:state(disabled)):state(active),
+fluent-dropdown fluent-option[selected]:not(:state(disabled)):focus-visible {
     position: relative;
     color: transparent;
 }
@@ -481,7 +532,7 @@ fluent-dropdown fluent-option[selected]::part(content) {
 
 fluent-dropdown fluent-option[selected]::before {
     position: absolute;
-    top: 5px;
+    top: 7px;
     left: 1px;
     width: 3px;
     height: 14px;
@@ -623,11 +674,28 @@ body {
     overflow: hidden;
 }
 
-.aspire-menu-container {
+.aspire-menu-button {
+    display: flex;
+    align-items: center;
+    position: relative;
+}
+
+.aspire-menu-button > fluent-button > svg[slot="end"] {
+    flex: 0 0 16px;
+    width: 16px !important;
+    height: 16px !important;
+    margin-inline-start: auto;
+}
+
+.aspire-menu-button > .aspire-menu-container {
+    position: absolute;
+}
+
+:is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) {
     --colorNeutralBackground1Hover: var(--aspire-menu-item-hover-background);
 }
 
-.aspire-menu-container fluent-menu-list {
+:is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-menu-list {
     gap: 0;
     padding: 3px 0;
     border-radius: var(--aspire-popup-radius);
@@ -635,15 +703,17 @@ body {
     box-shadow: var(--aspire-popup-shadow);
 }
 
-.aspire-menu-container fluent-menu-list:has(> fluent-menu-item:state(submenu)) {
+:is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-menu-list:has(> fluent-menu-item:state(submenu)) {
     min-width: 180px;
 }
 
-.aspire-menu-container fluent-menu-item {
+:is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-menu-item {
     gap: 0;
     grid-template-columns: minmax(32px, auto) 0 minmax(0, 1fr) minmax(32px, auto);
     height: 28px;
     min-height: 28px;
+    box-sizing: border-box;
+    inline-size: calc(100% - 8px);
     margin-inline: 4px;
     padding: 0;
     border-radius: var(--aspire-control-radius);
@@ -655,35 +725,62 @@ body {
     line-height: var(--lineHeightBase300);
 }
 
-.aspire-menu-container fluent-menu-item:state(submenu) {
+:is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-menu-item:state(submenu) {
     grid-template-columns: minmax(32px, auto) 0 minmax(0, 1fr) minmax(32px, auto) 24px;
     height: 32px;
     min-height: 32px;
     padding-inline-end: 8px;
 }
 
-.aspire-menu-container fluent-menu-item > [slot="start"],
-.aspire-menu-container fluent-menu-item > [slot="indicator"] {
+:is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-menu-item > [slot="start"],
+:is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-menu-item > [slot="indicator"] {
     grid-column: 1;
     grid-row: 1;
     position: relative;
     inset-inline-start: 8px;
 }
 
-.aspire-menu-container fluent-menu-item:hover,
-.aspire-menu-container fluent-menu-item:state(active),
-.aspire-menu-container fluent-menu-item:focus-visible {
+/* Selection indicators use one trailing axis across radio and checkbox menus. This leaves the
+   leading edge for the option icon and keeps labels aligned whether or not an item is selected. */
+:is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-menu-item > .aspire-menu-item-indicator {
+    grid-column: 4;
+    grid-row: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    inset-inline-start: auto;
+    justify-self: center;
+    color: var(--colorNeutralForeground1);
+}
+
+[cell-type="columnheader"] > fluent-menu fluent-menu-item {
+    text-align: left;
+}
+
+[cell-type="columnheader"] > fluent-menu fluent-menu-item > [slot="start"] {
+    color: var(--colorBrandForeground1);
+    width: 16px !important;
+}
+
+[cell-type="columnheader"] > [col-header-ui] {
+    background: var(--aspire-popup-background);
+}
+
+:is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-menu-item:not(:state(disabled)):hover,
+:is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-menu-item:not(:state(disabled)):state(active),
+:is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-menu-item:not(:state(disabled)):focus-visible {
     background-color: var(--aspire-menu-item-hover-background);
 }
 
-.aspire-menu-container fluent-divider {
+:is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-divider {
     margin-block: 4px;
 }
 
 /* Fluent v5 separates the indicator and start slots. Collapse the unused indicator track so the
    icon and content align with v4's 32px start track while retaining the end slot for secondary actions. */
 
-.aspire-menu-container fluent-menu-item:not(:state(submenu))::part(content) {
+:is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-menu-item:not(:state(submenu))::part(content) {
     grid-column: 2 / span 2;
     grid-row: 1;
     min-width: 0;
@@ -692,7 +789,7 @@ body {
     text-overflow: ellipsis;
 }
 
-.aspire-menu-container fluent-menu-item:state(submenu)::part(content) {
+:is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-menu-item:state(submenu)::part(content) {
     grid-column: 3;
     grid-row: 1;
     padding-inline: 0;
@@ -702,37 +799,52 @@ fluent-menu-item:state(disabled) {
     background-color: transparent;
     color: var(--colorNeutralForeground1);
     cursor: not-allowed;
-    opacity: 0.3;
+    opacity: var(--disabled-opacity);
+}
+
+/* The mobile menu is a sheet laid over the page, flush with the screen edges and directly under the header. It doesn't
+   take a layout row, so the content below stays where it is. The scrim covers the page under it. */
+.mobile-nav-scrim {
+    position: fixed;
+    inset: var(--mobile-header-height) 0 0;
+    z-index: 99;
+    background: rgba(0, 0, 0, .35);
 }
 
 .aspire-menu-container.mobile-nav-menu {
-    z-index: 1;
-    width: 100%;
+    position: fixed;
+    top: var(--mobile-header-height);
+    left: 0;
+    right: 0;
+    z-index: 100;
+    width: auto;
     min-width: 0;
     max-width: none;
     gap: 0;
     padding-inline: 0;
-    border: 1px solid transparent;
-    border-radius: var(--aspire-popup-radius);
+    border: 0;
+    border-bottom: 1px solid var(--colorNeutralStroke2);
+    border-radius: 0;
     background-color: var(--aspire-popup-background);
     box-shadow: var(--aspire-popup-shadow);
 }
 
 .aspire-menu-container.mobile-nav-menu fluent-menu-item {
     position: relative;
-    grid-template-columns: 36px minmax(0, 1fr) 32px;
+    grid-template-columns: 44px minmax(0, 1fr) 32px;
     width: auto;
     min-width: 0;
-    height: 40px;
+    height: 48px;
     margin: 0;
-    border: 1px solid transparent;
+    border: 0;
+    border-radius: 0;
     background-color: transparent;
     color: var(--aspire-dropdown-option-foreground);
 }
 
 .aspire-menu-container.mobile-nav-menu fluent-menu-item > [slot="start"] {
     --colorNeutralForeground1: var(--aspire-dropdown-option-foreground);
-    inset-inline-start: 8px;
+    inset-inline-start: 12px;
     color: inherit;
 }
 
@@ -753,10 +865,9 @@ fluent-menu-item:state(disabled) {
     content: "";
     position: absolute;
     inset-inline-start: 0;
-    top: 4px;
+    top: 0;
+    bottom: 0;
     width: 3px;
-    height: 30px;
-    border-radius: 2px;
     background-color: var(--colorBrandForegroundLinkPressed);
 }
 
@@ -767,7 +878,7 @@ fluent-menu-item:state(disabled) {
 .aspire-menu-container.mobile-nav-menu fluent-divider {
     --colorNeutralStroke2: var(--mobile-nav-divider-color);
     height: 1px;
-    margin: 0 0 4px;
+    margin: 0;
 }
 
 *,
@@ -791,6 +902,12 @@ fluent-menu-item:state(disabled) {
 body .fluent-multi-splitter > .fluent-multi-splitter-bar {
     background-color: transparent;
     z-index: 99;
+}
+
+.fluent-multi-splitter > .fluent-multi-splitter-bar:focus-visible {
+    outline: none;
+    background-color: var(--fluent-multi-splitter-background-color-active);
+    opacity: var(--fluent-multi-splitter-hover-opacity);
 }
 
 .fluent-multi-splitter > .fluent-multi-splitter-bar > span[part="resize"] {
@@ -863,12 +980,15 @@ fluent-text-input[type="search"] [slot="start"] svg {
     margin-block: 0;
 }
 
-.fluent-tabs {
+/* Custom tab hosts share the Fluent tab appearance without taking over their selection lifecycle. */
+.fluent-tabs,
+.aspire-tab-list {
     max-width: 100%;
     min-width: 0;
 }
 
-.fluent-tabs:not(.aspire-content-tabs) {
+.fluent-tabs:not(.aspire-content-tabs),
+.aspire-tab-list {
     width: fit-content !important;
     display: flex;
     align-items: center;
@@ -877,7 +997,8 @@ fluent-text-input[type="search"] [slot="start"] svg {
 }
 
 .fluent-tabs:not(.aspire-content-tabs),
-.fluent-tabs.aspire-content-tabs > fluent-tablist {
+.fluent-tabs.aspire-content-tabs > fluent-tablist,
+.aspire-tab-list {
     min-height: 40px;
     gap: 4px;
     padding: 3px;
@@ -904,7 +1025,8 @@ fluent-text-input[type="search"] [slot="start"] svg {
     display: none;
 }
 
-fluent-tab {
+fluent-tab,
+.aspire-tab {
     height: 32px;
     padding: 0 12px;
     gap: 4px;
@@ -936,7 +1058,8 @@ fluent-tab.tab-label fluent-badge {
     font-weight: var(--fontWeightRegular);
 }
 
-fluent-tab[aria-selected="true"] {
+fluent-tab[aria-selected="true"],
+.aspire-tab.active {
     color: var(--colorNeutralForeground1);
     background-color: var(--colorNeutralBackground3);
     border-color: var(--colorNeutralStroke1);
@@ -952,11 +1075,13 @@ fluent-tablist::after {
     display: none;
 }
 
-fluent-tab[aria-selected="false"] {
+fluent-tab[aria-selected="false"],
+.aspire-tab:not(.active) {
     color: var(--colorNeutralForeground3);
 }
 
-fluent-tab[aria-selected="false"]:hover {
+fluent-tab[aria-selected="false"]:hover,
+.aspire-tab:not(.active):hover {
     color: var(--colorNeutralForeground1);
 }
 
@@ -991,8 +1116,18 @@ table.aspire-scroll-border-grid:not(:has(tr[row-state="empty-content"], tr[row-s
     font-weight: 600;
 }
 
+.aspire-empty-message {
+    display: flex;
+    align-items: center;
+    gap: var(--spacingHorizontalS);
+}
+
+.aspire-empty-message > svg {
+    flex-shrink: 0;
+}
+
 .fluent-data-grid > thead > tr > th,
-.fluent-data-grid > thead > tr > th fluent-button,
+.fluent-data-grid > thead > tr > th > fluent-button,
 .fluent-data-grid > thead > tr > th [col-title-text] {
     color: var(--colorNeutralForeground3);
     font-weight: 400 !important;
@@ -1005,7 +1140,7 @@ table.aspire-scroll-border-grid:not(:has(tr[row-state="empty-content"], tr[row-s
     white-space: nowrap;
 }
 
-.fluent-data-grid > thead > tr > th fluent-button::part(content) {
+.fluent-data-grid > thead > tr > th > fluent-button::part(content) {
     min-width: 0;
     overflow: hidden;
 }
@@ -1020,7 +1155,7 @@ table.aspire-scroll-border-grid:not(:has(tr[row-state="empty-content"], tr[row-s
     --aspire-data-grid-cell-border-color: var(--datagrid-border-color);
 }
 
-.property-grid-container .fluent-data-grid > thead > tr > th fluent-button {
+.property-grid-container .fluent-data-grid > thead > tr > th > fluent-button {
     --colorSubtleBackground: var(--property-grid-background-color);
 }
 
@@ -1108,7 +1243,7 @@ fluent-badge.property-details-accordion-badge {
     padding: 4px 1px 4px 8px;
 }
 
-.fluent-data-grid > thead > tr > th fluent-button {
+.fluent-data-grid > thead > tr > th > fluent-button {
     --aspire-button-foreground: var(--colorNeutralForeground3);
     --aspire-button-border-color: transparent;
     --colorSubtleBackground: var(--aspire-page-background);
@@ -1149,6 +1284,23 @@ fluent-badge.property-details-accordion-badge {
 }
 
 .persistent-container-icon {
+    vertical-align: text-bottom;
+    margin-inline-start: var(--inline-icon-margin);
+}
+/* Text-only tooltips use the same Fluent component as rich tooltips. Preserve multiline
+   descriptions and wrap long URLs rather than overflowing the tooltip's default max width. */
+.dashboard-tooltip {
+    width: max-content;
+    overflow-wrap: anywhere;
+    pointer-events: none;
+}
+
+/* Preserve description newlines only in content, not Fluent's shadow-template whitespace. */
+.dashboard-tooltip > span {
+    white-space: pre-wrap;
+}
+
+.resource-hidden-icon {
     vertical-align: text-bottom;
     margin-inline-start: var(--inline-icon-margin);
 }

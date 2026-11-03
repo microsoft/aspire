@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
+using System.Reflection;
 using Aspire.Components.Common.TestUtilities;
 using Aspire.Hosting.RabbitMQ;
 using Aspire.TestUtilities;
@@ -13,12 +14,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using RabbitMQ.Client;
 using Testcontainers.RabbitMq;
 using Xunit;
-
-#if RABBITMQ_V6
-using RabbitMQ.Client.Logging;
-#else
-using System.Reflection;
-#endif
 
 namespace Aspire.RabbitMQ.Client.Tests;
 
@@ -35,8 +30,7 @@ public class AspireRabbitMQLoggingTests
     [ActiveIssue("https://github.com/microsoft/aspire/issues/11820", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
     public async Task EndToEndLoggingTest()
     {
-        await using var rabbitMqContainer = new RabbitMqBuilder()
-            .WithImage($"{ComponentTestConstants.AspireTestContainerRegistry}/{RabbitMQContainerImageTags.Image}:{RabbitMQContainerImageTags.Tag}")
+        await using var rabbitMqContainer = new RabbitMqBuilder($"{ComponentTestConstants.AspireTestContainerRegistry}/{RabbitMQContainerImageTags.Image}:{RabbitMQContainerImageTags.Tag}")
             .Build();
         await rabbitMqContainer.StartAsync();
 
@@ -227,36 +221,22 @@ public class AspireRabbitMQLoggingTests
         Assert.Equal($"{innerException.GetType()}: {innerException.Message}", errorEvent[3].Value?.ToString());
     }
 
-#if !RABBITMQ_V6
     private static readonly object s_log =
         Type.GetType("RabbitMQ.Client.Logging.RabbitMqClientEventSource, RabbitMQ.Client")!
             .GetField("Log", BindingFlags.Static | BindingFlags.Public)!
             .GetValue(null)!;
-#endif
 
     private static void LogInfo(string message)
     {
-#if RABBITMQ_V6
-        RabbitMqClientEventSource.Log.Info(message);
-#else
         s_log.GetType().GetMethod("Info")!.Invoke(s_log, new object[] { message });
-#endif
     }
     private static void LogWarn(string message)
     {
-#if RABBITMQ_V6
-        RabbitMqClientEventSource.Log.Warn(message);
-#else
         s_log.GetType().GetMethod("Warn")!.Invoke(s_log, new object[] { message });
-#endif
     }
     private static void LogError(string message, Exception ex)
     {
-#if RABBITMQ_V6
-        RabbitMqClientEventSource.Log.Error(message, ex);
-#else
         s_log.GetType().GetMethod("Error", [typeof(string), typeof(Exception)])!.Invoke(s_log, new object[] { message, ex });
-#endif
     }
 
     private sealed class LoggerProvider(TestLogger logger) : ILoggerProvider

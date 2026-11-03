@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
@@ -27,9 +26,10 @@ public class AzureContainerRegistryResource : AzureProvisioningResource, IAzureC
     {
         Annotations.Add(new PipelineStepAnnotation((factoryContext) =>
         {
-            var loginStep = new PipelineStep
+            var loginStep = new AzureAuthenticatedPipelineStep
             {
                 Name = $"login-to-acr-{name}",
+                TokenScopes = [AcrLoginService.AcrScope],
                 Action = context => AzureContainerRegistryHelpers.LoginToRegistryAsync(this, context),
                 Tags = ["acr-login"],
                 RequiredBySteps = [WellKnownPipelineSteps.PushPrereq],

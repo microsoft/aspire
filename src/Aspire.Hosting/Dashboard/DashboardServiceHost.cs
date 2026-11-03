@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
-
 using System.Diagnostics;
 using System.Net;
 using Aspire.Hosting.ApplicationModel;
@@ -18,6 +16,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+
+#pragma warning disable ASPIRETERMINAL001 // Internal consumer of the experimental AppHost terminal API.
 
 namespace Aspire.Hosting.Dashboard;
 
@@ -50,7 +50,8 @@ internal sealed class DashboardServiceHost : IHostedService
         ResourceLoggerService resourceLoggerService,
         ResourceCommandService resourceCommandService,
         InteractionService interactionService,
-        IInteractionFileUploadStore fileUploadStore)
+        IInteractionFileUploadStore fileUploadStore,
+        TerminalService terminalService)
     {
         _logger = loggerFactory.CreateLogger<DashboardServiceHost>();
 
@@ -110,6 +111,7 @@ internal sealed class DashboardServiceHost : IHostedService
             builder.Services.AddSingleton(resourceLoggerService);
             builder.Services.AddSingleton(interactionService);
             builder.Services.AddSingleton(fileUploadStore);
+            builder.Services.AddSingleton(terminalService);
 
             builder.WebHost.ConfigureKestrel(ConfigureKestrel);
 

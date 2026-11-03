@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
+using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Resources;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
@@ -29,6 +31,15 @@ public sealed class DashboardDialogService(
     /// </summary>
     public bool IsDesktop => dimensionManager.ViewportInformation.IsDesktop;
 
+    public Task<DashboardDialogReference> ShowManageDataAsync() =>
+        ShowDialogAsync<ManageDataDialog>(new DialogParameters
+        {
+            Title = dialogsLoc[nameof(Dialogs.ManageDataDialogTitle)],
+            PrimaryAction = CloseButtonText,
+            SecondaryAction = string.Empty,
+            Width = "800px"
+        });
+
     /// <summary>
     /// Shows a dialog with the specified content and parameters.
     /// Automatically sets the dismiss title to the localized close button text if not specified.
@@ -37,7 +48,7 @@ public sealed class DashboardDialogService(
     /// <param name="content">The content to pass to the dialog.</param>
     /// <param name="parameters">The dialog parameters.</param>
     /// <returns>A reference to the opened dialog.</returns>
-    public Task<DashboardDialogReference> ShowDialogAsync<TDialog>(object content, DialogParameters parameters)
+    public Task<DashboardDialogReference> ShowDialogAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] TDialog>(object content, DialogParameters parameters)
         where TDialog : ComponentBase
     {
         return ShowAsync<TDialog>(content, parameters, drawer: false);
@@ -50,7 +61,7 @@ public sealed class DashboardDialogService(
     /// <typeparam name="TDialog">The type of dialog component to show.</typeparam>
     /// <param name="parameters">The dialog parameters.</param>
     /// <returns>A reference to the opened dialog.</returns>
-    public Task<DashboardDialogReference> ShowDialogAsync<TDialog>(DialogParameters parameters)
+    public Task<DashboardDialogReference> ShowDialogAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] TDialog>(DialogParameters parameters)
         where TDialog : ComponentBase
     {
         return ShowAsync<TDialog>(content: null, parameters, drawer: false);
@@ -64,7 +75,7 @@ public sealed class DashboardDialogService(
     /// <param name="content">The content to pass to the dialog.</param>
     /// <param name="parameters">The dialog parameters.</param>
     /// <returns>A reference to the opened dialog.</returns>
-    public Task<DashboardDialogReference> ShowPanelAsync<TDialog>(object content, DialogParameters parameters)
+    public Task<DashboardDialogReference> ShowPanelAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] TDialog>(object content, DialogParameters parameters)
         where TDialog : ComponentBase
     {
         return ShowAsync<TDialog>(content, parameters, drawer: true);
@@ -77,7 +88,7 @@ public sealed class DashboardDialogService(
     /// <typeparam name="TDialog">The type of dialog component to show.</typeparam>
     /// <param name="parameters">The dialog parameters.</param>
     /// <returns>A reference to the opened dialog.</returns>
-    public Task<DashboardDialogReference> ShowPanelAsync<TDialog>(DialogParameters parameters)
+    public Task<DashboardDialogReference> ShowPanelAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] TDialog>(DialogParameters parameters)
         where TDialog : ComponentBase
     {
         return ShowAsync<TDialog>(content: null, parameters, drawer: true);
@@ -104,7 +115,7 @@ public sealed class DashboardDialogService(
         return EventCallback.Factory.Create(receiver, callback);
     }
 
-    private async Task<DashboardDialogReference> ShowAsync<TDialog>(object? content, DialogParameters parameters, bool drawer)
+    private async Task<DashboardDialogReference> ShowAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] TDialog>(object? content, DialogParameters parameters, bool drawer)
         where TDialog : ComponentBase
     {
         var opened = new TaskCompletionSource<IDialogInstance>(TaskCreationOptions.RunContinuationsAsynchronously);

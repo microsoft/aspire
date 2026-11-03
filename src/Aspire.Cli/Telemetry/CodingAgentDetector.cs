@@ -1,14 +1,13 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Microsoft.Extensions.Configuration;
-
 namespace Aspire.Cli.Telemetry;
 
 /// <summary>
-/// Detects coding agents from known environment variables.
+/// Detects coding agents for CLI process telemetry from known environment variables,
+/// independently of the agent hook scripts' client-name classification.
 /// </summary>
-internal sealed class CodingAgentDetector(IConfiguration configuration) : ICodingAgentDetector
+internal sealed class CodingAgentDetector(IEnvironment environment) : ICodingAgentDetector
 {
     // Keep this in sync with the dotnet CLI's LLMEnvironmentDetectorForTelemetry detection
     // order so Aspire reports the same agent names when the same environment variables are set.
@@ -35,6 +34,8 @@ internal sealed class CodingAgentDetector(IConfiguration configuration) : ICodin
         new("qwen", ["QWEN_CODE"]),
         new("droid", ["DROID_CLI"]),
         new("opencode", ["OPENCODE_AI"]),
+        new("opencode", ["OPENCODE"], "1"),
+        new("opencode", ["OPENCODE_PID"], allowEmptyValue: true),
         new("zed", ["ZED_ENVIRONMENT", "ZED_TERM"]),
         new("kimi", ["KIMI_CLI"]),
         new("openhands", ["OR_APP_NAME"], "OpenHands"),
@@ -48,7 +49,8 @@ internal sealed class CodingAgentDetector(IConfiguration configuration) : ICodin
         new("generic_agent", ["AGENT_CLI"])
     ];
 
-    private readonly IConfiguration _configuration = configuration;
+    // Settings files must not introduce or override process-level agent markers.
+    private readonly IEnvironment _environment = environment;
 
     /// <inheritdoc />
     public string? GetCodingAgent()
@@ -57,7 +59,7 @@ internal sealed class CodingAgentDetector(IConfiguration configuration) : ICodin
 
         foreach (var rule in s_detectionRules)
         {
-            if (rule.IsMatch(_configuration))
+            if (rule.IsMatch(_environment))
             {
                 agentNames ??= [];
                 if (!agentNames.Contains(rule.AgentName, StringComparer.Ordinal))
@@ -70,21 +72,22 @@ internal sealed class CodingAgentDetector(IConfiguration configuration) : ICodin
         return agentNames is { Count: > 0 } ? string.Join(", ", agentNames) : null;
     }
 
-    private sealed class DetectionRule(string agentName, string[] variableNames, string? expectedValue = null)
+    private sealed class DetectionRule(string agentName, string[] variableNames, string? expectedValue = null, bool allowEmptyValue = false)
     {
         private readonly string[] _variableNames = variableNames;
         private readonly string? _expectedValue = expectedValue;
+        private readonly bool _allowEmptyValue = allowEmptyValue;
 
         public string AgentName { get; } = agentName;
 
-        public bool IsMatch(IConfiguration configuration)
+        public bool IsMatch(IEnvironment environment)
         {
             foreach (var variableName in _variableNames)
             {
-                var value = configuration[variableName];
+                var value = environment.GetEnvironmentVariable(variableName);
                 if (_expectedValue is null)
                 {
-                    if (!string.IsNullOrEmpty(value))
+                    if (value is not null && (_allowEmptyValue || value.Length > 0))
                     {
                         return true;
                     }

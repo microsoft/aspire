@@ -24,7 +24,7 @@ public class AzureResourceOptionsTests(ITestOutputHelper output)
         var tempDir = Directory.CreateTempSubdirectory();
         var outputPath = Path.Combine(tempDir.FullName, "aspire-manifest.json");
 
-        using (var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath, step: "publish-manifest"))
+        using (var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output, outputPath, step: "publish-manifest"))
         {
             builder.Services.Configure<AzureProvisioningOptions>(options =>
             {

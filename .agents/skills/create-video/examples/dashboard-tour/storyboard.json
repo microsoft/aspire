@@ -1,0 +1,187 @@
+{
+  "title": "The Aspire dashboard",
+  "output": "dashboard-tour",
+  "spoken": {},
+  "chapters": [
+    {
+      "id": "00",
+      "title": "The Aspire dashboard",
+      "subtitle": "See every resource of your app, as it runs",
+      "clips": [
+        {
+          "id": "00-intro",
+          "kind": "card",
+          "steps": [
+            {
+              "id": "intro",
+              "text": "Projects, containers, databases, and caches. A distributed app runs many processes at once. The Aspire dashboard shows all of them in one place. In this video, we'll see why the dashboard exists, how to find a resource and its logs, and where the AppHost describes what it shows."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "01",
+      "title": "Why the dashboard",
+      "subtitle": "The problem it solves",
+      "clips": [
+        {
+          "id": "01-why",
+          "kind": "slide",
+          "steps": [
+            {
+              "id": "why-1",
+              "text": "Without it, each service runs in its own terminal, with its own console. It's hard to tell which ones are running, which ones failed, and which ones depend on each other.",
+              "slide": {
+                "heading": "Many processes, many consoles",
+                "bullets": [
+                  {
+                    "icon": "1",
+                    "title": "Many processes",
+                    "text": "Projects, containers and executables, each in its own terminal."
+                  },
+                  {
+                    "icon": "2",
+                    "title": "No overview",
+                    "text": "Which ones run, which ones failed, which ones depend on each other?"
+                  },
+                  {
+                    "icon": "check",
+                    "title": "Every resource",
+                    "text": "Its state, its health, and its endpoints, in one list."
+                  },
+                  {
+                    "icon": "check",
+                    "title": "Every signal",
+                    "text": "Console logs, structured logs, traces, and metrics, side by side."
+                  }
+                ],
+                "active": [
+                  0,
+                  1
+                ]
+              }
+            },
+            {
+              "id": "why-2",
+              "text": "The Aspire dashboard brings them together. It lists every resource with its state and endpoints, and it shows their console logs, structured logs, traces, and metrics, side by side.",
+              "slide": {
+                "heading": "Many processes, many consoles",
+                "bullets": [
+                  {
+                    "icon": "1",
+                    "title": "Many processes",
+                    "text": "Projects, containers and executables, each in its own terminal."
+                  },
+                  {
+                    "icon": "2",
+                    "title": "No overview",
+                    "text": "Which ones run, which ones failed, which ones depend on each other?"
+                  },
+                  {
+                    "icon": "check",
+                    "title": "Every resource",
+                    "text": "Its state, its health, and its endpoints, in one list."
+                  },
+                  {
+                    "icon": "check",
+                    "title": "Every signal",
+                    "text": "Console logs, structured logs, traces, and metrics, side by side."
+                  }
+                ],
+                "active": [
+                  2,
+                  3
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "02",
+      "title": "The resources",
+      "subtitle": "Everything the AppHost runs",
+      "clips": [
+        {
+          "id": "02-resources",
+          "kind": "clip",
+          "steps": [
+            {
+              "id": "resources-1",
+              "text": "The Resources page lists everything the AppHost runs. Here, the API service is a project resource: it's running, and its endpoints are one click away."
+            },
+            {
+              "id": "resources-2",
+              "text": "Let's open Console. It shows the output of each resource, as if it ran in its own terminal."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "03",
+      "title": "The AppHost",
+      "subtitle": "Where the resources come from",
+      "clips": [
+        {
+          "id": "03-apphost",
+          "kind": "slide",
+          "steps": [
+            {
+              "id": "apphost-1",
+              "text": "The resources come from the AppHost. Add Redis adds a cache. Add Project adds a service. With Reference and Wait For connect them, so the web frontend starts once the cache and the API are ready.",
+              "slide": {
+                "heading": "The AppHost describes the app",
+                "code": {
+                  "title": "AppHost.cs",
+                  "language": "csharp",
+                  "source": "slides/AppHost.cs",
+                  "size": 22,
+                  "types": [
+                    "DistributedApplication",
+                    "Projects",
+                    "VideoDemo_ApiService",
+                    "VideoDemo_Web"
+                  ]
+                },
+                "notes": [
+                  {
+                    "title": "Add Redis",
+                    "text": "a container resource"
+                  },
+                  {
+                    "title": "Add Project",
+                    "text": "a service resource"
+                  },
+                  {
+                    "title": "With Reference",
+                    "text": "connects them"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "99",
+      "title": "The Aspire dashboard",
+      "subtitle": "aspire.dev",
+      "clips": [
+        {
+          "id": "99-outro",
+          "kind": "card",
+          "steps": [
+            {
+              "id": "outro",
+              "text": "That's the Aspire dashboard: every resource of your app, with its logs, traces, and metrics, in one place. Thanks for watching."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

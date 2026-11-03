@@ -3,6 +3,7 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Tests.Utils;
+using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Hosting.Tests;
 
@@ -24,7 +25,7 @@ public class MauiWithArgsTests(ITestOutputHelper outputHelper)
         var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
         var windows = maui.AddWindowsDevice();
 
-        var args = await ArgumentEvaluator.GetArgumentListAsync(windows.Resource);
+        var args = await ArgumentEvaluator.GetArgumentListAsync(windows.Resource).DefaultTimeout();
 
         Assert.Contains("run", args);
         Assert.Contains("-f", args);
@@ -42,7 +43,7 @@ public class MauiWithArgsTests(ITestOutputHelper outputHelper)
         var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
         var macCatalyst = maui.AddMacCatalystDevice();
 
-        var args = await ArgumentEvaluator.GetArgumentListAsync(macCatalyst.Resource);
+        var args = await ArgumentEvaluator.GetArgumentListAsync(macCatalyst.Resource).DefaultTimeout();
 
         Assert.Contains("run", args);
         Assert.Contains("-f", args);
@@ -61,7 +62,7 @@ public class MauiWithArgsTests(ITestOutputHelper outputHelper)
         var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
         var androidDevice = maui.AddAndroidDevice();
 
-        var args = await ArgumentEvaluator.GetArgumentListAsync(androidDevice.Resource);
+        var args = await ArgumentEvaluator.GetArgumentListAsync(androidDevice.Resource).DefaultTimeout();
 
         Assert.Contains("run", args);
         Assert.Contains("-f", args);
@@ -81,7 +82,7 @@ public class MauiWithArgsTests(ITestOutputHelper outputHelper)
         var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
         var androidDevice = maui.AddAndroidDevice("my-device", "abc12345");
 
-        var args = await ArgumentEvaluator.GetArgumentListAsync(androidDevice.Resource);
+        var args = await ArgumentEvaluator.GetArgumentListAsync(androidDevice.Resource).DefaultTimeout();
 
         Assert.Contains("-p:AdbTarget=-s abc12345", args);
         Assert.DoesNotContain("-p:AdbTarget=-d", args);
@@ -98,7 +99,7 @@ public class MauiWithArgsTests(ITestOutputHelper outputHelper)
         var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
         var emulator = maui.AddAndroidEmulator();
 
-        var args = await ArgumentEvaluator.GetArgumentListAsync(emulator.Resource);
+        var args = await ArgumentEvaluator.GetArgumentListAsync(emulator.Resource).DefaultTimeout();
 
         Assert.Contains("run", args);
         Assert.Contains("-f", args);
@@ -118,7 +119,7 @@ public class MauiWithArgsTests(ITestOutputHelper outputHelper)
         var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
         var emulator = maui.AddAndroidEmulator("my-emulator", "emulator-5554");
 
-        var args = await ArgumentEvaluator.GetArgumentListAsync(emulator.Resource);
+        var args = await ArgumentEvaluator.GetArgumentListAsync(emulator.Resource).DefaultTimeout();
 
         Assert.Contains("-p:AdbTarget=-s emulator-5554", args);
         Assert.DoesNotContain("-p:AdbTarget=-e", args);
@@ -135,7 +136,7 @@ public class MauiWithArgsTests(ITestOutputHelper outputHelper)
         var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
         var device = maui.AddiOSDevice();
 
-        var args = await ArgumentEvaluator.GetArgumentListAsync(device.Resource);
+        var args = await ArgumentEvaluator.GetArgumentListAsync(device.Resource).DefaultTimeout();
 
         Assert.Contains("run", args);
         Assert.Contains("-f", args);
@@ -154,7 +155,7 @@ public class MauiWithArgsTests(ITestOutputHelper outputHelper)
         var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
         var device = maui.AddiOSDevice("my-device", "00008030-001234567890123A");
 
-        var args = await ArgumentEvaluator.GetArgumentListAsync(device.Resource);
+        var args = await ArgumentEvaluator.GetArgumentListAsync(device.Resource).DefaultTimeout();
 
         Assert.Contains("-p:RuntimeIdentifier=ios-arm64", args);
         Assert.Contains("-p:_DeviceName=00008030-001234567890123A", args);
@@ -171,7 +172,7 @@ public class MauiWithArgsTests(ITestOutputHelper outputHelper)
         var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
         var simulator = maui.AddiOSSimulator();
 
-        var args = await ArgumentEvaluator.GetArgumentListAsync(simulator.Resource);
+        var args = await ArgumentEvaluator.GetArgumentListAsync(simulator.Resource).DefaultTimeout();
 
         Assert.Contains("run", args);
         Assert.Contains("-f", args);
@@ -191,7 +192,7 @@ public class MauiWithArgsTests(ITestOutputHelper outputHelper)
         var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
         var simulator = maui.AddiOSSimulator("my-simulator", "E25BBE37-69BA-4720-B6FD-D54C97791E79");
 
-        var args = await ArgumentEvaluator.GetArgumentListAsync(simulator.Resource);
+        var args = await ArgumentEvaluator.GetArgumentListAsync(simulator.Resource).DefaultTimeout();
 
         Assert.Contains("-p:_DeviceName=:v2:udid=E25BBE37-69BA-4720-B6FD-D54C97791E79", args);
         // Simulator should NOT have RuntimeIdentifier=ios-arm64 (that's for devices only)
@@ -230,7 +231,7 @@ public class MauiWithArgsTests(ITestOutputHelper outputHelper)
 
         foreach (var (builder, expectedTfm) in platforms)
         {
-            var args = await ArgumentEvaluator.GetArgumentListAsync(builder.Resource);
+            var args = await ArgumentEvaluator.GetArgumentListAsync(builder.Resource).DefaultTimeout();
             Assert.True(args.Count > 0, $"Expected args for {builder.Resource.Name}");
             Assert.Equal("run", args[0]);
             AssertTfm(args, expectedTfm);

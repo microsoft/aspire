@@ -7,5 +7,7 @@ namespace Aspire.Cli.Tests.TestServices;
 
 internal sealed class TestWindowsRegistryReader(bool hasWingetAspireUninstallEntry = false) : IWindowsRegistryReader
 {
-    public bool HasWingetAspireUninstallEntry(string processPath) => hasWingetAspireUninstallEntry;
+    public Func<string, bool>? ProbeCallback { get; init; }
+
+    public bool HasWingetAspireUninstallEntry(string processPath) => ProbeCallback?.Invoke(processPath) ?? hasWingetAspireUninstallEntry;
 }

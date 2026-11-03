@@ -1,0 +1,26 @@
+﻿[
+  {
+    Method: ShowTunnelAsync,
+    TunnelId: mytunnel.eun1,
+    Arguments: [
+      show,
+      mytunnel.eun1,
+      --json,
+      --nologo
+    ]
+  },
+  {
+    Method: UpdateTunnelAsync,
+    TunnelId: mytunnel.eun1,
+    Arguments: [
+      update,
+      mytunnel.eun1,
+      --description,
+      new,
+      --expiration,
+      24h,
+      --json,
+      --nologo
+    ]
+  }
+]

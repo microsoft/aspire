@@ -4,6 +4,6 @@
     "language": "typescript/nodejs"
   },
   "packages": {
-    "Aspire.Hosting.Azure.KeyVault": ""
+    "Aspire.Hosting.Azure.Provisioning.KeyVault": ""
   }
 }

@@ -1,10 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREAZURE001
 #pragma warning disable ASPIREAZURE003
-#pragma warning disable ASPIREPIPELINES001
-#pragma warning disable ASPIREPIPELINES002
 #pragma warning disable ASPIREPIPELINES003
 
 using System.Runtime.CompilerServices;
@@ -13,7 +10,6 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.Kubernetes;
 using Aspire.Hosting.Kubernetes;
 using Aspire.Hosting.Pipelines;
-using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Tests;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -27,8 +23,8 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
     [Fact]
     public async Task NoUserPool_CreatesDefaultWorkloadPool()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(
-            DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var builder = AzureKubernetesTestBuilder.Create(output, workspace);
 
         var aks = builder.AddAzureKubernetesEnvironment("aks");
 
@@ -45,6 +41,7 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
         Assert.Equal(2, aks.Resource.NodePools.Count);
         var workloadPool = aks.Resource.NodePools.First(p => p.Mode is AksNodePoolMode.User);
         Assert.Equal("workload", workloadPool.Name);
+        Assert.Null(workloadPool.OsSku);
 
         // Compute resource should have been auto-assigned to the workload pool
         Assert.True(container.Resource.TryGetLastAnnotation<KubernetesNodePoolAnnotation>(out var affinity));
@@ -54,8 +51,8 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
     [Fact]
     public async Task ExplicitUserPool_NoDefaultCreated()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(
-            DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var builder = AzureKubernetesTestBuilder.Create(output, workspace);
 
         var aks = builder.AddAzureKubernetesEnvironment("aks");
         var gpuPool = aks.AddNodePool("gpu", "Standard_NC6s_v3", 0, 5);
@@ -77,8 +74,8 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
     [Fact]
     public async Task ExplicitAffinity_NotOverridden()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(
-            DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var builder = AzureKubernetesTestBuilder.Create(output, workspace);
 
         var aks = builder.AddAzureKubernetesEnvironment("aks");
         var gpuPool = aks.AddNodePool("gpu", "Standard_NC6s_v3", 0, 5);
@@ -98,8 +95,8 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
     [Fact]
     public async Task ComputeResource_GetsDeploymentTargetFromKubernetesInfrastructure()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(
-            DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var builder = AzureKubernetesTestBuilder.Create(output, workspace);
 
         var aks = builder.AddAzureKubernetesEnvironment("aks");
         var container = builder.AddContainer("myapi", "myimage");
@@ -125,8 +122,8 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
     [Fact]
     public async Task MultiEnv_ResourcesMatchCorrectEnvironment()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(
-            DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var builder = AzureKubernetesTestBuilder.Create(output, workspace);
 
         var registry = builder.AddAzureContainerRegistry("registry");
         var enva = builder.AddAzureKubernetesEnvironment("enva")
@@ -169,14 +166,12 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
     public async Task KubernetesPipelineStepsFlowThroughAksEnvironment()
     {
         using var workspace = TemporaryWorkspace.Create(output);
-        using var builder = TestDistributedApplicationBuilder.Create(
-            DistributedApplicationOperation.Publish,
-            workspace.Path,
-            step: WellKnownPipelineSteps.Diagnostics);
-
         var reporter = new TestPipelineActivityReporter(output);
-        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
-        builder.Services.AddSingleton<IPipelineActivityReporter>(reporter);
+        using var builder = AzureKubernetesTestBuilder.Create(
+            output,
+            workspace,
+            step: WellKnownPipelineSteps.Diagnostics,
+            activityReporter: reporter);
 
         builder.AddAzureKubernetesEnvironment("aks");
         builder.AddContainer("api", "myimage")
@@ -198,17 +193,42 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task CrossGroupRegistryRoleProvisioningPrecedesHelmDeployment()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        var reporter = new TestPipelineActivityReporter(output);
+        using var builder = AzureKubernetesTestBuilder.Create(
+            output, workspace, step: WellKnownPipelineSteps.Diagnostics, activityReporter: reporter);
+        var registry = builder.AddAzureContainerRegistry("registry").PublishAsExisting("existingacr", "registry-rg");
+        builder.AddAzureKubernetesEnvironment("aks").WithContainerRegistry(registry);
+        builder.AddContainer("api", "myimage").WithHttpEndpoint(targetPort: 8080);
+
+        await using var app = builder.Build();
+        await app.RunAsync();
+
+        var diagnostics = string.Join('\n', reporter.LoggedMessages
+            .Where(message => message.StepTitle == "diagnostics")
+            .Select(message => message.Message));
+        var lines = diagnostics.Split('\n').Select(line => line.Trim()).ToList();
+        Assert.Equal(
+            "Direct dependencies: create-provisioning-context, provision-aks-control-plane-identity, provision-aks-control-plane-identity-roles-aks-kubelet-identity, provision-aks-kubelet-identity, provision-aks-kubelet-identity-roles-registry",
+            GetDirectDependencies(lines, "provision-aks"));
+        Assert.Equal(
+            "Direct dependencies: create-provisioning-context, provision-aks-kubelet-identity, provision-registry",
+            GetDirectDependencies(lines, "provision-aks-kubelet-identity-roles-registry"));
+        await Verify(diagnostics, "txt");
+    }
+
+    [Fact]
     public async Task DestroyPipelineFetchesCredentialsBeforeClusterCleanupAndDeletesAzureLast()
     {
         using var workspace = TemporaryWorkspace.Create(output);
-        using var builder = TestDistributedApplicationBuilder.Create(
-            DistributedApplicationOperation.Publish,
-            workspace.Path,
-            step: WellKnownPipelineSteps.Diagnostics);
-
         var reporter = new TestPipelineActivityReporter(output);
-        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
-        builder.Services.AddSingleton<IPipelineActivityReporter>(reporter);
+        using var builder = AzureKubernetesTestBuilder.Create(
+            output,
+            workspace,
+            step: WellKnownPipelineSteps.Diagnostics,
+            activityReporter: reporter);
 
         var aks = builder.AddAzureKubernetesEnvironment("aks");
         aks.AddHelmChart("podinfo", "oci://ghcr.io/stefanprodan/charts/podinfo", "6.7.1")
@@ -314,14 +334,13 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
         async Task<TestPipelineActivityReporter> RunDestroyAsync()
         {
             var reporter = new TestPipelineActivityReporter(output);
-            using var builder = TestDistributedApplicationBuilder.Create(
-                DistributedApplicationOperation.Publish,
-                workspace.Path,
-                step: WellKnownPipelineSteps.Destroy);
-            builder.Services.AddSingleton<IDeploymentStateManager>(stateManager);
-            builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
-            builder.Services.AddSingleton<IPipelineActivityReporter>(reporter);
-            builder.Services.AddSingleton<IHelmRunner>(fakeHelm);
+            using var builder = AzureKubernetesTestBuilder.Create(
+                output,
+                workspace,
+                step: WellKnownPipelineSteps.Destroy,
+                deploymentStateManager: stateManager,
+                activityReporter: reporter,
+                helmRunner: fakeHelm);
             builder.Services.Configure<PipelineOptions>(o => o.SkipConfirmation = true);
 
             var aks = builder.AddAzureKubernetesEnvironment("aks");
@@ -373,14 +392,12 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
     public async Task DestroyPipelineUsesMatchingCredentialsForEachAksEnvironment()
     {
         using var workspace = TemporaryWorkspace.Create(output);
-        using var builder = TestDistributedApplicationBuilder.Create(
-            DistributedApplicationOperation.Publish,
-            workspace.Path,
-            step: WellKnownPipelineSteps.Diagnostics);
-
         var reporter = new TestPipelineActivityReporter(output);
-        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
-        builder.Services.AddSingleton<IPipelineActivityReporter>(reporter);
+        using var builder = AzureKubernetesTestBuilder.Create(
+            output,
+            workspace,
+            step: WellKnownPipelineSteps.Diagnostics,
+            activityReporter: reporter);
 
         var east = builder.AddAzureKubernetesEnvironment("east");
         var west = builder.AddAzureKubernetesEnvironment("west");
@@ -453,13 +470,14 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
             ["Namespace"] = "default"
         });
         var azArguments = new List<string>();
+        var fakeHelm = new FakeHelmRunner();
 
-        using var builder = TestDistributedApplicationBuilder.Create(
-            DistributedApplicationOperation.Publish,
-            workspace.Path,
-            step: WellKnownPipelineSteps.Destroy);
-        builder.Services.AddSingleton<IDeploymentStateManager>(stateManager);
-        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        using var builder = AzureKubernetesTestBuilder.Create(
+            output,
+            workspace,
+            step: WellKnownPipelineSteps.Destroy,
+            deploymentStateManager: stateManager,
+            helmRunner: fakeHelm);
         builder.Services.Configure<PipelineOptions>(o => o.SkipConfirmation = true);
         var aks = builder.AddAzureKubernetesEnvironment("aks");
         aks.Resource.AzCliPathResolverForTesting = () => "/fake/az";
@@ -495,6 +513,10 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
             ],
             azArguments);
         Assert.Empty(aks.Resource.Outputs);
+        Assert.NotNull(aks.Resource.KubernetesEnvironment.KubeConfigPath);
+        Assert.Equal(
+            ["version --short", $"uninstall aks --namespace default --ignore-not-found --kubeconfig \"{aks.Resource.KubernetesEnvironment.KubeConfigPath}\""],
+            fakeHelm.Arguments);
     }
 
     [Fact]
@@ -527,13 +549,14 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
             ["Namespace"] = "default"
         });
         var azArguments = new List<string>();
+        var fakeHelm = new FakeHelmRunner();
 
-        using var builder = TestDistributedApplicationBuilder.Create(
-            DistributedApplicationOperation.Publish,
-            workspace.Path,
-            step: WellKnownPipelineSteps.Destroy);
-        builder.Services.AddSingleton<IDeploymentStateManager>(stateManager);
-        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        using var builder = AzureKubernetesTestBuilder.Create(
+            output,
+            workspace,
+            step: WellKnownPipelineSteps.Destroy,
+            deploymentStateManager: stateManager,
+            helmRunner: fakeHelm);
         builder.Services.Configure<PipelineOptions>(o => o.SkipConfirmation = true);
         var aks = builder.AddAzureKubernetesEnvironment("aks");
 
@@ -573,6 +596,10 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
             ],
             azArguments);
         Assert.Empty(aks.Resource.Outputs);
+        Assert.NotNull(aks.Resource.KubernetesEnvironment.KubeConfigPath);
+        Assert.Equal(
+            ["version --short", $"uninstall aks --namespace default --ignore-not-found --kubeconfig \"{aks.Resource.KubernetesEnvironment.KubeConfigPath}\""],
+            fakeHelm.Arguments);
     }
 
     [Fact]
@@ -591,13 +618,12 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
         });
 
         var reporter = new TestPipelineActivityReporter(output);
-        using var builder = TestDistributedApplicationBuilder.Create(
-            DistributedApplicationOperation.Publish,
-            workspace.Path,
-            step: WellKnownPipelineSteps.Destroy);
-        builder.Services.AddSingleton<IDeploymentStateManager>(stateManager);
-        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
-        builder.Services.AddSingleton<IPipelineActivityReporter>(reporter);
+        using var builder = AzureKubernetesTestBuilder.Create(
+            output,
+            workspace,
+            step: WellKnownPipelineSteps.Destroy,
+            deploymentStateManager: stateManager,
+            activityReporter: reporter);
         builder.Services.Configure<PipelineOptions>(o => o.SkipConfirmation = true);
         var aks = builder.AddAzureKubernetesEnvironment("aks");
         aks.Resource.AzCliPathResolverForTesting = () =>
@@ -639,13 +665,12 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
         });
 
         var reporter = new TestPipelineActivityReporter(output);
-        using var builder = TestDistributedApplicationBuilder.Create(
-            DistributedApplicationOperation.Publish,
-            workspace.Path,
-            step: WellKnownPipelineSteps.Destroy);
-        builder.Services.AddSingleton<IDeploymentStateManager>(stateManager);
-        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
-        builder.Services.AddSingleton<IPipelineActivityReporter>(reporter);
+        using var builder = AzureKubernetesTestBuilder.Create(
+            output,
+            workspace,
+            step: WellKnownPipelineSteps.Destroy,
+            deploymentStateManager: stateManager,
+            activityReporter: reporter);
         builder.Services.Configure<PipelineOptions>(o => o.SkipConfirmation = true);
 
         var aks = builder.AddAzureKubernetesEnvironment("aks");
@@ -676,13 +701,12 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
         var reporter = new TestPipelineActivityReporter(output);
         var stateManager = new InMemoryDeploymentStateManager();
         stateManager.SetSection("Sentinel", new JsonObject { ["Value"] = "cleared-by-destroy" });
-        using var builder = TestDistributedApplicationBuilder.Create(
-            DistributedApplicationOperation.Publish,
-            workspace.Path,
-            step: WellKnownPipelineSteps.Destroy);
-        builder.Services.AddSingleton<IDeploymentStateManager>(stateManager);
-        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
-        builder.Services.AddSingleton<IPipelineActivityReporter>(reporter);
+        using var builder = AzureKubernetesTestBuilder.Create(
+            output,
+            workspace,
+            step: WellKnownPipelineSteps.Destroy,
+            deploymentStateManager: stateManager,
+            activityReporter: reporter);
         builder.Services.Configure<PipelineOptions>(o => o.SkipConfirmation = true);
 
         var aks = builder.AddAzureKubernetesEnvironment("aks");
@@ -715,13 +739,12 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
         {
             ["Location"] = "westus2"
         });
-        using var builder = TestDistributedApplicationBuilder.Create(
-            DistributedApplicationOperation.Publish,
-            workspace.Path,
-            step: "destroy-azure-azure-environment");
-        builder.Services.AddSingleton<IDeploymentStateManager>(stateManager);
-        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
-        builder.Services.AddSingleton<IPipelineActivityReporter>(reporter);
+        using var builder = AzureKubernetesTestBuilder.Create(
+            output,
+            workspace,
+            step: "destroy-azure-azure-environment",
+            deploymentStateManager: stateManager,
+            activityReporter: reporter);
         builder.Services.Configure<PipelineOptions>(o => o.SkipConfirmation = true);
 
         var aks = builder.AddAzureKubernetesEnvironment("aks");
@@ -765,13 +788,12 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
             }.ToJsonString()
         });
 
-        using var builder = TestDistributedApplicationBuilder.Create(
-            DistributedApplicationOperation.Publish,
-            workspace.Path,
-            step: "destroy-azure-azure-environment");
-        builder.Services.AddSingleton<IDeploymentStateManager>(stateManager);
-        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
-        builder.Services.AddSingleton<IPipelineActivityReporter>(reporter);
+        using var builder = AzureKubernetesTestBuilder.Create(
+            output,
+            workspace,
+            step: "destroy-azure-azure-environment",
+            deploymentStateManager: stateManager,
+            activityReporter: reporter);
         builder.Services.Configure<PipelineOptions>(o => o.SkipConfirmation = true);
 
         var aks = builder.AddAzureKubernetesEnvironment("aks");
@@ -828,14 +850,13 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
         var fakeHelm = new FakeHelmRunner { ThrowOnVersion = true };
         var azArguments = new List<string>();
 
-        using var builder = TestDistributedApplicationBuilder.Create(
-            DistributedApplicationOperation.Publish,
-            workspace.Path,
-            step: "destroy-azure-azure-environment");
-        builder.Services.AddSingleton<IDeploymentStateManager>(stateManager);
-        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
-        builder.Services.AddSingleton<IPipelineActivityReporter>(reporter);
-        builder.Services.AddSingleton<IHelmRunner>(fakeHelm);
+        using var builder = AzureKubernetesTestBuilder.Create(
+            output,
+            workspace,
+            step: "destroy-azure-azure-environment",
+            deploymentStateManager: stateManager,
+            activityReporter: reporter,
+            helmRunner: fakeHelm);
         builder.Services.Configure<PipelineOptions>(o => o.SkipConfirmation = true);
 
         var aks = builder.AddAzureKubernetesEnvironment("aks");
@@ -892,14 +913,13 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
         var fakeHelm = new FakeHelmRunner { ThrowOnVersion = true };
         var azArguments = new List<string>();
 
-        using var builder = TestDistributedApplicationBuilder.Create(
-            DistributedApplicationOperation.Publish,
-            workspace.Path,
-            step: "helm-uninstall-aks");
-        builder.Services.AddSingleton<IDeploymentStateManager>(stateManager);
-        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
-        builder.Services.AddSingleton<IPipelineActivityReporter>(reporter);
-        builder.Services.AddSingleton<IHelmRunner>(fakeHelm);
+        using var builder = AzureKubernetesTestBuilder.Create(
+            output,
+            workspace,
+            step: "helm-uninstall-aks",
+            deploymentStateManager: stateManager,
+            activityReporter: reporter,
+            helmRunner: fakeHelm);
 
         var releaseParameter = builder.AddParameter("helm-release");
         var namespaceParameter = builder.AddParameter("helm-namespace");
@@ -965,14 +985,13 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
         var fakeHelm = new FakeHelmRunner { ThrowOnVersion = true };
         var azArguments = new List<string>();
 
-        using var builder = TestDistributedApplicationBuilder.Create(
-            DistributedApplicationOperation.Publish,
-            workspace.Path,
-            step: "helm-uninstall-aks");
-        builder.Services.AddSingleton<IDeploymentStateManager>(stateManager);
-        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
-        builder.Services.AddSingleton<IPipelineActivityReporter>(reporter);
-        builder.Services.AddSingleton<IHelmRunner>(fakeHelm);
+        using var builder = AzureKubernetesTestBuilder.Create(
+            output,
+            workspace,
+            step: "helm-uninstall-aks",
+            deploymentStateManager: stateManager,
+            activityReporter: reporter,
+            helmRunner: fakeHelm);
 
         var aks = builder.AddAzureKubernetesEnvironment("aks");
         // A direct cleanup never provisions the AKS resource, so resolving this output would wait
@@ -1035,13 +1054,12 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
         var fakeHelm = new FakeHelmRunner();
         var azArguments = new List<string>();
 
-        using var builder = TestDistributedApplicationBuilder.Create(
-            DistributedApplicationOperation.Publish,
-            workspace.Path,
-            step: "helm-uninstall-aks");
-        builder.Services.AddSingleton<IDeploymentStateManager>(stateManager);
-        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
-        builder.Services.AddSingleton<IHelmRunner>(fakeHelm);
+        using var builder = AzureKubernetesTestBuilder.Create(
+            output,
+            workspace,
+            step: "helm-uninstall-aks",
+            deploymentStateManager: stateManager,
+            helmRunner: fakeHelm);
         var aks = builder.AddAzureKubernetesEnvironment("aks");
         aks.Resource.KubernetesEnvironment.Annotations.Add(
             new HelmReleaseNameAnnotation(ReferenceExpression.Create($"main-release")));
@@ -1084,14 +1102,12 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
         using var workspace = TemporaryWorkspace.Create(output);
         var reporter = new TestPipelineActivityReporter(output);
         var stateManager = new InMemoryDeploymentStateManager();
-        using var builder = TestDistributedApplicationBuilder.Create(
-            DistributedApplicationOperation.Publish,
-            workspace.Path,
-            step: "helm-uninstall-same-name-as-ambient-release");
-        builder.Services.AddSingleton<IDeploymentStateManager>(stateManager);
-        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
-        builder.Services.AddSingleton<IPipelineActivityReporter>(reporter);
-        builder.Services.AddSingleton<IHelmRunner, FakeHelmRunner>();
+        using var builder = AzureKubernetesTestBuilder.Create(
+            output,
+            workspace,
+            step: "helm-uninstall-same-name-as-ambient-release",
+            deploymentStateManager: stateManager,
+            activityReporter: reporter);
 
         var aks = builder.AddAzureKubernetesEnvironment("aks");
         aks.AddHelmChart("same-name-as-ambient-release", "oci://example.com/chart", "1.0.0")
@@ -1340,15 +1356,16 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
         const string subscriptionId = "00000000-0000-0000-0000-000000000001";
         const string clusterName = "provisioned-aks";
 
-        using var builder = TestDistributedApplicationBuilder.Create(
-            DistributedApplicationOperation.Publish);
-
+        using var workspace = TemporaryWorkspace.Create(output);
         var deploymentStateManager = new InMemoryDeploymentStateManager();
         deploymentStateManager.SetSection("Azure", new JsonObject
         {
             ["SubscriptionId"] = subscriptionId
         });
-        builder.Services.AddSingleton<IDeploymentStateManager>(deploymentStateManager);
+        using var builder = AzureKubernetesTestBuilder.Create(
+            output,
+            workspace,
+            deploymentStateManager: deploymentStateManager);
 
         var aks = builder.AddAzureKubernetesEnvironment("aks");
 
@@ -1438,9 +1455,7 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
         const string clusterResourceGroup = "shared-platform-rg";
         const string clusterName = "shared-aks";
 
-        using var builder = TestDistributedApplicationBuilder.Create(
-            DistributedApplicationOperation.Publish);
-
+        using var workspace = TemporaryWorkspace.Create(output);
         // The app deploys into its own subscription and resource group...
         var deploymentStateManager = new InMemoryDeploymentStateManager();
         deploymentStateManager.SetSection("Azure", new JsonObject
@@ -1448,7 +1463,10 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
             ["SubscriptionId"] = appSubscriptionId,
             ["ResourceGroup"] = "app-rg"
         });
-        builder.Services.AddSingleton<IDeploymentStateManager>(deploymentStateManager);
+        using var builder = AzureKubernetesTestBuilder.Create(
+            output,
+            workspace,
+            deploymentStateManager: deploymentStateManager);
 
         // ...but the cluster it targets already exists somewhere else entirely.
         var aks = builder.AddAzureKubernetesEnvironment("aks")
@@ -1649,16 +1667,17 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
         const string scopeResourceGroup = "scope-assigned-rg";
         const string clusterName = "scoped-aks";
 
-        using var builder = TestDistributedApplicationBuilder.Create(
-            DistributedApplicationOperation.Publish);
-
+        using var workspace = TemporaryWorkspace.Create(output);
         var deploymentStateManager = new InMemoryDeploymentStateManager();
         deploymentStateManager.SetSection("Azure", new JsonObject
         {
             ["SubscriptionId"] = "00000000-0000-0000-0000-000000000001",
             ["ResourceGroup"] = "app-rg"
         });
-        builder.Services.AddSingleton<IDeploymentStateManager>(deploymentStateManager);
+        using var builder = AzureKubernetesTestBuilder.Create(
+            output,
+            workspace,
+            deploymentStateManager: deploymentStateManager);
 
         var aks = builder.AddAzureKubernetesEnvironment("aks")
             .AsExistingInResourceGroup(clusterName, "annotation-rg", "00000000-0000-0000-0000-000000000002");
@@ -1719,16 +1738,17 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
         const string subscriptionId = "00000000-0000-0000-0000-000000000001";
         const string clusterName = "subscription-scoped-aks";
 
-        using var builder = TestDistributedApplicationBuilder.Create(
-            DistributedApplicationOperation.Publish);
-
+        using var workspace = TemporaryWorkspace.Create(output);
         var deploymentStateManager = new InMemoryDeploymentStateManager();
         deploymentStateManager.SetSection("Azure", new JsonObject
         {
             ["SubscriptionId"] = subscriptionId,
             ["ResourceGroup"] = "app-rg"
         });
-        builder.Services.AddSingleton<IDeploymentStateManager>(deploymentStateManager);
+        using var builder = AzureKubernetesTestBuilder.Create(
+            output,
+            workspace,
+            deploymentStateManager: deploymentStateManager);
 
         var aks = builder.AddAzureKubernetesEnvironment("aks");
 
@@ -1817,4 +1837,5 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
             .AddSingleton<IDeploymentStateManager>(deploymentStateManager)
             .BuildServiceProvider();
     }
+
 }

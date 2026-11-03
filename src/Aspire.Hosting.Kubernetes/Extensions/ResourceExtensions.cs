@@ -431,7 +431,6 @@ internal static class ResourceExtensions
         return container;
     }
 
-#pragma warning disable ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
     private static ContainerV1 WithContainerProbes(this ContainerV1 container, KubernetesResource context)
     {
         if (context.Probes.Count == 0)
@@ -459,7 +458,6 @@ internal static class ResourceExtensions
 
         return container;
     }
-#pragma warning restore ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
     private static PersistentVolumeClaim CreatePersistentVolumeClaim(KubernetesResource context, VolumeMountV1 volume)
     {

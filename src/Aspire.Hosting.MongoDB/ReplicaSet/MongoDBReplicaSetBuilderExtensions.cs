@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.MongoDB;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using MongoDB.Bson;
@@ -27,6 +28,8 @@ public static class MongoDBReplicaSetBuilderExtensions
     private const string NewReplicaSetConfigurationIncompatibleCodeName = "NewReplicaSetConfigurationIncompatible";
     private const string ConfigurationInProgressCodeName = "ConfigurationInProgress"; // NOTE: Represents the error `Cannot run replSetReconfig because the node is currently updating its configuration.` that can be returned by `replSetReconfig` when a preceding `replSetInitiate` (or `replSetReconfig`, for that matter) command is still being processed in the background.
     private static readonly TimeSpan s_rsInitiationRetryWaitInterval = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan s_primaryElectionPollInterval = TimeSpan.FromMilliseconds(100);
+    private static readonly TimeSpan s_primaryElectionTimeout = TimeSpan.FromSeconds(30);
 
     /// <summary>
     /// Adds a MongoDB replica set resource to the application model.
@@ -74,16 +77,7 @@ public static class MongoDBReplicaSetBuilderExtensions
 
         var rsResource = new MongoDBReplicaSetResource(
             name: name,
-            keyFile: ParameterResourceBuilderExtensions.CreateGeneratedParameter(
-                builder,
-                $"{name}-keyfile-content",
-                secret: true,
-                new GenerateParameterDefault
-                {
-                    MinLength = 512, // NOTE: MongoDB requires the key file content to be between 6 and 1024 characters — see https://www.mongodb.com/docs/manual/tutorial/deploy-replica-set-with-keyfile-access-control/#create-a-keyfile
-                    Special = false,
-                }
-            ),
+            keyFile: MongoDBBuilderExtensions.CreateReplicaSetKeyFile(builder, name),
             sharedUserName: userName?.Resource,
             sharedPassword: password?.Resource
                 ?? ParameterResourceBuilderExtensions.CreateDefaultPasswordParameter(builder, $"{name}-password", special: false)
@@ -307,28 +301,7 @@ public static class MongoDBReplicaSetBuilderExtensions
                                 // NOTE: There is no existing configuration to preserve member ids from, so all of them are freshly allocated.
                                 var membersBsonArray = BuildMembersConfiguration(memberHosts, currentMembers: null);
 
-                                // NOTE: The initialization is performed in two steps, first with a single member and then with the full configuration. `replSetInitiate` runs a quorum check against every host in the configuration it is handed and only returns once an election has succeeded, so initiating with the full member list makes success depend on every other member already being reachable. Initiating with only the initial primary elects it immediately, and the remaining members are then added by a reconfiguration, which does not have to wait on them.
-                                await admin.RunCommandAsync<BsonDocument>(new BsonDocument
-                                {
-                                    ["replSetInitiate"] = new BsonDocument
-                                    {
-                                        ["_id"] = rsResource.Name,
-                                        ["members"] = new BsonArray([membersBsonArray[0]]),
-                                    },
-                                    // NOTE: A member has no primary until this very command has run, so selecting one is
-                                    // the one thing that cannot be asked for here.
-                                }, readPreference: ReadPreference.Nearest, cancellationToken: ct).ConfigureAwait(false);
-
-                                await admin.RunCommandAsync<BsonDocument>(new BsonDocument
-                                {
-                                    ["replSetReconfig"] = new BsonDocument
-                                    {
-                                        ["_id"] = rsResource.Name,
-                                        ["version"] = 2,
-                                        ["members"] = membersBsonArray,
-                                    },
-                                    ["force"] = true,
-                                }, readPreference: ReadPreference.Nearest, cancellationToken: ct).ConfigureAwait(false);
+                                await InitiateReplicaSetAsync(admin, rsResource.Name, membersBsonArray, ct).ConfigureAwait(false);
                                 configured = true;
                                 break;
                             }
@@ -393,7 +366,7 @@ public static class MongoDBReplicaSetBuilderExtensions
     /// <remarks>
     /// Internally calls the following methods on the member's builder:
     /// <list type="number">
-    /// <item> <description><see cref="MongoDBBuilderExtensions.WithReplicaSet(IResourceBuilder{MongoDBServerResource}, string)"/> to set the replica set name on the member resource and configure it accordingly. </description></item>
+    /// <item> <description>Configures the member's replica set name and command-line arguments without initializing a separate single-member set. Do not call <see cref="MongoDBBuilderExtensions.WithReplicaSet"/> on these members. </description></item>
     /// <item> <description><see cref="MongoDBBuilderExtensions.WithKeyFile(IResourceBuilder{MongoDBServerResource}, IExpressionValue, string)"/> to set the key file parameter on the member resource, which is required for internal authentication between replica set members. </description></item>
     /// <item> <description><see cref="MongoDBBuilderExtensions.WithTlsAllowInvalidCertificates(IResourceBuilder{MongoDBServerResource})"/> because members authenticate to each other with the same certificate they serve to clients, which does not carry a <c>clientAuth</c> extended key usage. </description></item>
     /// <item> <description><see cref="ResourceBuilderExtensions.WithHttpsDeveloperCertificate{TResource}(IResourceBuilder{TResource}, IResourceBuilder{ParameterResource}?)"/>, unless the member already has certificate configuration of its own. TLS is required for members of a replica set, because the split-horizon member hostname advertisement performed by the server operates on top of SNI. </description></item>
@@ -407,6 +380,12 @@ public static class MongoDBReplicaSetBuilderExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(member);
+        MongoDBBuilderExtensions.ThrowIfPublishMode(builder.ApplicationBuilder, nameof(WithMember));
+
+        if (member.Resource.HasAnnotationOfType<MongoDBSingleMemberReplicaSetAnnotation>())
+        {
+            throw new InvalidOperationException($"The MongoDB server resource '{member.Resource.Name}' is configured as a single-member replica set. Remove WithReplicaSet before adding it to the advanced replica set '{builder.Resource.Name}'. Migrating existing single-member data to an advanced replica set is not supported.");
+        }
 
         if (builder.Resource.Members.Count() >= MaxMembers)
         {
@@ -454,7 +433,7 @@ public static class MongoDBReplicaSetBuilderExtensions
                 $"The MongoDB server resource '{member.Resource.Name}' was given an explicit password that differs from the one of the replica set '{builder.Resource.Name}'. Members of a replica set share a single set of credentials: pass the password to '{nameof(AddMongoDBReplicaSet)}' instead of to the individual members.");
         }
 
-        member.WithReplicaSet(builder.Resource.Name);
+        MongoDBBuilderExtensions.ConfigureReplicaSetMember(member, builder.Resource.Name);
 
         // NOTE: A member that already carries the replica set's shared key file keeps it exactly as it is, mounted wherever
         // the caller put it. Configuring it again would only be a no-op when the path happened to match the default too,
@@ -551,6 +530,76 @@ public static class MongoDBReplicaSetBuilderExtensions
             // below actually needs, since that is what makes the member's endpoint resolvable.
             .WaitForStart(member)
             .WithRelationship(member, "replica set member");
+    }
+
+    /// <summary>
+    /// Initiates a brand new replica set on the initial primary and then extends it to every declared member.
+    /// </summary>
+    /// <remarks>
+    /// The initialization is performed in two steps, first with a single member and then with the full configuration.
+    /// <c>replSetInitiate</c> runs a quorum check against every host in the configuration it is handed, so initiating
+    /// with the full member list makes success depend on every other member already being reachable. Initiating with
+    /// only the initial primary does not, and the remaining members are then added by a reconfiguration.
+    /// </remarks>
+    internal static async Task InitiateReplicaSetAsync(IMongoDatabase admin, string replicaSetName, BsonArray members, CancellationToken cancellationToken)
+    {
+        await admin.RunCommandAsync<BsonDocument>(new BsonDocument
+        {
+            ["replSetInitiate"] = new BsonDocument
+            {
+                ["_id"] = replicaSetName,
+                ["members"] = new BsonArray([members[0]]),
+            },
+            // NOTE: A member has no primary until this very command has run, so selecting one is
+            // the one thing that cannot be asked for here.
+        }, readPreference: ReadPreference.Nearest, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        // NOTE: `replSetInitiate` returns as soon as the configuration is installed, while the member is still going
+        // through its own election. A reconfiguration sent straight away races that election: it is either rejected with
+        // `ConfigurationInProgress`, or interrupted with `InterruptedDueToReplStateChange` by the state transition that
+        // makes the member primary. Waiting for the member to report itself as a writable primary closes that window.
+        await WaitForWritablePrimaryAsync(admin, cancellationToken).ConfigureAwait(false);
+
+        await admin.RunCommandAsync<BsonDocument>(new BsonDocument
+        {
+            ["replSetReconfig"] = new BsonDocument
+            {
+                ["_id"] = replicaSetName,
+                ["version"] = 2,
+                ["members"] = members,
+            },
+            ["force"] = true,
+        }, readPreference: ReadPreference.Nearest, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task WaitForWritablePrimaryAsync(IMongoDatabase admin, CancellationToken cancellationToken)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(s_primaryElectionTimeout);
+
+        try
+        {
+            while (true)
+            {
+                // NOTE: `hello` is answered in every replica set state, and `isWritablePrimary` only turns true once the
+                // member has finished stepping up, which is the transition that would otherwise interrupt the next command.
+                var hello = await admin.RunCommandAsync<BsonDocument>(
+                    new BsonDocument("hello", 1),
+                    readPreference: ReadPreference.Nearest,
+                    cancellationToken: timeout.Token).ConfigureAwait(false);
+
+                if (hello.TryGetValue("isWritablePrimary", out var isWritablePrimary) && isWritablePrimary.ToBoolean())
+                {
+                    return;
+                }
+
+                await Task.Delay(s_primaryElectionPollInterval, timeout.Token).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException) when (timeout.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            throw new DistributedApplicationException($"The initial MongoDB replica set member did not become a writable primary within {s_primaryElectionTimeout.TotalSeconds} seconds of being initiated.");
+        }
     }
 
     /// <summary>

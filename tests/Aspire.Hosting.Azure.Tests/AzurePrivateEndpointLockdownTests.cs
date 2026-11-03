@@ -7,12 +7,12 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzurePrivateEndpointLockdownTests
+public class AzurePrivateEndpointLockdownTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public async Task AddAzureCosmosDB_WithPrivateEndpoint_GeneratesCorrectBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("pesubnet", "10.0.1.0/24");
@@ -28,7 +28,7 @@ public class AzurePrivateEndpointLockdownTests
     [Fact]
     public async Task AddAzureSqlServer_WithPrivateEndpoint_GeneratesCorrectBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("pesubnet", "10.0.1.0/24");
@@ -44,7 +44,7 @@ public class AzurePrivateEndpointLockdownTests
     [Fact]
     public async Task AddAzurePostgresFlexibleServer_WithPrivateEndpoint_GeneratesCorrectBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("pesubnet", "10.0.1.0/24");
@@ -60,7 +60,7 @@ public class AzurePrivateEndpointLockdownTests
     [Fact]
     public async Task AddAzureManagedRedis_WithPrivateEndpoint_GeneratesCorrectBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("pesubnet", "10.0.1.0/24");
@@ -76,7 +76,7 @@ public class AzurePrivateEndpointLockdownTests
     [Fact]
     public async Task AddAzureServiceBus_WithPrivateEndpoint_GeneratesCorrectBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("pesubnet", "10.0.1.0/24");
@@ -92,7 +92,7 @@ public class AzurePrivateEndpointLockdownTests
     [Fact]
     public async Task AddAzureEventHubs_WithPrivateEndpoint_GeneratesCorrectBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("pesubnet", "10.0.1.0/24");
@@ -108,7 +108,7 @@ public class AzurePrivateEndpointLockdownTests
     [Fact]
     public async Task AddAzureKeyVault_WithPrivateEndpoint_GeneratesCorrectBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("pesubnet", "10.0.1.0/24");
@@ -124,7 +124,7 @@ public class AzurePrivateEndpointLockdownTests
     [Fact]
     public async Task AddAzureAppConfiguration_WithPrivateEndpoint_GeneratesCorrectBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("pesubnet", "10.0.1.0/24");
@@ -140,7 +140,7 @@ public class AzurePrivateEndpointLockdownTests
     [Fact]
     public async Task AddAzureSearch_WithPrivateEndpoint_GeneratesCorrectBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("pesubnet", "10.0.1.0/24");
@@ -156,7 +156,7 @@ public class AzurePrivateEndpointLockdownTests
     [Fact]
     public async Task AddAzureSignalR_WithPrivateEndpoint_GeneratesCorrectBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("pesubnet", "10.0.1.0/24");
@@ -172,7 +172,7 @@ public class AzurePrivateEndpointLockdownTests
     [Fact]
     public async Task AddAzureWebPubSub_WithPrivateEndpoint_GeneratesCorrectBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("pesubnet", "10.0.1.0/24");
@@ -188,7 +188,7 @@ public class AzurePrivateEndpointLockdownTests
     [Fact]
     public async Task AddAzureOpenAI_WithPrivateEndpoint_GeneratesCorrectBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("pesubnet", "10.0.1.0/24");
@@ -204,7 +204,7 @@ public class AzurePrivateEndpointLockdownTests
     [Fact]
     public async Task AddFoundry_WithPrivateEndpoint_GeneratesCorrectBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("pesubnet", "10.0.1.0/24");
@@ -220,7 +220,7 @@ public class AzurePrivateEndpointLockdownTests
     [Fact]
     public async Task AddAzureContainerRegistry_WithPrivateEndpoint_GeneratesCorrectBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("pesubnet", "10.0.1.0/24");

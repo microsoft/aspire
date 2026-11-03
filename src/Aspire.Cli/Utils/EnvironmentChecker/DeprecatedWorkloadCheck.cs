@@ -19,12 +19,12 @@ internal sealed class DeprecatedWorkloadCheck(ILogger<DeprecatedWorkloadCheck> l
     internal const string CheckName = "aspire-workload";
 
     private static readonly TimeSpan s_processTimeout = TimeSpan.FromSeconds(10);
-    private readonly Func<ProcessStartInfo, Process?> _startProcess = Process.Start;
+    private readonly Func<ProcessStartInfo, CancellationToken, Task<ProcessTextOutput>> _runProcess = Process.RunAndCaptureTextAsync;
 
-    internal DeprecatedWorkloadCheck(ILogger<DeprecatedWorkloadCheck> logger, IEnvironment environment, Func<ProcessStartInfo, Process?> startProcess)
+    internal DeprecatedWorkloadCheck(ILogger<DeprecatedWorkloadCheck> logger, IEnvironment environment, Func<ProcessStartInfo, CancellationToken, Task<ProcessTextOutput>> runProcess)
         : this(logger, environment)
     {
-        _startProcess = startProcess;
+        _runProcess = runProcess;
     }
 
     public int Order => 32; // After SDK check (30), before dev certs (35)
@@ -33,43 +33,31 @@ internal sealed class DeprecatedWorkloadCheck(ILogger<DeprecatedWorkloadCheck> l
     {
         try
         {
-            var processInfo = new ProcessStartInfo
+            var processInfo = new ProcessStartInfo(DotNetSdkInstaller.ResolveDotNetPath(environment), "workload list")
             {
-                FileName = DotNetSdkInstaller.ResolveDotNetPath(environment),
-                Arguments = "workload list",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
-                UseShellExecute = false,
                 CreateNoWindow = true
             };
-
-            using var process = _startProcess(processInfo);
-            if (process is null)
-            {
-                logger.LogDebug("Failed to start dotnet workload list process");
-                // Don't fail the check if we can't run the command - the SDK check will catch SDK issues
-                return [];
-            }
 
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeoutCts.CancelAfter(s_processTimeout);
 
-            string output;
+            ProcessTextOutput result;
             try
             {
-                output = await process.StandardOutput.ReadToEndAsync(timeoutCts.Token);
-                await process.WaitForExitAsync(timeoutCts.Token);
+                // RunAndCaptureTextAsync kills the process when the timeout fires, so no cleanup is needed here.
+                result = await _runProcess(processInfo, timeoutCts.Token);
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
-                process.Kill();
                 logger.LogDebug("dotnet workload list timed out");
                 return [];
             }
 
-            if (process.ExitCode != 0)
+            if (result.ExitStatus.ExitCode != 0)
             {
-                logger.LogDebug("dotnet workload list exited with code {ExitCode}", process.ExitCode);
+                logger.LogDebug("dotnet workload list exited with code {ExitCode}", result.ExitStatus.ExitCode);
                 return [];
             }
 
@@ -78,7 +66,7 @@ internal sealed class DeprecatedWorkloadCheck(ILogger<DeprecatedWorkloadCheck> l
             // Installed Workload Id      Manifest Version       Installation Source
             // --------------------------------------------------------------------
             // aspire                     8.0.0/8.0.100          SDK 8.0.100
-            if (IsAspireWorkloadInstalled(output))
+            if (IsAspireWorkloadInstalled(result.StandardOutput))
             {
                 return [new EnvironmentCheckResult
                 {

@@ -5,6 +5,8 @@ import type { AspireExtendedDebugConfiguration } from '../dcp/types';
 const extensionOwnedConfigurationMarker = `__aspireAppHostLaunchServiceConfiguration_${randomUUID()}`;
 const extensionOwnedConfigurationValue = randomUUID();
 const externalLaunchReservationMarker = `__aspireExternalLaunchReservation_${randomUUID()}`;
+const recordedDiscoveryFailureMarker = `__aspireRecordedDiscoveryFailure_${randomUUID()}`;
+const recordedDiscoveryFailureValue = randomUUID();
 const resolvedCliPathMarker = `__aspireResolvedCliPath_${randomUUID()}`;
 const resolvedCliPathScopeMarker = `__aspireResolvedCliPathScope_${randomUUID()}`;
 
@@ -62,6 +64,16 @@ export function getAspireDebugConfigurationExternalLaunchReservation(configurati
         : undefined;
 }
 
+export function tryMarkAspireDebugConfigurationDiscoveryFailureRecorded(configuration: vscode.DebugConfiguration): boolean {
+    const configRecord = configuration as Record<string, unknown>;
+    if (configRecord[recordedDiscoveryFailureMarker] === recordedDiscoveryFailureValue) {
+        return false;
+    }
+
+    configRecord[recordedDiscoveryFailureMarker] = recordedDiscoveryFailureValue;
+    return true;
+}
+
 export function markAspireDebugConfigurationWithResolvedCliPath(configuration: vscode.DebugConfiguration, cliPath: string): void {
     (configuration as Record<string, unknown>)[resolvedCliPathMarker] = cliPath;
 }
@@ -94,6 +106,7 @@ export function stripAspireDebugConfigurationProviderInternalProperties(configur
     const configRecord = configuration as Record<string, unknown>;
     delete configRecord[extensionOwnedConfigurationMarker];
     delete configRecord[externalLaunchReservationMarker];
+    delete configRecord[recordedDiscoveryFailureMarker];
     delete configRecord[resolvedCliPathMarker];
     delete configRecord[resolvedCliPathScopeMarker];
     delete configRecord.launchedByExtension;

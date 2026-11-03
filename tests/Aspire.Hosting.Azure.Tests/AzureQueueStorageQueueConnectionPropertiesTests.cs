@@ -6,12 +6,12 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureQueueStorageQueueConnectionPropertiesTests
+public class AzureQueueStorageQueueConnectionPropertiesTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void AzureQueueStorageQueueResourceGetConnectionPropertiesReturnsExpectedValues()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var storage = builder.AddAzureStorage("storage");
         var queue = storage.AddQueue("queue", "myqueue");
 

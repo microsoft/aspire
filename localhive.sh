@@ -439,15 +439,15 @@ fi
 if [[ $SKIP_CLI -eq 0 ]]; then
   if [[ $NATIVE_AOT -eq 1 ]]; then
     # Native AOT CLI from Bundle.proj publish (already has embedded bundle payload)
-    CLI_PUBLISH_DIR="$REPO_ROOT/artifacts/bin/Aspire.Cli/$EFFECTIVE_CONFIG/net10.0/$BUNDLE_RID/native"
+    CLI_PUBLISH_DIR="$REPO_ROOT/artifacts/bin/Aspire.Cli/$EFFECTIVE_CONFIG/net11.0/$BUNDLE_RID/native"
     if [[ ! -d "$CLI_PUBLISH_DIR" ]]; then
-      CLI_PUBLISH_DIR="$REPO_ROOT/artifacts/bin/Aspire.Cli/$EFFECTIVE_CONFIG/net10.0/$BUNDLE_RID/publish"
+      CLI_PUBLISH_DIR="$REPO_ROOT/artifacts/bin/Aspire.Cli/$EFFECTIVE_CONFIG/net11.0/$BUNDLE_RID/publish"
     fi
   elif [[ -n "$TARGET_RID" ]]; then
     # Cross-RID: publish CLI for the target platform with embedded bundle payload
     log "Publishing Aspire CLI for target RID: $TARGET_RID"
     CLI_PROJ="$REPO_ROOT/src/Aspire.Cli/Aspire.Cli.csproj"
-    CLI_PUBLISH_DIR="$REPO_ROOT/artifacts/bin/Aspire.Cli/$EFFECTIVE_CONFIG/net10.0/$TARGET_RID/publish"
+    CLI_PUBLISH_DIR="$REPO_ROOT/artifacts/bin/Aspire.Cli/$EFFECTIVE_CONFIG/net11.0/$TARGET_RID/publish"
     PUBLISH_ARGS=(-c "$EFFECTIVE_CONFIG" -r "$TARGET_RID" --self-contained /p:PublishAot=false /p:PublishSingleFile=true "${PACK_VERSION_ARGS[@]}")
     if [[ -n "$BUNDLE_PAYLOAD_ARCHIVE" ]]; then
       PUBLISH_ARGS+=("/p:BundlePayloadPath=$BUNDLE_PAYLOAD_ARCHIVE")
@@ -465,7 +465,7 @@ if [[ $SKIP_CLI -eq 0 ]]; then
     if [[ -n "$BUNDLE_PAYLOAD_ARCHIVE" ]]; then
       # NativeAOT CLI (Aspire.Cli.csproj sets PublishAot=true) with embedded bundle payload.
       # Publish output is RID-specific when we pass -r, so the path includes $BUNDLE_RID.
-      CLI_PUBLISH_DIR="$REPO_ROOT/artifacts/bin/Aspire.Cli.Tool/$EFFECTIVE_CONFIG/net10.0/$BUNDLE_RID/publish"
+      CLI_PUBLISH_DIR="$REPO_ROOT/artifacts/bin/Aspire.Cli.Tool/$EFFECTIVE_CONFIG/net11.0/$BUNDLE_RID/publish"
       log "Publishing Aspire CLI (dotnet tool, native AOT) with embedded bundle payload..."
       set +e
       dotnet publish "$CLI_PROJ" -c "$EFFECTIVE_CONFIG" -r "$BUNDLE_RID" "${PACK_VERSION_ARGS[@]}" "/p:BundlePayloadPath=$BUNDLE_PAYLOAD_ARCHIVE"
@@ -478,15 +478,15 @@ if [[ $SKIP_CLI -eq 0 ]]; then
     else
       # --skip-bundle builds Aspire.Cli.Tool with PublishAot=false, which keeps the
       # historical framework-dependent, non-RID output layout.
-      CLI_PUBLISH_DIR="$REPO_ROOT/artifacts/bin/Aspire.Cli.Tool/$EFFECTIVE_CONFIG/net10.0/publish"
+      CLI_PUBLISH_DIR="$REPO_ROOT/artifacts/bin/Aspire.Cli.Tool/$EFFECTIVE_CONFIG/net11.0/publish"
       if [[ ! -d "$CLI_PUBLISH_DIR" ]]; then
-        CLI_PUBLISH_DIR="$REPO_ROOT/artifacts/bin/Aspire.Cli.Tool/$EFFECTIVE_CONFIG/net10.0"
+        CLI_PUBLISH_DIR="$REPO_ROOT/artifacts/bin/Aspire.Cli.Tool/$EFFECTIVE_CONFIG/net11.0"
       fi
     fi
 
     if [[ ! -f "$CLI_PUBLISH_DIR/aspire" ]]; then
-      RID_CLI_PUBLISH_DIR="$REPO_ROOT/artifacts/bin/Aspire.Cli.Tool/$EFFECTIVE_CONFIG/net10.0/$BUNDLE_RID/publish"
-      RID_CLI_NATIVE_DIR="$REPO_ROOT/artifacts/bin/Aspire.Cli.Tool/$EFFECTIVE_CONFIG/net10.0/$BUNDLE_RID/native"
+      RID_CLI_PUBLISH_DIR="$REPO_ROOT/artifacts/bin/Aspire.Cli.Tool/$EFFECTIVE_CONFIG/net11.0/$BUNDLE_RID/publish"
+      RID_CLI_NATIVE_DIR="$REPO_ROOT/artifacts/bin/Aspire.Cli.Tool/$EFFECTIVE_CONFIG/net11.0/$BUNDLE_RID/native"
       if [[ -f "$RID_CLI_PUBLISH_DIR/aspire" ]]; then
         CLI_PUBLISH_DIR="$RID_CLI_PUBLISH_DIR"
       elif [[ -f "$RID_CLI_NATIVE_DIR/aspire" ]]; then

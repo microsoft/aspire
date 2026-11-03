@@ -35,7 +35,7 @@ public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
         var logFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "cli [extension].log");
         var executionContext = workspace.CreateExecutionContext(logFilePath: logFilePath);
         var consoleInteractionService = new ConsoleInteractionService(
-            new ConsoleEnvironment(console, console),
+            new ConsoleEnvironment(console, console, TextReader.Null),
             executionContext,
             TestHelpers.CreateInteractiveHostEnvironment(),
             new EnvironmentProcessPathProvider(),
@@ -278,7 +278,7 @@ public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var executionContext = workspace.CreateExecutionContext();
         var consoleInteractionService = new ConsoleInteractionService(
-            new ConsoleEnvironment(console, console),
+            new ConsoleEnvironment(console, console, TextReader.Null),
             executionContext,
             TestHelpers.CreateInteractiveHostEnvironment(),
             new EnvironmentProcessPathProvider(),
@@ -306,6 +306,42 @@ public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
 
         Assert.True(cancellationMessageCalled.Task.IsCompletedSuccessfully);
         Assert.False(displayMessageCalled);
+    }
+
+    [Fact]
+    public async Task PromptForSelectionsAsync_ForwardsFormattedDefaultsAndMapsSelectedValues()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        SelectionChoice[] choices =
+        [
+            new("Aspire skill"),
+            new("Playwright CLI")
+        ];
+        string? capturedPrompt = null;
+        IReadOnlyList<string>? capturedChoices = null;
+        IReadOnlyList<string>? capturedPreSelected = null;
+        var backchannel = new TestExtensionBackchannel
+        {
+            PromptForSelectionsAsyncCallback = (prompt, formattedChoices, formattedPreSelected) =>
+            {
+                capturedPrompt = prompt;
+                capturedChoices = formattedChoices;
+                capturedPreSelected = formattedPreSelected;
+                return Task.FromResult<IReadOnlyList<string>>(["Playwright CLI"]);
+            }
+        };
+        using var interactionService = CreateExtensionInteractionService(workspace, backchannel);
+
+        var result = await interactionService.PromptForSelectionsAsync(
+            "[bold]Select skills:[/]",
+            choices,
+            choice => $"[bold]{choice.Label}[/]",
+            preSelected: [choices[0]]);
+
+        Assert.Equal("Select skills:", capturedPrompt);
+        Assert.Equal(["Aspire skill", "Playwright CLI"], capturedChoices);
+        Assert.Equal(["Aspire skill"], capturedPreSelected);
+        Assert.Same(choices[1], Assert.Single(result));
     }
 
     [Fact]
@@ -425,7 +461,7 @@ public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
         var logFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "cli [extension].log");
         var executionContext = workspace.CreateExecutionContext(logFilePath: logFilePath);
         var consoleInteractionService = new ConsoleInteractionService(
-            new ConsoleEnvironment(console, console),
+            new ConsoleEnvironment(console, console, TextReader.Null),
             executionContext,
             TestHelpers.CreateInteractiveHostEnvironment(),
             new EnvironmentProcessPathProvider(),
@@ -457,7 +493,7 @@ public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
         console.Profile.Width = int.MaxValue;
 
         var consoleInteractionService = new ConsoleInteractionService(
-            new ConsoleEnvironment(console, console),
+            new ConsoleEnvironment(console, console, TextReader.Null),
             workspace.CreateExecutionContext(),
             TestHelpers.CreateInteractiveHostEnvironment(),
             new EnvironmentProcessPathProvider(),
@@ -470,4 +506,6 @@ public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
             extensionPromptEnabled: true,
             logger: NullLogger<ExtensionInteractionService>.Instance);
     }
+
+    private sealed record SelectionChoice(string Label);
 }

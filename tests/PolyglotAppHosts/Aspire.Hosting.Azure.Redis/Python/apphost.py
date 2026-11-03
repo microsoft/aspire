@@ -1,12 +1,37 @@
 # Aspire Python validation AppHost
 # Mirrors the top-level TypeScript playground surface with Python-style members.
 
-from aspire_app import create_builder
+from aspire_app import AzureResourceInfrastructure, create_builder
+
+
+def configure_managed_redis(infrastructure: AzureResourceInfrastructure) -> None:
+    cluster = infrastructure.get_redis_enterprise_cluster()
+    cluster.minimum_tls_version = "Tls1_2"
+    _minimum_tls_version = cluster.minimum_tls_version
+
+
+def create_legacy_redis(infrastructure: AzureResourceInfrastructure) -> None:
+    # The obsolete Azure Redis hosting API is not exported.
+    redis = infrastructure.add_redis_resource("legacyRedis")
+    sku = infrastructure.create_redis_sku()
+    sku.name = "Basic"
+    sku.family = "BasicOrStandard"
+    sku.capacity = 0
+    redis.sku = sku
+
+
+def configure_legacy_redis(infrastructure: AzureResourceInfrastructure) -> None:
+    redis = infrastructure.get_redis_resource()
+    redis.enable_non_ssl_port = False
+    _enable_non_ssl_port = redis.enable_non_ssl_port
 
 
 with create_builder() as builder:
     key_vault = builder.add_azure_key_vault("resource")
     cache = builder.add_azure_managed_redis("resource")
+    cache.configure_infrastructure(configure_managed_redis)
+    legacy_cache = builder.add_azure_infrastructure("legacyRedis", create_legacy_redis)
+    legacy_cache.configure_infrastructure(configure_legacy_redis)
     access_key_cache = builder.add_azure_managed_redis("resource")
     container_cache = builder.add_azure_managed_redis("resource")
     access_key_cache.with_access_key_authentication()

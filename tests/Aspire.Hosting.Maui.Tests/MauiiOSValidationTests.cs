@@ -3,6 +3,7 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Eventing;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Tests;
@@ -32,7 +33,8 @@ public class MauiiOSValidationTests(ITestOutputHelper outputHelper)
         var exception = await Assert.ThrowsAsync<DistributedApplicationException>(async () =>
         {
             await app.Services.GetRequiredService<IDistributedApplicationEventing>()
-                .PublishAsync(new BeforeResourceStartedEvent(device.Resource, app.Services), CancellationToken.None);
+                .PublishAsync(new BeforeResourceStartedEvent(device.Resource, app.Services), CancellationToken.None)
+                .DefaultTimeout();
         });
 
         Assert.Contains("appears to be an iOS Simulator UDID", exception.Message);
@@ -57,7 +59,8 @@ public class MauiiOSValidationTests(ITestOutputHelper outputHelper)
         var exception = await Assert.ThrowsAsync<DistributedApplicationException>(async () =>
         {
             await app.Services.GetRequiredService<IDistributedApplicationEventing>()
-                .PublishAsync(new BeforeResourceStartedEvent(simulator.Resource, app.Services), CancellationToken.None);
+                .PublishAsync(new BeforeResourceStartedEvent(simulator.Resource, app.Services), CancellationToken.None)
+                .DefaultTimeout();
         });
 
         Assert.Contains("does not appear to be an iOS Simulator UDID", exception.Message);
@@ -81,7 +84,8 @@ public class MauiiOSValidationTests(ITestOutputHelper outputHelper)
 
         // Should not throw — this is a valid device UDID format
         await app.Services.GetRequiredService<IDistributedApplicationEventing>()
-            .PublishAsync(new BeforeResourceStartedEvent(device.Resource, app.Services), CancellationToken.None);
+            .PublishAsync(new BeforeResourceStartedEvent(device.Resource, app.Services), CancellationToken.None)
+            .DefaultTimeout();
     }
 
     [Fact]
@@ -101,7 +105,8 @@ public class MauiiOSValidationTests(ITestOutputHelper outputHelper)
 
         // Should not throw — this is a valid simulator UDID format
         await app.Services.GetRequiredService<IDistributedApplicationEventing>()
-            .PublishAsync(new BeforeResourceStartedEvent(simulator.Resource, app.Services), CancellationToken.None);
+            .PublishAsync(new BeforeResourceStartedEvent(simulator.Resource, app.Services), CancellationToken.None)
+            .DefaultTimeout();
     }
 
     [Fact]
@@ -119,7 +124,8 @@ public class MauiiOSValidationTests(ITestOutputHelper outputHelper)
 
         // No device ID validation when no ID is provided
         await app.Services.GetRequiredService<IDistributedApplicationEventing>()
-            .PublishAsync(new BeforeResourceStartedEvent(device.Resource, app.Services), CancellationToken.None);
+            .PublishAsync(new BeforeResourceStartedEvent(device.Resource, app.Services), CancellationToken.None)
+            .DefaultTimeout();
     }
 
     [Fact]
@@ -137,6 +143,7 @@ public class MauiiOSValidationTests(ITestOutputHelper outputHelper)
 
         // No simulator ID validation when no ID is provided
         await app.Services.GetRequiredService<IDistributedApplicationEventing>()
-            .PublishAsync(new BeforeResourceStartedEvent(simulator.Resource, app.Services), CancellationToken.None);
+            .PublishAsync(new BeforeResourceStartedEvent(simulator.Resource, app.Services), CancellationToken.None)
+            .DefaultTimeout();
     }
 }

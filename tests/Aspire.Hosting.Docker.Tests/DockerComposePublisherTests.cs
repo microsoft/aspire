@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource Compose projection alongside executable/V2 deployment coverage.
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIRECONTAINERRUNTIME001
 
@@ -107,6 +108,30 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void ConnectionStringNamesWithHyphens_PreserveBothAliases()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.AddDockerComposeEnvironment("docker-compose");
+        var connection = builder.AddConnectionString("my-db", ReferenceExpression.Create($"Host=example"));
+        builder.AddContainer("api", "myimage")
+            .WithReference(connection);
+
+        using var app = builder.Build();
+        app.Run();
+
+        var compose = File.ReadAllText(Path.Combine(workspace.Path, "docker-compose.yaml"));
+        var aliases = Regex.Matches(compose, @"(?m)^\s+(ConnectionStrings__[^:]+):")
+            .Select(static match => match.Groups[1].Value)
+            .Order(StringComparer.Ordinal);
+
+        Assert.Equal(
+            ["ConnectionStrings__my-db", "ConnectionStrings__my_db"],
+            aliases);
+    }
+
+    [Fact]
     public async Task DockerComposeWithProjectResources()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -141,6 +166,26 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
 
         await Verify(File.ReadAllText(composePath), "yaml")
             .AppendContentAsFile(File.ReadAllText(envPath), "env");
+    }
+
+    [Fact]
+    public async Task DockerComposeWithDotnetProjectUsesImagePlaceholderAndWaitDependency()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.AddDockerComposeEnvironment("docker-compose").WithDashboard(false);
+        var api = builder.AddDotnetProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true);
+        builder.AddDotnetProject("worker", "worker.csproj", options => options.ExcludeLaunchProfile = true)
+            .WaitFor(api);
+        using var app = builder.Build();
+
+        app.Run();
+
+        var compose = File.ReadAllText(Path.Combine(workspace.Path, "docker-compose.yaml"));
+        var environment = File.ReadAllText(Path.Combine(workspace.Path, ".env"));
+        await Verify(compose, "yaml")
+            .AppendContentAsFile(environment, "env");
     }
 
     [Fact]
@@ -321,6 +366,25 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
 
         await Verify(firstContent, "env")
             .AppendContentAsFile(secondContent, "env");
+    }
+
+    [Fact]
+    public async Task DockerComposePreservesMultilineEnvValuesOnPublish()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var envFilePath = Path.Combine(workspace.Path, ".env");
+        File.WriteAllLines(envFilePath, ["BANNER='hello", "world'", "TAIL=preserved"]);
+
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.AddDockerComposeEnvironment("docker-compose");
+        var parameter = builder.AddParameter("param1");
+        builder.AddContainer("app", "busybox").WithEnvironment("param1", parameter);
+
+        using var app = builder.Build();
+        app.Run();
+
+        await Verify(File.ReadAllText(envFilePath), "env");
     }
 
     [Fact]
@@ -1235,6 +1299,37 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
         await Verify(File.ReadAllText(composePath), "yaml");
     }
 
+    [Fact]
+    public async Task PublishAsync_ResolvesEndpointTlsEnabledProperty()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+
+        builder.AddDockerComposeEnvironment("docker-compose");
+
+        var cache = builder.AddContainer("cache", "redis")
+            .WithEndpoint(targetPort: 6379, name: "tcp", scheme: "tcp")
+            .WithEndpoint(targetPort: 6380, name: "tls", scheme: "tcp")
+            .WithEndpoint("tls", endpoint => endpoint.TlsEnabled = true);
+
+        builder.AddContainer("myapp", "mcr.microsoft.com/dotnet/aspnet:8.0")
+            .WithEnvironment("CACHE_TLS", cache.GetEndpoint("tls").Property(EndpointProperty.TlsEnabled))
+            .WithEnvironment("CACHE_PLAIN_TLS", cache.GetEndpoint("tcp").Property(EndpointProperty.TlsEnabled));
+
+        var app = builder.Build();
+        app.Run();
+
+        var composePath = Path.Combine(workspace.Path, "docker-compose.yaml");
+        Assert.True(File.Exists(composePath));
+
+        var composeContent = await File.ReadAllTextAsync(composePath);
+
+        Assert.Contains("CACHE_TLS: \"True\"", composeContent);
+        Assert.Contains("CACHE_PLAIN_TLS: \"False\"", composeContent);
+    }
+
     private sealed class TestConditionProvider(string value) : IValueProvider, IManifestExpressionProvider
     {
         public string ValueExpression => "test-condition";
@@ -1314,3 +1409,4 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
         public Microsoft.Extensions.FileProviders.IFileProvider ContentRootFileProvider { get; set; } = null!;
     }
 }
+#pragma warning restore CS0618

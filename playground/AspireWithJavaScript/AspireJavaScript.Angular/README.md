@@ -2,6 +2,10 @@
 
 This project was generated with [Angular CLI](https://github.com/angular/angular-cli) version 17.0.7.
 
+## Prerequisites
+
+The project now uses Angular 21, which requires Node.js `^20.19.0 || ^22.12.0 || >=24.0.0`. See [Angular's version compatibility table](https://angular.dev/reference/versions).
+
 ## Development server
 
 Run `ng serve` for a dev server. Navigate to `http://localhost:4200/`. The application will automatically reload if you change any of the source files.

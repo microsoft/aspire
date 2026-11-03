@@ -9,16 +9,18 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureProvisioningResourceTests
+public class AzureProvisioningResourceTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public async Task PublishAsAzureContainerApp_CreatesAzureContainerAppResource()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
         var apiProject = builder.AddProject<Project>("api", launchProfileName: null);
+#pragma warning restore CS0618
         apiProject.PublishAsAzureContainerApp((infrastructure, containerApp) =>
         {
             // This callback should have access to the original resource
@@ -48,11 +50,13 @@ public class AzureProvisioningResourceTests
     [Fact]
     public async Task PublishAsAzureAppServiceWebsite_CreatesAzureWebSiteResource()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         builder.AddAzureAppServiceEnvironment("env");
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
         var apiProject = builder.AddProject<Project>("api", launchProfileName: null);
+#pragma warning restore CS0618
         apiProject.PublishAsAzureAppServiceWebsite((infrastructure, website) =>
         {
             // This callback should have access to the original resource
@@ -82,7 +86,7 @@ public class AzureProvisioningResourceTests
     [Fact]
     public async Task ContainerResource_WithPublishAsContainerApp_CreatesAzureContainerAppResource()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
 

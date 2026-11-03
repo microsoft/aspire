@@ -38,16 +38,30 @@
     src: url("../fonts/poppins/latin-700-normal.woff2") format("woff2");
 }
 
+.card-header-icon {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    background: var(--colorBrandBackground2);
+    color: var(--colorBrandForeground2);
+}
+
 :root {
     color-scheme: light;
     --aspire-font-sans: "Geist", "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
     --aspire-font-mono: "Cascadia Mono", "Geist Mono", Consolas, ui-monospace, "Courier New", monospace;
     --aspire-font-display: "Poppins", var(--aspire-font-sans);
+    --aspire-brand-hover-brightness: 1.1;
     --fontFamilyBase: var(--aspire-font-sans);
     --fontFamilyMonospace: var(--aspire-font-mono);
     --aspire-control-height: 28px;
     --aspire-control-radius: 6px;
     --aspire-popup-radius: 10px;
+    --disabled-opacity: 0.3;
 
     --aspire-page-background: #f7f7f7;
     --aspire-shell-background: #e5e5e5;
@@ -63,6 +77,8 @@
     --colorNeutralStroke3: #e5e5e5;
     --aspire-button-hover-border: #c2c2c2;
     --aspire-link-button-pressed-background: #efefef;
+    --run-select-hover-background: color-mix(in srgb, var(--colorNeutralBackground3) 50%, var(--aspire-page-background));
+    --run-select-pressed-background: color-mix(in srgb, var(--colorNeutralBackground3) 80%, var(--aspire-page-background));
     --colorBrandBackground: #512bd4;
     --colorBrandBackgroundHover: #7455dd;
     --colorBrandBackgroundPressed: #512bd4;
@@ -106,7 +122,7 @@
     --layout-left-padding: 12px;
     --layout-right-padding: 12px;
     --layout-top-padding: 12px;
-    --datagrid-hover-color: #f3f3f3;
+    --datagrid-hover-color: #efefef;
     --datagrid-selected-color: var(--colorNeutralBackground3);
     --datagrid-border-color: #e5e5e5;
     --fluent-multi-splitter-background-color: var(--colorNeutralStroke1);
@@ -242,6 +258,7 @@
 
 [data-theme="dark"] {
     color-scheme: dark;
+    --aspire-brand-hover-brightness: 0.9;
     --aspire-page-background: #221e2d;
     --aspire-shell-background: #000000;
     --aspire-control-background: #2d2937;
@@ -249,16 +266,19 @@
     --colorNeutralBackground2: var(--aspire-page-background);
     --colorNeutralBackground3: #312e3c;
     --colorNeutralBackground4: var(--aspire-shell-background);
+    --colorNeutralBackgroundDisabled: var(--colorNeutralBackground1);
     --datagrid-hover-color: var(--colorNeutralBackground1);
     --datagrid-border-color: #363241;
     --colorNeutralForeground1: #ffffff;
-    --colorNeutralForeground3: #8c8894;
+    --colorNeutralForeground3: #96929e;
     --colorNeutralForegroundOnBrand: #000000;
     --colorNeutralStroke1: #494553;
     --colorNeutralStroke2: #494553;
     --colorNeutralStroke3: #312e3c;
     --aspire-button-hover-border: #5c5865;
     --aspire-link-button-pressed-background: #2d2937;
+    --run-select-hover-background: var(--colorNeutralBackground3);
+    --run-select-pressed-background: var(--colorNeutralBackground3);
     --colorBrandBackground: #b9aaee;
     --colorBrandBackgroundHover: #dcd5f6;
     --colorBrandBackgroundPressed: #b9aaee;
@@ -283,11 +303,11 @@
     --aspire-dropdown-option-selected-background: #44404e;
     --aspire-dropdown-option-selected-hover-background: #3f3c4a;
     --accent-button-background: var(--colorBrandBackground);
-    --accent-button-foreground: color-mix(in srgb, #512bd4 85%, #000000);
+    --accent-button-foreground: #211047;
     --accent-button-hover-background: color-mix(in srgb, var(--colorBrandBackground) 90%, #000000);
-    --accent-button-hover-foreground: color-mix(in srgb, #512bd4 65%, #000000);
+    --accent-button-hover-foreground: #211047;
     --accent-button-pressed-background: color-mix(in srgb, var(--colorBrandBackground) 85%, #000000);
-    --accent-button-pressed-foreground: color-mix(in srgb, #512bd4 55%, #000000);
+    --accent-button-pressed-foreground: #211047;
 
     --log-critical: #493634;
     --log-error: #493634;

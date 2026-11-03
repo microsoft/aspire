@@ -33,7 +33,7 @@ The Aspire release process uses these main automation components:
    - Normally dispatched automatically by the AzDO pipeline; it can also be run manually as a fallback after the GitHub release assets are live.
 5. **GitHub Actions workflow** (`.github/workflows/homebrew-validate-release.yml`)
    - Triggered when the release manager publishes the draft (i.e. `release: [published]`).
-   - Generates the Homebrew cask file from the just-published `aspire-cli-osx-*` assets and runs `brew audit --cask --online --signing` + a real `brew install`/`brew uninstall` cycle to catch problems before Homebrew/homebrew-cask's autobump PR is opened.
+   - Generates the Homebrew cask file from the just-published `aspire-cli-osx-*` assets and runs `brew audit --cask --online` + explicit binary notarization verification + a real `brew install`/`brew uninstall` cycle to catch problems before Homebrew/homebrew-cask's autobump PR is opened.
 6. **GitHub Actions workflow** (`.github/workflows/extension-release.yml`)
    - Prepares a VS Code extension release PR.
    - Bumps `extension/package.json`.
@@ -54,6 +54,12 @@ To support this, the release flow now creates the GitHub release as a **draft**:
 3. The AzDO pipeline's `PublishReleaseAssetsJob` uploads `aspire-cli-*` archives onto the draft via `gh release upload`. (Draft releases support asset upload via the Releases REST API.)
 4. **The release manager publishes the draft manually as a final step** — see [Step 5: Publish the draft release](#step-5-publish-the-draft-release).
 5. Publishing the draft fires `release: [published]`, which kicks off downstream workflows that need the live release: `release-update-support-mdx` (opens a PR on `microsoft/aspire.dev`) and `homebrew-validate-release` (validates the cask against the live download URLs). Both subscribe to `published` rather than `released` because GitHub does not reliably fire `released` when a release is published from a draft.
+
+The release-existence check uses the same GitHub App token as release creation.
+GitHub requires push access to see draft releases; a read-only automatic
+`GITHUB_TOKEN` reports an existing draft as missing. Keeping this lookup on the
+App token preserves retries without granting write permissions to the automatic
+token.
 
 ## Installer channels
 
@@ -233,7 +239,7 @@ This is a **manual** step performed by the release manager. The release is creat
 Publishing the draft fires the `release: [published]` event, which triggers:
 
 - [`release-update-support-mdx`](https://github.com/microsoft/aspire/actions/workflows/release-update-support-mdx.lock.yml): opens a draft PR on `microsoft/aspire.dev` to update the support mdx with the new release info.
-- [`homebrew-validate-release`](https://github.com/microsoft/aspire/actions/workflows/homebrew-validate-release.yml): runs `brew audit --cask --online --signing` + a real `brew install`/`brew uninstall` cycle against the cask generated from the just-published `aspire-cli-osx-*` assets.
+- [`homebrew-validate-release`](https://github.com/microsoft/aspire/actions/workflows/homebrew-validate-release.yml): runs `brew audit --cask --online` + explicit binary notarization verification + a real `brew install`/`brew uninstall` cycle against the cask generated from the just-published `aspire-cli-osx-*` assets.
 
 If either downstream workflow fails, the release itself is fine — the release is published and immutable. Investigate the failure on the workflow run, fix the underlying issue, and rerun via `workflow_dispatch` against the published tag.
 
@@ -444,7 +450,7 @@ GitHub release-update-support-mdx.lock.yml (triggered on `release: published`)
 
 GitHub homebrew-validate-release.yml (triggered on `release: published`)
   -> generates aspire.rb from the just-published aspire-cli-osx-* assets
-  -> runs `brew audit --cask --online --signing` + brew install/uninstall
+   -> runs `brew audit --cask --online` + binary notarization verification + brew install/uninstall
 ```
 
 ## Related documentation

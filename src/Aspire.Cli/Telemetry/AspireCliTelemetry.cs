@@ -2,10 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using Aspire.Hosting;
 using Aspire.Shared;
+using Aspire.Shared.Telemetry;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -14,12 +13,19 @@ namespace Aspire.Cli.Telemetry;
 /// <summary>
 /// Provides a single ActivitySource for all Aspire CLI components.
 /// </summary>
-internal sealed class AspireCliTelemetry : IHostedService
+internal sealed class AspireCliTelemetry : AspireTelemetryBase, IHostedService
 {
+    private static readonly TimeSpan s_internalMicrosoftDiagnosticsCompletionTimeout = TimeSpan.FromSeconds(20);
+
     /// <summary>
     /// The name of the ActivitySource for report telemetry. This telemetry is exported to external systems.
     /// </summary>
     public const string ReportedActivitySourceName = "Aspire.Cli.Reported";
+
+    /// <summary>
+    /// The category for explicitly reported product-event logs.
+    /// </summary>
+    public const string EventLogCategoryName = "Aspire.Cli.Reported.Events";
 
     /// <summary>
     /// The name of the ActivitySource for diagnostics telemetry. This telemetry is used for internal diagnostics only.
@@ -42,8 +48,6 @@ internal sealed class AspireCliTelemetry : IHostedService
     /// </summary>
     internal const string ConsoleExporterLevelConfigKey = "ASPIRE_CLI_CONSOLE_EXPORTER_LEVEL";
 
-    private readonly ActivitySource _diagnosticsActivitySource;
-    private readonly ActivitySource _reportedActivitySource;
     private readonly IMachineInformationProvider _machineInformationProvider;
     private readonly ICIEnvironmentDetector _ciEnvironmentDetector;
     private readonly ICodingAgentDetector _codingAgentDetector;
@@ -52,6 +56,8 @@ internal sealed class AspireCliTelemetry : IHostedService
     private readonly ILogger<AspireCliTelemetry> _logger;
     private readonly CliExecutionContext _executionContext;
     private readonly TelemetryTagsSource _tagsSource;
+    private Task _internalMicrosoftDiagnosticsTask = Task.CompletedTask;
+    private Task? _internalMicrosoftDiagnosticsCompletionTask;
 
     private bool _isInitialized;
 
@@ -107,6 +113,7 @@ internal sealed class AspireCliTelemetry : IHostedService
     /// <param name="executionContext">The CLI execution context carrying the effective identity.</param>
     /// <param name="tagsSource">The shared source for background-calculated telemetry tags.</param>
     internal AspireCliTelemetry(ILogger<AspireCliTelemetry> logger, IMachineInformationProvider machineInformationProvider, ICIEnvironmentDetector ciEnvironmentDetector, ICodingAgentDetector codingAgentDetector, IInternalMicrosoftDetector internalMicrosoftDetector, TelemetryConfiguration telemetryConfiguration, string reportedSourceName, string diagnosticsSourceName, CliExecutionContext executionContext, TelemetryTagsSource tagsSource)
+        : base(logger, reportedSourceName, diagnosticsSourceName, TelemetryConstants.Events.Error)
     {
         _logger = logger;
         _machineInformationProvider = machineInformationProvider;
@@ -116,8 +123,6 @@ internal sealed class AspireCliTelemetry : IHostedService
         _telemetryConfiguration = telemetryConfiguration;
         _executionContext = executionContext;
         _tagsSource = tagsSource;
-        _reportedActivitySource = new ActivitySource(reportedSourceName);
-        _diagnosticsActivitySource = new ActivitySource(diagnosticsSourceName);
     }
 
     /// <summary>
@@ -125,99 +130,41 @@ internal sealed class AspireCliTelemetry : IHostedService
     /// </summary>
     internal async Task<IReadOnlyList<KeyValuePair<string, object?>>> GetDefaultTagsAsync()
     {
-        return await _tagsSource.TagsTask.ConfigureAwait(false);
+        var tags = await _tagsSource.TagsTask.ConfigureAwait(false);
+        await _internalMicrosoftDiagnosticsTask.ConfigureAwait(false);
+        return tags;
+    }
+
+    protected override IReadOnlyList<KeyValuePair<string, object?>> GetDefaultTags() => _tagsSource.GetResolvedTags();
+
+    internal override IEnumerable<KeyValuePair<string, object?>> GetActivityDefaultTags(Activity activity)
+    {
+        var tags = GetDefaultTags();
+        // Detector-health telemetry reports only bounded outcome metadata. Raw alias and domain
+        // belong on ordinary product telemetry, not the event measuring their availability.
+        return activity.OperationName == TelemetryConstants.Activities.InternalMicrosoftDetector
+            ? tags.Where(tag => tag.Key is not (TelemetryConstants.Tags.InternalMicrosoftAlias or TelemetryConstants.Tags.InternalMicrosoftDomain))
+            : tags;
+    }
+
+    protected override bool IsReportedTelemetryEnabled => _telemetryConfiguration.ReportedTelemetryEnabled;
+
+    /// <inheritdoc />
+    protected override bool TrySanitizeProperty(string key, object? value, out object? sanitizedValue)
+    {
+        // CLI properties are supplied by internal instrumentation, which retains its existing
+        // tag set and exception details rather than adopting the dashboard's privacy policy.
+        sanitizedValue = value;
+        return true;
     }
 
     /// <summary>
-    /// Starts a new activity for reported telemetry that is exported to external systems.
+    /// Records a CLI product event immediately as a structured log.
     /// </summary>
-    /// <param name="name">The name of the activity.</param>
-    /// <param name="kind">The activity kind.</param>
-    /// <returns>The started activity, or null if no listeners are registered.</returns>
-    public Activity? StartReportedActivity([CallerMemberName] string name = "", ActivityKind kind = ActivityKind.Internal)
-    {
-        return StartActivityCore(_reportedActivitySource, name, kind);
-    }
-
-    /// <summary>
-    /// Starts a new activity for reported telemetry with an explicit parent context.
-    /// </summary>
-    public Activity? StartReportedActivity(string name, ActivityKind kind, ActivityContext parentContext)
-    {
-        return StartActivityCore(_reportedActivitySource, name, kind, parentContext);
-    }
-
-    /// <summary>
-    /// Starts a new activity for diagnostic telemetry used for internal diagnostics only.
-    /// Uses the caller member name if no name is provided.
-    /// </summary>
-    /// <param name="name">The name of the activity. Defaults to the caller member name if not specified.</param>
-    /// <param name="kind">The activity kind.</param>
-    /// <returns>The started activity, or null if no listeners are registered.</returns>
-    public Activity? StartDiagnosticActivity([CallerMemberName] string name = "", ActivityKind kind = ActivityKind.Internal)
-    {
-        return StartActivityCore(_diagnosticsActivitySource, name, kind);
-    }
-
-    /// <summary>
-    /// Starts a new activity for diagnostic telemetry with an explicit parent context.
-    /// </summary>
-    public Activity? StartDiagnosticActivity(string name, ActivityKind kind, ActivityContext parentContext)
-    {
-        return StartActivityCore(_diagnosticsActivitySource, name, kind, parentContext);
-    }
-
-    private static Activity? StartActivityCore(ActivitySource source, string name, ActivityKind kind)
-    {
-        return StartActivityCore(source, name, kind, parentContext: null);
-    }
-
-    private static Activity? StartActivityCore(ActivitySource source, string name, ActivityKind kind, ActivityContext? parentContext)
-    {
-        // Activities must have a name.
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
-
-        var activity = parentContext is { } context
-            ? source.StartActivity(name, kind, context)
-            : source.StartActivity(name, kind);
-
-        return activity;
-    }
-
-    /// <summary>
-    /// Records an error by logging it and adding an activity event to a CLI activity.
-    /// </summary>
-    /// <param name="message">The error message.</param>
-    /// <param name="exception">The exception that occurred.</param>
-    public void RecordError(string message, Exception exception)
-    {
-        _logger.LogError(exception, message);
-
-        var activity = FindReportedActivity(Activity.Current);
-        if (activity is not null)
-        {
-            // This adds an activity event for the error. Capturing the data manually is intentional.
-            // The reason is we want to record this information to the traces table instead of the exceptions table.
-            var tags = new ActivityTagsCollection
-            {
-                [TelemetryConstants.Tags.ExceptionType] = exception.GetType().FullName,
-                [TelemetryConstants.Tags.ExceptionMessage] = exception.Message,
-                [TelemetryConstants.Tags.ExceptionStackTrace] = exception.StackTrace
-            };
-
-            foreach (var tag in _tagsSource.GetResolvedTags())
-            {
-                tags[tag.Key] = tag.Value;
-            }
-
-            activity.AddEvent(new ActivityEvent(TelemetryConstants.Events.Error, tags: tags));
-        }
-        else
-        {
-            // There should always be a reported activity. Sanity check in case something goes wrong.
-            Debug.WriteLine("No reported activity found to record the error event.");
-        }
-    }
+    /// <param name="eventName">The event name.</param>
+    /// <param name="properties">The CLI-specific event properties.</param>
+    public void RecordEvent(string eventName, IEnumerable<KeyValuePair<string, object?>>? properties = null) =>
+        RecordEventCore(eventName, properties);
 
     /// <inheritdoc />
     public Task StartAsync(CancellationToken cancellationToken)
@@ -227,7 +174,42 @@ internal sealed class AspireCliTelemetry : IHostedService
     }
 
     /// <inheritdoc />
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task StopAsync(CancellationToken cancellationToken) => CompleteInternalMicrosoftDiagnosticsAsync(cancellationToken);
+
+    internal Task CompleteInternalMicrosoftDiagnosticsAsync(CancellationToken cancellationToken = default)
+    {
+        var completionTask = Volatile.Read(ref _internalMicrosoftDiagnosticsCompletionTask);
+        if (completionTask is null)
+        {
+            var newCompletionTask = WaitForInternalMicrosoftDiagnosticsAsync();
+            completionTask = Interlocked.CompareExchange(ref _internalMicrosoftDiagnosticsCompletionTask, newCompletionTask, comparand: null) ?? newCompletionTask;
+        }
+
+        return cancellationToken.CanBeCanceled
+            ? completionTask.WaitAsync(cancellationToken)
+            : completionTask;
+    }
+
+    private async Task WaitForInternalMicrosoftDiagnosticsAsync()
+    {
+        try
+        {
+            await _internalMicrosoftDiagnosticsTask.WaitAsync(s_internalMicrosoftDiagnosticsCompletionTimeout).ConfigureAwait(false);
+        }
+        catch (TimeoutException ex)
+        {
+            // Telemetry must never prevent the CLI from exiting. Detector probes are individually
+            // bounded, but this also protects shutdown from unexpected filesystem or provider stalls.
+            _logger.LogDebug(ex, "Timed out waiting for internal Microsoft diagnostics to complete.");
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Activity listeners/processors can throw during emission, after detection has finished.
+            // Completion is awaited from shutdown's finally block and must not replace the command's
+            // exit code or prevent application/provider shutdown. Caller cancellation still propagates.
+            _logger.LogDebug(ex, "Failed to complete internal Microsoft diagnostics.");
+        }
+    }
 
     /// <summary>
     /// Starts background tag calculation. Returns immediately; the tags become available
@@ -242,61 +224,38 @@ internal sealed class AspireCliTelemetry : IHostedService
 
         _isInitialized = true;
 
+        var internalMicrosoftResultSource = new TaskCompletionSource<InternalMicrosoftDetectionResult?>(TaskCreationOptions.RunContinuationsAsynchronously);
         _tagsSource.StartCalculation(async () =>
         {
+            InternalMicrosoftDetectionResult? internalMicrosoftResult = null;
+            CancellationTokenSource? internalMicrosoftTimeoutSource = null;
             try
             {
-                var tagsList = new List<KeyValuePair<string, object?>>();
-
-                var macAddressHashTask = _machineInformationProvider.GetMacAddressHash();
-                var deviceIdTask = _machineInformationProvider.GetOrCreateDeviceId();
+                var machineTagsTask = TelemetryMetadata.GetMachineTagsAsync(_machineInformationProvider);
 
                 Task<InternalMicrosoftDetectionResult>? internalMicrosoftTask = null;
                 if (_telemetryConfiguration.ReportedTelemetryEnabled)
                 {
                     // The internal Microsoft check can be slow and can perform multiple async operations in parallel, so only run it if reported
-                    // telemetry is enabled. Use CancellationToken.None because background tag calculation should not be interrupted by app shutdown.
-                    internalMicrosoftTask = _internalMicrosoftDetector.IsInternalMicrosoftMachineAsync(CancellationToken.None);
+                    // telemetry is enabled. Ordinary commands are not interrupted by app shutdown. The
+                    // high-frequency agent hook has its own 10-second process deadline, so it uses a
+                    // shorter detector budget to leave time for activity export and process teardown.
+                    if (_telemetryConfiguration.InternalMicrosoftDetectionTimeout is { } timeout)
+                    {
+                        internalMicrosoftTimeoutSource = new(timeout);
+                    }
+                    internalMicrosoftTask = GetInternalMicrosoftResultAsync(internalMicrosoftTimeoutSource, TimeProvider.System);
                 }
 
-                await Task.WhenAll(new Task[] { macAddressHashTask, deviceIdTask }).ConfigureAwait(false);
+                var machineTags = await machineTagsTask.ConfigureAwait(false);
 
-                InternalMicrosoftDetectionResult? internalMicrosoftResult = null;
                 if (internalMicrosoftTask is not null)
                 {
-                    try
-                    {
-                        internalMicrosoftResult = await internalMicrosoftTask.ConfigureAwait(false);
-                    }
-                    catch (Exception ex)
-                    {
-                        if (_logger.IsEnabled(LogLevel.Debug))
-                        {
-                            _logger.LogDebug(ex, "Internal Microsoft detection failed.");
-                        }
-                    }
+                    internalMicrosoftResult = await internalMicrosoftTask.ConfigureAwait(false);
                 }
 
-                tagsList.Add(new(TelemetryConstants.Tags.MacAddressHash, macAddressHashTask.Result));
-                tagsList.Add(new(TelemetryConstants.Tags.DeviceId, deviceIdTask.Result));
-                if (internalMicrosoftResult is { IsInternalMicrosoft: true })
-                {
-                    tagsList.Add(new(TelemetryConstants.Tags.InternalMicrosoft, internalMicrosoftResult.IsInternalMicrosoft));
-                    if (!string.IsNullOrEmpty(internalMicrosoftResult.Source))
-                    {
-                        tagsList.Add(new(TelemetryConstants.Tags.InternalMicrosoftSource, internalMicrosoftResult.Source));
-                    }
-
-                    if (!string.IsNullOrEmpty(internalMicrosoftResult.Alias))
-                    {
-                        tagsList.Add(new(TelemetryConstants.Tags.InternalMicrosoftAlias, internalMicrosoftResult.Alias));
-                    }
-
-                    if (!string.IsNullOrEmpty(internalMicrosoftResult.Domain))
-                    {
-                        tagsList.Add(new(TelemetryConstants.Tags.InternalMicrosoftDomain, internalMicrosoftResult.Domain));
-                    }
-                }
+                var isCIEnvironment = _ciEnvironmentDetector.IsCIEnvironment();
+                var tagsList = TelemetryMetadata.CreateDefaultTags(machineTags, isCIEnvironment, internalMicrosoftResult, "aspire.cli");
 
                 // This is consistent with dashboard version data.
                 tagsList.Add(new(TelemetryConstants.Tags.CliVersion, GetCliVersion()));
@@ -318,12 +277,6 @@ internal sealed class AspireCliTelemetry : IHostedService
                     tagsList.Add(new(TelemetryConstants.Tags.CodingAgent, codingAgent));
                 }
 
-                tagsList.Add(new(TelemetryConstants.Tags.DeploymentEnvironmentName, _ciEnvironmentDetector.IsCIEnvironment() ? "ci" : "local"));
-
-                tagsList.Add(new(TelemetryConstants.Tags.OsName, GetOsName()));
-                tagsList.Add(new(TelemetryConstants.Tags.OsType, GetOsType()));
-                tagsList.Add(new(TelemetryConstants.Tags.OsVersion, Environment.OSVersion.Version.ToString()));
-
                 return (IReadOnlyList<KeyValuePair<string, object?>>)tagsList;
             }
             catch (Exception ex)
@@ -332,72 +285,127 @@ internal sealed class AspireCliTelemetry : IHostedService
                 _logger.LogError(ex, "Error occurred initializing telemetry service.");
                 return Array.Empty<KeyValuePair<string, object?>>();
             }
+            finally
+            {
+                internalMicrosoftTimeoutSource?.Dispose();
+                internalMicrosoftResultSource.TrySetResult(internalMicrosoftResult);
+            }
         });
+
+        // Detector diagnostics are reported only after default tag calculation completes. Reported
+        // activities are enriched on stop, so emitting from inside the calculation would make the
+        // enrichment processor synchronously wait on the task that is currently producing the activity.
+        _internalMicrosoftDiagnosticsTask = EmitInternalMicrosoftDetectorDiagnosticsAsync(internalMicrosoftResultSource.Task);
     }
 
-    /// <summary>
-    /// Searches the activity hierarchy to find the first reported activity.
-    /// We want to log errors only to the reported activity so they're reported.
-    /// </summary>
-    private Activity? FindReportedActivity(Activity? activity)
+    internal async Task<InternalMicrosoftDetectionResult> GetInternalMicrosoftResultAsync(CancellationTokenSource? timeoutSource, TimeProvider timeProvider)
     {
-        while (activity is not null)
+        var startTimestamp = timeProvider.GetTimestamp();
+        var cancellationToken = timeoutSource?.Token ?? CancellationToken.None;
+
+        try
         {
-            if (activity.Source == _reportedActivitySource)
+            return await _internalMicrosoftDetector
+                .IsInternalMicrosoftMachineAsync(cancellationToken)
+                .WaitAsync(cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (timeoutSource?.IsCancellationRequested == true)
+        {
+            return new InternalMicrosoftDetectionResult(
+                IsInternalMicrosoft: false,
+                Source: null,
+                Alias: null,
+                Domain: null,
+                Outcome: InternalMicrosoftDetectorOutcome.TimedOut,
+                CacheStatus: InternalMicrosoftDetectorCacheStatus.Miss,
+                Duration: timeProvider.GetElapsedTime(startTimestamp),
+                ProbeDiagnostics: []);
+        }
+        catch (Exception ex)
+        {
+            if (_logger.IsEnabled(LogLevel.Debug))
             {
-                return activity;
+                _logger.LogDebug(ex, "Internal Microsoft detection failed.");
             }
 
-            activity = activity.Parent;
+            return new InternalMicrosoftDetectionResult(
+                IsInternalMicrosoft: false,
+                Source: null,
+                Alias: null,
+                Domain: null,
+                Outcome: InternalMicrosoftDetectorOutcome.Failed,
+                CacheStatus: InternalMicrosoftDetectorCacheStatus.Miss,
+                Duration: timeProvider.GetElapsedTime(startTimestamp),
+                ProbeDiagnostics: []);
         }
-
-        return null;
     }
 
-    /// <summary>
-    /// Gets the human-readable operating system name for the <c>os.name</c> semantic convention.
-    /// </summary>
-    internal static string GetOsName()
+    private async Task EmitInternalMicrosoftDetectorDiagnosticsAsync(Task<InternalMicrosoftDetectionResult?> resultTask)
     {
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        if (!_telemetryConfiguration.ReportedTelemetryEnabled ||
+            !_telemetryConfiguration.EmitInternalMicrosoftDiagnostics)
         {
-            return "Windows";
+            return;
         }
 
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        var result = await resultTask.ConfigureAwait(false);
+        await _tagsSource.TagsTask.ConfigureAwait(false);
+        if (result is null)
         {
-            return "Linux";
+            return;
         }
 
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        using var activity = StartReportedActivity(TelemetryConstants.Activities.InternalMicrosoftDetector);
+        if (activity is null)
         {
-            return "macOS";
+            return;
         }
 
-        return RuntimeInformation.OSDescription;
-    }
-
-    /// <summary>
-    /// Gets the OpenTelemetry semantic convention value for the <c>os.type</c> attribute.
-    /// </summary>
-    internal static string GetOsType()
-    {
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        SetActivityProperties(activity,
+        [
+            new(TelemetryConstants.Tags.InternalMicrosoftDetectorOutcome, result.Outcome),
+            new(TelemetryConstants.Tags.InternalMicrosoftDetectorCacheStatus, result.CacheStatus),
+            new(TelemetryConstants.Tags.InternalMicrosoftDetectorDurationMs, (long)result.Duration.TotalMilliseconds),
+            new(TelemetryConstants.Tags.InternalMicrosoftDetectorHasAlias, !string.IsNullOrEmpty(result.Alias)),
+            new(TelemetryConstants.Tags.InternalMicrosoftDetectorHasDomain, !string.IsNullOrEmpty(result.Domain))
+        ]);
+        if (!string.IsNullOrEmpty(result.Source))
         {
-            return "windows";
+            SetActivityProperty(activity, TelemetryConstants.Tags.InternalMicrosoftSource, result.Source);
         }
 
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        foreach (var probe in result.ProbeDiagnostics)
         {
-            return "linux";
-        }
+            var tags = new ActivityTagsCollection
+            {
+                [TelemetryConstants.Tags.InternalMicrosoftSource] = probe.Source,
+                [TelemetryConstants.Tags.InternalMicrosoftProbeOutcome] = probe.Outcome,
+                [TelemetryConstants.Tags.InternalMicrosoftProbeDurationMs] = (long)probe.Duration.TotalMilliseconds,
+                [TelemetryConstants.Tags.InternalMicrosoftProbeHasAlias] = probe.HasAlias,
+                [TelemetryConstants.Tags.InternalMicrosoftProbeHasDomain] = probe.HasDomain
+            };
 
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-        {
-            return "darwin";
-        }
+            if (probe.Failure is { } failure)
+            {
+                tags[TelemetryConstants.Tags.InternalMicrosoftProbeFailureCode] = failure.Code;
+                tags[TelemetryConstants.Tags.InternalMicrosoftProbeFailureStage] = failure.Stage;
+                if (failure.ExceptionType is not null)
+                {
+                    tags[TelemetryConstants.Tags.InternalMicrosoftProbeExceptionType] = failure.ExceptionType;
+                }
+                if (failure.ProcessExitCode is not null)
+                {
+                    tags[TelemetryConstants.Tags.InternalMicrosoftProbeProcessExitCode] = failure.ProcessExitCode;
+                }
+                if (failure.HttpStatusCode is not null)
+                {
+                    tags[TelemetryConstants.Tags.InternalMicrosoftProbeHttpStatusCode] = failure.HttpStatusCode;
+                }
+            }
 
-        return "unknown";
+            activity.AddEvent(new ActivityEvent(TelemetryConstants.Events.InternalMicrosoftProbe, tags: tags));
+        }
     }
 
     /// <summary>

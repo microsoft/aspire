@@ -4,6 +4,16 @@ const builder = await createBuilder();
 
 // 1) addAzureCosmosDB
 const cosmos = await builder.addAzureCosmosDB("cosmos");
+await cosmos.configureInfrastructure(async infrastructure => {
+    const account = await infrastructure.getCosmosDBAccount();
+    const tags = await account.tags.get();
+    await tags.set("provisioning-proxy", "typescript");
+    const bypassResourceId = await infrastructure.createCosmosDBResourceIdentifier(
+        "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/shared/providers/Microsoft.DocumentDB/databaseAccounts/bypass",
+    );
+    const bypassResourceIds = await account.networkAclBypassResourceIds.get();
+    await bypassResourceIds.add(bypassResourceId);
+});
 
 // 2) withDefaultAzureSku
 await cosmos.withDefaultAzureSku();

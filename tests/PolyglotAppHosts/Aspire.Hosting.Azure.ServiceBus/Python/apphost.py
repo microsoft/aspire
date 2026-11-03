@@ -1,12 +1,18 @@
 # Aspire Python validation AppHost
 # Mirrors the top-level TypeScript playground surface with Python-style members.
 
-from aspire_app import create_builder
+from aspire_app import AzureResourceInfrastructure, create_builder
+
+
+def configure_provisioning(infrastructure: AzureResourceInfrastructure) -> None:
+    namespace = infrastructure.get_service_bus_namespace()
+    namespace.tags.set("provisioning-proxy", "python")
 
 
 with create_builder() as builder:
     # ── 1. addAzureServiceBus ──────────────────────────────────────────────────
     service_bus = builder.add_azure_service_bus("resource")
+    service_bus.configure_infrastructure(configure_provisioning)
     # ── 2. runAsEmulator — with configureContainer callback ────────────────────
     emulator_bus = builder
     # ── 3. addServiceBusQueue — factory method returns Queue type ──────────────

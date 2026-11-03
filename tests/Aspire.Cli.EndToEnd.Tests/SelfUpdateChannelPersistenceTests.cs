@@ -44,6 +44,16 @@ public sealed class SelfUpdateChannelPersistenceTests(ITestOutputHelper output)
             counter,
             timeout: TimeSpan.FromMinutes(5));
 
+        // The downloaded staging CLI can predate package-only AppHosts.
+        var appHostPath = Path.Combine(projectPath, "apphost.cs");
+        var appHostContent = File.ReadAllText(appHostPath);
+        var appHostVersion = CliE2ETestHelpers.GetAppHostVersion(appHostContent);
+        File.WriteAllText(appHostPath, $"#:sdk Aspire.AppHost.Sdk@{appHostVersion}\n" + string.Join('\n',
+            appHostContent.Split('\n').Where(line =>
+                !line.StartsWith("#:sdk Aspire.AppHost.Sdk@", StringComparison.Ordinal) &&
+                !line.StartsWith("#:package Aspire.Hosting.AppHost@", StringComparison.Ordinal) &&
+                !line.StartsWith("#:package Aspire.Hosting.Dotnet@", StringComparison.Ordinal))));
+
         var createdConfig = ReadConfig(configPath);
         createdConfig.Remove("channel");
         File.WriteAllText(configPath, createdConfig.ToJsonString());

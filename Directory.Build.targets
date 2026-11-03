@@ -16,11 +16,33 @@
 
   <Import Project="Sdk.targets" Sdk="Microsoft.DotNet.Arcade.Sdk" />
 
+  <PropertyGroup>
+    <ResxCodeGenerator Condition="'$(ResxCodeGenerator)' == ''">ResXFileCodeGenerator</ResxCodeGenerator>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Update="Resources\*.Designer.cs;Properties\*.Designer.cs">
+      <DesignTime Condition="Exists('%(RelativeDir)$([System.IO.Path]::ChangeExtension(%(Filename), .resx))')">True</DesignTime>
+      <AutoGen Condition="Exists('%(RelativeDir)$([System.IO.Path]::ChangeExtension(%(Filename), .resx))')">True</AutoGen>
+      <DependentUpon Condition="Exists('%(RelativeDir)$([System.IO.Path]::ChangeExtension(%(Filename), .resx))')">$([System.IO.Path]::ChangeExtension('%(Filename)', '.resx'))</DependentUpon>
+    </Compile>
+    <!-- Neutral resources have checked-in designers; translations do not. Match pairs instead
+         of parsing culture suffixes so dotted neutral names such as Errors.Validation.resx work. -->
+    <EmbeddedResource Update="Resources\*.resx;Properties\*.resx">
+      <XlfSourceFormat>Resx</XlfSourceFormat>
+      <XlfOutputItem>EmbeddedResource</XlfOutputItem>
+      <SubType Condition="Exists('%(RelativeDir)%(Filename).Designer.cs')">Designer</SubType>
+      <Generator Condition="Exists('%(RelativeDir)%(Filename).Designer.cs')">$(ResxCodeGenerator)</Generator>
+      <LastGenOutput Condition="Exists('%(RelativeDir)%(Filename).Designer.cs')">%(Filename).Designer.cs</LastGenOutput>
+    </EmbeddedResource>
+  </ItemGroup>
+
   <ItemGroup Condition="'$(ReadMeExists)' == 'true'">
     <None Include="$(ReadMePath)" Pack="true" PackagePath="\" />
   </ItemGroup>
 
   <Import Project="$(RepositoryEngineeringDir)/NullablePolyfill.targets" />
+  <Import Project="$(MSBuildThisFileDirectory)src/Aspire.Hosting/buildTransitive/Aspire.Hosting.Hex1b.targets" />
 
   <!-- HACK: This resolves issues in CI builds where the extensions.json file is mapped to the incorrect directory. We only want
    to copy the updated extensions.json file once the `_FunctionsExtensionUpdateMetadata` target has completed. -->

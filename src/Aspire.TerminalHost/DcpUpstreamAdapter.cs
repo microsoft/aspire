@@ -77,6 +77,11 @@ internal sealed class DcpUpstreamAdapter : IHex1bTerminalWorkloadAdapter
     /// <inheritdoc />
     public event Action? Disconnected;
 
+    /// <summary>
+    /// Completes after the producer transport connects.
+    /// </summary>
+    public Task ConnectedTask => _connectedTcs.Task;
+
     public DcpUpstreamAdapter(
         Func<CancellationToken, Task<Stream>> streamFactory,
         ILogger<DcpUpstreamAdapter> logger)
@@ -468,6 +473,12 @@ internal sealed class DcpUpstreamAdapter : IHex1bTerminalWorkloadAdapter
         {
             _logger.LogDebug(ex, "DcpUpstreamAdapter: Disconnected handler threw (ignored).");
         }
+    }
+
+    internal void ReportConsumerListenerFailure(Exception error)
+    {
+        ArgumentNullException.ThrowIfNull(error);
+        Complete(error);
     }
 
     public async ValueTask DisposeAsync()

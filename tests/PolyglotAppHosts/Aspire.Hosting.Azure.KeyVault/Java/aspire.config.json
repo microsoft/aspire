@@ -4,9 +4,9 @@
     "language": "java"
   },
   "features": {
-    "experimentalPolyglot:java": true
+    "experimentalPolyglotJava": true
   },
   "packages": {
-    "Aspire.Hosting.Azure.KeyVault": ""
+    "Aspire.Hosting.Azure.Provisioning.KeyVault": ""
   }
 }
