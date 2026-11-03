@@ -667,10 +667,9 @@ internal sealed partial class WorkflowRunEvidenceCollector
                     IEnumerable<JsonObject> producerJobs = allJobs.OfType<JsonObject>();
                     if (runAttempt > 1)
                     {
-                        // Attempt-scoped jobs omit siblings that were not rerun, but their
-                        // reports can remain in All-TestResults (e.g. Hosting-Collection
-                        // also matches Hosting's filename prefix). Ownership needs history;
-                        // historical jobs must never enter the actionable failure inventory.
+                        // Include cross-attempt producer context defensively when resolving
+                        // ownership of reports carried into a rerun's All-TestResults.
+                        // Historical jobs must never enter the actionable failure inventory.
                         JsonArray historicalJobs;
                         try
                         {

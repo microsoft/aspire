@@ -134,9 +134,32 @@ public sealed partial class AnalyzeCiFailureWorkflowTests
             Assert.Equal(2, failures.Count);
             Assert.All(failures, failure => Assert.Equal("12", failure!["sources"]![0]!["artifact_id"]!.GetValue<string>()));
         }
-        if (scenario is "combined-malformed" or "combined-partial" or "combined-no-fallback" or "combined-empty")
+        if (scenario is "combined-malformed" or "combined-empty" or "combined-partial" or "combined-upload-failure")
         {
-            Assert.Contains(failures, failure => failure!["sources"]!.AsArray().Any(source => source!["artifact_id"]!.GetValue<string>() == "12"));
+            var multipleFrameworks = scenario is "combined-partial" or "combined-upload-failure";
+            Assert.Equal(multipleFrameworks ? 2 : 1, failures.Count);
+            Assert.All(failures, failure => Assert.Equal("Suite.Case(value: a/b)", failure!["name"]!.GetValue<string>()));
+            var net10 = Assert.Single(failures, failure => failure!["sources"]!.AsArray().Any(source =>
+                source!["execution_id"]!.GetValue<string>() == "net10-execution"))!;
+            var net10Sources = net10["sources"]!.AsArray();
+            Assert.Equal(["10", "12"], net10Sources.Select(source => source!["artifact_id"]!.GetValue<string>()).Order(StringComparer.Ordinal));
+            Assert.All(net10Sources, source => Assert.Equal("net10-execution", source!["execution_id"]!.GetValue<string>()));
+            if (multipleFrameworks)
+            {
+                var net11 = Assert.Single(failures, failure => failure!["sources"]!.AsArray().Any(source =>
+                    source!["execution_id"]!.GetValue<string>() == "net11-execution"))!;
+                var source = Assert.Single(net11["sources"]!.AsArray())!;
+                Assert.Equal("12", source["artifact_id"]!.GetValue<string>());
+                Assert.Equal("net11-execution", source["execution_id"]!.GetValue<string>());
+            }
+        }
+        if (scenario == "combined-no-fallback")
+        {
+            Assert.Equal(2, failures.Count);
+            var sources = failures.Select(failure => Assert.Single(failure!["sources"]!.AsArray())!).ToArray();
+            Assert.All(sources, source => Assert.Equal("12", source["artifact_id"]!.GetValue<string>()));
+            Assert.Equal(["net10-execution", "net11-execution"],
+                sources.Select(source => source["execution_id"]!.GetValue<string>()).Order(StringComparer.Ordinal));
         }
         var calls = await File.ReadAllLinesAsync(Path.Combine(_workspace.Path, "gh-calls.log"));
         Assert.Equal(fallback && scenario is not "combined-no-fallback" and not "combined-source-stale", calls.Any(call => call.Contains("actions/artifacts/10/zip", StringComparison.Ordinal)));
@@ -896,6 +919,8 @@ public sealed partial class AnalyzeCiFailureWorkflowTests
                     archive,
                     scenario == "unsafe-archive" ? "../failure.trx" : scenario == "missing-trx" ? "ignored.txt" : mocha ? "nested/mocha.json" : "nested/failure.trx",
                     scenario is "malformed-trx" or "malformed-mocha" ? "malformed" :
+                    scenario is "combined-malformed" or "combined-empty" or "combined-partial" or "combined-upload-failure"
+                        ? FrameworkResult("Suite.Case(value: a/b)", "net10-execution", "Assertion failed") :
                     """
                     <TestRun><TestDefinitions><UnitTest id="duplicate"/><UnitTest id="duplicate"/></TestDefinitions><Results><UnitTestResult testName="Suite.Case(value: a/b)" outcome="Failed"><Output><ErrorInfo><Message>Assertion failed</Message><StackTrace>frame</StackTrace></ErrorInfo><StdErr>stderr evidence</StdErr></Output></UnitTestResult></Results></TestRun>
                     """);
