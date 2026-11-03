@@ -1,0 +1,156 @@
+{
+  "run_id": 41699762575,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/41699762575",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-03T20:25:11Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 21594,
+    "title": "Wait for MongoDB replica set primary before reconfiguring to fix rs0 FailedToStart flake",
+    "author": "davidfowl",
+    "state": "closed",
+    "head_branch": "aspireagent/fix-mongodb-replicaset-initiate-race",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/21594",
+    "merged_at": "2026-11-03T19:04:03Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "020bf8c8c58f879abd0beb92517454332429e21b",
+    "failed_sha": "18e10127ad320b0986efce2b5ce988cd2cba4dbd",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "c64ba9fdbdd0de50433187df07d7db959518e8ba",
+        "message": "Detect drift in generated pipeline output (#21681) ## Description Fixes #18833 Users sometimes add their generated assets to source control. Those assets can drift from the code that generates them, leading to stale deployments or deployed files that do not match the versioned artifacts. To support these workflows, this PR adds an opt-in check that regenerates pipeline output from the current source _and_ fails when selected artifacts are added, changed or removed. ```csharp builder.Pipeline.Wit",
+        "html_url": "https://github.com/microsoft/aspire/commit/c64ba9fdbdd0de50433187df07d7db959518e8ba",
+        "pull_request": {
+          "number": 21681,
+          "title": "Detect drift in generated pipeline output",
+          "url": "https://github.com/microsoft/aspire/pull/21681",
+          "merged_at": "2026-11-03T17:22:56Z"
+        }
+      },
+      {
+        "sha": "d70dbf541b4b27850f8cb9e4e4890e6f5ef12ca1",
+        "message": "Fix coordinated .NET build path casing that breaks Blazor WebAssembly builds (#21623) ## Description Fixes #21621. Part of the flake-zero effort in #21600. **Problem.** In #21621 (VS Code Windows `browser-debugger` E2E), `standalone-gateway` goes `FailedToStart` right after the coordinated build `__dotnet-project-build-2` exits non-zero. Frequency over 7 days: 3 of 192 `browser-debugger` jobs, including 1 of 20 main runs. The real build error was not visible anywhere, so this PR first makes it v",
+        "html_url": "https://github.com/microsoft/aspire/commit/d70dbf541b4b27850f8cb9e4e4890e6f5ef12ca1",
+        "pull_request": {
+          "number": 21623,
+          "title": "Fix coordinated .NET build path casing that breaks Blazor WebAssembly builds",
+          "url": "https://github.com/microsoft/aspire/pull/21623",
+          "merged_at": "2026-11-03T17:27:47Z"
+        }
+      },
+      {
+        "sha": "d1e379cfc5f77d0fc6f552c913f7be04a88c2453",
+        "message": "Add Azure API Management hosting integration (#19664) ## Description Adds an experimental `Aspire.Hosting.Azure.ApiManagement` integration that models an API Management service and its managed child resources without requiring hand-authored Bicep. APIM is a deploy-only parent resource: it is omitted during `aspire run`, while `aspire deploy` provisions the service and the APIs, backends, policies, products, and other children declared beneath it. No execution-mode guard is required in the AppHos",
+        "html_url": "https://github.com/microsoft/aspire/commit/d1e379cfc5f77d0fc6f552c913f7be04a88c2453",
+        "pull_request": {
+          "number": 19664,
+          "title": "Add Azure API Management hosting integration",
+          "url": "https://github.com/microsoft/aspire/pull/19664",
+          "merged_at": "2026-11-03T17:45:38Z"
+        }
+      },
+      {
+        "sha": "c51656846e8e770986cc6c5b11203a14cf8dc8d3",
+        "message": "Wait for Functions host storage before stopping multi-project test (#21445) ## Description Fixes an intermittent first-attempt failure in `Aspire.Hosting.Azure.Tests.AzureFunctionsTests.AddAzureFunctionsProject_WorksWithMultipleProjects` on the Hosting.Azure (ubuntu-latest) job. The failure is a `TaskCanceledException` from `Host.StopAsync` at `AzureFunctionsTests.cs:201`. **Root cause.** Evidence comes from the `logs-Hosting.Azure-ubuntu-latest` artifact (DCP run-controller logs and TRX) of run",
+        "html_url": "https://github.com/microsoft/aspire/commit/c51656846e8e770986cc6c5b11203a14cf8dc8d3",
+        "pull_request": {
+          "number": 21445,
+          "title": "Wait for Functions host storage before stopping multi-project test",
+          "url": "https://github.com/microsoft/aspire/pull/21445",
+          "merged_at": "2026-11-03T17:46:49Z"
+        }
+      },
+      {
+        "sha": "8abd5e19075bdd9197c7f154293fbc91870c96d2",
+        "message": "Stop DevTunnel test monitor before disposing its host (#21424) ## Description `TestDevTunnelMonitor` starts `DevTunnelMonitor` directly and only disposes the app afterwards. In production, the resource stop handler and `ApplicationStopping` cancel the monitor's run before the host is disposed. The test fixture never does that. So if an access-metadata query finished after the service provider was marked disposed but before the monitor was disposed, the run was still current. The monitor then pub",
+        "html_url": "https://github.com/microsoft/aspire/commit/8abd5e19075bdd9197c7f154293fbc91870c96d2",
+        "pull_request": {
+          "number": 21424,
+          "title": "Stop DevTunnel test monitor before disposing its host",
+          "url": "https://github.com/microsoft/aspire/pull/21424",
+          "merged_at": "2026-11-03T17:49:44Z"
+        }
+      },
+      {
+        "sha": "8d79e4e496cdffc3636d505b8037ce7f0669e171",
+        "message": "Replace CI failure analysis scripts with a typed analyzer (#21347) ## Description The existing CI failure-analysis agent workflow spreads collection, validation, and publication across shell scripts, inline Bash, and extensive `jq` expressions. That makes it difficult to understand the data flow, debug failures, or review whether a proposed analysis can safely update history and issues. This PR replaces that logic with the C# tool `AnalyzeCiFailure`. The workflow calls explicit commands; typed e",
+        "html_url": "https://github.com/microsoft/aspire/commit/8d79e4e496cdffc3636d505b8037ce7f0669e171",
+        "pull_request": {
+          "number": 21347,
+          "title": "Replace CI failure analysis scripts with a typed analyzer",
+          "url": "https://github.com/microsoft/aspire/pull/21347",
+          "merged_at": "2026-11-03T18:03:56Z"
+        }
+      },
+      {
+        "sha": "2133a84bd3e5e60fd2b4049646caa42c606d8e57",
+        "message": "Forward AppHost --artifacts-path to project resource launches (#21579) ## Description Fixes #6887 Running an AppHost with `--artifacts-path` (for example `dotnet run --project AppHost --artifacts-path .artifacts`) made every `AddProject<T>` resource fail to start. The error was: ``` An error occurred trying to start process '/tmp/repro6887/Api/bin/Debug/net10.0/Api' ... No such file or directory ``` ### Root cause The dotnet CLI passes `--artifacts-path` as a **global** `ArtifactsPath` MSBuild p",
+        "html_url": "https://github.com/microsoft/aspire/commit/2133a84bd3e5e60fd2b4049646caa42c606d8e57",
+        "pull_request": {
+          "number": 21579,
+          "title": "Forward AppHost --artifacts-path to project resource launches",
+          "url": "https://github.com/microsoft/aspire/pull/21579",
+          "merged_at": "2026-11-03T18:07:12Z"
+        }
+      },
+      {
+        "sha": "3498ca9c4655841857b53a1604bf21e87c91cea2",
+        "message": "Remove flaky Go goroutine-count test from GeneratedRuntime_PassesGoRuntimeHardeningTests (#21474) ## Description Removes the flaky Go runtime test `TestRegisterCancellationDoesNotParkGoroutinePerToken` from the script that `GeneratedRuntime_PassesGoRuntimeHardeningTests` runs. This follows review feedback: we don't need a goroutine-count test for this. ### Why The test compared the process-wide `runtime.NumGoroutine()` before and after registering 1000 cancellation tokens. That count includes go",
+        "html_url": "https://github.com/microsoft/aspire/commit/3498ca9c4655841857b53a1604bf21e87c91cea2",
+        "pull_request": {
+          "number": 21474,
+          "title": "Remove flaky Go goroutine-count test from GeneratedRuntime_PassesGoRuntimeHardeningTests",
+          "url": "https://github.com/microsoft/aspire/pull/21474",
+          "merged_at": "2026-11-03T18:24:01Z"
+        }
+      },
+      {
+        "sha": "18e10127ad320b0986efce2b5ce988cd2cba4dbd",
+        "message": "Wait for MongoDB replica set primary before reconfiguring to fix rs0 FailedToStart flake (#21594) ## Description Fixes an intermittent `Hosting.MongoDB (ubuntu-latest)` failure in which the multi-member replica set resource `rs0` goes to `FailedToStart` with this error: ``` MongoDB.Driver.MongoNodeIsRecoveringException: Server returned node is recovering error (code = 11602, codeName = \"InterruptedDueToReplStateChange\").    at ... MongoDBReplicaSetBuilderExtensions.cs:line 314 Resource rs0/rs0 c",
+        "html_url": "https://github.com/microsoft/aspire/commit/18e10127ad320b0986efce2b5ce988cd2cba4dbd",
+        "pull_request": {
+          "number": 21594,
+          "title": "Wait for MongoDB replica set primary before reconfiguring to fix rs0 FailedToStart flake",
+          "url": "https://github.com/microsoft/aspire/pull/21594",
+          "merged_at": "2026-11-03T19:04:03Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, tree-actions)",
+      "id": 126159250744,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/41699762575/job/126159250744",
+      "classification": "flaky-test",
+      "reason": "Linux tree-actions E2E timed out waiting for a resource state; no deterministic evidence tying it to a candidate merge.",
+      "failed_steps": [
+        "Run extension E2E tests"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire tree action command E2E routes view, copy, endpoint, log, and resource commands through tree handlers",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, tree-actions)",
+      "error": "Timed out after 180000ms waiting for resource 'e2e-terminal' state Running.\nLast error: <none>\nLast state: {\n  \"extensionHostSessionId\": \"0042f39e-c199-40ff-a51b-ebd18eb5ebbb\",\n  \"updatedAt\": \"2026-11-03T19:46:09.270Z\",\n  \"runId\": \"4622-1793735042981\",\n  \"state\": {\n    \"viewMode\": \"workspace\",\n    \"isRepositoryLoading\": false,\n    \"isWorkspaceAppHostDiscoveryComplete\": true,\n    \"hasError\": false,\n    \"workspaceAppHost\": {\n      \"appHostPath\": \"/tmp/aev-LOodcq/workspace/AspireE2E.AppHost/AspireE2E.AppHost.csproj\",\n      \"appHostPid\": 9397,\n      \"dashboardUrl\": \"https://localhost:35131/login?t=<redacted>\",\n      \"resources\": [\n        {\n          \"name\": \"e2e-no-commands\",\n          \"displayName\": \"e2e-no-commands\",\n          \"resourceType\": \"NoCommandsResource\",\n          \"projectPath\": null,\n          \"dashboardUrl\": \"https://localhost:35131\",\n          \"urls\": [],\n          \"commands\": {}\n        },\n        {\n          \"name\": \"e2e-terminal-sqnjnaha\",\n          \"displayName\": \"e2e-t",
+      "stack_trace": "Error: Timed out after 180000ms waiting for resource 'e2e-terminal' state Running.\nLast error: <none>\nLast state: {\n  \"extensionHostSessionId\": \"0042f39e-c199-40ff-a51b-ebd18eb5ebbb\",\n  \"updatedAt\": \"2026-11-03T19:46:09.270Z\",\n  \"runId\": \"4622-1793735042981\",\n  \"state\": {\n    \"viewMode\": \"workspace\",\n    \"isRepositoryLoading\": false,\n    \"isWorkspaceAppHostDiscoveryComplete\": true,\n    \"hasError\": false,\n    \"workspaceAppHost\": {\n      \"appHostPath\": \"/tmp/aev-LOodcq/workspace/AspireE2E.AppHost/AspireE2E.AppHost.csproj\",\n      \"appHostPid\": 9397,\n      \"dashboardUrl\": \"https://localhost:35131/login?t=<redacted>\",\n      \"resources\": [\n        {\n          \"name\": \"e2e-no-commands\",\n          \"displayName\": \"e2e-no-commands\",\n          \"resourceType\": \"NoCommandsResource\",\n          \"projectPath\": null,\n          \"dashboardUrl\": \"https://localhost:35131\",\n          \"urls\": [],\n          \"commands\": {}\n        },\n        {\n          \"name\": \"e2e-terminal-sqnjnaha\",\n          \"displayName\": \"e2e-terminal\",\n          \"resourceType\": \"Project\",\n          \"state\": \"Finished\",\n          \"projectPath\": \"/tmp/aev-LOodcq/workspace/AspireE2E.Worker/AspireE2E.Worker.csproj\",\n          \"dashboardUrl\": \"https://localhost:35131\",\n          \"urls\": [],\n          \"commands\": {\n            \"rebuild\": {\n              \"displayName\": \"Rebuild\",\n              \"description\": \"Stop the resource, rebuild the project from source, and restart. Use this to apply source code changes.\",\n              \"state\": \"Enabled\"\n            },\n            \"restart\": {\n              \"displayName\": \"Restart\",\n              \"description\": \"Restart resource. Source code is not recompiled.\",\n              \"state\": \"Disabled\"\n            },\n            \"start\": {\n              \"displayName\": \"Start\",\n              \"description\": \"Start resource\",\n              \"state\": \"Enabled\"\n            }\n          }\n        },\n        {\n          \"name\": \"e2e-worker-saetqnqf\",\n          \"displayName\": \"e2e-worker\",\n         ",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Same tree-actions test has prior intermittent timeout history; failure is a 180s wait timeout with no assertion or compile error.",
+      "job_id": 126159250744,
+      "result_file": "00001.json",
+      "result_format": "mocha"
+    }
+  ],
+  "causes": [
+    "vscode-e2e-linux-tree-actions-resource-running-timeout"
+  ]
+}
