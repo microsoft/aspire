@@ -33,7 +33,7 @@ public sealed class PipelineOutputSnapshotterTests(ITestOutputHelper output) : I
         Write(root, "changed.txt", "after!");
         File.Delete(removed);
         var after = await snapshotter.CaptureAsync(root);
-        var comparison = PipelineOutputComparer.Compare(before, after, root);
+        var comparison = DefaultPipelineOutputComparer.Compare(before, after, root);
 
         Assert.Collection(comparison,
             change => AssertChange(change, PipelineOutputChangeKind.Added, Path.GetRelativePath(root, added)),
@@ -59,7 +59,7 @@ public sealed class PipelineOutputSnapshotterTests(ITestOutputHelper output) : I
         var after = await snapshotter.CaptureAsync(root);
 
         Assert.Equal(bytes.Length, new FileInfo(path).Length);
-        AssertChange(Assert.Single(PipelineOutputComparer.Compare(before, after, root)), PipelineOutputChangeKind.Changed, Path.GetRelativePath(root, path));
+        AssertChange(Assert.Single(DefaultPipelineOutputComparer.Compare(before, after, root)), PipelineOutputChangeKind.Changed, Path.GetRelativePath(root, path));
     }
 
     [Theory]
@@ -247,7 +247,7 @@ public sealed class PipelineOutputSnapshotterTests(ITestOutputHelper output) : I
 
         Assert.Empty(before.Keys.Order(PipelineOutputRoot.PathComparer).ToArray());
         Assert.Empty(after.Keys.Order(PipelineOutputRoot.PathComparer).ToArray());
-        Assert.Empty(PipelineOutputComparer.Compare(before, after, root));
+        Assert.Empty(DefaultPipelineOutputComparer.Compare(before, after, root));
     }
 
     [Fact]
@@ -266,7 +266,7 @@ public sealed class PipelineOutputSnapshotterTests(ITestOutputHelper output) : I
 
         var before = await snapshotter.CaptureAsync(lower);
         var after = await snapshotter.CaptureAsync(upper);
-        var comparison = PipelineOutputComparer.Compare(before, after, parent);
+        var comparison = DefaultPipelineOutputComparer.Compare(before, after, parent);
 
         if (OperatingSystem.IsWindows())
         {
@@ -311,7 +311,7 @@ public sealed class PipelineOutputSnapshotterTests(ITestOutputHelper output) : I
         Write(root, "first.txt", "c");
         var after = await snapshotter.CaptureAsync(root);
 
-        AssertChange(Assert.Single(PipelineOutputComparer.Compare(before, after, root)), PipelineOutputChangeKind.Changed, Path.GetRelativePath(root, first));
+        AssertChange(Assert.Single(DefaultPipelineOutputComparer.Compare(before, after, root)), PipelineOutputChangeKind.Changed, Path.GetRelativePath(root, first));
 
         var constant = new PipelineOutputSnapshotter(new TestPipelineOutputFileHasher((_, _) => ValueTask.FromResult<ReadOnlyMemory<byte>>(new byte[] { 42 })));
         var shortCapture = await constant.CaptureAsync(root);
@@ -322,7 +322,7 @@ public sealed class PipelineOutputSnapshotterTests(ITestOutputHelper output) : I
 
         Assert.False(shortCapture[first].Hash.Equals(longCapture[first].Hash));
         Assert.Equal(shortCapture[first].Hash.ToArray(), longCapture[first].Hash.ToArray());
-        Assert.Empty(PipelineOutputComparer.Compare(shortCapture, longCapture, root));
+        Assert.Empty(DefaultPipelineOutputComparer.Compare(shortCapture, longCapture, root));
     }
 
     [Theory]
@@ -479,14 +479,14 @@ public sealed class PipelineOutputSnapshotterTests(ITestOutputHelper output) : I
         File.WriteAllText(external, "new");
 
         var unchanged = await snapshotter.CaptureAsync(root);
-        Assert.Empty(PipelineOutputComparer.Compare(before, unchanged, root));
+        Assert.Empty(DefaultPipelineOutputComparer.Compare(before, unchanged, root));
         Directory.Delete(link);
         Directory.CreateSymbolicLink(link, root);
 
         var cyclic = await snapshotter.CaptureAsync(root);
 
         Assert.Equal(new[] { link }, cyclic.Keys.Order(PipelineOutputRoot.PathComparer).ToArray());
-        AssertChange(Assert.Single(PipelineOutputComparer.Compare(before, cyclic, root)), PipelineOutputChangeKind.Changed, Path.GetRelativePath(root, link));
+        AssertChange(Assert.Single(DefaultPipelineOutputComparer.Compare(before, cyclic, root)), PipelineOutputChangeKind.Changed, Path.GetRelativePath(root, link));
         await Assert.ThrowsAsync<IOException>(() => snapshotter.CaptureAsync(link));
     }
 
@@ -512,13 +512,13 @@ public sealed class PipelineOutputSnapshotterTests(ITestOutputHelper output) : I
 
         File.WriteAllText(target, "changed target contents");
         var unchanged = await snapshotter.CaptureAsync(root);
-        Assert.Empty(PipelineOutputComparer.Compare(before, unchanged, root));
+        Assert.Empty(DefaultPipelineOutputComparer.Compare(before, unchanged, root));
         File.Delete(link);
         File.WriteAllText(link, target);
 
         var regularFile = await snapshotter.CaptureAsync(root);
 
-        AssertChange(Assert.Single(PipelineOutputComparer.Compare(before, regularFile, root)), PipelineOutputChangeKind.Changed, Path.GetRelativePath(root, link));
+        AssertChange(Assert.Single(DefaultPipelineOutputComparer.Compare(before, regularFile, root)), PipelineOutputChangeKind.Changed, Path.GetRelativePath(root, link));
     }
 
     [Theory]
@@ -535,7 +535,7 @@ public sealed class PipelineOutputSnapshotterTests(ITestOutputHelper output) : I
         var after = new Dictionary<string, PipelineOutputFileSnapshot> { [path] = new(false, new byte[] { 42 }, afterMode) };
         Assert.Equal(before[path].Hash.ToArray(), after[path].Hash.ToArray());
 
-        var changes = PipelineOutputComparer.Compare(before, after, root);
+        var changes = DefaultPipelineOutputComparer.Compare(before, after, root);
 
         if (changed)
         {

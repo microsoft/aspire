@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
@@ -91,7 +92,7 @@ public static class PipelineOutputDiffingExtensions
         this IDistributedApplicationBuilder builder,
         Func<PipelineStep> createStep)
     {
-        return builder.WithOutputDiffing<PipelineOutputSnapshot, NativePipelineOutputSnapshotter, PipelineOutputComparer>(createStep);
+        return builder.WithOutputDiffing<PipelineOutputSnapshot, DefaultPipelineOutputSnapshotter, DefaultPipelineOutputComparer>(createStep);
     }
 
     /// <summary>
@@ -152,8 +153,7 @@ public static class PipelineOutputDiffingExtensions
     /// <remarks>
     /// The snapshotter and comparer are registered as transient defaults for <typeparamref name="TSnapshot"/>.
     /// Existing registrations for either closed generic interface are preserved.
-    /// Each check resolves one snapshotter and retains it across both captures. A comparer is resolved after the
-    /// second capture. The host disposes DI-created services; callers retain ownership of pre-instantiated instances.
+    /// Each capture resolves its snapshotter. A comparer is resolved after the second capture.
     /// </remarks>
     [Experimental("ASPIREPIPELINES005", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Custom output providers use .NET snapshot and service types.")]
@@ -180,7 +180,7 @@ public static class PipelineOutputDiffingExtensions
         builder.Services.TryAddTransient<IPipelineOutputComparer<TSnapshot>, TComparer>();
         var pipeline = builder.Pipeline;
         var baselineName = step.Name + "-baseline";
-        (IPipelineOutputSnapshotter<TSnapshot> Snapshotter, TSnapshot Snapshot)? activeCapture = null;
+        StrongBox<TSnapshot>? baselineSnapshot = null;
 
         pipeline.AddStep(new PipelineStep
         {
@@ -189,7 +189,7 @@ public static class PipelineOutputDiffingExtensions
             Tags = [BaselineTag],
             Action = async context =>
             {
-                activeCapture = null;
+                baselineSnapshot = null;
                 var execution = context.PipelineContext;
                 if (!execution.SelectedSteps.Any(selected => selected.Name == step.Name))
                 {
@@ -198,18 +198,20 @@ public static class PipelineOutputDiffingExtensions
 
                 var snapshotter = context.Services.GetRequiredService<IPipelineOutputSnapshotter<TSnapshot>>();
                 var snapshot = await snapshotter.CaptureAsync(GetOutputDirectory(context), context.CancellationToken).ConfigureAwait(false);
-                activeCapture = (snapshotter, snapshot);
+                baselineSnapshot = new(snapshot);
             }
         });
 
         step.AddFinalAction(async context =>
         {
-            var captured = activeCapture ?? throw new InvalidOperationException($"Output diff baseline '{baselineName}' did not complete for '{step.Name}'.");
-            activeCapture = null;
+            var captured = baselineSnapshot ?? throw new InvalidOperationException($"Output diff baseline '{baselineName}' did not complete for '{step.Name}'.");
+            var before = captured.Value!;
+            baselineSnapshot = null;
 
-            var after = await captured.Snapshotter.CaptureAsync(GetOutputDirectory(context), context.CancellationToken).ConfigureAwait(false);
+            var snapshotter = context.Services.GetRequiredService<IPipelineOutputSnapshotter<TSnapshot>>();
+            var after = await snapshotter.CaptureAsync(GetOutputDirectory(context), context.CancellationToken).ConfigureAwait(false);
             var outputComparer = context.Services.GetRequiredService<IPipelineOutputComparer<TSnapshot>>();
-            var changes = await outputComparer.CompareAsync(captured.Snapshot, after, context.CancellationToken).ConfigureAwait(false);
+            var changes = await outputComparer.CompareAsync(before, after, context.CancellationToken).ConfigureAwait(false);
             if (changes.Count > 0)
             {
                 var comparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;

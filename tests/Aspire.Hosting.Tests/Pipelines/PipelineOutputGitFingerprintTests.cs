@@ -38,7 +38,7 @@ public sealed class PipelineOutputGitFingerprintTests(ITestOutputHelper output)
         var index = File.ReadAllBytes(Path.Combine(workspace.Path, ".git", "index"));
         var objects = ReadObjects(workspace.Path);
         var beforeOid = await PipelineOutputGitTestHelper.RunAsync(workspace.Path, "--no-optional-locks", "hash-object", "--", "output/model.txt");
-        var nativeSnapshotter = new NativePipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions { Mode = useGit ? PipelineOutputDiffMode.Git : PipelineOutputDiffMode.FileSystem }));
+        var nativeSnapshotter = new DefaultPipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions { Mode = useGit ? PipelineOutputDiffMode.Git : PipelineOutputDiffMode.FileSystem }));
         var beforeSnapshot = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
 
         File.WriteAllText(path, after);
@@ -46,7 +46,7 @@ public sealed class PipelineOutputGitFingerprintTests(ITestOutputHelper output)
         Assert.Equal(changed, beforeOid != afterOid);
         var expectedChanged = useGit ? changed : before != after;
         var afterSnapshot = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
-        var changes = await new PipelineOutputComparer().CompareAsync(beforeSnapshot, afterSnapshot, TestContext.Current.CancellationToken);
+        var changes = await new DefaultPipelineOutputComparer().CompareAsync(beforeSnapshot, afterSnapshot, TestContext.Current.CancellationToken);
 
         Assert.Equal(index, File.ReadAllBytes(Path.Combine(workspace.Path, ".git", "index")));
         AssertObjectsEqual(objects, ReadObjects(workspace.Path));
@@ -88,7 +88,7 @@ public sealed class PipelineOutputGitFingerprintTests(ITestOutputHelper output)
         var beforeBytes = File.ReadAllBytes(path);
         await AssertResidualAsync();
         var beforeOid = (await PipelineOutputGitTestHelper.RunAsync(workspace.Path, "--no-optional-locks", "hash-object", "--", gitPath)).TrimEnd('\r', '\n');
-        var nativeSnapshotter = new NativePipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions()));
+        var nativeSnapshotter = new DefaultPipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions()));
         var before = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
         Assert.Equal(path, Assert.Single(before.Files).Key);
 
@@ -102,7 +102,7 @@ public sealed class PipelineOutputGitFingerprintTests(ITestOutputHelper output)
         Assert.Equal(path, Assert.Single(after.Files).Key);
         output.WriteLine($"tracked={tracked}; canonical before={beforeOid}; canonical after={afterOid}; captured before={Encoding.ASCII.GetString(before.Files[path].Hash.Span)}; captured after={Encoding.ASCII.GetString(after.Files[path].Hash.Span)}");
 
-        var changes = await new PipelineOutputComparer().CompareAsync(before, after, TestContext.Current.CancellationToken);
+        var changes = await new DefaultPipelineOutputComparer().CompareAsync(before, after, TestContext.Current.CancellationToken);
         Assert.Multiple(
             () => Assert.Equal(beforeOid, Encoding.ASCII.GetString(before.Files[path].Hash.Span)),
             () => Assert.Equal(afterOid, Encoding.ASCII.GetString(after.Files[path].Hash.Span)),
@@ -157,12 +157,12 @@ public sealed class PipelineOutputGitFingerprintTests(ITestOutputHelper output)
         var indexPath = Path.Combine(workspace.Path, ".git", "index");
         var index = File.Exists(indexPath) ? File.ReadAllBytes(indexPath) : null;
         var objects = ReadObjects(workspace.Path);
-        var nativeSnapshotter = new NativePipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions()));
+        var nativeSnapshotter = new DefaultPipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions()));
         var beforeSnapshot = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
 
         SetContent(after);
         var afterSnapshot = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
-        var changes = await new PipelineOutputComparer().CompareAsync(beforeSnapshot, afterSnapshot, TestContext.Current.CancellationToken);
+        var changes = await new DefaultPipelineOutputComparer().CompareAsync(beforeSnapshot, afterSnapshot, TestContext.Current.CancellationToken);
 
         Assert.Equal(index is not null, File.Exists(indexPath));
         if (index is not null)
@@ -207,7 +207,7 @@ public sealed class PipelineOutputGitFingerprintTests(ITestOutputHelper output)
         Assert.StartsWith("100644 ", beforeEntry);
         var indexPath = Path.Combine(workspace.Path, ".git", "index");
         var beforeIndex = File.ReadAllBytes(indexPath);
-        var nativeSnapshotter = new NativePipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions()));
+        var nativeSnapshotter = new DefaultPipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions()));
         var beforeSnapshot = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
         Assert.Equal(beforeIndex, File.ReadAllBytes(indexPath));
 
@@ -219,7 +219,7 @@ public sealed class PipelineOutputGitFingerprintTests(ITestOutputHelper output)
         var afterSnapshot = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
         Assert.Equal(afterIndex, File.ReadAllBytes(indexPath));
 
-        var change = Assert.Single(await new PipelineOutputComparer().CompareAsync(beforeSnapshot, afterSnapshot, TestContext.Current.CancellationToken));
+        var change = Assert.Single(await new DefaultPipelineOutputComparer().CompareAsync(beforeSnapshot, afterSnapshot, TestContext.Current.CancellationToken));
         Assert.Equal(PipelineOutputChangeKind.Changed, change.Kind);
         Assert.Equal("model.txt", change.Path);
     }
@@ -244,7 +244,7 @@ public sealed class PipelineOutputGitFingerprintTests(ITestOutputHelper output)
         var objects = ReadObjects(workspace.Path);
         var raw = new PipelineOutputSnapshotter();
         var rawBefore = await raw.CaptureAsync(root, TestContext.Current.CancellationToken);
-        var nativeSnapshotter = new NativePipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions()));
+        var nativeSnapshotter = new DefaultPipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions()));
         var beforeSnapshot = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
 
         Directory.Delete(link);
@@ -255,9 +255,9 @@ public sealed class PipelineOutputGitFingerprintTests(ITestOutputHelper output)
             "--porcelain=v2", "-z", "--untracked-files=no", "--no-renames");
         Assert.Equal(OperatingSystem.IsWindows() ? '.' : 'M', Assert.Single(status.Split('\0', StringSplitOptions.RemoveEmptyEntries)).Split(' ')[1][1]);
         var afterSnapshot = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
-        var changes = await new PipelineOutputComparer().CompareAsync(beforeSnapshot, afterSnapshot, TestContext.Current.CancellationToken);
+        var changes = await new DefaultPipelineOutputComparer().CompareAsync(beforeSnapshot, afterSnapshot, TestContext.Current.CancellationToken);
         var rawAfter = await raw.CaptureAsync(root, TestContext.Current.CancellationToken);
-        var rawChange = Assert.Single(PipelineOutputComparer.Compare(rawBefore, rawAfter, root));
+        var rawChange = Assert.Single(DefaultPipelineOutputComparer.Compare(rawBefore, rawAfter, root));
         Assert.Equal(PipelineOutputChangeKind.Changed, rawChange.Kind);
         Assert.Equal("link", rawChange.Path);
         Assert.Equal(index, File.ReadAllBytes(indexPath));
@@ -305,7 +305,7 @@ public sealed class PipelineOutputGitFingerprintTests(ITestOutputHelper output)
         {
             File.CreateSymbolicLink(link, target);
         }
-        var nativeSnapshotter = new NativePipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions()));
+        var nativeSnapshotter = new DefaultPipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions()));
         var beforeSnapshot = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
 
         await PipelineOutputGitTestHelper.RunAsync(workspace.Path, "add", "--", "output/link");
@@ -319,7 +319,7 @@ public sealed class PipelineOutputGitFingerprintTests(ITestOutputHelper output)
         var objects = ReadObjects(workspace.Path);
         var afterSnapshot = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
 
-        Assert.Empty(await new PipelineOutputComparer().CompareAsync(beforeSnapshot, afterSnapshot, TestContext.Current.CancellationToken));
+        Assert.Empty(await new DefaultPipelineOutputComparer().CompareAsync(beforeSnapshot, afterSnapshot, TestContext.Current.CancellationToken));
         Assert.Equal(index, File.ReadAllBytes(Path.Combine(workspace.Path, ".git", "index")));
         AssertObjectsEqual(objects, ReadObjects(workspace.Path));
 
@@ -329,7 +329,7 @@ public sealed class PipelineOutputGitFingerprintTests(ITestOutputHelper output)
         var contentPath = directoryLink ? Path.Combine(target, "content.txt") : target;
         File.WriteAllText(contentPath, "changed destination contents");
         var sameTarget = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
-        Assert.Empty(await new PipelineOutputComparer().CompareAsync(staged, sameTarget, TestContext.Current.CancellationToken));
+        Assert.Empty(await new DefaultPipelineOutputComparer().CompareAsync(staged, sameTarget, TestContext.Current.CancellationToken));
         var other = directoryLink ? workspace.CreateDirectory("other-target").FullName : Path.Combine(workspace.Path, "other-target.txt");
         File.WriteAllText(directoryLink ? Path.Combine(other, "content.txt") : other, File.ReadAllText(contentPath));
         Assert.Equal(File.ReadAllText(contentPath), File.ReadAllText(directoryLink ? Path.Combine(other, "content.txt") : other));
@@ -346,7 +346,7 @@ public sealed class PipelineOutputGitFingerprintTests(ITestOutputHelper output)
         Assert.NotEqual(target, other);
         Assert.Equal(other, new FileInfo(link).LinkTarget);
         var retargeted = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
-        var change = Assert.Single(await new PipelineOutputComparer().CompareAsync(staged, retargeted, TestContext.Current.CancellationToken));
+        var change = Assert.Single(await new DefaultPipelineOutputComparer().CompareAsync(staged, retargeted, TestContext.Current.CancellationToken));
         Assert.Equal(PipelineOutputChangeKind.Changed, change.Kind);
         Assert.Equal("link", change.Path);
         Assert.Equal(index, File.ReadAllBytes(Path.Combine(workspace.Path, ".git", "index")));
@@ -363,7 +363,7 @@ public sealed class PipelineOutputGitFingerprintTests(ITestOutputHelper output)
         var root = workspace.CreateDirectory("output").FullName;
         var path = Path.Combine(root, "model.txt");
         File.WriteAllText(path, "same content\n");
-        var nativeSnapshotter = new NativePipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions()));
+        var nativeSnapshotter = new DefaultPipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions()));
         var before = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
         Assert.False(before.Files[path].IsLink);
         Assert.Null(before.Files[path].GitMode);
@@ -374,11 +374,11 @@ public sealed class PipelineOutputGitFingerprintTests(ITestOutputHelper output)
         var staged = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
         Assert.Equal("100644", staged.Files[path].GitMode);
         Assert.Equal(before.Files[path].Hash.ToArray(), staged.Files[path].Hash.ToArray());
-        Assert.Empty(await new PipelineOutputComparer().CompareAsync(before, staged, TestContext.Current.CancellationToken));
+        Assert.Empty(await new DefaultPipelineOutputComparer().CompareAsync(before, staged, TestContext.Current.CancellationToken));
         File.WriteAllText(path, "real change\n");
         var changed = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
 
-        var change = Assert.Single(await new PipelineOutputComparer().CompareAsync(staged, changed, TestContext.Current.CancellationToken));
+        var change = Assert.Single(await new DefaultPipelineOutputComparer().CompareAsync(staged, changed, TestContext.Current.CancellationToken));
         Assert.Equal(PipelineOutputChangeKind.Changed, change.Kind);
         Assert.Equal("model.txt", change.Path);
         Assert.Equal(index, File.ReadAllBytes(Path.Combine(workspace.Path, ".git", "index")));
@@ -406,12 +406,12 @@ public sealed class PipelineOutputGitFingerprintTests(ITestOutputHelper output)
         Assert.Equal('.', Assert.Single(status.Split('\0', StringSplitOptions.RemoveEmptyEntries)).Split(' ')[1][1]);
         var index = File.ReadAllBytes(Path.Combine(workspace.Path, ".git", "index"));
         var objects = ReadObjects(workspace.Path);
-        var nativeSnapshotter = new NativePipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions()));
+        var nativeSnapshotter = new DefaultPipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions()));
 
         var beforeSnapshot = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
         var afterSnapshot = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
 
-        Assert.Empty(await new PipelineOutputComparer().CompareAsync(beforeSnapshot, afterSnapshot, TestContext.Current.CancellationToken));
+        Assert.Empty(await new DefaultPipelineOutputComparer().CompareAsync(beforeSnapshot, afterSnapshot, TestContext.Current.CancellationToken));
         Assert.Equal(index, File.ReadAllBytes(Path.Combine(workspace.Path, ".git", "index")));
         AssertObjectsEqual(objects, ReadObjects(workspace.Path));
     }
@@ -445,7 +445,7 @@ public sealed class PipelineOutputGitFingerprintTests(ITestOutputHelper output)
         await PipelineOutputGitTestHelper.RunAsync(workspace.Path, "config", "filter.record.clean",
             parentCommand + " >> '" + log.Replace('\\', '/').Replace("'", "'\\''") + "' && cat");
         await PipelineOutputGitTestHelper.RunAsync(workspace.Path, "config", "filter.record.required", "true");
-        var nativeSnapshotter = new NativePipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions()));
+        var nativeSnapshotter = new DefaultPipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions()));
 
         var beforeSnapshot = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
         var beforePids = File.ReadAllLines(log);
@@ -457,7 +457,7 @@ public sealed class PipelineOutputGitFingerprintTests(ITestOutputHelper output)
         var afterPids = File.ReadAllLines(log);
         Assert.Equal(count, afterPids.Length);
         Assert.True(int.Parse(Assert.Single(afterPids.Distinct()), System.Globalization.CultureInfo.InvariantCulture) > 1);
-        Assert.Empty(await new PipelineOutputComparer().CompareAsync(beforeSnapshot, afterSnapshot, TestContext.Current.CancellationToken));
+        Assert.Empty(await new DefaultPipelineOutputComparer().CompareAsync(beforeSnapshot, afterSnapshot, TestContext.Current.CancellationToken));
     }
 
     [Theory]
@@ -489,7 +489,7 @@ public sealed class PipelineOutputGitFingerprintTests(ITestOutputHelper output)
         }
         await PipelineOutputGitTestHelper.RunAsync(workspace.Path, "update-index", hint, "--", "output/model.txt");
         var index = File.ReadAllBytes(Path.Combine(workspace.Path, ".git", "index"));
-        var nativeSnapshotter = new NativePipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions()));
+        var nativeSnapshotter = new DefaultPipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions()));
         var beforeSnapshot = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
         if (changeMode)
         {
@@ -509,7 +509,7 @@ public sealed class PipelineOutputGitFingerprintTests(ITestOutputHelper output)
 
         var afterSnapshot = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
 
-        var change = Assert.Single(await new PipelineOutputComparer().CompareAsync(beforeSnapshot, afterSnapshot, TestContext.Current.CancellationToken));
+        var change = Assert.Single(await new DefaultPipelineOutputComparer().CompareAsync(beforeSnapshot, afterSnapshot, TestContext.Current.CancellationToken));
         Assert.Equal(PipelineOutputChangeKind.Changed, change.Kind);
         Assert.Equal(Path.GetRelativePath(root, path), change.Path);
         Assert.Equal(index, File.ReadAllBytes(Path.Combine(workspace.Path, ".git", "index")));
@@ -544,14 +544,14 @@ public sealed class PipelineOutputGitFingerprintTests(ITestOutputHelper output)
         }
         var index = File.ReadAllBytes(Path.Combine(workspace.Path, ".git", "index"));
         var objects = ReadObjects(workspace.Path);
-        var nativeSnapshotter = new NativePipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions()));
+        var nativeSnapshotter = new DefaultPipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions()));
         var beforeSnapshot = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
         Assert.Null(new FileInfo(path).LinkTarget);
 
         var storageBefore = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
         Assert.False(storageBefore.Files[path].IsLink);
         var afterSnapshot = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
-        Assert.Empty(await new PipelineOutputComparer().CompareAsync(beforeSnapshot, afterSnapshot, TestContext.Current.CancellationToken));
+        Assert.Empty(await new DefaultPipelineOutputComparer().CompareAsync(beforeSnapshot, afterSnapshot, TestContext.Current.CancellationToken));
 
         // A link index entry cannot supply the fingerprint for an ordinary storage file,
         // even if index-ignore hints keep its working-tree status clean.
@@ -559,7 +559,7 @@ public sealed class PipelineOutputGitFingerprintTests(ITestOutputHelper output)
         var storageAfter = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
         Assert.False(storageAfter.Files[path].IsLink);
 
-        var change = Assert.Single(await new PipelineOutputComparer().CompareAsync(storageBefore, storageAfter, TestContext.Current.CancellationToken));
+        var change = Assert.Single(await new DefaultPipelineOutputComparer().CompareAsync(storageBefore, storageAfter, TestContext.Current.CancellationToken));
         Assert.Equal(PipelineOutputChangeKind.Changed, change.Kind);
         Assert.Equal(Path.GetRelativePath(root, path), change.Path);
         Assert.Equal(index, File.ReadAllBytes(Path.Combine(workspace.Path, ".git", "index")));
@@ -577,13 +577,13 @@ public sealed class PipelineOutputGitFingerprintTests(ITestOutputHelper output)
         await PipelineOutputGitTestHelper.RunAsync(workspace.Path, "add", "--", "output/model.txt");
         var requested = OperatingSystem.IsWindows() ? root.ToUpperInvariant() : root;
         Assert.True(Directory.Exists(requested));
-        var nativeSnapshotter = new NativePipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions()));
+        var nativeSnapshotter = new DefaultPipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions()));
         var beforeSnapshot = await nativeSnapshotter.CaptureAsync(requested, TestContext.Current.CancellationToken);
         File.WriteAllText(path, "after!\n");
 
         var afterSnapshot = await nativeSnapshotter.CaptureAsync(requested, TestContext.Current.CancellationToken);
 
-        var change = Assert.Single(await new PipelineOutputComparer().CompareAsync(beforeSnapshot, afterSnapshot, TestContext.Current.CancellationToken));
+        var change = Assert.Single(await new DefaultPipelineOutputComparer().CompareAsync(beforeSnapshot, afterSnapshot, TestContext.Current.CancellationToken));
         Assert.Equal(PipelineOutputChangeKind.Changed, change.Kind);
         Assert.True(string.Equals(Path.GetRelativePath(requested, path), change.Path, PipelineOutputRoot.PathComparison));
     }
@@ -595,7 +595,7 @@ public sealed class PipelineOutputGitFingerprintTests(ITestOutputHelper output)
         await InitializeAsync(workspace.Path, "sha1");
         var root = workspace.CreateDirectory("output").FullName;
         File.WriteAllText(Path.Combine(root, "model.txt"), "untracked content\n");
-        var nativeSnapshotter = new NativePipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions()));
+        var nativeSnapshotter = new DefaultPipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions()));
         var beforeSnapshot = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
         Assert.Single(beforeSnapshot.Files);
         File.WriteAllText(Path.Combine(workspace.Path, ".gitattributes"), "*.txt filter=reject\n");

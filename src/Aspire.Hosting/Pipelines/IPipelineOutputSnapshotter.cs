@@ -10,9 +10,7 @@ namespace Aspire.Hosting.Pipelines;
 /// </summary>
 /// <typeparam name="TSnapshot">The captured representation shared with the matching comparer.</typeparam>
 /// <remarks>
-/// Each snapshot describes fixed captured output; later captures must not change earlier snapshots.
-/// The pipeline resolves one snapshotter per check and reuses it for both captures, allowing it to retain
-/// capture policy independently of the captured data. Implementations may replace native filesystem capture entirely.
+/// Implementations may replace default filesystem capture entirely.
 /// </remarks>
 [Experimental("ASPIREPIPELINES005", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public interface IPipelineOutputSnapshotter<TSnapshot> where TSnapshot : notnull

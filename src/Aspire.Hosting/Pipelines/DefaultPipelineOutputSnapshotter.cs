@@ -10,20 +10,19 @@ using Microsoft.Extensions.Options;
 namespace Aspire.Hosting.Pipelines;
 
 /// <summary>
-/// Retains a deferred capture strategy across independent output snapshots.
+/// Captures pipeline output with the configured output selection and Git policy.
 /// </summary>
-internal sealed class NativePipelineOutputSnapshotter : IPipelineOutputSnapshotter<PipelineOutputSnapshot>
+internal sealed class DefaultPipelineOutputSnapshotter : IPipelineOutputSnapshotter<PipelineOutputSnapshot>
 {
     private readonly PipelineOutputSnapshotter _snapshotter;
     private readonly IProcessRunner _processRunner;
     private readonly PipelineOutputDiffMode _mode;
     private readonly Matcher _matcher = new(PipelineOutputRoot.PathComparison, preserveFilterOrder: true);
-    private Func<string, CancellationToken, Task<IReadOnlyDictionary<string, PipelineOutputFileSnapshot>>>? _capture;
 
     /// <summary>
     /// Creates a snapshotter with the configured output selection and Git policy.
     /// </summary>
-    public NativePipelineOutputSnapshotter(PipelineOutputSnapshotter snapshotter, IProcessRunner processRunner, IOptions<PipelineOutputDiffOptions> options)
+    public DefaultPipelineOutputSnapshotter(PipelineOutputSnapshotter snapshotter, IProcessRunner processRunner, IOptions<PipelineOutputDiffOptions> options)
     {
         _snapshotter = snapshotter;
         _processRunner = processRunner;
@@ -52,22 +51,17 @@ internal sealed class NativePipelineOutputSnapshotter : IPipelineOutputSnapshott
         var directory = PipelineOutputRoot.NormalizeDirectoryPath(outputDirectory);
         if (!PipelineOutputSnapshotter.ValidateOutputDirectory(directory, ct))
         {
-            // Missing roots are empty, not an invitation to search parents. The first existing
-            // capture selects a strategy; after selection failures never switch strategies.
+            // Missing roots are empty, not an invitation to search parents.
             return new(directory, new Dictionary<string, PipelineOutputFileSnapshot>(PipelineOutputRoot.PathComparer));
         }
-        if (_capture is null)
+        var git = _mode is PipelineOutputDiffMode.Auto or PipelineOutputDiffMode.Git
+            ? await GitPipelineOutputReader.TryCreateAsync(directory, _processRunner, ct).ConfigureAwait(false)
+            : null;
+        if (git is null && _mode is PipelineOutputDiffMode.Git)
         {
-            var git = _mode is PipelineOutputDiffMode.Auto or PipelineOutputDiffMode.Git
-                ? await GitPipelineOutputReader.TryCreateAsync(directory, _processRunner, ct).ConfigureAwait(false)
-                : null;
-            if (git is null && _mode is PipelineOutputDiffMode.Git)
-            {
-                throw new DistributedApplicationException($"Git is required to capture pipeline output, but the Git executable or a usable worktree is unavailable: {directory}");
-            }
-            _capture = (path, token) => _snapshotter.CaptureAsync(path, _matcher, git, token);
+            throw new DistributedApplicationException($"Git is required to capture pipeline output, but the Git executable or a usable worktree is unavailable: {directory}");
         }
-        return new(directory, await _capture(directory, ct).ConfigureAwait(false));
+        return new(directory, await _snapshotter.CaptureAsync(directory, _matcher, git, ct).ConfigureAwait(false));
     }
 }
 

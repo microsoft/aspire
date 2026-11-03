@@ -159,7 +159,7 @@ Actions are case-insensitive `Include` or `Exclude`. Patterns must be nonempty p
 segments. Invalid options fail capture. Configuration arrays merge by index; review the resulting order when layering
 configuration.
 
-Rule values are fixed before generation; Git membership is reevaluated at each capture. Filesystem captures apply these
+Each default snapshotter reads rule values when constructed; Git membership is reevaluated at each capture. Filesystem captures apply these
 rules to `.git` entries too; to omit them, add `Exclude **/.git` and `Exclude **/.git/**` after an include.
 Missing directories contribute no files. Root links are rejected and filesystem errors propagate. Paths compare
 ordinal-ignore-case on Windows and ordinal elsewhere. Captures are not atomic.
@@ -174,8 +174,8 @@ ordinal-ignore-case on Windows and ordinal elsewhere. Captures are not atomic.
 | `Git` | Require Git and a usable worktree, with a clear failure when discovery cannot find them. |
 | `FileSystem` | Use filesystem membership and raw-byte XxHash3, including matching ignored files, with no engine Git invocations. |
 
-Discovery waits until the output directory exists. Missing directories contribute empty captures. Once selected,
-the strategy is retained; errors and cancellation do not switch strategies.
+In `Auto` and `Git` modes, each capture discovers Git when its output directory exists. Missing directories contribute empty captures.
+Errors and cancellation after discovery propagate without switching strategies.
 
 Git membership retains tracked files and untracked, nonignored files among the glob matches. Git's ignore rules include
 nested ignore files and repository and global excludes. Tracked files remain eligible even when an ignore pattern matches
@@ -189,7 +189,7 @@ report a mode, so staging an unchanged untracked entry does not itself report a 
 
 Links compare their target text rather than the destination's contents. Each capture reads `FileInfo.LinkTarget` and
 hashes its UTF-8 text with `hash-object --stdin`; index hashes are not reused for links. A regular link-storage file under
-`core.symlinks=false` is hashed as ordinary content. Native capture excludes entries Git reports as deleted from the
+`core.symlinks=false` is hashed as ordinary content. Default capture excludes entries Git reports as deleted from the
 working tree.
 
 Capture makes no Git storage writes. Files regenerated during a failed check remain available.
@@ -207,20 +207,20 @@ builder.WithOutputDiffing<MyOutputSnapshot, MyOutputSnapshotter, MyOutputCompare
 
 `MyOutputSnapshotter` implements `IPipelineOutputSnapshotter<MyOutputSnapshot>` and `MyOutputComparer` implements
 `IPipelineOutputComparer<MyOutputSnapshot>`. The generic constraints require both services to use the same snapshot type;
-no public snapshot base class or runtime representation cast is needed. Snapshots describe fixed captured output.
-`CaptureAsync(outputDirectory, ct)` returns a snapshot, and `CompareAsync(before, after, ct)` compares captured data without
-recapturing live output or changing either snapshot. Repeated comparison of the same snapshots produces the same changes.
+no public snapshot base class or runtime representation cast is needed.
+`CaptureAsync(outputDirectory, ct)` returns a snapshot, and `CompareAsync(before, after, ct)` reports differences between snapshots.
+See the [comparer contract](../../src/Aspire.Hosting/Pipelines/IPipelineOutputComparer.cs) for snapshot usage.
 Custom changes preserve the relative reporting paths supplied by the comparer.
 
 The extension registers transient defaults for the two closed generic interfaces and preserves existing host DI
-registrations. The baseline resolves one snapshotter and retains it for both captures so capture policy can stay consistent.
-Each capture looks up the current output directory. A comparer is resolved after the second capture. Both services follow
+registrations. Each capture resolves its snapshotter and looks up the current output directory. Only the baseline snapshot
+is retained between steps. A comparer is resolved after the second capture. Both services follow
 normal host DI ownership: DI-created services are disposed with the host; pre-instantiated services remain caller-owned.
-Native configuration and Git are not required by custom implementations.
+Default capture configuration and Git are not required by custom implementations.
 
 See the [diffing integration](../../src/Aspire.Hosting/Pipelines/PipelineOutputDiffingExtensions.cs),
-[native snapshotter](../../src/Aspire.Hosting/Pipelines/NativePipelineOutputSnapshotter.cs),
-[native comparer](../../src/Aspire.Hosting/Pipelines/PipelineOutputComparer.cs),
+[default snapshotter](../../src/Aspire.Hosting/Pipelines/DefaultPipelineOutputSnapshotter.cs),
+[default comparer](../../src/Aspire.Hosting/Pipelines/DefaultPipelineOutputComparer.cs),
 [artifact integration tests](../../tests/Aspire.Hosting.Tests/Pipelines/PipelineOutputDiffingTests.cs), and
 [EF graph and writer tests](../../tests/Aspire.Hosting.EntityFrameworkCore.Tests/EFOutputDiffingTests.cs).
 
@@ -236,8 +236,8 @@ See the [diffing integration](../../src/Aspire.Hosting/Pipelines/PipelineOutputD
 | Diff target | `PipelineOutputDiffingExtensions` | Capture before and after the selected target, then compare the typed snapshots. |
 | Provider contracts | `IPipelineOutputSnapshotter<TSnapshot>`, `IPipelineOutputComparer<TSnapshot>` | Pair capture and comparison through a shared snapshot type. |
 | Default selection | `PipelineOutputDiffOptions` | Configure ordered include/exclude rules and the Git strategy. |
-| Default capture | Internal `NativePipelineOutputSnapshotter`, `PipelineOutputSnapshotter` | Retain capture strategy and capture file snapshots. |
-| Default comparison | Internal `PipelineOutputComparer` | Compare captured entry kinds, hashes, and available Git modes without reading live output. |
+| Default capture | Internal `DefaultPipelineOutputSnapshotter`, `PipelineOutputSnapshotter` | Select a capture strategy for each capture and produce file snapshots. |
+| Default comparison | Internal `DefaultPipelineOutputComparer` | Compare captured entry kinds, hashes, and available Git modes without reading live output. |
 
 ## Resources
 

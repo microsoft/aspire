@@ -16,7 +16,7 @@ public sealed class PipelineOutputComparisonTests : IDisposable
     private readonly TestFileSystemService _fileSystem = new();
 
     [Fact]
-    public async Task RepeatedComparisonUsesImmutableCapturesAfterLiveOutputChangesOrDisappears()
+    public async Task RepeatedDefaultComparisonUsesCapturedDataAfterLiveOutputChangesOrDisappears()
     {
         var root = _fileSystem.TempDirectory.CreateTempSubdirectory().Path;
         var added = Path.Combine(root, "added.txt");
@@ -26,7 +26,7 @@ public sealed class PipelineOutputComparisonTests : IDisposable
         File.WriteAllText(changed, "before");
         File.WriteAllText(removed, "removed");
         File.WriteAllText(unchanged, "unchanged");
-        var snapshotter = new NativePipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions { Mode = PipelineOutputDiffMode.FileSystem }));
+        var snapshotter = new DefaultPipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions { Mode = PipelineOutputDiffMode.FileSystem }));
         var before = await snapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
         Assert.Equal(new[] { changed, removed, unchanged }, before.Files.Keys.Order(PipelineOutputRoot.PathComparer));
         Assert.False(File.Exists(added));
@@ -38,7 +38,7 @@ public sealed class PipelineOutputComparisonTests : IDisposable
         Assert.Equal(new[] { added, changed, unchanged }, after.Files.Keys.Order(PipelineOutputRoot.PathComparer));
         File.WriteAllText(changed, "third version must not be read");
         File.WriteAllText(unchanged, "also changed after capture");
-        var comparer = new PipelineOutputComparer();
+        var comparer = new DefaultPipelineOutputComparer();
 
         var changes = await comparer.CompareAsync(before, after, TestContext.Current.CancellationToken);
 
@@ -60,7 +60,7 @@ public sealed class PipelineOutputComparisonTests : IDisposable
         var path = Path.Combine(root, "artifact.txt");
         File.WriteAllText(path, "before");
         var calls = 0;
-        var snapshotter = new NativePipelineOutputSnapshotter(new PipelineOutputSnapshotter(new TestPipelineOutputFileHasher((file, _) =>
+        var snapshotter = new DefaultPipelineOutputSnapshotter(new PipelineOutputSnapshotter(new TestPipelineOutputFileHasher((file, _) =>
         {
             if (Interlocked.Increment(ref calls) == 1)
             {
@@ -82,21 +82,21 @@ public sealed class PipelineOutputComparisonTests : IDisposable
     }
 
     [Fact]
-    public async Task IndependentNativeSnapshottersCanShareLowLevelSnapshotter()
+    public async Task IndependentDefaultSnapshottersCanShareLowLevelSnapshotter()
     {
         var root = _fileSystem.TempDirectory.CreateTempSubdirectory().Path;
         var path = Path.Combine(root, "artifact.txt");
         File.WriteAllText(path, "first");
         var snapshotter = new PipelineOutputSnapshotter();
-        var first = new NativePipelineOutputSnapshotter(snapshotter, new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions { Mode = PipelineOutputDiffMode.FileSystem }));
-        var second = new NativePipelineOutputSnapshotter(snapshotter, new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions { Mode = PipelineOutputDiffMode.FileSystem }));
+        var first = new DefaultPipelineOutputSnapshotter(snapshotter, new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions { Mode = PipelineOutputDiffMode.FileSystem }));
+        var second = new DefaultPipelineOutputSnapshotter(snapshotter, new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions { Mode = PipelineOutputDiffMode.FileSystem }));
         var firstBefore = await first.CaptureAsync(root, TestContext.Current.CancellationToken);
         Assert.Equal("first", File.ReadAllText(path));
         File.WriteAllText(path, "second");
         var secondBefore = await second.CaptureAsync(root, TestContext.Current.CancellationToken);
         var secondAfter = await second.CaptureAsync(root, TestContext.Current.CancellationToken);
         var firstAfter = await first.CaptureAsync(root, TestContext.Current.CancellationToken);
-        var comparer = new PipelineOutputComparer();
+        var comparer = new DefaultPipelineOutputComparer();
 
         Assert.Empty(await comparer.CompareAsync(secondBefore, secondAfter, TestContext.Current.CancellationToken));
         var change = Assert.Single(await comparer.CompareAsync(firstBefore, firstAfter, TestContext.Current.CancellationToken));
@@ -107,7 +107,7 @@ public sealed class PipelineOutputComparisonTests : IDisposable
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task NativeCaptureObservesCancellationBeforeOpeningFilesOrReturningMissingRoot(bool rootExists)
+    public async Task DefaultCaptureObservesCancellationBeforeOpeningFilesOrReturningMissingRoot(bool rootExists)
     {
         var parent = _fileSystem.TempDirectory.CreateTempSubdirectory().Path;
         var root = rootExists ? parent : Path.Combine(parent, "missing");
@@ -117,7 +117,7 @@ public sealed class PipelineOutputComparisonTests : IDisposable
         }
         Assert.Equal(rootExists, Directory.Exists(root));
         var calls = 0;
-        var snapshotter = new NativePipelineOutputSnapshotter(new PipelineOutputSnapshotter(new TestPipelineOutputFileHasher((_, _) =>
+        var snapshotter = new DefaultPipelineOutputSnapshotter(new PipelineOutputSnapshotter(new TestPipelineOutputFileHasher((_, _) =>
         {
             Interlocked.Increment(ref calls);
             return ValueTask.FromResult<ReadOnlyMemory<byte>>(new byte[] { 42 });
@@ -140,11 +140,11 @@ public sealed class PipelineOutputComparisonTests : IDisposable
         var root = _fileSystem.TempDirectory.CreateTempSubdirectory().Path;
         var path = Path.Combine(root, "artifact.txt");
         File.WriteAllText(path, "before");
-        var snapshotter = new NativePipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions { Mode = PipelineOutputDiffMode.FileSystem }));
+        var snapshotter = new DefaultPipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions { Mode = PipelineOutputDiffMode.FileSystem }));
         var before = await snapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
         File.WriteAllText(path, "after!");
         var after = await snapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
-        IPipelineOutputComparer<PipelineOutputSnapshot> comparer = new PipelineOutputComparer();
+        IPipelineOutputComparer<PipelineOutputSnapshot> comparer = new DefaultPipelineOutputComparer();
         using var cts = new CancellationTokenSource();
         cts.Cancel();
         Assert.True(cts.IsCancellationRequested);
@@ -163,14 +163,14 @@ public sealed class PipelineOutputComparisonTests : IDisposable
         var root = Directory.CreateDirectory(Path.Combine(parent, "nested")).FullName;
         var path = Path.Combine(root, "artifact.txt");
         File.WriteAllText(path, "before");
-        var snapshotter = new NativePipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions { Mode = PipelineOutputDiffMode.FileSystem }));
+        var snapshotter = new DefaultPipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions { Mode = PipelineOutputDiffMode.FileSystem }));
         var before = await snapshotter.CaptureAsync(parent, TestContext.Current.CancellationToken);
         File.WriteAllText(path, "after!");
         var after = await snapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
         Assert.Equal(parent, before.OutputDirectory);
         Assert.Equal(root, after.OutputDirectory);
         Assert.NotEqual(before.OutputDirectory, after.OutputDirectory);
-        var comparer = new PipelineOutputComparer();
+        var comparer = new DefaultPipelineOutputComparer();
 
         var change = Assert.Single(await comparer.CompareAsync(before, after, TestContext.Current.CancellationToken));
 

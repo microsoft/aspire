@@ -6,12 +6,11 @@ using System.Diagnostics.CodeAnalysis;
 namespace Aspire.Hosting.Pipelines;
 
 /// <summary>
-/// Compares pipeline output snapshots without recapturing live output.
+/// Compares pipeline output snapshots and reports differences as <see cref="PipelineOutputChange"/> values.
 /// </summary>
 /// <typeparam name="TSnapshot">The captured representation shared with the matching snapshotter.</typeparam>
 /// <remarks>
-/// Comparison uses the captured data and does not change either snapshot. Comparing the same snapshots again
-/// produces the same changes, independently of subsequent output generation.
+/// Implementations should rely on the supplied snapshots rather than mutable live output.
 /// </remarks>
 [Experimental("ASPIREPIPELINES005", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public interface IPipelineOutputComparer<TSnapshot> where TSnapshot : notnull

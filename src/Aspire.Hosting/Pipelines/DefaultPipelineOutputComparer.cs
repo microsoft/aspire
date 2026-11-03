@@ -8,7 +8,7 @@ namespace Aspire.Hosting.Pipelines;
 /// <summary>
 /// Compares captured output without retaining operation state.
 /// </summary>
-internal sealed class PipelineOutputComparer : IPipelineOutputComparer<PipelineOutputSnapshot>
+internal sealed class DefaultPipelineOutputComparer : IPipelineOutputComparer<PipelineOutputSnapshot>
 {
     /// <inheritdoc />
     public Task<IReadOnlyList<PipelineOutputChange>> CompareAsync(

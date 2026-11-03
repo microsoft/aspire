@@ -71,12 +71,12 @@ public sealed class PipelineOutputSelectionTests(ITestOutputHelper output)
         Assert.Equal(existsBefore, File.Exists(artifact));
         var options = new PipelineOutputDiffOptions { Mode = mode };
         options.Rules.Add(new() { Action = "Include", Pattern = "artifacts/**/*.json" });
-        var nativeSnapshotter = new NativePipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(options));
+        var nativeSnapshotter = new DefaultPipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(options));
         var beforeSnapshot = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
 
         Write(root, "artifacts/model.json", "new");
         var afterSnapshot = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
-        var changes = await new PipelineOutputComparer().CompareAsync(beforeSnapshot, afterSnapshot, TestContext.Current.CancellationToken);
+        var changes = await new DefaultPipelineOutputComparer().CompareAsync(beforeSnapshot, afterSnapshot, TestContext.Current.CancellationToken);
 
         if (mode is not PipelineOutputDiffMode.FileSystem)
         {
@@ -225,7 +225,7 @@ public sealed class PipelineOutputSelectionTests(ITestOutputHelper output)
             options.Rules.Add(new() { Action = "Include", Pattern = "ignored*" });
             options.Rules.Add(new() { Action = "Include", Pattern = "control.txt" });
         }
-        var nativeSnapshotter = new NativePipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(options));
+        var nativeSnapshotter = new DefaultPipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(options));
         var before = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
         Assert.Equal(new[] { control }, before.Files.Keys.ToArray());
         var beforeSnapshot = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
@@ -235,11 +235,11 @@ public sealed class PipelineOutputSelectionTests(ITestOutputHelper output)
         Assert.Equal(second, new FileInfo(link).LinkTarget);
         var retargeted = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
         Assert.Equal(new[] { control }, retargeted.Files.Keys.ToArray());
-        Assert.Empty(await new PipelineOutputComparer().CompareAsync(before, retargeted, TestContext.Current.CancellationToken));
+        Assert.Empty(await new DefaultPipelineOutputComparer().CompareAsync(before, retargeted, TestContext.Current.CancellationToken));
         File.WriteAllText(control, "after!");
         var afterSnapshot = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
 
-        var change = Assert.Single(await new PipelineOutputComparer().CompareAsync(beforeSnapshot, afterSnapshot, TestContext.Current.CancellationToken));
+        var change = Assert.Single(await new DefaultPipelineOutputComparer().CompareAsync(beforeSnapshot, afterSnapshot, TestContext.Current.CancellationToken));
         Assert.Equal(PipelineOutputChangeKind.Changed, change.Kind);
         Assert.Equal("control.txt", change.Path);
 
@@ -269,7 +269,7 @@ public sealed class PipelineOutputSelectionTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public async Task ResolvedPolicyDoesNotChangeDuringGeneration()
+    public async Task SnapshotterCopiesRuleValuesWhenConstructed()
     {
         using var workspace = TemporaryWorkspace.Create(output);
         await InitializeGitAsync(workspace.Path);
@@ -279,36 +279,38 @@ public sealed class PipelineOutputSelectionTests(ITestOutputHelper output)
         var git = Assert.IsType<GitPipelineOutputReader>(await GitPipelineOutputReader.TryCreateAsync(root, new DefaultProcessRunner(), TestContext.Current.CancellationToken));
         Assert.Empty(await git.SelectFilesAsync(root, PipelineOutputGitTestHelper.AllFilesMatcher(), TestContext.Current.CancellationToken));
         var options = new PipelineOutputDiffOptions { Mode = PipelineOutputDiffMode.FileSystem };
-        var nativeSnapshotter = new NativePipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(options));
+        var nativeSnapshotter = new DefaultPipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(options));
         var beforeSnapshot = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
         options.Mode = PipelineOutputDiffMode.Git;
         options.Rules.Add(new() { Action = "Exclude", Pattern = "**/*" });
 
         File.WriteAllText(artifact, "new");
         var afterSnapshot = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
-        var change = Assert.Single(await new PipelineOutputComparer().CompareAsync(beforeSnapshot, afterSnapshot, TestContext.Current.CancellationToken));
+        var change = Assert.Single(await new DefaultPipelineOutputComparer().CompareAsync(beforeSnapshot, afterSnapshot, TestContext.Current.CancellationToken));
 
         Assert.Equal(PipelineOutputChangeKind.Changed, change.Kind);
         Assert.Equal(Path.GetRelativePath(root, artifact), change.Path);
     }
 
     [Fact]
-    public async Task NonRepositoryFallbackDoesNotSwitchWhenGitAppears()
+    public async Task AutoCaptureUsesGitMembershipWhenWorktreeAppears()
     {
         using var workspace = TemporaryWorkspace.Create(output);
         var root = workspace.CreateDirectory("output").FullName;
         var artifact = Write(root, "model.json", "old");
         Assert.Null(await GitPipelineOutputReader.TryCreateAsync(root, new DefaultProcessRunner(), TestContext.Current.CancellationToken));
-        var nativeSnapshotter = new NativePipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions()));
+        var nativeSnapshotter = new DefaultPipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions()));
         var beforeSnapshot = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
+        Assert.Equal(new[] { artifact }, beforeSnapshot.Files.Keys);
 
         await InitializeGitAsync(workspace.Path);
         await File.WriteAllTextAsync(Path.Combine(workspace.Path, ".gitignore"), "output/**\n", TestContext.Current.CancellationToken);
         File.WriteAllText(artifact, "new");
         var afterSnapshot = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
-        var change = Assert.Single(await new PipelineOutputComparer().CompareAsync(beforeSnapshot, afterSnapshot, TestContext.Current.CancellationToken));
+        Assert.Empty(afterSnapshot.Files);
+        var change = Assert.Single(await new DefaultPipelineOutputComparer().CompareAsync(beforeSnapshot, afterSnapshot, TestContext.Current.CancellationToken));
 
-        Assert.Equal(PipelineOutputChangeKind.Changed, change.Kind);
+        Assert.Equal(PipelineOutputChangeKind.Removed, change.Kind);
         Assert.Equal(Path.GetRelativePath(root, artifact), change.Path);
     }
 
@@ -339,7 +341,7 @@ public sealed class PipelineOutputSelectionTests(ITestOutputHelper output)
         var options = new PipelineOutputDiffOptions { Mode = mode };
         // Select only the artifact so Git administration changes cannot affect the diff.
         options.Rules.Add(new() { Action = "Include", Pattern = "artifact.txt" });
-        var nativeSnapshotter = new NativePipelineOutputSnapshotter(new(), runner, Options.Create(options));
+        var nativeSnapshotter = new DefaultPipelineOutputSnapshotter(new(), runner, Options.Create(options));
 
         if (mode is PipelineOutputDiffMode.Git)
         {
@@ -352,7 +354,7 @@ public sealed class PipelineOutputSelectionTests(ITestOutputHelper output)
         File.WriteAllText(artifact, "after");
         var afterSnapshot = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
 
-        var change = Assert.Single(await new PipelineOutputComparer().CompareAsync(beforeSnapshot, afterSnapshot, TestContext.Current.CancellationToken));
+        var change = Assert.Single(await new DefaultPipelineOutputComparer().CompareAsync(beforeSnapshot, afterSnapshot, TestContext.Current.CancellationToken));
         Assert.Equal("artifact.txt", change.Path);
         Assert.Equal(PipelineOutputChangeKind.Changed, change.Kind);
     }
@@ -365,18 +367,18 @@ public sealed class PipelineOutputSelectionTests(ITestOutputHelper output)
         await File.WriteAllTextAsync(Path.Combine(workspace.Path, ".gitignore"), "output/**\n", TestContext.Current.CancellationToken);
         var root = Path.Combine(workspace.Path, "output", "new");
         Assert.False(Directory.Exists(root));
-        var nativeSnapshotter = new NativePipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions()));
+        var nativeSnapshotter = new DefaultPipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions()));
         var beforeSnapshot = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
 
         Write(root, "ignored.bin");
         var afterSnapshot = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
 
-        Assert.Empty(await new PipelineOutputComparer().CompareAsync(beforeSnapshot, afterSnapshot, TestContext.Current.CancellationToken));
+        Assert.Empty(await new DefaultPipelineOutputComparer().CompareAsync(beforeSnapshot, afterSnapshot, TestContext.Current.CancellationToken));
         Assert.True(File.Exists(Path.Combine(root, "ignored.bin")));
     }
 
     [Fact]
-    public async Task MissingGitIsOptionalButChosenGitErrorsAndCancellationPropagate()
+    public async Task WorktreeLossIsRediscoveredButCaptureErrorsAndCancellationPropagate()
     {
         using var workspace = TemporaryWorkspace.Create(output);
         await InitializeGitAsync(workspace.Path);
@@ -391,16 +393,20 @@ public sealed class PipelineOutputSelectionTests(ITestOutputHelper output)
         canceled.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => git.SelectFilesAsync(root, PipelineOutputGitTestHelper.AllFilesMatcher(), canceled.Token));
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => GitPipelineOutputReader.TryCreateAsync(root, new DefaultProcessRunner(), canceled.Token));
-        var nativeSnapshotter = new NativePipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions()));
+        var nativeSnapshotter = new DefaultPipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions()));
         var beforeSnapshot = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
         Assert.Single(beforeSnapshot.Files);
         Directory.Move(Path.Combine(workspace.Path, ".git"), Path.Combine(workspace.Path, "saved-git"));
         Assert.False(Directory.Exists(Path.Combine(workspace.Path, ".git")));
 
-        var failure = await Assert.ThrowsAsync<DistributedApplicationException>(() => nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken));
+        var failure = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
+            git.SelectFilesAsync(root, PipelineOutputGitTestHelper.AllFilesMatcher(), TestContext.Current.CancellationToken));
 
         Assert.Contains("Git could not capture pipeline output", failure.Message);
         Assert.Contains("exit code", failure.Message);
+        var afterSnapshot = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
+        Assert.Equal(beforeSnapshot.Files.Keys, afterSnapshot.Files.Keys);
+        Assert.Equal(PipelineOutputChangeKind.Changed, Assert.Single(await new DefaultPipelineOutputComparer().CompareAsync(beforeSnapshot, afterSnapshot, TestContext.Current.CancellationToken)).Kind);
     }
 
     [Fact]
@@ -648,7 +654,7 @@ public sealed class PipelineOutputSelectionTests(ITestOutputHelper output)
         await PipelineOutputGitTestHelper.CreateDirectoryLinkAsync(link, second, junction: OperatingSystem.IsWindows());
         Assert.Equal(second, new DirectoryInfo(link).LinkTarget);
         var after = await snapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
-        var changes = PipelineOutputComparer.Compare(before, after, root);
+        var changes = DefaultPipelineOutputComparer.Compare(before, after, root);
 
         var change = Assert.Single(changes);
         Assert.Equal(PipelineOutputChangeKind.Changed, change.Kind);
@@ -671,14 +677,14 @@ public sealed class PipelineOutputSelectionTests(ITestOutputHelper output)
         var tracked = Write(original, "model.txt");
         Write(external, "model.txt");
         await PipelineOutputGitTestHelper.RunAsync(workspace.Path, "add", "--", "output/child/model.txt");
-        var nativeSnapshotter = new NativePipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions()));
+        var nativeSnapshotter = new DefaultPipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions()));
         var beforeSnapshot = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
         Assert.Equal(new[] { tracked }, await SelectAsync(new(), root));
 
         Directory.Delete(original, recursive: true);
         Directory.CreateSymbolicLink(original, external);
         var afterSnapshot = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
-        var changes = await new PipelineOutputComparer().CompareAsync(beforeSnapshot, afterSnapshot, TestContext.Current.CancellationToken);
+        var changes = await new DefaultPipelineOutputComparer().CompareAsync(beforeSnapshot, afterSnapshot, TestContext.Current.CancellationToken);
 
         Assert.Collection(changes,
             change => { Assert.Equal(PipelineOutputChangeKind.Added, change.Kind); Assert.Equal(Path.GetRelativePath(root, original), change.Path); },
@@ -745,7 +751,7 @@ public sealed class PipelineOutputSelectionTests(ITestOutputHelper output)
                         .Split('\0', StringSplitOptions.RemoveEmptyEntries).Order());
                 break;
         }
-        var nativeSnapshotter = new NativePipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions()));
+        var nativeSnapshotter = new DefaultPipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions()));
         Assert.Equal(new[] { tracked, direct, visible }.Order(PipelineOutputRoot.PathComparer),
             (await SelectAsync(new(), root)).Order(PipelineOutputRoot.PathComparer));
         var beforeSnapshot = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
@@ -753,7 +759,7 @@ public sealed class PipelineOutputSelectionTests(ITestOutputHelper output)
         File.WriteAllText(direct, "new");
         File.WriteAllText(tracked, "new");
         var afterSnapshot = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
-        var changes = await new PipelineOutputComparer().CompareAsync(beforeSnapshot, afterSnapshot, TestContext.Current.CancellationToken);
+        var changes = await new DefaultPipelineOutputComparer().CompareAsync(beforeSnapshot, afterSnapshot, TestContext.Current.CancellationToken);
 
         Assert.Equal(new[] { tracked, direct }.Select(path => Path.GetRelativePath(root, path)).Order(PipelineOutputRoot.PathComparer), changes.Select(change => change.Path));
         Assert.All(changes, change => Assert.Equal(PipelineOutputChangeKind.Changed, change.Kind));
@@ -798,7 +804,7 @@ public sealed class PipelineOutputSelectionTests(ITestOutputHelper output)
         Assert.False(File.Exists(added));
 
         Assert.Equal(new[] { visible }, await SelectAsync(new(), root));
-        var nativeSnapshotter = new NativePipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions()));
+        var nativeSnapshotter = new DefaultPipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions()));
         var beforeSnapshot = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
 
         File.Delete(removed);
@@ -808,7 +814,7 @@ public sealed class PipelineOutputSelectionTests(ITestOutputHelper output)
         Assert.False(File.Exists(removed));
         Assert.True(File.Exists(added));
         Assert.Equal(new[] { visible }, await SelectAsync(new(), root));
-        Assert.Empty(await new PipelineOutputComparer().CompareAsync(beforeSnapshot, afterSnapshot, TestContext.Current.CancellationToken));
+        Assert.Empty(await new DefaultPipelineOutputComparer().CompareAsync(beforeSnapshot, afterSnapshot, TestContext.Current.CancellationToken));
     }
 
     [Theory]
@@ -843,12 +849,12 @@ public sealed class PipelineOutputSelectionTests(ITestOutputHelper output)
         }
         var expected = !validRepository || trackedByEnclosingRepository ? new[] { artifact } : Array.Empty<string>();
         var paths = await SelectAsync(new(), root);
-        var nativeSnapshotter = new NativePipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions()));
+        var nativeSnapshotter = new DefaultPipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(new PipelineOutputDiffOptions()));
         var beforeSnapshot = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
 
         File.WriteAllText(artifact, "new");
         var afterSnapshot = await nativeSnapshotter.CaptureAsync(root, TestContext.Current.CancellationToken);
-        var changes = await new PipelineOutputComparer().CompareAsync(beforeSnapshot, afterSnapshot, TestContext.Current.CancellationToken);
+        var changes = await new DefaultPipelineOutputComparer().CompareAsync(beforeSnapshot, afterSnapshot, TestContext.Current.CancellationToken);
 
         Assert.Equal(expected, paths);
         if (expected.Length == 0)
@@ -893,7 +899,7 @@ public sealed class PipelineOutputSelectionTests(ITestOutputHelper output)
 
     private static async Task<IReadOnlyList<string>> SelectAsync(PipelineOutputDiffOptions options, string directory)
     {
-        var snapshotter = new NativePipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(options));
+        var snapshotter = new DefaultPipelineOutputSnapshotter(new(), new DefaultProcessRunner(), Options.Create(options));
         return (await snapshotter.CaptureAsync(directory, TestContext.Current.CancellationToken)).Files.Keys.Order(PipelineOutputRoot.PathComparer).ToArray();
     }
 
