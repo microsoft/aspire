@@ -1,0 +1,50 @@
+﻿{
+  "run_id": 123,
+  "run_attempt": null,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/123",
+  "run_scope": "main",
+  "analyzed_at": "2026-08-31T12:00:00Z",
+  "verdict": "main-repository-breakage",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 42,
+    "title": "",
+    "author": "",
+    "state": "",
+    "head_branch": "",
+    "base_branch": "",
+    "url": "",
+    "merged_at": null
+  },
+  "main_context": {
+    "last_successful_main_sha": null,
+    "failed_sha": "failed",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "candidate",
+        "message": "",
+        "html_url": "",
+        "pull_request": {
+          "number": null,
+          "title": "",
+          "url": "",
+          "merged_at": null
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Build",
+      "id": 123,
+      "conclusion": null,
+      "url": "",
+      "classification": null,
+      "reason": "",
+      "failed_steps": []
+    }
+  ],
+  "failed_tests": [],
+  "causes": []
+}
