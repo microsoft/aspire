@@ -45,9 +45,10 @@ public class AzureApiManagementTests(ITestOutputHelper output)
     public void ApiManagementResourcesAreNotAddedInRunMode()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
-        var backend = builder.AddProject<Project>("backend", launchProfileName: null)
+        var backend = builder.AddDotnetProject("backend", "project.csproj", options => options.ExcludeLaunchProfile = true)
             .WithHttpsEndpoint()
             .WithExternalHttpEndpoints();
+        var resources = builder.Resources.ToArray();
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
@@ -57,7 +58,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var api = apim.AddApi("catalog-api", backend, "catalog");
         var operation = api.AddOperation("get-product", "get", "/products/{id}");
 
-        Assert.Equal(["backend", "backend-rebuilder"], builder.Resources.Select(resource => resource.Name));
+        Assert.Equal(resources, builder.Resources);
         Assert.Single(apim.Resource.Apis);
         Assert.Single(api.Resource.Operations);
         Assert.Equal("get-product", operation.Resource.Name);
@@ -160,7 +161,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
     public void AddApiAndOperationCreateParentedResources()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        var backend = builder.AddProject<Project>("backend", launchProfileName: null)
+        var backend = builder.AddDotnetProject("backend", "project.csproj", options => options.ExcludeLaunchProfile = true)
             .WithHttpsEndpoint()
             .WithExternalHttpEndpoints();
         var apim = builder.AddAzureApiManagement("apim", new()
@@ -186,7 +187,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
     public void ApiAndOperationSupportDistinctPhysicalNamesAndSecureDefaults()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        var backend = builder.AddProject<Project>("backend", launchProfileName: null)
+        var backend = builder.AddDotnetProject("backend", "project.csproj", options => options.ExcludeLaunchProfile = true)
             .WithHttpsEndpoint()
             .WithExternalHttpEndpoints();
         var apim = builder.AddAzureApiManagement("apim", new()
@@ -211,7 +212,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
     public void ApiAndOperationValidatePhysicalIdentifierConstraints()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        var backend = builder.AddProject<Project>("backend", launchProfileName: null)
+        var backend = builder.AddDotnetProject("backend", "project.csproj", options => options.ExcludeLaunchProfile = true)
             .WithHttpsEndpoint()
             .WithExternalHttpEndpoints();
         var apim = builder.AddAzureApiManagement("apim", new()
@@ -234,7 +235,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
     public void ApiAndOperationValidatePropertyLengthConstraints()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        var backend = builder.AddProject<Project>("backend", launchProfileName: null)
+        var backend = builder.AddDotnetProject("backend", "project.csproj", options => options.ExcludeLaunchProfile = true)
             .WithHttpsEndpoint()
             .WithExternalHttpEndpoints();
         var apim = builder.AddAzureApiManagement("apim", new()
@@ -262,7 +263,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
     public void ApiPhysicalIdentifiersAndPathsMustBeUnique()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        var backend = builder.AddProject<Project>("backend", launchProfileName: null)
+        var backend = builder.AddDotnetProject("backend", "project.csproj", options => options.ExcludeLaunchProfile = true)
             .WithHttpsEndpoint()
             .WithExternalHttpEndpoints();
         var apim = builder.AddAzureApiManagement("apim", new()
@@ -287,7 +288,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var environment = builder.AddAzureContainerAppEnvironment("env");
-        var target = builder.AddProject<Project>("backend", launchProfileName: null)
+        var target = builder.AddDotnetProject("backend", "project.csproj", options => options.ExcludeLaunchProfile = true)
             .WithHttpsEndpoint()
             .WithComputeEnvironment(environment)
             .WithExternalHttpEndpoints();
@@ -309,7 +310,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
     public void OperationPhysicalIdentifiersMustBeUniqueAndCannotUseGeneratedProxyNames()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        var backend = builder.AddProject<Project>("backend", launchProfileName: null)
+        var backend = builder.AddDotnetProject("backend", "project.csproj", options => options.ExcludeLaunchProfile = true)
             .WithHttpsEndpoint()
             .WithExternalHttpEndpoints();
         var apim = builder.AddAzureApiManagement("apim", new()
@@ -434,7 +435,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
     public void PolicyHelpersValidateAndPreserveScopeSemantics()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        var backend = builder.AddProject<Project>("backend", launchProfileName: null)
+        var backend = builder.AddDotnetProject("backend", "project.csproj", options => options.ExcludeLaunchProfile = true)
             .WithHttpsEndpoint()
             .WithExternalHttpEndpoints();
         var apim = builder.AddAzureApiManagement("apim", new()
@@ -841,7 +842,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var environment = builder.AddAzureContainerAppEnvironment("env");
-        var backend = builder.AddProject<Project>("catalog-backend", launchProfileName: null)
+        var backend = builder.AddDotnetProject("catalog-backend", "project.csproj", options => options.ExcludeLaunchProfile = true)
             .WithHttpsEndpoint()
             .WithComputeEnvironment(environment)
             .WithExternalHttpEndpoints();
@@ -1049,7 +1050,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var environment = builder.AddAzureContainerAppEnvironment("env");
-        var backend = builder.AddProject<Project>("catalog-backend", launchProfileName: null)
+        var backend = builder.AddDotnetProject("catalog-backend", "project.csproj", options => options.ExcludeLaunchProfile = true)
             .WithHttpsEndpoint()
             .WithComputeEnvironment(environment)
             .WithExternalHttpEndpoints();
@@ -1090,7 +1091,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
 
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var environment = builder.AddAzureContainerAppEnvironment("env");
-        var backend = builder.AddProject<Project>("catalog-backend", launchProfileName: null)
+        var backend = builder.AddDotnetProject("catalog-backend", "project.csproj", options => options.ExcludeLaunchProfile = true)
             .WithHttpsEndpoint()
             .WithComputeEnvironment(environment)
             .WithExternalHttpEndpoints();
@@ -1142,7 +1143,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         bool secondSourceIsFile)
     {
         using var builder = TestDistributedApplicationBuilder.Create(operation);
-        var target = builder.AddProject<Project>("catalog-backend", launchProfileName: null);
+        var target = builder.AddDotnetProject("catalog-backend", "project.csproj", options => options.ExcludeLaunchProfile = true);
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
@@ -1209,7 +1210,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         AzureApiManagementOpenApiFormat format)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        var target = builder.AddProject<Project>("catalog-backend", launchProfileName: null);
+        var target = builder.AddDotnetProject("catalog-backend", "project.csproj", options => options.ExcludeLaunchProfile = true);
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
@@ -1236,7 +1237,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var environment = builder.AddAzureContainerAppEnvironment("env")
             .WithDelegatedSubnet(containerAppsSubnet)
             .WithInternalLoadBalancer(virtualNetwork);
-        var backend = builder.AddProject<Project>("catalog-backend", launchProfileName: null)
+        var backend = builder.AddDotnetProject("catalog-backend", "project.csproj", options => options.ExcludeLaunchProfile = true)
             .WithHttpsEndpoint()
             .WithComputeEnvironment(environment)
             .WithExternalHttpEndpoints();
@@ -1260,7 +1261,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var environment = builder.AddAzureContainerAppEnvironment("env");
-        var backend = builder.AddProject<Project>("catalog-backend", launchProfileName: null)
+        var backend = builder.AddDotnetProject("catalog-backend", "project.csproj", options => options.ExcludeLaunchProfile = true)
             .WithHttpsEndpoint()
             .WithComputeEnvironment(environment)
             .WithExternalHttpEndpoints();
@@ -1329,7 +1330,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var environment = builder.AddAzureContainerAppEnvironment("env");
-        var backend = builder.AddProject<Project>("backend", launchProfileName: null)
+        var backend = builder.AddDotnetProject("backend", "project.csproj", options => options.ExcludeLaunchProfile = true)
             .WithHttpsEndpoint()
             .WithComputeEnvironment(environment)
             .WithExternalHttpEndpoints();
@@ -1360,7 +1361,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
     public void ApiManagementServiceFeaturesValidateInvalidConfigurations()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        var backend = builder.AddProject<Project>("backend", launchProfileName: null)
+        var backend = builder.AddDotnetProject("backend", "project.csproj", options => options.ExcludeLaunchProfile = true)
             .WithHttpsEndpoint()
             .WithExternalHttpEndpoints();
         var nonSecretParameter = builder.AddParameter("value");
@@ -1622,7 +1623,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var environment = builder.AddAzureContainerAppEnvironment("env")
             .WithDelegatedSubnet(containerAppsSubnet)
             .WithInternalLoadBalancer(vnet);
-        var backend = builder.AddProject<Project>("catalog-backend", launchProfileName: null)
+        var backend = builder.AddDotnetProject("catalog-backend", "project.csproj", options => options.ExcludeLaunchProfile = true)
             .WithHttpsEndpoint()
             .WithComputeEnvironment(environment);
         var apim = builder.AddAzureApiManagement("apim", new()
@@ -1647,7 +1648,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var environment = builder.AddAzureContainerAppEnvironment("env");
-        var backend = builder.AddProject<Project>("catalog-backend", launchProfileName: null)
+        var backend = builder.AddDotnetProject("catalog-backend", "project.csproj", options => options.ExcludeLaunchProfile = true)
             .WithHttpsEndpoint()
             .WithComputeEnvironment(environment);
         var apim = builder.AddAzureApiManagement("apim", new()
@@ -2181,7 +2182,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var environment = builder.AddAzureContainerAppEnvironment("env");
-        var backend = builder.AddProject<Project>("backend", launchProfileName: null)
+        var backend = builder.AddDotnetProject("backend", "project.csproj", options => options.ExcludeLaunchProfile = true)
             .WithHttpsEndpoint()
             .WithComputeEnvironment(environment)
             .WithExternalHttpEndpoints();
@@ -2725,7 +2726,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var environment = builder.AddAzureContainerAppEnvironment("env")
             .WithDelegatedSubnet(backendSubnet)
             .WithInternalLoadBalancer(backendVnet);
-        var backend = builder.AddProject<Project>("backend", launchProfileName: null)
+        var backend = builder.AddDotnetProject("backend", "project.csproj", options => options.ExcludeLaunchProfile = true)
             .WithHttpsEndpoint()
             .WithExternalHttpEndpoints()
             .WithComputeEnvironment(environment);
@@ -3025,11 +3026,6 @@ public class AzureApiManagementTests(ITestOutputHelper output)
             () => environment.WithInternalLoadBalancer(otherVnet));
 
         Assert.Contains("must belong to virtual network 'other-vnet'", exception.Message);
-    }
-
-    private sealed class Project : IProjectMetadata
-    {
-        public string ProjectPath => "project";
     }
 
     private sealed class CustomKeyVaultResource(string name)
