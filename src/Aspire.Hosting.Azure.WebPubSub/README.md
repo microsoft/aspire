@@ -15,6 +15,7 @@ From your AppHost directory, add the `Aspire.Hosting.Azure.WebPubSub` integratio
 
 ```bash
 aspire add Aspire.Hosting.Azure.WebPubSub
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Usage example
@@ -26,7 +27,7 @@ In the AppHost, add a WebPubSub connection and reference it from another resourc
 ```csharp
 var wps = builder.AddAzureWebPubSub("wps1");
 
-var web = builder.AddProject<Projects.WebPubSubWeb>("webfrontend")
+var web = builder.AddDotnetProject("webfrontend", "../WebPubSubWeb/WebPubSubWeb.csproj")
                        .WithReference(wps);
 ```
 
@@ -49,7 +50,7 @@ Call `RunAsEmulator` to use `mcr.microsoft.com/webpubsub/emulator:1.0.0-beta.2` 
 var wps = builder.AddAzureWebPubSub("wps1").RunAsEmulator();
 var chat = wps.AddHub("chat");
 
-var web = builder.AddProject<Projects.WebPubSubWeb>("webfrontend")
+var web = builder.AddDotnetProject("webfrontend", "../WebPubSubWeb/WebPubSubWeb.csproj")
                  .WithReference(chat)
                  .WaitFor(wps);
 

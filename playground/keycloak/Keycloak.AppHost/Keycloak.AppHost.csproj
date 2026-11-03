@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <AspireProjectOrPackageReference Include="Aspire.Hosting.AppHost" />
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.Dotnet" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Keycloak" />
     <ProjectReference Include="..\Keycloak.ApiService\Keycloak.ApiService.csproj" />
     <ProjectReference Include="..\Keycloak.Web\Keycloak.Web.csproj" />

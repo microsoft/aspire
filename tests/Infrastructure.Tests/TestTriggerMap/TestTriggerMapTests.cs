@@ -16,6 +16,30 @@ namespace Infrastructure.Tests.TestTriggerMap;
 public sealed class TestTriggerMapTests
 {
     [Fact]
+    public void IndependentNativeWorkflowSelectsInfrastructureWithoutExtraJobs()
+    {
+        var result = SelectWithRealMap(".github/workflows/native-hosting-validation.yml");
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Equal(["Infrastructure.Tests"], result.TestProjects);
+        Assert.Empty(result.Jobs);
+    }
+
+    [Theory]
+    [InlineData("tests/Aspire.Dashboard.Playwright.Tests/Integration/Playwright/Pages/ResourcesTests.cs", "Aspire.Dashboard.Playwright.Tests")]
+    [InlineData("tests/Aspire.EndToEnd.Tests/IntegrationTests.cs", "Aspire.EndToEnd.Tests")]
+    public void OuterloopTestSourcesSelectTheirOwnProjectWithoutExtraJobs(string path, string project)
+    {
+        var result = SelectWithRealMap(path);
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Equal([project], result.TestProjects);
+        Assert.Empty(result.Jobs);
+    }
+
+    [Fact]
     public void AppHostServerV2SelectsItsBundleConsumers()
     {
         var result = SelectWithRealMap("src/Aspire.Hosting.Native.Server/Program.cs", "Aspire.Hosting.Native.Server");
@@ -72,6 +96,21 @@ public sealed class TestTriggerMapTests
         Assert.False(result.SelectsAll);
         Assert.Empty(result.UnmatchedFiles);
         Assert.Equal(["Aspire.Templates.Tests"], result.TestProjects);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void GoHostingChangesSelectExtensionE2e(bool hasAffectedProject)
+    {
+        const string path = "src/Aspire.Hosting.Go/GoHostingExtensions.cs";
+        var result = hasAffectedProject
+            ? SelectWithRealMap(path, "Aspire.Hosting.Go")
+            : SelectWithRealMap(path);
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Contains("job:extension-e2e", result.Jobs);
     }
 
     // Repo-relative '/'-separated project paths listed in Aspire.slnx (the Layer 1 graph root).
@@ -143,10 +182,6 @@ public sealed class TestTriggerMapTests
             ["test:Infrastructure.Tests"]
         },
         {
-            "eng/scripts/aspire-skills-bundle.common.ps1",
-            ["test:Infrastructure.Tests"]
-        },
-        {
             "eng/scripts/smoke-installed-cli.ps1",
             ["job:winget-installer"]
         },
@@ -171,19 +206,6 @@ public sealed class TestTriggerMapTests
         },
         {
             "eng/dashboardpack/Sdk.targets",
-            [
-                "test:Aspire.Hosting.Sdk.Tests",
-                "test:Aspire.Templates.Tests",
-                "test:Aspire.Cli.EndToEnd.Tests",
-                "job:cli-starter-validation",
-                "job:extension-e2e",
-                "job:homebrew-installer",
-                "job:native-dashboard-validation",
-                "job:winget-installer"
-            ]
-        },
-        {
-            "eng/dashboardpack/Common.projitems",
             [
                 "test:Aspire.Hosting.Sdk.Tests",
                 "test:Aspire.Templates.Tests",
@@ -471,6 +493,8 @@ public sealed class TestTriggerMapTests
     [InlineData("tests/Aspire.Dashboard.Components.Tests/JavaScript/TerminalDock.test.mjs")]
     [InlineData("src/Aspire.Dashboard/wwwroot/js/app-resourcegraph.js")]
     [InlineData("tests/Aspire.Dashboard.Components.Tests/JavaScript/ResourceGraph.test.mjs")]
+    [InlineData("src/Aspire.Dashboard/wwwroot/js/app-dashboard-experience.js")]
+    [InlineData("tests/Aspire.Dashboard.Components.Tests/JavaScript/DashboardExperience.test.mjs")]
     public void DashboardScriptInputsSelectInfrastructureTests(string path)
     {
         var result = SelectWithRealMap(path);
@@ -547,8 +571,6 @@ public sealed class TestTriggerMapTests
     [InlineData("eng/scripts/verify-cli-tool-nupkg.ps1")]
     [InlineData("eng/scripts/stabilization-smoke-init-restore.sh")]
     [InlineData("eng/generate-catalog.ps1")]
-    [InlineData("eng/scripts/update-aspire-skills-bundle.ps1")]
-    [InlineData("eng/scripts/verify-aspire-skills-bundle.ps1")]
     public void PathHandledOutsideSelectorDoesNotForceTestSelection(string path)
     {
         var result = SelectWithRealMap(path);
@@ -629,6 +651,19 @@ public sealed class TestTriggerMapTests
         Assert.Contains("Aspire.Cli.EndToEnd.Tests", result.TestProjects);
     }
 
+    [Theory]
+    [InlineData("src/Aspire.ProjectTemplates/templates/aspire-starter/.template.config/aspirecli.host.json")]
+    [InlineData("src/Aspire.ProjectTemplates/templates/aspire-apphost/.template.config/dotnetcli.host.json")]
+    [InlineData("src/Aspire.ProjectTemplates/templates/future-template/.template.config/template.json")]
+    [InlineData("src/Aspire.ProjectTemplates/templates/aspire-starter/Aspire-StarterApplication.1.AppHost/Properties/launchSettings.json")]
+    public void LocalTemplateSourcesRunCliUnitCoverage(string path)
+    {
+        var result = SelectWithRealMap(path);
+
+        Assert.False(result.SelectsAll);
+        Assert.Contains("Aspire.Cli.Tests", result.TestProjects);
+    }
+
     [Fact]
     public void CliBundleConsumersRunWhenCreateLayoutIsAffected()
     {
@@ -690,6 +725,7 @@ public sealed class TestTriggerMapTests
         Assert.False(result.SelectsAll);
         Assert.Contains("Aspire.Templates.Tests", result.TestProjects);
         Assert.Contains("Aspire.Cli.EndToEnd.Tests", result.TestProjects);
+        Assert.Contains("Aspire.EndToEnd.Tests", result.TestProjects);
         Assert.Contains("job:extension-e2e", result.Jobs);
         Assert.Contains("job:cli-starter-validation", result.Jobs);
     }
@@ -742,7 +778,7 @@ public sealed class TestTriggerMapTests
 
         Assert.False(result.SelectsAll);
         Assert.Equal(
-            ["Aspire.Cli.EndToEnd.Tests", "Aspire.Templates.Tests"],
+            ["Aspire.Cli.EndToEnd.Tests", "Aspire.Cli.Tests", "Aspire.Templates.Tests"],
             result.TestProjects.Order(StringComparer.Ordinal));
         Assert.Equal(
             ["job:deployment-e2e", "job:homebrew-installer", "job:winget-installer"],
@@ -763,6 +799,20 @@ public sealed class TestTriggerMapTests
         Assert.Equal(
             ["job:deployment-e2e", "job:homebrew-installer", "job:winget-installer"],
             result.Jobs.Order(StringComparer.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("src/Aspire.Hosting.CodeGeneration.Go/AtsGoCodeGenerator.cs")]
+    [InlineData("src/Aspire.Hosting.CodeGeneration.Go/GoLanguageSupport.cs")]
+    public void GoModTemplatesSelectCliMinimumGoVersionGuard(string path)
+    {
+        var result = SelectWithRealMap(path, "Aspire.Hosting.CodeGeneration.Go");
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Contains("Aspire.Cli.Tests", result.TestProjects);
+        Assert.Contains(result.TestCauses["Aspire.Cli.Tests"],
+            cause => cause.Kind == CauseKind.PathRule && cause.Trigger == path);
     }
 
     [Fact]

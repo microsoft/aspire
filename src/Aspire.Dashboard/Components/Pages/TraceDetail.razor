@@ -1,4 +1,5 @@
 ﻿@page "/traces/detail/{traceId}"
+@layout ResourcesLayout
 
 @using Aspire.Dashboard.Components.Controls.Grid
 @using Aspire.Dashboard.Resources
@@ -39,7 +40,7 @@
                                   Immediate="true"
                                   ImmediateDelay="@FluentUIExtensions.InputDelay"
                                   Placeholder="@ControlStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
-                                  title="@Loc[nameof(Dashboard.Resources.Traces.TracesNameFilter)]">
+                                  data-tooltip="@Loc[nameof(Dashboard.Resources.Traces.TracesNameFilter)]">
                         <StartTemplate>
                             <FluentIcon Value="@(new Icons.Regular.Size16.Search())" Color="Color.Primary" />
                         </StartTemplate>
@@ -91,7 +92,7 @@
                             }
                         }
 
-                        <div class="pane-details-title" title="@($"{title} ({subtitle})")">
+                        <div class="pane-details-title" data-tooltip="@($"{title} ({subtitle})")">
                             @title
                             <span class="pane-details-subtext">@subtitle</span>
                         </div>
@@ -100,11 +101,12 @@
                         <div class="trace-summary-layout">
                             @if (ViewportInformation.IsDesktop)
                             {
-                                @GetDesktopToolbar()
+                                @GetDesktopToolbar(trace)
                             }
                             else
                             {
                                 <div class="trace-details-mobile">
+                                    <div class="trace-back-mobile">@GetBackButton()</div>
                                     @GetTraceDetailsFragment()
                                 </div>
                             }
@@ -127,7 +129,7 @@
                                                     ItemKey="@(r => r.Span.SpanId)"
                                                     OnRowClick="@(r => r.ExecuteOnDefault(d => OnShowPropertiesAsync(d, focusElementId: ScrollContainerId)))">
                                     <ChildContent>
-                                        <AspireTemplateColumn ColumnId="@NameColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailNameHeader)]" Tooltip="true" TooltipText="@(c => c.GetTooltip(_resources))" Class="expand-col">
+                                        <AspireTemplateColumn ColumnId="@NameColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailNameHeader)]" Class="expand-col">
                                             @{
                                                 var isServerOrConsumer = context.Span.Kind == OtlpSpanKind.Server || context.Span.Kind == OtlpSpanKind.Consumer;
                                                 // Indent the span name based on the depth of the span.
@@ -208,7 +210,7 @@
                                                     {
                                                         <FluentButton Appearance="ButtonAppearance.Transparent"
                                                                     IconOnly="true"
-                                                                    Title="@ControlStringsLoc[nameof(ControlsStrings.GenAIDetailsTitle)]"
+                                                                    data-tooltip="@ControlStringsLoc[nameof(ControlsStrings.GenAIDetailsTitle)]" aria-label="@ControlStringsLoc[nameof(ControlsStrings.GenAIDetailsTitle)]"
                                                                     Class="genai-details-button"
                                                                     OnClick="() => OnGenAIClickedAsync(context.Span)">
                                                             <FluentIcon Icon="Icons.Regular.Size20.Sparkle"
@@ -218,7 +220,7 @@
                                                 </span>
                                             </div>
                                         </AspireTemplateColumn>
-                                        <AspireTemplateColumn ColumnId="@ResourceColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailResourceHeader)]" Tooltip="true" TooltipText="@(c => GetResourceName(c.Span.Source))" Class="expand-col">
+                                        <AspireTemplateColumn ColumnId="@ResourceColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailResourceHeader)]" Class="expand-col">
                                             <div class="resource-name">
                                                 <FluentHighlighter HighlightedText="@PageViewModel.Filter" Text="@GetResourceName(context.Span.Source)" />
                                             </div>
@@ -259,11 +261,9 @@
                                                                 var buttonId = $"{context.Span.SpanId}-{item.LogEntry.InternalId}";
                                                                 var eventName = item.LogEntry.EventName ?? StructuredLogsLoc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsEntryDetails)];
                                                                 var isSelected = SelectedData?.LogEntryViewModel?.LogEntry.InternalId == item.LogEntry.InternalId;
-                                                                var htmlTooltip = item.Index < 500;
                                                                 var buttonColor = item.LogEntry.IsError ? "var(--error)" : spanColor;
 
                                                                 <button id="@buttonId"
-                                                                        title="@(!htmlTooltip ? $"{eventName} - {item.LogEntry.ScopeName}" : string.Empty)"
                                                                         aria-label="@StructuredLogsLoc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsEntryDetails)]"
                                                                         class="@($"span-log-entry-button {(isSelected ? "span-log-entry-selected" : null)} {(item.LogEntry.IsError ? "span-log-entry-error" : null)}")"
                                                                         data-span-color="@spanColor"
@@ -271,33 +271,6 @@
                                                                         @onclick="@(() => ToggleSpanLogsAsync(item.LogEntry))"
                                                                         @onclick:stopPropagation="true">
                                                                 </button>
-                                                                @*
-                                                                    There is a performance impact to having many tooltips on the page. Limit to 500 tooltips per span.
-                                                                    The button continues to be displayed and clicking on it opens the details view.
-                                                                    A standard browser tooltip is displayed instead of the FluentTooltip.
-                                                                *@
-                                                                @if (htmlTooltip)
-                                                                {
-                                                                    <FluentTooltip Anchor="@buttonId" MaxWidth="350px" Style="flex-direction: column;">
-                                                                        <div class="log-tooltip-title-container">
-                                                                            <span class="log-tooltip-title">@eventName</span> <span class="log-tooltip-subtitle">@item.LogEntry.ScopeName</span><br />
-                                                                        </div>
-                                                                        <table class="log-tooltip-table">
-                                                                            <tr>
-                                                                                <td class="label-column">@StructuredLogsLoc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsLevelColumnHeader)]</td>
-                                                                                <td>@item.LogEntry.Severity</td>
-                                                                            </tr>
-                                                                            <tr>
-                                                                                <td class="label-column">@StructuredLogsLoc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsTimestampColumnHeader)]</td>
-                                                                                <td>@FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, item.LogEntry.TimeStamp, MillisecondsDisplay.Truncated)</td>
-                                                                            </tr>
-                                                                            <tr>
-                                                                                <td class="label-column">@StructuredLogsLoc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsMessageColumnHeader)]</td>
-                                                                                <td>@FormatHelpers.TruncateText(item.LogEntry.Message, maxLength: 150)</td>
-                                                                            </tr>
-                                                                        </table>
-                                                                    </FluentTooltip>
-                                                                }
                                                             }
                                                         </div>
                                                         <div class="span-bar" style="grid-column: 2; background: @spanColor;"></div>
@@ -361,9 +334,27 @@
 </div>
 
 @code {
-    private RenderFragment GetDesktopToolbar()
+    // The trace detail page is reached by drilling into a row of the traces list, so the back button makes the way
+    // back explicit. It uses the same toolbar button styling as the rest of the row so it reads as a page control.
+    private RenderFragment GetBackButton()
+    {
+        return @<FluentButton Appearance="ButtonAppearance.Default"
+                              Class="toolbar-button trace-back-button"
+                              data-tooltip="Back to traces"
+                              IconStart="@(new Icons.Regular.Size16.ArrowLeft().WithColor(Color.Primary))"
+                              OnClick="@(() => NavigationManager.NavigateTo(TracesListUrl))">
+            Traces
+        </FluentButton>;
+    }
+
+    private RenderFragment GetDesktopToolbar(OtlpTrace trace)
     {
         return @<div class="trace-header main-toolbar">
+            <div class="trace-header-nav">
+                @GetBackButton()
+                <span class="trace-header-title" data-tooltip="@GetPageTitle()">@GetPageTitle()</span>
+                <span class="trace-id">@OtlpHelpers.ToShortenedId(trace.TraceId)</span>
+            </div>
             @GetTraceDetailsFragment()
             <div class="trace-header-filters filter-toolbar"
                  role="group"
@@ -376,7 +367,7 @@
                               Immediate="true"
                               ImmediateDelay="@FluentUIExtensions.InputDelay"
                               Placeholder="@ControlStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
-                              title="@Loc[nameof(Dashboard.Resources.Traces.TracesNameFilter)]">
+                              data-tooltip="@Loc[nameof(Dashboard.Resources.Traces.TracesNameFilter)]">
                     <StartTemplate>
                         <FluentIcon Value="@(new Icons.Regular.Size16.Search())" Color="Color.Primary" />
                     </StartTemplate>
@@ -433,7 +424,7 @@
         return @<FluentOverflow TItem="TraceDetailItem" Items="@items" Class="trace-header-details">
             <ItemTemplate Context="item">
                 <div>
-                    @item.Name <strong title="@item.Tooltip">@item.Value</strong>
+                    @item.Name <strong data-tooltip="@item.Tooltip">@item.Value</strong>
                 </div>
             </ItemTemplate>
             <MoreTemplate Context="overflow">
@@ -447,7 +438,7 @@
                                Class="trace-header-tooltip">
                     @foreach (var item in overflow.Items)
                     {
-                        <div style="margin: 5px;" title="@item.Tooltip">@item.Name <strong>@item.Value</strong></div>
+                        <div style="margin: 5px;" data-tooltip="@item.Tooltip">@item.Name <strong>@item.Value</strong></div>
                     }
                 </FluentTooltip>
             </OverflowTemplate>

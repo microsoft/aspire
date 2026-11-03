@@ -6,6 +6,19 @@ This test project contains end-to-end tests for the Aspire CLI using the [Hex1b]
 
 These tests simulate real user interactions with the Aspire CLI by automating terminal input/output. Each test class runs as a **separate CI job** to enable parallel execution across GitHub Actions runners.
 
+### Custom template coverage
+
+`CustomTemplateTests` uses the test-only template in `Fixtures/CustomTemplate`, independently
+of the shipped project templates. It exercises required text, Boolean, single-choice defaults,
+multi-choice preselection, name replacement, and conditional files through the installed CLI.
+Directory and HTTP Git sources run in the SDK-free polyglot container, with generated files
+verified against snapshots. The non-interactive Git scenario runs `aspire new --non-interactive`
+without supplying prompt responses and verifies template-defined text, Boolean, single-choice,
+and multi-choice defaults. Git scenarios serve an isolated bare repository through
+`git http-backend` in a test-process `WebApplication`, bound to a dynamically assigned loopback
+port. Host networking lets the container reach the server. Smart HTTP supports the CLI's
+shallow fetches, unlike static-file Git hosting.
+
 ## Architecture
 
 ### Test Infrastructure

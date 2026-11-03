@@ -20,7 +20,7 @@ func main() {
 	//   - "ConnectionStrings__cache" so the API can dial Redis.
 	//   - "OTEL_EXPORTER_OTLP_*" env vars (via WithOtlpExporter) so traces,
 	//     metrics, and logs flow to the Aspire dashboard.
-	builder.AddGoApp("api", "./api").
+	api := builder.AddGoApp("api", "./api").
 		WithModTidy().
 		WithReference(cache).
 		WaitFor(cache).
@@ -28,8 +28,11 @@ func main() {
 		WithExternalHttpEndpoints().
 		WithOtlpExporter()
 
-	if err := builder.Err(); err != nil {
-		log.Fatal(aspire.FormatError(err))
+	// Each call records its failure on the handle that it returns, so check every resource.
+	for _, resource := range []aspire.Resource{cache, api} {
+		if err := resource.Err(); err != nil {
+			log.Fatal(aspire.FormatError(err))
+		}
 	}
 
 	app, err := builder.Build()

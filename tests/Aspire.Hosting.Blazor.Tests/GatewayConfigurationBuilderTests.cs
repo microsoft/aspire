@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable CS0618 // Retain synthetic-metadata legacy ProjectResource proxy, gateway, and fluent contracts.
+using System.Net.Sockets;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
 
@@ -538,6 +540,58 @@ public class GatewayConfigurationBuilderTests(ITestOutputHelper testOutputHelper
             env["ReverseProxy__Clusters__cluster-otlp-dashboard__Destinations__d1__Address"]);
     }
 
+    [Fact]
+    public async Task BuildConfigExpression_ResolvesOriginOnRequestedNetwork_WithoutLocalhostAllocation()
+    {
+        var deploymentNetwork = new NetworkIdentifier("deployment");
+        var (hostEndpoint, annotation) = CreateHttpsHostEndpoint();
+        annotation.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(
+            deploymentNetwork,
+            new AllocatedEndpoint(annotation, "web.example.test", 443, EndpointBindingMode.SingleAddress, targetPortExpression: null, deploymentNetwork));
+
+        var expression = GatewayConfigurationBuilder.BuildConfigExpression(
+            httpEndpoint: null, hostEndpoint, prefix: null, "web",
+            [new HostedClientService("api", GatewayConfigurationBuilder.DefaultApiPrefix)],
+            proxyBlazorTelemetry: false, httpOtlpEndpoint: null);
+
+        // Before the fix, the context was dropped and resolution waited for a localhost allocation that never happens.
+        var json = await expression.GetValueAsync(new ValueProviderContext { Network = deploymentNetwork }, CancellationToken.None)
+            .AsTask().WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Contains("\"services__api__https__0\":\"https://web.example.test:443/_api/api\"", json);
+    }
+
+    [Fact]
+    public async Task BuildConfigExpression_ResolvesOriginOnRequestedNetwork_WhenLocalhostIsAlsoAllocated()
+    {
+        var deploymentNetwork = new NetworkIdentifier("deployment");
+        var (hostEndpoint, annotation) = CreateHttpsHostEndpoint();
+        annotation.AllocatedEndpoint = new AllocatedEndpoint(annotation, "localhost", 7001);
+        annotation.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(
+            deploymentNetwork,
+            new AllocatedEndpoint(annotation, "web.example.test", 443, EndpointBindingMode.SingleAddress, targetPortExpression: null, deploymentNetwork));
+
+        var expression = GatewayConfigurationBuilder.BuildConfigExpression(
+            httpEndpoint: null, hostEndpoint, prefix: null, "web",
+            [new HostedClientService("api", GatewayConfigurationBuilder.DefaultApiPrefix)],
+            proxyBlazorTelemetry: false, httpOtlpEndpoint: null);
+
+        var json = await expression.GetValueAsync(new ValueProviderContext { Network = deploymentNetwork }, CancellationToken.None);
+
+        Assert.Contains("\"services__api__https__0\":\"https://web.example.test:443/_api/api\"", json);
+        Assert.DoesNotContain("localhost", json);
+    }
+
+    private static (EndpointReference Endpoint, EndpointAnnotation Annotation) CreateHttpsHostEndpoint()
+    {
+        var resource = new TestResource("web");
+        var annotation = new EndpointAnnotation(ProtocolType.Tcp, uriScheme: "https", name: "https");
+        resource.Annotations.Add(annotation);
+        return (new EndpointReference(resource, annotation), annotation);
+    }
+
+    private sealed class TestResource(string name) : Resource(name), IResourceWithEndpoints;
+
     private sealed class TestProjectMetadata : IProjectMetadata
     {
         public string ProjectPath => "TestProject/TestProject.csproj";
@@ -548,3 +602,4 @@ public class GatewayConfigurationBuilderTests(ITestOutputHelper testOutputHelper
     private static GatewayAppService[] Svc(params string[] names) =>
         Array.ConvertAll(names, n => new GatewayAppService(n));
 }
+#pragma warning restore CS0618

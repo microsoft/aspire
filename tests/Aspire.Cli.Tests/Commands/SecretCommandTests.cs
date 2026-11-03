@@ -113,7 +113,7 @@ public class SecretCommandTests(ITestOutputHelper outputHelper)
 
             Assert.Equal(CliExitCodes.Success, exitCode);
             Assert.Equal(value, new SecretsStore(secretsPath).Get("Parameters:api_key"));
-            Assert.Equal(new StringPromptCall(SecretCommandStrings.ValuePrompt, null, IsSecret: true),
+            Assert.Equal(new StringPromptCall(SecretCommandStrings.ValuePrompt, null, IsSecret: true, Required: false),
                 Assert.Single(interaction.StringPromptCalls));
             Assert.Equal(["Secret 'Parameters:api_key' set successfully."], interaction.DisplayedSuccess);
             Assert.Empty(interaction.DisplayedPlainText);
@@ -775,7 +775,7 @@ public class SecretCommandTests(ITestOutputHelper outputHelper)
         public Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
             => Task.FromResult<List<AppHostProjectCandidate>>([new(appHostFile, "test")]);
 
-        public Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
+        public Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken, bool skipValidation = false)
             => Task.FromResult<List<FileInfo>>([appHostFile]);
 
         public Task<FileInfo?> GetAppHostFromSettingsAsync(CancellationToken cancellationToken = default)

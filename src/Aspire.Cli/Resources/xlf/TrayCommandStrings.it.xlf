@@ -4,62 +4,62 @@
     <body>
       <trans-unit id="BundleRequired">
         <source>The experimental Aspire tray requires a leased, versioned CLI bundle. No usable bundle was found. Install a Windows or macOS Aspire bundle that includes the tray companion.</source>
-        <target state="new">The experimental Aspire tray requires a leased, versioned CLI bundle. No usable bundle was found. Install a Windows or macOS Aspire bundle that includes the tray companion.</target>
+        <target state="translated">L'area sperimentale di Aspire richiede un pacchetto CLI concesso in licenza e con versione. Non è stato trovato alcun pacchetto utilizzabile. Installare un pacchetto Aspire per Windows o macOS che includa il componente complementare dell'area.</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
         <source>Manage the Windows or macOS tray companion (Experimental)</source>
-        <target state="new">Manage the Windows or macOS tray companion (Experimental)</target>
+        <target state="translated">Gestire il componente complementare dell'area di Windows o macOS (sperimentale)</target>
         <note />
       </trans-unit>
       <trans-unit id="HelperFailed">
         <source>The Aspire tray '{0}' helper failed with exit code {1}.</source>
-        <target state="new">The Aspire tray '{0}' helper failed with exit code {1}.</target>
+        <target state="translated">Errore dell'helper '{0}' del cassetto Aspire. Codice di uscita {1}.</target>
         <note>{0} is the start or stop subcommand name. {1} is the helper exit code.</note>
       </trans-unit>
       <trans-unit id="HelperTimedOut">
         <source>The Aspire tray '{0}' helper did not acknowledge completion within 30 seconds.</source>
-        <target state="new">The Aspire tray '{0}' helper did not acknowledge completion within 30 seconds.</target>
+        <target state="translated">L'helper '{0}' del vassoio Aspire non ha confermato il completamento entro 30 secondi.</target>
         <note>{0} is the start or stop subcommand name.</note>
       </trans-unit>
       <trans-unit id="NativeCliRequired">
         <source>Starting the experimental tray requires an installed native Aspire CLI executable. Managed development builds and 'dotnet aspire.dll' are not supported.</source>
-        <target state="new">Starting the experimental tray requires an installed native Aspire CLI executable. Managed development builds and 'dotnet aspire.dll' are not supported.</target>
+        <target state="translated">Per avviare l'area sperimentale è necessario che sia installato un eseguibile nativo della CLI di Aspire. Le compilazioni di sviluppo gestite e 'dotnet aspire.dll' non sono supportate.</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationFailed">
         <source>Could not complete Aspire tray '{0}': {1}</source>
-        <target state="new">Could not complete Aspire tray '{0}': {1}</target>
+        <target state="translated">Non è stato possibile completare l'area di Aspire '{0}': {1}</target>
         <note>{0} is the start or stop subcommand name. {1} is the underlying error message.</note>
       </trans-unit>
       <trans-unit id="PayloadMissing">
         <source>The CLI bundle does not contain the tray companion for this platform (Windows: tray/aspire-tray.exe and tray/Aspire.ico; macOS: tray/Aspire Tray.app). Install a matching native Aspire bundle, or run 'aspire setup --force' to repair an incomplete extraction.</source>
-        <target state="new">The CLI bundle does not contain the tray companion for this platform (Windows: tray/aspire-tray.exe and tray/Aspire.ico; macOS: tray/Aspire Tray.app). Install a matching native Aspire bundle, or run 'aspire setup --force' to repair an incomplete extraction.</target>
+        <target state="translated">Il pacchetto CLI non contiene il componente associato all'area per questa piattaforma (Windows: tray/aspire-tray.exe e tray/Aspire.ico; macOS: tray/Aspire Tray.app). Installare un pacchetto Aspire nativo compatibile, oppure eseguire 'aspire setup --force' per correggere un'estrazione incompleta.</target>
         <note />
       </trans-unit>
       <trans-unit id="StartDescription">
         <source>Start or restore the tray icon (Experimental)</source>
-        <target state="new">Start or restore the tray icon (Experimental)</target>
+        <target state="translated">Avviare o ripristinare l'icona nell'area (sperimentale)</target>
         <note />
       </trans-unit>
       <trans-unit id="Started">
         <source>The Aspire Tray is starting.</source>
-        <target state="new">The Aspire Tray is starting.</target>
+        <target state="translated">È in corso l'avvio dell'interfaccia di Aspire.</target>
         <note />
       </trans-unit>
       <trans-unit id="StopDescription">
         <source>Stop the tray without stopping AppHosts (Experimental)</source>
-        <target state="new">Stop the tray without stopping AppHosts (Experimental)</target>
+        <target state="translated">Arrestare l'area senza arrestare gli AppHost (sperimentale)</target>
         <note />
       </trans-unit>
       <trans-unit id="Stopped">
         <source>The Aspire tray is stopped. AppHosts were not stopped.</source>
-        <target state="new">The Aspire tray is stopped. AppHosts were not stopped.</target>
+        <target state="translated">L'area di Aspire è arrestata. Gli AppHost non sono stati arrestati.</target>
         <note />
       </trans-unit>
       <trans-unit id="UnsupportedPlatform">
         <source>The experimental Aspire tray supports Windows and macOS x64/ARM64 installations. Linux is not supported.</source>
-        <target state="new">The experimental Aspire tray supports Windows and macOS x64/ARM64 installations. Linux is not supported.</target>
+        <target state="translated">L'area sperimentale di Aspire supporta le installazioni x64/ARM64 di Windows e macOS. Linux non è supportato.</target>
         <note />
       </trans-unit>
     </body>

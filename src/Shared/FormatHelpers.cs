@@ -51,6 +51,9 @@ internal static class FormatHelpers
         return local.ToString(pattern, cultureInfo);
     }
 
+    public static string FormatTime(TimeProvider timeProvider, DateTimeOffset value, MillisecondsDisplay millisecondsDisplay = MillisecondsDisplay.None, CultureInfo? cultureInfo = null) =>
+        FormatTime(timeProvider, value.UtcDateTime, millisecondsDisplay, cultureInfo);
+
     public static string FormatDateTime(TimeProvider timeProvider, DateTime value, MillisecondsDisplay millisecondsDisplay = MillisecondsDisplay.None, CultureInfo? cultureInfo = null)
     {
         cultureInfo ??= CultureInfo.CurrentCulture;
@@ -59,6 +62,17 @@ internal static class FormatHelpers
         var pattern = DateFormatStringsHelpers.GetShortDateLongTimePattern(cultureInfo, timeFormat, millisecondsDisplay);
 
         return local.ToString(pattern, cultureInfo);
+    }
+
+    public static string FormatDateTime(TimeProvider timeProvider, DateTimeOffset value, MillisecondsDisplay millisecondsDisplay = MillisecondsDisplay.None, CultureInfo? cultureInfo = null) =>
+        FormatDateTime(timeProvider, value.UtcDateTime, millisecondsDisplay, cultureInfo);
+
+    public static string FormatUtcDateTime(TimeProvider timeProvider, DateTime value, MillisecondsDisplay millisecondsDisplay = MillisecondsDisplay.None, CultureInfo? cultureInfo = null)
+    {
+        cultureInfo ??= CultureInfo.CurrentCulture;
+        var timeFormat = GetResolvedTimeFormat(timeProvider);
+        var pattern = DateFormatStringsHelpers.GetShortDateLongTimePattern(cultureInfo, timeFormat, millisecondsDisplay);
+        return $"{value.ToUniversalTime().ToString(pattern, cultureInfo)} UTC";
     }
 
     private static TimeFormat GetResolvedTimeFormat(TimeProvider timeProvider)
@@ -80,14 +94,17 @@ internal static class FormatHelpers
         {
             // e.g. "08:57:44" (based on user's culture and preferences)
             // Don't include milliseconds as resource server returned time stamp is second precision.
-            return FormatTime(timeProvider, local, millisecondsDisplay, cultureInfo);
+            return FormatTime(timeProvider, value, millisecondsDisplay, cultureInfo);
         }
         else
         {
             // e.g. "9/02/2024 08:57:44" (based on user's culture and preferences)
-            return FormatDateTime(timeProvider, local, millisecondsDisplay, cultureInfo);
+            return FormatDateTime(timeProvider, value, millisecondsDisplay, cultureInfo);
         }
     }
+
+    public static string FormatTimeWithOptionalDate(TimeProvider timeProvider, DateTimeOffset value, MillisecondsDisplay millisecondsDisplay = MillisecondsDisplay.None, CultureInfo? cultureInfo = null) =>
+        FormatTimeWithOptionalDate(timeProvider, value.UtcDateTime, millisecondsDisplay, cultureInfo);
 
     public static string FormatNumberWithOptionalDecimalPlaces(double value, int maxDecimalPlaces, CultureInfo? provider = null)
     {

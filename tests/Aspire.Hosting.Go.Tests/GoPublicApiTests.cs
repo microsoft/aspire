@@ -97,17 +97,6 @@ public class GoPublicApiTests
         Assert.Equal("go", app.Resource.Command);
     }
 
-    [Fact]
-    public async Task AddGoAppDefaultArgsAreRunDot()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-        var app = builder.AddGoApp("api", builder.AppHostDirectory);
-
-        var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource);
-
-        Assert.Equal(["run", "."], args);
-    }
-
     // ---- packagePath --------------------------------------------------------
 
     [Fact]

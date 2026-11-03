@@ -1,50 +1,50 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="ja" original="../InteractionServiceStrings.resx">
     <body>
       <trans-unit id="AppHostConnectionLost">
         <source>The connection to the AppHost was lost: {0}</source>
-        <target state="needs-review-translation">アプリ ホストへの接続が失われました: {0}。</target>
+        <target state="translated">AppHost への接続が失われました: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostConnectionLostGeneric">
         <source>The connection to the application was lost.</source>
-        <target state="new">The connection to the application was lost.</target>
+        <target state="translated">アプリケーションへの接続が失われました。</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostNotCompatibleConsiderUpgrading">
         <source>The AppHost version is not compatible. Please upgrade the AppHost or Aspire CLI.</source>
-        <target state="needs-review-translation">AppHost のバージョンに互換性がありません。AppHost または Aspire CLI をアップグレードしてください。</target>
+        <target state="translated">AppHost のバージョンに互換性がありません。AppHost または Aspire CLI をアップグレードしてください。</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostNotCompatibleUpdateAppHost">
         <source>The AppHost is using an older Aspire version than the Aspire CLI. Update the AppHost's Aspire packages to continue.</source>
-        <target state="new">The AppHost is using an older Aspire version than the Aspire CLI. Update the AppHost's Aspire packages to continue.</target>
+        <target state="translated">AppHost は、Aspire CLI よりも古い Aspire バージョンを使用しています。続行するには、AppHost の Aspire パッケージを更新します。</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostNotCompatibleUpdateCli">
         <source>The Aspire CLI is older than the Aspire version used by the AppHost. Update the Aspire CLI to continue.</source>
-        <target state="new">The Aspire CLI is older than the Aspire version used by the AppHost. Update the Aspire CLI to continue.</target>
+        <target state="translated">Aspire CLI は、AppHost で使用される Aspire バージョンよりも古くなっています。続行するには、Aspire CLI を更新します。</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostShutDown">
         <source>The application shut down.</source>
-        <target state="new">The application shut down.</target>
+        <target state="translated">アプリケーションがシャットダウンしました。</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireCLIVersion">
         <source>Aspire CLI version</source>
-        <target state="needs-review-translation">Aspire CLI バージョン</target>
+        <target state="translated">Aspire CLI バージョン</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireHostingSDKVersion">
         <source>Aspire.Hosting version</source>
-        <target state="needs-review-translation">Aspire.Hosting バージョン</target>
+        <target state="translated">Aspire.Hosting バージョン</target>
         <note />
       </trans-unit>
       <trans-unit id="BuildingAppHost">
         <source>Building AppHost...</source>
-        <target state="needs-review-translation">AppHost をビルドしています...</target>
+        <target state="translated">AppHost をビルドしています...</target>
         <note />
       </trans-unit>
       <trans-unit id="CheckingCertificates">
@@ -84,32 +84,32 @@
       </trans-unit>
       <trans-unit id="ErrorConnectingToAppHost">
         <source>An error occurred while connecting to the AppHost: {0}</source>
-        <target state="needs-review-translation">アプリ ホスティング プロセスへの接続でエラーが発生しました。アプリ ホスティング プロセスが、利用可能になる前にクラッシュした可能性があります: {0}。</target>
+        <target state="translated">AppHost への接続中にエラーが発生しました: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="FindingAppHosts">
         <source>Finding AppHosts...</source>
-        <target state="needs-review-translation">AppHost を検索しています...</target>
+        <target state="translated">AppHost を検索しています...</target>
         <note />
       </trans-unit>
       <trans-unit id="InteractiveInputNotSupported">
         <source>This prompt requires interactive input but the CLI is running in non-interactive mode. This operation does not yet support non-interactive execution.</source>
-        <target state="needs-review-translation">対話型入力は、この環境ではサポートされていません。--non-interactive フラグを使用するか、CLI が対話型ターミナルで実行されていることを確認してください。</target>
+        <target state="translated">このプロンプトには対話型入力が必要ですが、CLI は非対話モードで実行されています。この操作では、対話型以外の実行はまだサポートされていません。</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidSelection">
         <source>Invalid selection.</source>
-        <target state="new">Invalid selection.</target>
+        <target state="translated">無効な選択です。</target>
         <note />
       </trans-unit>
       <trans-unit id="MoreInfoNewCliVersion">
         <source>[dim]For more information, see: {0}[/]</source>
-        <target state="needs-review-translation">[暗い]詳細については、次を参照してください: [link]{0}[/][/]</target>
+        <target state="translated">[dim]詳細については、次を参照してください: {0}[/]</target>
         <note>Do not translate [dim]. Also leave [/] as-is. {0} is a pre-formatted link</note>
       </trans-unit>
       <trans-unit id="NewCliVersionAvailable">
         <source>[yellow]A new version of Aspire is available: {0}[/]</source>
-        <target state="new">[yellow]A new version of Aspire is available: {0}[/]</target>
+        <target state="translated">[yellow]Aspire の新しいバージョンが利用可能です: {0}[/]</target>
         <note>Do not translate [yellow] and also leave [/] as-is. {0} is the version number</note>
       </trans-unit>
       <trans-unit id="NoItemsAvailableForSelection">
@@ -119,32 +119,32 @@
       </trans-unit>
       <trans-unit id="NoSupportedAppHostsFound">
         <source>No supported app hosts were found.</source>
-        <target state="new">No supported app hosts were found.</target>
+        <target state="translated">サポートされているアプリ ホストが見つかりませんでした。</target>
         <note />
       </trans-unit>
       <trans-unit id="NonInteractiveAvailableValues">
         <source>Available values: {0}</source>
-        <target state="new">Available values: {0}</target>
+        <target state="translated">使用可能な値: {0}</target>
         <note>{0} is a comma-separated list of valid values</note>
       </trans-unit>
       <trans-unit id="NonInteractiveInvalidValue">
         <source>The value '{0}' is not valid for {1}.</source>
-        <target state="new">The value '{0}' is not valid for {1}.</target>
+        <target state="translated">値 '{0}' は {1} に対して無効です。</target>
         <note>{0} is the provided value. {1} is the option/argument display name.</note>
       </trans-unit>
       <trans-unit id="NonInteractiveOptionRequired">
         <source>The {0} option must be specified when running in non-interactive mode.</source>
-        <target state="new">The {0} option must be specified when running in non-interactive mode.</target>
+        <target state="translated">非対話型モードで実行する場合は、{0} オプションを指定する必要があります。</target>
         <note>{0} is the option/argument display name like '--publisher' or '&lt;integration&gt;'</note>
       </trans-unit>
       <trans-unit id="OpenAppHostLog">
         <source>Open AppHost Log</source>
-        <target state="new">Open AppHost Log</target>
+        <target state="translated">AppHost ログを開く</target>
         <note />
       </trans-unit>
       <trans-unit id="OpenCliLog">
         <source>Open CLI Log</source>
-        <target state="new">Open CLI Log</target>
+        <target state="translated">CLI ログを開く</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationCancelled">
@@ -154,12 +154,12 @@
       </trans-unit>
       <trans-unit id="ProjectCouldNotBeBuilt">
         <source>The project could not be built.</source>
-        <target state="new">The project could not be built.</target>
+        <target state="translated">プロジェクトを構築できませんでした。</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectCouldNotBeCreated">
         <source>The app could not be created.</source>
-        <target state="new">The app could not be created.</target>
+        <target state="translated">アプリを作成できませんでした。</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectOptionDoesntExist">
@@ -169,27 +169,27 @@
       </trans-unit>
       <trans-unit id="ProjectOptionNotSpecifiedMultipleAppHostsFound">
         <source>The --apphost option was not specified and multiple AppHost project files were detected.</source>
-        <target state="needs-review-translation">--apphost オプションが指定されておらず、アプリ ホスティング プロセスのプロジェクト ファイルが複数検出されました。</target>
+        <target state="translated">--apphost オプションが指定されておらず、AppHost プロセスのプロジェクト ファイルが複数検出されました。</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectOptionNotSpecifiedNoAppHostsFound">
         <source>The --apphost option was not specified and no AppHost project files were detected.</source>
-        <target state="new">The --apphost option was not specified and no AppHost project files were detected.</target>
+        <target state="translated">--apphost オプションが指定されておらず、AppHost プロジェクト ファイルが検出されませんでした。</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectOptionSpecifiedDirectoryContainsMultipleAppHosts">
         <source>The --apphost option specified a directory that contains multiple AppHost project files.</source>
-        <target state="new">The --apphost option specified a directory that contains multiple AppHost project files.</target>
+        <target state="translated">--apphost オプションは、複数の AppHost プロジェクト ファイルを含むディレクトリを指定しました。</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectOptionSpecifiedDirectoryContainsNoAppHosts">
         <source>The --apphost option specified a directory that does not contain any AppHost project files.</source>
-        <target state="new">The --apphost option specified a directory that does not contain any AppHost project files.</target>
+        <target state="translated">--apphost オプションは、AppHost プロジェクト ファイルを含まないディレクトリを指定しました。</target>
         <note />
       </trans-unit>
       <trans-unit id="RequiredCapability">
         <source>Required capability</source>
-        <target state="needs-review-translation">必要な機能</target>
+        <target state="translated">必要な機能</target>
         <note />
       </trans-unit>
       <trans-unit id="SearchingProjects">
@@ -199,7 +199,7 @@
       </trans-unit>
       <trans-unit id="SeeAppHostLogsAt">
         <source>See AppHost logs at {0}</source>
-        <target state="new">See AppHost logs at {0}</target>
+        <target state="translated">AppHost のログは {0} を参照してください</target>
         <note>{0} is the log file path of the CLI process managing the AppHost</note>
       </trans-unit>
       <trans-unit id="SeeLogsAt">
@@ -209,12 +209,12 @@
       </trans-unit>
       <trans-unit id="SelectAppHostToUse">
         <source>Select an AppHost to use:</source>
-        <target state="needs-review-translation">使用する AppHost を選択してください: </target>
+        <target state="translated">使用する AppHost を選択してください:</target>
         <note />
       </trans-unit>
       <trans-unit id="SpecifiedProjectFileNotAppHostProject">
         <source>The specified project file is not an Aspire AppHost project.</source>
-        <target state="needs-review-translation">指定されたプロジェクト ファイルは、Aspire AppHost のプロジェクトではありません。</target>
+        <target state="translated">指定されたプロジェクト ファイルは、Aspire AppHost のプロジェクトではありません。</target>
         <note />
       </trans-unit>
       <trans-unit id="StoppingAspire">
@@ -234,7 +234,7 @@
       </trans-unit>
       <trans-unit id="UnbuildableAppHostsDetected">
         <source>No AppHosts were found (there may be AppHost project files with syntax errors/invalid SDK versions).</source>
-        <target state="needs-review-translation">アプリ ホストが見つかりませんでした (構文エラーがあるか SDK バージョンが無効であるアプリ ホスト プロジェクト ファイルが存在する可能性があります)。</target>
+        <target state="translated">AppHost が見つかりませんでした (構文エラーがあるか SDK バージョンが無効である AppHost プロジェクト ファイルが存在する可能性があります)。</target>
         <note />
       </trans-unit>
       <trans-unit id="UnexpectedErrorOccurred">
@@ -244,12 +244,12 @@
       </trans-unit>
       <trans-unit id="UpdatedSettingsFile">
         <source>Updated settings file at {0}.</source>
-        <target state="new">Updated settings file at {0}.</target>
+        <target state="translated">{0} で設定ファイルを更新しました。</target>
         <note>{0} is a path</note>
       </trans-unit>
       <trans-unit id="WaitingForDebuggerToAttachToAppHost">
         <source>Waiting for debugger to attach to AppHost process</source>
-        <target state="needs-review-translation">デバッガーがアプリ ホスティング プロセスにアタッチされるのを待機しています</target>
+        <target state="translated">デバッガーが AppHost プロセスにアタッチされるのを待機しています</target>
         <note />
       </trans-unit>
     </body>

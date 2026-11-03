@@ -1,0 +1,1492 @@
+.resources-layout {
+    /* --resource-pane-expanded-width is set inline once the user resizes the pane. */
+    --resource-pane-width: var(--resource-pane-expanded-width, 290px);
+    --resource-brand-soft: color-mix(in srgb, var(--colorBrandBackground) 14%, transparent);
+    display: flex;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    position: relative;
+    background: var(--aspire-page-background);
+}
+
+/* A collapsed pane is hidden entirely; the toggle at the start of the tabs row brings it back. */
+.resources-layout.pane-collapsed .resource-pane {
+    display: none;
+}
+
+/* Resource pane */
+
+.resource-pane {
+    container: resource-pane / inline-size;
+    display: flex;
+    flex-direction: column;
+    flex: 0 0 var(--resource-pane-width);
+    width: var(--resource-pane-width);
+    min-width: 0;
+    position: relative;
+    border-right: 1px solid var(--colorNeutralStroke3);
+    background: var(--aspire-page-background);
+}
+
+/* The resizer straddles the pane's right border so it's easy to grab. */
+.resource-pane-resizer {
+    position: absolute;
+    top: 0;
+    right: -4px;
+    bottom: 0;
+    z-index: 5;
+    width: 8px;
+    cursor: col-resize;
+    touch-action: none;
+}
+
+.resource-pane-resizer::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 3px;
+    width: 2px;
+    background: transparent;
+    transition: background-color .15s;
+}
+
+.resource-pane-resizer:hover::after,
+.resource-pane-resizer.resizing::after,
+.resource-pane-resizer:focus-visible::after {
+    background: var(--colorBrandStroke1);
+}
+
+.resource-pane-resizer:focus-visible {
+    outline: none;
+}
+
+.resource-pane-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 12px 12px 8px;
+}
+
+.resource-pane-head ::deep .aspire-menu-container:has(.resource-grouping-menu-item) fluent-menu-list {
+    min-width: 220px;
+    padding: 4px;
+    border: 1px solid var(--colorNeutralStroke1);
+}
+
+.resource-pane-head ::deep fluent-menu-item.resource-grouping-menu-item {
+    width: calc(100% - 8px);
+    height: 34px;
+    min-height: 34px;
+}
+
+.resource-pane-head ::deep fluent-menu-item.resource-grouping-menu-item[checked] {
+    background: var(--colorNeutralBackground3);
+    color: var(--colorNeutralForeground1);
+}
+
+.resource-pane-head ::deep fluent-menu-item.resource-grouping-menu-item > .aspire-menu-item-indicator {
+    color: var(--colorBrandForeground1);
+}
+
+::deep .resource-pane-search {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+::deep .resource-pane-search > fluent-text-input,
+::deep fluent-text-input.resource-pane-search {
+    width: 100%;
+}
+
+.state-dot {
+    display: inline-block;
+    flex: 0 0 8px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--colorNeutralForeground3);
+}
+
+.state-dot.state-success {
+    background: var(--success);
+}
+
+.state-dot.state-error {
+    background: var(--error);
+}
+
+.state-dot.state-warning {
+    background: var(--warning);
+}
+
+.state-dot.state-pending {
+    background: transparent;
+    border: 1.5px solid var(--warning);
+}
+
+.state-dot.state-neutral {
+    background: var(--colorNeutralStroke1);
+}
+
+.resource-pane-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding-inline: 6px;
+    overflow: auto;
+}
+
+.resource-pane-section-label {
+    padding: 12px 6px 5px;
+    color: var(--colorNeutralForeground3);
+    font-size: 11px;
+    font-weight: var(--fontWeightSemibold);
+    line-height: 16px;
+    text-transform: uppercase;
+}
+
+.resource-pane-section-header {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    margin: 4px 0 0;
+    padding: 8px 6px 5px;
+    border: 0;
+    background: transparent;
+    color: var(--colorNeutralForeground3);
+    font: inherit;
+    font-size: 11px;
+    font-weight: var(--fontWeightSemibold);
+    line-height: 16px;
+    text-align: left;
+    text-transform: uppercase;
+    cursor: pointer;
+}
+
+.resource-pane-section-header:hover {
+    color: var(--colorNeutralForeground2);
+}
+
+.resource-pane-section-count {
+    min-width: 20px;
+    margin-left: 6px;
+    padding-inline: 5px;
+    border-radius: 10px;
+    background: var(--colorNeutralBackground3);
+    color: var(--colorNeutralForeground2);
+    line-height: 18px;
+    text-align: center;
+}
+
+.resource-pane-section-chevron {
+    display: inline-flex;
+    margin-left: auto;
+    transition: transform .15s ease;
+}
+
+.resource-pane-section-chevron.collapsed {
+    transform: rotate(-90deg);
+}
+
+.resource-pane-message {
+    display: flex;
+    justify-content: center;
+    padding: 16px 8px;
+    color: var(--colorNeutralForeground2);
+    font-size: 13px;
+}
+
+.resource-pane-group {
+    margin: 10px 6px 4px;
+    color: var(--colorNeutralForeground2);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+
+.resource-tag-group {
+    position: relative;
+}
+
+.resource-tag-group + .resource-tag-group {
+    margin-top: 4px;
+}
+
+.resource-tag-header {
+    display: flex;
+    align-items: center;
+    position: relative;
+    border-radius: 8px;
+}
+
+.resource-row-hidden:not(.selected):not(:hover) {
+    background-color: var(--resource-hidden-background);
+}
+
+.resource-tag-header:hover {
+    background: light-dark(var(--colorNeutralBackground1Hover), color-mix(in srgb, var(--aspire-control-background) 88%, var(--colorNeutralForeground1)));
+}
+
+.resource-tag-header.selected {
+    background: var(--aspire-control-background);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .08);
+}
+
+.resource-tag-header.selected::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 6px;
+    bottom: 6px;
+    width: 3px;
+    border-radius: 2px;
+    background: var(--colorBrandBackground);
+}
+
+/* Matches the resource row link so the tag icon lines up with the resource icons below it. */
+.resource-tag-link {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    min-height: 30px;
+    padding: 4px 8px;
+    border-radius: 8px;
+    color: var(--colorNeutralForeground1);
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.resource-tag-link:focus-visible {
+    outline: 2px solid var(--colorStrokeFocus2);
+    outline-offset: -2px;
+}
+
+.resource-tag-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.untagged .resource-tag-name {
+    color: var(--colorNeutralForeground2);
+    font-weight: 400;
+}
+
+.resource-tag-count {
+    flex: 0 0 auto;
+    min-width: 20px;
+    padding: 0 6px;
+    border-radius: 10px;
+    background: var(--colorNeutralBackground3);
+    color: var(--colorNeutralForeground2);
+    font-size: 11px;
+    line-height: 18px;
+    text-align: center;
+}
+
+/* Rows of a group are indented under its header so the grouping reads at a glance. */
+.resource-tag-group .resource-row-link {
+    padding-inline-start: 14px;
+}
+
+.resource-tags-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    margin: 8px 4px 12px;
+    padding: 16px 12px;
+    border: 1px dashed var(--colorNeutralStroke2);
+    border-radius: 8px;
+    text-align: center;
+}
+
+.resource-tags-empty-title {
+    margin-top: 4px;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.resource-tags-empty-description {
+    color: var(--colorNeutralForeground2);
+    font-size: 12px;
+}
+
+.resource-row {
+    display: flex;
+    align-items: center;
+    position: relative;
+    border-radius: 8px;
+}
+
+.resource-row:hover {
+    background: light-dark(var(--colorNeutralBackground1Hover), color-mix(in srgb, var(--aspire-control-background) 88%, var(--colorNeutralForeground1)));
+}
+
+.resource-row.selected {
+    background: var(--aspire-control-background);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .08);
+}
+
+.resource-row.selected::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 8px;
+    bottom: 8px;
+    width: 3px;
+    border-radius: 2px;
+    background: var(--colorBrandBackground);
+}
+
+.resource-dragging {
+    opacity: .5;
+}
+
+.resource-drop-before::after,
+.resource-drop-after::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--colorBrandBackground);
+    pointer-events: none;
+}
+
+.resource-drop-before::after {
+    top: -1px;
+}
+
+.resource-drop-after::after {
+    bottom: -1px;
+}
+
+/* The expand toggle sits on the right so resource icons stay aligned with the filter box above the list. */
+.resource-row-toggle {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    margin-right: 6px;
+    padding: 0;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--colorNeutralForeground2);
+    cursor: pointer;
+}
+
+.resource-row-toggle:hover {
+    background: var(--colorNeutralBackground3);
+}
+
+.resource-row-toggle.collapsed ::deep svg {
+    transform: rotate(-90deg);
+}
+
+.resource-row-link {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    /* Nested resources are indented by their depth in the tree. */
+    padding: 6px 8px 6px calc(6px + var(--resource-row-depth, 0) * 16px);
+    border-radius: 8px;
+    color: var(--colorNeutralForeground1);
+    text-decoration: none;
+}
+
+.resource-row-link:focus-visible {
+    outline: 2px solid var(--colorStrokeFocus2);
+    outline-offset: -2px;
+}
+
+.resource-row-icon {
+    display: inline-flex;
+    flex: 0 0 30px;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    background: var(--colorNeutralBackground3);
+}
+
+.resource-row.selected .resource-row-icon {
+    background: var(--resource-brand-soft);
+}
+
+/* The "All resources" row clears the selection, so it's separated from the resources it stands for. */
+.resource-row-all {
+    margin-bottom: 9px;
+}
+
+/* The toggles sit between the search row and the list, outside the scrolling list. A scrollbar in the list never
+   changes their width (which would change which labels fit), and the divider marks where the scrolling begins. */
+.resource-pane-kinds {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    /* The same inline padding as the search row, so the toggles line up with the search box on the left and the
+       grouping button on the right. */
+    padding: 2px 12px 10px;
+    border-bottom: 1px solid var(--colorNeutralStroke2);
+}
+/* Toggles for the kinds of items the pane lists. They look like the layout switcher in the page header: a quiet
+   tray with icon buttons, where an on button is the raised one with a brand-colored icon. Every button is the same
+   size in both states, so toggling never shifts the list. The name and count are in the tooltip. */
+/* The trays and buttons have the same sizes as the icon toggles in the settings and the layout switcher. */
+.resource-kind-toggles {
+    display: inline-flex;
+    gap: 2px;
+    padding: 2px;
+    border: 1px solid var(--colorNeutralStroke1);
+    border-radius: 8px;
+    background: var(--colorNeutralBackground2);
+}
+
+.resource-kind-toggle {
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--colorNeutralForeground3);
+    cursor: pointer;
+}
+
+.resource-kind-toggle:hover {
+    background: light-dark(var(--colorNeutralBackground1Hover), color-mix(in srgb, var(--aspire-control-background) 88%, var(--colorNeutralForeground1)));
+    color: var(--colorNeutralForeground1);
+}
+
+.resource-kind-toggle.on {
+    background: var(--colorNeutralBackground1);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .15);
+    color: var(--colorBrandForeground1);
+}
+
+.resource-kind-toggle.on:hover {
+    background: light-dark(var(--colorNeutralBackground1Hover), color-mix(in srgb, var(--aspire-control-background) 88%, var(--colorNeutralForeground1)));
+    color: var(--colorBrandForeground1);
+}
+
+.resource-kind-toggle:focus-visible,
+.resource-select-all-toggle:focus-visible {
+    outline: 2px solid var(--colorStrokeFocus2);
+    outline-offset: 1px;
+}
+
+/* Select all is an action next to the trays rather than one of them, so it looks like a plain toolbar icon button:
+   no border or tray, a hover background, and a brand-colored icon while everything is selected. */
+.resource-select-all {
+    display: inline-flex;
+}
+
+.resource-select-all-toggle {
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--borderRadiusMedium);
+    background: transparent;
+    color: var(--colorNeutralForeground2);
+    cursor: pointer;
+}
+
+.resource-select-all-toggle:hover {
+    background: var(--colorSubtleBackgroundHover);
+    color: var(--colorNeutralForeground1);
+}
+
+.resource-select-all-toggle:active {
+    background: var(--colorSubtleBackgroundPressed);
+}
+
+.resource-select-all-toggle.on,
+.resource-select-all-toggle.on:hover {
+    color: var(--colorBrandForeground1);
+}
+.resource-row-all::after {
+    content: "";
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    bottom: -5px;
+    height: 1px;
+    background: var(--colorNeutralStroke2);
+}
+
+/* Give "All resources" a brand-tinted icon at rest (not just when selected) so it reads as the
+   primary entry point in the pane rather than just another resource row. */
+.resource-row-all .resource-row-icon {
+    background: var(--resource-brand-soft);
+    color: var(--colorBrandForeground1);
+}
+
+.resource-row-all .resource-row-name {
+    font-weight: 700;
+}
+
+.resource-row-text {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.resource-row-name {
+    overflow: hidden;
+    font-size: 13.5px;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.resource-row-sub {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    overflow: hidden;
+    color: var(--colorNeutralForeground2);
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.resource-row-detail {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    overflow: hidden;
+    color: var(--colorNeutralForeground3);
+    font-size: 11.5px;
+    white-space: nowrap;
+}
+
+.resource-row-detail > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.resource-row-endpoint {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.resource-row-type {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.resource-pane-counts {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.resource-pane-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    flex: 0 0 auto;
+    color: var(--colorNeutralForeground2);
+    font-variant-numeric: tabular-nums;
+}
+
+.resource-pane-count ::deep svg {
+    color: var(--colorNeutralForeground3);
+}
+
+.error-badge {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 9px;
+    background: var(--error);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.resource-pane-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 6px 4px 12px;
+    border-top: 1px solid var(--colorNeutralStroke3);
+    color: var(--colorNeutralForeground2);
+    font-size: 12px;
+}
+
+.resource-header-row ::deep .resource-pane-toggle-button {
+    --aspire-control-height: 32px;
+    flex: 0 0 auto;
+    width: 32px;
+    height: 32px;
+}
+
+.resource-pane-foot-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.resource-workspace-foot {
+    display: none;
+}
+
+/* Resource content */
+
+.resource-content {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+@media (min-width: 769px) {
+    .resources-layout {
+        display: grid;
+        grid-template-columns: var(--resource-pane-width) minmax(0, 1fr);
+        grid-template-rows: minmax(0, 1fr) 34px;
+    }
+
+    .resources-layout.pane-collapsed {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .resource-pane {
+        grid-column: 1;
+        grid-row: 1;
+        width: auto;
+    }
+
+    .resource-content {
+        grid-column: 2;
+        grid-row: 1;
+    }
+
+    .resources-layout.pane-collapsed .resource-content {
+        grid-column: 1;
+    }
+
+    .resource-workspace-foot {
+        display: grid;
+        grid-column: 1 / -1;
+        grid-row: 2;
+        grid-template-columns: var(--resource-pane-width) minmax(0, 1fr);
+        grid-template-rows: minmax(0, 1fr);
+        min-width: 0;
+        border-top: 1px solid var(--colorNeutralStroke3);
+        background: var(--aspire-page-background);
+    }
+
+    .resources-layout.pane-collapsed .resource-workspace-foot {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .resource-workspace-foot .resource-pane-foot {
+        min-width: 0;
+        padding: 2px 6px 2px 12px;
+        border-top: 0;
+        border-right: 1px solid var(--colorNeutralStroke3);
+    }
+
+    .resource-content-foot {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+        padding: 2px 8px;
+    }
+
+    .resource-footer-status {
+        display: flex;
+        flex: 1 1 auto;
+        align-items: center;
+        gap: 4px 10px;
+        min-width: 0;
+        overflow: hidden;
+        color: var(--colorNeutralForeground2);
+        font-size: 12px;
+        white-space: nowrap;
+    }
+
+    .resource-footer-status .state-pill {
+        flex: 0 0 auto;
+        padding-block: 1px;
+    }
+
+    .resource-footer-status .resource-header-urls {
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .resource-footer-page-status {
+        flex: 0 0 auto;
+        min-width: 0;
+        margin-left: auto;
+        color: var(--colorNeutralForeground2);
+        font-size: 12px;
+        white-space: nowrap;
+    }
+}
+
+.resource-header {
+    padding: 12px var(--layout-right-padding) 0 var(--layout-left-padding);
+    background: var(--aspire-page-background);
+}
+
+.resource-header-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    /* Lets header actions (such as the missing parameters notice) condense with @container as the row narrows. */
+    container-type: inline-size;
+}
+
+.resource-header-icon {
+    position: relative;
+    display: inline-flex;
+    flex: 0 0 32px;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: var(--resource-brand-soft);
+}
+
+.resource-header-icon.neutral {
+    border: 1px dashed var(--colorNeutralStroke1);
+    background: transparent;
+}
+
+.resource-header-text {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    min-width: 0;
+    min-height: 32px;
+}
+
+.resource-header-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.resource-header-actions {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+}
+
+.resource-header-controls {
+    display: flex;
+    flex: 0 1 auto;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    margin-left: auto;
+}
+
+.resource-title {
+    margin: 0;
+    overflow: hidden;
+    font-family: var(--aspire-font-display);
+    font-size: 18px;
+    font-weight: 500;
+    line-height: 24px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.resource-header-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 10px;
+    min-width: 0;
+    min-height: 20px;
+    margin-top: 2px;
+    color: var(--colorNeutralForeground2);
+    font-size: 12.5px;
+}
+
+.resource-header-urls {
+    min-width: 0;
+    max-width: 100%;
+}
+
+.state-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 9px;
+    border-radius: 10px;
+    background: var(--colorNeutralBackground3);
+    color: var(--colorNeutralForeground2);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+/* Status colors don't reach text contrast on the tinted pill, so only the icon carries the state color. */
+.state-pill.state-success {
+    background: color-mix(in srgb, var(--success) 14%, transparent);
+    color: var(--colorNeutralForeground1);
+}
+
+.state-pill.state-success ::deep svg {
+    color: var(--success);
+}
+
+.state-pill.state-error {
+    background: color-mix(in srgb, var(--error) 14%, transparent);
+    color: var(--colorNeutralForeground1);
+}
+
+.state-pill.state-error ::deep svg {
+    color: var(--error);
+}
+
+.state-pill.state-warning,
+.state-pill.state-pending {
+    background: color-mix(in srgb, var(--warning) 14%, transparent);
+    color: var(--colorNeutralForeground1);
+}
+
+.state-pill.state-warning ::deep svg,
+.state-pill.state-pending ::deep svg {
+    color: var(--warning);
+}
+
+.resource-header-actions {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 6px;
+}
+
+.resource-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    margin-top: 10px;
+    min-width: 0;
+}
+
+.resource-tabs > .resource-tab-toolbar {
+    display: flex;
+    flex: 0 1 auto;
+    align-items: center;
+    min-width: 0;
+    max-width: 100%;
+    margin-left: auto;
+}
+
+.resource-header-controls > .resource-tab-toolbar {
+    margin-left: 0;
+}
+
+.resource-tab-toolbar:empty {
+    display: none;
+}
+
+/* The toolbar's controls keep their size, so when they don't fit they wrap onto another line instead of painting over
+   the tab picker. */
+.resource-tab-toolbar ::deep .main-toolbar.filter-toolbar,
+.resource-tab-toolbar ::deep .main-toolbar.filter-toolbar > .toolbar-end {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    row-gap: 8px;
+}
+
+.resource-tab-toolbar ::deep .main-toolbar.filter-toolbar {
+    padding: 0;
+}
+
+.resource-tab-toolbar ::deep .main-toolbar.filter-toolbar .toolbar-search {
+    flex-basis: 9rem;
+    width: 9rem;
+    min-width: 7rem;
+}
+
+/* The span type options are short ("Messaging" is the longest), so this dropdown is narrower than Fluent's 160px default. */
+.resource-tab-toolbar ::deep .main-toolbar.filter-toolbar .toolbar-select-compact,
+.resource-tab-toolbar ::deep .main-toolbar.filter-toolbar .toolbar-select-compact > fluent-dropdown {
+    --aspire-dropdown-min-width: 0px;
+    width: 8rem;
+    min-width: 0;
+}
+
+/* FluentTabs keeps its horizontal tab list at max-content width. Constrain the host so
+   focus can scroll the selected tab into view when space is limited. */
+.resource-tabs-nav ::deep .resources-tab-header {
+    width: max-content;
+    max-width: 100%;
+    min-width: 0;
+    flex: 0 1 auto;
+    overflow: hidden;
+}
+
+/* Tabs that don't fit are hidden from the right by registerTabOverflow and listed in the "..." menu instead. */
+.resource-tabs-nav ::deep fluent-tab[data-tab-overflow] {
+    display: none;
+}
+
+.resource-tabs-overflow {
+    display: none;
+    flex: 0 0 auto;
+    align-items: center;
+}
+
+.resource-tabs-overflow.has-overflow {
+    display: flex;
+}
+
+.resource-tabs-nav .resource-tabs-overflow ::deep .aspire-menu-button {
+    display: inline-flex;
+}
+
+.resource-tabs-nav .resource-tabs-overflow ::deep .resource-tabs-overflow-button {
+    color: var(--colorNeutralForeground2);
+}
+
+/* The current page's tab is in the menu, so the button takes the active tab's accent. */
+.resource-tabs-overflow.has-active ::deep .resource-tabs-overflow-button {
+    color: var(--colorBrandForeground1);
+}
+
+/* Wraps the tab row in its own layout container so a container query can react to the row's
+   actual available width - which depends on sibling pane/toolbar state, not just viewport width -
+   rather than letting FluentTabs grow a horizontal scrollbar once labels no longer fit. */
+.resource-tabs-nav {
+    container-type: inline-size;
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+/* The compact tab picker is a single bordered control, like the dropdowns in the toolbar, with the chevron at the end. */
+.resource-tabs-nav ::deep .aspire-menu-button {
+    display: none;
+    align-items: center;
+}
+
+.resource-tabs-nav ::deep .resource-tabs-compact-button {
+    justify-content: flex-start;
+    min-width: 160px;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.resource-tabs-nav ::deep .resource-tabs-compact-button::part(content) {
+    flex: 1 1 auto;
+}
+
+.resource-tabs-nav ::deep .resource-tabs-compact-button > svg[slot="end"] {
+    margin-inline-start: auto;
+}
+
+.resource-tabs-nav ::deep .resource-tabs-compact-button > svg[slot="start"] {
+    width: 18px !important;
+    min-width: 18px;
+    max-width: 18px;
+    height: 18px !important;
+    margin-right: var(--spacingHorizontalXS);
+    color: var(--colorBrandForeground1);
+}
+
+.resource-tabs-nav ::deep .aspire-menu-container fluent-menu-list {
+    width: max-content;
+    min-width: anchor-size(width);
+    gap: 4px;
+    padding: 3px;
+    border: 1px solid var(--colorNeutralStroke1);
+    border-radius: var(--aspire-control-radius);
+    background-color: var(--colorNeutralBackground1);
+}
+
+.resource-tabs-nav ::deep fluent-menu-item.resource-tab-menu-item {
+    grid-template-columns: minmax(0, 1fr) 32px;
+    width: auto;
+    height: 32px;
+    min-height: 32px;
+    margin: 0;
+    padding: 0 12px;
+    border: 1px solid transparent;
+    border-radius: var(--aspire-control-radius);
+    background-color: transparent;
+    color: var(--colorNeutralForeground2);
+}
+
+.resource-tabs-nav ::deep fluent-menu-item.resource-tab-menu-item::part(content) {
+    grid-column: 1;
+}
+
+.resource-tabs-nav ::deep fluent-menu-item.resource-tab-menu-item > .aspire-menu-item-indicator {
+    grid-column: 2;
+}
+
+.resource-tabs-nav ::deep fluent-menu-item.resource-tab-menu-item[checked] {
+    border-color: var(--colorNeutralStroke1);
+    background-color: var(--colorNeutralBackground3);
+    color: var(--colorNeutralForeground1);
+}
+
+.resource-tabs-nav ::deep fluent-menu-item.resource-tab-menu-item:not(:state(disabled)):hover,
+.resource-tabs-nav ::deep fluent-menu-item.resource-tab-menu-item:not(:state(disabled)):state(active),
+.resource-tabs-nav ::deep fluent-menu-item.resource-tab-menu-item:not(:state(disabled)):focus-visible {
+    background-color: var(--colorNeutralBackground3);
+    color: var(--colorNeutralForeground1);
+}
+
+.resource-tabs-nav ::deep fluent-menu-item.resource-tab-menu-item .aspire-menu-item-label {
+    gap: var(--spacingHorizontalXS);
+}
+
+.resource-tabs-nav ::deep fluent-menu-item.resource-tab-menu-item .aspire-menu-item-label svg {
+    width: 18px !important;
+    min-width: 18px;
+    max-width: 18px;
+    height: 18px !important;
+    color: var(--colorBrandForeground1);
+}
+
+@container (max-width: 200px) {
+    .resource-tabs-nav ::deep .resources-tab-header {
+        display: none;
+    }
+
+    .resource-tabs-nav ::deep .aspire-menu-button {
+        display: inline-flex;
+    }
+
+    .resource-tabs-nav .resource-tabs-overflow.has-overflow {
+        display: none;
+    }
+}
+
+.resource-tabs-nav ::deep .resource-tab-error-count {
+    background: color-mix(in srgb, var(--error) 14%, transparent);
+    color: var(--error);
+}
+
+.resource-tab-body {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* Mobile: the resource pane is a full-screen sheet over the content. It's opaque, so it needs no scrim. The breakpoint
+   matches ViewportInformation.MobileCutoffPixelWidth, which decides what the layout renders. */
+
+@media (max-width: 768px) {
+    .resource-pane {
+        position: absolute;
+        inset: 0;
+        z-index: 21;
+        width: 100%;
+        border-right: 0;
+    }
+
+    .resource-header {
+        padding: 8px 12px 0;
+    }
+
+    .resource-header-icon {
+        display: none;
+    }
+
+    /* The 48px minimum height matches the resource icon, which is hidden here. Keeping it would leave a lone
+       title in a tall box. */
+    .resource-header-text {
+        display: block;
+        min-height: 0;
+    }
+
+    .resource-header-title {
+        gap: 0;
+    }
+
+    .resource-header-row {
+        flex-wrap: wrap;
+    }
+
+    .resource-header-controls {
+        width: 100%;
+        margin-left: 0;
+    }
+
+    /* The title is the control that opens the resource list. It spans the content width, like the page content
+       below it, and has the outline and chevron of a select so it reads as something to change. The heading's
+       own overflow clipping is lifted so the focus ring isn't cut off. */
+    .resource-title {
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow: visible;
+    }
+
+    .resource-picker {
+        display: grid;
+        grid-template-columns: 20px minmax(0, 1fr) 16px;
+        align-items: center;
+        column-gap: 10px;
+        width: 100%;
+        min-height: 48px;
+        padding: 0 14px;
+        border: 1px solid var(--colorNeutralStroke1);
+        border-radius: var(--aspire-control-radius);
+        background: color-mix(in srgb, var(--colorBrandBackground) 5%, var(--aspire-control-background));
+        color: var(--colorNeutralForeground1);
+        font: inherit;
+        font-size: 16px;
+        font-weight: 600;
+        line-height: 22px;
+        text-align: start;
+        cursor: pointer;
+    }
+
+    .resource-picker-leading-icon,
+    .resource-picker-chevron {
+        display: block;
+        flex: 0 0 auto;
+    }
+
+    .resource-picker-chevron {
+        justify-self: center;
+        color: var(--colorNeutralForeground2);
+        transition: transform .15s ease;
+    }
+
+    .resource-picker[aria-expanded="true"] .resource-picker-chevron {
+        transform: rotate(180deg);
+    }
+
+    .resource-picker:hover {
+        background: var(--aspire-menu-item-hover-background);
+    }
+
+    .resource-picker:active {
+        background: var(--colorNeutralBackground3);
+    }
+
+    .resource-picker:focus-visible {
+        outline: 2px solid var(--colorStrokeFocus2);
+        outline-offset: 1px;
+    }
+
+    .resource-picker-text {
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .resource-header-meta {
+        margin-top: 8px;
+    }
+
+    /* The meta items wrap onto separate lines here, which would leave a separator dangling at a line's end.
+       The row's gap spaces the items instead. */
+    .resource-header-sep {
+        display: none;
+    }
+
+    .resource-tabs {
+        margin-top: 8px;
+    }
+
+    /* The view picker is deliberately shorter and quieter than the resource picker above it. Both controls use the
+       same horizontal inset and chevron width so their trailing indicators align. */
+    .resource-tabs-nav ::deep .aspire-menu-button {
+        flex: 1 1 auto;
+    }
+
+    .resource-tabs-nav ::deep .resource-tabs-compact-button {
+        flex: 1 1 auto;
+        width: 100%;
+        min-height: 40px;
+        padding: 0 14px;
+        border-color: var(--colorNeutralStroke2);
+        background: var(--aspire-page-background);
+        color: var(--colorNeutralForeground1);
+        font-size: 14px;
+        font-weight: 600;
+    }
+
+    .resource-tabs-nav ::deep .resource-tabs-compact-button::part(control) {
+        min-height: 40px;
+        padding: 0;
+        border: 0;
+        background: transparent;
+    }
+
+    .resource-tabs-nav ::deep .resource-tabs-compact-button > svg[slot="end"] {
+        width: 16px !important;
+        min-width: 16px;
+        max-width: 16px;
+        height: 16px !important;
+        margin-inline-start: auto;
+        color: var(--colorNeutralForeground2) !important;
+        transition: transform .15s ease;
+    }
+
+    .resource-tabs-nav ::deep .resource-tabs-compact-button[aria-expanded="true"] > svg[slot="end"] {
+        transform: rotate(180deg);
+    }
+
+    /* The tab picker's menu is a sheet as wide as the page content, directly under its trigger, so the options are
+       large targets that line up with everything else. The popover's backdrop dims the page behind it, and a tap
+       there closes the menu. */
+    .resource-tabs-nav ::deep .aspire-menu-container fluent-menu-list {
+        left: var(--layout-left-padding);
+        right: var(--layout-right-padding);
+        width: auto;
+        min-width: 0;
+        max-width: none;
+        margin-top: 4px;
+    }
+
+    .resource-tabs-nav ::deep .aspire-menu-container fluent-menu-list::backdrop {
+        background: rgba(0, 0, 0, .35);
+    }
+
+    .resource-tabs-nav ::deep fluent-menu-item.resource-tab-menu-item {
+        height: 44px;
+        min-height: 44px;
+        padding: 0 16px;
+        font-size: var(--fontSizeBase400);
+    }
+
+}
+
+/* Fluent UI has no 16px GroupList icon. Draw the 20px one at 16px so the grouping button matches the
+   filter and collapse buttons next to it. FluentIcon sets the width inline, hence !important. */
+.resource-pane-head ::deep #resourcePaneGroupingButton svg {
+    width: 16px !important;
+}
+
+/* Compact density: one line per resource. The state, type and persistence move to fixed-width columns on the
+   right, so they line up from row to row. */
+.density-compact .resource-row-link {
+    gap: 8px;
+    padding-top: 3px;
+    padding-bottom: 3px;
+}
+
+.density-compact .resource-row-icon {
+    flex-basis: 22px;
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+}
+
+.density-spacious .resource-row-link {
+    gap: 10px;
+    padding-top: 9px;
+    padding-bottom: 9px;
+}
+
+.density-spacious .resource-row-icon {
+    flex-basis: 36px;
+    width: 36px;
+    height: 36px;
+}
+
+.density-compact .resource-row-text {
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+}
+
+.density-compact .resource-row-name {
+    font-size: 13px;
+}
+
+.density-compact .resource-row-text ::deep .resource-row-hidden-icon {
+    flex-shrink: 0;
+}
+
+.resource-row-meta {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 8px;
+    color: var(--colorNeutralForeground2);
+    font-size: 12px;
+}
+
+.resource-row-meta-state {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.resource-row-title {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+}
+
+.resource-row-toggle-spacer {
+    flex: 0 0 20px;
+    margin-right: 6px;
+}
+
+.resource-row-meta-state {
+    width: 10px;
+}
+
+.resource-row-meta .resource-row-type {
+    width: 64px;
+    text-align: right;
+    white-space: nowrap;
+}
+
+/* Keep type columns aligned, reserving room for resource names when the pane is narrow. */
+.density-compact:has(.resource-row-type-persistent) .resource-row-meta .resource-row-type {
+    width: clamp(48px, calc(100cqw - 180px), 128px);
+}
+
+.density-compact .resource-row-toggle,
+.density-compact .resource-row-toggle-spacer {
+    margin-right: 2px;
+}
+
+/* A resource's actions: labeled buttons in the overview, icons on the rows of the resource list. */
+.resource-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 6px;
+}
+
+.resource-row-actions {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 2px;
+    margin-right: 4px;
+}
+
+.resource-row-actions ::deep .resource-row-action {
+    width: 24px;
+    min-width: 24px;
+    height: 24px;
+    /* Fluent UI buttons default to a 32px minimum, which would make the row taller than the others. */
+    min-height: 24px;
+}
+
+.resource-row-actions ::deep .resource-row-action::part(control) {
+    width: 24px;
+    min-width: 24px;
+    height: 24px;
+    padding: 0;
+}
+
+.resource-row-actions > a.resource-row-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    color: var(--colorBrandForeground1);
+    text-decoration: none;
+}
+
+.resource-row-actions > a.resource-row-action:hover {
+    background: var(--colorSubtleBackgroundHover);
+}
+
+/* Override the direct-anchor display rule as well as Fluent button styles when disclosing actions. */
+@container resource-pane (max-width: 239px) {
+    .resource-row-actions ::deep .resource-row-action.resource-row-action-priority-0 {
+        display: none;
+    }
+}
+
+@container resource-pane (max-width: 299px) {
+    .resource-row-actions ::deep .resource-row-action.resource-row-action-priority-1 {
+        display: none;
+    }
+}
+
+@container resource-pane (max-width: 359px) {
+    .resource-row-actions ::deep .resource-row-action.resource-row-action-priority-2 {
+        display: none;
+    }
+}
+
+@container resource-pane (max-width: 419px) {
+    .resource-row-actions ::deep .resource-row-action.resource-row-action-priority-3 {
+        display: none;
+    }
+}
+
+/* Compact rows show the actions only while hovered or focused, in place of their state and type columns. They stay
+   while the row's menu is open. Comfortable rows always show them. */
+.density-compact .resource-row-actions {
+    display: none;
+}
+
+.density-compact .resource-row:hover .resource-row-actions,
+.density-compact .resource-row:focus-within .resource-row-actions,
+.density-compact .resource-row:has(.resource-row-actions [aria-expanded="true"]) .resource-row-actions {
+    display: flex;
+}
+
+.density-compact .resource-row:hover .resource-row-meta,
+.density-compact .resource-row:focus-within .resource-row-meta,
+.density-compact .resource-row:has(.resource-row-actions [aria-expanded="true"]) .resource-row-meta {
+    display: none;
+}
+
+@media (hover: none) {
+    .density-compact .resource-row-actions {
+        display: flex;
+    }
+}

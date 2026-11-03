@@ -188,6 +188,54 @@ fluent-dialog::part(dialog) {
     box-shadow: 0 0 2px rgba(0, 0, 0, 0.2), 0 64px 128px rgba(0, 0, 0, 0.24);
 }
 
+fluent-drawer::part(dialog) {
+    transition-duration: 360ms !important;
+    transition-timing-function: cubic-bezier(.2, .8, .2, 1) !important;
+}
+
+@media (min-width: 769px) {
+    fluent-drawer::part(dialog) {
+        box-sizing: border-box;
+        height: calc(100dvh - 24px) !important;
+        max-height: calc(100dvh - 24px) !important;
+        margin: 12px 12px 12px auto;
+        inset-inline-start: auto !important;
+        inset-inline-end: 0 !important;
+        border: 1px solid var(--dialog-border-color);
+        border-radius: 12px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, .28);
+        overflow: hidden;
+        opacity: 1;
+        transform: translateX(0);
+        transition:
+            transform 360ms cubic-bezier(.2, .8, .2, 1),
+            opacity 240ms ease-out;
+    }
+
+    @starting-style {
+        fluent-drawer::part(dialog):open {
+            opacity: 0;
+            transform: translateX(calc(100% + 24px));
+        }
+    }
+
+    fluent-drawer::part(dialog):not(:open) {
+        opacity: 0;
+        transform: translateX(calc(100% + 24px));
+    }
+
+    fluent-drawer-body {
+        height: 100% !important;
+        max-height: 100% !important;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    fluent-drawer::part(dialog) {
+        transition: none;
+    }
+}
+
 fluent-dialog-body {
     height: auto !important;
     max-height: calc(100dvh - 48px) !important;
@@ -655,17 +703,26 @@ fluent-dialog-body .fluent-message-box {
 }
 
 .main-toolbar.filter-toolbar > .pause-incoming-data-button {
-    width: 44px;
+    width: 32px;
+    min-width: 32px;
+    padding-inline: 0;
 }
 
 .main-toolbar.filter-toolbar .clear-button {
-    width: 67px;
+    width: auto;
+    padding-inline: 8px;
 }
 
 /* v4 used Stealth colors for inactive toolbar buttons while retaining accent icons.
     Column-resize actions reuse the same recipe. */
-:is(.toolbar-button:not([appearance]), [resize-options] > fluent-button:not([appearance])) {
-    --colorNeutralBackground1: var(--colorNeutralBackground2);
+:is(
+    .toolbar-button:not([appearance]),
+    .resource-pane-button:not([appearance]),
+    .resource-pane-toggle-button:not([appearance]),
+    .pause-incoming-data-button:not([appearance]),
+    .clear-button:not([appearance]),
+    [resize-options] > fluent-button:not([appearance])
+) {
     --colorNeutralBackground1Hover: var(--colorNeutralBackground3);
     --colorNeutralBackground1Pressed: var(--aspire-link-button-pressed-background);
     --colorNeutralForeground1: var(--colorBrandForeground1);
@@ -909,4 +966,17 @@ fluent-dialog-body .fluent-message-box {
 
 .trace-tag-icon {
     margin-right: 3px;
+}
+
+/* Hides content visually while keeping it available to assistive technology. */
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
 }

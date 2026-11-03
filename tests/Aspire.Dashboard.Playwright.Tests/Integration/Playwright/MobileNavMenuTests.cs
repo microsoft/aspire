@@ -32,7 +32,7 @@ public sealed class MobileNavMenuTests : PlaywrightTestsBase<DashboardServerFixt
         var page = await context.NewPageAsync();
 
         await page.GotoAsync("/").DefaultTimeout();
-        await Assertions.Expect(page.GetByText(MockDashboardClient.TestResource1.DisplayName)).ToBeVisibleAsync();
+        await Assertions.Expect(page.GetByRole(AriaRole.Link, new() { Name = MockDashboardClient.TestResource1.DisplayName, Exact = true }).First).ToBeVisibleAsync();
 
         await page.Locator(".navigation-button").ClickAsync();
         var menu = page.Locator("fluent-menu-list.mobile-nav-menu");
@@ -69,7 +69,7 @@ public sealed class MobileNavMenuTests : PlaywrightTestsBase<DashboardServerFixt
         var page = await context.NewPageAsync();
 
         await page.GotoAsync("/").DefaultTimeout();
-        await Assertions.Expect(page.GetByText(MockDashboardClient.TestResource1.DisplayName)).ToBeVisibleAsync();
+        await Assertions.Expect(page.GetByRole(AriaRole.Link, new() { Name = MockDashboardClient.TestResource1.DisplayName, Exact = true }).First).ToBeVisibleAsync();
 
         await page.Locator(".navigation-button").ClickAsync();
         var menu = page.Locator("fluent-menu-list.mobile-nav-menu");
@@ -111,7 +111,7 @@ public sealed class MobileNavMenuTests : PlaywrightTestsBase<DashboardServerFixt
                 const focusedRect = focusedMenuItem?.getBoundingClientRect() ?? new DOMRect();
                 const style = getComputedStyle(menu);
                 return {
-                    activeTitle: focusedMenuItem?.getAttribute('title'),
+                    activeTitle: focusedMenuItem?.getAttribute('data-tooltip'),
                     menuTop: menuRect.top,
                     menuBottom: menuRect.bottom,
                     focusedTop: focusedRect.top,
@@ -171,7 +171,7 @@ public sealed class MobileNavMenuTests : PlaywrightTestsBase<DashboardServerFixt
             while (element && !visited.has(element)) {
                 visited.add(element);
                 if (element.matches?.('fluent-menu-item')) {
-                    return element.getAttribute('title');
+                    return element.getAttribute('data-tooltip');
                 }
 
                 if (element.shadowRoot?.activeElement) {

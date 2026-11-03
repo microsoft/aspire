@@ -151,6 +151,8 @@
     <PackageReference Include="Microsoft.Extensions.FileSystemGlobbing" />
     <PackageReference Include="Microsoft.Extensions.Hosting" />
     <PackageReference Include="Microsoft.Extensions.Http" />
+    <PackageReference Include="Microsoft.TemplateEngine.Edge" />
+    <PackageReference Include="Microsoft.TemplateEngine.Orchestrator.RunnableProjects" />
     <PackageReference Include="StreamJsonRpc" />
     <PackageReference Include="OpenTelemetry.Exporter.Console" />
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
@@ -196,6 +198,7 @@
     <Compile Include="$(SharedDir)WindowsTrayPayload.cs" Link="Layout\WindowsTrayPayload.cs" />
     <Compile Include="$(SharedDir)BundleVersionLease.cs" Link="Bundles\BundleVersionLease.cs" />
     <Compile Include="$(SharedDir)ChannelExtensions.cs" Link="Utils\ChannelExtensions.cs" />
+    <Compile Include="$(SharedDir)CertificateFactory.cs" Link="Certificates\CertificateGeneration\CertificateFactory.cs" />
     <Compile Include="$(SharedDir)CommandLineArgsParser.cs" Link="Utils\CommandLineArgsParser.cs" />
     <Compile Include="$(SharedDir)EnumerableExtensions.cs" Link="Utils\EnumerableExtensions.cs" />
     <Compile Include="$(SharedDir)FileLock.cs" Link="Utils\FileLock.cs" />
@@ -326,15 +329,8 @@
     <EmbeddedResource Include="$(SharedDir)Mcp\Resources\aspire-32.png" Link="Mcp\Resources\aspire-32.png" />
     <EmbeddedResource Include="$(SharedDir)Mcp\Resources\aspire-48.png" Link="Mcp\Resources\aspire-48.png" />
     <EmbeddedResource Include="$(SharedDir)Mcp\Resources\aspire-64.png" Link="Mcp\Resources\aspire-64.png" />
-    <EmbeddedResource Include="Agents\AspireSkills\Embedded\aspire-skills-v0.0.4.tgz" LogicalName="aspire-skills.bundle.tgz">
-      <WithCulture>false</WithCulture>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Agents\AspireSkills\Embedded\aspire-skills.metadata.json" LogicalName="aspire-skills.metadata.json">
-      <WithCulture>false</WithCulture>
-    </EmbeddedResource>
-    <!-- Agent PostToolUse telemetry hook scripts. Materialized to ~/.aspire/hooks/ by
-         TelemetryHookInstaller and registered into each detected agent client's user-level
-         config during `aspire agent init`. -->
+    <!-- Compatibility hook scripts are refreshed in ~/.aspire/hooks/ during agent init.
+         New PostToolUse registrations execute the CLI directly. -->
     <EmbeddedResource Include="Agents\Hooks\track-telemetry.sh" LogicalName="track-telemetry.sh">
       <WithCulture>false</WithCulture>
     </EmbeddedResource>

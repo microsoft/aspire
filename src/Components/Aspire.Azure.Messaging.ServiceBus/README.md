@@ -118,16 +118,19 @@ In your AppHost project, install the Aspire Azure Service Bus Hosting library wi
 
 ```dotnetcli
 dotnet add package Aspire.Hosting.Azure.ServiceBus
+dotnet add package Aspire.Hosting.Dotnet
 ```
 
 Then, in the _AppHost.cs_ file of `AppHost`, add a Service Bus connection and consume the connection using the following methods:
 
 ```csharp
-var serviceBus = builder.ExecutionContext.IsPublishMode
+using Aspire.Hosting.ApplicationModel;
+
+IResourceBuilder<IResourceWithConnectionString> serviceBus = builder.ExecutionContext.IsPublishMode
     ? builder.AddAzureServiceBus("sb")
     : builder.AddConnectionString("sb");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(serviceBus);
 ```
 

@@ -13,6 +13,14 @@ type TelemetryRegistryEvent = {
     entries: string[];
 };
 
+type ResourceDebugTelemetryPropertyExpectation = {
+    eventName: string;
+    interfaceName: string;
+    propertyName: string;
+    values: readonly string[];
+    comment: string;
+};
+
 // Telemetry events emit verbatim to the wire — the registry-declared name
 // (e.g. `aspire/vscode/command/invoked`, `aspire/dashboard/operation`) is
 // what appears in `extension/telemetry.json`. The transport sender strips VS
@@ -40,10 +48,76 @@ const platformCommonTelemetryProperties = [
     'common.vscodesessionid',
     'common.vscodeversion',
 ] as const;
+const resourceDebugTelemetryPropertyExpectations: readonly ResourceDebugTelemetryPropertyExpectation[] = [
+    {
+        eventName: 'aspire/vscode/resourcedebug/start',
+        interfaceName: 'ResourceDebugStartTelemetryProperties',
+        propertyName: 'requested_strategy',
+        values: ['attach', 'auto', 'invalid'],
+        comment: 'The bounded resource debug strategy requested by the caller: auto, attach, or invalid.',
+    },
+    {
+        eventName: 'aspire/vscode/resourcedebug/result',
+        interfaceName: 'ResourceDebugResultTelemetryProperties',
+        propertyName: 'requested_strategy',
+        values: ['attach', 'auto', 'invalid'],
+        comment: 'The bounded resource debug strategy requested by the caller: auto, attach, or invalid.',
+    },
+    {
+        eventName: 'aspire/vscode/resourcedebug/result',
+        interfaceName: 'ResourceDebugResultTelemetryProperties',
+        propertyName: 'effective_strategy',
+        values: ['attach', 'none'],
+        comment: 'The bounded effective resource debug strategy: attach or none.',
+    },
+    {
+        eventName: 'aspire/vscode/resourcedebug/session/end',
+        interfaceName: 'ResourceDebugSessionEndTelemetryProperties',
+        propertyName: 'requested_strategy',
+        values: ['attach', 'auto'],
+        comment: 'The bounded resource debug strategy requested by the caller: auto or attach.',
+    },
+    {
+        eventName: 'aspire/vscode/resourcedebug/session/end',
+        interfaceName: 'ResourceDebugSessionEndTelemetryProperties',
+        propertyName: 'effective_strategy',
+        values: ['attach'],
+        comment: 'The bounded effective resource debug strategy: attach.',
+    },
+];
 
 function readTelemetryInventory(): TelemetryInventory {
     const inventoryPath = path.resolve(__dirname, '../../telemetry.json');
     return JSON.parse(fs.readFileSync(inventoryPath, 'utf8')) as TelemetryInventory;
+}
+
+function readResourceDebugTelemetryPropertyValues(interfaceName: string, propertyName: string): string[] {
+    const telemetryPath = path.resolve(__dirname, '../../src/debugger/resourceDebugTelemetry.ts');
+    const program = ts.createProgram([telemetryPath], {
+        moduleResolution: ts.ModuleResolutionKind.Node10,
+        target: ts.ScriptTarget.Latest,
+    });
+    const sourceFile = program.getSourceFile(telemetryPath);
+    const telemetryInterface = sourceFile?.statements.find((node): node is ts.InterfaceDeclaration =>
+        ts.isInterfaceDeclaration(node) && node.name.text === interfaceName);
+    if (!telemetryInterface) {
+        return [];
+    }
+
+    const typeChecker = program.getTypeChecker();
+    const property = typeChecker
+        .getTypeAtLocation(telemetryInterface)
+        .getProperty(propertyName);
+    if (!property) {
+        return [];
+    }
+
+    const declaration = property.valueDeclaration ?? property.declarations?.[0];
+    if (!declaration) {
+        return [];
+    }
+
+    return getStringLiteralValues(typeChecker.getTypeOfSymbolAtLocation(property, declaration));
 }
 
 function readTelemetryRegistryEvents(): TelemetryRegistryEvent[] {
@@ -128,6 +202,16 @@ function getStringLiteralUnion(typeNode: ts.TypeNode): string[] {
     return [];
 }
 
+function getStringLiteralValues(type: ts.Type): string[] {
+    if (type.isUnion()) {
+        return [...new Set(type.types.flatMap(getStringLiteralValues))].sort();
+    }
+
+    return type.flags & ts.TypeFlags.StringLiteral
+        ? [(type as ts.StringLiteralType).value]
+        : [];
+}
+
 suite('extension/telemetry.json', () => {
     test('event entity names are lowercase', () => {
         const inventory = readTelemetryInventory();
@@ -174,5 +258,28 @@ suite('extension/telemetry.json', () => {
                 .map(entry => `${event.name}.${entry}`));
 
         assert.deepStrictEqual(suspiciousRegistryEntries, []);
+    });
+
+    test('documents bounded resource debug strategy telemetry', () => {
+        const inventory = readTelemetryInventory();
+        const inconsistencies = resourceDebugTelemetryPropertyExpectations.flatMap(expectation => {
+            const inventoryProperty = inventory.events[expectation.eventName]?.[expectation.propertyName] as { comment?: unknown } | undefined;
+            const actualValues = readResourceDebugTelemetryPropertyValues(expectation.interfaceName, expectation.propertyName);
+            const actualComment = inventoryProperty?.comment;
+
+            return actualComment === expectation.comment &&
+                JSON.stringify(actualValues) === JSON.stringify(expectation.values)
+                ? []
+                : [{
+                    eventName: expectation.eventName,
+                    propertyName: expectation.propertyName,
+                    expectedValues: expectation.values,
+                    actualValues,
+                    expectedComment: expectation.comment,
+                    actualComment,
+                }];
+        });
+
+        assert.deepStrictEqual(inconsistencies, []);
     });
 });

@@ -531,8 +531,9 @@ public class UpdateCommandRepositoryToolsTests(ITestOutputHelper outputHelper)
         });
         using var provider = services.BuildServiceProvider();
 
+        // The real multi-file update transaction needs headroom for filesystem contention in full-suite runs.
         var result = await provider.GetRequiredService<RootCommand>()
-            .Parse("update --channel daily").InvokeAsync().DefaultTimeout();
+            .Parse("update --channel daily").InvokeAsync().DefaultTimeout(TestConstants.LongTimeoutDuration);
 
         var restoreAttempted = confirmUpdates && confirmConfiguration;
         var updatesApplied = restoreAttempted && restoreExitCode == 0;

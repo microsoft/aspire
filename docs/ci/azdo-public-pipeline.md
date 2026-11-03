@@ -323,19 +323,37 @@ If a test depends on a capability not covered by these (e.g., a new plugin or co
 
 ### 6. Tests Referencing Repo Paths or Test Projects at Runtime
 
-**Pattern**: Tests that reference files relative to the repo root, or that use `AddProject<T>()` to load test project binaries, fail on Helix because the repo directory structure does not exist on the Helix agent. At runtime, Aspire resolves the original project paths embedded at build time, and those paths won't be present on Helix.
+**Pattern**: Tests that reference files relative to the repo root, or load service projects with
+`AddDotnetProject`, can fail on Helix when the required source/output layout is absent. Retained
+legacy `AddProject<T>()` tests can also refer to original paths embedded at build time.
+
+`AddDotnetProject` requires `Aspire.Hosting.Dotnet` in the AppHost; that package does not
+make referenced service sources or outputs part of a Helix payload automatically.
 
 This applies in two ways:
 - **File/directory references**: Tests that use `$(RepoRoot)`, `AppHostDirectory`, `Directory.GetCurrentDirectory()`, or hardcoded repo-relative paths to read/write files.
-- **`AddProject` calls**: Tests that call `builder.AddProject<Projects.SomeTestProject>()` embed the original `.csproj` path. On Helix, that path doesn't exist, so the resource fails to start. Any test project whose tests reference other projects via `AddProject` cannot run on Helix as a basic test — all such files and project outputs would need to be packaged into the archive.
+- **Project resource calls**: `builder.AddDotnetProject("service", "../Service/Service.csproj")`
+  resolves relative to the AppHost directory, not the test runner's working directory. Legacy
+  generated-metadata calls embed the original project path. A basic Helix archive must carry
+  every required service source/build input and output in the expected layout; a method rename
+  does not make an unavailable project runnable. Removing an AppHost project reference also
+  removes a build/test-selection edge, so trace runtime-only inputs and their consumers.
 
-**Exception**: `Aspire.Playground.Tests` runs in the `buildonhelixtests` category, which does `dotnet build` + `dotnet test` on Helix itself with the full source tree. So `AddProject` calls work there because the projects are built and present on the agent.
+**Exception**: `Aspire.Playground.Tests` runs in the `buildonhelixtests` category, which does
+`dotnet build` + `dotnet test` on Helix itself with the full source tree. Project resources
+can resolve their sources there. V2 coordinates service builds at run time; an AppHost-only
+build does not build services whose references were removed.
 
 **Real incidents**:
 - `00e8aba4`: Python venv tests created directories under `builder.AppHostDirectory` which resolved to `/mnt/vss/` on Helix agents where the test user lacks write access
 - `306e5419`: `VerifyDefaultDockerfile` test failed on Helix because it used a path relative to the repo
 
-**What to watch for**: Tests that use `AddProject<T>()`, `AppHostDirectory`, `Directory.GetCurrentDirectory()`, repo-relative paths, or write to directories that might be read-only on Helix agents. If a test needs `AddProject`, it likely cannot run on Helix as a basic test — set `RunOnAzdoHelixWindows=false` / `RunOnAzdoHelixLinux=false`, or move it to the `buildonhelixtests` category. Use `TempDirectory` or `Path.GetTempPath()` for write operations.
+**What to watch for**: Tests using `AddDotnetProject`, retained legacy `AddProject<T>()`,
+`AppHostDirectory`, `Directory.GetCurrentDirectory()`, or repo-relative files. If the required
+layout cannot be packaged for a basic test, set `RunOnAzdoHelixWindows=false` /
+`RunOnAzdoHelixLinux=false` or use the `buildonhelixtests` category. Do not write to read-only
+source locations. See the [project migration guide](../migrate-from-addproject.md#build-ownership-and-metadata)
+for build and metadata ownership.
 
 ### 7. Out-of-Repo Build Differences (buildonhelixtests)
 
@@ -365,7 +383,7 @@ When reviewing PRs, flag these for manual AzDO validation (`/azp run aspire-test
 - [ ] New source files added to tests that run on Helix
 - [ ] Changes to `DOTNET_ROOT`, `PATH`, or SDK configuration
 - [ ] New Docker/buildx-dependent tests (must use `[RequiresFeature]`)
-- [ ] Tests using `AddProject<T>()` in projects that run on Helix
+- [ ] Tests using `AddDotnetProject` or retained legacy `AddProject<T>()` in projects that run on Helix
 - [ ] Changes to `AspireProjectOrPackageReference` items
 - [ ] New or modified Verify snapshot tests
 - [ ] Changes to `tests/workloads.proj` or SDK setup

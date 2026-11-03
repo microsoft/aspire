@@ -172,7 +172,9 @@ public class AzureContainerAppExpressTests(ITestOutputHelper testOutputHelper)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
         builder.AddAzureContainerAppEnvironment("env").AsExpress();
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
         var project = builder.AddProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
+#pragma warning restore CS0618
             .WithHttpEndpoint(targetPort: 8080)
             .WithExternalHttpEndpoints();
         if (replicas is { } count)
@@ -200,7 +202,9 @@ public class AzureContainerAppExpressTests(ITestOutputHelper testOutputHelper)
         builder.AddAzureContainerAppEnvironment("env").AsExpress();
         var secret = builder.AddParameter("api-key", secret: true);
         var storage = builder.AddAzureStorage("storage");
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
         var project = builder.AddProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
+#pragma warning restore CS0618
             .WithHttpEndpoint(targetPort: 8080)
             .WithExternalHttpEndpoints()
             .WithEnvironment("API_KEY", secret)

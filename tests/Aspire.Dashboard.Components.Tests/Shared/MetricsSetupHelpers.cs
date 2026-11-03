@@ -40,6 +40,13 @@ internal static class MetricsSetupHelpers
 
     internal static void SetupMetricsPage(BunitContext context, ISessionStorage? sessionStorage = null)
     {
+        var metricsModule = context.JSInterop.SetupModule("/Components/Pages/Metrics.razor.js");
+        metricsModule.Setup<bool>("registerMetricsSplitter", _ => true).SetResult(true);
+        metricsModule.SetupVoid("unregisterMetricsSplitter", _ => true).SetVoidResult();
+
+        var meterOverviewModule = context.JSInterop.SetupModule("/Components/Controls/Chart/MeterOverview.razor.js");
+        meterOverviewModule.SetupModule("observeCards", _ => true).SetupVoid("dispose", _ => true).SetVoidResult();
+
         FluentUISetupHelpers.SetupFluentDivider(context);
         FluentUISetupHelpers.SetupFluentInputLabel(context);
         FluentUISetupHelpers.SetupFluentDataGrid(context);

@@ -1,0 +1,1 @@
+﻿{"profiles":{"dev:local":{"environmentVariables":{"Logging:LogLevel:Default":"Debug"}}},"features":{"feature:name":true},"custom":{"nested":{"literal:key":"preserved"}},"settings":{"object":{"nested:value":42},"enabled":true}}

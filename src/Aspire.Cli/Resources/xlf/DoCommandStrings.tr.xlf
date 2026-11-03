@@ -4,7 +4,7 @@
     <body>
       <trans-unit id="Description">
         <source>Execute a specific pipeline step and its dependencies</source>
-        <target state="needs-review-translation">Belirli bir işlem hattı adımını ve bağımlılıklarını yürütün. (Önizleme)</target>
+        <target state="translated">Belirli bir işlem hattı adımını ve bağımlılıklarını yürütün</target>
         <note />
       </trans-unit>
       <trans-unit id="GeneratingArtifacts">
@@ -14,7 +14,7 @@
       </trans-unit>
       <trans-unit id="ListStepsRequiresStep">
         <source>The 'step' argument is required when using --list-steps. Example: 'aspire do deploy --list-steps'. Common starting steps are 'build', 'publish' and 'deploy'. See https://aspire.dev/reference/cli/commands/aspire-do/ for the full list of pipeline steps.</source>
-        <target state="new">The 'step' argument is required when using --list-steps. Example: 'aspire do deploy --list-steps'. Common starting steps are 'build', 'publish' and 'deploy'. See https://aspire.dev/reference/cli/commands/aspire-do/ for the full list of pipeline steps.</target>
+        <target state="translated">--list-steps kullanılırken 'step' bağımsız değişkeni gereklidir. Örnek: 'aspire do deploy --list-steps'. Yaygın başlangıç adımları 'build', 'publish' ve 'deploy' komutlarıdır. İşlem hattı adımlarının tamamını görmek için https://aspire.dev/reference/cli/commands/aspire-do/ adresini ziyaret edin.</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationCanceled">
@@ -34,17 +34,17 @@
       </trans-unit>
       <trans-unit id="OutputPathArgumentDescription">
         <source>The optional output path for artifacts</source>
-        <target state="needs-review-translation">Yapıtlar için isteğe bağlı çıktı yolu.</target>
+        <target state="translated">Yapıtlar için isteğe bağlı çıktı yolu</target>
         <note />
       </trans-unit>
       <trans-unit id="StepArgumentDescription">
         <source>The name of the step to execute</source>
-        <target state="needs-review-translation">Yürütülecek adımın adı.</target>
+        <target state="translated">Yürütülecek adımın adı</target>
         <note />
       </trans-unit>
       <trans-unit id="StepArgumentRequired">
         <source>The 'step' argument is required.</source>
-        <target state="new">The 'step' argument is required.</target>
+        <target state="translated">'step' bağımsız değişkeni gereklidir.</target>
         <note />
       </trans-unit>
     </body>

@@ -182,13 +182,14 @@ callback customize `OpenAIClientOptions`. `DisableTracing`, `DisableMetrics`, an
 `EnableSensitiveTelemetryData` have the same meaning as for project clients.
 Use distinct service keys when registering multiple account/project clients.
 
-In the AppHost, use `Aspire.Hosting.Azure.CognitiveServices` and keep the deployment reference:
+In the AppHost, use `Aspire.Hosting.Azure.CognitiveServices` and `Aspire.Hosting.Dotnet`,
+and keep the deployment reference.
 
 ```csharp
 var chat = builder.AddAzureOpenAI("openai")
     .AddDeployment("chat", "gpt-4o", "2024-05-13");
 
-builder.AddProject<Projects.MyApp>("app").WithReference(chat);
+builder.AddDotnetProject("app", "../MyApp/MyApp.csproj").WithReference(chat);
 ```
 
 ## AppHost extensions
@@ -197,6 +198,7 @@ Install `Aspire.Hosting.Foundry` in the AppHost:
 
 ```dotnetcli
 dotnet add package Aspire.Hosting.Foundry
+dotnet add package Aspire.Hosting.Dotnet
 ```
 
 ```csharp
@@ -206,7 +208,7 @@ var foundry = builder.AddFoundry("foundry");
 var project = foundry.AddProject("ai");
 var chat = project.AddModelDeployment("chat", FoundryModel.OpenAI.Gpt5Mini);
 
-builder.AddProject<Projects.MyApp>("app")
+builder.AddDotnetProject("app", "../MyApp/MyApp.csproj")
     .WithReference(foundry)
     .WithReference(project)
     .WaitFor(chat);
