@@ -3,7 +3,7 @@ param location string = resourceGroup().location
 
 param _apim_backendUrl_catalog_backend string
 
-param apim_identity_outputs_clientid string
+param apim_existing_identity_outputs_clientid string
 
 resource apim 'Microsoft.ApiManagement/service@2025-03-01-preview' existing = {
   name: 'existing-apim'
@@ -258,7 +258,7 @@ resource _apim_apiPolicy_catalog_api 'Microsoft.ApiManagement/service/apis/polic
   name: 'policy'
   properties: {
     format: 'rawxml'
-    value: '<policies>\n  <inbound>\n    <base />\n    <authentication-managed-identity resource="api://catalog" client-id="${apim_identity_outputs_clientid}" />\n    <set-backend-service backend-id="catalog-backend" />\n  </inbound>\n  <backend><base /></backend>\n  <outbound><base /></outbound>\n  <on-error><base /></on-error>\n</policies>'
+    value: '<policies>\n  <inbound>\n    <base />\n    <authentication-managed-identity resource="api://catalog" client-id="${apim_existing_identity_outputs_clientid}" />\n    <set-backend-service backend-id="catalog-backend" />\n  </inbound>\n  <backend><base /></backend>\n  <outbound><base /></outbound>\n  <on-error><base /></on-error>\n</policies>'
   }
   parent: catalog_api
   dependsOn: [

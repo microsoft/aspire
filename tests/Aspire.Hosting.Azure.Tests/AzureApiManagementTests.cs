@@ -1920,8 +1920,10 @@ public class AzureApiManagementTests(ITestOutputHelper output)
             PublisherEmail = "api-owners@example.com",
             PublisherName = "Contoso APIs",
             Sku = AzureApiManagementSku.Developer,
-        }).PublishAsExisting("shared-apim", resourceGroup: overrideScope ? null : "gateway-resources")
-            .WithIdentityAttachedToExistingService();
+        }).PublishAsExisting("shared-apim", resourceGroup: overrideScope ? null : "gateway-resources");
+        var identity = builder.AddAzureUserAssignedIdentity("shared-identity")
+            .PublishAsExisting("shared-identity", resourceGroup: null);
+        apim.WithAzureUserAssignedIdentity(identity);
         if (overrideScope)
         {
             apim.Resource.Scope = new AzureBicepResourceScope("gateway-resources");
@@ -1936,19 +1938,19 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
         var roleAssignments = Assert.Single(
             model.Resources.OfType<AzureRoleAssignmentResource>(),
-            resource => resource.Name == "apim-identity-roles-openai");
+            resource => resource.Name == "shared-identity-roles-openai");
         Assert.Null(roleAssignments.Scope);
         Assert.Same(account.Resource, roleAssignments.TargetAzureResource);
         Assert.Same(apim.Resource.Identity, roleAssignments.IdentityResource);
         Assert.Contains(roleAssignments, apim.Resource.References);
 
-        var (_, apimBicep) = await GetManifestWithBicep(apim.Resource);
+        var (_, apimBicep) = await GetManifestWithBicep(apim.Resource, skipPreparer: true);
         var (rolesManifest, rolesBicep) = await GetManifestWithBicep(roleAssignments, skipPreparer: true);
 
         Assert.DoesNotContain("Microsoft.Authorization/roleAssignments@", apimBicep);
         Assert.Contains("Microsoft.Authorization/roleAssignments@", rolesBicep);
         Assert.DoesNotContain("\"scope\"", rolesManifest.ToJsonString());
-        Assert.Contains("apim-identity.outputs.principalId", rolesManifest.ToJsonString());
+        Assert.Contains("shared-identity.outputs.principalId", rolesManifest.ToJsonString());
     }
 
     [Fact]
@@ -2435,18 +2437,16 @@ public class AzureApiManagementTests(ITestOutputHelper output)
 
         Assert.Equal(
             "Existing API Management resource 'apim' uses managed-identity backends or Key Vault-backed named values, " +
-            "but its user-assigned identity is not confirmed as attached to the service. " +
-            "Adopt an already-attached identity with Identity.PublishAsExisting(...) or attach the identity outside Aspire " +
-            "and call WithIdentityAttachedToExistingService(). Aspire does not attach identities to existing services.",
+            "but its user-assigned identity is not configured as an existing resource. " +
+            "Supply an already-attached identity using WithAzureUserAssignedIdentity(...) and configure it with PublishAsExisting(...). " +
+            "Aspire does not attach identities to existing services.",
             exception.Message);
     }
 
     [Theory]
-    [InlineData(false, false)]
-    [InlineData(false, true)]
-    [InlineData(true, false)]
-    [InlineData(true, true)]
-    public async Task ExistingApiManagementAllowsKeyVaultWithAdoptedOrConfirmedIdentity(bool confirmAttachment, bool configureIdentityFirst)
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ExistingApiManagementAllowsKeyVaultWithSuppliedIdentityRegardlessOfCallOrder(bool configureIdentityFirst)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var apim = builder.AddAzureApiManagement("apim", new()
@@ -2455,6 +2455,9 @@ public class AzureApiManagementTests(ITestOutputHelper output)
             PublisherName = "Contoso APIs",
             Sku = AzureApiManagementSku.Developer,
         });
+        var defaultIdentity = apim.Resource.Identity;
+        var identity = builder.AddAzureUserAssignedIdentity("shared-identity")
+            .PublishAsExisting("shared-identity", resourceGroup: null);
         if (configureIdentityFirst)
         {
             ConfigureIdentity();
@@ -2472,28 +2475,144 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         await ExecuteBeforeStartHooksAsync(app, default);
 
         Assert.True(apim.Resource.IsExisting());
-        Assert.Equal(!confirmAttachment, apim.Resource.Identity.IsExisting());
-        Assert.Equal(confirmAttachment, apim.Resource.IdentityAttachedToExistingService);
+        Assert.True(apim.Resource.Identity.IsExisting());
+        Assert.Same(identity.Resource, apim.Resource.Identity);
+        Assert.DoesNotContain(defaultIdentity, builder.Resources);
+        Assert.Empty(defaultIdentity.Annotations.OfType<RoleAssignmentAnnotation>());
+        var roles = Assert.Single(builder.Resources.OfType<AzureRoleAssignmentResource>());
+        Assert.Same(identity.Resource, roles.IdentityResource);
+        Assert.Contains(roles, apim.Resource.References);
 
         void ConfigureIdentity()
         {
-            if (confirmAttachment)
-            {
-                Assert.Same(apim, apim.WithIdentityAttachedToExistingService());
-            }
-            else
-            {
-                builder.CreateResourceBuilder(apim.Resource.Identity)
-                    .PublishAsExisting("shared-identity", resourceGroup: null);
-            }
+            Assert.Same(apim, apim.WithAzureUserAssignedIdentity(identity));
         }
     }
 
     [Fact]
-    public void IdentityAttachmentConfirmationRejectsNullBuilder()
+    public void SuppliedIdentityRejectsNullArguments()
     {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var identity = builder.AddAzureUserAssignedIdentity("identity");
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
+        });
         Assert.Throws<ArgumentNullException>(() =>
-            AzureApiManagementExtensions.WithIdentityAttachedToExistingService(null!));
+            AzureApiManagementExtensions.WithAzureUserAssignedIdentity(null!, identity));
+        Assert.Throws<ArgumentNullException>(() => apim.WithAzureUserAssignedIdentity(null!));
+    }
+
+    [Fact]
+    public async Task ExistingApiManagementRejectsSuppliedNewIdentity()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var identity = builder.AddAzureUserAssignedIdentity("new-identity");
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
+            Sku = AzureApiManagementSku.Developer,
+        }).WithAzureUserAssignedIdentity(identity)
+            .PublishAsExisting("existing-apim", resourceGroup: null);
+        var backend = apim.AddBackend("catalog-backend", ReferenceExpression.Create($"https://example.com"), new()
+        {
+            ManagedIdentityResource = "api://catalog",
+        });
+        apim.AddApi("catalog-api", "catalog").WithBackend(backend);
+
+        using var app = builder.Build();
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => ExecuteBeforeStartHooksAsync(app, default));
+
+        Assert.Contains("user-assigned identity is not configured as an existing resource", exception.Message);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SuppliedIdentityKeepsInferredBackendAndKeyVaultRolesRegardlessOfCallOrder(bool identityFirst)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var identity = builder.AddAzureUserAssignedIdentity("shared-identity");
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
+        });
+        var defaultIdentity = apim.Resource.Identity;
+        if (identityFirst)
+        {
+            apim.WithAzureUserAssignedIdentity(identity);
+        }
+
+        var storage = builder.AddAzureStorage("storage");
+        var backend = apim.AddBlobStorageBackend("blob-backend", storage.AddBlobs("blobs"));
+        apim.AddApi("blob-api", "blob").WithBackend(backend);
+        var vault = builder.AddAzureKeyVault("vault");
+        apim.AddKeyVaultNamedValue("upstream-secret", vault.GetSecret("upstream-secret"));
+        if (!identityFirst)
+        {
+            apim.WithAzureUserAssignedIdentity(identity);
+        }
+        apim.WithAzureUserAssignedIdentity(identity);
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        Assert.Same(identity.Resource, apim.Resource.Identity);
+        Assert.Same(identity.Resource, apim.Resource.PrincipalId.Resource);
+        Assert.Same(identity.Resource, apim.Resource.Annotations.OfType<AppIdentityAnnotation>().Single().IdentityResource);
+        Assert.DoesNotContain(defaultIdentity, builder.Resources);
+        Assert.Empty(defaultIdentity.Annotations.OfType<RoleAssignmentAnnotation>());
+        var roles = builder.Resources.OfType<AzureRoleAssignmentResource>().OrderBy(role => role.Name).ToArray();
+        Assert.Collection(roles,
+            role =>
+            {
+                Assert.Same(storage.Resource, role.TargetAzureResource);
+                Assert.Same(identity.Resource, role.IdentityResource);
+            },
+            role =>
+            {
+                Assert.Same(vault.Resource, role.TargetAzureResource);
+                Assert.Same(identity.Resource, role.IdentityResource);
+            });
+        var (_, bicep) = await GetManifestWithBicep(apim.Resource, skipPreparer: true);
+        await Verify(bicep, "bicep");
+    }
+
+    [Fact]
+    public async Task ReplacingSharedIdentityMovesOnlyThisServicesInferredRoles()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var sharedIdentity = builder.AddAzureUserAssignedIdentity("shared-identity");
+        var replacementIdentity = builder.AddAzureUserAssignedIdentity("replacement-identity");
+        var first = builder.AddAzureApiManagement("first", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
+        }).WithAzureUserAssignedIdentity(sharedIdentity);
+        var second = builder.AddAzureApiManagement("second", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
+        }).WithAzureUserAssignedIdentity(sharedIdentity);
+        var firstVault = builder.AddAzureKeyVault("first-vault");
+        var secondVault = builder.AddAzureKeyVault("second-vault");
+        first.AddKeyVaultNamedValue("first-secret", firstVault.GetSecret("secret"));
+        second.AddKeyVaultNamedValue("second-secret", secondVault.GetSecret("secret"));
+
+        first.WithAzureUserAssignedIdentity(replacementIdentity);
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        Assert.Contains(sharedIdentity.Resource, builder.Resources);
+        Assert.Same(secondVault.Resource, Assert.Single(sharedIdentity.Resource.Annotations.OfType<RoleAssignmentAnnotation>()).Target);
+        Assert.Same(firstVault.Resource, Assert.Single(replacementIdentity.Resource.Annotations.OfType<RoleAssignmentAnnotation>()).Target);
+        Assert.Contains(replacementIdentity.Resource, first.Resource.References);
+        Assert.DoesNotContain(sharedIdentity.Resource, first.Resource.References);
+        Assert.Contains(sharedIdentity.Resource, second.Resource.References);
     }
 
     [Fact]
@@ -2516,7 +2635,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         await ExecuteBeforeStartHooksAsync(app, default);
 
         Assert.Empty(builder.Resources);
-        Assert.False(apim.Resource.IdentityAttachedToExistingService);
+        Assert.True(apim.Resource.HasDefaultIdentity);
     }
 
     [Fact]
@@ -2528,8 +2647,10 @@ public class AzureApiManagementTests(ITestOutputHelper output)
             PublisherEmail = "api-owners@example.com",
             PublisherName = "Contoso APIs",
             Sku = AzureApiManagementSku.Developer,
-        }).PublishAsExisting("existing-apim", resourceGroup: null)
-            .WithIdentityAttachedToExistingService();
+        }).PublishAsExisting("existing-apim", resourceGroup: null);
+        var identity = builder.AddAzureUserAssignedIdentity("apim-existing-identity")
+            .PublishAsExisting("shared-identity", resourceGroup: null);
+        apim.WithAzureUserAssignedIdentity(identity);
         var backend = apim.AddBackend(
             "catalog-backend",
             ReferenceExpression.Create($"https://example.com"),
@@ -2542,7 +2663,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         using var app = builder.Build();
         await ExecuteBeforeStartHooksAsync(app, default);
 
-        var (_, bicep) = await GetManifestWithBicep(apim.Resource);
+        var (_, bicep) = await GetManifestWithBicep(apim.Resource, skipPreparer: true);
         await Verify(bicep, "bicep");
     }
 
@@ -2556,8 +2677,9 @@ public class AzureApiManagementTests(ITestOutputHelper output)
             PublisherName = "Contoso APIs",
             Sku = AzureApiManagementSku.Developer,
         }).PublishAsExisting("existing-apim", resourceGroup: null);
-        builder.CreateResourceBuilder(apim.Resource.Identity)
+        var identity = builder.AddAzureUserAssignedIdentity("apim-existing-identity")
             .PublishAsExisting("shared-identity", resourceGroup: "identity-resources");
+        apim.WithAzureUserAssignedIdentity(identity);
         var vault = builder.AddAzureKeyVault("vault")
             .PublishAsExisting("shared-vault", resourceGroup: "security-resources");
         apim.AddKeyVaultNamedValue("upstream-secret", vault.GetSecret("upstream-secret"));

@@ -118,26 +118,39 @@ public static class AzureApiManagementExtensions
     }
 
     /// <summary>
-    /// Confirms that the API Management identity is attached to an existing service outside Aspire.
+    /// Configures the user-assigned managed identity used by API Management.
     /// </summary>
     /// <param name="builder">The Azure API Management resource builder.</param>
+    /// <param name="identityResourceBuilder">The user-assigned managed identity.</param>
     /// <returns>The Azure API Management resource builder.</returns>
     /// <remarks>
-    /// Existing services are read-only: this method does not attach the identity or verify its attachment in Azure.
-    /// Call it only after attaching the identity to the service outside Aspire. Alternatively, configure the
-    /// identity as an existing Azure resource that is already attached to the service.
-    /// This confirmation is required when publishing managed-identity backends or Key Vault-backed named values
-    /// to an existing service unless its identity is configured as an existing resource.
-    /// New services attach the identity automatically and do not require this confirmation.
+    /// New services attach the supplied identity automatically instead of creating a default identity.
+    /// For an existing service, the supplied identity must be configured as an existing resource and
+    /// already attached to the service outside Aspire. Aspire does not change or verify the existing
+    /// service's identity attachments. Backend and Key Vault permissions use the supplied identity.
     /// </remarks>
-    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> is null.</exception>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="identityResourceBuilder"/> is null.</exception>
     [AspireExport]
-    public static IResourceBuilder<AzureApiManagementResource> WithIdentityAttachedToExistingService(
-        this IResourceBuilder<AzureApiManagementResource> builder)
+    public static IResourceBuilder<AzureApiManagementResource> WithAzureUserAssignedIdentity(
+        this IResourceBuilder<AzureApiManagementResource> builder,
+        IResourceBuilder<AzureUserAssignedIdentityResource> identityResourceBuilder)
     {
         ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(identityResourceBuilder);
 
-        builder.Resource.IdentityAttachedToExistingService = true;
+        var previousIdentity = builder.Resource.Identity;
+        if (ReferenceEquals(previousIdentity, identityResourceBuilder.Resource))
+        {
+            return builder;
+        }
+
+        // Only the automatically created identity belongs to APIM; never remove a caller-owned identity.
+        if (builder.Resource.HasDefaultIdentity)
+        {
+            builder.ApplicationBuilder.Resources.Remove(previousIdentity);
+        }
+        builder.Resource.SetIdentity(identityResourceBuilder.Resource);
+        builder.WithAnnotation(new AppIdentityAnnotation(identityResourceBuilder.Resource), ResourceAnnotationMutationBehavior.Replace);
 
         return builder;
     }
@@ -895,10 +908,11 @@ public static class AzureApiManagementExtensions
             ReferenceExpression.Create($"{deployment.Resource.Parent.Endpoint}"),
             deployment.Resource.DeploymentName,
             backendName);
-        builder.ApplicationBuilder.CreateResourceBuilder(builder.Resource.Identity)
-            .WithRoleAssignments(
-                builder.ApplicationBuilder.CreateResourceBuilder(deployment.Resource.Parent),
-                CognitiveServicesBuiltInRole.CognitiveServicesOpenAIUser);
+        builder.Resource.AddIdentityRoleAssignment(
+            deployment.Resource.Parent,
+            new RoleDefinition(
+                CognitiveServicesBuiltInRole.CognitiveServicesOpenAIUser.ToString(),
+                CognitiveServicesBuiltInRole.GetBuiltInRoleName(CognitiveServicesBuiltInRole.CognitiveServicesOpenAIUser)));
 
         return backend.WithRelationship(deployment.Resource, "Backend");
     }
@@ -928,10 +942,11 @@ public static class AzureApiManagementExtensions
             ReferenceExpression.Create($"{deployment.Resource.Parent.Endpoint}"),
             deployment.Resource.DeploymentName,
             backendName);
-        builder.ApplicationBuilder.CreateResourceBuilder(builder.Resource.Identity)
-            .WithRoleAssignments(
-                builder.ApplicationBuilder.CreateResourceBuilder(deployment.Resource.Parent),
-                CognitiveServicesBuiltInRole.CognitiveServicesUser);
+        builder.Resource.AddIdentityRoleAssignment(
+            deployment.Resource.Parent,
+            new RoleDefinition(
+                CognitiveServicesBuiltInRole.CognitiveServicesUser.ToString(),
+                CognitiveServicesBuiltInRole.GetBuiltInRoleName(CognitiveServicesBuiltInRole.CognitiveServicesUser)));
 
         return backend.WithRelationship(deployment.Resource, "Backend");
     }
@@ -956,10 +971,11 @@ public static class AzureApiManagementExtensions
                 ManagedIdentityResource = "https://storage.azure.com/",
             },
             backendName);
-        builder.ApplicationBuilder.CreateResourceBuilder(builder.Resource.Identity)
-            .WithRoleAssignments(
-                builder.ApplicationBuilder.CreateResourceBuilder(blobs.Resource.Parent),
-                StorageBuiltInRole.StorageBlobDataReader);
+        builder.Resource.AddIdentityRoleAssignment(
+            blobs.Resource.Parent,
+            new RoleDefinition(
+                StorageBuiltInRole.StorageBlobDataReader.ToString(),
+                StorageBuiltInRole.GetBuiltInRoleName(StorageBuiltInRole.StorageBlobDataReader)));
 
         return backend.WithRelationship(blobs.Resource, "Backend");
     }
@@ -1581,15 +1597,14 @@ public static class AzureApiManagementExtensions
 
         if (isExisting &&
             !azureResource.Identity.IsExisting() &&
-            !azureResource.IdentityAttachedToExistingService &&
             (azureResource.Backends.Any(backend => backend.Options.ManagedIdentityResource is not null) ||
              azureResource.NamedValues.Any(namedValue => namedValue.Value is IAzureKeyVaultSecretReference)))
         {
             throw new InvalidOperationException(
                 $"Existing API Management resource '{azureResource.Name}' uses managed-identity backends or Key Vault-backed named values, " +
-                "but its user-assigned identity is not confirmed as attached to the service. " +
-                "Adopt an already-attached identity with Identity.PublishAsExisting(...) or attach the identity outside Aspire " +
-                $"and call {nameof(WithIdentityAttachedToExistingService)}(). Aspire does not attach identities to existing services.");
+                "but its user-assigned identity is not configured as an existing resource. " +
+                $"Supply an already-attached identity using {nameof(WithAzureUserAssignedIdentity)}(...) and configure it with PublishAsExisting(...). " +
+                "Aspire does not attach identities to existing services.");
         }
 
         var hasExplicitExistingScope =
@@ -2093,12 +2108,9 @@ public static class AzureApiManagementExtensions
     {
         if (secret.Resource is AzureProvisioningResource target)
         {
-            apiManagement.Identity.Annotations.Add(new RoleAssignmentAnnotation(
+            apiManagement.AddIdentityRoleAssignment(
                 target,
-                new HashSet<RoleDefinition>
-                {
-                    new(role.ToString(), KeyVaultBuiltInRole.GetBuiltInRoleName(role)),
-                }));
+                new RoleDefinition(role.ToString(), KeyVaultBuiltInRole.GetBuiltInRoleName(role)));
         }
     }
 

@@ -2,7 +2,7 @@
 @description('The location for the resource(s) to be deployed.')
 param location string = resourceGroup().location
 
-param apim_identity_outputs_clientid string
+param apim_existing_identity_outputs_clientid string
 
 param _apim_backendUrl_catalog_backend string
 
@@ -27,7 +27,7 @@ resource upstream_secret 'Microsoft.ApiManagement/service/namedValues@2024-05-01
     secret: true
     keyVault: {
       secretIdentifier: '${vault.properties.vaultUri}secrets/upstream-secret'
-      identityClientId: apim_identity_outputs_clientid
+      identityClientId: apim_existing_identity_outputs_clientid
     }
   }
   parent: apim
@@ -282,7 +282,7 @@ resource _apim_apiPolicy_catalog_api 'Microsoft.ApiManagement/service/apis/polic
   name: 'policy'
   properties: {
     format: 'rawxml'
-    value: '<policies>\n  <inbound>\n    <base />\n    <authentication-managed-identity resource="api://catalog" client-id="${apim_identity_outputs_clientid}" />\n    <set-backend-service backend-id="catalog-backend" />\n  </inbound>\n  <backend><base /></backend>\n  <outbound><base /></outbound>\n  <on-error><base /></on-error>\n</policies>'
+    value: '<policies>\n  <inbound>\n    <base />\n    <authentication-managed-identity resource="api://catalog" client-id="${apim_existing_identity_outputs_clientid}" />\n    <set-backend-service backend-id="catalog-backend" />\n  </inbound>\n  <backend><base /></backend>\n  <outbound><base /></outbound>\n  <on-error><base /></on-error>\n</policies>'
   }
   parent: catalog_api
   dependsOn: [
@@ -313,25 +313,25 @@ output name string = 'existing-apim'
 
 output id string = apim.id
 
-// Resource: apim-identity
+// Resource: apim-existing-identity
 @description('The location for the resource(s) to be deployed.')
 param location string = resourceGroup().location
 
-resource apim_identity 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' existing = {
+resource apim_existing_identity 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' existing = {
   name: 'shared-identity'
 }
 
-output id string = apim_identity.id
+output id string = apim_existing_identity.id
 
-output clientId string = apim_identity.properties.clientId
+output clientId string = apim_existing_identity.properties.clientId
 
-output principalId string = apim_identity.properties.principalId
+output principalId string = apim_existing_identity.properties.principalId
 
-output principalName string = apim_identity.name
+output principalName string = apim_existing_identity.name
 
-output name string = apim_identity.name
+output name string = apim_existing_identity.name
 
-// Resource: apim-identity-roles-vault
+// Resource: apim-existing-identity-roles-vault
 @description('The location for the resource(s) to be deployed.')
 param location string = resourceGroup().location
 

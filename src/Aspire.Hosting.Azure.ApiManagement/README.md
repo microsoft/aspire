@@ -96,20 +96,18 @@ Aspire treats the existing service itself as read-only. It can manage declared A
 
 Set `Sku` explicitly to the adopted service's actual pricing tier, even for Developer. Aspire requires this metadata to validate SKU-dependent children such as circuit breakers and OpenAI backends; it does not query or change the existing service's SKU. The Developer default applies only to new services.
 
-APIM uses a user-assigned managed identity for backend authentication and Key Vault access. Aspire creates this identity as a separate resource and grants its permissions through the standard Azure role-assignment pipeline. For an existing APIM service, publishing managed-identity backends or Key Vault-backed named values throws unless you adopt an already-attached identity or explicitly confirm that the identity is attached outside Aspire. To use an identity already attached to the service, adopt it as an existing resource:
+APIM uses a user-assigned managed identity for backend authentication and Key Vault access. Aspire creates and attaches an identity for new services and grants its permissions through the standard Azure role-assignment pipeline. For an existing APIM service, bring an existing identity that is already attached to the service:
 
 ```csharp
-builder.CreateResourceBuilder(apim.Resource.Identity)
+var identity = builder.AddAzureUserAssignedIdentity("existing-apim-identity")
     .PublishAsExisting("shared-apim-identity", resourceGroup: "shared-infrastructure");
+
+apim.WithAzureUserAssignedIdentity(identity);
 ```
 
-Alternatively, after attaching Aspire's identity to the existing service outside Aspire, explicitly confirm the attachment:
+Publishing managed-identity backends or Key Vault-backed named values for an existing service throws if its identity is not configured as an existing resource. Aspire does not query Azure to verify attachment or attach an identity to an existing service; attachment remains the caller's responsibility. Existing services with only anonymous backends and literal named values do not require an existing identity.
 
-```csharp
-apim.WithIdentityAttachedToExistingService();
-```
-
-Both alternatives are caller assertions: Aspire does not query Azure to verify attachment, and the confirmation method does not attach the identity. New services attach their identity automatically. Existing services with only anonymous backends and literal named values do not require confirmation.
+`WithAzureUserAssignedIdentity` can also supply an identity for a new service, which attaches it automatically. Configure the identity before or after adding backends and named values; their inferred role assignments follow the selected identity.
 
 Aspire uses the same identity and role-assignment path for new and existing APIM services. Role-assignment modules deploy at the target resource's scope, including other resource groups or subscriptions. Diagnostics configured on an existing APIM service still require the service and Application Insights resource to be in the same deployment resource group.
 

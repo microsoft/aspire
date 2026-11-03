@@ -25,6 +25,7 @@ public class AzureApiManagementResource(
     : AzureProvisioningResource(name, configureInfrastructure), IAzurePrivateEndpointTarget
 {
     private readonly List<string> _inboundPolicyStatements = [];
+    private readonly List<RoleAssignmentAnnotation> _identityRoleAssignments = [];
 
     /// <summary>
     /// Gets the configured service options.
@@ -93,16 +94,37 @@ public class AzureApiManagementResource(
     /// Gets the user-assigned managed identity used for backend authentication and Key Vault access.
     /// </summary>
     /// <remarks>
-    /// When adopting an existing API Management service, attach this identity to the service outside Aspire.
-    /// Before publishing identity-dependent features, either configure the identity as an existing Azure resource
-    /// already attached to the service or call <see cref="AzureApiManagementExtensions.WithIdentityAttachedToExistingService"/>
-    /// to confirm the attachment.
+    /// New services attach this identity automatically. Existing services require an existing identity
+    /// that is already attached outside Aspire. Supply it with
+    /// <see cref="AzureApiManagementExtensions.WithAzureUserAssignedIdentity"/>.
     /// </remarks>
     [AspireExport]
-    public AzureUserAssignedIdentityResource Identity { get; } =
+    public AzureUserAssignedIdentityResource Identity { get; private set; } =
         new(AzureApiManagementExtensions.CreateBoundedIdentifier($"{name}-identity", 64));
 
-    internal bool IdentityAttachedToExistingService { get; set; }
+    internal bool HasDefaultIdentity { get; private set; } = true;
+
+    internal void SetIdentity(AzureUserAssignedIdentityResource identity)
+    {
+        // Move only APIM's inferred permissions; a supplied identity can be shared with other resources.
+        foreach (var roleAssignment in _identityRoleAssignments)
+        {
+            Identity.Annotations.Remove(roleAssignment);
+            identity.Annotations.Add(roleAssignment);
+        }
+
+        References.Remove(Identity);
+        Identity = identity;
+        HasDefaultIdentity = false;
+        References.Add(identity);
+    }
+
+    internal void AddIdentityRoleAssignment(AzureProvisioningResource target, RoleDefinition role)
+    {
+        var annotation = new RoleAssignmentAnnotation(target, new HashSet<RoleDefinition> { role });
+        _identityRoleAssignments.Add(annotation);
+        Identity.Annotations.Add(annotation);
+    }
 
     /// <summary>
     /// Gets the user-assigned managed identity principal ID output reference.
