@@ -2,6 +2,12 @@
     display: contents;
 }
 
+/* A closed native popover must stay hidden even before Blazor receives its toggle event. */
+.resource-pane-filter ::deep .resource-filter-popover::part(dialog):popover-open {
+    display: flex;
+    flex-direction: column;
+}
+
 .resource-pane-filter ::deep .resource-filter-popover::part(dialog) {
     position-anchor: var(--resource-filter-anchor);
     /* Clear Fluent's inline insets without overriding the browser's fallback placement.
@@ -12,13 +18,13 @@
     justify-self: start;
     margin: 6px 0 12px;
     position-try-fallbacks: flip-inline, flip-block, flip-block flip-inline;
-    display: flex;
-    flex-direction: column;
     box-sizing: border-box;
     width: min(320px, calc(100vw - 24px));
     max-width: none;
     /* Leave room for the dialog's 6px and 12px block margins. */
     max-height: calc(100% - 18px);
+    /* A constrained panel can fit below the anchor while clipping its footer; prefer the roomier side. */
+    position-try-order: most-height;
     padding: 0;
     overflow: hidden;
     cursor: default;

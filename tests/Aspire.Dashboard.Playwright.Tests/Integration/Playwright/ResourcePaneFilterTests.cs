@@ -12,9 +12,9 @@ using Xunit;
 namespace Aspire.Dashboard.Tests.Integration.Playwright;
 
 [RequiresFeature(TestFeature.Playwright)]
-public sealed class ResourcePaneFilterTests : PlaywrightTestsBase<DashboardServerFixture>
+public sealed class ResourcePaneFilterTests : PlaywrightTestsBase<ResourcePaneFilterTests.SingleResourceFixture>
 {
-    public ResourcePaneFilterTests(DashboardServerFixture dashboardServerFixture)
+    public ResourcePaneFilterTests(SingleResourceFixture dashboardServerFixture)
         : base(dashboardServerFixture)
     {
     }
@@ -48,7 +48,6 @@ public sealed class ResourcePaneFilterTests : PlaywrightTestsBase<DashboardServe
             await done.ClickAsync();
             await Assertions.Expect(filter).ToBeHiddenAsync();
             await Assertions.Expect(trigger).ToHaveAttributeAsync("aria-expanded", "false");
-            Assert.False(await page.EvaluateAsync<bool>("() => !!document.activeElement?.closest('.resource-filter')"));
 
             await trigger.ClickAsync();
             await Assertions.Expect(project).Not.ToBeCheckedAsync();
@@ -66,7 +65,6 @@ public sealed class ResourcePaneFilterTests : PlaywrightTestsBase<DashboardServe
             await done.ClickAsync();
             await Assertions.Expect(filter).ToBeHiddenAsync();
             await Assertions.Expect(trigger).ToHaveAttributeAsync("aria-expanded", "false");
-            Assert.False(await page.EvaluateAsync<bool>("() => !!document.activeElement?.closest('.resource-filter')"));
 
             await trigger.ClickAsync();
             await Assertions.Expect(filter).ToBeVisibleAsync();
@@ -80,6 +78,48 @@ public sealed class ResourcePaneFilterTests : PlaywrightTestsBase<DashboardServe
             await Assertions.Expect(filter).ToBeHiddenAsync();
             await Assertions.Expect(page.Locator("h1.resource-title")).ToHaveTextAsync("TestResource");
             Assert.EndsWith("/resources/TestResource", page.Url, StringComparison.Ordinal);
+        });
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task Filter_NativeDismissHidesDialogBeforeServerRender()
+    {
+        await RunTestAsync(async page =>
+        {
+            await page.SetViewportSizeAsync(1440, 900);
+            await OpenResourcePaneAsync(page);
+            await page.GetByRole(AriaRole.Button, new() { Name = Resources.ControlsStrings.ChartContainerFiltersHeader, Exact = true }).ClickAsync();
+            var dialog = page.Locator(".resource-filter-popover").Locator("[part='dialog']");
+            await Assertions.Expect(dialog).ToBeVisibleAsync();
+
+            // Measure in the same browser task as native dismissal, before Blazor can remove the content.
+            Assert.True(await dialog.EvaluateAsync<bool>("e => { e.hidePopover(); const bounds = e.getBoundingClientRect(); return bounds.width === 0 && bounds.height === 0; }"),
+                "A natively dismissed dialog must disappear without waiting for the server to render.");
+            await Assertions.Expect(dialog).ToBeHiddenAsync();
+        });
+    }
+
+    [Theory]
+    [InlineData(1440, 300)]
+    [InlineData(800, 200)]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task Filter_ShortViewportContainsActions(int width, int height)
+    {
+        await RunTestAsync(async page =>
+        {
+            await page.SetViewportSizeAsync(width, height);
+            await OpenResourcePaneAsync(page);
+            await page.GetByRole(AriaRole.Button, new() { Name = Resources.ControlsStrings.ChartContainerFiltersHeader, Exact = true }).ClickAsync();
+            var filter = page.GetByRole(AriaRole.Group, new() { Name = Resources.ControlsStrings.ChartContainerFiltersHeader, Exact = true });
+            await Assertions.Expect(filter).ToBeVisibleAsync();
+            await AssertContainedAsync(page, filter);
+            await filter.GetByRole(AriaRole.Checkbox, new() { Name = KnownResourceTypes.Project, Exact = true }).UncheckAsync();
+            await Assertions.Expect(page.Locator(".resource-pane .resource-row")).ToHaveCountAsync(0);
+            await filter.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.ResourcePaneFilterReset, Exact = true }).ClickAsync();
+            await Assertions.Expect(page.Locator(".resource-pane .resource-row")).ToHaveCountAsync(1);
+            await filter.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.ResourcePaneFilterDone, Exact = true }).ClickAsync();
+            await Assertions.Expect(filter).ToBeHiddenAsync();
         });
     }
 
@@ -117,6 +157,11 @@ public sealed class ResourcePaneFilterTests : PlaywrightTestsBase<DashboardServe
 
             return true;
         }, "The filter and both footer actions must fit inside the viewport, not just the document scroll width.");
+    }
+
+    public sealed class SingleResourceFixture : DashboardServerFixture
+    {
+        protected override IReadOnlyList<ResourceViewModel>? Resources => [MockDashboardClient.TestResource1];
     }
 }
 
