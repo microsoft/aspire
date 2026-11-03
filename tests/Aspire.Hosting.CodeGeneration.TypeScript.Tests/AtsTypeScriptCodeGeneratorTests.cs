@@ -1927,7 +1927,7 @@ public class AtsTypeScriptCodeGeneratorTests
         Assert.All(capability.Parameters.Skip(1), parameter => Assert.True(parameter.IsOptional));
 
         var files = _generator.GenerateDistributedApplication(result.ToAtsContext());
-        var purgeDeclarations = files["aspire.mts"].Split('\n').Where(line =>
+        var purgeDeclarations = files["aspire.mts"].ReplaceLineEndings("\n").Split('\n').Where(line =>
             line.Contains("withPurgeTask", StringComparison.Ordinal) ||
             line.Contains("WithPurgeTaskOptions", StringComparison.Ordinal) ||
             line.Contains("untagged", StringComparison.Ordinal) ||
