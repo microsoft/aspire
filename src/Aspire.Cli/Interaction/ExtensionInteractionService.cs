@@ -174,8 +174,8 @@ internal class ExtensionInteractionService : IExtensionInteractionService, IDisp
                         }
                         else
                         {
-                            // Fallback to regular prompt for older extension versions
-                            result = await Backchannel.PromptForStringAsync(StringUtils.RemoveMarkup(promptText), binding?.DefaultValue, validator, required, _cancellationToken).ConfigureAwait(false);
+                            // Older extensions cannot mask regular input boxes, so keep secret entry in the terminal.
+                            result = await _consoleInteractionService.PromptForStringAsync(promptText, validator, isSecret, required, binding, logResponse, cancellationToken).ConfigureAwait(false);
                         }
                     }
                     else
