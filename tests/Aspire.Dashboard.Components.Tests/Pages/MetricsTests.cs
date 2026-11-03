@@ -1514,11 +1514,15 @@ public partial class MetricsTests : DashboardTestContext
     public async Task ReplicaGroupPinnedView_ShowsPinnedNonFirstReplica()
     {
         MetricsSetupHelpers.SetupMetricsPage(this);
+        var now = new DateTime(2025, 12, 20, 23, 59, 50, DateTimeKind.Utc);
+        var browserTimeProvider = new TestTimeProvider { UtcNow = new DateTimeOffset(now) };
+        Services.AddSingleton<BrowserTimeProvider>(browserTimeProvider);
+        Services.AddSingleton<TimeProvider>(new FakeTimeProvider(browserTimeProvider.UtcNow));
         var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
         await telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
         {
-            CreateReplicaResourceMetrics("first"),
-            CreateReplicaResourceMetrics("second")
+            CreateReplicaResourceMetrics("first", now.AddMinutes(-1), value: 10),
+            CreateReplicaResourceMetrics("second", now.AddMinutes(-1), value: 20)
         });
         Services.GetRequiredService<MetricPinStore>().SetPinned(
             new ResourceKey("TestApp", "second"),
@@ -1537,8 +1541,33 @@ public partial class MetricsTests : DashboardTestContext
         cut.WaitForAssertion(() =>
         {
             Assert.Equal("1", cut.Find(".metric-group.pinned .metric-group-count").TextContent);
-            var instrument = Assert.Single(cut.FindComponent<MeterOverview>().Instance.Instruments);
+            var overview = cut.FindComponent<MeterOverview>();
+            Assert.Null(overview.Instance.ResourceKey);
+            var instrument = Assert.Single(overview.Instance.Instruments);
             Assert.Equal(new ResourceKey("TestApp", "second"), instrument.ResourceView.ResourceKey);
+            Assert.Equal("20", cut.Find(".meter-card-value-number").TextContent);
+        });
+
+        var resources = telemetryRepository.GetResources();
+        var secondResource = resources.Single(resource => resource.ResourceKey == new ResourceKey("TestApp", "second"));
+        var secondResourceName = OtlpHelpers.GetResourceName(secondResource, resources);
+        var instrumentUrl = DashboardUrls.MetricsUrl(
+            resource: secondResourceName,
+            meter: "test-meter",
+            instrument: "shared-instrument",
+            duration: 5);
+        Assert.Equal(instrumentUrl, cut.Find(".meter-card-link").GetAttribute("href"));
+
+        Services.GetRequiredService<NavigationManager>().NavigateTo(instrumentUrl);
+        cut.Render(parameters =>
+        {
+            parameters.Add(component => component.ResourceName, secondResourceName);
+        });
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(new ResourceKey("TestApp", "second"), cut.FindComponent<ChartContainer>().Instance.ResourceKey);
+            Assert.Equal(new ResourceKey("TestApp", "second"), cut.FindComponent<MetricPinButton>().Instance.ResourceKey);
+            Assert.Equal("Back to Pinned", cut.Find(".metrics-chart-back").GetAttribute("aria-label"));
         });
     }
 
@@ -2086,7 +2115,7 @@ public partial class MetricsTests : DashboardTestContext
         Assert.Equal(TimeSpan.FromMinutes(720), viewModel.SelectedDuration.Id);
     }
 
-    private static ResourceMetrics CreateReplicaResourceMetrics(string instanceId) => new()
+    private static ResourceMetrics CreateReplicaResourceMetrics(string instanceId, DateTime? startTime = null, int? value = null) => new()
     {
         Resource = CreateResource(name: "TestApp", instanceId: instanceId),
         ScopeMetrics =
@@ -2094,7 +2123,7 @@ public partial class MetricsTests : DashboardTestContext
             new ScopeMetrics
             {
                 Scope = CreateScope(name: "test-meter"),
-                Metrics = { CreateSumMetric(metricName: "shared-instrument", startTime: s_testTime.AddMinutes(1)) }
+                Metrics = { CreateSumMetric(metricName: "shared-instrument", startTime: startTime ?? s_testTime.AddMinutes(1), value: value) }
             }
         }
     };

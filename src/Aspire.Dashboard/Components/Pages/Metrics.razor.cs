@@ -556,7 +556,10 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
 
     private string? CurrentResourceName => PageViewModel.SelectedResource.Id is null ? null : PageViewModel.SelectedResource.Name;
 
-    private ResourceKey? OverviewResourceKey => PageViewModel.SelectedResource.Id?.GetResourceKey();
+    private ResourceKey? OverviewResourceKey =>
+        PageViewModel is { ShowPinned: true, ShowFilterResults: false }
+            ? null
+            : PageViewModel.SelectedResource.Id?.GetResourceKey();
 
     private Func<OtlpInstrumentSummary, string>? ResourceLabelProvider => IsAggregate ? GetInstrumentResourceLabel : null;
 
@@ -901,9 +904,11 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
 
     private string GetInstrumentUrl(OtlpInstrumentSummary instrument)
     {
-        // A card in a list of several resources opens the chart of the resource it came from.
+        // A card in a list of several resources, including a replica group's pinned list, opens the chart of
+        // the resource it came from. Ordinary group cards keep opening an aggregate chart for the replica set.
+        var useInstrumentResource = IsAggregate || PageViewModel is { ShowPinned: true, ShowFilterResults: false };
         var url = DashboardUrls.MetricsUrl(
-            resource: IsAggregate ? GetInstrumentResourceLabel(instrument) : PageViewModel.SelectedResource.Name,
+            resource: useInstrumentResource ? GetInstrumentResourceLabel(instrument) : PageViewModel.SelectedResource.Name,
             meter: instrument.Parent.Name,
             instrument: instrument.Name,
             duration: DurationMinutes,
