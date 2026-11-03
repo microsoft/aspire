@@ -116,15 +116,10 @@ Run-mode origins come from the endpoint's `BrowserOrigins` after all `WithUrlFor
 This includes friendly `*.dev.localhost` names and custom origins added after `WithRedirectUris`. Preferred origins follow display
 ordering, and navigation paths, queries, and fragments are excluded before appending the callback path. Removing all browser URLs
 for the endpoint reports a missing origin rather than falling back to its physical address.
+Resolution fails if URL finalization has not completed within 30 seconds of endpoint allocation. URL callbacks must not await provisioning outputs
+from a registration whose redirect URIs depend on those URLs; supply an explicit redirect URI to break that dependency cycle.
 
-To select the browser origin explicitly, pass the scalar reference and callback paths:
-
-```csharp
-var origin = web.GetEndpoint("https").BrowserOrigins.First;
-entraWeb.WithRedirectUris(origin, "/signin-oidc", "/signout-callback-oidc");
-```
-
-Both overloads use the same publish/deploy behavior: an HTTPS hostname expression from the owning compute environment during infrastructure generation,
+The endpoint overload uses an HTTPS hostname expression from the owning compute environment during infrastructure generation,
 preserving deployment outputs and allowing compute-environment configuration after `WithRedirectUris`.
 For a different public origin, supply the callback URLs explicitly or through parameters.
 

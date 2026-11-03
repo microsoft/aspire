@@ -13,22 +13,11 @@ namespace Aspire.Hosting.Kubernetes;
 internal sealed class KubernetesEnvironmentContext(KubernetesEnvironmentResource environment, ILogger logger)
 {
     private readonly Dictionary<IResource, KubernetesResource> _kubernetesComponents = new(new ResourceNameComparer());
-    private readonly Dictionary<string, ParameterResource> _endpointInputs = new(StringComparer.OrdinalIgnoreCase);
+    private readonly EndpointPropertyInputCache _endpointInputs = new();
 
     public ParameterResource GetEndpointInput(EndpointReferenceExpression reference, DistributedApplicationExecutionContext executionContext)
-    {
-        if (!_endpointInputs.TryGetValue(reference.ValueExpression, out var parameter))
-        {
-            var name = ResourceNameHelpers.GetEndpointPropertyInputName(
-                reference.Endpoint.Resource.Name, reference.Endpoint.EndpointAnnotation.Name, reference.Property.ToString(), 64);
-            var resources = executionContext.Services.GetRequiredService<DistributedApplicationModel>().Resources;
-            parameter = ParameterResourceBuilderExtensions.CreateParameter(
-                executionContext.Services.GetRequiredService<IConfiguration>(), name, secret: false, GetOriginDefault(reference, resources));
-            _endpointInputs.Add(reference.ValueExpression, parameter);
-        }
-
-        return parameter;
-    }
+        => _endpointInputs.GetOrAdd(reference, executionContext.Services.GetRequiredService<IConfiguration>(),
+            () => GetOriginDefault(reference, executionContext.Services.GetRequiredService<DistributedApplicationModel>().Resources));
 
     private string? GetOriginDefault(EndpointReferenceExpression reference, IEnumerable<IResource> resources)
     {
@@ -95,7 +84,7 @@ internal sealed class KubernetesEnvironmentContext(KubernetesEnvironmentResource
                     return false;
                 }
 
-                origins.Add(new UriBuilder(uri) { Host = uri.IdnHost }.Uri.GetComponents(UriComponents.SchemeAndServer, UriFormat.UriEscaped));
+                origins.Add(BrowserOriginHelpers.GetOrigin(uri));
             }
 
             return true;

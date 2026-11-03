@@ -571,6 +571,21 @@ public class EndpointReferenceTests
     }
 
     [Theory]
+    [InlineData("https://b\u00fccher.example:443/app?x=1#top", "https://xn--bcher-kva.example")]
+    [InlineData("https://[::1]:443/app", "https://[::1]")]
+    [InlineData("http://127.0.0.1:8080/app", "http://127.0.0.1:8080")]
+    [InlineData("https://user:password@frontend.example:9443/app", "https://frontend.example:9443")]
+    public async Task BrowserOriginsNormalizeAuthority(string url, string expected)
+    {
+        var resource = new TestResource("frontend");
+        resource.Annotations.Add(new EndpointAnnotation(ProtocolType.Tcp, uriScheme: "http"));
+        var endpoint = resource.GetEndpoint("http");
+        endpoint.EndpointAnnotation.BrowserUrlsSnapshot.SetValue([new() { Url = url }]);
+
+        Assert.Equal(expected, await endpoint.BrowserOrigins.First.GetValueAsync());
+    }
+
+    [Theory]
     [InlineData(EndpointProperty.BrowserOrigin)]
     [InlineData(EndpointProperty.BrowserOrigins)]
     [InlineData(EndpointProperty.BrowserOriginsJson)]

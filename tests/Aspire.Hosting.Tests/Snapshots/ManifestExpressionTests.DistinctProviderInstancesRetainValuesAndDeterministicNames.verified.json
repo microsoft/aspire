@@ -4,7 +4,7 @@
       "type": "container.v0",
       "image": "image:latest",
       "env": {
-        "FIRST": "{value-f97679fecbfddf91.connectionString}",
+        "FIRST": "{opaque}",
         "VALUES": "{cond-enabled-value-71cdf305.connectionString}"
       }
     },
@@ -17,17 +17,9 @@
         }
       }
     },
-    "value-f97679fecbfddf91": {
-      "type": "value.v0",
-      "connectionString": "first"
-    },
     "cond-enabled-value-71cdf305": {
       "type": "value.v0",
-      "connectionString": "{value-f97679fecbfddf91.connectionString}|{value-f97679fecbfddf91-1.connectionString}|{value-f97679fecbfddf91.connectionString}"
-    },
-    "value-f97679fecbfddf91-1": {
-      "type": "value.v0",
-      "connectionString": "second"
+      "connectionString": "{opaque}|{opaque}|{opaque}"
     }
   }
 }

@@ -581,10 +581,10 @@ internal sealed class ApplicationOrchestrator
             var browserUrls = urls
                 .Where(url => url.Endpoint is { } endpoint && resourceComparer.Equals(endpoint.Resource, resource))
                 .Select(url => (Annotation: url, Uri: GetBrowserUrl(url)))
-                .Where(url => url.Uri.Scheme is "http" or "https")
+                .Where(url => url.Uri is not null)
                 .OrderBy(url => url.Annotation.DisplayLocation == UrlDisplayLocation.DetailsOnly)
                 .ThenByDescending(url => url.Annotation.DisplayOrder ?? 0)
-                .ThenByDescending(url => url.Uri.Scheme == Uri.UriSchemeHttps)
+                .ThenByDescending(url => url.Uri!.Scheme == Uri.UriSchemeHttps)
                 .ToArray();
             foreach (var endpoint in resourceEndpoints)
             {
@@ -621,14 +621,21 @@ internal sealed class ApplicationOrchestrator
             resourceLogger.LogError(ex, "An error occurred while processing URLs for resource '{ResourceName}': {Message}", resource.Name, ex.Message);
         }
 
-        Uri GetBrowserUrl(ResourceUrlAnnotation url)
+        Uri? GetBrowserUrl(ResourceUrlAnnotation url)
         {
             if (!Uri.TryCreate(url.Url, UriKind.Absolute, out var uri))
             {
-                throw new InvalidOperationException($"The browser URL '{url.Url}' for resource '{resource.Name}' must be absolute.");
+                _loggerService.GetLogger(resource).LogWarning(
+                    "URL '{Url}' for resource '{ResourceName}' is not absolute and cannot provide a browser origin.", url.Url, resource.Name);
+                return null;
             }
 
-            return new UriBuilder(uri) { Host = uri.HostNameType == UriHostNameType.Dns ? uri.IdnHost : uri.Host }.Uri;
+            if (uri.Scheme is not ("http" or "https"))
+            {
+                return null;
+            }
+
+            return uri;
         }
     }
 

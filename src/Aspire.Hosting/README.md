@@ -36,6 +36,8 @@ In run mode, endpoint URLs targeting `localhost` are projected to the HTTPS Code
 
 Physical endpoint allocation and host/container service discovery remain unchanged. Snapshot-only resource URLs continue to use the dashboard notification rewriter.
 
+Non-absolute endpoint links are excluded from browser-origin collections with a warning, but remain available to the dashboard without affecting other links. Non-HTTP(S) links do not contribute browser origins.
+
 ## Feedback & contributing
 
 https://github.com/microsoft/aspire

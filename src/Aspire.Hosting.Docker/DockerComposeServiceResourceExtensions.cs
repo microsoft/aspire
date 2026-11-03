@@ -103,27 +103,19 @@ internal static class DockerComposeServiceResourceExtensions
         }
 
         ParameterResource GetEndpointInput(EndpointReferenceExpression reference, DockerComposeServiceResource.EndpointMapping mapping)
-        {
-            if (resource.Parent.EndpointInputs.TryGetValue(reference.ValueExpression, out var parameter))
-            {
-                return parameter;
-            }
+            => resource.Parent.EndpointInputs.GetOrAdd(reference, configuration, () => GetOriginDefault(reference, mapping));
 
-            var name = ResourceNameHelpers.GetEndpointPropertyInputName(
-                reference.Endpoint.Resource.Name, reference.Endpoint.EndpointAnnotation.Name, reference.Property.ToString(), 64);
-            string? defaultValue = null;
+        static string? GetOriginDefault(EndpointReferenceExpression reference, DockerComposeServiceResource.EndpointMapping mapping)
+        {
             if (mapping.IsExternal && mapping.ExposedPort is int port && mapping.Scheme is "http" or "https")
             {
-                var origin = new UriBuilder(mapping.Scheme, "localhost", port).Uri
-                    .GetComponents(UriComponents.SchemeAndServer, UriFormat.UriEscaped);
-                defaultValue = reference.Property == EndpointProperty.BrowserOriginsJson
+                var origin = BrowserOriginHelpers.GetOrigin(new UriBuilder(mapping.Scheme, "localhost", port).Uri);
+                return reference.Property == EndpointProperty.BrowserOriginsJson
                     ? System.Text.Json.JsonSerializer.Serialize(new[] { origin })
                     : origin;
             }
 
-            parameter = ParameterResourceBuilderExtensions.CreateParameter(configuration, name, secret: false, defaultValue);
-            resource.Parent.EndpointInputs.Add(reference.ValueExpression, parameter);
-            return parameter;
+            return null;
         }
     }
 

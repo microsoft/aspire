@@ -4,21 +4,29 @@
       "type": "container.v0",
       "image": "image:latest",
       "env": {
-        "CUSTOM": "{value-f97679fecbfddf91-1.connectionString}"
+        "TLS": "{value-b08c77b13693cee3-1.connectionString}"
+      },
+      "bindings": {
+        "http": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http",
+          "targetPort": 8080
+        }
       }
     },
-    "value-f97679fecbfddf91": {
+    "value-b08c77b13693cee3": {
       "type": "parameter.v0",
-      "value": "{value-f97679fecbfddf91.inputs.value}",
+      "value": "{value-b08c77b13693cee3.inputs.value}",
       "inputs": {
         "value": {
           "type": "string"
         }
       }
     },
-    "value-f97679fecbfddf91-1": {
+    "value-b08c77b13693cee3-1": {
       "type": "value.v0",
-      "connectionString": "concrete"
+      "connectionString": "False"
     }
   }
 }

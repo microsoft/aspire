@@ -314,14 +314,20 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         Assert.Equal("http://localhost:8080", frontend.GetEndpoint("http").Url);
     }
 
-    [Fact]
-    public async Task InvalidBrowserOriginPreservesDashboardLinks()
+    [Theory]
+    [InlineData("mailto:frontend@example.com")]
+    [InlineData("swagger")]
+    public async Task InvalidBrowserOriginPreservesDashboardLinks(string invalidUrl)
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var frontend = builder.AddExecutable("frontend", "unused", ".").WithHttpEndpoint()
-            .WithUrlForEndpoint("http", url => url.Url = "mailto:frontend@example.com");
+            .WithUrlForEndpoint("http", url => url.Url = invalidUrl)
+            .WithHttpsEndpoint()
+            .WithUrlForEndpoint("https", url => url.Url = "https://frontend.example/home");
         var endpoint = frontend.GetEndpoint("http").EndpointAnnotation;
         endpoint.AllocatedEndpoint = new(endpoint, "localhost", 8080);
+        var httpsEndpoint = frontend.GetEndpoint("https").EndpointAnnotation;
+        httpsEndpoint.AllocatedEndpoint = new(httpsEndpoint, "localhost", 8443);
 
         using var app = builder.Build();
         var orchestrator = CreateOrchestrator(app.Services.GetRequiredService<DistributedApplicationModel>(), ResourceNotificationServiceTestHelpers.Create(),
@@ -331,7 +337,10 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
 
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await frontend.GetEndpoint("http").BrowserOrigins.First.GetValueAsync().DefaultTimeout());
-        Assert.Equal("mailto:frontend@example.com", Assert.Single(frontend.Resource.Annotations.OfType<ResourceUrlAnnotation>()).Url);
+        Assert.Equal("[]", await frontend.GetEndpoint("http").BrowserOrigins.AsJson().GetValueAsync().DefaultTimeout());
+        Assert.Equal("https://frontend.example", await frontend.GetEndpoint("https").BrowserOrigins.First.GetValueAsync().DefaultTimeout());
+        Assert.Equal([invalidUrl, "https://frontend.example/home"],
+            frontend.Resource.Annotations.OfType<ResourceUrlAnnotation>().Select(url => url.Url));
     }
 
     [Fact]

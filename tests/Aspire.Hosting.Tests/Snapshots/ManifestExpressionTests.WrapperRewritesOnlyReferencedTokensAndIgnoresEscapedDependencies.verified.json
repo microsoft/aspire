@@ -13,7 +13,7 @@
       "type": "container.v0",
       "image": "image:latest",
       "env": {
-        "URL": "https://{public-host.value}/{value-4311bf6732892bae.connectionString}?literal={{cond-unused-condition-value-7999efbb.connectionString}}"
+        "URL": "https://{public-host.value}/{frontend.customProperty}?literal={{cond-unused-condition-value-7999efbb.connectionString}}"
       }
     },
     "unused-condition": {
@@ -24,10 +24,6 @@
           "type": "string"
         }
       }
-    },
-    "value-4311bf6732892bae": {
-      "type": "value.v0",
-      "connectionString": "concrete"
     }
   }
 }

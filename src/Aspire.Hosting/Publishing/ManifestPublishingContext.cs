@@ -780,7 +780,7 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
     /// <remarks>
     /// Manifest callbacks should use this method rather than writing
     /// <see cref="IManifestExpressionProvider.ValueExpression"/> directly when a value may require lowering.
-    /// Opaque tokens from symbolic-only providers are preserved without concrete evaluation.
+    /// Opaque tokens from custom providers are preserved without concrete evaluation.
     /// Call <see cref="TryAddDependentResources"/> to include its referenced resources.
     /// </remarks>
     /// <exception cref="ArgumentNullException"><paramref name="value"/> is <see langword="null"/>.</exception>
@@ -874,17 +874,16 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
             {
                 lowered = token.Text;
             }
-            else if (source is IValueProvider valueProvider)
+            else if (source is EndpointReferenceExpression { Property: EndpointProperty.TlsEnabled } endpointProperty)
             {
-                // The provider's expression cannot be represented by azd. Resolve this provider only,
-                // not the enclosing expression, so adjacent deployment references remain symbolic.
-                return RegisterConcreteManifestValue(valueProvider, expression);
+                // TLS is model configuration, not a runtime or secret value. azd has no binding
+                // for it, so it is safe to materialize this specific property at publication.
+                return RegisterConcreteManifestValue(endpointProperty, expression);
             }
             else
             {
-                // Symbolic-only providers own their representation. They do not advertise
-                // concrete evaluation, so preserve opaque tokens as before rather than
-                // treating this publisher's vocabulary as validation of their contract.
+                // Custom providers own their representation. IValueProvider does not promise
+                // that a value is public or available while publishing.
                 lowered = token.Text;
             }
 
@@ -1292,8 +1291,8 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
         {
             // azd understands ordinary binding tokens, but not browser-origin properties.
             // Keep those properties symbolic as required inputs; no runtime allocation is read.
-            var baseName = ResourceNameHelpers.TruncateWithHash(
-                $"{endpoint.Endpoint.Resource.Name}-{endpoint.Endpoint.EndpointName}-{endpoint.Property}",
+            var baseName = ResourceNameHelpers.GetEndpointPropertyInputName(
+                endpoint.Endpoint.Resource.Name, endpoint.Endpoint.EndpointAnnotation.Name, endpoint.Property.ToString(),
                 ModelName.DefaultMaxLength);
             name = GetAvailableManifestResourceName(baseName);
             _manifestResourceNames.Add(name);

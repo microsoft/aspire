@@ -9,6 +9,8 @@
 
   <ItemGroup>
     <Compile Include="$(SharedDir)ResourceNameHelpers.cs" Link="Shared/ResourceNameHelpers.cs" />
+    <Compile Include="$(SharedDir)EndpointPropertyInputCache.cs" Link="Shared/EndpointPropertyInputCache.cs" />
+    <Compile Include="$(SharedDir)BrowserOriginHelpers.cs" Link="Shared/BrowserOriginHelpers.cs" />
     <Compile Include="..\Aspire.Hosting\Dcp\Process\ProcessResult.cs" Link="Shared\ProcessResult.cs" />
     <Compile Include="..\Aspire.Hosting\Dcp\Process\ProcessSpec.cs" Link="Shared\ProcessSpec.cs" />
     <Compile Include="..\Aspire.Hosting\Dcp\Process\ProcessOutputCapture.cs" Link="Shared\ProcessOutputCapture.cs" />

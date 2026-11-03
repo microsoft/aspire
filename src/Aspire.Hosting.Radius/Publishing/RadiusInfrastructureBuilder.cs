@@ -52,7 +52,7 @@ internal sealed class RadiusInfrastructureBuilder
     // These are emitted as top-level Bicep `param`s (secure when the source parameter is secret)
     // instead of inlining values, so no literal secret is written to the published artifact.
     private readonly Dictionary<string, ProvisioningParameter> _envParametersByName = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, ParameterResource> _endpointInputs = new(StringComparer.OrdinalIgnoreCase);
+    private readonly EndpointPropertyInputCache _endpointInputs = new();
 
     // Maps the emitted Bicep parameter identifier to its originating Aspire ParameterResource, so
     // the deploy step can resolve each value at deploy time and pass it via `rad deploy --parameters`.
@@ -4154,15 +4154,8 @@ internal sealed class RadiusInfrastructureBuilder
             case EndpointReferenceExpression endpointReferenceExpression when endpointReferenceExpression.Property is
                 EndpointProperty.BrowserOrigin or EndpointProperty.BrowserOrigins or EndpointProperty.BrowserOriginsJson:
                 ThrowIfEndpointMissing(endpointReferenceExpression.Endpoint, owner);
-                if (!_endpointInputs.TryGetValue(endpointReferenceExpression.ValueExpression, out var input))
-                {
-                    var inputName = ResourceNameHelpers.GetEndpointPropertyInputName(
-                        endpointReferenceExpression.Endpoint.Resource.Name, endpointReferenceExpression.Endpoint.EndpointAnnotation.Name,
-                        endpointReferenceExpression.Property.ToString(), 64);
-                    input = ParameterResourceBuilderExtensions.CreateParameter(
-                        _executionContext.Services.GetRequiredService<IConfiguration>(), inputName, secret: false);
-                    _endpointInputs.Add(endpointReferenceExpression.ValueExpression, input);
-                }
+                var input = _endpointInputs.GetOrAdd(endpointReferenceExpression,
+                    _executionContext.Services.GetRequiredService<IConfiguration>());
                 parts.Add(ResolveParameterPart(input, referencedResource, allowRecipeSubstitutions: false));
                 return;
             case EndpointReferenceExpression endpointReferenceExpression:

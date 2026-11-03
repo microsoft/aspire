@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using System.Globalization;
+using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.ApplicationModel;
 
@@ -397,8 +398,7 @@ public class EndpointReferenceExpression(EndpointReference endpointReference, En
             var urls = await snapshot.GetValueAsync(cancellationToken).ConfigureAwait(false);
             var origins = urls.Select(url => new Uri(url.Url, UriKind.Absolute))
                 .Where(uri => uri.Scheme is "http" or "https")
-                .Select(uri => new UriBuilder(uri) { Host = uri.HostNameType == UriHostNameType.Dns ? uri.IdnHost : uri.Host }.Uri
-                    .GetComponents(UriComponents.SchemeAndServer, UriFormat.UriEscaped))
+                .Select(BrowserOriginHelpers.GetOrigin)
                 .Distinct(StringComparer.Ordinal)
                 .ToArray();
             return Property switch

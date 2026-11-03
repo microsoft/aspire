@@ -25,22 +25,12 @@ internal sealed class ContainerAppEnvironmentContext(
     public IServiceProvider Services => serviceProvider;
 
     private readonly Dictionary<IResource, BaseContainerAppContext> _containerApps = new(new ResourceNameComparer());
-    private readonly Dictionary<string, ParameterResource> _endpointInputs = new(StringComparer.OrdinalIgnoreCase);
+    private readonly EndpointPropertyInputCache _endpointInputs = new();
     private readonly List<(string ResourceName, string[] EndpointNames)> _upgradedEndpoints = [];
     private bool _hasLoggedHttpsUpgrade;
 
-    public ParameterResource GetEndpointInput(EndpointReferenceExpression reference)
-    {
-        if (!_endpointInputs.TryGetValue(reference.ValueExpression, out var parameter))
-        {
-            var name = ResourceNameHelpers.GetEndpointPropertyInputName(
-                reference.Endpoint.Resource.Name, reference.Endpoint.EndpointAnnotation.Name, reference.Property.ToString(), 64);
-            parameter = ParameterResourceBuilderExtensions.CreateParameter(serviceProvider.GetRequiredService<IConfiguration>(), name, secret: false);
-            _endpointInputs.Add(reference.ValueExpression, parameter);
-        }
-
-        return parameter;
-    }
+    public ParameterResource GetEndpointInput(EndpointReferenceExpression reference) =>
+        _endpointInputs.GetOrAdd(reference, serviceProvider.GetRequiredService<IConfiguration>());
 
     /// <summary>
     /// Records HTTP endpoints that were upgraded to HTTPS for a resource.

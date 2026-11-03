@@ -1,23 +1,34 @@
 ﻿{
   "resources": {
+    "first": {
+      "type": "parameter.v0",
+      "value": "{first.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "second": {
+      "type": "parameter.v0",
+      "value": "{second.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    },
     "backend": {
       "type": "container.v0",
       "image": "image:latest",
       "env": {
-        "VALUES": "{value-24a3f268d8a982e1-uri-encoded.connectionString}|{value-f97679fecbfddf91-1.connectionString}|{value-f97679fecbfddf91.connectionString}"
+        "VALUES": "{second-uri-encoded.value}|{first.value}|{second.value}"
       }
     },
-    "value-f97679fecbfddf91": {
-      "type": "value.v0",
-      "connectionString": "second/value"
-    },
-    "value-f97679fecbfddf91-1": {
-      "type": "value.v0",
-      "connectionString": "first value"
-    },
-    "value-24a3f268d8a982e1-uri-encoded": {
-      "type": "value.v0",
-      "connectionString": "second%2Fvalue"
+    "second-uri-encoded": {
+      "type": "annotated.string",
+      "value": "{second.value}",
+      "filter": "uri"
     }
   }
 }

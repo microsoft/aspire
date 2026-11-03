@@ -27,11 +27,7 @@
     },
     "cond-enabled-value-79448306": {
       "type": "value.v0",
-      "connectionString": "https://{public-host.value}/{value-4311bf6732892bae.connectionString}"
-    },
-    "value-4311bf6732892bae": {
-      "type": "value.v0",
-      "connectionString": "concrete"
+      "connectionString": "https://{public-host.value}/{frontend.customProperty}"
     }
   }
 }

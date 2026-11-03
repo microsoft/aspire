@@ -1346,58 +1346,6 @@ public static class EntraIdResourceExtensions
     }
 
     /// <summary>
-    /// Adds redirect URIs for a browser origin to a registration created by Aspire.
-    /// </summary>
-    /// <param name="builder">The resource builder.</param>
-    /// <param name="browserOrigin">An endpoint's <see cref="EndpointProperty.BrowserOrigin"/> expression that serves the callbacks.</param>
-    /// <param name="callbackPaths">The callback paths on that origin, such as <c>/signin-oidc</c>.</param>
-    /// <returns>The resource builder for chaining.</returns>
-    /// <exception cref="ArgumentNullException">Thrown when an argument is null.</exception>
-    /// <exception cref="ArgumentException">Thrown when the expression is not a browser origin, no path is provided, or a path doesn't start with <c>/</c>.</exception>
-    /// <remarks>
-    /// This uses the same resolution as the endpoint overload: the preferred finalized browser origin in run mode,
-    /// or an HTTPS URL using the owning compute environment's host expression when publishing.
-    /// Callback paths must match the consuming application's configuration.
-    /// Existing registrations are not modified.
-    /// </remarks>
-    /// <example>
-    /// <code>
-    /// var origin = web.GetEndpoint("https").BrowserOrigins.First;
-    /// entraWeb.WithRedirectUris(origin, "/signin-oidc", "/signout-callback-oidc");
-    /// </code>
-    /// </example>
-    [AspireExportIgnore(Reason = "The withRedirectUris export accepts the endpoint directly with optional callback paths.")]
-    public static IResourceBuilder<EntraIdApplicationResource> WithRedirectUris(
-        this IResourceBuilder<EntraIdApplicationResource> builder,
-        EndpointReferenceExpression browserOrigin,
-        params string[] callbackPaths)
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(browserOrigin);
-        ArgumentNullException.ThrowIfNull(callbackPaths);
-        if (browserOrigin.Property != EndpointProperty.BrowserOrigin)
-        {
-            throw new ArgumentException("The endpoint expression must select the browser origin.", nameof(browserOrigin));
-        }
-
-        if (callbackPaths.Length == 0)
-        {
-            throw new ArgumentException("At least one callback path is required.", nameof(callbackPaths));
-        }
-
-        foreach (var path in callbackPaths)
-        {
-            ArgumentException.ThrowIfNullOrWhiteSpace(path, nameof(callbackPaths));
-            if (!path.StartsWith('/'))
-            {
-                throw new ArgumentException($"The callback path '{path}' must start with '/'.", nameof(callbackPaths));
-            }
-        }
-
-        return builder.WithRedirectUris(browserOrigin.Endpoint, callbackPaths);
-    }
-
-    /// <summary>
     /// Adds redirect URIs for a resource's endpoint to a registration created by Aspire.
     /// </summary>
     /// <param name="builder">The resource builder.</param>
@@ -1411,6 +1359,8 @@ public static class EntraIdResourceExtensions
     /// In run mode the origin comes from the endpoint's finalized browser URLs, including vanity hostnames and URL
     /// customization. When publishing or deploying, the host name comes from the resource's compute environment and
     /// the scheme is <c>https</c>.
+    /// Resolution fails if URL finalization has not completed within 30 seconds of endpoint allocation. URL callbacks must not wait for
+    /// provisioning outputs from this registration, because its redirect URIs depend on those callbacks completing.
     /// </para>
     /// <para>
     /// The callback path can't be discovered from the endpoint: it's configured by the consuming application, so it is
@@ -1466,7 +1416,7 @@ public static class EntraIdResourceExtensions
         {
             if (!builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
             {
-                return ReferenceExpression.Create($"{endpoint.BrowserOrigins.First}{path}");
+                return ReferenceExpression.Create($"{new EntraIdRunModeBrowserOrigin(endpoint)}{path}");
             }
 
             // Delay environment lookup until infrastructure generation, so compute-environment

@@ -15,6 +15,71 @@ namespace Aspire.Hosting.Tests;
 [Trait("Partition", "5")]
 public class ManifestExpressionTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CustomSecretProviderIsNeverMaterialized(bool dependencyOnly)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var calls = 0;
+        var secret = new TestManifestValue("{vault.custom.key}", (_, _) =>
+        {
+            calls++;
+            return ValueTask.FromResult<string?>("must-not-be-published");
+        });
+        var consumer = builder.AddContainer("consumer", "image");
+        if (dependencyOnly)
+        {
+            consumer.WithManifestPublishingCallback(context =>
+            {
+                context.Writer.WriteString("type", "custom.v0");
+                context.TryAddDependentResources(secret);
+            });
+        }
+        else
+        {
+            consumer.WithEnvironment("SECRET", secret);
+        }
+        using var app = builder.Build();
+
+        var manifest = await ManifestUtils.GetManifestForModel(app.Services.GetRequiredService<DistributedApplicationModel>());
+
+        Assert.Equal(0, calls);
+        await Verify(manifest.ToJsonString(new JsonSerializerOptions { WriteIndented = true }), "json").UseParameters(dependencyOnly);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task EndpointOriginInputIdentityDoesNotDependOnReferenceOrder(bool reverseOrder)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var first = builder.AddContainer("a-b", "image").WithHttpEndpoint(name: "c", targetPort: 80);
+        var second = builder.AddContainer("a", "image").WithHttpEndpoint(name: "b-c", targetPort: 80);
+        var consumer = builder.AddContainer("consumer", "image");
+        if (reverseOrder)
+        {
+            consumer.WithEnvironment("SECOND", second.GetEndpoint("b-c").BrowserOrigins.First);
+            consumer.WithEnvironment("FIRST", first.GetEndpoint("c").BrowserOrigins.First);
+        }
+        else
+        {
+            consumer.WithEnvironment("FIRST", first.GetEndpoint("c").BrowserOrigins.First);
+            consumer.WithEnvironment("SECOND", second.GetEndpoint("b-c").BrowserOrigins.First);
+        }
+        using var app = builder.Build();
+
+        var manifest = await ManifestUtils.GetManifestForModel(app.Services.GetRequiredService<DistributedApplicationModel>());
+        var variables = manifest["resources"]!["consumer"]!["env"]!.AsObject();
+        Assert.Equal("{a-b-c-BrowserOrigin.value}", variables["FIRST"]!.GetValue<string>());
+        var secondName = ResourceNameHelpers.GetEndpointPropertyInputName("a", "b-c", nameof(EndpointProperty.BrowserOrigin), ModelName.DefaultMaxLength);
+        Assert.Equal($"{{{secondName}.value}}", variables["SECOND"]!.GetValue<string>());
+        Assert.Equal(
+            ["a-b-c-BrowserOrigin", secondName],
+            manifest["resources"]!.AsObject().Where(resource => resource.Value!["type"]!.GetValue<string>() == "parameter.v0")
+                .Select(resource => resource.Key).Order(StringComparer.Ordinal));
+    }
+
     [Fact]
     public async Task SymbolicOnlyProvidersPreserveOpaqueTokensAlongsideLoweredOrigins()
     {
@@ -113,7 +178,7 @@ public class ManifestExpressionTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task UnsupportedCustomPropertyResolvesOnceWithoutResolvingAdjacentParameters()
+    public async Task UnsupportedCustomPropertyRemainsSymbolicAlongsideParameters()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var publicHost = new ParameterResource("public-host", _ =>
@@ -127,12 +192,12 @@ public class ManifestExpressionTests(ITestOutputHelper outputHelper)
         });
         builder.AddContainer("backend", "image")
             .WithEnvironment("CUSTOM", custom)
-            .WithEnvironment("URL", ReferenceExpression.Create($"https://{publicHost}/{custom:uri}"));
+            .WithEnvironment("URL", ReferenceExpression.Create($"https://{publicHost}/{custom}"));
         using var app = builder.Build();
 
         var manifest = await ManifestUtils.GetManifestForModel(app.Services.GetRequiredService<DistributedApplicationModel>());
 
-        Assert.Equal(1, calls);
+        Assert.Equal(0, calls);
         await Verify(manifest.ToJsonString(new JsonSerializerOptions { WriteIndented = true }), "json");
     }
 
@@ -162,11 +227,11 @@ public class ManifestExpressionTests(ITestOutputHelper outputHelper)
 
         var manifest = await ManifestUtils.GetManifestForModel(model);
 
-        Assert.Equal(1, firstCalls);
-        Assert.Equal(1, secondCalls);
+        Assert.Equal(0, firstCalls);
+        Assert.Equal(0, secondCalls);
         var repeated = await ManifestUtils.GetManifestForModel(model);
-        Assert.Equal(2, firstCalls);
-        Assert.Equal(2, secondCalls);
+        Assert.Equal(0, firstCalls);
+        Assert.Equal(0, secondCalls);
         Assert.True(JsonNode.DeepEquals(manifest, repeated));
         await Verify(manifest.ToJsonString(new JsonSerializerOptions { WriteIndented = true }), "json");
     }
@@ -177,8 +242,8 @@ public class ManifestExpressionTests(ITestOutputHelper outputHelper)
     public async Task WrappedStructuredExpressionsPreserveProviderOccurrencesAndFormats(bool reverseOrder)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        var first = new TestManifestValue("{opaque}", (_, _) => ValueTask.FromResult<string?>("first value"));
-        var second = new TestManifestValue("{opaque}", (_, _) => ValueTask.FromResult<string?>("second/value"));
+        var first = builder.AddParameter("first");
+        var second = builder.AddParameter("second");
         var inner = reverseOrder
             ? ReferenceExpression.Create($"{second:uri}|{first}|{second}")
             : ReferenceExpression.Create($"{first}|{second:uri}|{first}");
@@ -210,7 +275,7 @@ public class ManifestExpressionTests(ITestOutputHelper outputHelper)
 
         var manifest = await ManifestUtils.GetManifestForModel(app.Services.GetRequiredService<DistributedApplicationModel>());
 
-        Assert.Equal(1, calls);
+        Assert.Equal(0, calls);
         await Verify(manifest.ToJsonString(new JsonSerializerOptions { WriteIndented = true }), "json");
     }
 
@@ -237,8 +302,8 @@ public class ManifestExpressionTests(ITestOutputHelper outputHelper)
     public async Task ConcreteNamesAvoidExistingModelResourceNames()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        var value = new TestManifestValue("{opaque}", (_, _) => ValueTask.FromResult<string?>("concrete"));
-        builder.AddContainer("backend", "image").WithEnvironment("CUSTOM", value);
+        var backend = builder.AddContainer("backend", "image").WithHttpEndpoint(targetPort: 8080);
+        backend.WithEnvironment("TLS", backend.GetEndpoint("http").Property(EndpointProperty.TlsEnabled));
         using var app = builder.Build();
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
         var initial = await ManifestUtils.GetManifestForModel(model);
@@ -312,12 +377,8 @@ public class ManifestExpressionTests(ITestOutputHelper outputHelper)
             conditionCalls++;
             return bool.TrueString;
         });
-        var customCalls = 0;
-        var custom = new TestManifestValue("{opaque}", (_, _) =>
-        {
-            customCalls++;
-            return ValueTask.FromResult<string?>("path with spaces/{literal}");
-        });
+        var custom = new TestManifestValue("path with spaces/{{literal}}", (_, _) =>
+            throw new InvalidOperationException("A literal expression must not be resolved."));
         var inactive = ReferenceExpression.CreateConditional(new ParameterResource("inactive", _ =>
                 throw new InvalidOperationException("An unselected condition must not be resolved.")),
             bool.TrueString, ReferenceExpression.Empty, ReferenceExpression.Empty);
@@ -330,7 +391,6 @@ public class ManifestExpressionTests(ITestOutputHelper outputHelper)
 
         var manifest = await ManifestUtils.GetManifestForModel(app.Services.GetRequiredService<DistributedApplicationModel>());
 
-        Assert.Equal(1, customCalls);
         Assert.Equal(1, conditionCalls);
         await Verify(manifest.ToJsonString(new JsonSerializerOptions { WriteIndented = true }), "json");
     }
@@ -501,7 +561,7 @@ public class ManifestExpressionTests(ITestOutputHelper outputHelper)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var calls = 0;
-        var concrete = new TestManifestValue("{opaque}", (_, _) =>
+        var concrete = new TestManifestValue("one two/%", (_, _) =>
         {
             calls++;
             return ValueTask.FromResult<string?>("one two/%");
@@ -515,15 +575,18 @@ public class ManifestExpressionTests(ITestOutputHelper outputHelper)
 
         var manifest = await ManifestUtils.GetManifestForModel(app.Services.GetRequiredService<DistributedApplicationModel>());
 
-        Assert.Equal(1, calls);
+        Assert.Equal(0, calls);
         await Verify(manifest.ToJsonString(new JsonSerializerOptions { WriteIndented = true }), "json");
     }
 
-    [Fact]
-    public async Task OpaqueSymbolicUriFormattingFailsWithoutResolvingTheProvider()
+    [Theory]
+    [InlineData("{resource.connectionString}")]
+    [InlineData("{vault.custom.key}")]
+    [InlineData("{value}")]
+    public async Task OpaqueSymbolicUriFormattingFailsWithoutResolvingTheProvider(string token)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        var opaque = new TestManifestValue("{resource.connectionString}", (_, _) =>
+        var opaque = new TestManifestValue(token, (_, _) =>
             throw new InvalidOperationException("An opaque symbolic reference must not be forced to resolve."));
         builder.AddContainer("backend", "image").WithEnvironment("ENCODED", ReferenceExpression.Create($"{opaque:uri}"));
         using var app = builder.Build();
@@ -532,7 +595,7 @@ public class ManifestExpressionTests(ITestOutputHelper outputHelper)
             app.Services.GetRequiredService<DistributedApplicationModel>()));
 
         Assert.Equal(
-            "URI formatting cannot be deferred for manifest reference '{resource.connectionString}'. " +
+            $"URI formatting cannot be deferred for manifest reference '{token}'. " +
             "Use a parameter/output expression or a publication-time value.", error.Message);
     }
 
@@ -582,7 +645,7 @@ public class ManifestExpressionTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task ConcreteResolutionPropagatesErrors()
+    public async Task UnavailableCustomProviderIsNotEvaluated()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var value = new TestManifestValue("{frontend.customProperty}", (_, _) =>
@@ -590,14 +653,14 @@ public class ManifestExpressionTests(ITestOutputHelper outputHelper)
         builder.AddContainer("backend", "image").WithEnvironment("CUSTOM", value);
         using var app = builder.Build();
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => ManifestUtils.GetManifestForModel(
-            app.Services.GetRequiredService<DistributedApplicationModel>()));
+        var manifest = await ManifestUtils.GetManifestForModel(
+            app.Services.GetRequiredService<DistributedApplicationModel>());
 
-        Assert.Equal("The publication-time value is unavailable.", error.Message);
+        await Verify(manifest.ToJsonString(new JsonSerializerOptions { WriteIndented = true }), "json");
     }
 
     [Fact]
-    public async Task ConcreteNullValueRetainsEmptyStringBehavior()
+    public async Task NullCustomProviderRetainsSymbolicValue()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var value = new TestManifestValue("{frontend.customProperty}", (_, _) => ValueTask.FromResult<string?>(null));
@@ -628,7 +691,7 @@ public class ManifestExpressionTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task ConcreteResolutionReceivesPublicationContextAndCancellation()
+    public async Task ConditionalResolutionReceivesPublicationContextAndCancellation()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         using var cts = new CancellationTokenSource();
@@ -638,7 +701,9 @@ public class ManifestExpressionTests(ITestOutputHelper outputHelper)
             Assert.Equal(cts.Token, token);
             return ValueTask.FromException<string?>(new OperationCanceledException(token));
         });
-        builder.AddContainer("backend", "image").WithEnvironment("CUSTOM", value);
+        var conditional = ReferenceExpression.CreateConditional(value, bool.TrueString,
+            ReferenceExpression.Create($"selected"), ReferenceExpression.Empty);
+        builder.AddContainer("backend", "image").WithEnvironment("CUSTOM", conditional);
         using var app = builder.Build();
         using var buffer = new MemoryStream();
         using var writer = new Utf8JsonWriter(buffer);
