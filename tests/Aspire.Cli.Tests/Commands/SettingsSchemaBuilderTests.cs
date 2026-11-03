@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Commands;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Documentation.ApiDocs;
 using Aspire.Cli.Documentation.Docs;
 
@@ -9,6 +10,25 @@ namespace Aspire.Cli.Tests.Commands;
 
 public class SettingsSchemaBuilderTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void BuildSchema_DescribesSourceNameConstraints(bool global)
+    {
+        foreach (var schema in new[]
+        {
+            SettingsSchemaBuilder.BuildSchema(excludeLocalOnly: global),
+            SettingsSchemaBuilder.BuildConfigFileSchema(excludeLocalOnly: global)
+        })
+        {
+            foreach (var source in schema.Properties.Where(property =>
+                property.Name is "integrationSources" or "skillSources" or "templateSources"))
+            {
+                Assert.EndsWith(SourceNameValidator.Description, source.Description, StringComparison.Ordinal);
+            }
+        }
+    }
+
     [Fact]
     public void BuildConfigFileSchema_HonorsConditionalJsonIgnore()
     {

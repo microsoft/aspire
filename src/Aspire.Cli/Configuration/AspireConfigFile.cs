@@ -119,11 +119,11 @@ internal sealed class AspireConfigFile
     public AspireConfigDocs? Docs { get; set; }
 
     [JsonPropertyName(SkillSource.SectionName)]
-    [Description("Named agent skill sources, merged across configuration layers. The built-in default source remains enabled unless explicitly disabled.")]
+    [Description("Named agent skill sources, merged across configuration layers. The built-in default source remains enabled unless explicitly disabled. " + SourceNameValidator.Description)]
     public Dictionary<string, SkillSource>? SkillSources { get; set; }
 
     [JsonPropertyName(IntegrationSourceConfiguration.SectionName)]
-    [Description("Named NuGet integration sources and allowed package patterns, merged across configuration layers.")]
+    [Description("Named NuGet integration sources and allowed package patterns, merged across configuration layers. " + SourceNameValidator.Description)]
     public Dictionary<string, IntegrationSourceConfiguration>? IntegrationSources { get; set; }
 
     /// <summary>
@@ -176,7 +176,7 @@ internal sealed class AspireConfigFile
     public Dictionary<string, PackageEntry>? Packages { get; set; }
 
     [JsonPropertyName(TemplateSourcesSectionName)]
-    [Description("Named global template sources. Each source specifies an absolute local path or a Git repository with optional ref and path.")]
+    [Description("Named global template sources. Each source specifies an absolute local path or a Git repository with optional ref and path. " + SourceNameValidator.Description)]
     public Dictionary<string, AspireConfigTemplateSource?>? TemplateSources { get; set; }
 
     // Unmodeled settings must survive typed load/save cycles.

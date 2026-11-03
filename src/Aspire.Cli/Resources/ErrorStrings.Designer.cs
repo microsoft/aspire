@@ -466,6 +466,24 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Invalid source name at &apos;{0}&apos;. Source names must be 1-64 ASCII letters, digits, dots, hyphens, or underscores, starting with a letter or digit..
+        /// </summary>
+        internal static string InvalidSourceName {
+            get {
+                return ResourceManager.GetString("InvalidSourceName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to NuGet source key &apos;{0}&apos; is already reserved by another source or its settings. Choose another integration source key or update the NuGet configuration manually..
+        /// </summary>
+        internal static string NuGetSourceKeyAlreadyInUse {
+            get {
+                return ResourceManager.GetString("NuGetSourceKeyAlreadyInUse", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to The configuration file &apos;{0}&apos; contains invalid JSON: {1}.
         /// </summary>
         internal static string InvalidJsonInConfigFile {

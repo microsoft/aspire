@@ -279,7 +279,10 @@ internal sealed class BundleNuGetService : INuGetService
                 PackageSourceIdentity.IsNamedSourceReference(mapping.Source) &&
                 settings.Sources.Any(source => string.Equals(source.Name, mapping.Source, StringComparison.OrdinalIgnoreCase))
                     ? mapping.Source
-                    : PackageSourceOverrideMappings.ResolveForWorkingDirectory(mapping.Source, workingDirectory)))
+                    : PackageSourceOverrideMappings.ResolveForWorkingDirectory(mapping.Source, workingDirectory))
+            {
+                SourceKey = mapping.SourceKey
+            })
             .ToArray();
 
     internal bool IsPackageSourceMappingEnabled(DirectoryInfo workingDirectory, CancellationToken cancellationToken)

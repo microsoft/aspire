@@ -242,6 +242,11 @@
         <target state="translated">Il percorso del socket di estensione fornito richiede due parti valide.</target>
         <note />
       </trans-unit>
+      <trans-unit id="InvalidSourceName">
+        <source>Invalid source name at '{0}'. Source names must be 1-64 ASCII letters, digits, dots, hyphens, or underscores, starting with a letter or digit.</source>
+        <target state="new">Invalid source name at '{0}'. Source names must be 1-64 ASCII letters, digits, dots, hyphens, or underscores, starting with a letter or digit.</target>
+        <note>{0} is the configuration key. Do not translate ASCII.</note>
+      </trans-unit>
       <trans-unit id="LegacyAppHostPathCannotBeSetWithConfigCommand">
         <source>The legacy AppHost path key 'appHostPath' cannot be set with 'aspire config set'. Use 'appHost.path' in a local aspire.config.json file instead.</source>
         <target state="translated">Non è possibile impostare la chiave legacy del percorso di AppHost 'appHostPath' con 'aspire config set'. Usare invece 'appHost.path' in un file aspire.config.json locale.</target>
@@ -271,6 +276,11 @@
         <source>Input was required for prompt '{0}' but not provided.</source>
         <target state="translated">L'input necessario per la richiesta '{0}' non è stato fornito.</target>
         <note />
+      </trans-unit>
+      <trans-unit id="NuGetSourceKeyAlreadyInUse">
+        <source>NuGet source key '{0}' is already reserved by another source or its settings. Choose another integration source key or update the NuGet configuration manually.</source>
+        <target state="new">NuGet source key '{0}' is already reserved by another source or its settings. Choose another integration source key or update the NuGet configuration manually.</target>
+        <note>{0} is the source key. Do not translate NuGet.</note>
       </trans-unit>
       <trans-unit id="ProjectCouldNotBeAnalyzed">
         <source>The project could not be analyzed due to a build error. See logs at {0}</source>

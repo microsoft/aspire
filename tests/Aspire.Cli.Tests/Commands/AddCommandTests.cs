@@ -65,8 +65,10 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                     _ => throw new InvalidOperationException($"Unexpected integration query: {query}")
                 };
                 Assert.True(filter!(id));
-                return Task.FromResult<IEnumerable<NuGetPackage>>(
-                    [new() { Id = id, Version = "1.0.0", Source = source }]);
+                return Task.FromResult<IEnumerable<NuGetPackage>>(query == "Contoso."
+                    ? [new() { Id = id, Version = "1.0.0", Source = source },
+                       new() { Id = "Contoso.Hosting.Three", Version = "1.0.0", Source = source }]
+                    : [new() { Id = id, Version = "1.0.0", Source = source }]);
             }
         };
         var added = new List<string>();
@@ -86,29 +88,80 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
         var configurations = new XElement("configurations");
 
-        foreach (var id in new[] { "Contoso.Hosting.One", "Fabrikam.Hosting.Two" })
+        foreach (var id in new[] { "Contoso.Hosting.One", "Fabrikam.Hosting.Two", "Contoso.Hosting.Three" })
         {
             var exitCode = await provider.GetRequiredService<AddCommand>()
                 .Parse($"add {id} --apphost \"{appHostFile.FullName}\" --version 1.0.0").InvokeAsync().DefaultTimeout();
 
             Assert.Equal(CliExitCodes.Success, exitCode);
             var expectedSources = new List<string> { "https://example.com/sdk", "https://example.com/public", "https://example.com/team" };
-            if (added.Count == 2)
+            if (added.Count >= 2)
             {
                 expectedSources.Add("https://example.com/other");
             }
             foreach (var packageId in added)
             {
                 Assert.Equal(hasMappings
-                        ? [packageId == "Contoso.Hosting.One" ? "https://example.com/team" : "https://example.com/other"]
+                        ? [packageId.StartsWith("Contoso.", StringComparison.Ordinal) ? "https://example.com/team" : "https://example.com/other"]
                         : expectedSources.Order(StringComparer.Ordinal).ToArray(),
                     NuGetTestHelper.GetEligiblePackageSources(workspace.Path, packageId));
             }
             configurations.Add(new XElement(id, XDocument.Load(Path.Combine(workspace.Path, "nuget.config")).Root));
         }
 
-        Assert.Equal(["Contoso.Hosting.One", "Fabrikam.Hosting.Two"], added);
+        Assert.Equal(["Contoso.Hosting.One", "Fabrikam.Hosting.Two", "Contoso.Hosting.Three"], added);
         await Verify(configurations.ToString(), "xml").UseParameters(hasMappings);
+    }
+
+    [Theory]
+    [InlineData("team")]
+    [InlineData("TEAM")]
+    public async Task AddCommandRejectsIntegrationSourceKeyCollisionsWithoutChangingNuGetConfig(string existingKey)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.Path, "apphost.ts"));
+        File.WriteAllText(appHostFile.FullName, string.Empty);
+        File.WriteAllText(Path.Combine(workspace.Path, AspireConfigFile.FileName), """
+            {"integrationSources":{"default":{"enabled":false},"team":{"source":"https://example.com/team","patterns":["Acme.*"]}}}
+            """);
+        var configPath = Path.Combine(workspace.Path, "nuget.config");
+        var original = $$"""
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="{{existingKey}}" value="https://example.com/different" />
+              </packageSources>
+            </configuration>
+            """;
+        File.WriteAllText(configPath, original);
+        var cache = new FakeNuGetPackageCache
+        {
+            GetPackagesAsyncCallback = (_, _, _, _, _, _, _) =>
+                Task.FromResult<IEnumerable<NuGetPackage>>(
+                    [new() { Id = "Acme.Hosting.Redis", Version = "1.0.0", Source = "https://example.com/team" }])
+        };
+        var added = false;
+        var factory = new TestTypeScriptStarterProjectFactory((_, _, _) => Task.FromResult(true));
+        factory.Project.AddPackageAsyncCallback = (_, _) =>
+        {
+            added = true;
+            return Task.FromResult(true);
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+            options.NuGetClientFactory = _ => NuGetTestHelper.CreateClient();
+        });
+        services.AddSingleton<Aspire.Cli.NuGet.INuGetPackageCache>(cache);
+        services.AddSingleton<IAppHostProjectFactory>(factory);
+        using var provider = services.BuildServiceProvider();
+
+        var exitCode = await provider.GetRequiredService<AddCommand>()
+            .Parse($"add Acme.Hosting.Redis --apphost \"{appHostFile.FullName}\" --version 1.0.0").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToAddPackage, exitCode);
+        Assert.False(added);
+        Assert.Equal(original, File.ReadAllText(configPath));
     }
 
     [Theory]

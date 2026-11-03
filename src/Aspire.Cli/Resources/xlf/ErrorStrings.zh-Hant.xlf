@@ -242,6 +242,11 @@
         <target state="translated">提供的延伸模組通訊端路徑需要兩個有效的部分。</target>
         <note />
       </trans-unit>
+      <trans-unit id="InvalidSourceName">
+        <source>Invalid source name at '{0}'. Source names must be 1-64 ASCII letters, digits, dots, hyphens, or underscores, starting with a letter or digit.</source>
+        <target state="new">Invalid source name at '{0}'. Source names must be 1-64 ASCII letters, digits, dots, hyphens, or underscores, starting with a letter or digit.</target>
+        <note>{0} is the configuration key. Do not translate ASCII.</note>
+      </trans-unit>
       <trans-unit id="LegacyAppHostPathCannotBeSetWithConfigCommand">
         <source>The legacy AppHost path key 'appHostPath' cannot be set with 'aspire config set'. Use 'appHost.path' in a local aspire.config.json file instead.</source>
         <target state="translated">不能使用 'aspire config set' 設定舊版 AppHost 路徑金鑰 'appHostPath'。改為在本機 aspire.config.json 檔案中使用 'appHost.path'。</target>
@@ -271,6 +276,11 @@
         <source>Input was required for prompt '{0}' but not provided.</source>
         <target state="translated">提示 '{0}' 需要輸入，但未提供。</target>
         <note />
+      </trans-unit>
+      <trans-unit id="NuGetSourceKeyAlreadyInUse">
+        <source>NuGet source key '{0}' is already reserved by another source or its settings. Choose another integration source key or update the NuGet configuration manually.</source>
+        <target state="new">NuGet source key '{0}' is already reserved by another source or its settings. Choose another integration source key or update the NuGet configuration manually.</target>
+        <note>{0} is the source key. Do not translate NuGet.</note>
       </trans-unit>
       <trans-unit id="ProjectCouldNotBeAnalyzed">
         <source>The project could not be analyzed due to a build error. See logs at {0}</source>

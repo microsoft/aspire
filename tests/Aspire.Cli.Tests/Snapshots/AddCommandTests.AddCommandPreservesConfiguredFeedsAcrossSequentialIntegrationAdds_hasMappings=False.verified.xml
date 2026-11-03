@@ -5,7 +5,7 @@
         <clear />
         <add key="sdk" value="https://example.com/sdk" />
         <add key="public" value="https://example.com/public" />
-        <add key="aspire-integration-add" value="https://example.com/team" />
+        <add key="team" value="https://example.com/team" />
       </packageSources>
     </configuration>
   </Contoso.Hosting.One>
@@ -15,9 +15,20 @@
         <clear />
         <add key="sdk" value="https://example.com/sdk" />
         <add key="public" value="https://example.com/public" />
-        <add key="aspire-integration-add" value="https://example.com/team" />
-        <add key="aspire-integration-add-0" value="https://example.com/other" />
+        <add key="team" value="https://example.com/team" />
+        <add key="other" value="https://example.com/other" />
       </packageSources>
     </configuration>
   </Fabrikam.Hosting.Two>
+  <Contoso.Hosting.Three>
+    <configuration>
+      <packageSources>
+        <clear />
+        <add key="sdk" value="https://example.com/sdk" />
+        <add key="public" value="https://example.com/public" />
+        <add key="team" value="https://example.com/team" />
+        <add key="other" value="https://example.com/other" />
+      </packageSources>
+    </configuration>
+  </Contoso.Hosting.Three>
 </configurations>

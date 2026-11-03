@@ -242,6 +242,11 @@
         <target state="translated">제공된 확장 소켓 경로에는 두 개의 유효한 부분이 필요합니다.</target>
         <note />
       </trans-unit>
+      <trans-unit id="InvalidSourceName">
+        <source>Invalid source name at '{0}'. Source names must be 1-64 ASCII letters, digits, dots, hyphens, or underscores, starting with a letter or digit.</source>
+        <target state="new">Invalid source name at '{0}'. Source names must be 1-64 ASCII letters, digits, dots, hyphens, or underscores, starting with a letter or digit.</target>
+        <note>{0} is the configuration key. Do not translate ASCII.</note>
+      </trans-unit>
       <trans-unit id="LegacyAppHostPathCannotBeSetWithConfigCommand">
         <source>The legacy AppHost path key 'appHostPath' cannot be set with 'aspire config set'. Use 'appHost.path' in a local aspire.config.json file instead.</source>
         <target state="translated">레거시 AppHost 경로 키 'appHostPath'는 'aspire config set'으로 설정할 수 없습니다. 대신 로컬 aspire.config.json 파일에서 'appHost.path'를 사용하세요.</target>
@@ -271,6 +276,11 @@
         <source>Input was required for prompt '{0}' but not provided.</source>
         <target state="translated">프롬프트 '{0}'에 대한 입력이 필요하지만 제공되지 않았습니다.</target>
         <note />
+      </trans-unit>
+      <trans-unit id="NuGetSourceKeyAlreadyInUse">
+        <source>NuGet source key '{0}' is already reserved by another source or its settings. Choose another integration source key or update the NuGet configuration manually.</source>
+        <target state="new">NuGet source key '{0}' is already reserved by another source or its settings. Choose another integration source key or update the NuGet configuration manually.</target>
+        <note>{0} is the source key. Do not translate NuGet.</note>
       </trans-unit>
       <trans-unit id="ProjectCouldNotBeAnalyzed">
         <source>The project could not be analyzed due to a build error. See logs at {0}</source>

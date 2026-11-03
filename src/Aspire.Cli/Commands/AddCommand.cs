@@ -387,7 +387,10 @@ internal sealed class AddCommand : BaseCommand
                 var configuration = _nugetService.BuildAppHostConfiguration(
                     effectiveAppHostProjectFile.Directory!,
                     "integration-add",
-                    [new PackageMapping(selectedNuGetPackage.Package.Id, integrationSource)],
+                    [new PackageMapping(selectedNuGetPackage.Package.Id, integrationSource)
+                    {
+                        SourceKey = selectedNuGetPackage.Channel.IntegrationSource.Name
+                    }],
                     overrideIntegrationSources: false,
                     cancellationToken);
                 await new DotNetAppHostNuGetConfigMerger(_nugetService).CreateOrUpdateAsync(

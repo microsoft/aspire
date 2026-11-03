@@ -4,6 +4,7 @@
 using System.ComponentModel;
 using System.Globalization;
 using System.Text.Json.Serialization;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
@@ -77,7 +78,8 @@ internal sealed class IntegrationSourceConfiguration
         var sources = new List<string>();
         foreach (var entry in section.GetChildren())
         {
-            if (!IsIdentifier(entry.Key) || entry.Value is not null)
+            SourceNameValidator.Validate(entry.Key, $"{SectionName}.{entry.Key}");
+            if (entry.Value is not null)
             {
                 throw InvalidConfiguration($"{SectionName}.{entry.Key}");
             }
@@ -103,7 +105,8 @@ internal sealed class IntegrationSourceConfiguration
         {
             var settings = section.GetSection(name);
             var key = $"{SectionName}.{name}";
-            if (!IsIdentifier(name) || settings.Value is not null)
+            SourceNameValidator.Validate(name, key);
+            if (settings.Value is not null)
             {
                 throw InvalidConfiguration(key);
             }

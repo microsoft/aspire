@@ -2,8 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Xml.Linq;
+using System.Globalization;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using NuGet.Configuration;
 
@@ -11,6 +13,69 @@ namespace Aspire.Cli.Tests.Packaging;
 
 public class PackageSourceIdentityTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData("team")]
+    [InlineData("Team_1")]
+    [InlineData("1team")]
+    [InlineData("team.source")]
+    public void ExplicitSourceKeyIsUsedForNewFeeds(string sourceKey)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        WriteSource(workspace.WorkspaceRoot, "https://example.com/existing");
+        var snapshot = NuGetTestHelper.CreateClient().GetSettings(
+            workspace.Path, new byte[NuGetSourceIdentity.KeySizeInBytes]);
+
+        var aliases = NuGetConfigurationBuilder.ResolveSourceAliases(
+            [new PackageMapping("Contoso.Hosting.One", "https://example.com/team") { SourceKey = sourceKey }],
+            "integration-add", snapshot.Sources, snapshot.ReservedPackageSourceKeys, snapshot.SourceIdentityKey);
+
+        var alias = Assert.Single(aliases);
+        Assert.Equal(sourceKey, alias.Key);
+        Assert.False(alias.IsAmbient);
+        Assert.True(alias.IsExplicitlyNamed);
+    }
+
+    [Theory]
+    [InlineData("local")]
+    [InlineData("aspire-integration-add")]
+    [InlineData("team.source")]
+    public void ExplicitSourceKeyPreservesExistingFeedAliases(string existingKey)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        WriteSource(workspace.WorkspaceRoot, "https://example.com/team", existingKey);
+        var snapshot = NuGetTestHelper.CreateClient().GetSettings(
+            workspace.Path, new byte[NuGetSourceIdentity.KeySizeInBytes]);
+
+        var aliases = NuGetConfigurationBuilder.ResolveSourceAliases(
+            [new PackageMapping("Contoso.Hosting.One", "https://example.com/team") { SourceKey = "team" }],
+            "integration-add", snapshot.Sources, snapshot.ReservedPackageSourceKeys, snapshot.SourceIdentityKey);
+
+        var alias = Assert.Single(aliases);
+        Assert.Equal(existingKey, alias.Key);
+        Assert.True(alias.IsAmbient);
+        Assert.False(alias.IsExplicitlyNamed);
+    }
+
+    [Theory]
+    [InlineData("local")]
+    [InlineData("LOCAL")]
+    [InlineData("reserved")]
+    public void ExplicitSourceKeyRejectsCollisionsWithoutOverwriting(string sourceKey)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        WriteSource(workspace.WorkspaceRoot, "https://example.com/existing");
+        var snapshot = NuGetTestHelper.CreateClient().GetSettings(
+            workspace.Path, new byte[NuGetSourceIdentity.KeySizeInBytes]);
+
+        var exception = Assert.Throws<InvalidOperationException>(() => NuGetConfigurationBuilder.ResolveSourceAliases(
+            [new PackageMapping("Contoso.Hosting.One", "https://example.com/team") { SourceKey = sourceKey }],
+            "integration-add", snapshot.Sources, [.. snapshot.ReservedPackageSourceKeys, "reserved"], snapshot.SourceIdentityKey));
+
+        Assert.Equal(string.Format(CultureInfo.CurrentCulture, ErrorStrings.NuGetSourceKeyAlreadyInUse, sourceKey), exception.Message);
+        Assert.Equal("https://example.com/existing",
+            Assert.Single(new PackageSourceProvider(Settings.LoadSpecificSettings(workspace.Path, "NuGet.Config")).LoadPackageSources()).Source);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -72,13 +137,13 @@ public class PackageSourceIdentityTests(ITestOutputHelper outputHelper)
         Assert.Equal(OperatingSystem.IsWindows() ? "local" : "aspire-identity-case", alias.Key);
     }
 
-    private static void WriteSource(DirectoryInfo directory, string source)
+    private static void WriteSource(DirectoryInfo directory, string source, string key = "local")
         => new XDocument(
             new XElement("configuration",
                 new XElement("packageSources",
                     new XElement("clear"),
                     new XElement("add",
-                        new XAttribute("key", "local"),
+                        new XAttribute("key", key),
                         new XAttribute("value", source)))))
             .Save(Path.Combine(directory.FullName, "NuGet.Config"));
 }

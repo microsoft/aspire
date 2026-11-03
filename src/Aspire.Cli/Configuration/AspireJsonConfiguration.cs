@@ -78,11 +78,11 @@ internal sealed class AspireJsonConfiguration
     public Dictionary<string, bool>? Features { get; set; }
 
     [JsonPropertyName(SkillSource.SectionName)]
-    [Description("Named agent skill sources, merged across configuration layers. The built-in default source remains enabled unless explicitly disabled.")]
+    [Description("Named agent skill sources, merged across configuration layers. The built-in default source remains enabled unless explicitly disabled. " + SourceNameValidator.Description)]
     public Dictionary<string, SkillSource>? SkillSources { get; set; }
 
     [JsonPropertyName(IntegrationSourceConfiguration.SectionName)]
-    [Description("Named NuGet integration sources and allowed package patterns, merged across configuration layers.")]
+    [Description("Named NuGet integration sources and allowed package patterns, merged across configuration layers. " + SourceNameValidator.Description)]
     public Dictionary<string, IntegrationSourceConfiguration>? IntegrationSources { get; set; }
 
     /// <summary>

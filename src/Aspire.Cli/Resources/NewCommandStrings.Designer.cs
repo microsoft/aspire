@@ -655,7 +655,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Template source names must be nonempty and must not contain dots, colons, or control characters..
+        ///   Looks up a localized string similar to Template source names must be 1-64 ASCII letters, digits, dots, hyphens, or underscores, starting with a letter or digit..
         /// </summary>
         internal static string TemplateSourceNameRequired {
             get {

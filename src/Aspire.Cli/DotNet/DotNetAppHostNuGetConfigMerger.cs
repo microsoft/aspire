@@ -190,7 +190,8 @@ internal sealed class DotNetAppHostNuGetConfigMerger(BundleNuGetService nuGetSer
             var ambientSource = sourceConfiguration.Settings.Sources.Single(ambient =>
                 string.Equals(ambient.Name, source.Key, StringComparison.OrdinalIgnoreCase));
             // Borrowing an alias can shadow inherited mappings and gives the CLI no
-            // reliable ownership for later cleanup. Only maintain our own local entry.
+            // reliable ownership for later cleanup. Maintain only CLI-owned local entries
+            // or local aliases explicitly named by the selected integration configuration.
             // NuGet replaces mapping entries by key, so a local source definition alone
             // does not make an inherited mapping safe to extend.
             var inheritsMapping = !localMappingItems.Any(static item => item is ClearItem) &&
@@ -199,7 +200,8 @@ internal sealed class DotNetAppHostNuGetConfigMerger(BundleNuGetService nuGetSer
                 inheritedMappings.Any(mapping =>
                     string.Equals(mapping.Key, source.Key, StringComparison.OrdinalIgnoreCase));
             if (inheritsMapping ||
-                !NuGetConfigurationBuilder.IsCliManagedSourceKey(source.Key, configuration.WorkloadId) ||
+                !(NuGetConfigurationBuilder.IsCliManagedSourceKey(source.Key, configuration.WorkloadId) ||
+                  source.IsExplicitlyNamed && ambientSource.IsIntegrationSource) ||
                 !localSources.Any(local =>
                     string.Equals(local.Key, source.Key, StringComparison.OrdinalIgnoreCase) &&
                     string.Equals(

@@ -179,12 +179,14 @@ public partial class NewCommandLocalTemplateTests
     }
 
     [Theory]
-    [InlineData("local")]
-    [InlineData("git")]
-    [InlineData("git-defaults")]
-    [InlineData("git-path")]
-    [InlineData("git-ref")]
-    public async Task TemplateSourceCommands_AddAndRemoveGlobalObjects(string kind)
+    [InlineData("local", "company")]
+    [InlineData("git", "company")]
+    [InlineData("git-defaults", "company")]
+    [InlineData("git-path", "company")]
+    [InlineData("git-ref", "company")]
+    [InlineData("local", "company.templates")]
+    [InlineData("git-defaults", "company.templates")]
+    public async Task TemplateSourceCommands_AddAndRemoveGlobalObjects(string kind, string name)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interaction = new TestInteractionService();
@@ -205,9 +207,9 @@ public partial class NewCommandLocalTemplateTests
         };
         var root = provider.GetRequiredService<RootCommand>();
 
-        Assert.Equal(CliExitCodes.Success, await root.Parse(["template", "source", "add", "company", "--yes", .. options]).InvokeAsync().DefaultTimeout());
+        Assert.Equal(CliExitCodes.Success, await root.Parse(["template", "source", "add", name, "--yes", .. options]).InvokeAsync().DefaultTimeout());
         var settings = JsonNode.Parse(await File.ReadAllTextAsync(globalPath))!;
-        var source = Assert.IsType<JsonObject>(settings["templateSources"]!["company"]);
+        var source = Assert.IsType<JsonObject>(settings["templateSources"]![name]);
         Assert.Equal(options.Length / 2, source.Count);
         for (var index = 0; index < options.Length; index += 2)
         {
@@ -217,7 +219,7 @@ public partial class NewCommandLocalTemplateTests
         Assert.Equal(2, settings["templateSources"]!.AsObject().Count);
         Assert.Equal(localBefore, File.Exists(localPath) ? await File.ReadAllTextAsync(localPath) : null);
 
-        Assert.Equal(CliExitCodes.Success, await root.Parse("template source remove COMPANY").InvokeAsync().DefaultTimeout());
+        Assert.Equal(CliExitCodes.Success, await root.Parse(["template", "source", "remove", name.ToUpperInvariant()]).InvokeAsync().DefaultTimeout());
         settings = JsonNode.Parse(await File.ReadAllTextAsync(globalPath))!;
         Assert.Equal(["existing"], settings["templateSources"]!.AsObject().Select(entry => entry.Key));
         Assert.Equal("preserved", settings["unrelated"]!.GetValue<string>());
@@ -230,7 +232,7 @@ public partial class NewCommandLocalTemplateTests
     [InlineData("company", new string[0])]
     [InlineData("company", new[] { "--repository", "http://example.test/repo" })]
     [InlineData("company", new[] { "--repository", "https://example.test/repo", "--path", "../escape" })]
-    [InlineData("nested.name", new[] { "--repository", "https://example.test/templates" })]
+    [InlineData(".leading.dot", new[] { "--repository", "https://example.test/templates" })]
     [InlineData("nested:name", new[] { "--repository", "https://example.test/templates" })]
     public async Task TemplateSourceCommands_InvalidAddDoesNotWrite(string name, string[] options)
     {

@@ -1,7 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Packaging;
+using Aspire.Cli.Resources;
 
 namespace Aspire.Cli.NuGet;
 
@@ -138,6 +141,18 @@ internal static class NuGetConfigurationBuilder
             // Source order still determines the primary source when its ambient alias is reused.
             var isPrimarySource = sourceIndex++ == 0;
             var sourceIdentity = NuGetSourceIdentity.Compute(source, sourceIdentityKey);
+            var preferredKey = mappings.First(mapping => PackageSourceIdentity.Comparer.Equals(mapping.Source, source)).SourceKey;
+            if (preferredKey is not null)
+            {
+                SourceNameValidator.Validate(preferredKey, $"{IntegrationSourceConfiguration.SectionName}.{preferredKey}");
+                if (usedKeys.Contains(preferredKey) && !ambientSources.Any(candidate =>
+                    string.Equals(candidate.Name, preferredKey, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(candidate.Identity, sourceIdentity, StringComparison.Ordinal)))
+                {
+                    throw new InvalidOperationException(string.Format(
+                        CultureInfo.CurrentCulture, ErrorStrings.NuGetSourceKeyAlreadyInUse, preferredKey));
+                }
+            }
             var ambientMatches = ambientSources
                 .Where(candidate =>
                     string.Equals(candidate.Identity, sourceIdentity, StringComparison.Ordinal) ||
@@ -165,14 +180,22 @@ internal static class NuGetConfigurationBuilder
                         ambientSource.Name,
                         source,
                         IsAmbient: true,
-                        ambientSource.IsEnabled));
+                        ambientSource.IsEnabled)
+                    {
+                        IsExplicitlyNamed = string.Equals(ambientSource.Name, preferredKey, StringComparison.OrdinalIgnoreCase)
+                    });
                 }
 
                 continue;
             }
 
             string key;
-            if (isPrimarySource)
+            if (preferredKey is not null)
+            {
+                key = preferredKey;
+                usedKeys.Add(key);
+            }
+            else if (isPrimarySource)
             {
                 key = generatedSourceKeyPrefix;
                 if (!usedKeys.Add(key))
@@ -193,7 +216,10 @@ internal static class NuGetConfigurationBuilder
                 while (!usedKeys.Add(key));
             }
 
-            resolvedSources.Add(new NuGetConfigSource(key, source, IsAmbient: false, IsEnabled: true));
+            resolvedSources.Add(new NuGetConfigSource(key, source, IsAmbient: false, IsEnabled: true)
+            {
+                IsExplicitlyNamed = preferredKey is not null
+            });
         }
 
         return [.. resolvedSources];
