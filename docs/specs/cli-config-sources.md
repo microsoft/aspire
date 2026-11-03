@@ -498,7 +498,7 @@ Configure integration discovery independently of the AppHost's SDK channel:
 }
 ```
 
-The implicit `default` entry retains existing channel and ambient NuGet discovery, including official and Community Toolkit packages. Set `default.enabled` to `false` to search only explicitly configured sources. An entry with a `source` can omit `patterns` to discover all packages from that feed, equivalent to `["*"]`; an explicitly supplied array must be non-empty. Override `default.source` to replace built-in discovery with a different feed, optionally specifying `default.patterns` to restrict its packages.
+The implicit `default` entry retains existing channel and ambient NuGet discovery, including official and Community Toolkit packages. Set `default.enabled` to `false` to search only explicitly configured sources. An entry with a `source` can omit `patterns` to discover all packages from that feed, equivalent to `["*"]`; an explicitly supplied array, including `default.patterns`, must be non-empty. Override `default.source` to replace built-in discovery with a different feed, optionally specifying `default.patterns` to restrict its packages.
 
 Each enabled source is searched for matching package IDs, regardless of their namespace. Patterns use case-insensitive NuGet matching: an exact ID, a prefix ending in `*`, or `*` for every package. Other wildcard positions are invalid. Sources may be HTTP(S) NuGet service indexes or local package directories; relative directories resolve against the selected AppHost directory. Embedded credentials are rejected. Configure private-feed credentials using NuGet's existing credential mechanisms.
 

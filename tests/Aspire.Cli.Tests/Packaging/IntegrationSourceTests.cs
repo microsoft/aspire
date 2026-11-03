@@ -1,11 +1,13 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using System.Text;
 using System.Xml.Linq;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.Configuration;
@@ -17,13 +19,47 @@ namespace Aspire.Cli.Tests.Packaging;
 
 public class IntegrationSourceTests(ITestOutputHelper output)
 {
-    [Fact]
-    public void Resolve_PreservesBuiltInDiscoveryByDefault()
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("""{"integrationSources":{"default":{}}}""")]
+    [InlineData("""{"integrationSources":{"DEFAULT":{"enabled":true}}}""")]
+    public void Resolve_PreservesBuiltInDiscoveryByDefault(string json)
     {
         using var configuration = new ConfigurationManager();
+        configuration.AddJsonStream(new MemoryStream(Encoding.UTF8.GetBytes(json)));
+
         var source = Assert.Single(IntegrationSourceConfiguration.Resolve(configuration, new DirectoryInfo(Environment.CurrentDirectory)));
         Assert.Equal("default", source.Name);
         Assert.Null(source.Source);
+    }
+
+    [Theory]
+    [InlineData("""{"integrationSources":{"default":{"patterns":[]}}}""")]
+    [InlineData("""{"integrationSources":{"DEFAULT":{"patterns":[]}}}""")]
+    [InlineData("""{"integrationSources":{"default":{"patterns":{}}}}""")]
+    [InlineData("""{"integrationSources":{"default":{"patterns":null}}}""")]
+    public void Resolve_RejectsInvalidDefaultPatterns(string json)
+    {
+        using var configuration = new ConfigurationManager();
+        configuration.AddJsonStream(new MemoryStream(Encoding.UTF8.GetBytes(json)));
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            IntegrationSourceConfiguration.Resolve(configuration, new DirectoryInfo(Environment.CurrentDirectory)));
+
+        Assert.Equal(
+            string.Format(CultureInfo.CurrentCulture, ErrorStrings.InvalidIntegrationSource, "integrationSources.default.patterns"),
+            exception.Message);
+    }
+
+    [Fact]
+    public void Resolve_DisabledDefaultDoesNotValidatePatterns()
+    {
+        using var configuration = new ConfigurationManager();
+        configuration.AddJsonStream(new MemoryStream(Encoding.UTF8.GetBytes("""
+            {"integrationSources":{"default":{"enabled":false,"patterns":[]}}}
+            """)));
+
+        Assert.Empty(IntegrationSourceConfiguration.Resolve(configuration, new DirectoryInfo(Environment.CurrentDirectory)));
     }
 
     [Theory]

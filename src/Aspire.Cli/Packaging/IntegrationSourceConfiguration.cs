@@ -104,14 +104,14 @@ internal sealed class IntegrationSourceConfiguration
             var source = settings["source"];
             var patternsSection = settings.GetSection("patterns");
             var patterns = patternsSection.GetChildren().Select(child => child.Value).ToArray();
-            if (source is null && name.Equals(DefaultName, StringComparison.OrdinalIgnoreCase) &&
-                patternsSection.Value is null && patterns.Length == 0)
+            // Explicit "patterns": null or {} must not be treated as an omitted property.
+            var hasPatterns = settings.GetChildren().Any(child => child.Key.Equals("patterns", StringComparison.OrdinalIgnoreCase));
+            if (source is null && name.Equals(DefaultName, StringComparison.OrdinalIgnoreCase) && !hasPatterns)
             {
                 sources.Add(new IntegrationSourceConfiguration());
                 continue;
             }
-            var resolvedSource = ResolveSource(source, $"{key}.source", directory);
-            if (!settings.GetChildren().Any(child => child.Key.Equals("patterns", StringComparison.OrdinalIgnoreCase)))
+            if (!hasPatterns)
             {
                 patterns = ["*"];
             }
@@ -122,6 +122,7 @@ internal sealed class IntegrationSourceConfiguration
                 throw InvalidConfiguration($"{key}.patterns");
             }
 
+            var resolvedSource = ResolveSource(source, $"{key}.source", directory);
             sources.Add(new IntegrationSourceConfiguration
             {
                 Name = name,
