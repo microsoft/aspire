@@ -402,7 +402,8 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
                             LabelFormat: Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphResourceActionsButton)].Value),
                         new GraphHiddenIconDto(
                             Path: ResourceGraphMapper.GetIconPathData(new Icons.Regular.Size16.EyeOff()),
-                            Tooltip: ColumnsLoc[nameof(Columns.HiddenResourceIconTooltip)].Value));
+                            Tooltip: ColumnsLoc[nameof(Columns.HiddenResourceIconTooltip)].Value),
+                        ResourceGraphMapper.GetGameStrings(Loc));
 
                     await _jsModule.InvokeVoidAsync("initializeResourcesGraph", _resourcesInteropReference, graphIcons);
                     _graphInitialized = true;

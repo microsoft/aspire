@@ -252,7 +252,8 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
                     LabelFormat: Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphResourceActionsButton)].Value),
                 new GraphHiddenIconDto(
                     Path: ResourceGraphMapper.GetIconPathData(new Icons.Regular.Size16.EyeOff()),
-                    Tooltip: ColumnsLoc[nameof(Dashboard.Resources.Columns.HiddenResourceIconTooltip)].Value));
+                    Tooltip: ColumnsLoc[nameof(Dashboard.Resources.Columns.HiddenResourceIconTooltip)].Value),
+                ResourceGraphMapper.GetGameStrings(Loc));
 
             await _jsModule.InvokeVoidAsync("initializeResourcesGraph", _resourcesInteropReference, graphIcons);
             _graphInitialized = true;

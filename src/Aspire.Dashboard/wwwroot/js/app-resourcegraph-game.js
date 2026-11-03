@@ -180,7 +180,15 @@ export function computeWorldSize(rectWidth, rectHeight) {
 export function isLaunchKey(event) {
     return (event.key === 'o' || event.key === 'O') &&
         !event.repeat && !event.ctrlKey && !event.metaKey && !event.altKey &&
-        !event.target?.closest?.('a, button, input, textarea, select, [contenteditable=""], [contenteditable="true"]');
+        !event.target?.closest?.('a, button, [role="button"], input, textarea, select, [contenteditable=""], [contenteditable="true"]');
+}
+
+/**
+ * States the game can be paused in. The ones between two lives or two waves count: the game would otherwise carry on from
+ * them on its own, and cost lives while the user is working elsewhere in the dashboard.
+ */
+export function isPausable(state) {
+    return state === 'playing' || state === 'ready' || state === 'dying' || state === 'cleared';
 }
 
 /** Whether Enter and Space on this target should activate a focused button instead of playing the game. */
@@ -852,8 +860,9 @@ let activeGame = null;
 const attachedGraphs = new WeakSet();
 
 class ResourceGraphGame {
-    constructor(graph, svg, container, onClosed) {
+    constructor(graph, svg, container, strings, onClosed) {
         this.graph = graph;
+        this.strings = strings;
         this.svg = svg;
         this.container = container;
         this.onClosed = onClosed;
@@ -927,7 +936,7 @@ class ResourceGraphGame {
         root.className = 'resource-graph-game';
         root.tabIndex = -1;
         root.setAttribute('role', 'application');
-        root.setAttribute('aria-label', 'Aspire Outage. Arrow keys or A and D to move, Space to fire, P to pause, M to mute, Escape to return to the graph.');
+        root.setAttribute('aria-label', this.strings.instructions);
 
         const canvas = createCanvas(this.width, this.height);
         const crt = document.createElement('div');
@@ -941,8 +950,8 @@ class ResourceGraphGame {
         const close = document.createElement('button');
         close.type = 'button';
         close.className = 'resource-graph-game-button';
-        close.textContent = 'Exit';
-        close.setAttribute('aria-label', 'Exit Aspire Outage and return to the graph');
+        close.textContent = this.strings.exit;
+        close.setAttribute('aria-label', this.strings.exitLabel);
         buttons.append(mute, close);
 
         root.append(canvas, crt, buttons);
@@ -967,6 +976,9 @@ class ResourceGraphGame {
         };
         this.svg.style.transition = 'none';
         this.svg.style.opacity = '0';
+        // Opacity alone would leave the resource menu cogs focusable and exposed to assistive technology behind the game.
+        // Hidden elements keep their layout, which is what morphing back to the nodes needs.
+        this.svg.style.visibility = 'hidden';
         if (this.controls) {
             this.controls.style.visibility = 'hidden';
         }
@@ -979,6 +991,7 @@ class ResourceGraphGame {
         this.revealed = true;
         if (animate) {
             this.svg.style.transition = 'opacity 200ms ease-out';
+            this.svg.style.visibility = 'visible';
             this.svg.style.opacity = '1';
         } else {
             restoreStyle(this.svg, this.saved.svgStyle);
@@ -989,7 +1002,7 @@ class ResourceGraphGame {
     }
 
     updateMuteButton() {
-        this.muteButton.textContent = this.sound.muted ? 'Sound: off' : 'Sound: on';
+        this.muteButton.textContent = this.sound.muted ? this.strings.soundOff : this.strings.soundOn;
         this.muteButton.setAttribute('aria-pressed', this.sound.muted ? 'true' : 'false');
     }
 
@@ -1265,7 +1278,7 @@ class ResourceGraphGame {
     }
 
     pause() {
-        if (this.state === 'playing' || this.state === 'ready') {
+        if (isPausable(this.state)) {
             this.pausedState = this.state;
             this.sound.satelliteStop();
             this.state = 'paused';
@@ -1849,7 +1862,7 @@ class ResourceGraphGame {
         // During "ready" the formation slides into place.
         let slideY = 0;
         let enemyAlpha = 1;
-        if (this.state === 'ready') {
+        if (this.state === 'ready' && !this.reducedMotion) {
             const p = easeInOutCubic(clamp(this.stateTime / 0.9, 0, 1));
             slideY = Math.round(-(1 - p) * 60);
             enemyAlpha = p;
@@ -2156,7 +2169,7 @@ class ResourceGraphGame {
  * Listens for the gesture on the graph. This is the only thing that runs while the game is closed: a
  * passive pointermove listener that keeps a short trail of hover positions over empty graph space.
  */
-export function attachResourceGraphGame(graph) {
+export function attachResourceGraphGame(graph, strings) {
     const svg = typeof graph?.svg?.node === 'function' ? graph.svg.node() : null;
     if (!svg || typeof svg.addEventListener !== 'function' || attachedGraphs.has(svg)) {
         return;
@@ -2192,7 +2205,7 @@ export function attachResourceGraphGame(graph) {
             sinceCheck = 0;
             if (detectCircleGesture(points)) {
                 points = [];
-                launchGame(graph, svg);
+                launchGame(graph, svg, strings);
             }
         }
     };
@@ -2206,7 +2219,7 @@ export function attachResourceGraphGame(graph) {
         if (!activeGame && svg.isConnected && isLaunchKey(event)) {
             event.preventDefault();
             event.stopPropagation();
-            launchGame(graph, svg);
+            launchGame(graph, svg, strings);
         }
     };
 
@@ -2215,7 +2228,7 @@ export function attachResourceGraphGame(graph) {
     svg.closest?.('.resource-graph-container')?.addEventListener('keydown', onKeyDown);
 }
 
-function launchGame(graph, svg) {
+function launchGame(graph, svg, strings) {
     if (activeGame) {
         return;
     }
@@ -2223,7 +2236,7 @@ function launchGame(graph, svg) {
     if (!container || !isShown(container)) {
         return;
     }
-    activeGame = new ResourceGraphGame(graph, svg, container, () => {
+    activeGame = new ResourceGraphGame(graph, svg, container, strings, () => {
         activeGame = null;
     });
 }

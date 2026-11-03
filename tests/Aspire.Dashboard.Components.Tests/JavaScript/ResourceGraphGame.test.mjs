@@ -16,6 +16,7 @@ import {
     extraLives,
     isButtonTarget,
     isLaunchKey,
+    isPausable,
     marchInterval,
     MAX_ENEMIES,
     padScore,
@@ -228,4 +229,13 @@ test("Enter and Space stay with a focused button", () => {
     assert.equal(isButtonTarget({ closest: () => ({}) }), true);
     assert.equal(isButtonTarget({ closest: () => null }), false);
     assert.equal(isButtonTarget(null), false);
+});
+
+test("the game can pause in every state that would otherwise carry on by itself", () => {
+    for (const state of ["ready", "playing", "dying", "cleared"]) {
+        assert.equal(isPausable(state), true, state);
+    }
+    for (const state of ["morph-in", "title", "gameover", "paused", "morph-out"]) {
+        assert.equal(isPausable(state), false, state);
+    }
 });

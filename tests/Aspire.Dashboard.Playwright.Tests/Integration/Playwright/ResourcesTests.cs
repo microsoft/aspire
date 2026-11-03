@@ -378,6 +378,78 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
 
     [Fact]
     [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task ResourceGraphGame_IsKeyboardAccessibleAndReleasesGraphOnExit()
+    {
+        await RunTestAsync(async page =>
+        {
+            await PlaywrightFixture.GoToHomeAndWaitForDataGridLoad(page).DefaultTimeout();
+            await page.GetByRole(AriaRole.Group, new() { Name = Dashboard.Resources.Resources.LayoutLabel, Exact = true })
+                .GetByRole(AriaRole.Button, new() { Name = Dashboard.Resources.Layout.NavMenuGraphTab, Exact = true })
+                .ClickAsync();
+
+            var node = page.Locator(".resource-group[resource-name='TestResource']");
+            await Assertions.Expect(node).ToBeVisibleAsync();
+
+            var graphContainer = page.GetByRole(AriaRole.Region, new() { Name = Dashboard.Resources.ControlsStrings.ChartContainerGraphAccessibleLabel });
+            var game = page.GetByRole(AriaRole.Application, new() { Name = Dashboard.Resources.Resources.ResourceGraphGameInstructions, Exact = true });
+            var cog = node.GetByRole(AriaRole.Button, new()
+            {
+                Name = string.Format(Dashboard.Resources.Resources.ResourcesGraphResourceActionsButton, "TestResource"),
+                Exact = true
+            });
+
+            await graphContainer.FocusAsync();
+            await page.Keyboard.PressAsync("o");
+            await Assertions.Expect(game).ToBeVisibleAsync();
+            await Assertions.Expect(game).ToBeFocusedAsync();
+
+            // The graph behind the game can't be reached by keyboard or assistive technology.
+            await Assertions.Expect(cog).ToHaveCountAsync(0);
+            await page.Keyboard.PressAsync("Shift+Tab");
+            Assert.True(await page.EvaluateAsync<bool>("() => document.activeElement?.closest('.resource-graph') == null"));
+            await game.FocusAsync();
+
+            // Enter starts the game from the title screen, and doesn't leave it.
+            await page.WaitForTimeoutAsync(1500);
+            await page.Keyboard.PressAsync("Enter");
+
+            var sound = game.GetByRole(AriaRole.Button, new() { Name = Dashboard.Resources.Resources.ResourceGraphGameSoundOn, Exact = true });
+            await page.Keyboard.PressAsync("Tab");
+            await Assertions.Expect(sound).ToBeFocusedAsync();
+            await page.Keyboard.PressAsync("Enter");
+            await Assertions.Expect(game.GetByRole(AriaRole.Button, new() { Name = Dashboard.Resources.Resources.ResourceGraphGameSoundOff, Exact = true })).ToBeVisibleAsync();
+            // Sound gives focus back to the game, so that Space keeps firing.
+            await Assertions.Expect(game).ToBeFocusedAsync();
+
+            await page.Keyboard.PressAsync("Tab");
+            await page.Keyboard.PressAsync("Tab");
+            await Assertions.Expect(game.GetByRole(AriaRole.Button, new() { Name = Dashboard.Resources.Resources.ResourceGraphGameExitLabel, Exact = true })).ToBeFocusedAsync();
+            await page.Keyboard.PressAsync("Space");
+
+            await Assertions.Expect(game).ToHaveCountAsync(0);
+            await Assertions.Expect(graphContainer).ToBeFocusedAsync();
+            await Assertions.Expect(cog).ToHaveCountAsync(1);
+            await Assertions.Expect(node).ToBeVisibleAsync();
+
+            // Leaving the page while playing also closes the game, and it can be started again after coming back.
+            await page.Keyboard.PressAsync("o");
+            await Assertions.Expect(game).ToBeVisibleAsync();
+            await page.GetByRole(AriaRole.Tab, new() { Name = Dashboard.Resources.Layout.NavMenuConsoleLogsTab, Exact = true }).ClickAsync();
+            await Assertions.Expect(game).ToHaveCountAsync(0);
+            await Assertions.Expect(page.Locator("#resource-graph-game-style")).ToHaveCountAsync(0);
+
+            await page.GetByRole(AriaRole.Tab, new() { Name = Dashboard.Resources.Layout.ResourceTabOverview, Exact = true }).ClickAsync();
+            await Assertions.Expect(node).ToBeVisibleAsync();
+            await graphContainer.FocusAsync();
+            await page.Keyboard.PressAsync("o");
+            await Assertions.Expect(game).ToBeVisibleAsync();
+            await page.Keyboard.PressAsync("Escape");
+            await Assertions.Expect(game).ToHaveCountAsync(0);
+        });
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
     public async Task GraphNode_RightClickOpensMenuAtCursorWithoutOverlay()
     {
         await RunTestAsync(async page =>

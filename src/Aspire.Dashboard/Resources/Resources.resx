@@ -324,6 +324,26 @@
     <value>Mermaid is a text-based format for defining diagrams. [Learn more about Mermaid](https://aka.ms/aspire/about-mermaid).</value>
     <comment>Markdown description displayed above the Mermaid source in the resource graph export dialog. Preserve the Markdown link syntax and documentation URL.</comment>
   </data>
+  <data name="ResourceGraphGameExit" xml:space="preserve">
+    <value>Exit</value>
+    <comment>Text of the button that leaves the Aspire Outage game in the resource graph.</comment>
+  </data>
+  <data name="ResourceGraphGameExitLabel" xml:space="preserve">
+    <value>Exit Aspire Outage and return to the graph</value>
+    <comment>Accessible label of the button that leaves the Aspire Outage game in the resource graph.</comment>
+  </data>
+  <data name="ResourceGraphGameInstructions" xml:space="preserve">
+    <value>Aspire Outage. Arrow keys or A and D to move, Space to fire, P to pause, M to mute, Escape to return to the graph.</value>
+    <comment>Accessible description of the Aspire Outage game in the resource graph. Aspire Outage is the name of the game. The key names refer to keyboard keys.</comment>
+  </data>
+  <data name="ResourceGraphGameSoundOff" xml:space="preserve">
+    <value>Sound: off</value>
+    <comment>Text of the button that toggles the sound of the Aspire Outage game, when the sound is off.</comment>
+  </data>
+  <data name="ResourceGraphGameSoundOn" xml:space="preserve">
+    <value>Sound: on</value>
+    <comment>Text of the button that toggles the sound of the Aspire Outage game, when the sound is on.</comment>
+  </data>
   <data name="ResourcesGraphResourceActionsButton" xml:space="preserve">
     <value>Resource actions for {0}</value>
     <comment>Accessible label and tooltip for the cog affordance on a graph resource node that opens the resource actions menu. {0} is the resource display name.</comment>

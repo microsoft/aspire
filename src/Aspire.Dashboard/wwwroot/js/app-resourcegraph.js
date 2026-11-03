@@ -6,7 +6,7 @@ let resourceGraph = null;
 export function initializeResourcesGraph(resourcesInterop, graphIcons) {
     resourceGraph = new ResourceGraph(resourcesInterop, graphIcons);
     resourceGraph.resize();
-    attachResourceGraphGame(resourceGraph);
+    attachResourceGraphGame(resourceGraph, graphIcons?.game);
 
     const observer = new ResizeObserver(function () {
         resourceGraph.resize();

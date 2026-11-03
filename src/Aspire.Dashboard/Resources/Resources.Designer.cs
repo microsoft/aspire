@@ -1189,6 +1189,51 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Exit.
+        /// </summary>
+        public static string ResourceGraphGameExit {
+            get {
+                return ResourceManager.GetString("ResourceGraphGameExit", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Exit Aspire Outage and return to the graph.
+        /// </summary>
+        public static string ResourceGraphGameExitLabel {
+            get {
+                return ResourceManager.GetString("ResourceGraphGameExitLabel", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Aspire Outage. Arrow keys or A and D to move, Space to fire, P to pause, M to mute, Escape to return to the graph..
+        /// </summary>
+        public static string ResourceGraphGameInstructions {
+            get {
+                return ResourceManager.GetString("ResourceGraphGameInstructions", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Sound: off.
+        /// </summary>
+        public static string ResourceGraphGameSoundOff {
+            get {
+                return ResourceManager.GetString("ResourceGraphGameSoundOff", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Sound: on.
+        /// </summary>
+        public static string ResourceGraphGameSoundOn {
+            get {
+                return ResourceManager.GetString("ResourceGraphGameSoundOn", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Resource actions for {0}.
         /// </summary>
         public static string ResourcesGraphResourceActionsButton {

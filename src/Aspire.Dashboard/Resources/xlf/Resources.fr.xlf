@@ -277,6 +277,31 @@
         <target state="translated">(Annuler)</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourceGraphGameExit">
+        <source>Exit</source>
+        <target state="new">Exit</target>
+        <note>Text of the button that leaves the Aspire Outage game in the resource graph.</note>
+      </trans-unit>
+      <trans-unit id="ResourceGraphGameExitLabel">
+        <source>Exit Aspire Outage and return to the graph</source>
+        <target state="new">Exit Aspire Outage and return to the graph</target>
+        <note>Accessible label of the button that leaves the Aspire Outage game in the resource graph.</note>
+      </trans-unit>
+      <trans-unit id="ResourceGraphGameInstructions">
+        <source>Aspire Outage. Arrow keys or A and D to move, Space to fire, P to pause, M to mute, Escape to return to the graph.</source>
+        <target state="new">Aspire Outage. Arrow keys or A and D to move, Space to fire, P to pause, M to mute, Escape to return to the graph.</target>
+        <note>Accessible description of the Aspire Outage game in the resource graph. Aspire Outage is the name of the game. The key names refer to keyboard keys.</note>
+      </trans-unit>
+      <trans-unit id="ResourceGraphGameSoundOff">
+        <source>Sound: off</source>
+        <target state="new">Sound: off</target>
+        <note>Text of the button that toggles the sound of the Aspire Outage game, when the sound is off.</note>
+      </trans-unit>
+      <trans-unit id="ResourceGraphGameSoundOn">
+        <source>Sound: on</source>
+        <target state="new">Sound: on</target>
+        <note>Text of the button that toggles the sound of the Aspire Outage game, when the sound is on.</note>
+      </trans-unit>
       <trans-unit id="ResourceOverviewBrowseMeters">
         <source>Browse meters</source>
         <target state="new">Browse meters</target>
