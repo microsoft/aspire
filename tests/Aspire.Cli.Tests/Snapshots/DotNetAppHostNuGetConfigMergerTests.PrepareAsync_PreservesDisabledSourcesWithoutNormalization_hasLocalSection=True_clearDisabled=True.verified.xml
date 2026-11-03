@@ -1,0 +1,21 @@
+﻿<configuration>
+  <disabledPackageSources>
+    <!-- Keep explicit values and aliases even after their source is removed. -->
+    <clear />
+    <add key="nuget.org" value="true" />
+    <add key="aspire-staging" value="false" />
+    <add key="aspire-apphost-0123456789abcdef" value="true" />
+  </disabledPackageSources>
+  <packageSourceMapping>
+    <clear />
+    <packageSource key="company">
+      <package pattern="*" />
+    </packageSource>
+    <packageSource key="aspire-test">
+      <package pattern="Aspire*" />
+    </packageSource>
+  </packageSourceMapping>
+  <packageSources>
+    <add key="aspire-test" value="https://new.example/v3/index.json" />
+  </packageSources>
+</configuration>

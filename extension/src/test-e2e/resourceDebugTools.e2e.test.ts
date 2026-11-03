@@ -279,6 +279,9 @@ suite('Aspire resource debug language model tool E2E', function () {
         const workerRunning = await waitForResourceState('e2e-worker', ['Running'], 180000);
         const worker = findResource(workerRunning.state, 'e2e-worker');
         assert.ok(worker);
+        const customOutputWorkerRunning = await waitForResourceState('e2e-custom-output-worker', ['Running'], 180000);
+        const customOutputWorker = findResource(customOutputWorkerRunning.state, 'e2e-custom-output-worker');
+        assert.ok(customOutputWorker);
         const goRunning = await waitForResourceState('e2e-go', ['Running'], 180000);
         const go = findResource(goRunning.state, 'e2e-go');
         assert.ok(go);
@@ -290,6 +293,13 @@ suite('Aspire resource debug language model tool E2E', function () {
                 sourcePath: path.join(getWorkspaceRoot(), 'AspireE2E.Worker', 'Program.cs'),
                 marker: 'app.MapGet("/", () => "ok");',
                 expectedResponse: 'ok',
+            },
+            {
+                resourceName: customOutputWorker.name,
+                debugType: 'coreclr' as const,
+                sourcePath: path.join(getWorkspaceRoot(), 'AspireE2E.CustomOutputWorker', 'Program.cs'),
+                marker: 'app.MapGet("/", () => "custom-ok");',
+                expectedResponse: 'custom-ok',
             },
             {
                 resourceName: go.name,

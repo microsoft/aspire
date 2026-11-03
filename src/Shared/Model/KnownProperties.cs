@@ -61,6 +61,8 @@ internal static class KnownProperties
         public const string LaunchCommand = "project.launchCommand";
         public const string Configuration = "project.configuration";
         public const string TargetFramework = "project.targetFramework";
+        public const string TargetPath = "project.targetPath";
+        public const string UseAppHost = "project.useAppHost";
     }
 
     public static class Terminal

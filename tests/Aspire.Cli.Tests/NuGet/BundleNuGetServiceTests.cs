@@ -14,7 +14,7 @@ namespace Aspire.Cli.Tests.NuGet;
 public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
 {
     [Fact]
-    public async Task CreateConfigurationPreviewAsync_MatchesPersistedPolicyWithoutChangingOriginal()
+    public async Task CreateConfigurationPreviewAsync_PreservesAmbientSettingsWithoutChangingOriginal()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostDirectory = workspace.CreateDirectory("apphost");
@@ -46,23 +46,13 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(configPath, original);
         var client = NuGetTestHelper.CreateClient();
         var service = new BundleNuGetService(NullLogger<BundleNuGetService>.Instance, client);
-        var channel = PackageChannel.CreateExplicitChannel(
-            "stable",
-            PackageChannelQuality.Stable,
+        var configuration = service.BuildConfiguration(
+            appHostDirectory, "test",
             [new PackageMapping("Aspire*", "https://api.nuget.org/v3/index.json"), new PackageMapping("*", "https://api.nuget.org/v3/index.json")],
-            new FakeNuGetPackageCache(),
-            new TestFeatures(),
-            NullLogger.Instance);
-        var configuration = service.BuildChannelConfiguration(
-            appHostDirectory, "test", channel, packageSourceOverride: null,
-            nugetServiceIndexOverride: null, TestContext.Current.CancellationToken);
+            restrictToSelectedSources: false, hasAuthoritativeAspirePolicy: true,
+            cancellationToken: TestContext.Current.CancellationToken);
         using var preview = await service.CreateConfigurationPreviewAsync(
             appHostDirectory, configuration, globalPackagesFolder: null, TestContext.Current.CancellationToken);
-        var candidate = await new DotNetAppHostNuGetConfigMerger(service).PrepareAsync(
-            workspace.WorkspaceRoot, configuration, createIfMissing: false,
-            globalPackagesFolder: null, TestContext.Current.CancellationToken);
-        Assert.NotNull(candidate);
-
         Assert.Equal(original, await File.ReadAllTextAsync(configPath));
         Assert.StartsWith(Path.Combine(appHostDirectory.FullName, ".aspire") + Path.DirectorySeparatorChar, preview.EffectiveWorkingDirectory.FullName);
         Assert.Empty(workspace.WorkspaceRoot.EnumerateFiles(".aspire-nuget-preview-*.config"));
@@ -74,22 +64,26 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
 
         var key = new byte[NuGetSourceIdentity.KeySizeInBytes];
         var previewSnapshot = client.GetSettings(preview.EffectiveWorkingDirectory.FullName, key);
-        await DotNetAppHostNuGetConfigMerger.ApplyAsync(candidate, TestContext.Current.CancellationToken);
-        var persistedSnapshot = client.GetSettings(appHostDirectory.FullName, key);
-        Assert.Equal(
-            persistedSnapshot.Sources.Where(static source => source.IsEnabled),
-            previewSnapshot.Sources.Where(static source => source.IsEnabled));
-        Assert.Equal(
-            persistedSnapshot.PackageSourceMappings.Select(mapping => $"{mapping.SourceKey}:{string.Join(",", mapping.Patterns)}"),
-            previewSnapshot.PackageSourceMappings.Select(mapping => $"{mapping.SourceKey}:{string.Join(",", mapping.Patterns)}"));
+        Assert.Equal(["private", "nuget.org"],
+            previewSnapshot.Sources.Where(static source => source.IsEnabled).Select(static source => source.Name));
         Assert.Equal(["daily"], previewSnapshot.DisabledPackageSourceKeys);
-        Assert.Empty(persistedSnapshot.DisabledPackageSourceKeys);
-        var persistedSettings = NuGetTestHelper.LoadSettings(appHostDirectory.FullName);
+        Assert.Collection(previewSnapshot.PackageSourceMappings,
+            mapping =>
+            {
+                Assert.Equal("private", mapping.SourceKey);
+                Assert.Equal(["Contoso.*"], mapping.Patterns);
+            },
+            mapping =>
+            {
+                Assert.Equal("nuget.org", mapping.SourceKey);
+                Assert.Equal(["*", "Aspire*"], mapping.Patterns);
+            });
+        var ambientSettings = NuGetTestHelper.LoadSettings(appHostDirectory.FullName);
         Assert.Equal(
-            NativeSettingsUtility.GetGlobalPackagesFolder(persistedSettings),
+            NativeSettingsUtility.GetGlobalPackagesFolder(ambientSettings),
             NativeSettingsUtility.GetGlobalPackagesFolder(previewSettings));
         Assert.Equal(
-            persistedSettings.GetSection("packageSources")!.Items.OfType<global::NuGet.Configuration.SourceItem>().Single(source => source.Key == "private").AdditionalAttributes,
+            ambientSettings.GetSection("packageSources")!.Items.OfType<global::NuGet.Configuration.SourceItem>().Single(source => source.Key == "private").AdditionalAttributes,
             previewSettings.GetSection("packageSources")!.Items.OfType<global::NuGet.Configuration.SourceItem>().Single(source => source.Key == "private").AdditionalAttributes);
         Assert.Equal("unchanged", previewSettings.GetSection("custom")!.Items.OfType<global::NuGet.Configuration.AddItem>().Single().Value);
     }
@@ -115,11 +109,9 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             """);
         var client = NuGetTestHelper.CreateClient();
         var service = new BundleNuGetService(NullLogger<BundleNuGetService>.Instance, client);
-        var configuration = service.BuildConfiguration(
+        var configuration = service.BuildAppHostConfiguration(
             appHostDirectory, "test",
             [new PackageMapping("Aspire*", "https://selected.example/v3/index.json")],
-            restrictToSelectedSources: false,
-            hasAuthoritativeAspirePolicy: true,
             cancellationToken: TestContext.Current.CancellationToken);
         using var preview = await service.CreateConfigurationPreviewAsync(
             appHostDirectory, configuration, globalPackagesFolder: null, TestContext.Current.CancellationToken);
@@ -130,10 +122,12 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
 
         Assert.False(candidate.TargetFile.Exists);
         var previewSnapshot = client.GetSettings(preview.EffectiveWorkingDirectory.FullName, new byte[NuGetSourceIdentity.KeySizeInBytes]);
-        Assert.Equal(["aspire-test", "app"], previewSnapshot.Sources.Select(source => source.Name));
+        Assert.Equal(["app", "aspire-test"], previewSnapshot.Sources.Select(source => source.Name).Order());
         await DotNetAppHostNuGetConfigMerger.ApplyAsync(candidate, TestContext.Current.CancellationToken);
         var persistedSnapshot = client.GetSettings(appHostDirectory.FullName, new byte[NuGetSourceIdentity.KeySizeInBytes]);
-        Assert.Equal(persistedSnapshot.Sources, previewSnapshot.Sources);
+        Assert.Equal(
+            persistedSnapshot.Sources.OrderBy(static source => source.Name),
+            previewSnapshot.Sources.OrderBy(static source => source.Name));
     }
 
     [Fact]

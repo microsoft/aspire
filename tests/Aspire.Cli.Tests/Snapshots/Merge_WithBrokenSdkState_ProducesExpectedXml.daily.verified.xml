@@ -3,15 +3,17 @@
     <clear />
     <add key="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json" />
     <add key="https://api.nuget.org/v3/index.json" value="https://api.nuget.org/v3/index.json" />
+    <add key="{STALE_PR_HIVE}" value="{STALE_PR_HIVE}" />
   </packageSources>
   <packageSourceMapping>
-    <clear />
     <packageSource key="https://api.nuget.org/v3/index.json">
       <package pattern="*" />
     </packageSource>
+    <packageSource key="{STALE_PR_HIVE}">
+      <package pattern="Aspire*" />
+    </packageSource>
     <packageSource key="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json">
       <package pattern="*" />
-      <package pattern="Aspire*" />
     </packageSource>
   </packageSourceMapping>
 </configuration>

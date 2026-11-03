@@ -52,6 +52,14 @@ internal sealed partial class EntraIdSymbolNames(AzureResourceInfrastructure inf
     public string RoleAssignment(EntraIdApiAccess access, EntraIdResolvedPermission role) =>
         Get(access, $"RoleAssignment:{role.Id:N}", $"{Base(access)}{ToPascalCase(role.Name)}RoleAssignment");
 
+    /// <summary>Gets the parameter carrying a managed identity's service-principal object ID.</summary>
+    public string ManagedIdentityPrincipalId(AzureUserAssignedIdentityResource identity) =>
+        Get(identity, "PrincipalId", $"{StartWithLetter(Infrastructure.NormalizeBicepIdentifier(identity.Name))}PrincipalId");
+
+    /// <summary>Gets the symbol for one role assigned directly to a managed identity.</summary>
+    public string ManagedIdentityRoleAssignment(AzureUserAssignedIdentityResource identity, EntraIdAppRole role, Guid roleId) =>
+        Get(identity, $"RoleAssignment:{roleId:N}", $"{StartWithLetter(Infrastructure.NormalizeBicepIdentifier(identity.Name))}{ToPascalCase(role.Value)}RoleAssignment");
+
     // A registration in the AppHost has a unique resource name; Aspire's normalization maps '-' to '_' and resource names can't contain
     // '_', so two names never normalize to the same text. Another API is named after its display text, and made unique by allocation.
     private static string Base(EntraIdApplicationResource application) => StartWithLetter(Infrastructure.NormalizeBicepIdentifier(application.Name));

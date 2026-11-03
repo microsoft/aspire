@@ -14,6 +14,7 @@ From your AppHost directory, add the `Aspire.Hosting.Azure.ApplicationInsights` 
 
 ```bash
 aspire add Aspire.Hosting.Azure.ApplicationInsights
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Configure Azure Provisioning for local development
@@ -40,7 +41,7 @@ In the AppHost, add an Application Insights connection and reference it from ano
 ```csharp
 var appInsights = builder.AddAzureApplicationInsights("appInsights");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(appInsights);
 ```
 

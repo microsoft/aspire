@@ -369,7 +369,7 @@ Progress and informational messages go to stderr, so redirection captures only M
 | `relationships` | Related resources as `{ "type": "...", "resourceName": "..." }`. |
 | `urls` | Endpoint objects with `name`, `displayName`, `url`, and `isInternal`. |
 | `volumes` | Volume objects with `source`, `target`, `mountType`, and `isReadOnly`. |
-| `properties` | Resource properties keyed by property name. Common debug-related keys include `project.path`, `project.launchProfile`, `project.launchCommand`, `project.configuration`, `project.targetFramework`, and `resource.launchConfigurationType`. For current AppHosts, `project.launchCommand` is `run`, `watch`, `ide`, or `null` when a .NET project launch command cannot be classified. |
+| `properties` | Resource properties keyed by property name. Common debug-related keys include `project.path`, `project.launchProfile`, `project.launchCommand`, `project.configuration`, `project.targetFramework`, `project.targetPath`, `project.useAppHost`, and `resource.launchConfigurationType`. For current AppHosts, `project.launchCommand` is `run`, `watch`, `ide`, `direct`, or `null` when a .NET project launch command cannot be classified. |
 | `environment` | Environment variables keyed by variable name. |
 | `healthReports` | Health report objects keyed by report name. |
 | `commands` | Resource command metadata keyed by command name. |
@@ -377,6 +377,16 @@ Progress and informational messages go to stderr, so redirection captures only M
 For recognized IDE-managed .NET project launches, `project.launchCommand` is `ide`. In that mode,
 `executable.pid`, when present, identifies the application process rather than a `dotnet run` or
 `dotnet watch` launcher.
+
+For coordinated .NET projects launched directly through the SDK's `RunCommand`,
+`project.launchCommand` is `direct` and `resource.launchConfigurationType` is
+`project-with-external-build.v1`. The executable can be a native apphost or `dotnet exec`,
+and `executable.pid` identifies the application itself. `project.configuration`, when present,
+comes from the coordinated build rather than application arguments. `project.targetPath` is the
+authoritative MSBuild `TargetPath` produced with the coordinated build inputs, and
+`project.useAppHost` is `true` or `false` according to the corresponding MSBuild property.
+Debugger clients must verify that the reported process matches this authoritative project output
+before attaching.
 
 ## Logs
 

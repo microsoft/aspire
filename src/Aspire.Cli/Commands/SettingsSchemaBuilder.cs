@@ -92,8 +92,8 @@ internal static class SettingsSchemaBuilder
                 continue;
             }
 
-            // Skip JsonIgnore properties (like convenience accessors)
-            if (prop.GetCustomAttribute<JsonIgnoreAttribute>() is not null)
+            // Skip properties that are always ignored (like convenience accessors)
+            if (prop.GetCustomAttribute<JsonIgnoreAttribute>() is { Condition: JsonIgnoreCondition.Always })
             {
                 continue;
             }

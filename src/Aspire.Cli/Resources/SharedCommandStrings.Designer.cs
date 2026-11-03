@@ -376,6 +376,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Only use sources you trust. Content from these sources can run code on your machine..
+        /// </summary>
+        internal static string SourceTrustWarning {
+            get {
+                return ResourceManager.GetString("SourceTrustWarning", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Unrecognized option &apos;{0}&apos;. Did you mean &apos;{1}&apos;?.
         /// </summary>
         internal static string UnrecognizedOptionDidYouMeanFormat {
