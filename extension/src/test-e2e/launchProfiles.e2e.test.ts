@@ -157,6 +157,7 @@ suite('Aspire launch profiles E2E', function () {
         originalLaunchSettings = captureFile(launchSettingsPath);
         originalLaunchJson = captureFile(launchJsonPath);
         originalAppHostSource = captureFile(appHostSourcePath);
+        assert.ok(originalAppHostSource.exists, 'Expected generated AppHost source.');
         launchSettingsDirectoryExisted = fs.existsSync(launchSettingsDirectory);
 
         await openAspireView();
@@ -169,16 +170,16 @@ suite('Aspire launch profiles E2E', function () {
                 h2: { commandName: 'Project', environmentVariables: { mode: '2' } },
             },
         }, undefined, 2));
-        writeFileWithRetry(appHostSourcePath, `var builder = DistributedApplication.CreateBuilder(args);
-
-builder.AddProject<Projects.AspireE2E_Worker>("e2e-worker").WithHttpEndpoint(name: "http");
-if (builder.Configuration["mode"] == "2")
+        const appHostSource = originalAppHostSource.content.replace(
+            'builder.Build().Run();',
+            `if (builder.Configuration["mode"] == "2")
 {
-    builder.AddProject<Projects.AspireE2E_Worker>("e2e-profile-two").WithHttpEndpoint(name: "http");
+    builder.AddExecutable("e2e-profile-two", "node", ".", "-e", "setInterval(() => {}, 1000)");
 }
 
-builder.Build().Run();
-`);
+builder.Build().Run();`);
+        assert.notStrictEqual(appHostSource, originalAppHostSource.content, 'Expected generated AppHost source to contain builder.Build().Run().');
+        writeFileWithRetry(appHostSourcePath, appHostSource);
         fs.mkdirSync(path.dirname(launchJsonPath), { recursive: true });
         writeFileWithRetry(launchJsonPath, JSON.stringify({
             version: '0.2.0',

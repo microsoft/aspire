@@ -272,7 +272,7 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
             const hasNestedLaunchProfileOptions = nestedDisableLaunchProfile === true
                 || nestedLaunchProfile !== undefined;
             if (command === 'run' && cliOwnsDotnetAppHostLaunch && nestedDisableLaunchProfile === true) {
-                await vscode.window.showWarningMessage(appHostLifecycleDisableLaunchProfileNotSupported);
+                void vscode.window.showWarningMessage(appHostLifecycleDisableLaunchProfileNotSupported);
             }
             const canForwardNestedLaunchProfile = cliOwnsDotnetAppHostLaunch
                 && nestedDisableLaunchProfile !== true;

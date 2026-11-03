@@ -835,14 +835,15 @@ suite('AspireDebugConfigurationProvider', () => {
         assert.strictEqual(launchReservation.prepared[0].launchProfile, 'Selected Profile');
     });
 
-    test('warns that disabling a nested profile has no effect when C# is unavailable', async () => {
+    test('resolves configuration while the unsupported disableLaunchProfile warning remains open', async () => {
         isCsharpInstalledStub.returns(false);
-        const warning = sandbox.stub(vscode.window, 'showWarningMessage').resolves(undefined);
+        const pendingWarning = new Promise<vscode.MessageItem | undefined>(() => { });
+        const warning = sandbox.stub(vscode.window, 'showWarningMessage').returns(pendingWarning);
         const appHostPath = path.join(tempDir, 'AppHost.csproj');
         fs.writeFileSync(appHostPath, '<Project Sdk="Aspire.AppHost.Sdk" />');
         const provider = createProvider(createAppHostDiscoveryService(appHostPath), launchReservation);
 
-        await provider.resolveDebugConfigurationWithSubstitutedVariables(undefined, {
+        const config = await provider.resolveDebugConfigurationWithSubstitutedVariables(undefined, {
             name: 'Run AppHost',
             type: 'aspire',
             request: 'launch',
@@ -854,6 +855,7 @@ suite('AspireDebugConfigurationProvider', () => {
             },
         });
 
+        assert.strictEqual(config?.program, appHostPath);
         assert.deepStrictEqual(launchReservation.prepared[0].args, []);
         assert.strictEqual(launchReservation.prepared[0].launchProfile, undefined);
         assert.strictEqual(warning.calledOnce, true);
