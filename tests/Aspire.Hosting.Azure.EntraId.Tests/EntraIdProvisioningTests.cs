@@ -803,6 +803,37 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
         Assert.Equal(firstContents, entra.Resource.GetBicepTemplateString());
     }
 
+    [Fact]
+    public async Task ConfigureInfrastructure_CustomizesApplicationMetadata()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var serviceReference = builder.AddParameter("service-reference");
+        var entra = builder.AddEntraIdApplication("entra-api")
+            .WithScope("read", "Read data.")
+            .ConfigureInfrastructure(infrastructure =>
+            {
+                var application = infrastructure.GetProvisionableResources().OfType<MicrosoftGraphApplication>()
+                    .Single(r => r.BicepIdentifier == "application");
+                application.Tags.Add("department:engineering");
+                application.Tags.Add(serviceReference.AsProvisioningParameter(infrastructure));
+                application.ServiceManagementReference = serviceReference.AsProvisioningParameter(infrastructure);
+                application.Description = "Orders API";
+                application.GroupMembershipClaims = "SecurityGroup";
+                application.HomePageUrl = "https://contoso.example";
+                application.SpaRedirectUris.Add("https://contoso.example/spa");
+
+                var servicePrincipal = Assert.Single(infrastructure.GetProvisionableResources().OfType<MicrosoftGraphServicePrincipal>());
+                servicePrincipal.Tags.Add("department:engineering");
+                servicePrincipal.AppRoleAssignmentRequired = true;
+                servicePrincipal.NotificationEmailAddresses.Add("owners@contoso.example");
+            });
+
+        var bicep = entra.Resource.GetBicepTemplateString();
+        Assert.Same(serviceReference.Resource, entra.Resource.Parameters["service_reference"]);
+        Assert.Equal(bicep, entra.Resource.GetBicepTemplateString());
+        await Verify(bicep, "bicep");
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
