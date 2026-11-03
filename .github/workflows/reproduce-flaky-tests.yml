@@ -20,7 +20,7 @@ on:
 env:
   # Test project shortname (maps to tests/Aspire.{name}.Tests/ or tests/{name}.Tests/)
   # Examples: Hosting, Core, Dashboard, Components.Common, Cli.EndToEnd
-  TEST_PROJECT: "Hosting"
+  TEST_PROJECT: "Infrastructure"
 
   # Test filter arguments passed to dotnet test (after the -- separator).
   # Use quotes around wildcard patterns to prevent shell glob expansion.
@@ -28,18 +28,18 @@ env:
   #   --filter-method "*.TestMethodName"
   #   --filter-class "*.TestClassName"
   #   --filter-method "*.Test1" --filter-method "*.Test2"
-  TEST_FILTER: '--filter-method "*.YourTestMethodName"'
+  TEST_FILTER: '--filter-not-class "*.PowerShellStartupProfileTests" --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true" --filter-not-trait "category=failing"'
 
   # Target operating systems (comma-separated)
   # Options: ubuntu-latest, windows-latest, macos-latest
-  TARGET_OSES: "ubuntu-latest,windows-latest"
+  TARGET_OSES: "ubuntu-latest"
 
   # Number of parallel runners per OS
   # Total jobs = RUNNERS_PER_OS × number of OSes (must be ≤ 256)
-  RUNNERS_PER_OS: "3"
+  RUNNERS_PER_OS: "50"
 
   # Number of test iterations each runner executes
-  ITERATIONS_PER_RUNNER: "3"
+  ITERATIONS_PER_RUNNER: "1"
 
 jobs:
 
@@ -167,6 +167,26 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Pin PowerShell and record comparison environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = x86_64
+          test -z "${DOTNET_MultiCoreJitNoProfileGather:-}"
+          mkdir -p "$RUNNER_TEMP/pwsh-7.6.9"
+          curl --fail --location --retry 3 \
+            https://github.com/PowerShell/PowerShell/releases/download/v7.6.9/powershell-7.6.9-linux-x64.tar.gz \
+            --output "$RUNNER_TEMP/pwsh-7.6.9.tar.gz"
+          tar -xzf "$RUNNER_TEMP/pwsh-7.6.9.tar.gz" -C "$RUNNER_TEMP/pwsh-7.6.9"
+          chmod +x "$RUNNER_TEMP/pwsh-7.6.9/pwsh"
+          echo "$RUNNER_TEMP/pwsh-7.6.9" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/pwsh-7.6.9/pwsh" -NoProfile -NonInteractive -Command \
+            '$PSVersionTable; [System.Runtime.InteropServices.RuntimeInformation]::FrameworkDescription'
+          git rev-parse HEAD
+          uname -a
+          printf 'ImageOS=%s ImageVersion=%s\n' "$ImageOS" "$ImageVersion"
+          find "${XDG_CACHE_HOME:-$HOME/.cache}/powershell" -maxdepth 1 -name 'StartupProfileData-*' -ls 2>/dev/null || test ! -d "${XDG_CACHE_HOME:-$HOME/.cache}/powershell"
+
       - name: Trust HTTPS development certificate (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -281,6 +301,8 @@ jobs:
             ITER_OUTPUT="${{ github.workspace }}/iter-output-$i.log"
             set +e  # Disable errexit so pipefail doesn't abort before PIPESTATUS capture
             ${{ env.DOTNET_SCRIPT }} test --project "${{ env.TEST_PROJECT_PATH }}" \
+              --no-launch-profile \
+              /p:ContinuousIntegrationBuild=true \
               --no-restore \
               --no-build \
               -- \
@@ -298,7 +320,8 @@ jobs:
                 RESULT=8
               fi
             fi
-            rm -f "$ITER_OUTPUT"
+            mkdir -p "${{ github.workspace }}/all-results"
+            cp "$ITER_OUTPUT" "${{ github.workspace }}/all-results/iteration-$i.log"
 
             if [ "$RESULT" -eq 0 ]; then
               echo "✅ Iteration $i: PASS"
@@ -390,11 +413,13 @@ jobs:
           if ($fail -gt 0) { exit 1 }
 
       - name: Upload failure logs
-        if: failure()
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: failures-${{ matrix.os }}-${{ matrix.index }}
-          path: all-results/
+          path: |
+            all-results/*.log
+            testresults/**/*.trx
           if-no-files-found: ignore
 
   results:
