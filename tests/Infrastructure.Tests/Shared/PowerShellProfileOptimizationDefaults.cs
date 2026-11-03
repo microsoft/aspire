@@ -29,6 +29,5 @@ internal static class PowerShellProfileOptimizationDefaults
     [ModuleInitializer]
     internal static void DisableSharedStartupProfileWrites()
     {
-        Environment.SetEnvironmentVariable(NoProfileGatherVariable, "1");
     }
 }
