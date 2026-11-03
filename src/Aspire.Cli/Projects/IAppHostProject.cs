@@ -32,6 +32,11 @@ internal sealed class UpdatePackagesContext
     public required Packaging.PackageChannel Channel { get; init; }
 
     /// <summary>
+    /// Gets whether the invocation explicitly requested a channel.
+    /// </summary>
+    public required bool HasExplicitChannel { get; init; }
+
+    /// <summary>
     /// Gets the prompt binding for confirmation prompts.
     /// Enables non-interactive confirmation via CLI options (e.g. <c>--yes</c>).
     /// </summary>
@@ -42,6 +47,11 @@ internal sealed class UpdatePackagesContext
     /// Enables non-interactive selection via CLI options (e.g. <c>--nuget-config-dir</c>).
     /// </summary>
     public required Interaction.PromptBinding<string?> NuGetConfigDirBinding { get; init; }
+
+    /// <summary>
+    /// Gets additional file edits to include in the project's confirmation and apply phase.
+    /// </summary>
+    public IReadOnlyList<UpdateStep> AdditionalUpdateSteps { get; init; } = [];
 }
 
 /// <summary>
@@ -76,9 +86,19 @@ internal sealed class AddPackageContext
     public required string PackageVersion { get; init; }
 
     /// <summary>
-    /// Gets or sets the optional NuGet source.
+    /// Gets or sets the package channel selected for this add operation.
+    /// </summary>
+    public string? RequestedChannel { get; init; }
+
+    /// <summary>
+    /// Gets or sets the optional invocation-scoped NuGet source.
     /// </summary>
     public string? Source { get; init; }
+
+    /// <summary>
+    /// Gets or sets the package pattern whose restore is owned by <see cref="Source"/>.
+    /// </summary>
+    public string? SourcePackagePattern { get; init; }
 
     /// <summary>
     /// Gets or sets the output collector for capturing stdout/stderr.

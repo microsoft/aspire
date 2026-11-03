@@ -1,0 +1,10 @@
+﻿<configuration>
+  <packageSources>
+    <add key="aspire-test" value="https://channel.example/v3/index.json" />
+  </packageSources>
+  <packageSourceMapping>
+    <packageSource key="aspire-test">
+      <package pattern="Aspire*" />
+    </packageSource>
+  </packageSourceMapping>
+</configuration>

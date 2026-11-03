@@ -4,57 +4,57 @@
     <body>
       <trans-unit id="ActivityStarting">
         <source>Starting...</source>
-        <target state="new">Starting...</target>
+        <target state="translated">開始中...</target>
         <note />
       </trans-unit>
       <trans-unit id="ActivityStartingWithName">
         <source>Starting {0}...</source>
-        <target state="new">Starting {0}...</target>
+        <target state="translated">{0} を開始しています...</target>
         <note />
       </trans-unit>
       <trans-unit id="PipelineFailed">
         <source>Pipeline failed</source>
-        <target state="new">Pipeline failed</target>
+        <target state="translated">パイプラインが失敗しました</target>
         <note />
       </trans-unit>
       <trans-unit id="PipelineSucceeded">
         <source>Pipeline succeeded</source>
-        <target state="new">Pipeline succeeded</target>
+        <target state="translated">パイプラインが成功しました</target>
         <note />
       </trans-unit>
       <trans-unit id="SummaryFailed">
         <source>{0} failed</source>
-        <target state="new">{0} failed</target>
+        <target state="translated">{0} 個が失敗</target>
         <note />
       </trans-unit>
       <trans-unit id="SummaryLogLevelHelp">
         <source>For more details, add --pipeline-log-level debug/trace to the command.</source>
-        <target state="new">For more details, add --pipeline-log-level debug/trace to the command.</target>
+        <target state="translated">詳細については、コマンドに --pipeline-log-level debug/trace を追加します。</target>
         <note />
       </trans-unit>
       <trans-unit id="SummaryStepsSucceeded">
         <source>{0} steps succeeded</source>
-        <target state="new">{0} steps succeeded</target>
+        <target state="translated">{0} 件の手順が成功しました</target>
         <note />
       </trans-unit>
       <trans-unit id="SummaryStepsSucceededWithTotal">
         <source>{0}/{1} steps succeeded</source>
-        <target state="new">{0}/{1} steps succeeded</target>
+        <target state="translated">{0}/{1} の手順が成功しました</target>
         <note />
       </trans-unit>
       <trans-unit id="SummaryTotalTime">
         <source>Total time: {0}</source>
-        <target state="new">Total time: {0}</target>
+        <target state="translated">合計時間: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="SummaryWarningsPlural">
         <source>{0} warnings</source>
-        <target state="new">{0} warnings</target>
+        <target state="translated">{0} 件の警告</target>
         <note />
       </trans-unit>
       <trans-unit id="SummaryWarningsSingular">
         <source>{0} warning</source>
-        <target state="new">{0} warning</target>
+        <target state="translated">{0} 件の警告</target>
         <note />
       </trans-unit>
     </body>

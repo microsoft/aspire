@@ -2,7 +2,7 @@
   Execute a command on a resource (e.g. start, stop, restart)
 
 Usage:
-  Aspire.Cli.Tests resource <resource> <command> [options] [[--] <additional arguments>...]]
+  aspire resource <resource> <command> [options] [[--] <additional arguments>...]]
 
 Arguments:
   <resource>  The name of the resource to execute the command on

@@ -207,7 +207,7 @@ internal sealed class LogsCommand : BaseCommand
             {
                 return CommandResult.Success();
             }
-            catch (Exception ex) when (AppHostFollowDisconnectHelpers.IsExpectedDisconnect(ex))
+            catch (Exception ex) when (BackchannelDisconnectHelpers.IsExpectedDisconnect(ex))
             {
                 if (cancellationToken.IsCancellationRequested)
                 {

@@ -55,7 +55,7 @@ if ([string]::IsNullOrWhiteSpace($Version)) {
 
 # Build (or locate) the CLI. The override only changes identity/decisions — it never
 # materializes package bytes — so a normal local build of the CLI is all we need.
-$cliDll = Join-Path $repoRoot "artifacts/bin/Aspire.Cli/$Config/net10.0/aspire.dll"
+$cliDll = Join-Path $repoRoot "artifacts/bin/Aspire.Cli/$Config/net11.0/aspire.dll"
 if (-not $NoBuild) {
     Write-Host "emulate-aspire-cli: building Aspire.Cli ($Config)..." -ForegroundColor DarkGray
     $env:MSBUILDTERMINALLOGGER = 'false'

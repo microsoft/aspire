@@ -159,6 +159,74 @@ public class AtsMarshallerTests
         Assert.True(result.GetValue<bool>());
     }
 
+    [Theory]
+    [InlineData("hello", "\"hello\"")]
+    [InlineData(42, "42")]
+    [InlineData(true, "true")]
+    public void MarshalToJson_UnionSerializesMatchingPrimitive(object value, string expectedJson)
+    {
+        var marshaller = CreateMarshaller();
+        var typeRef = new AtsTypeRef
+        {
+            TypeId = "string|number|boolean",
+            Category = AtsTypeCategory.Union,
+            UnionTypes =
+            [
+                new AtsTypeRef { TypeId = AtsConstants.String, ClrType = typeof(string), Category = AtsTypeCategory.Primitive },
+                new AtsTypeRef { TypeId = AtsConstants.Number, ClrType = typeof(int), Category = AtsTypeCategory.Primitive },
+                new AtsTypeRef { TypeId = AtsConstants.Boolean, ClrType = typeof(bool), Category = AtsTypeCategory.Primitive }
+            ]
+        };
+
+        var result = marshaller.MarshalToJson(value, typeRef);
+
+        Assert.Equal(expectedJson, result!.ToJsonString());
+    }
+
+    [Fact]
+    public void MarshalToJson_UnionPreservesDeclaredHandleTypeAndIdentity()
+    {
+        var registry = new HandleRegistry();
+        var marshaller = CreateMarshaller(registry);
+        var value = new ContainerResource("container");
+        var typeRef = new AtsTypeRef
+        {
+            TypeId = "string|resource",
+            Category = AtsTypeCategory.Union,
+            UnionTypes =
+            [
+                new AtsTypeRef { TypeId = AtsConstants.String, ClrType = typeof(string), Category = AtsTypeCategory.Primitive },
+                new AtsTypeRef { TypeId = "test/IResource", ClrType = typeof(IResource), Category = AtsTypeCategory.Handle }
+            ]
+        };
+
+        var result = Assert.IsType<JsonObject>(marshaller.MarshalToJson(value, typeRef));
+
+        Assert.Equal("test/IResource", result["$type"]!.GetValue<string>());
+        Assert.True(registry.TryGet(result["$handle"]!.GetValue<string>(), out var retrieved, out _));
+        Assert.Same(value, retrieved);
+    }
+
+    [Fact]
+    public void MarshalToJson_UnionRejectsValueOutsideDeclaredMembers()
+    {
+        var marshaller = CreateMarshaller();
+        var typeRef = new AtsTypeRef
+        {
+            TypeId = "string|boolean",
+            Category = AtsTypeCategory.Union,
+            UnionTypes =
+            [
+                new AtsTypeRef { TypeId = AtsConstants.String, ClrType = typeof(string), Category = AtsTypeCategory.Primitive },
+                new AtsTypeRef { TypeId = AtsConstants.Boolean, ClrType = typeof(bool), Category = AtsTypeCategory.Primitive }
+            ]
+        };
+
+        var exception = Assert.Throws<InvalidOperationException>(() => marshaller.MarshalToJson(42, typeRef));
+
+        Assert.Equal("Value of type 'System.Int32' does not match any member of union 'string|boolean'.", exception.Message);
+    }
+
     [Fact]
     public void MarshalToJson_MarshalsEnumAsString()
     {
@@ -1002,6 +1070,35 @@ public class AtsMarshallerTests
 
         Assert.Equal("updated", dto.Name);
         Assert.Equal(10, dto.Count); // Count unchanged since not in JSON
+    }
+
+    [Theory]
+    [InlineData("0.0", 0)]
+    [InlineData("2.0", 2)]
+    [InlineData("-1.0", -1)]
+    [InlineData("2147483647.0", int.MaxValue)]
+    public void ApplyDtoProperties_ConvertsIntegralDecimalNumbers(string countJson, int expected)
+    {
+        var marshaller = CreateMarshaller();
+        var dto = new TestDto();
+        var source = new JsonObject { ["count"] = JsonNode.Parse(countJson) };
+
+        marshaller.ApplyDtoProperties(source, dto, typeof(TestDto));
+
+        Assert.Equal(expected, dto.Count);
+    }
+
+    [Theory]
+    [InlineData("1.5")]
+    [InlineData("2147483648.0")]
+    public void ApplyDtoProperties_RejectsInvalidIntegralNumbers(string countJson)
+    {
+        var marshaller = CreateMarshaller();
+        var dto = new TestDto { Count = 3 };
+        var source = new JsonObject { ["count"] = JsonNode.Parse(countJson) };
+
+        Assert.Throws<InvalidCastException>(() => marshaller.ApplyDtoProperties(source, dto, typeof(TestDto)));
+        Assert.Equal(3, dto.Count);
     }
 
     [Fact]

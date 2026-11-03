@@ -111,7 +111,6 @@ public sealed class TypeScriptEmptyAppHostTemplateTests(ITestOutputHelper output
                 <TargetFramework>net10.0</TargetFramework>
                 <ImplicitUsings>enable</ImplicitUsings>
                 <Nullable>enable</Nullable>
-                <NoWarn>$(NoWarn);ASPIREATS001</NoWarn>
               </PropertyGroup>
 
               <ItemGroup>

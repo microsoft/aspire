@@ -4,7 +4,7 @@
     "language": "go"
   },
   "features": {
-    "experimentalPolyglot:go": true
+    "experimentalPolyglotGo": true
   },
   "packages": {
     "Aspire.Hosting.Rust": ""

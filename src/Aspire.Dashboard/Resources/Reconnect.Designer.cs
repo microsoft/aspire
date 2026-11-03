@@ -10,8 +10,8 @@
 
 namespace Aspire.Dashboard.Resources {
     using System;
-    
-    
+
+
     /// <summary>
     ///   A strongly-typed resource class, for looking up localized strings, etc.
     /// </summary>
@@ -23,15 +23,15 @@ namespace Aspire.Dashboard.Resources {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     public class Reconnect {
-        
+
         private static global::System.Resources.ResourceManager resourceMan;
-        
+
         private static global::System.Globalization.CultureInfo resourceCulture;
-        
+
         [global::System.Diagnostics.CodeAnalysis.SuppressMessageAttribute("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode")]
         internal Reconnect() {
         }
-        
+
         /// <summary>
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
@@ -45,7 +45,7 @@ namespace Aspire.Dashboard.Resources {
                 return resourceMan;
             }
         }
-        
+
         /// <summary>
         ///   Overrides the current thread's CurrentUICulture property for all
         ///   resource lookups using this strongly typed resource class.
@@ -59,7 +59,7 @@ namespace Aspire.Dashboard.Resources {
                 resourceCulture = value;
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Failed to rejoin.&lt;br /&gt;Please retry or reload the page..
         /// </summary>
@@ -68,7 +68,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ReconnectFailedText", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Rejoining the server....
         /// </summary>
@@ -77,7 +77,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ReconnectFirstAttemptText", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Rejoin failed... trying again in &lt;span id=&quot;components-seconds-to-next-attempt&quot;&gt;&lt;/span&gt; seconds..
         /// </summary>
@@ -86,7 +86,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ReconnectRepeatedAttemptText", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Retry.
         /// </summary>
@@ -95,7 +95,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ReconnectRetryButtonText", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Lost connection to the AppHost. Attempting to reconnect....
         /// </summary>
@@ -104,7 +104,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourceServiceReconnectDisconnectedText", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Retry.
         /// </summary>
@@ -113,7 +113,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourceServiceReconnectRetryButtonText", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to {0} app requires dashboard {2} or later.&lt;br /&gt;&lt;br /&gt;See &lt;a href=&quot;{1}&quot; target=&quot;_blank&quot; rel=&quot;noreferrer noopener&quot;&gt;upgrade Aspire&lt;/a&gt; for more information..
         /// </summary>

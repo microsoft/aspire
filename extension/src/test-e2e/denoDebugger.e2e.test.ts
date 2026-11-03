@@ -41,10 +41,7 @@ Deno.serve({ hostname: "127.0.0.1", port: Number(Deno.env.get("PORT") ?? "8000")
   </ItemGroup>
 </Project>
 `);
-        const appHostWithLocalJavaScriptHosting = originalAppHostSource.replace(
-            /(#:sdk [^\r\n]+)(\r?\n)/,
-            `$1$2#:property NoWarn=ASPIREDENO001$2#:project ${javascriptHostingProject}$2`);
-        assert.notStrictEqual(appHostWithLocalJavaScriptHosting, originalAppHostSource, 'Expected generated AppHost source to contain an SDK directive.');
+        const appHostWithLocalJavaScriptHosting = `#:property NoWarn=ASPIREDENO001\n#:project ${javascriptHostingProject}\n${originalAppHostSource}`;
 
         const appHostSource = appHostWithLocalJavaScriptHosting.replace(
             'builder.Build().Run();',

@@ -39,12 +39,12 @@ export const DEFAULT_REPOS = [
   "CommunityToolkit/Aspire",
 ];
 
-// Enterprise Managed User (EMU) accounts (e.g. "dapine_microsoft") work against
-// the private first-party mirror rather than the public Aspire repos, so they get
-// a different default watch set. See accounts.isEmuAccountId for how an account is
-// classified and state.defaultReposForId for how this default is applied.
-export const DEFAULT_EMU_REPOS = [
-  "devdiv-microsoft/aspire-1p",
+// The Proxima enterprise account has its own host and repository location. Keep this
+// separate from the public defaults because account-specific GraphQL requests target
+// the account's host.
+export const DEFAULT_PROXIMA_REPOS = [
+  "coreai/aspire-1p",
+  "coreai/sisyphus",
 ];
 
 const GRAPHQL = "https://api.github.com/graphql";
@@ -196,7 +196,7 @@ function isCopilotReviewer(login) {
 }
 function isCopilotLogin(login) {
   const n = String(login || "").toLowerCase();
-  return n === "copilot" || n === "copilot[bot]" || n === "github-copilot[bot]" || n.endsWith("/copilot");
+  return n === "copilot" || n === "copilot-swe-agent" || n === "copilot-swe-agent[bot]" || n === "copilot[bot]" || n === "github-copilot[bot]" || n.endsWith("/copilot");
 }
 
 // Copilot attribution (mirrors GitHubModels.ResolveAuthor): a Copilot-authored PR with
@@ -204,7 +204,7 @@ function isCopilotLogin(login) {
 // human's work rather than a bot.
 function resolveAuthor(login, assignees) {
   if (!isCopilotLogin(login)) return login;
-  const humans = assignees.filter((a) => a && !/\[bot\]$/i.test(a) && a.toLowerCase() !== "copilot");
+  const humans = assignees.filter((a) => a && !/\[bot\]$/i.test(a) && !isCopilotLogin(a));
   return humans.length === 1 ? `${humans[0]}/copilot` : login;
 }
 

@@ -8,6 +8,7 @@ using System.IO.Hashing;
 using System.Security.Cryptography;
 using System.Text;
 using Aspire.Hosting.Utils;
+using Aspire.Shared;
 
 namespace Aspire.Hosting.Backchannel;
 
@@ -101,7 +102,7 @@ internal static class BackchannelConstants
     /// <param name="homeDirectory">The user's home directory.</param>
     /// <returns>The full path to the compact backchannels directory.</returns>
     public static string GetBackchannelsDirectory(string homeDirectory)
-        => Path.Combine(homeDirectory, ".aspire", "cli", "bch");
+        => Path.Combine(homeDirectory, SocketDirectoryNames.Aspire, SocketDirectoryNames.Cli, SocketDirectoryNames.Backchannels);
 
     /// <summary>
     /// Gets the legacy backchannels directory path for the given home directory.

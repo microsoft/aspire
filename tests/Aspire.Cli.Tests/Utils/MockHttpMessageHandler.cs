@@ -10,6 +10,7 @@ namespace Aspire.Cli.Tests.Utils;
 internal sealed class MockHttpMessageHandler : HttpMessageHandler
 {
     private readonly Func<HttpRequestMessage, HttpResponseMessage>? _responseFactory;
+    private readonly Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>>? _asyncResponseFactory;
     private readonly HttpResponseMessage? _response;
     private readonly Exception? _exception;
     private readonly Action<HttpRequestMessage>? _requestValidator;
@@ -39,6 +40,11 @@ internal sealed class MockHttpMessageHandler : HttpMessageHandler
         _responseFactory = responseFactory;
     }
 
+    public MockHttpMessageHandler(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> responseFactory)
+    {
+        _asyncResponseFactory = responseFactory;
+    }
+
     /// <summary>
     /// Creates a handler that throws the specified exception.
     /// </summary>
@@ -47,6 +53,9 @@ internal sealed class MockHttpMessageHandler : HttpMessageHandler
     {
         _exception = exception;
     }
+
+    protected override HttpResponseMessage Send(HttpRequestMessage request, CancellationToken cancellationToken)
+        => SendAsync(request, cancellationToken).GetAwaiter().GetResult();
 
     protected override Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request,
@@ -66,6 +75,11 @@ internal sealed class MockHttpMessageHandler : HttpMessageHandler
         if (_responseFactory is not null)
         {
             return Task.FromResult(_responseFactory(request));
+        }
+
+        if (_asyncResponseFactory is not null)
+        {
+            return _asyncResponseFactory(request, cancellationToken);
         }
 
         return Task.FromResult(_response!);

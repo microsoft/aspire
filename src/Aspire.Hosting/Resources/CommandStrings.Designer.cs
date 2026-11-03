@@ -61,33 +61,6 @@ namespace Aspire.Hosting.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Restart resource.
-        /// </summary>
-        internal static string RestartDescription {
-            get {
-                return ResourceManager.GetString("RestartDescription", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Restart resource. Source code is not recompiled..
-        /// </summary>
-        internal static string RestartProjectDescription {
-            get {
-                return ResourceManager.GetString("RestartProjectDescription", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Restart.
-        /// </summary>
-        internal static string RestartName {
-            get {
-                return ResourceManager.GetString("RestartName", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to Delete parameter value.
         /// </summary>
         internal static string DeleteParameterDescription {
@@ -115,20 +88,20 @@ namespace Aspire.Hosting.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Rebuild.
-        /// </summary>
-        internal static string RebuildName {
-            get {
-                return ResourceManager.GetString("RebuildName", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to Rebuilder resource for &apos;{0}&apos; not found..
         /// </summary>
         internal static string RebuilderResourceNotFound {
             get {
                 return ResourceManager.GetString("RebuilderResourceNotFound", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Rebuild.
+        /// </summary>
+        internal static string RebuildName {
+            get {
+                return ResourceManager.GetString("RebuildName", resourceCulture);
             }
         }
 
@@ -183,6 +156,33 @@ namespace Aspire.Hosting.Resources {
         internal static string ResourceStopped {
             get {
                 return ResourceManager.GetString("ResourceStopped", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Restart resource.
+        /// </summary>
+        internal static string RestartDescription {
+            get {
+                return ResourceManager.GetString("RestartDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Restart.
+        /// </summary>
+        internal static string RestartName {
+            get {
+                return ResourceManager.GetString("RestartName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Restart resource. Source code is not recompiled..
+        /// </summary>
+        internal static string RestartProjectDescription {
+            get {
+                return ResourceManager.GetString("RestartProjectDescription", resourceCulture);
             }
         }
 

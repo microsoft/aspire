@@ -3,7 +3,7 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
-using Azure.AI.Projects.Agents;
+using Azure.AI.Extensions.OpenAI;
 using OpenAI.Responses;
 
 namespace Aspire.Hosting.Foundry;
@@ -69,7 +69,7 @@ public class BingGroundingToolResource : FoundryToolResource
                 "The Foundry project connection may not have been provisioned correctly.");
         }
 
-        var config = new BingGroundingSearchConfiguration(connectionId);
+        var config = new BingGroundingSearchOptions(connectionId);
         var options = new BingGroundingSearchToolOptions([config]);
         return new BingGroundingTool(options);
     }

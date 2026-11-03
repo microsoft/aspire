@@ -4,9 +4,12 @@
     "language": "go"
   },
   "features": {
-    "experimentalPolyglot:go": true
+    "experimentalPolyglotGo": true
   },
   "packages": {
+    "Aspire.Hosting.Azure.Provisioning.Network": "",
+    "Aspire.Hosting.Azure.Provisioning.PrivateDns": "",
+    "Aspire.Hosting.Azure.Storage": "",
     "Aspire.Hosting.Azure.Network": ""
   }
 }

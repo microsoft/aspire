@@ -1,12 +1,18 @@
 # Aspire Python validation AppHost
 # Mirrors the top-level TypeScript playground surface with Python-style members.
 
-from aspire_app import create_builder
+from aspire_app import AzureResourceInfrastructure, create_builder
+
+
+def configure_provisioning(infrastructure: AzureResourceInfrastructure) -> None:
+    server = infrastructure.get_sql_server()
+    server.tags.set("provisioning-proxy", "python")
 
 
 with create_builder() as builder:
     storage = builder.add_azure_storage("resource")
     sql_server = builder.add_azure_sql_server("resource")
+    sql_server.configure_infrastructure(configure_provisioning)
     db = sql_server.add_database("resource")
     db2 = sql_server.add_database("resource")
     db2.with_default_azure_sku()

@@ -4,6 +4,7 @@
 using System.Net.Sockets;
 using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Eventing;
+using Aspire.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -24,6 +25,8 @@ internal sealed class AuxiliaryBackchannelService(
 {
     private AppHostSocketManager.AppHostSocketListener? _appHostSocket;
     private readonly TaskCompletionSource _listeningTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly object _clientTasksLock = new();
+    private readonly HashSet<Task> _clientTasks = [];
 
     /// <summary>
     /// Gets the Unix socket path where the auxiliary backchannel is listening.
@@ -61,8 +64,15 @@ internal sealed class AuxiliaryBackchannelService(
                 {
                     var clientSocket = await _appHostSocket.Socket.AcceptAsync(stoppingToken).ConfigureAwait(false);
 
-                    // Handle each connection on a separate task
-                    _ = Task.Run(async () => await HandleClientConnectionAsync(clientSocket, stoppingToken).ConfigureAwait(false), stoppingToken);
+                    // Calling the async handler directly transfers socket ownership before the first await.
+                    // Task.Run with the stopping token could cancel before invoking the delegate and leak an
+                    // already-accepted socket.
+                    var clientTask = HandleClientConnectionAsync(clientSocket, stoppingToken);
+                    lock (_clientTasksLock)
+                    {
+                        _clientTasks.Add(clientTask);
+                    }
+                    _ = ObserveClientTaskAsync(clientTask);
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {
@@ -98,14 +108,23 @@ internal sealed class AuxiliaryBackchannelService(
             _ = _listeningTcs.Task.Exception;
 
             _appHostSocket?.Dispose();
+
+            Task[] clientTasks;
+            lock (_clientTasksLock)
+            {
+                clientTasks = [.. _clientTasks];
+            }
+            await Task.WhenAll(clientTasks).ConfigureAwait(false);
         }
     }
 
     private async Task HandleClientConnectionAsync(Socket clientSocket, CancellationToken stoppingToken)
     {
+        using var ownedClientSocket = clientSocket;
+
         try
         {
-            logger.LogDebug("Client connected to auxiliary backchannel.");
+            logger.LogTrace("Client connected to auxiliary backchannel.");
 
             // Publish the connected event
             var connectedEvent = new AuxiliaryBackchannelConnectedEvent(serviceProvider, SocketPath!, clientSocket);
@@ -122,7 +141,7 @@ internal sealed class AuxiliaryBackchannelService(
                 serviceProvider);
 
             // Set up JSON-RPC over the client socket
-            using var stream = new NetworkStream(clientSocket, ownsSocket: true);
+            using var stream = new NetworkStream(ownedClientSocket, ownsSocket: false);
 
             // Create JSON-RPC connection with proper System.Text.Json formatter so it doesn't use Newtonsoft.Json
             // and handles correct MCP SDK type serialization
@@ -141,24 +160,46 @@ internal sealed class AuxiliaryBackchannelService(
             };
             rpc.StartListening();
 
-            // Wait for the connection to be disposed (client disconnect or cancellation)
-            await rpc.Completion.ConfigureAwait(false);
+            // Stop waiting when the hosted service is shutting down so the RPC, stream, and socket
+            // are disposed before the application's service provider is torn down.
+            await rpc.Completion.WaitAsync(stoppingToken).ConfigureAwait(false);
 
-            logger.LogDebug("Client disconnected from auxiliary backchannel");
+            logger.LogTrace("Client disconnected from auxiliary backchannel");
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
-            logger.LogDebug("Client connection handler was cancelled");
+            logger.LogTrace("Client connection handler was cancelled");
         }
-        catch (IOException ex) when (ex.InnerException is SocketException { SocketErrorCode: SocketError.ConnectionReset })
+        catch (IOException ex) when (SocketExceptionHelpers.IsConnectionReset(ex))
         {
             // IOException wrapping a ConnectionReset SocketException is expected when the client
             // disconnects abruptly (e.g., process exit). This is a normal condition and not an error.
-            logger.LogDebug(ex, "Client disconnected from auxiliary backchannel");
+            logger.LogTrace("Client disconnected from auxiliary backchannel (connection reset)");
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Error handling client connection on auxiliary backchannel");
+        }
+    }
+
+    private async Task ObserveClientTaskAsync(Task clientTask)
+    {
+        try
+        {
+            await clientTask.ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            // HandleClientConnectionAsync handles connection failures itself. Reaching this catch means
+            // its cleanup path failed, and this detached observer is the only place that can report it.
+            logger.LogError(ex, "Unexpected error while observing an auxiliary backchannel client");
+        }
+        finally
+        {
+            lock (_clientTasksLock)
+            {
+                _clientTasks.Remove(clientTask);
+            }
         }
     }
 

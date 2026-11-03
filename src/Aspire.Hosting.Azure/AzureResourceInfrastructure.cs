@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
 using Azure.Provisioning.Expressions;
 using Azure.Provisioning;
 
@@ -31,6 +32,29 @@ public sealed class AzureResourceInfrastructure : Infrastructure
     /// The Aspire <see cref="AzureProvisioningResource"/> resource that this <see cref="AzureResourceInfrastructure"/> represents.
     /// </summary>
     public AzureProvisioningResource AspireResource { get; }
+
+    /// <summary>
+    /// Gets the Bicep extension declarations for this infrastructure, keyed by namespace alias.
+    /// </summary>
+    /// <remarks>
+    /// Each value is an extension reference, such as
+    /// <c>br:mcr.microsoft.com/bicep/extensions/microsoftgraph/v1.0:1.0.0</c>.
+    /// Inline references keep generated modules independent of a <c>bicepconfig.json</c> file.
+    /// This experimental API works around the lack of native extension support in Azure.Provisioning.
+    /// See <see href="https://github.com/Azure/azure-sdk-for-net/issues/63848">the Azure SDK feature request</see>.
+    /// </remarks>
+    /// <example>
+    /// <code lang="csharp">
+    /// builder.AddAzureInfrastructure("graph", infrastructure =>
+    /// {
+    ///     infrastructure.BicepExtensions["microsoftGraphV1"] =
+    ///         "br:mcr.microsoft.com/bicep/extensions/microsoftgraph/v1.0:1.0.0";
+    /// });
+    /// </code>
+    /// </example>
+    [AspireExportIgnore(Reason = "Bicep extension declarations are configured through C# infrastructure callbacks.")]
+    [Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public Dictionary<string, string> BicepExtensions { get; } = new(StringComparer.Ordinal);
 
     internal IEnumerable<ProvisioningParameter> GetParameters() => GetProvisionableResources().OfType<ProvisioningParameter>();
 }

@@ -1,0 +1,18 @@
+﻿{
+  "$schema": "https://example.test/custom-schema.json",
+  "quoted": "a \u0022 // text inside a string",
+  "mcp": {
+    "other": {
+      "url": "https://example.test/a//b"
+    },
+    "aspire": {
+      "type": "local",
+      "command": [
+        "aspire",
+        "agent",
+        "mcp"
+      ],
+      "enabled": true
+    }
+  }
+}

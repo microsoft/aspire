@@ -219,14 +219,17 @@ internal sealed class AtsRustCodeGenerator : ICodeGenerator
             foreach (var property in dto.Properties)
             {
                 var propertyName = ToSnakeCase(property.Name);
+                var wireName = JsonNamingPolicy.CamelCase.ConvertName(property.Name);
                 var propertyType = MapTypeRefToRustForDto(property.Type, property.IsOptional);
+                // Exported-value metadata retains CLR property names; callbacks use camel-case JSON.
+                var alias = wireName == property.Name ? string.Empty : $", alias = \"{property.Name}\"";
                 if (property.IsOptional)
                 {
-                    WriteLine($"    #[serde(rename = \"{property.Name}\", skip_serializing_if = \"Option::is_none\")]");
+                    WriteLine($"    #[serde(rename = \"{wireName}\"{alias}, skip_serializing_if = \"Option::is_none\")]");
                 }
                 else
                 {
-                    WriteLine($"    #[serde(rename = \"{property.Name}\")]");
+                    WriteLine($"    #[serde(rename = \"{wireName}\"{alias})]");
                 }
                 WriteLine($"    pub {propertyName}: {propertyType},");
             }
@@ -243,12 +246,12 @@ internal sealed class AtsRustCodeGenerator : ICodeGenerator
                 if (property.IsOptional)
                 {
                     WriteLine($"        if let Some(ref v) = self.{propertyName} {{");
-                    WriteLine($"            map.insert(\"{property.Name}\".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));");
+                    WriteLine($"            map.insert(\"{JsonNamingPolicy.CamelCase.ConvertName(property.Name)}\".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));");
                     WriteLine("        }");
                 }
                 else
                 {
-                    WriteLine($"        map.insert(\"{property.Name}\".to_string(), serde_json::to_value(&self.{propertyName}).unwrap_or(Value::Null));");
+                    WriteLine($"        map.insert(\"{JsonNamingPolicy.CamelCase.ConvertName(property.Name)}\".to_string(), serde_json::to_value(&self.{propertyName}).unwrap_or(Value::Null));");
                 }
             }
             WriteLine("        map");
@@ -460,7 +463,6 @@ internal sealed class AtsRustCodeGenerator : ICodeGenerator
         var parameters = capability.Parameters
             .Where(p => !string.Equals(p.Name, targetParamName, StringComparison.Ordinal))
             .ToList();
-
         // Check if this is a List/Dict property getter (no parameters, returns List/Dict)
         if (parameters.Count == 0 && IsListOrDictPropertyGetter(capability.ReturnType))
         {
@@ -739,27 +741,27 @@ internal sealed class AtsRustCodeGenerator : ICodeGenerator
         WriteLine("            resolved_options.insert(k, v);");
         WriteLine("        }");
         WriteLine("    }");
-        WriteLine("    if !resolved_options.contains_key(\"Args\") {");
+        WriteLine("    if !resolved_options.contains_key(\"args\") {");
         WriteLine("        let args: Vec<String> = std::env::args().skip(1).collect();");
-        WriteLine("        resolved_options.insert(\"Args\".to_string(), serde_json::to_value(args).unwrap_or(Value::Null));");
+        WriteLine("        resolved_options.insert(\"args\".to_string(), serde_json::to_value(args).unwrap_or(Value::Null));");
         WriteLine("    }");
-        WriteLine("    if !resolved_options.contains_key(\"ProjectDirectory\") {");
+        WriteLine("    if !resolved_options.contains_key(\"projectDirectory\") {");
         // ASPIRE_PROJECT_DIRECTORY is set by the CLI so the host reports the correct project
         // directory (not the cwd) when matching --apphost <directory> requests.
         WriteLine("        if let Some(project_directory) = std::env::var(\"ASPIRE_PROJECT_DIRECTORY\").ok().filter(|s| !s.is_empty()) {");
-        WriteLine("            resolved_options.insert(\"ProjectDirectory\".to_string(), Value::String(project_directory));");
+        WriteLine("            resolved_options.insert(\"projectDirectory\".to_string(), Value::String(project_directory));");
         WriteLine("        } else if let Ok(pwd) = std::env::current_dir() {");
-        WriteLine("            resolved_options.insert(\"ProjectDirectory\".to_string(), Value::String(pwd.to_string_lossy().to_string()));");
+        WriteLine("            resolved_options.insert(\"projectDirectory\".to_string(), Value::String(pwd.to_string_lossy().to_string()));");
         WriteLine("        }");
         WriteLine("    }");
         // ASPIRE_APPHOST_FILEPATH is set by the CLI so the host reports the original AppHost file
         // path (e.g. apphost.rs) back through GetAppHostInformationAsync. Without this the host
         // falls back to the aspire-managed entry assembly name and the CLI cannot match
         // --apphost <directory> against the running AppHost.
-        WriteLine("    if !resolved_options.contains_key(\"AppHostFilePath\") {");
+        WriteLine("    if !resolved_options.contains_key(\"appHostFilePath\") {");
         WriteLine("        if let Ok(app_host_file_path) = std::env::var(\"ASPIRE_APPHOST_FILEPATH\") {");
         WriteLine("            if !app_host_file_path.is_empty() {");
-        WriteLine("                resolved_options.insert(\"AppHostFilePath\".to_string(), Value::String(app_host_file_path));");
+        WriteLine("                resolved_options.insert(\"appHostFilePath\".to_string(), Value::String(app_host_file_path));");
         WriteLine("            }");
         WriteLine("        }");
         WriteLine("    }");

@@ -3,6 +3,7 @@
     image: "custom-dashboard:latest"
     container_name: "custom-dashboard"
     environment:
+      ASPIRE_DASHBOARD_TELEMETRY_OPTOUT: "true"
       CUSTOM_VAR: "custom-value"
     ports:
       - "8081:18888"

@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Net;
-using System.Net.Http.Json;
 using Aspire.Dashboard.Api;
 using Aspire.Dashboard.Configuration;
 using Aspire.Hosting;
@@ -142,6 +141,8 @@ public class TelemetryApiTests
 
         // Assert - wrong API key should return 401 Unauthorized
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Null(response.Content.Headers.ContentType);
+        Assert.Equal(string.Empty, await response.Content.ReadAsStringAsync().DefaultTimeout());
     }
 
     [Fact]

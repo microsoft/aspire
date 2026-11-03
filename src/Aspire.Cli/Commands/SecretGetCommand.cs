@@ -20,17 +20,18 @@ internal sealed class SecretGetCommand : BaseCommand
         Description = SecretCommandStrings.KeyRetrieveArgumentDescription
     };
 
-    private readonly SecretStoreResolver _secretStoreResolver;
+    private readonly AspireSecretsStoreResolver _secretsStoreResolver;
 
     public SecretGetCommand(
-        SecretStoreResolver secretStoreResolver,
+        AspireSecretsStoreResolver secretsStoreResolver,
         CommonCommandServices services)
         : base("get", SecretCommandStrings.GetDescription, services)
     {
-        _secretStoreResolver = secretStoreResolver;
+        _secretsStoreResolver = secretsStoreResolver;
 
         Arguments.Add(s_keyArgument);
         Options.Add(SecretCommand.s_appHostOption);
+        Options.Add(SecretCommand.s_environmentOption);
     }
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -38,14 +39,15 @@ internal sealed class SecretGetCommand : BaseCommand
         // Argument arity guarantees non-null
         var key = parseResult.GetValue(s_keyArgument)!;
         var projectFile = parseResult.GetValue(SecretCommand.s_appHostOption);
+        var environment = parseResult.GetValue(SecretCommand.s_environmentOption);
 
-        var result = await _secretStoreResolver.ResolveAsync(projectFile, autoInit: false, cancellationToken);
+        var result = await _secretsStoreResolver.ResolveAsync(projectFile, environment, cancellationToken);
         if (result is null)
         {
             return CommandResult.Failure(CliExitCodes.FailedToFindProject, SecretCommandStrings.CouldNotFindAppHost);
         }
 
-        var value = result.Store.Get(key);
+        var value = result.GetReadStore().Get(key);
         if (value is null)
         {
             return CommandResult.Failure(CliExitCodes.ConfigNotFound, string.Format(CultureInfo.CurrentCulture, SecretCommandStrings.SecretNotFound, key.EscapeMarkup()));

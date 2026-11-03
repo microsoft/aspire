@@ -141,11 +141,11 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
     private void SetOutputs(BundleResolution resolution)
     {
         DcpDir = EnsureTrailingDirectorySeparator(resolution.DcpDir);
-        AspireDashboardDir = EnsureTrailingDirectorySeparator(resolution.ManagedDir);
-        AspireDashboardPath = resolution.ManagedPath;
-        AspireTerminalHostDir = EnsureTrailingDirectorySeparator(resolution.ManagedDir);
-        AspireTerminalHostPath = resolution.ManagedPath;
-        AspireTerminalHostInvocationArgs = "terminalhost";
+        AspireDashboardDir = EnsureTrailingDirectorySeparator(resolution.DashboardDir);
+        AspireDashboardPath = resolution.DashboardPath;
+        AspireTerminalHostDir = EnsureTrailingDirectorySeparator(resolution.TerminalHostDir);
+        AspireTerminalHostPath = resolution.TerminalHostPath;
+        AspireTerminalHostInvocationArgs = resolution.TerminalHostInvocationArgs;
     }
 
     private static bool TryResolveFromPath(out BundleResolution resolution)
@@ -231,12 +231,49 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
         var managedDir = Path.Combine(bundleRoot, "managed");
         var managedPath = Path.Combine(managedDir, IsWindows() ? "aspire-managed.exe" : "aspire-managed");
 
+        // Current bundles isolate the Native AOT Dashboard and its static assets in dashboard/.
+        // Preserve compatibility with transitional bundles that placed Aspire.Dashboard in managed/;
+        // if there is no dashboard/ component or transitional executable, fall back to the older aspire-managed
+        // dispatcher, which launches the Dashboard through its "dashboard" subcommand.
+        var dashboardDir = Path.Combine(bundleRoot, "dashboard");
+        var dashboardPath = Path.Combine(dashboardDir, IsWindows() ? "Aspire.Dashboard.exe" : "Aspire.Dashboard");
+        if (Directory.Exists(dashboardDir) && !File.Exists(dashboardPath))
+        {
+            // An incomplete current bundle must not fall back to aspire-managed, which no longer
+            // supports the dashboard subcommand. Only older layouts omit dashboard/ entirely.
+            return false;
+        }
+
+        if (!File.Exists(dashboardPath))
+        {
+            dashboardDir = managedDir;
+            dashboardPath = Path.Combine(managedDir, IsWindows() ? "Aspire.Dashboard.exe" : "Aspire.Dashboard");
+        }
+
         if (!File.Exists(dcpPath) || !File.Exists(managedPath))
         {
             return false;
         }
 
-        resolution = new BundleResolution(dcpDir, managedDir, managedPath);
+        var terminalHostDir = Path.Combine(bundleRoot, "terminalhost");
+        var terminalHostPath = Path.Combine(terminalHostDir, IsWindows() ? "Aspire.TerminalHost.exe" : "Aspire.TerminalHost");
+        if (Directory.Exists(terminalHostDir) && !File.Exists(terminalHostPath))
+        {
+            return false;
+        }
+
+        // Older CLI bundles omit terminalhost/ entirely. Try their legacy dispatcher as a
+        // best-effort fallback; an existing but incomplete component was rejected above.
+        var hasStandaloneTerminalHost = File.Exists(terminalHostPath);
+        resolution = new BundleResolution(
+            dcpDir,
+            managedDir,
+            managedPath,
+            dashboardDir,
+            File.Exists(dashboardPath) ? dashboardPath : managedPath,
+            hasStandaloneTerminalHost ? terminalHostDir : managedDir,
+            hasStandaloneTerminalHost ? terminalHostPath : managedPath,
+            hasStandaloneTerminalHost ? string.Empty : "terminalhost");
         return true;
     }
 
@@ -494,12 +531,23 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
             or System.Security.SecurityException;
     }
 
-    private sealed class BundleResolution(string dcpDir, string managedDir, string managedPath)
+    private sealed class BundleResolution(string dcpDir, string managedDir, string managedPath, string dashboardDir, string dashboardPath,
+        string terminalHostDir, string terminalHostPath, string terminalHostInvocationArgs)
     {
         public string DcpDir { get; } = dcpDir;
 
         public string ManagedDir { get; } = managedDir;
 
         public string ManagedPath { get; } = managedPath;
+
+        public string DashboardDir { get; } = dashboardDir;
+
+        public string DashboardPath { get; } = dashboardPath;
+
+        public string TerminalHostDir { get; } = terminalHostDir;
+
+        public string TerminalHostPath { get; } = terminalHostPath;
+
+        public string TerminalHostInvocationArgs { get; } = terminalHostInvocationArgs;
     }
 }

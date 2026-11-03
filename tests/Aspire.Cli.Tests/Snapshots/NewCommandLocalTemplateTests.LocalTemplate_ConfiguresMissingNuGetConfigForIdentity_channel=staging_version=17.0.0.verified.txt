@@ -1,0 +1,13 @@
+﻿{
+  aspire.config.json: { "sdk": { "version": "17.0.0" } },
+  nuget.config:
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <packageSources>
+    <add key="aspire-apphost-source" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-abcdef12/nuget/v3/index.json" />
+  </packageSources>
+  <config>
+    <add key="globalPackagesFolder" value=".nugetpackages" />
+  </config>
+</configuration>
+}

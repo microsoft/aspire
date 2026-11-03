@@ -1,0 +1,46 @@
+.terminal-disconnected-banner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 12px;
+    border: 1px solid var(--colorNeutralStroke1);
+    border-radius: var(--aspire-control-radius);
+    background: var(--colorNeutralBackground2);
+    color: var(--colorNeutralForeground1);
+}
+
+.terminal-disconnected-banner span {
+    flex: 1 1 200px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.terminal-disconnected-banner ::deep fluent-button {
+    --colorNeutralBackground1: var(--colorNeutralBackground2);
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+.terminal-disconnected-banner ::deep fluent-button::part(control) {
+    white-space: nowrap;
+}
+
+@media (forced-colors: active) {
+    .terminal-disconnected-banner {
+        border-color: CanvasText;
+        background: Canvas;
+        color: CanvasText;
+    }
+}
+
+.terminal-disconnected-indicator {
+    align-self: flex-end;
+}
+
+.terminal-disconnected-indicator ::deep .terminal-show-banner {
+    width: 36px;
+    height: 36px;
+    border-radius: var(--aspire-control-radius);
+    --colorNeutralBackground1: var(--colorNeutralBackground2);
+}

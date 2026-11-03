@@ -14,6 +14,7 @@
 //
 // Usage: dotnet run PrefixEndpoints.cs -- <manifest-path> <prefix> <output-path>
 
+using System.Globalization;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -31,6 +32,11 @@ var outputPath = args[2];
 var manifest = JsonSerializer.Deserialize(
     File.ReadAllText(manifestPath),
     ManifestJsonContext.Default.EndpointsManifest)!;
+
+var sourceEndpoints = manifest.Endpoints;
+manifest.Endpoints = sourceEndpoints
+    .Where(endpoint => !IsSpaFallbackEndpoint(endpoint, sourceEndpoints))
+    .ToArray();
 
 var fallbackEndpoints = new List<EndpointEntry>();
 
@@ -51,7 +57,11 @@ foreach (var ep in manifest.Endpoints)
             // Deep-clone via round-trip serialization, then patch route and cache header
             var fallbackJson = JsonSerializer.Serialize(ep, ManifestJsonContext.Default.EndpointEntry);
             var fallback = JsonSerializer.Deserialize(fallbackJson, ManifestJsonContext.Default.EndpointEntry)!;
-            fallback.Route = "{**path:nonfile}";
+            fallback.Route = "{**fallback:nonfile}";
+            fallback.ExtensionData ??= [];
+            fallback.ExtensionData["Order"] = JsonSerializer.SerializeToElement(
+                int.MaxValue.ToString(CultureInfo.InvariantCulture),
+                ManifestJsonContext.Default.String);
             if (fallback.ResponseHeaders is not null)
             {
                 foreach (var header in fallback.ResponseHeaders)
@@ -78,6 +88,20 @@ if (dir is not null)
 File.WriteAllText(outputPath, JsonSerializer.Serialize(manifest, ManifestJsonContext.Relaxed.EndpointsManifest));
 
 return 0;
+
+static bool IsSpaFallbackEndpoint(EndpointEntry endpoint, EndpointEntry[] endpoints)
+{
+    // .NET 11 doesn't add explicit fallback metadata, so recognize the SDK/legacy shape by
+    // combining the nonfile catch-all route with an index.html asset.
+    return endpoint.ExtensionData?.TryGetValue("Order", out var order) == true
+        && order.ValueKind == JsonValueKind.String
+        && order.GetString() == int.MaxValue.ToString(CultureInfo.InvariantCulture)
+        && endpoint.Route.StartsWith("{**", StringComparison.Ordinal)
+        && endpoint.Route.EndsWith(":nonfile}", StringComparison.Ordinal)
+        && endpoints.Any(indexEndpoint =>
+            string.Equals(indexEndpoint.Route, "index.html", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(indexEndpoint.AssetFile, endpoint.AssetFile, StringComparison.Ordinal));
+}
 
 // Same typed model used by the Hosting library's EndpointsManifestTransformer
 class EndpointsManifest
@@ -118,6 +142,7 @@ class EndpointResponseHeader
 
 [JsonSerializable(typeof(EndpointsManifest))]
 [JsonSerializable(typeof(EndpointEntry))]
+[JsonSerializable(typeof(string))]
 [JsonSourceGenerationOptions(
     WriteIndented = true)]
 partial class ManifestJsonContext : JsonSerializerContext

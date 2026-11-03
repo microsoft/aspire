@@ -9,14 +9,14 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class DurableTaskResourceExtensionsTests
+public class DurableTaskResourceExtensionsTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public async Task AddDurableTaskScheduler_RunAsEmulator_ResolvedConnectionString()
     {
         string expectedConnectionString = "Endpoint=http://localhost:8080;Authentication=None";
 
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var dts = builder
             .AddDurableTaskScheduler("dts")
@@ -37,7 +37,7 @@ public class DurableTaskResourceExtensionsTests
     {
         string expectedConnectionString = "Endpoint=https://existing-scheduler.durabletask.io;Authentication=DefaultAzure";
 
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var dts = builder
             .AddDurableTaskScheduler("dts")
@@ -53,7 +53,7 @@ public class DurableTaskResourceExtensionsTests
     {
         string expectedConnectionString = "Endpoint=https://existing-scheduler.durabletask.io;Authentication=DefaultAzure";
 
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var connectionStringParameter = builder.AddParameter("dts-connection-string", expectedConnectionString);
 
@@ -73,7 +73,7 @@ public class DurableTaskResourceExtensionsTests
     {
         string dtsConnectionString = "Endpoint=https://existing-scheduler.durabletask.io;Authentication=DefaultAzure";
         string expectedConnectionString = $"{dtsConnectionString};TaskHub={expectedTaskHubName}";
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var dts = builder
             .AddDurableTaskScheduler("dts")
@@ -94,7 +94,7 @@ public class DurableTaskResourceExtensionsTests
     [Fact]
     public void AddDurableTaskScheduler_IsExcludedFromPublishingManifest()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var dts = builder.AddDurableTaskScheduler("dts");
 
@@ -106,7 +106,7 @@ public class DurableTaskResourceExtensionsTests
     [Fact]
     public void AddDurableTaskHub_IsExcludedFromPublishingManifest()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var dts = builder.AddDurableTaskScheduler("dts").RunAsExisting("Endpoint=https://existing-scheduler.durabletask.io;Authentication=DefaultAzure");
         var taskHub = dts.AddTaskHub("hub");
@@ -119,7 +119,7 @@ public class DurableTaskResourceExtensionsTests
     [Fact]
     public void RunAsExisting_InPublishMode_DoesNotApplyConnectionStringAnnotation()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var dts = builder.AddDurableTaskScheduler("dts")
             .RunAsExisting("Endpoint=https://existing-scheduler.durabletask.io;Authentication=DefaultAzure");
@@ -134,7 +134,7 @@ public class DurableTaskResourceExtensionsTests
     [Fact]
     public void RunAsEmulator_InPublishMode_IsNoOp()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var dts = builder.AddDurableTaskScheduler("dts")
             .RunAsEmulator();
@@ -148,7 +148,7 @@ public class DurableTaskResourceExtensionsTests
     [Fact]
     public void RunAsEmulator_AddsEmulatorAnnotationContainerImageAndEndpoints()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var dts = builder.AddDurableTaskScheduler("dts")
             .RunAsEmulator();
@@ -184,7 +184,7 @@ public class DurableTaskResourceExtensionsTests
     [Fact]
     public async Task RunAsEmulator_SetsSingleDtsTaskHubNamesEnvironmentVariable()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var dts = builder.AddDurableTaskScheduler("dts").RunAsEmulator();
 
@@ -198,7 +198,7 @@ public class DurableTaskResourceExtensionsTests
     [Fact]
     public async Task RunAsEmulator_SetsMultipleDtsTaskHubNamesEnvironmentVariable()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var dts = builder.AddDurableTaskScheduler("dts").RunAsEmulator();
 
@@ -213,7 +213,7 @@ public class DurableTaskResourceExtensionsTests
     [Fact]
     public async Task RunAsEmulator_DtsTaskHubNamesOnlyIncludesHubsForSameScheduler()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var dts1 = builder.AddDurableTaskScheduler("dts1").RunAsEmulator();
         var dts2 = builder.AddDurableTaskScheduler("dts2").RunAsEmulator();
@@ -231,7 +231,7 @@ public class DurableTaskResourceExtensionsTests
     [Fact]
     public async Task WithTaskHubName_Parameter_ResolvedConnectionString()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         const string dtsConnectionString = "Endpoint=https://existing-scheduler.durabletask.io;Authentication=DefaultAzure";
         var hubNameParameter = builder.AddParameter("hub-name", "parameterHub");
@@ -248,7 +248,7 @@ public class DurableTaskResourceExtensionsTests
     [Fact]
     public void DurableTaskSchedulerResource_WithoutEmulatorOrExistingConnectionString_Throws()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var dts = builder.AddDurableTaskScheduler("dts");
 

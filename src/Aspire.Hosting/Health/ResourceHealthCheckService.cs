@@ -11,7 +11,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Health;
 
-internal class ResourceHealthCheckService(ILogger<ResourceHealthCheckService> logger, ResourceNotificationService resourceNotificationService, HealthCheckService healthCheckService, IServiceProvider services, IDistributedApplicationEventing eventing, TimeProvider timeProvider) : BackgroundService
+internal class ResourceHealthCheckService(ILogger<ResourceHealthCheckService> logger, ResourceNotificationService resourceNotificationService, ResourceLoggerService resourceLoggerService, HealthCheckService healthCheckService, IServiceProvider services, IDistributedApplicationEventing eventing, TimeProvider timeProvider) : BackgroundService
 {
     private readonly Dictionary<string, ResourceMonitorState> _resourceMonitoringStates = new();
 
@@ -272,6 +272,14 @@ internal class ResourceHealthCheckService(ILogger<ResourceHealthCheckService> lo
             await task.ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
 
             logger.LogDebug("ResourceReadyEvent for '{ResourceName}' completed.", resource.Name);
+
+            if (task.Exception is { } exception)
+            {
+                // Surface subscriber failures on the resource and the AppHost; otherwise they are only observed by dependents.
+                var failure = exception.InnerExceptions.Count == 1 ? exception.InnerException! : exception;
+                resourceLoggerService.GetLogger(resource).LogError(failure, "ResourceReadyEvent subscriber for '{ResourceName}' failed.", resource.Name);
+                logger.LogError(failure, "ResourceReadyEvent subscriber for '{ResourceName}' failed.", resource.Name);
+            }
 
             logger.LogDebug("Publishing the result of ResourceReadyEvent for '{ResourceName}'.", resource.Name);
 

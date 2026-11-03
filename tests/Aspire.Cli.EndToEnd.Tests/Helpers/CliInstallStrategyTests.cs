@@ -23,6 +23,29 @@ public class CliInstallStrategyTests
     }
 
     [Fact]
+    public void GetLocalArchiveInstallCommandFromCurrentRef_AllowsHiveAutoDetection()
+    {
+        using var environment = new EnvironmentVariableScope(("GITHUB_SHA", "0123456789abcdef0123456789abcdef01234567"));
+
+        var command = AspireCliShellCommandHelpers.GetLocalArchiveInstallCommandFromCurrentRef("/tmp/cli-archives");
+
+        Assert.Equal(
+            "curl -fsSL https://raw.githubusercontent.com/microsoft/aspire/0123456789abcdef0123456789abcdef01234567/eng/scripts/get-aspire-cli-pr.sh | bash -s -- --local-dir '/tmp/cli-archives'",
+            command);
+    }
+
+    [Fact]
+    public void GetConfigureLocalHiveCommands_OverridesCliIdentity()
+    {
+        Assert.Equal(
+            [
+                "aspire config set channel local -g",
+                "SDK_VER=$(ls ~/.aspire/hives/local/packages/Aspire.Hosting.*.nupkg 2>/dev/null | head -1 | sed 's/.*Aspire\\.Hosting\\.//;s/\\.nupkg//') && aspire config set sdk.version \"$SDK_VER\" -g && export ASPIRE_CLI_CHANNEL=local ASPIRE_CLI_VERSION=\"$SDK_VER\" ASPIRE_CLI_PACKAGES=\"$HOME/.aspire/hives/local/packages\""
+            ],
+            AspireCliShellCommandHelpers.GetConfigureLocalHiveCommands());
+    }
+
+    [Fact]
     public void GetRecordAspireCliVersionCommand_IsBestEffort()
     {
         var strategy = CliInstallStrategy.FromDotnetTool(includePrerelease: true);
@@ -330,6 +353,67 @@ public class CliInstallStrategyTests
         CliE2ETestHelpers.ConfigureDockerContainerSource(options, "/repo", CliE2ETestHelpers.DockerfileVariant.Polyglot);
 
         Assert.Equal(Path.Combine("/repo", "tests", "Shared", "Docker", "Dockerfile.e2e-polyglot-base"), options.DockerfilePath);
+        Assert.Equal("/repo", options.BuildContext);
+    }
+
+    [Fact]
+    public void ConfigureDockerContainerSource_UsesPolyglotGoImageWhenEnvironmentVariableIsSet()
+    {
+        using var environment = WithCleanCliE2ETestEnvironment(
+            (CliE2ETestHelpers.PolyglotGoImageEnvironmentVariableName, "aspire-cli-e2e-polyglot-go:prebuilt"),
+            (CliE2ETestHelpers.RequirePolyglotGoImageEnvironmentVariableName, "true"),
+            ("GITHUB_ACTIONS", "true"));
+        var options = new DockerContainerOptions();
+
+        CliE2ETestHelpers.ConfigureDockerContainerSource(options, "/repo", CliE2ETestHelpers.DockerfileVariant.PolyglotGo);
+
+        Assert.Equal("aspire-cli-e2e-polyglot-go:prebuilt", options.Image);
+        Assert.True(string.IsNullOrEmpty(options.DockerfilePath));
+        Assert.True(string.IsNullOrEmpty(options.BuildContext));
+    }
+
+    [Fact]
+    public void ConfigureDockerContainerSource_RequiresPolyglotGoImageWhenConfigured()
+    {
+        using var environment = WithCleanCliE2ETestEnvironment(
+            (CliE2ETestHelpers.PolyglotGoImageEnvironmentVariableName, null),
+            (CliE2ETestHelpers.RequirePolyglotGoImageEnvironmentVariableName, "true"),
+            ("GITHUB_ACTIONS", "true"));
+        var options = new DockerContainerOptions();
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            CliE2ETestHelpers.ConfigureDockerContainerSource(options, "/repo", CliE2ETestHelpers.DockerfileVariant.PolyglotGo));
+
+        Assert.Contains(CliE2ETestHelpers.PolyglotGoImageEnvironmentVariableName, exception.Message);
+    }
+
+    [Fact]
+    public void ConfigureDockerContainerSource_FallsBackToPolyglotGoDockerfileWhenImageIsNotRequired()
+    {
+        using var environment = WithCleanCliE2ETestEnvironment(
+            (CliE2ETestHelpers.PolyglotGoImageEnvironmentVariableName, null),
+            (CliE2ETestHelpers.RequirePolyglotGoImageEnvironmentVariableName, null),
+            ("GITHUB_ACTIONS", null));
+        var options = new DockerContainerOptions();
+
+        CliE2ETestHelpers.ConfigureDockerContainerSource(options, "/repo", CliE2ETestHelpers.DockerfileVariant.PolyglotGo);
+
+        Assert.Equal(Path.Combine("/repo", "tests", "Shared", "Docker", "Dockerfile.e2e-polyglot-go"), options.DockerfilePath);
+        Assert.Equal("/repo", options.BuildContext);
+    }
+
+    [Fact]
+    public void ConfigureDockerContainerSource_IgnoresPolyglotGoImageForPolyglotJavaVariant()
+    {
+        using var environment = WithCleanCliE2ETestEnvironment(
+            (CliE2ETestHelpers.PolyglotGoImageEnvironmentVariableName, "aspire-cli-e2e-polyglot-go:prebuilt"),
+            (CliE2ETestHelpers.RequirePolyglotGoImageEnvironmentVariableName, "true"),
+            ("GITHUB_ACTIONS", null));
+        var options = new DockerContainerOptions();
+
+        CliE2ETestHelpers.ConfigureDockerContainerSource(options, "/repo", CliE2ETestHelpers.DockerfileVariant.PolyglotJava);
+
+        Assert.Equal(Path.Combine("/repo", "tests", "Shared", "Docker", "Dockerfile.e2e-polyglot-java"), options.DockerfilePath);
         Assert.Equal("/repo", options.BuildContext);
     }
 
@@ -786,6 +870,28 @@ public class CliInstallStrategyTests
         }
     }
 
+    [Theory]
+    [InlineData("14.0.0-pr.20466.ga2bed197", "pr-20466")]
+    [InlineData("13.3.0-pr.1234.a1b2c3d4", "pr-1234")]
+    [InlineData("14.0.0-pr.20466.xyz", "local")]
+    [InlineData("14.0.0-ci", "local")]
+    public void FromLocalArchive_SelectsHiveMatchingPackageVersion(string version, string expectedHiveLabel)
+    {
+        var tempDir = Directory.CreateTempSubdirectory("cli-archives-test");
+        try
+        {
+            File.WriteAllText(Path.Combine(tempDir.FullName, $"Aspire.Cli.{version}.nupkg"), "");
+
+            var strategy = CliInstallStrategy.FromLocalArchive(tempDir.FullName);
+
+            Assert.Equal(expectedHiveLabel, strategy.LocalArchiveHiveLabel);
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
+    }
+
     [Fact]
     public void FromLocalArchive_IgnoresRidSpecificCliNupkg()
     {
@@ -1000,6 +1106,8 @@ public class CliInstallStrategyTests
             (CliE2ETestHelpers.RequirePolyglotImageEnvironmentVariableName, null),
             (CliE2ETestHelpers.PolyglotJavaImageEnvironmentVariableName, null),
             (CliE2ETestHelpers.RequirePolyglotJavaImageEnvironmentVariableName, null),
+            (CliE2ETestHelpers.PolyglotGoImageEnvironmentVariableName, null),
+            (CliE2ETestHelpers.RequirePolyglotGoImageEnvironmentVariableName, null),
             ("GITHUB_ACTIONS", null),
         ];
 

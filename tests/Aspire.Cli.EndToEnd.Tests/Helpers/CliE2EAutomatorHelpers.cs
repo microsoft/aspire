@@ -90,11 +90,6 @@ internal static class CliE2EAutomatorHelpers
 
             await auto.RunCommandAsync($"export ASPIRE_E2E_WORKSPACE={AspireCliShellCommandHelpers.QuoteBashArg(containerWorkspace)}", counter);
 
-            if (!CliE2ETestHelpers.IsRunningInCI && ShouldPreserveLocalWorkspace())
-            {
-                workspace.Preserve();
-            }
-
             if (ShouldCaptureWorkspaceDiagnostics())
             {
                 await auto.RunCommandAsync(
@@ -105,6 +100,35 @@ internal static class CliE2EAutomatorHelpers
             }
         }
     }
+
+    /// <summary>
+    /// Redirects external NuGet service hosts to a local TCP listener so tests can detect attempted
+    /// source access even when package-search commands suppress individual source failures.
+    /// </summary>
+    internal static async Task StartUnexpectedNuGetSourceContactTripwireAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter,
+        bool includeAzureDevOps)
+    {
+        var blockedHosts = includeAzureDevOps
+            ? "api.nuget.org azuresearch-usnc.nuget.org azuresearch-ussc.nuget.org pkgs.dev.azure.com"
+            : "api.nuget.org azuresearch-usnc.nuget.org azuresearch-ussc.nuget.org";
+
+        await auto.RunCommandAsync($"printf '127.0.0.1 {blockedHosts}\\n' >> /etc/hosts", counter);
+        await auto.RunCommandAsync(
+            "rm -f /tmp/unexpected-nuget-source-contacted /tmp/nuget-source-listener-ready && " +
+            "python3 -c 'import pathlib,socket; s=socket.socket(); s.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1); " +
+            "s.bind((\"0.0.0.0\",443)); s.listen(); pathlib.Path(\"/tmp/nuget-source-listener-ready\").touch(); " +
+            "c,_=s.accept(); pathlib.Path(\"/tmp/unexpected-nuget-source-contacted\").touch(); c.close()' >/tmp/nuget-source-listener.log 2>&1 & " +
+            "for i in $(seq 1 100); do [ -f /tmp/nuget-source-listener-ready ] && break; sleep 0.1; done; " +
+            "if [ ! -f /tmp/nuget-source-listener-ready ]; then cat /tmp/nuget-source-listener.log; (exit 1); fi",
+            counter);
+    }
+
+    internal static Task AssertUnexpectedNuGetSourceWasNotContactedAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter)
+        => auto.RunCommandAsync("test ! -e /tmp/unexpected-nuget-source-contacted", counter);
 
     internal static Task WaitUntilAppHostStoppedSuccessfullyAsync(this Hex1bTerminalAutomator auto, TimeSpan timeout)
     {
@@ -146,6 +170,10 @@ internal static class CliE2EAutomatorHelpers
                     counter,
                     TimeSpan.FromSeconds(120));
                 await auto.SourceAspireBundleEnvironmentAsync(counter);
+                if (strategy.LocalArchiveHiveLabel == "local")
+                {
+                    await auto.ConfigureLocalHiveAsync(counter);
+                }
                 break;
 
             case CliInstallMode.InstallScript:
@@ -244,6 +272,37 @@ internal static class CliE2EAutomatorHelpers
             "TypeScript",
             counter,
             AppHostLanguagePromptSelection.TypeScript,
+            effectiveTimeout);
+    }
+
+    /// <summary>
+    /// Creates a Go empty AppHost using the direct <c>aspire new aspire-go-empty</c> command.
+    /// Requires <see cref="EnableExperimentalGoSupportAsync"/> to have run first.
+    /// </summary>
+    internal static async Task AspireNewGoEmptyAppHostAsync(
+        this Hex1bTerminalAutomator auto,
+        string projectName,
+        SequenceCounter counter,
+        string? outputPath = null,
+        string? channel = null,
+        bool useLocalhostTld = false,
+        TimeSpan? timeout = null)
+    {
+        var effectiveTimeout = timeout ?? TimeSpan.FromMinutes(2);
+        var command = BuildAspireNewEmptyAppHostCommand(
+            "aspire-go-empty",
+            projectName,
+            outputPath,
+            channel,
+            useLocalhostTld);
+
+        await auto.TypeAsync(command);
+        await auto.EnterAsync();
+        await auto.WaitForAspireNewEmptyAppHostCompletionAsync(
+            projectName,
+            "Go",
+            counter,
+            AppHostLanguagePromptSelection.Go,
             effectiveTimeout);
     }
 
@@ -358,6 +417,16 @@ internal static class CliE2EAutomatorHelpers
                 await auto.EnterAsync();
                 return;
 
+            case AppHostLanguagePromptSelection.Go:
+                // Search by text so the selection does not depend on which other languages the picker lists.
+                await auto.TypeAsync("Go");
+                await auto.WaitUntilAsync(
+                    s => new CellPatternSearcher().Find("> Go").Search(s).Count > 0,
+                    timeout: TimeSpan.FromSeconds(5),
+                    description: "Go AppHost language selected");
+                await auto.EnterAsync();
+                return;
+
             default:
                 throw new InvalidOperationException($"Unexpected AppHost language prompt selection: {languagePromptSelection}.");
         }
@@ -402,6 +471,19 @@ internal static class CliE2EAutomatorHelpers
     }
 
     /// <summary>
+    /// Runs <c>aspire add &lt;packageName&gt;</c> and waits for it to finish, answering the version picker when it appears.
+    /// </summary>
+    internal static async Task AspireAddPackageAsync(
+        this Hex1bTerminalAutomator auto,
+        string packageName,
+        SequenceCounter counter)
+    {
+        await auto.TypeAsync($"aspire add {packageName}");
+        await auto.EnterAsync();
+        await auto.WaitForAspireAddSuccessAsync(counter, TimeSpan.FromMinutes(2));
+    }
+
+    /// <summary>
     /// Installs the Aspire CLI in a non-Docker shell using the given install strategy.
     /// </summary>
     internal static async Task InstallAspireCliInShellAsync(
@@ -436,6 +518,10 @@ internal static class CliE2EAutomatorHelpers
                     counter,
                     TimeSpan.FromSeconds(120));
                 await auto.SourceAspireCliEnvironmentAsync(counter);
+                if (strategy.LocalArchiveHiveLabel == "local")
+                {
+                    await auto.ConfigureLocalHiveAsync(counter);
+                }
                 break;
 
             case CliInstallMode.InstallScript:
@@ -570,11 +656,6 @@ internal static class CliE2EAutomatorHelpers
     {
         await auto.PrepareBashEnvironmentAsync(workspace.WorkspaceRoot.FullName, counter, TimeSpan.FromSeconds(10));
         await auto.RunCommandAsync($"export ASPIRE_E2E_WORKSPACE={AspireCliShellCommandHelpers.QuoteBashArg(workspace.WorkspaceRoot.FullName)}", counter);
-
-        if (!CliE2ETestHelpers.IsRunningInCI && ShouldPreserveLocalWorkspace())
-        {
-            workspace.Preserve();
-        }
 
         if (ShouldCaptureWorkspaceDiagnostics())
         {
@@ -716,9 +797,42 @@ internal static class CliE2EAutomatorHelpers
         this Hex1bTerminalAutomator auto,
         SequenceCounter counter)
     {
-        await auto.TypeAsync("aspire config set features:experimentalPolyglot:java true --global --non-interactive");
+        await auto.TypeAsync("aspire config set features:experimentalPolyglotJava true --global --non-interactive");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
+    }
+
+    /// <summary>
+    /// Enables experimental Go polyglot support for CLI tests.
+    /// </summary>
+    /// <remarks>
+    /// Go AppHosts are gated behind the <c>experimentalPolyglotGo</c> feature, which hides both the Go starter template
+    /// and the Go entry in the language picker. Every Go test goes through this helper so that dropping the gate only
+    /// requires turning this method into a no-op like <see cref="EnablePolyglotSupportAsync"/>.
+    /// </remarks>
+    internal static async Task EnableExperimentalGoSupportAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter)
+    {
+        await auto.TypeAsync("aspire config set features:experimentalPolyglotGo true --global --non-interactive");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+    }
+
+    /// <summary>
+    /// Creates a Go AppHost in the current directory through the interactive <c>aspire init</c> language picker.
+    /// Requires <see cref="EnableExperimentalGoSupportAsync"/> to have run first.
+    /// </summary>
+    internal static async Task AspireInitGoAppHostAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter)
+    {
+        await auto.TypeAsync("aspire init");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("Which language would you like to use?", timeout: TimeSpan.FromSeconds(30));
+        await auto.SelectAppHostLanguageAsync(AppHostLanguagePromptSelection.Go);
+        await auto.WaitUntilTextAsync("Created apphost.go", timeout: TimeSpan.FromMinutes(2));
+        await auto.DeclineAgentInitPromptAsync(counter);
     }
 
     /// <summary>
@@ -780,22 +894,32 @@ internal static class CliE2EAutomatorHelpers
 
         // Wait for the command to finish — check for success or error exit.
         var succeeded = false;
-        await auto.WaitUntilAsync(snapshot =>
+        try
         {
-            var successSearcher = new CellPatternSearcher()
-                .FindPattern(expectedCounter.ToString())
-                .RightText(" OK] $ ");
-            if (successSearcher.Search(snapshot).Count > 0)
+            await auto.WaitUntilAsync(snapshot =>
             {
-                succeeded = true;
-                return true;
-            }
+                var successSearcher = new CellPatternSearcher()
+                    .FindPattern(expectedCounter.ToString())
+                    .RightText(" OK] $ ");
+                if (successSearcher.Search(snapshot).Count > 0)
+                {
+                    succeeded = true;
+                    return true;
+                }
 
-            var errorSearcher = new CellPatternSearcher()
-                .FindPattern(expectedCounter.ToString())
-                .RightText(" ERR:");
-            return errorSearcher.Search(snapshot).Count > 0;
-        }, timeout: effectiveTimeout, description: $"aspire start to complete [{expectedCounter} OK/ERR]");
+                var errorSearcher = new CellPatternSearcher()
+                    .FindPattern(expectedCounter.ToString())
+                    .RightText(" ERR:");
+                return errorSearcher.Search(snapshot).Count > 0;
+            }, timeout: effectiveTimeout, description: $"aspire start to complete [{expectedCounter} OK/ERR]");
+        }
+        catch (Hex1bAutomationException ex) when (ex.InnerException is WaitUntilTimeoutException)
+        {
+            throw new TimeoutException(
+                $"aspire start did not complete within {startupTimeoutSeconds} seconds. AppHost startup may be stuck. " +
+                "Check the terminal recording and captured workspace diagnostics for CLI and AppHost logs.",
+                ex);
+        }
 
         counter.Increment();
 
@@ -914,18 +1038,37 @@ internal static class CliE2EAutomatorHelpers
                 "Check terminal output for CLI logs and JSON content.");
         }
 
-        // Retry curl up to 10 times with 2s delay — the dashboard may still be binding
-        // its listening port immediately after aspire start returns.
-        await auto.TypeAsync(
-            "for i in $(seq 1 10); do " +
-            "CODE=$(curl -ksSL -o /dev/null -w '%{http_code}' \"$DASHBOARD_URL\" 2>/dev/null); " +
-            "if [ \"$CODE\" = \"200\" ]; then echo 'dashboard-http-200'; break; fi; " +
-            "sleep 2; " +
-            "done; " +
-            "if [ \"$CODE\" != \"200\" ]; then echo \"dashboard-http-${CODE}\"; echo 'dashboard-http-failed'; fi");
-        await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("dashboard-http-200", timeout: TimeSpan.FromSeconds(30));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForDashboardReadyAsync(counter, TimeSpan.FromSeconds(90));
+    }
+
+    /// <summary>
+    /// Waits for HTTP 200 from the shell's Dashboard URL using bounded requests.
+    /// </summary>
+    internal static async Task WaitForDashboardReadyAsync(this Hex1bTerminalAutomator auto, SequenceCounter counter, TimeSpan timeout)
+    {
+        // Bound each request so a non-responsive Dashboard cannot block the shell and prevent diagnostics capture.
+        // Wait for the command's exit status because the success marker also appears in the echoed command.
+        try
+        {
+            await auto.RunCommandAsync(
+                "for i in $(seq 1 10); do " +
+                "CODE=$(curl -ksSL --connect-timeout 2 --max-time 5 -o /dev/null -w '%{http_code}' \"$DASHBOARD_URL\" 2>/dev/null); " +
+                "if [ \"$CODE\" = \"200\" ]; then echo 'dashboard-http-200'; break; fi; " +
+                "sleep 2; " +
+                "done; " +
+                "if [ \"$CODE\" != \"200\" ]; then echo \"dashboard-http-${CODE}\"; echo 'dashboard-http-failed'; fi; " +
+                "test \"$CODE\" = \"200\"",
+                counter,
+                timeout);
+        }
+        catch (Exception ex) when (ex is Hex1bAutomationException { InnerException: WaitUntilTimeoutException } or InvalidOperationException)
+        {
+            throw new TimeoutException(
+                $"aspire start completed, but the Dashboard did not become ready within the {timeout.TotalSeconds.ToString(CultureInfo.InvariantCulture)}-second readiness budget. " +
+                "Expected HTTP 200 from the Dashboard URL. The Dashboard may have failed to start or stopped responding. " +
+                "Check the terminal recording for the last HTTP status and the captured workspace diagnostics for AppHost and Dashboard logs.",
+                ex);
+        }
     }
 
     /// <summary>
@@ -1014,7 +1157,7 @@ internal static class CliE2EAutomatorHelpers
         {
             await auto.TypeAsync("echo diagnostics-available-in-workspace");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter);
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(15));
             return;
         }
 
@@ -1022,7 +1165,7 @@ internal static class CliE2EAutomatorHelpers
 
         await auto.TypeAsync(BuildAspireDiagnosticsCaptureCommand(containerWorkspace) + "echo done");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(15));
     }
 
     /// <summary>
@@ -1160,7 +1303,7 @@ internal static class CliE2EAutomatorHelpers
         await auto.WaitForAnyPromptAsync(counter);
     }
 
-    private static bool ShouldPreserveLocalWorkspace()
+    private static bool ShouldCaptureWorkspaceOnFailure()
     {
         return TestContext.Current?.KeyValueStorage.TryGetValue("PreserveWorkspaceOnFailure", out var value) == true &&
             value is true;
@@ -1168,7 +1311,7 @@ internal static class CliE2EAutomatorHelpers
 
     private static bool ShouldCaptureWorkspaceDiagnostics()
     {
-        return CliE2ETestHelpers.IsRunningInCI || ShouldPreserveLocalWorkspace();
+        return CliE2ETestHelpers.IsRunningInCI || ShouldCaptureWorkspaceOnFailure();
     }
 
     private enum AspireNewEmptyAppHostResult
@@ -1183,6 +1326,7 @@ internal static class CliE2EAutomatorHelpers
     private enum AppHostLanguagePromptSelection
     {
         DefaultCSharp,
-        TypeScript
+        TypeScript,
+        Go
     }
 }

@@ -73,6 +73,15 @@ is not mis-attributed to the PR. (Diffing from the base *tip* instead surfaced
 exactly such a file and tripped the run-all fallback —
 [microsoft/aspire#18377](https://github.com/microsoft/aspire/pull/18377#issuecomment-4782187184).)
 The same rebound `from` feeds both layers, so they see an identical change set.
+
+In PR CI, both the top-level `check-changed-files` skip gate and the
+`select-tests` action resolve their comparison base with
+[`eng/github-ci/resolve-comparison-base.sh`](../../eng/github-ci/resolve-comparison-base.sh).
+The script verifies a comparison pinned to the run's checkout because the
+event's `pull_request.base.sha` can be stale and incorrectly attribute inherited
+base-branch changes to the PR. Sharing it keeps the skip gate and selector
+consistent.
+
 When `--to` is omitted (local working-tree run) `HEAD` is used only to resolve the
 merge-base; the diff itself then compares that merge-base against the **working
 tree**, so uncommitted changes are included. The
@@ -124,7 +133,8 @@ correct affected set *and* the genuine shortest hop chain to each project.
 
 The output is the affected project base names: the `.csproj` filename without
 extension. `TestSelector.Select(...)` intersects test-project names with the
-matrix and matches production-project names against `affected_project_rules`.
+matrix, then matches production/non-test project names against
+`affected_project_rules`.
 
 #### Decision paths (traceability)
 
@@ -237,10 +247,11 @@ load-bearing at the design level:
   This is why `prefilter`, not `ignore`, is what stops a packed `README.md` from
   being attributed by the graph and fanned out: `ignore` only suppresses the
   Layer 2 run-all fallback, while Layer 1 still attributes an `ignore`d file.
-- **`affected_project_rules`** matches Layer 1's affected **production** project
-  names only; affected matrix *test* projects are filtered out first, so a
-  test-only change cannot fire production jobs (`typescript-api-compat`, `extension-e2e`, …)
-  through a glob like `Aspire.Hosting*`.
+- **`affected_project_rules`** matches Layer 1's affected
+  **production/non-test** project names. Every project under `tests/`, including
+  non-matrix fixtures and support projects, is filtered out first, so test-only
+  changes cannot fire jobs (`typescript-api-compat`, `extension-e2e`, …) through
+  a glob like `Aspire.Hosting*`.
 
 ## The tool (`tools/SelectTests`)
 
@@ -285,9 +296,9 @@ Flow:
    treated as Layer-1-owned, so a link-compiled `src/Shared`/`tests/Shared`
    file does not trip the run-all fallback even though it is under no project
    directory.
-4. Apply `affected_project_rules` to Layer 1 **production**-project names only
-   (affected matrix test projects are filtered out first, so a test-only change
-   does not fire production jobs through a production-name glob).
+4. Apply `affected_project_rules` to Layer 1 **production/non-test** project
+   names (every project under `tests/` is filtered out first, so a test-only
+   change does not fire jobs through a broad project-name glob).
 5. Apply `derived_targets` to a cycle-safe fixpoint.
 6. Escalate to `ALL` for a kill switch, an `ALL` path rule, or any changed file
    that survived the prefilter but is not Layer-1-owned (neither under a project
@@ -360,28 +371,23 @@ The kill switch is wired in the same step: the `run-full-ci` PR label passes
 `--force-all`. The label is read from the workflow event payload
 (`contains(github.event.pull_request.labels.*.name, 'run-full-ci')`), a snapshot —
 so adding the label takes effect on the next push (or reopen), not on a plain
-re-run of an existing run. Non-PR events (no base SHA at all,
-e.g. a push to `main`) also force the full set. A PR *with* a base SHA that
-cannot be fetched in the shallow checkout **fails the step** instead of forcing
-run-all: `base.sha` is always reachable on origin, so a fetch failure is a real
-problem, and masking it with run-all would teach the audit nothing.
+re-run of an existing run. Non-PR events with no base SHA (e.g. a push to `main`)
+also force the full set.
 
-Because the diff is taken from the merge-base, the shallow PR checkout must be
-deepened until that common ancestor is reachable. The step fetches the base
-commit, then re-fetches both base and head at a growing depth until
-`git merge-base` resolves. If it never resolves within the depth bound, the step
-**warns and falls back to `--force-all`** (run the full matrix) rather than
-failing the PR. An unresolved merge-base must not block PRs while the cause (a
-history-depth gap or a genuinely divergent base) is found and fixed; over-selecting
-is the fail-safe outcome, matching the unmapped-file run-all fallback. `SelectTests`
-applies the same fallback itself if its own `git merge-base` comes up empty. Both
-emit a `::warning::` and record the reason in the run summary, so a systemic
-regression surfaces instead of hiding behind a green-but-full-matrix run.
+If the comparison cannot be verified, the selector **warns and runs ALL tests**
+to avoid under-selection. The skip gate instead **fails**, because it cannot
+safely declare CI skippable without a verified diff. Missing comparison endpoints
+fail either action rather than hiding an infrastructure problem behind a full
+test run.
 
-Note the asymmetry with the base-fetch failure above: a base commit that can't be
-**fetched** still fails the step (`base.sha` is always reachable on origin, so that
-is a real infra problem), whereas a base/head that can't be **merge-based** after
-deepening degrades to run-all.
+Both callers require a full-history checkout (`fetch-depth: 0`), including when
+the selector reuses a caller's checkout. The shared resolver validates identity
+and ancestry without fetching or changing the checkout. In a shallow checkout, Git
+can find an older common ancestor through a short side branch while a newer one
+remains hidden, silently omitting PR changes. Rejecting shallow history prevents
+that unsafe selective result even if a caller omits the checkout prerequisite.
+It also rejects comparisons with multiple equally good common ancestors, because
+choosing just one can hide changes relative to another.
 
 ## Failure policy
 
@@ -398,8 +404,8 @@ The selector may still choose run-all intentionally for known-safe reasons:
   not `src/**`-only).
 
 Those are explicit selections of the full matrix. They are not fallbacks for a
-crashed selector or a failed graph computation. (A PR whose base SHA cannot be
-fetched is *not* one of them — that fails the step; see above.)
+crashed selector or a failed graph computation. Missing comparison endpoints
+are *not* one of them — that fails the step; see above.
 
 ## Debuggability and traceability
 
@@ -470,29 +476,29 @@ regular PR matrix and PR-gated jobs. The summary shows:
 - any `ALL` or kill-switch escalation and why;
 - unattributed changed files that may need curated rules.
 
-The PR comment carries the same selection in a more scannable form. It leads
-with **what runs** — the flat list of selected PR test projects, the flat list
-of selected PR jobs, and a separate advisory schedule/outerloop section (test
-projects first, since they are the primary review signal) — so a reviewer sees
-the full impact at a glance even when many files changed. It then explains
-**how** the selection was reached in a collapsed
-`<details>` (the heading is the `<summary>`, so the rationale stays out of the
-way until expanded), grouping the selected projects under each trigger (changed
-file, affected project, or derived test) that pulled them in: a changed file
-and its graph fan-out appear under one heading, so a single edit's whole
-closure is stated once rather than repeated per project, and large fan-outs
-collapse into a nested `<details>`. Every cause is still shown — a project
-selected by several triggers appears under each — and a per-job table names
-what triggered each job. The comment is posted **one per pushed
-commit** and links the head commit it was computed for: a re-run of the same
-commit updates that commit's comment in place (no duplicate — re-runs are
-common), a new commit posts a fresh comment at the bottom, and comments from
-superseded commits are collapsed (minimized, never deleted) so the latest
-selection surfaces at the bottom while the per-push history is preserved. In
-audit mode the comment is advisory — the regular PR matrix and PR-gated jobs
-still run — so it is labelled "(audit mode)" and states that the PR lists are
-what selective CI **would** run under enforcement. Advisory-only targets remain
-explicitly labelled as schedule/outerloop impact.
+The PR comment carries the PR-gated selection in a more scannable form. It
+leads with **what runs** — the flat list of selected PR test projects and the
+flat list of selected PR jobs (test projects first, since they are the primary
+review signal) — so a reviewer sees the regular PR impact at a glance even when
+many files changed. It then explains **how** the PR-gated selection was reached
+in a collapsed `<details>` (the heading is the `<summary>`, so the rationale
+stays out of the way until expanded), grouping selected projects under each
+trigger (changed file, affected project, or derived test) that pulled them in:
+a changed file and its graph fan-out appear under one heading, so a single
+edit's whole closure is stated once rather than repeated per project, and large
+fan-outs collapse into a nested `<details>`. Every PR-gated cause is still shown
+— a project selected by several triggers appears under each — and a per-job
+table names what triggered each PR job. The full step summary, `--explain`
+output, and JSON artifact remain the diagnostic surfaces for advisory
+schedule/outerloop impact. The comment is posted **one per pushed commit** and
+links the head commit it was computed for: a re-run of the same commit updates
+that commit's comment in place (no duplicate — re-runs are common), a new commit
+posts a fresh comment at the bottom, and comments from superseded commits are
+collapsed (minimized, never deleted) so the latest selection surfaces at the
+bottom while the per-push history is preserved. In audit mode the comment is
+advisory — the regular PR matrix and PR-gated jobs still run — so it is labelled
+"(audit mode)" and states that the PR lists are what selective CI **would** run
+under enforcement.
 
 Any audit run where a would-be-skipped test would have failed is a map bug. Fix
 the map before returning to enforcing mode.
@@ -552,15 +558,15 @@ does not arise for them.
 
 ### Shallow checkout and the unresolved-merge-base fallback
 
-CI checkouts are shallow, so the merge-base may not be present locally. Our
-action deepens **both** endpoints until `git merge-base` resolves, and if it
-never does, warns and runs **all** tests rather than failing the PR. Both halves
-mirror established behavior:
+Selective CI requires full history at checkout, and rejects shallow history even
+when a merge-base is visible. An unverifiable comparison warns and runs **all**
+tests rather than risking under-selection. Related tools use different history
+preparation strategies but share the conservative fallback:
 
 - **dorny/paths-filter** doubles its `initial-fetch-depth` "until the merge-base
   is found, or there are no more commits in the history," and if there is no
   common ancestor "all files are considered as added" — i.e. everything matches.
-  That is the same deepen-then-degrade-to-all behavior, arrived at independently.
+  This shares the conservative run-all outcome when ancestry cannot be resolved.
 - **Turborepo** warns that "if the checkout is too shallow, then all packages
   will be considered changed," and recommends `--depth=0`.
 - **Nx** CI recipes use `fetch-depth: 0` for the same reason.

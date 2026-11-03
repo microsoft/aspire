@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Threading.Channels;
+using Aspire.Dashboard.Components.Controls;
+using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Configuration;
@@ -22,7 +24,36 @@ namespace Aspire.Dashboard.Components.Tests.Shared;
 
 internal static class ResourceSetupHelpers
 {
-    public static void SetupResourceDetails(TestContext context)
+    public static void SetupResourceOverview(BunitContext context, ViewportInformation viewport, IDashboardClient dashboardClient)
+    {
+        context.Services.AddSingleton<IVolumePathLauncher, VolumePathLauncher>();
+        context.Services.AddSingleton<IInstrumentUnitResolver, TestInstrumentUnitResolver>();
+        context.Services.AddSingleton<ConsoleLogsManager>();
+        SetupResourcesLayout(context, viewport, dashboardClient);
+        context.JSInterop.Setup<string>("Blazor._internal.PageTitle.getAndRemoveExistingTitle", _ => true).SetResult(string.Empty);
+    }
+
+    public static void SetupResourcesLayout(BunitContext context, ViewportInformation viewport, IDashboardClient dashboardClient)
+    {
+        SetupResourcesPage(context, viewport, dashboardClient);
+        context.Services.AddLogging();
+        FluentUISetupHelpers.SetupFluentTextField(context);
+        context.JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Utilities.Attributes.observeAttributeChange", _ => true).SetVoidResult();
+        context.JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Components.TextInput.attachImmediateEvent", _ => true).SetVoidResult();
+        context.JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Components.Tabs.ObserveTabsChanged", _ => true).SetVoidResult();
+        FluentUISetupHelpers.SetupFluentButton(context);
+        var module = context.JSInterop.SetupModule(invocation => invocation.Arguments[0] is string path && path.Contains(nameof(ResourcesLayout), StringComparison.Ordinal));
+        module.SetupVoid("registerPaneResizer", _ => true).SetVoidResult();
+        module.SetupVoid("unregisterPaneResizer", _ => true).SetVoidResult();
+        module.Setup<bool>("fitPaneToActions", _ => true).SetResult(true);
+        module.SetupVoid("setTabListAriaLabel", _ => true).SetVoidResult();
+        module.SetupVoid("registerResourceOrdering", _ => true).SetVoidResult();
+        module.SetupVoid("unregisterResourceOrdering", _ => true).SetVoidResult();
+        module.SetupVoid("registerTabOverflow", _ => true).SetVoidResult();
+        module.SetupVoid("unregisterTabOverflow", _ => true).SetVoidResult();
+    }
+
+    public static void SetupResourceDetails(BunitContext context)
     {
         FluentUISetupHelpers.AddCommonDashboardServices(context);
         context.Services.AddSingleton<IInstrumentUnitResolver, TestInstrumentUnitResolver>();
@@ -38,12 +69,18 @@ internal static class ResourceSetupHelpers
         FluentUISetupHelpers.SetupFluentMenu(context);
 
         context.JSInterop.SetupVoid("scrollToTop", _ => true);
-        context.JSInterop.SetupVoid("focusElement", _ => true);
+        context.JSInterop.SetupVoid("focusElement", _ => true).SetVoidResult();
 
         FluentUISetupHelpers.SetupFluentUIComponents(context);
     }
 
-    public static void SetupResourcesPage(TestContext context, ViewportInformation viewport, IDashboardClient? dashboardClient = null, ILocalStorage? localStorage = null)
+    public static void SetupResourcesPage(
+        BunitContext context,
+        ViewportInformation viewport,
+        IDashboardClient? dashboardClient = null,
+        ILocalStorage? localStorage = null,
+        ISessionStorage? sessionStorage = null,
+        IDialogService? dialogService = null)
     {
         FluentUISetupHelpers.SetupFluentDivider(context);
         FluentUISetupHelpers.SetupFluentInputLabel(context);
@@ -57,8 +94,8 @@ internal static class ResourceSetupHelpers
         FluentUISetupHelpers.SetupFluentOverflow(context);
         FluentUISetupHelpers.SetupFluentMenu(context);
 
-        FluentUISetupHelpers.AddCommonDashboardServices(context, localStorage: localStorage);
-        context.JSInterop.SetupVoid("focusElement", _ => true);
+        FluentUISetupHelpers.AddCommonDashboardServices(context, localStorage: localStorage, sessionStorage: sessionStorage);
+        context.JSInterop.SetupVoid("focusElement", _ => true).SetVoidResult();
         context.Services.AddSingleton<IconResolver>();
         context.Services.AddSingleton<ILogger<StructuredLogs>>(NullLogger<StructuredLogs>.Instance);
         context.Services.AddTransient<StructuredLogsViewModel>();
@@ -66,6 +103,11 @@ internal static class ResourceSetupHelpers
         context.Services.AddSingleton<IDashboardClient>(dashboardClient ?? new TestDashboardClient(isEnabled: true, initialResources: [], resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
 
         FluentUISetupHelpers.SetupFluentUIComponents(context);
+
+        if (dialogService is not null)
+        {
+            context.Services.AddSingleton(dialogService);
+        }
 
         var dimensionManager = context.Services.GetRequiredService<DimensionManager>();
         dimensionManager.InvokeOnViewportInformationChanged(viewport);

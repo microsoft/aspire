@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Net;
+using System.Net.Http.Headers;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Json.Nodes;
 using Aspire.Dashboard.Authentication.OtlpApiKey;
@@ -236,6 +238,34 @@ public class OtlpGrpcServiceTests
 
         // Assert 2
         Assert.Equal(StatusCode.Unauthenticated, ex.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("/opentelemetry.proto.collector.logs.v1.LogsService/Export")]
+    [InlineData("/opentelemetry.proto.collector.metrics.v1.MetricsService/Export")]
+    [InlineData("/opentelemetry.proto.collector.trace.v1.TraceService/Export")]
+    public async Task CallService_BrowserEndPoint_SkipsStatusCodePages(string path)
+    {
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(_testOutputHelper, config =>
+        {
+            config[DashboardConfigNames.DashboardFrontendUrlName.ConfigKey] = "https://127.0.0.1:0";
+        });
+        await app.StartAsync().DefaultTimeout();
+
+        using var httpClient = IntegrationTestHelpers.CreateHttpClient($"https://{app.FrontendSingleEndPointAccessor().EndPoint}");
+        using var request = new HttpRequestMessage(HttpMethod.Post, path)
+        {
+            Version = HttpVersion.Version20,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+            Content = new ByteArrayContent([])
+        };
+        request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/grpc");
+
+        using var response = await httpClient.SendAsync(request).DefaultTimeout();
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Null(response.Content.Headers.ContentType);
+        Assert.Equal(string.Empty, await response.Content.ReadAsStringAsync().DefaultTimeout());
     }
 
     [Fact]

@@ -409,6 +409,17 @@ public class AddPostgresTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void WithPgAdminHidesThePgAdminResource()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddPostgres("mypostgres").WithPgAdmin();
+
+        var pgAdmin = Assert.Single(builder.Resources.OfType<PgAdminContainerResource>());
+        var hidden = Assert.Single(pgAdmin.Annotations.OfType<HiddenAnnotation>());
+        Assert.Equal(HiddenBehavior.Always, hidden.Behavior);
+    }
+
+    [Fact]
     public void WithPgWebAddsWithPgWebResource()
     {
         var builder = DistributedApplication.CreateBuilder();
@@ -416,6 +427,17 @@ public class AddPostgresTests(ITestOutputHelper outputHelper)
         builder.AddPostgres("mypostgres2").WithPgWeb();
 
         Assert.Single(builder.Resources.OfType<PgWebContainerResource>());
+    }
+
+    [Fact]
+    public void WithPgWebHidesThePgWebResource()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddPostgres("mypostgres").WithPgWeb();
+
+        var pgWeb = Assert.Single(builder.Resources.OfType<PgWebContainerResource>());
+        var hidden = Assert.Single(pgWeb.Annotations.OfType<HiddenAnnotation>());
+        Assert.Equal(HiddenBehavior.Always, hidden.Behavior);
     }
 
     [Fact]

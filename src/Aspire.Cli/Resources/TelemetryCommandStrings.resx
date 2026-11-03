@@ -135,6 +135,9 @@
   <data name="FollowOptionDescription" xml:space="preserve">
     <value>Stream telemetry in real-time as it arrives</value>
   </data>
+  <data name="DashboardConnectionLost" xml:space="preserve">
+    <value>The connection to the dashboard was lost.</value>
+  </data>
   <data name="FormatOptionDescription" xml:space="preserve">
     <value>Output format (Table or Json)</value>
   </data>
@@ -233,6 +236,12 @@
   </data>
   <data name="DashboardUrlInvalidHint" xml:space="preserve">
     <value>Specify an absolute URL like 'http://localhost:18888'.</value>
+  </data>
+  <data name="InvalidDashboardUrlDisplayValue" xml:space="preserve">
+    <value>not an absolute HTTP(S) URL</value>
+  </data>
+  <data name="ConfiguredDashboardDisplayValue" xml:space="preserve">
+    <value>the configured dashboard</value>
   </data>
   <data name="DashboardLoginTokenFailed" xml:space="preserve">
     <value>Could not fetch telemetry data from the dashboard. The login token in the URL is invalid or expired.</value>

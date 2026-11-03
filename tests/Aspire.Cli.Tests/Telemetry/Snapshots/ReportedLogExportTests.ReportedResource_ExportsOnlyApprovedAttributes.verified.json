@@ -1,0 +1,80 @@
+﻿[
+  {
+    "name": "Message",
+    "time": "timestamp",
+    "iKey": "instrumentation-key",
+    "tags": {
+      "ai.operation.id": "trace-id",
+      "ai.operation.parentId": "span-id",
+      "ai.operation.name": "reported-event",
+      "ai.cloud.role": "aspire-cli",
+      "ai.cloud.roleInstance": "instance-id",
+      "ai.application.ver": "cli-version",
+      "ai.internal.sdkVersion": "sdk-version"
+    },
+    "data": {
+      "baseType": "MessageData",
+      "baseData": {
+        "ver": 2,
+        "message": "reported-event",
+        "severityLevel": "Information",
+        "properties": {
+          "test.property": "approved",
+          "CategoryName": "Aspire.Cli.Reported.Events",
+          "EventName": "reported-event"
+        }
+      }
+    }
+  },
+  {
+    "name": "Metric",
+    "time": "timestamp",
+    "iKey": "instrumentation-key",
+    "tags": {
+      "ai.cloud.role": "aspire-cli",
+      "ai.cloud.roleInstance": "instance-id",
+      "ai.application.ver": "cli-version",
+      "ai.internal.sdkVersion": "sdk-version"
+    },
+    "data": {
+      "baseType": "MetricData",
+      "baseData": {
+        "ver": 2,
+        "metrics": [
+          {
+            "name": "_OTELRESOURCE_",
+            "value": 0
+          }
+        ],
+        "properties": {
+          "service.name": "aspire-cli",
+          "service.version": "cli-version",
+          "service.instance.id": "instance-id"
+        }
+      }
+    }
+  },
+  {
+    "name": "RemoteDependency",
+    "time": "timestamp",
+    "iKey": "instrumentation-key",
+    "tags": {
+      "ai.operation.id": "trace-id",
+      "ai.cloud.role": "aspire-cli",
+      "ai.cloud.roleInstance": "instance-id",
+      "ai.application.ver": "cli-version",
+      "ai.internal.sdkVersion": "sdk-version"
+    },
+    "data": {
+      "baseType": "RemoteDependencyData",
+      "baseData": {
+        "ver": 2,
+        "id": "span-id",
+        "name": "reported-operation",
+        "type": "InProc",
+        "duration": "duration",
+        "success": true
+      }
+    }
+  }
+]

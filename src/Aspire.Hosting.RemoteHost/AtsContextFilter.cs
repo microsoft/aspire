@@ -334,6 +334,7 @@ internal static class AtsContextFilter
             CapabilityId = capability.CapabilityId,
             MethodName = capability.MethodName,
             OwningTypeName = capability.OwningTypeName,
+            IsExperimental = capability.IsExperimental,
             // The canonical exporter needs the same handle universe as full source generation.
             // Preserve foreign handle references as required synthetic parameters so wrapper
             // unions stay identical without importing the foreign member's options interface.

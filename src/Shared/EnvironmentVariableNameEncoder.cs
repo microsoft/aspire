@@ -41,4 +41,36 @@ internal static partial class EnvironmentVariableNameEncoder
 
         return builder.ToString();
     }
+
+    /// <summary>
+    /// Returns an environment-variable-safe connection-string name that remains a single configuration key.
+    /// </summary>
+    /// <param name="name">The logical connection-string name.</param>
+    /// <returns>A portable connection-string name.</returns>
+    public static string EncodeConnectionStringName(string name)
+    {
+        var encodedName = Encode(name);
+        if (!encodedName.Contains("__", StringComparison.Ordinal))
+        {
+            return encodedName;
+        }
+
+        // The environment configuration provider maps every "__" sequence to the ":" path delimiter.
+        // Collapse underscore runs so the suffix remains one key under the ConnectionStrings section.
+        // See https://learn.microsoft.com/dotnet/core/extensions/configuration-providers#environment-variable-configuration-provider.
+        var builder = new StringBuilder(encodedName.Length);
+        var previousWasUnderscore = false;
+        foreach (var character in encodedName)
+        {
+            if (character == '_' && previousWasUnderscore)
+            {
+                continue;
+            }
+
+            builder.Append(character);
+            previousWasUnderscore = character == '_';
+        }
+
+        return builder.ToString();
+    }
 }

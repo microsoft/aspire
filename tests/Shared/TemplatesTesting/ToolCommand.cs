@@ -220,8 +220,7 @@ public class ToolCommand : IDisposable
         psi.Environment["DOTNET_MULTILEVEL_LOOKUP"] = "0";
         psi.Environment["DOTNET_SKIP_FIRST_TIME_EXPERIENCE"] = "1";
 
-        // runtime repo sets this, which interferes with the tests
-        psi.EnvironmentVariables.Remove("MSBuildSDKsPath");
+        RemoveInheritedMSBuildPaths(psi.Environment);
 
         AddEnvironmentVariablesTo(psi);
         AddWorkingDirectoryTo(psi);
@@ -230,6 +229,14 @@ public class ToolCommand : IDisposable
             StartInfo = psi,
             EnableRaisingEvents = true
         };
+    }
+
+    internal static void RemoveInheritedMSBuildPaths(IDictionary<string, string?> environment)
+    {
+        // Tests launched by MSBuild inherit the repo SDK's paths. Solution restore uses
+        // MSBuildExtensionsPath to locate NuGet.targets, which cannot run under an older test SDK.
+        environment.Remove("MSBuildSDKsPath");
+        environment.Remove("MSBuildExtensionsPath");
     }
 
     private string WorkingDirectoryInfo()

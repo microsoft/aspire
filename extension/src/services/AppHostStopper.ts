@@ -1,18 +1,25 @@
 import * as vscode from 'vscode';
 import { spawnCliProcess, terminateCliProcess } from '../utils/process/cliProcess';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
-import { getCliPathTargetForUri } from '../utils/cliPathVariables';
+import { getCliPathTargetForAppHostOperation, type AppHostOperationTarget } from '../utils/appHostOperationTarget';
 import { reportCliResolvedForOperation } from '../utils/cliOperationResolution';
 
 const maxRetainedStderrLength = 16 * 1024;
 
+/**
+ * Stops an AppHost the extension does not own by running `aspire stop` against it.
+ *
+ * `appHost.operationPath` is the physical AppHost that reaches the CLI, so a repointed alias
+ * cannot move the stop onto a different AppHost. `appHost.scopePath` is the path the caller
+ * named, and it alone decides which workspace folder's `aspire.cliPath` runs - the physical path
+ * can sit outside every open folder when a root is a symlink or a linked worktree.
+ */
 export async function stopExternalAppHost(
     terminalProvider: AspireTerminalProvider,
-    appHostPath: string,
+    appHost: AppHostOperationTarget,
     cancellationToken: vscode.CancellationToken,
 ): Promise<void> {
-
-    const target = getCliPathTargetForUri(vscode.Uri.file(appHostPath));
+    const target = getCliPathTargetForAppHostOperation(appHost);
     const cliPath = await terminalProvider.getAspireCliExecutablePath(target);
     if (cancellationToken.isCancellationRequested) {
         throw new vscode.CancellationError();
@@ -59,7 +66,7 @@ export async function stopExternalAppHost(
         });
 
         try {
-            cliProcess = spawnCliProcess(terminalProvider, cliPath, ['stop', '--apphost', appHostPath], {
+            cliProcess = spawnCliProcess(terminalProvider, cliPath, ['stop', '--apphost', appHost.operationPath], {
                 createProcessGroup: true,
                 noExtensionVariables: true,
                 stderrCallback: data => {

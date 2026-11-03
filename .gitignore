@@ -139,7 +139,8 @@ node_modules/
 target/
 dependency-reduced-pom.xml
 
-# Gradle caches and Java build outputs
+# Gradle local cache/state and Java build outputs
+# Unanchored so caches match at any nesting depth.
 .gradle/
 playground/Java*/**/build/
 tests/PolyglotAppHosts/**/Java/**/build/

@@ -130,7 +130,7 @@
     <value>The 'aspire dashboard' command requires the CLI bundle, but no bundle layout was found. The bundle provides the dashboard binary and supporting files. Run 'aspire setup --force' to extract the bundle, or reinstall the Aspire CLI.</value>
   </data>
   <data name="ManagedBinaryNotFound" xml:space="preserve">
-    <value>The CLI bundle layout was found, but the dashboard binary (aspire-managed) is missing. The bundle may be corrupted or incomplete. Run 'aspire setup --force' to re-extract the bundle, or reinstall the Aspire CLI.</value>
+    <value>The CLI bundle layout was found, but the Dashboard executable is missing. The bundle may be corrupted or incomplete. Run 'aspire setup --force' to re-extract the bundle, or reinstall the Aspire CLI.</value>
   </data>
   <data name="DashboardStarted" xml:space="preserve">
     <value>Dashboard started (PID {0}).</value>

@@ -5,6 +5,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Aspire.Hosting.Dcp;
@@ -107,8 +108,8 @@ public sealed class DcpHostNotificationTests
         // Act
         await dcpHost.EnsureDcpContainerRuntimeAsync(CancellationToken.None).DefaultTimeout();
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-        var interaction = await interactionService.Interactions.Reader.ReadAsync(cts.Token);
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
+        var interaction = await interactionService.Interactions.Reader.ReadAsync(cts.Token).DefaultTimeout();
 
         // Assert
         Assert.Equal(InteractionStrings.ContainerRuntimeUnhealthyTitle, interaction.Title);
@@ -151,8 +152,8 @@ public sealed class DcpHostNotificationTests
         // Act
         await dcpHost.EnsureDevelopmentCertificateTrustAsync(CancellationToken.None).DefaultTimeout();
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-        var interaction = await interactionService.Interactions.Reader.ReadAsync(cts.Token);
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
+        var interaction = await interactionService.Interactions.Reader.ReadAsync(cts.Token).DefaultTimeout();
 
         // Assert
         Assert.Equal(InteractionStrings.DeveloperCertificateNotFullyTrustedTitle, interaction.Title);
@@ -204,21 +205,7 @@ public sealed class DcpHostNotificationTests
         // Act
         await dcpHost.EnsureDcpContainerRuntimeAsync(CancellationToken.None).DefaultTimeout();
 
-        // Use a short timeout to check that no notification is sent
-        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
-        var hasInteraction = false;
-        try
-        {
-            await interactionService.Interactions.Reader.ReadAsync(cts.Token);
-            hasInteraction = true;
-        }
-        catch (OperationCanceledException)
-        {
-            // Expected - no notification should be sent
-        }
-
-        // Assert - no notification should be shown for healthy runtime
-        Assert.False(hasInteraction);
+        Assert.False(interactionService.Interactions.Reader.TryRead(out _));
     }
 
     [Fact]
@@ -263,21 +250,7 @@ public sealed class DcpHostNotificationTests
         // Act
         await dcpHost.EnsureDcpContainerRuntimeAsync(CancellationToken.None).DefaultTimeout();
 
-        // Use a short timeout to check that no notification is sent
-        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
-        var hasInteraction = false;
-        try
-        {
-            await interactionService.Interactions.Reader.ReadAsync(cts.Token);
-            hasInteraction = true;
-        }
-        catch (OperationCanceledException)
-        {
-            // Expected - no notification should be sent when dashboard is disabled
-        }
-
-        // Assert - no notification should be shown when dashboard is disabled
-        Assert.False(hasInteraction);
+        Assert.False(interactionService.Interactions.Reader.TryRead(out _));
     }
 
     [Fact]
@@ -322,8 +295,8 @@ public sealed class DcpHostNotificationTests
         // Act
         await dcpHost.EnsureDcpContainerRuntimeAsync(CancellationToken.None).DefaultTimeout();
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-        var interaction = await interactionService.Interactions.Reader.ReadAsync(cts.Token);
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
+        var interaction = await interactionService.Interactions.Reader.ReadAsync(cts.Token).DefaultTimeout();
 
         // Assert
         Assert.Equal(InteractionStrings.ContainerRuntimeUnhealthyTitle, interaction.Title);
@@ -358,7 +331,7 @@ public sealed class DcpHostNotificationTests
         };
         var interactionService = new TestInteractionService { IsAvailable = true };
         var locations = CreateTestLocations();
-        var timeProvider = new FakeTimeProvider();
+        var timeProvider = new SignalingFakeTimeProvider(TimeSpan.FromSeconds(5));
         var developerCertificateService = new TestDeveloperCertificateService([], false, false, false);
         var configuration = new ConfigurationBuilder().Build();
 
@@ -377,8 +350,9 @@ public sealed class DcpHostNotificationTests
         await dcpHost.EnsureDcpContainerRuntimeAsync(CancellationToken.None).DefaultTimeout();
 
         // Use ReadAsync with timeout to wait for the notification
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-        var interaction = await interactionService.Interactions.Reader.ReadAsync(cts.Token);
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
+        var interaction = await interactionService.Interactions.Reader.ReadAsync(cts.Token).DefaultTimeout();
+        await timeProvider.TimerCreated.DefaultTimeout();
         
         // Assert - Verify notification was shown initially
         Assert.Equal(InteractionStrings.ContainerRuntimeUnhealthyTitle, interaction.Title);
@@ -398,12 +372,7 @@ public sealed class DcpHostNotificationTests
         // Advance time by 5 seconds to trigger the next polling cycle
         timeProvider.Advance(TimeSpan.FromSeconds(5));
 
-        // Assert - The notification should now be cancelled
-        using (var testTimeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(5)))
-        using (var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(interaction.CancellationToken, testTimeoutCts.Token))
-        {
-            await Assert.ThrowsAsync<TaskCanceledException>(() => Task.Delay(-1, linkedCts.Token));
-        }
+        await interaction.CancellationToken.WaitUntilCancelledAsync().DefaultTimeout();
     }
 
     [Fact]
@@ -448,8 +417,8 @@ public sealed class DcpHostNotificationTests
         // Act
         await dcpHost.EnsureDcpContainerRuntimeAsync(CancellationToken.None).DefaultTimeout();
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-        var interaction = await interactionService.Interactions.Reader.ReadAsync(cts.Token);
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
+        var interaction = await interactionService.Interactions.Reader.ReadAsync(cts.Token).DefaultTimeout();
 
         // Assert
         Assert.Equal(InteractionStrings.ContainerRuntimeNotInstalledTitle, interaction.Title);
@@ -460,9 +429,7 @@ public sealed class DcpHostNotificationTests
         Assert.Equal(InteractionStrings.ContainerRuntimeLinkText, notificationOptions.LinkText);
         Assert.Equal("https://aka.ms/aspire/containers", notificationOptions.LinkUrl);
 
-        // Verify that no polling is started by ensuring the cancellation token is not cancelled after a delay
-        // This tests that the function returns immediately and doesn't start the polling task
-        await Task.Delay(TimeSpan.FromMilliseconds(100));
+        timeProvider.Advance(TimeSpan.FromSeconds(5));
         Assert.False(interaction.CancellationToken.IsCancellationRequested);
     }
 
@@ -570,6 +537,103 @@ public sealed class DcpHostNotificationTests
         Assert.Contains("--container-runtime \"podman\"", processSpec.Arguments);
     }
 
+    [Theory]
+    [InlineData(Architecture.X64, "x64")]
+    [InlineData(Architecture.Arm64, "arm64")]
+    public void TryGetBundledConPtyPath_WithCompleteBundlePayload_ReturnsTerminalHostDirectory(Architecture architecture, string architectureDirectory)
+    {
+        var directory = Directory.CreateTempSubdirectory();
+        try
+        {
+            var terminalHostPath = Path.Combine(directory.FullName, "aspire-managed.exe");
+            File.WriteAllText(terminalHostPath, "");
+            File.WriteAllText(Path.Combine(directory.FullName, "conpty.dll"), "");
+            Directory.CreateDirectory(Path.Combine(directory.FullName, architectureDirectory));
+            File.WriteAllText(Path.Combine(directory.FullName, architectureDirectory, "OpenConsole.exe"), "");
+
+            var found = DcpHost.TryGetBundledConPtyPath(terminalHostPath, architecture, architecture, out var conPtyPath);
+
+            Assert.True(found);
+            Assert.Equal(directory.FullName, conPtyPath);
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData(Architecture.X64, Architecture.X64, "win-x64", "x64")]
+    [InlineData(Architecture.X64, Architecture.Arm64, "win-x64", "arm64")]
+    [InlineData(Architecture.Arm64, Architecture.Arm64, "win-arm64", "arm64")]
+    public void TryGetBundledConPtyPath_WithCompleteRepoPayload_ReturnsRuntimeNativeDirectory(
+        Architecture processArchitecture,
+        Architecture osArchitecture,
+        string runtimeIdentifier,
+        string nativeHostDirectory)
+    {
+        var directory = Directory.CreateTempSubdirectory();
+        try
+        {
+            var terminalHostPath = Path.Combine(directory.FullName, "aspire-managed.exe");
+            File.WriteAllText(terminalHostPath, "");
+            var nativeDirectory = Path.Combine(directory.FullName, "runtimes", runtimeIdentifier, "native");
+            Directory.CreateDirectory(Path.Combine(nativeDirectory, nativeHostDirectory));
+            File.WriteAllText(Path.Combine(nativeDirectory, "conpty.dll"), "");
+            File.WriteAllText(Path.Combine(nativeDirectory, nativeHostDirectory, "OpenConsole.exe"), "");
+
+            var found = DcpHost.TryGetBundledConPtyPath(
+                terminalHostPath,
+                processArchitecture,
+                osArchitecture,
+                out var conPtyPath);
+
+            Assert.True(found);
+            Assert.Equal(nativeDirectory, conPtyPath);
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public void TryGetBundledConPtyPath_WithIncompletePayload_ReturnsFalse(bool includeConPty, bool includeOpenConsole)
+    {
+        var directory = Directory.CreateTempSubdirectory();
+        try
+        {
+            var terminalHostPath = Path.Combine(directory.FullName, "aspire-managed.exe");
+            File.WriteAllText(terminalHostPath, "");
+            if (includeConPty)
+            {
+                File.WriteAllText(Path.Combine(directory.FullName, "conpty.dll"), "");
+            }
+
+            if (includeOpenConsole)
+            {
+                var architectureDirectory = RuntimeInformation.OSArchitecture == Architecture.Arm64 ? "arm64" : "x64";
+                Directory.CreateDirectory(Path.Combine(directory.FullName, architectureDirectory));
+                File.WriteAllText(Path.Combine(directory.FullName, architectureDirectory, "OpenConsole.exe"), "");
+            }
+
+            var found = DcpHost.TryGetBundledConPtyPath(
+                terminalHostPath,
+                RuntimeInformation.ProcessArchitecture,
+                RuntimeInformation.OSArchitecture,
+                out var conPtyPath);
+
+            Assert.False(found);
+            Assert.Null(conPtyPath);
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
     [Fact]
     public void CreateDcpProcessSpec_DoesNotInheritExcludedEnvironmentVariables()
     {
@@ -650,6 +714,83 @@ public sealed class DcpHostNotificationTests
         Assert.Equal("vendor=value", processSpec.EnvironmentVariables[KnownConfigNames.DcpOtelStartupTraceState]);
     }
 
+    [Theory]
+    [InlineData(0, true)]
+    [InlineData(1, false)]
+    public async Task EnsureDcpHostRunning_TransfersSessionFolderOwnershipToDcpOnlyWhenDcpStarts(int launcherExitCode, bool sessionFolderOwnedByDcp)
+    {
+        // DCP is started with --detach and DCP_SESSION_FOLDER, so it outlives the AppHost and still reads
+        // the kubeconfig in the session folder during its own cleanup before deleting the folder itself.
+        // Disposing the managed file system service must therefore not delete the folder once DCP has been launched,
+        // but the folder must still be deleted when the DCP launcher reports that startup failed.
+        var launcherDir = Directory.CreateTempSubdirectory("aspire-dcp-launcher");
+        var fileSystemService = new FileSystemService(new ConfigurationBuilder().Build());
+        var locations = new Locations(fileSystemService);
+        var dcpOptions = new DcpOptions { CliPath = CreateFakeDcpLauncher(launcherDir.FullName, launcherExitCode) };
+        var dcpHost = new DcpHost(
+            new NullLoggerFactory(),
+            Options.Create(dcpOptions),
+            new TestDcpDependencyCheckService(),
+            new TestInteractionService(),
+            locations,
+            new DistributedApplicationModel(new ResourceCollection()),
+            new FakeTimeProvider(),
+            new TestDeveloperCertificateService([], false, false, false),
+            new ConfigurationBuilder().Build());
+
+        var sessionDir = locations.DcpSessionDir;
+        try
+        {
+            await File.WriteAllTextAsync(locations.DcpKubeconfigPath, "kubeconfig written by DCP");
+
+            dcpHost.EnsureDcpHostRunning();
+
+            // Shut down without waiting for the launcher result, as an AppHost that stops right after starting DCP would.
+            fileSystemService.Dispose();
+
+            await dcpHost.DcpLaunchResultObserved.WaitAsync(TimeSpan.FromSeconds(60));
+
+            Assert.Equal(sessionFolderOwnedByDcp, File.Exists(locations.DcpKubeconfigPath));
+        }
+        finally
+        {
+            await dcpHost.StopAsync();
+            if (Directory.Exists(sessionDir))
+            {
+                Directory.Delete(sessionDir, recursive: true);
+            }
+            launcherDir.Delete(recursive: true);
+        }
+    }
+
+    private static string CreateFakeDcpLauncher(string directory, int exitCode)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            var scriptPath = Path.Combine(directory, "dcp.cmd");
+            File.WriteAllText(scriptPath, $"@exit /b {exitCode}{Environment.NewLine}");
+            return scriptPath;
+        }
+
+        var shellScriptPath = Path.Combine(directory, "dcp");
+        File.WriteAllText(shellScriptPath, $"#!/bin/sh{Environment.NewLine}exit {exitCode}{Environment.NewLine}");
+        File.SetUnixFileMode(shellScriptPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        return shellScriptPath;
+    }
+
+    [Fact]
+    public void DcpSessionFolder_IsDeletedOnDisposeWhenDcpWasNotStarted()
+    {
+        var fileSystemService = new FileSystemService(new ConfigurationBuilder().Build());
+        var locations = new Locations(fileSystemService);
+        var sessionDir = locations.DcpSessionDir;
+        File.WriteAllText(locations.DcpKubeconfigPath, "kubeconfig");
+
+        fileSystemService.Dispose();
+
+        Assert.False(Directory.Exists(sessionDir));
+    }
+
     private static DcpHost CreateDcpHostForProcessSpecTests(
         IDeveloperCertificateService? developerCertificateService = null,
         IConfiguration? configuration = null,
@@ -711,7 +852,7 @@ public sealed class DcpHostNotificationTests
         {
             if (File.Exists(path))
             {
-                return new X509Certificate2(path, "testPassword");
+                return X509CertificateLoader.LoadPkcs12FromFile(path, "testPassword");
             }
         }
 
@@ -781,20 +922,7 @@ public sealed class DcpHostNotificationTests
         // Act
         await dcpHost.EnsureDevelopmentCertificateTrustAsync(CancellationToken.None).DefaultTimeout();
 
-        // Assert - no notification or warning should be shown
-        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
-        var hasInteraction = false;
-        try
-        {
-            await interactionService.Interactions.Reader.ReadAsync(cts.Token);
-            hasInteraction = true;
-        }
-        catch (OperationCanceledException)
-        {
-            // Expected - no notification
-        }
-
-        Assert.False(hasInteraction);
+        Assert.False(interactionService.Interactions.Reader.TryRead(out _));
         Assert.DoesNotContain(testSink.Writes, w => w.LogLevel == LogLevel.Warning);
     }
 
@@ -831,20 +959,7 @@ public sealed class DcpHostNotificationTests
         // Act
         await dcpHost.EnsureDevelopmentCertificateTrustAsync(CancellationToken.None).DefaultTimeout();
 
-        // Assert - no notification or warning should be shown for empty model
-        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
-        var hasInteraction = false;
-        try
-        {
-            await interactionService.Interactions.Reader.ReadAsync(cts.Token);
-            hasInteraction = true;
-        }
-        catch (OperationCanceledException)
-        {
-            // Expected - no notification
-        }
-
-        Assert.False(hasInteraction);
+        Assert.False(interactionService.Interactions.Reader.TryRead(out _));
         Assert.DoesNotContain(testSink.Writes, w => w.LogLevel == LogLevel.Warning);
     }
 
@@ -891,8 +1006,8 @@ public sealed class DcpHostNotificationTests
         // Act
         await dcpHost.EnsureDevelopmentCertificateTrustAsync(CancellationToken.None).DefaultTimeout();
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-        var interaction = await interactionService.Interactions.Reader.ReadAsync(cts.Token);
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
+        var interaction = await interactionService.Interactions.Reader.ReadAsync(cts.Token).DefaultTimeout();
 
         // Assert - warning should be shown because HttpsCertificateConfigurationCallbackAnnotation indicates TLS
         Assert.Equal(InteractionStrings.DeveloperCertificateNotFullyTrustedTitle, interaction.Title);
@@ -942,20 +1057,7 @@ public sealed class DcpHostNotificationTests
         // Act
         await dcpHost.EnsureDevelopmentCertificateTrustAsync(CancellationToken.None).DefaultTimeout();
 
-        // Assert - no warning because TLS was explicitly disabled
-        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
-        var hasInteraction = false;
-        try
-        {
-            await interactionService.Interactions.Reader.ReadAsync(cts.Token);
-            hasInteraction = true;
-        }
-        catch (OperationCanceledException)
-        {
-            // Expected - no notification
-        }
-
-        Assert.False(hasInteraction);
+        Assert.False(interactionService.Interactions.Reader.TryRead(out _));
         Assert.DoesNotContain(testSink.Writes, w => w.LogLevel == LogLevel.Warning);
     }
 
@@ -1000,20 +1102,7 @@ public sealed class DcpHostNotificationTests
         // Act
         await dcpHost.EnsureDevelopmentCertificateTrustAsync(CancellationToken.None).DefaultTimeout();
 
-        // Assert - no warning because HttpsCertificateAnnotation alone has no effect
-        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
-        var hasInteraction = false;
-        try
-        {
-            await interactionService.Interactions.Reader.ReadAsync(cts.Token);
-            hasInteraction = true;
-        }
-        catch (OperationCanceledException)
-        {
-            // Expected - no notification
-        }
-
-        Assert.False(hasInteraction);
+        Assert.False(interactionService.Interactions.Reader.TryRead(out _));
         Assert.DoesNotContain(testSink.Writes, w => w.LogLevel == LogLevel.Warning);
     }
 
@@ -1065,8 +1154,8 @@ public sealed class DcpHostNotificationTests
         // Act
         await dcpHost.EnsureDevelopmentCertificateTrustAsync(CancellationToken.None).DefaultTimeout();
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-        var interaction = await interactionService.Interactions.Reader.ReadAsync(cts.Token);
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
+        var interaction = await interactionService.Interactions.Reader.ReadAsync(cts.Token).DefaultTimeout();
 
         // Assert - warning should be shown because TLS is active
         Assert.Equal(InteractionStrings.DeveloperCertificateNotFullyTrustedTitle, interaction.Title);

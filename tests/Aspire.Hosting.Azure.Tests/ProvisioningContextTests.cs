@@ -5,7 +5,7 @@ using System.Text.Json.Nodes;
 using Aspire.Hosting.Azure.Provisioning;
 using Azure;
 using Azure.Core;
-using Azure.ResourceManager.Resources.Models;
+using Azure.ResourceManager.Resources.Deployments.Models;
 
 namespace Aspire.Hosting.Azure.Tests;
 

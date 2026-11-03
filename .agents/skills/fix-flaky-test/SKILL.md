@@ -958,12 +958,12 @@ UPDATE todos SET status = 'done' WHERE id = 'cleanup';
 
 ### Build System Quarantine Filtering
 
-`eng/Testing.props` auto-appends `--filter-not-trait "quarantined=true"` to test arguments via the `TestRunnerAdditionalArguments` MSBuild property. This property is evaluated during `dotnet test` even with `--no-build`, so it must be handled in both build and test commands:
+`eng/Testing.targets` auto-appends `--filter-not-trait "quarantined=true"` to test arguments via the `TestRunnerAdditionalArguments` MSBuild property. The filter value is defined in `eng/Testing.props`, and the composed property is evaluated during `dotnet test` even with `--no-build`, so it must be handled in both build and test commands:
 
 - **Reproduce workflow**: Overrides `_NonQuarantinedTestRunAdditionalArgs` to empty, removing the quarantine exclusion filter for all tests
 - **Local reproduction**: Pass `/p:RunQuarantinedTests=true` to both `dotnet build` and `dotnet test`
 
-`Testing.props` also adds `--ignore-exit-code 8`, which masks zero-test runs as successes. The workflow and `run-test-repeatedly` scripts detect this by checking test output for the `Total:` count indicator.
+`Testing.targets` also adds `--ignore-exit-code 8` via `MtpBaseArgs`, which masks zero-test runs as successes. The workflow and `run-test-repeatedly` scripts detect this by checking test output for the `Total:` count indicator.
 
 ### test-reproduce.yml Architecture
 

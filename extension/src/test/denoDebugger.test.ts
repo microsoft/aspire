@@ -42,9 +42,9 @@ suite('Deno Debugger Tests', () => {
         await denoDebuggerExtension.createDebugSessionConfigurationCallback!(launchConfig, args, [], { debug, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig);
     }
 
-    function assertInjectedInspectWaitArg(arg: string | undefined, debugConfig: AspireResourceExtendedDebugConfiguration): number {
+    function assertInspectorArg(arg: string | undefined, flagName: '--inspect-brk' | '--inspect-wait', debugConfig: AspireResourceExtendedDebugConfiguration): number {
         assert.ok(arg);
-        const match = /^--inspect-wait=127\.0\.0\.1:(\d+)$/.exec(arg);
+        const match = new RegExp(`^${flagName}=127\\.0\\.0\\.1:(\\d+)$`).exec(arg);
         assert.ok(match);
 
         const port = Number(match[1]);
@@ -68,7 +68,7 @@ suite('Deno Debugger Tests', () => {
         assert.ok(fileTypes.includes('.jsx'));
     });
 
-    test('injects --inspect-wait after the run sub-command and drives js-debug via runtimeArgs', async () => {
+    test('injects --inspect-brk after the run sub-command and drives js-debug via runtimeArgs', async () => {
         const launchConfig: DenoLaunchConfiguration = {
             type: 'deno',
             runtime_executable: 'deno',
@@ -84,9 +84,9 @@ suite('Deno Debugger Tests', () => {
         assert.strictEqual(debugConfig.outputCapture, 'std');
         assert.strictEqual(debugConfig.cwd, '/workspace/app');
         assert.strictEqual(debugConfig.runtimeExecutable, 'deno');
-        // --inspect-wait must be inserted AFTER "run" (it is a runtime flag, not a script arg).
+        // --inspect-brk must be inserted AFTER "run" (it is a runtime flag, not a script arg).
         assert.strictEqual(debugConfig.runtimeArgs?.[0], 'run');
-        assertInjectedInspectWaitArg(debugConfig.runtimeArgs?.[1], debugConfig);
+        assertInspectorArg(debugConfig.runtimeArgs?.[1], '--inspect-brk', debugConfig);
         assert.deepStrictEqual(debugConfig.runtimeArgs?.slice(2), ['-A', 'main.ts']);
         assert.strictEqual(registeredCleanupCount, 1);
         // The pwa-node simple-attach path drives the launch purely through runtimeExecutable + runtimeArgs.
@@ -107,8 +107,8 @@ suite('Deno Debugger Tests', () => {
         await configure(launchConfig, ['run', '-A', 'main.ts'], firstDebugConfig);
         await configure(launchConfig, ['run', '-A', 'main.ts'], secondDebugConfig);
 
-        const firstPort = assertInjectedInspectWaitArg(firstDebugConfig.runtimeArgs?.[1], firstDebugConfig);
-        const secondPort = assertInjectedInspectWaitArg(secondDebugConfig.runtimeArgs?.[1], secondDebugConfig);
+        const firstPort = assertInspectorArg(firstDebugConfig.runtimeArgs?.[1], '--inspect-brk', firstDebugConfig);
+        const secondPort = assertInspectorArg(secondDebugConfig.runtimeArgs?.[1], '--inspect-brk', secondDebugConfig);
         assert.notStrictEqual(firstPort, secondPort);
         assert.strictEqual(registeredCleanupCount, 2);
     });
@@ -239,7 +239,7 @@ suite('Deno Debugger Tests', () => {
         // Attaching to 0 would never connect; the flag must be rewritten to a concrete allocated port.
         await configure(launchConfig, ['run', '--inspect-wait=127.0.0.1:0', '-A', 'main.ts'], debugConfig);
 
-        const injectedPort = assertInjectedInspectWaitArg(debugConfig.runtimeArgs?.[1], debugConfig);
+        const injectedPort = assertInspectorArg(debugConfig.runtimeArgs?.[1], '--inspect-wait', debugConfig);
         assert.notStrictEqual(injectedPort, 0);
         assert.deepStrictEqual(debugConfig.runtimeArgs, ['run', `--inspect-wait=127.0.0.1:${injectedPort}`, '-A', 'main.ts']);
         assert.strictEqual(registeredCleanupCount, 1);
@@ -278,7 +278,7 @@ suite('Deno Debugger Tests', () => {
         await configure(launchConfig, ['run', '-A', 'main.ts', '--inspect=9229'], debugConfig);
 
         assert.strictEqual(debugConfig.runtimeArgs?.[0], 'run');
-        const injectedPort = assertInjectedInspectWaitArg(debugConfig.runtimeArgs?.[1], debugConfig);
+        const injectedPort = assertInspectorArg(debugConfig.runtimeArgs?.[1], '--inspect-brk', debugConfig);
         assert.notStrictEqual(injectedPort, 9229);
         assert.deepStrictEqual(debugConfig.runtimeArgs?.slice(2), ['-A', 'main.ts', '--inspect=9229']);
         assert.strictEqual(registeredCleanupCount, 1);
@@ -298,11 +298,11 @@ suite('Deno Debugger Tests', () => {
         await configure(launchConfig, ['run', '--inspect-wait', '-A', 'main.ts'], secondDebugConfig);
 
         assert.strictEqual(firstDebugConfig.runtimeArgs?.[0], 'run');
-        const firstPort = assertInjectedInspectWaitArg(firstDebugConfig.runtimeArgs?.[1], firstDebugConfig);
+        const firstPort = assertInspectorArg(firstDebugConfig.runtimeArgs?.[1], '--inspect-wait', firstDebugConfig);
         assert.deepStrictEqual(firstDebugConfig.runtimeArgs?.slice(2), ['-A', 'main.ts']);
 
         assert.strictEqual(secondDebugConfig.runtimeArgs?.[0], 'run');
-        const secondPort = assertInjectedInspectWaitArg(secondDebugConfig.runtimeArgs?.[1], secondDebugConfig);
+        const secondPort = assertInspectorArg(secondDebugConfig.runtimeArgs?.[1], '--inspect-wait', secondDebugConfig);
         assert.deepStrictEqual(secondDebugConfig.runtimeArgs?.slice(2), ['-A', 'main.ts']);
 
         assert.notStrictEqual(firstPort, secondPort);
@@ -320,7 +320,7 @@ suite('Deno Debugger Tests', () => {
         await configure(launchConfig, ['run', '-A', 'main.ts'], debugConfig);
 
         assert.strictEqual(debugConfig.runtimeExecutable, 'deno');
-        assertInjectedInspectWaitArg(debugConfig.runtimeArgs?.[1], debugConfig);
+        assertInspectorArg(debugConfig.runtimeArgs?.[1], '--inspect-brk', debugConfig);
     });
 });
 

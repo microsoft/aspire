@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Runtime.InteropServices;
+
 namespace Aspire.Cli.Tests.Utils;
 
 /// <summary>
@@ -29,6 +31,10 @@ internal sealed class TestEnvironment : IEnvironment
         return Variables.Select(pair => (pair.Key, pair.Value));
     }
 
+    private string ReportRuntimeIdentifier { get; init; } = RuntimeInformation.RuntimeIdentifier;
+
+    public string RuntimeIdentifier => ReportRuntimeIdentifier;
+
     private bool ReportIsWindows { get; init; } = OperatingSystem.IsWindows();
 
     private bool ReportIsLinux { get; init; } = OperatingSystem.IsLinux();
@@ -42,11 +48,11 @@ internal sealed class TestEnvironment : IEnvironment
     public bool IsMacOS() => ReportIsMacOS;
 
     public static TestEnvironment CreateWindows(IReadOnlyDictionary<string, string?>? variables = null)
-        => new(variables) { ReportIsWindows = true, ReportIsLinux = false, ReportIsMacOS = false };
+        => new(variables) { ReportRuntimeIdentifier = "win-x64", ReportIsWindows = true, ReportIsLinux = false, ReportIsMacOS = false };
 
     public static TestEnvironment CreateLinux(IReadOnlyDictionary<string, string?>? variables = null)
-        => new(variables) { ReportIsWindows = false, ReportIsLinux = true, ReportIsMacOS = false };
+        => new(variables) { ReportRuntimeIdentifier = "linux-x64", ReportIsWindows = false, ReportIsLinux = true, ReportIsMacOS = false };
 
     public static TestEnvironment CreateMacOS(IReadOnlyDictionary<string, string?>? variables = null)
-        => new(variables) { ReportIsWindows = false, ReportIsLinux = false, ReportIsMacOS = true };
+        => new(variables) { ReportRuntimeIdentifier = "osx-arm64", ReportIsWindows = false, ReportIsLinux = false, ReportIsMacOS = true };
 }

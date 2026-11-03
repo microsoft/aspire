@@ -15,24 +15,35 @@ public class GuestAppHostProjectSkewTests
     // Issue #16709 reproduction: same M.M.P prerelease tag with different daily build numbers
     // is detected as skew (this was the exact failure case).
     [InlineData("13.1.0-preview.1.26218.1", "13.1.0-preview.1.26227.1", true)]
-    // Release vs prerelease of the same M.M.P is skew.
-    [InlineData("13.1.0", "13.1.0-preview.1", true)]
+    [InlineData("13.1.0-preview.1.26227.1", "13.1.0-preview.1.26218.1", false)]
+    [InlineData("13.1.0", "13.1.0-preview.1", false)]
     [InlineData("13.1.0-preview.1", "13.1.0", true)]
     [InlineData("13.1.0", "13.2.0", true)]
     [InlineData("13.1.0", "14.0.0", true)]
     [InlineData("13.1.0", "13.1.1", true)]
-    public void IsKnownIncompatibleSkew_DetectsMajorMinorPatchAndPrereleaseChanges(string cli, string sdk, bool expected)
+    [InlineData("13.2.0", "13.1.0", false)]
+    [InlineData("14.0.0", "13.1.0", false)]
+    [InlineData("13.1.1", "13.1.0", false)]
+    [InlineData("13.6.0-pr.19847.g8be64f3a", "13.5.4", false)]
+    [InlineData("13.6.0-pr.19847.g8be64f3a", "13.6.0", true)]
+    [InlineData("13.5.4", "13.5.4+abc123", false)]
+    [InlineData("13.5.4+abc123", "13.5.4", false)]
+    public void ShouldWarnAboutCliSdkVersionSkew_WarnsOnlyWhenCliIsOlder(string cli, string sdk, bool expected)
     {
-        var result = GuestAppHostProject.IsKnownIncompatibleSkew(cli, sdk);
+        var result = GuestAppHostProject.ShouldWarnAboutCliSdkVersionSkew(cli, sdk);
 
         Assert.Equal(expected, result);
     }
 
-    [Fact]
-    public void IsKnownIncompatibleSkew_FallsBackToStringCompareForUnparseable()
+    [Theory]
+    [InlineData("not-a-version", "also-not-a-version-but-different", true)]
+    [InlineData("identical", "identical", false)]
+    [InlineData("IDENTICAL", "identical", false)]
+    [InlineData("not-a-version", "13.5.4", true)]
+    [InlineData("13.5.4", "not-a-version", true)]
+    public void ShouldWarnAboutCliSdkVersionSkew_FallsBackToStringCompareForUnparseable(string cli, string sdk, bool expected)
     {
-        Assert.True(GuestAppHostProject.IsKnownIncompatibleSkew("not-a-version", "also-not-a-version-but-different"));
-        Assert.False(GuestAppHostProject.IsKnownIncompatibleSkew("identical", "identical"));
+        Assert.Equal(expected, GuestAppHostProject.ShouldWarnAboutCliSdkVersionSkew(cli, sdk));
     }
 
     [Theory]

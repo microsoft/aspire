@@ -207,9 +207,12 @@ public static class DotnetToolResourceExtensions
         return builder;
     }
 
-    internal static async Task<RequiredCommandValidationResult> ValidateDotnetSdkVersionAsync(RequiredCommandValidationContext _, string workingDirectory)
+    internal static async Task<RequiredCommandValidationResult> ValidateDotnetSdkVersionAsync(RequiredCommandValidationContext context, string workingDirectory)
     {
-        var version = await DotnetSdkUtils.TryGetVersionAsync(workingDirectory).ConfigureAwait(false);
+        var versionProvider = context.Services.GetRequiredService<IDotnetSdkVersionProvider>();
+        var version = await versionProvider.TryGetVersionAsync(
+            workingDirectory,
+            context.CancellationToken).ConfigureAwait(false);
 
         if (version?.Major < 10)
         {

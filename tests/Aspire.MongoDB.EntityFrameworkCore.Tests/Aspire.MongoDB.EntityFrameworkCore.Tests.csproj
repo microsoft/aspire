@@ -1,11 +1,15 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <!-- MongoDB.EntityFrameworkCore does not support EF Core 10 yet, so only target net8.0 and net9.0 -->
-    <TargetFrameworks>$(DefaultTargetFramework);net9.0</TargetFrameworks>
+    <TargetFrameworks>$(AllTargetFrameworks)</TargetFrameworks>
     <!-- MongoDB.Driver.Core.Extensions.DiagnosticSources and AspNetCore.HealthChecks.MongoDb packages are not signed -->
     <NoWarn>$(NoWarn);CS8002</NoWarn>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Exercise both runtimes without lifting the net10-only provider to EF Core 11. -->
+    <PackageVersion Update="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="$(MicrosoftExtensionsDiagnosticsHealthChecksEntityFrameworkCoreNet10Version)" />
+  </ItemGroup>
 
   <ItemGroup>
     <Compile Include="$(RepoRoot)src\Aspire.Hosting.MongoDB\MongoDBContainerImageTags.cs" />

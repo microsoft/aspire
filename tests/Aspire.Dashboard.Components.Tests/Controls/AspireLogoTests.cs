@@ -7,12 +7,12 @@ using Xunit;
 
 namespace Aspire.Dashboard.Components.Tests.Controls;
 
-public class AspireLogoTests : Bunit.TestContext
+public class AspireLogoTests : Bunit.BunitContext
 {
     [Fact]
     public void Render_UsesCurrentBrandArtwork()
     {
-        var cut = RenderComponent<AspireLogo>();
+        var cut = Render<AspireLogo>();
 
         var svg = cut.Find("svg");
         var paths = cut.FindAll("path");

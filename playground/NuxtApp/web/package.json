@@ -1,0 +1,13 @@
+{
+  "name": "nuxt-sample-web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nuxt dev --no-fork --no-clear",
+    "build": "nuxt build",
+    "start": "node .output/server/index.mjs"
+  },
+  "dependencies": {
+    "nuxt": "4.5.2"
+  }
+}

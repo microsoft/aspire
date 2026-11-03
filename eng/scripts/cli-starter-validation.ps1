@@ -73,6 +73,66 @@ function Get-CombinedProcessOutput
     return "$stdout$stderr"
 }
 
+function Write-DiagnosticMessage
+{
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Message
+    )
+
+    Write-Host "[$([DateTimeOffset]::UtcNow.ToString('O'))] $Message"
+}
+
+function Write-DiagnosticFileTail
+{
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Description
+    )
+
+    if (-not (Test-Path $Path))
+    {
+        Write-DiagnosticMessage "$Description does not exist at '$Path'."
+        return
+    }
+
+    Write-DiagnosticMessage "$Description tail from '$Path':"
+    Get-Content -Path $Path -Tail 40 -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "| $_" }
+}
+
+function Write-AspireProcessSnapshot
+{
+    param(
+        [Parameter(Mandatory = $true)]
+        [int]$RootProcessId
+    )
+
+    Write-DiagnosticMessage "Process snapshot after timeout; launched CLI PID is $RootProcessId."
+
+    try
+    {
+        $processes = Get-Process -ErrorAction SilentlyContinue |
+            Where-Object { $_.Id -eq $RootProcessId -or $_.ProcessName -match '^(aspire|dcp|dotnet|node|npm|pwsh)$' } |
+            Select-Object Id, ProcessName, StartTime, CPU, Responding
+
+        if ($processes)
+        {
+            Write-Host ($processes | Format-Table -AutoSize | Out-String -Width 240)
+        }
+        else
+        {
+            Write-Host 'No matching Aspire-related processes were found.'
+        }
+    }
+    catch
+    {
+        Write-Warning "Failed to capture process snapshot: $($_.Exception.Message)"
+    }
+}
+
 function Invoke-DetachedAspireCommand
 {
     param(
@@ -104,6 +164,9 @@ function Invoke-DetachedAspireCommand
     $arguments += @('--format', 'json', '--non-interactive', '--nologo')
 
     $startedAt = Get-Date
+    Write-DiagnosticMessage "${TemplateId}: invoking 'aspire $($arguments -join ' ')' in '$WorkingDirectory'."
+    Write-DiagnosticMessage "${TemplateId}: stdout -> '$stdoutPath'; stderr -> '$stderrPath'."
+
     $process = Start-Process -FilePath 'aspire' `
         -ArgumentList $arguments `
         -WorkingDirectory $WorkingDirectory `
@@ -111,19 +174,37 @@ function Invoke-DetachedAspireCommand
         -RedirectStandardError $stderrPath `
         -PassThru
 
-    try
+    Write-DiagnosticMessage "${TemplateId}: Start-Process returned PID $($process.Id) for 'aspire $Command'."
+
+    $nextHeartbeatSeconds = 30
+    while (-not $process.WaitForExit(1000))
     {
-        $process | Wait-Process -Timeout $TimeoutSeconds -ErrorAction Stop
-    }
-    catch
-    {
-        if (-not $process.HasExited)
+        $elapsed = (Get-Date) - $startedAt
+        if ($elapsed.TotalSeconds -ge $TimeoutSeconds)
         {
-            $process | Stop-Process -Force -ErrorAction SilentlyContinue
+            Write-Warning "${TemplateId}: aspire $Command PID $($process.Id) did not exit within $TimeoutSeconds seconds."
+            Write-DiagnosticFileTail -Path $stdoutPath -Description "aspire $Command stdout"
+            Write-DiagnosticFileTail -Path $stderrPath -Description "aspire $Command stderr"
+            Write-AspireProcessSnapshot -RootProcessId $process.Id
+
+            if (-not $process.HasExited)
+            {
+                Write-DiagnosticMessage "${TemplateId}: force-stopping aspire $Command PID $($process.Id)."
+                $process | Stop-Process -Force -ErrorAction SilentlyContinue
+                [void]$process.WaitForExit(5000)
+            }
+
+            throw "${TemplateId}: aspire $Command did not exit within $TimeoutSeconds seconds."
         }
 
-        throw "${TemplateId}: aspire $Command did not exit within $TimeoutSeconds seconds."
+        if ($elapsed.TotalSeconds -ge $nextHeartbeatSeconds)
+        {
+            Write-DiagnosticMessage "${TemplateId}: aspire $Command PID $($process.Id) is still running after $([math]::Round($elapsed.TotalSeconds, 1)) seconds."
+            $nextHeartbeatSeconds += 30
+        }
     }
+
+    Write-DiagnosticMessage "${TemplateId}: aspire $Command PID $($process.Id) exited with code $($process.ExitCode) after $([math]::Round(((Get-Date) - $startedAt).TotalSeconds, 1)) seconds."
 
     $output = Get-CombinedProcessOutput -StdOutPath $stdoutPath -StdErrPath $stderrPath
     Set-Content -Path $combinedPath -Value $output -Encoding utf8
@@ -196,12 +277,18 @@ foreach ($template in $templates)
     {
         try
         {
+            $newStartedAt = Get-Date
+            Write-DiagnosticMessage "${templateId}: invoking aspire new."
             aspire new $templateId --name $projectName --output $projectRoot --channel "pr-$PRNumber" --non-interactive --nologo --suppress-agent-init
+            Write-DiagnosticMessage "${templateId}: aspire new returned after $([math]::Round(((Get-Date) - $newStartedAt).TotalSeconds, 1)) seconds."
 
             Push-Location $projectRoot
             try
             {
+                $addStartedAt = Get-Date
+                Write-DiagnosticMessage "${templateId}: invoking aspire add."
                 aspire add Aspire.Hosting.PostgreSQL --non-interactive --nologo *>&1 | Tee-Object -FilePath $addLogPath
+                Write-DiagnosticMessage "${templateId}: aspire add returned after $([math]::Round(((Get-Date) - $addStartedAt).TotalSeconds, 1)) seconds."
 
                 $runElapsed = Invoke-DetachedAspireCommand `
                     -Command run `
@@ -210,7 +297,9 @@ foreach ($template in $templates)
                     -DiagnosticsDirectory $diagnosticsDir `
                     -TimeoutSeconds $MaxStartupSeconds
 
+                Write-DiagnosticMessage "${templateId}: invoking aspire stop after run."
                 aspire stop --non-interactive --nologo *>&1 | Out-File -FilePath $postRunStopLogPath -Encoding utf8
+                Write-DiagnosticMessage "${templateId}: aspire stop after run returned."
                 Write-Host "$templateId aspire run started in $([math]::Round($runElapsed.TotalSeconds, 2)) seconds."
             }
             finally
@@ -220,7 +309,9 @@ foreach ($template in $templates)
 
             try
             {
+                Write-DiagnosticMessage "${templateId}: invoking pre-start aspire stop."
                 aspire stop *>&1 | Out-File -FilePath $preStartStopLogPath -Encoding utf8
+                Write-DiagnosticMessage "${templateId}: pre-start aspire stop returned."
             }
             catch
             {
@@ -248,6 +339,7 @@ foreach ($template in $templates)
             $resourcesStdErrPath = Join-Path $diagnosticsDir 'aspire-resources.stderr.log'
             $resourcesCombinedPath = Join-Path $diagnosticsDir 'aspire-resources.log'
 
+            Write-DiagnosticMessage "${templateId}: invoking aspire resources."
             $resourcesProcess = Start-Process -FilePath 'aspire' `
                 -ArgumentList @('resources') `
                 -WorkingDirectory $projectRoot `
@@ -255,6 +347,7 @@ foreach ($template in $templates)
                 -RedirectStandardError $resourcesStdErrPath `
                 -Wait `
                 -PassThru
+            Write-DiagnosticMessage "${templateId}: aspire resources returned with exit code $($resourcesProcess.ExitCode)."
 
             $resourcesOutput = Get-CombinedProcessOutput -StdOutPath $resourcesStdOutPath -StdErrPath $resourcesStdErrPath
 
@@ -273,6 +366,7 @@ foreach ($template in $templates)
                 $waitStdErrPath = Join-Path $diagnosticsDir "aspire-wait-${sanitizedResourceName}.stderr.log"
                 $waitCombinedPath = Join-Path $diagnosticsDir "aspire-wait-${sanitizedResourceName}.log"
 
+                Write-DiagnosticMessage "${templateId}: invoking aspire wait for resource '$resourceName'."
                 $waitProcess = Start-Process -FilePath 'aspire' `
                     -ArgumentList @('wait', $resourceName, '--status', 'up', '--timeout', $ResourceReadyTimeoutSeconds) `
                     -WorkingDirectory $projectRoot `
@@ -280,6 +374,7 @@ foreach ($template in $templates)
                     -RedirectStandardError $waitStdErrPath `
                     -Wait `
                     -PassThru
+                Write-DiagnosticMessage "${templateId}: aspire wait for resource '$resourceName' returned with exit code $($waitProcess.ExitCode)."
 
                 $waitOutput = Get-CombinedProcessOutput -StdOutPath $waitStdOutPath -StdErrPath $waitStdErrPath
 
@@ -307,7 +402,9 @@ foreach ($template in $templates)
             Push-Location $projectRoot
             try
             {
+                Write-DiagnosticMessage "${templateId}: invoking final cleanup aspire stop."
                 aspire stop *>&1 | Out-File -FilePath $stopLogPath -Encoding utf8
+                Write-DiagnosticMessage "${templateId}: final cleanup aspire stop returned."
             }
             catch
             {

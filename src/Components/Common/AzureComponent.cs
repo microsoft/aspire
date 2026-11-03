@@ -65,7 +65,7 @@ internal abstract class AzureComponent<TSettings, TClient, TClientOptions>
 
         Debug.Assert(settings is IConnectionStringSettings, $"The settings object should implement {nameof(IConnectionStringSettings)}.");
         if (settings is IConnectionStringSettings csSettings &&
-            builder.Configuration.GetConnectionString(connectionName) is string connectionString)
+            builder.Configuration.TryGetConnectionString(connectionName, out var connectionString))
         {
             csSettings.ParseConnectionString(connectionString);
         }

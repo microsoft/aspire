@@ -24,7 +24,8 @@ internal static class TestExecutionContextHelper
         string? identityCommit = null,
         bool identityOverridden = false,
         DirectoryInfo? aspireHomeDirectory = null,
-        bool identityOverrideNoticeRequired = false)
+        bool identityOverrideNoticeRequired = false,
+        string? nugetServiceIndexOverride = null)
     {
         return CreateExecutionContext(
             workspace.WorkspaceRoot,
@@ -34,7 +35,8 @@ internal static class TestExecutionContextHelper
             identityCommit: identityCommit,
             identityOverridden: identityOverridden,
             aspireHomeDirectory: aspireHomeDirectory,
-            identityOverrideNoticeRequired: identityOverrideNoticeRequired);
+            identityOverrideNoticeRequired: identityOverrideNoticeRequired,
+            nugetServiceIndexOverride: nugetServiceIndexOverride);
     }
 
     /// <summary>
@@ -55,7 +57,8 @@ internal static class TestExecutionContextHelper
         bool identityOverridden = false,
         DirectoryInfo? identityPackagesDirectory = null,
         DirectoryInfo? aspireHomeDirectory = null,
-        bool identityOverrideNoticeRequired = false)
+        bool identityOverrideNoticeRequired = false,
+        string? nugetServiceIndexOverride = null)
     {
         var root = rootDirectory.FullName;
         hivesDirectory ??= new DirectoryInfo(Path.Combine(root, ".aspire", "hives"));
@@ -75,7 +78,7 @@ internal static class TestExecutionContextHelper
             identityChannel: identityChannel,
             identityVersion: identityVersion,
             identityCommit: identityCommit,
-            nugetServiceIndexOverride: null,
+            nugetServiceIndexOverride: nugetServiceIndexOverride,
             identityOverridden: identityOverridden,
             identityPackagesDirectory: identityPackagesDirectory,
             identityOverrideNoticeRequired: identityOverrideNoticeRequired,

@@ -116,28 +116,19 @@ internal static partial class CertificateHelpers
             {
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
-                UseShellExecute = false,
                 CreateNoWindow = true
             };
 
-            using var process = Process.Start(processInfo);
-            if (process is null)
+            // The timeout bounds both output capture and exit, and the process is killed when it fires.
+            // If output is still open, TimeoutException is thrown (caught below); if output already
+            // closed, a canceled non-zero exit status is returned. Both mean "not detected".
+            var result = Process.RunAndCaptureText(processInfo, TimeSpan.FromSeconds(5));
+            if (result.ExitStatus.ExitCode != 0)
             {
                 return false;
             }
 
-            var stdout = process.StandardOutput.ReadToEnd();
-            if (!process.WaitForExit(TimeSpan.FromSeconds(5)))
-            {
-                return false;
-            }
-
-            if (process.ExitCode != 0)
-            {
-                return false;
-            }
-
-            var match = OpenSslVersionRegex().Match(stdout);
+            var match = OpenSslVersionRegex().Match(result.StandardOutput);
             if (!match.Success)
             {
                 return false;

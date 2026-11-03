@@ -4,37 +4,37 @@
     <body>
       <trans-unit id="Description">
         <source>Destroy a previously deployed AppHost environment</source>
-        <target state="new">Destroy a previously deployed AppHost environment</target>
+        <target state="translated">銷毀先前部署的 AppHost 環境</target>
         <note />
       </trans-unit>
       <trans-unit id="DestroyCanceled">
         <source>The destroy operation was canceled.</source>
-        <target state="new">The destroy operation was canceled.</target>
+        <target state="translated">銷毀作業已取消。</target>
         <note />
       </trans-unit>
       <trans-unit id="NonInteractiveRequiresYes">
         <source>The destroy command requires --yes when the --non-interactive option is specified.</source>
-        <target state="new">The destroy command requires --yes when the --non-interactive option is specified.</target>
+        <target state="translated">指定 --non-interactive 選項時，銷毀命令需要 --yes。</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationCompletedPrefix">
         <source>Destroy completed</source>
-        <target state="new">Destroy completed</target>
+        <target state="translated">銷毀完成</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationFailedPrefix">
         <source>Destroy failed</source>
-        <target state="new">Destroy failed</target>
+        <target state="translated">銷毀失敗</target>
         <note />
       </trans-unit>
       <trans-unit id="OutputPathArgumentDescription">
         <source>The output path containing the deployment artifacts to destroy</source>
-        <target state="new">The output path containing the deployment artifacts to destroy</target>
+        <target state="translated">包含要銷毀之部署成品的輸出路徑</target>
         <note />
       </trans-unit>
       <trans-unit id="YesOptionDescription">
         <source>Do not prompt for confirmation before destroying resources</source>
-        <target state="new">Do not prompt for confirmation before destroying resources</target>
+        <target state="translated">銷毀資源前不提示您確認</target>
         <note />
       </trans-unit>
     </body>

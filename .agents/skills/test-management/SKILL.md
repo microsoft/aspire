@@ -56,6 +56,12 @@ grep -r "public.*void.*TestMethodName\|public.*async.*Task.*TestMethodName" test
 
 Once located, determine the fully-qualified name (Namespace.Type.Method) by examining the file structure.
 
+Before adding or removing `QuarantinedTest`, `ActiveIssue`, or `OuterloopTest`,
+read `.github/instructions/test-trigger-map.instructions.md` when the test
+consumes repository-built packages, templates, or fixtures at runtime, and
+audit whether its routing needs to change. `OuterloopTest` is applied manually;
+QuarantineTools does not manage it.
+
 ### 3. Run QuarantineTools for Each Test
 
 For **quarantining/disabling** tests, run QuarantineTools once per test:
@@ -304,6 +310,7 @@ After completing the task, provide a summary:
 - **Issue URLs are mandatory** - never quarantine/disable without a URL
 - **Fully-qualified names required** - QuarantineTools needs Namespace.Type.Method format
 - **Conditional attributes require manual editing** - QuarantineTools adds basic attributes only
+- **Audit runtime-only E2E routing** - scheduling-attribute changes can add or remove a regular-PR consumer
 - **No placeholder values** - use actual issue numbers and test names
 
 ## Repository-Specific Notes

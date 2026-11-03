@@ -3,7 +3,7 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
-using Azure.AI.Projects.Agents;
+using Azure.AI.Extensions.OpenAI;
 using OpenAI.Responses;
 
 namespace Aspire.Hosting.Foundry;

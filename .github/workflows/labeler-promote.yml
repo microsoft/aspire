@@ -22,16 +22,19 @@ on:
         description: "The cache key suffix to use for backing up the currently active model. Defaults to 'backup'."
         default: "backup"
 
-permissions:
-  actions: write
+# Disable every configurable permission on the automatic GITHUB_TOKEN by default.
+# Each promotion job opts into only the scope required by the action it runs.
+permissions: {}
 
 jobs:
   promote-issues:
     if: ${{ inputs.issues }}
     runs-on: ubuntu-latest
+    permissions:
+      actions: write # The promotion action deletes the active GitHub Actions cache.
     steps:
       - name: "Promote Model for Issues"
-        uses: dotnet/issue-labeler/promote@46125e85e6a568dc712f358c39f35317366f5eed # v2.0.0
+        uses: dotnet/issue-labeler/promote@160b6b1e1e8d36da09beb34ef1e4806d2c0520a3 # v2.2.0
         with:
           type: "issues"
           staged_key: ${{ inputs.staged_key }}
@@ -40,9 +43,11 @@ jobs:
   promote-pulls:
     if: ${{ inputs.pulls }}
     runs-on: ubuntu-latest
+    permissions:
+      actions: write # The promotion action deletes the active GitHub Actions cache.
     steps:
       - name: "Promote Model for Pull Requests"
-        uses: dotnet/issue-labeler/promote@46125e85e6a568dc712f358c39f35317366f5eed # v2.0.0
+        uses: dotnet/issue-labeler/promote@160b6b1e1e8d36da09beb34ef1e4806d2c0520a3 # v2.2.0
         with:
           type: "pulls"
           staged_key: ${{ inputs.staged_key }}

@@ -1278,7 +1278,7 @@ public sealed partial class SqliteTelemetryRepository
         public required IReadOnlySet<(string TraceId, string SpanId)> CircularSpanIds { get; init; }
     }
 
-    private sealed class IngestionTraceRecord
+    internal sealed class IngestionTraceRecord
     {
         public required string TraceId { get; init; }
         public required long FirstSpanTimestampTicks { get; init; }
@@ -1292,7 +1292,7 @@ public sealed partial class SqliteTelemetryRepository
         public required long PrimaryStartTimeTicks { get; init; }
     }
 
-    private sealed class IngestionExistingSpanRecord
+    internal sealed class IngestionExistingSpanRecord
     {
         public required string TraceId { get; init; }
         public required string SpanId { get; init; }
@@ -1300,20 +1300,20 @@ public sealed partial class SqliteTelemetryRepository
         public long? UninstrumentedPeerResourceId { get; init; }
     }
 
-    private sealed class IngestionParentReferenceRecord
+    internal sealed class IngestionParentReferenceRecord
     {
         public required string TraceId { get; init; }
         public required string ParentSpanId { get; init; }
     }
 
-    private sealed class IngestionAncestorRecord
+    internal sealed class IngestionAncestorRecord
     {
         public required string TraceId { get; init; }
         public required string SpanId { get; init; }
         public string? ParentSpanId { get; init; }
     }
 
-    private sealed record TraceUpsertRecord(
+    internal sealed record TraceUpsertRecord(
         string TraceId,
         long FirstSpanTimestampTicks,
         long LastSpanEndTimestampTicks,
@@ -1329,7 +1329,7 @@ public sealed partial class SqliteTelemetryRepository
         public long LinkId { get; set; }
     }
 
-    private sealed class PeerRecalculationRowRecord
+    internal sealed class PeerRecalculationRowRecord
     {
         public required string TraceId { get; init; }
         public required string SpanId { get; init; }
@@ -1344,7 +1344,7 @@ public sealed partial class SqliteTelemetryRepository
         public string? AttributeValue { get; init; }
     }
 
-    private sealed class PeerSpanUpdateRecord
+    internal sealed class PeerSpanUpdateRecord
     {
         public required string TraceId { get; init; }
         public required string SpanId { get; init; }

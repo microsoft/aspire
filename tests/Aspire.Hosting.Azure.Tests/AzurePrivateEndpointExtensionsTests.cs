@@ -7,12 +7,12 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzurePrivateEndpointExtensionsTests
+public class AzurePrivateEndpointExtensionsTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void AddPrivateEndpoint_CreatesResource()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("pesubnet", "10.0.1.0/24");
@@ -31,7 +31,7 @@ public class AzurePrivateEndpointExtensionsTests
     [Fact]
     public void AddPrivateEndpoint_AddsAnnotationToParentStorage()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("pesubnet", "10.0.1.0/24");
@@ -51,7 +51,7 @@ public class AzurePrivateEndpointExtensionsTests
     [Fact]
     public void AddPrivateEndpoint_ForQueues_AddsAnnotationToParentStorage()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("pesubnet", "10.0.1.0/24");
@@ -67,7 +67,7 @@ public class AzurePrivateEndpointExtensionsTests
     [Fact]
     public async Task AddPrivateEndpoint_GeneratesBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("pesubnet", "10.0.1.0/24");
@@ -84,7 +84,7 @@ public class AzurePrivateEndpointExtensionsTests
     [Fact]
     public async Task AddPrivateEndpoint_ForQueues_GeneratesBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("pesubnet", "10.0.1.0/24");
@@ -101,7 +101,7 @@ public class AzurePrivateEndpointExtensionsTests
     [Fact]
     public void AddPrivateEndpoint_InRunMode_DoesNotAddToBuilder()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("pesubnet", "10.0.1.0/24");
@@ -117,7 +117,7 @@ public class AzurePrivateEndpointExtensionsTests
     [Fact]
     public void AzureBlobStorageResource_ImplementsIAzurePrivateEndpointTarget()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var storage = builder.AddAzureStorage("storage");
         var blobs = storage.AddBlobs("blobs");
@@ -132,7 +132,7 @@ public class AzurePrivateEndpointExtensionsTests
     [Fact]
     public void AzureQueueStorageResource_ImplementsIAzurePrivateEndpointTarget()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var storage = builder.AddAzureStorage("storage");
         var queues = storage.AddQueues("queues");
@@ -147,7 +147,7 @@ public class AzurePrivateEndpointExtensionsTests
     [Fact]
     public async Task AddPrivateEndpoint_ReusesDnsZone_ForSameZoneName()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("pesubnet", "10.0.1.0/24");
@@ -186,7 +186,7 @@ public class AzurePrivateEndpointExtensionsTests
     [Fact]
     public void AddPrivateEndpoint_CreatesSeparateDnsZones_ForDifferentZoneNames()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("pesubnet", "10.0.1.0/24");
@@ -212,7 +212,7 @@ public class AzurePrivateEndpointExtensionsTests
     [Fact]
     public async Task AddPrivateEndpoint_CreatesMultipleDnsZones_ForMultiZoneTarget()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("pesubnet", "10.0.1.0/24");

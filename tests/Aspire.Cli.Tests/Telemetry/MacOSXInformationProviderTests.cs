@@ -4,7 +4,7 @@
 using Microsoft.AspNetCore.InternalTesting;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
-using Aspire.Cli.Telemetry;
+using Aspire.Shared.Telemetry;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Telemetry;

@@ -1,0 +1,14 @@
+﻿{
+  Source:
+export interface PropertyContext {
+    toJSON(): MarshalledHandle;
+    /**
+     * @experimental
+     */
+    name: {
+        get: () => Promise<string>;
+        set: (value: string) => Promise<void>;
+    };
+},
+  Api: {"id":"property:PropertyContext.name","kind":"property","name":"name","declaration":"name: { get: () =\u003E Promise\u003Cstring\u003E; set: (value: string) =\u003E Promise\u003Cvoid\u003E }","capabilityId":"Aspire.Hosting.CodeGeneration.TypeScript.Tests/PropertyContext.name","experimental":true}
+}

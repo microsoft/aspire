@@ -1,21 +1,97 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Reflection;
 using System.Text;
+using Aspire.Cli.Acquisition;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Telemetry;
+using Aspire.Cli.Tests.Telemetry;
 using Aspire.Cli.Tests.TestServices;
+using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Aspire.Shared;
 using Microsoft.DotNet.RemoteExecutor;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Spectre.Console;
 
 namespace Aspire.Cli.Tests;
 
 public class ProgramTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData("script")]
+    [InlineData("winget")]
+    [InlineData("brew")]
+    [InlineData("dotnet-tool")]
+    [InlineData("nix")]
+    [InlineData("pr")]
+    [InlineData("localhive")]
+    [InlineData("npm")]
+    [InlineData("mise")]
+    [InlineData("unknown")]
+    public void StartMainActivity_ReportsInstallSource(string source)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var fixture = new TelemetryFixture();
+        if (source is not ("unknown" or "npm" or "mise"))
+        {
+            File.WriteAllText(Path.Combine(workspace.Path, InstallSidecarReader.SidecarFileName), $$"""{"source":"{{source}}"}""");
+        }
+        var environment = TestEnvironment.CreateLinux(new Dictionary<string, string?>
+        {
+            [NpmInstallDetection.PackageEnvironmentVariableName] = source == "npm" ? NpmInstallDetection.ExpectedPackageName : null
+        });
+        var processPath = source == "mise"
+            ? Path.Combine(workspace.Path, "mise", "installs", "aspire", "13.5.0", "aspire")
+            : Path.Combine(workspace.Path, "aspire");
+        var detector = new InstallSourceDetector(
+            new TestProcessPathProvider(processPath),
+            CliTestHelper.CreateSidecarReader(outputHelper),
+            new TestWindowsRegistryReader(),
+            environment,
+            NullLogger<InstallSourceDetector>.Instance);
+
+        using var activity = Program.StartMainActivity(fixture.Telemetry, detector);
+
+        Assert.NotNull(activity);
+        Assert.Equal(TelemetryConstants.Activities.Main, activity.OperationName);
+        Assert.Equal(source, activity.GetTagItem("aspire.cli.install.source"));
+        Assert.Equal(Environment.ProcessId, activity.GetTagItem(TelemetryConstants.Tags.ProcessPid));
+        Assert.Equal("aspire", activity.GetTagItem(TelemetryConstants.Tags.ProcessExecutableName));
+        activity.Stop();
+        Assert.NotNull(fixture.CapturedActivity);
+        Assert.Same(activity, fixture.CapturedActivity);
+        Assert.Equal(source, fixture.CapturedActivity.GetTagItem(TelemetryConstants.Tags.InstallSource));
+
+        using var otherActivity = fixture.Telemetry.StartReportedActivity("other");
+        Assert.NotNull(otherActivity);
+        Assert.Null(otherActivity.GetTagItem(TelemetryConstants.Tags.InstallSource));
+    }
+
+    [Fact]
+    public void StartMainActivity_DoesNotProbeWhenActivityIsNotCreated()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var fixture = new TelemetryFixture(sampleResult: ActivitySamplingResult.None);
+        var detector = new InstallSourceDetector(
+            new TestProcessPathProvider(Path.Combine(workspace.Path, "aspire.exe")),
+            CliTestHelper.CreateSidecarReader(outputHelper),
+            new TestWindowsRegistryReader
+            {
+                ProbeCallback = _ => throw new InvalidOperationException("No install probe should run without an activity.")
+            },
+            TestEnvironment.CreateWindows(),
+            NullLogger<InstallSourceDetector>.Instance);
+
+        using var activity = Program.StartMainActivity(fixture.Telemetry, detector);
+
+        Assert.Null(activity);
+    }
+
     [Fact]
     public void ParseLogFileOption_ReturnsNull_WhenArgsAreNull()
     {

@@ -1,0 +1,47 @@
+@namespace Aspire.Dashboard.Components.Controls
+
+<svg class="relationship-graph"
+     viewBox="0 0 @_layout.Width @_layout.Height"
+     style="@($"max-width: {(_layout.Width * 3) / 2}px")"
+     role="group"
+     aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewRelationshipGraph)]">
+    <defs>
+        <marker id="@_markerId" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L8,4 L0,8 z" class="relationship-graph-arrow" />
+        </marker>
+    </defs>
+
+    @foreach (var edge in _layout.Edges)
+    {
+        <path class="relationship-graph-edge" d="@edge.Path" marker-end="@($"url(#{_markerId})")" data-tooltip="@edge.Type" role="img" aria-label="@edge.Type" />
+    }
+
+    @foreach (var node in _layout.Nodes)
+    {
+        var resourceNode = node.Node;
+        var title = node.IsCenter ? $"{resourceNode.Name} ({resourceNode.Type})" : $"{resourceNode.Type}: {resourceNode.Name}";
+        if (resourceNode.Url is { } url)
+        {
+            <a class="relationship-graph-node" href="@url" aria-label="@title" data-tooltip="@title">
+                @NodeContent(node, resourceNode)
+            </a>
+        }
+        else
+        {
+            <g class="relationship-graph-node center" data-tooltip="@title" role="img" aria-label="@title">
+                @NodeContent(node, resourceNode)
+            </g>
+        }
+    }
+</svg>
+
+@code {
+    private readonly string _markerId = $"relationship-arrow-{Guid.NewGuid():N}";
+
+    private RenderFragment NodeContent(NodeLayout node, RelationshipGraphNode resourceNode) =>
+        @<g>
+            <rect x="@node.X" y="@node.Y" width="@_nodeWidth" height="@NodeHeight" rx="6" />
+            <circle cx="@(node.X + 12)" cy="@(node.Y + NodeHeight / 2)" r="4" style="@($"fill: {ColorGenerator.Instance.GetColorVariableByKey(resourceNode.Name)}")" />
+            <text x="@(node.X + LabelStart)" y="@(node.Y + NodeHeight / 2)" dominant-baseline="central">@GetLabel(resourceNode.Name)</text>
+        </g>;
+}

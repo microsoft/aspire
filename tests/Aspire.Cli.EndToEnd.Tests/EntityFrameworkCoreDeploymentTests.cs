@@ -73,6 +73,10 @@ public sealed class EntityFrameworkCoreDeploymentTests(ITestOutputHelper output)
             // Compose has started but before deployment state has been persisted.
             await auto.TypeAsync(
                 "if [ -f deploy-output/.env.Production ]; then " +
+                "mkdir -p ~/.aspire/logs; " +
+                $"docker compose --project-name {composeProject} --env-file deploy-output/.env.Production " +
+                "-f deploy-output/docker-compose.yaml logs --no-color > ~/.aspire/logs/ef-compose.log 2>&1 " +
+                "|| echo 'WARNING: compose log capture failed'; " +
                 $"docker compose --project-name {composeProject} --env-file deploy-output/.env.Production " +
                 "-f deploy-output/docker-compose.yaml down --volumes --remove-orphans " +
                 "|| echo 'WARNING: fallback compose cleanup failed'; fi");
@@ -157,6 +161,7 @@ public sealed class EntityFrameworkCoreDeploymentTests(ITestOutputHelper output)
         File.WriteAllText(
             Path.Combine(appHostDirectory, "AppHost.cs"),
             $$"""
+            #pragma warning disable ASPIREPROJECTS001
             using Aspire.Hosting.Docker.Resources.ComposeNodes;
             using Aspire.Hosting.Docker.Resources.ServiceNodes;
 
@@ -176,7 +181,7 @@ public sealed class EntityFrameworkCoreDeploymentTests(ITestOutputHelper output)
                 });
             var database = postgres.AddDatabase("db");
 
-            var api = builder.AddProject<Projects.{{ProjectName}}_ApiService>("server")
+            var api = builder.AddDotnetProject("server", "../{{ProjectName}}.ApiService/{{ProjectName}}.ApiService.csproj")
                 .WithReference(database)
                 .WithExternalHttpEndpoints();
 

@@ -1,0 +1,3 @@
+﻿[
+  Could not create the local template (TemplateIssueDetected): ConnectionString: String 'not-a-boolean' was not recognized as a valid Boolean.
+]

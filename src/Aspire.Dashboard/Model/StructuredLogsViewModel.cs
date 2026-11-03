@@ -15,6 +15,7 @@ public class StructuredLogsViewModel
 
     private PagedResult<LogSummary>? _logs;
     private ResourceKey? _resourceKey;
+    private IReadOnlyList<ResourceKey>? _resourceKeys;
     private string _filterText = string.Empty;
     private int _logsStartIndex;
     private int _logsCount;
@@ -27,6 +28,25 @@ public class StructuredLogsViewModel
     }
 
     public ResourceKey? ResourceKey { get => _resourceKey; set => SetValue(ref _resourceKey, value); }
+
+    /// <summary>
+    /// Gets or sets the resources to include when several resources are selected. When set, it's used instead of
+    /// <see cref="ResourceKey"/>, and an empty list matches no data because none of the selected resources have telemetry.
+    /// </summary>
+    public IReadOnlyList<ResourceKey>? ResourceKeys
+    {
+        get => _resourceKeys;
+        set
+        {
+            if (_resourceKeys is null ? value is null : value is not null && _resourceKeys.SequenceEqual(value))
+            {
+                return;
+            }
+
+            _resourceKeys = value;
+            _logs = null;
+        }
+    }
     public string FilterText { get => _filterText; set => SetValue(ref _filterText, value); }
     public IReadOnlyList<FieldTelemetryFilter> Filters => _filters;
 
@@ -78,6 +98,12 @@ public class StructuredLogsViewModel
 
     public async Task<PagedResult<LogSummary>> GetLogsAsync(CancellationToken cancellationToken)
     {
+        if (ResourceKeys is { Count: 0 })
+        {
+            _currentDataHasErrors = false;
+            return PagedResult<LogSummary>.Empty;
+        }
+
         var logs = _logs;
         if (logs == null)
         {
@@ -85,7 +111,7 @@ public class StructuredLogsViewModel
 
             logs = await _dataSource.TelemetryRepository.GetLogSummariesAsync(new GetLogsContext
             {
-                ResourceKeys = ResourceKey is { } key ? [key] : [],
+                ResourceKeys = ResourceKeys ?? (ResourceKey is { } key ? [key] : []),
                 StartIndex = StartIndex,
                 Count = Count,
                 Filters = filters,

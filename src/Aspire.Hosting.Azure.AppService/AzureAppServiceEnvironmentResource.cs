@@ -1,8 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES001
-#pragma warning disable ASPIREAZURE001
+#pragma warning disable ASPIREPROJECTS001
 
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
@@ -211,8 +210,9 @@ public class AzureAppServiceEnvironmentResource :
 
         foreach (var resource in appModel.GetComputeResources())
         {
-            // Support project resources and containers with Dockerfile
-            if (resource is not ProjectResource && !(resource.IsContainer() && resource.TryGetAnnotationsOfType<DockerfileBuildAnnotation>(out _)))
+            // Support SDK-published .NET programs and containers with Dockerfiles.
+            if (!resource.SupportsDotnetProgramPublishing() &&
+                !(resource.IsContainer() && resource.TryGetAnnotationsOfType<DockerfileBuildAnnotation>(out _)))
             {
                 continue;
             }

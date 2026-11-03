@@ -4,7 +4,9 @@
     "language": "typescript/nodejs"
   },
   "packages": {
+    "Aspire.Hosting.Azure.Provisioning.AppContainers": "",
     "Aspire.Hosting.Azure.AppContainers": "",
+    "Aspire.Hosting.Azure.Network": "",
     "Aspire.Hosting.Azure.OperationalInsights": ""
   }
 }

@@ -1,4 +1,4 @@
-﻿{
+{
   CapabilityId: Aspire.Hosting.CodeGeneration.TypeScript.Tests/withRedisSpecific,
   MethodName: withRedisSpecific,
   QualifiedMethodName: withRedisSpecific,
@@ -6,6 +6,7 @@
   Documentation: {
     Summary: Redis-specific configuration
   },
+  IsExperimental: false,
   IsObsolete: false,
   Parameters: [
     {

@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPROJECTS001
+
 using System.Collections.Immutable;
 using Microsoft.Extensions.Logging;
 
@@ -54,7 +56,8 @@ internal class ArgumentsExecutionConfigurationGatherer : IExecutionConfiguration
         // PublishAsDockerFile() reuses the executable's annotations for the generated container resource. Note that
         // the container's own `WithArgs(c => c.Args.Clear())` cannot undo a launch prefix because it is evaluated
         // separately, so return before recording that segment.
-        if (resource.IsContainer())
+        if (resource.IsContainer() ||
+            (executionContext.IsPublishMode && resource.SupportsDotnetProgramPublishing()))
         {
             return;
         }
