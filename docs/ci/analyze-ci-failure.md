@@ -598,6 +598,10 @@ dotnet test --project tests/AnalyzeCiFailure.Tests/AnalyzeCiFailure.Tests.csproj
 ```
 
 Analyzer-owned tests and snapshots live in `tests/AnalyzeCiFailure.Tests/`.
+Analyzer subprocesses launched by the workflow test helper default
+`GITHUB_STEP_SUMMARY` to a file in the test's temporary workspace, so simulated
+limited-evidence reports do not appear in the hosting Actions job's summary.
+Tests can override that path explicitly to exercise summary output behavior.
 Generated Markdown snapshots preserve issue/comment layout and arbitrary
 operator notes, so documentation lint excludes those verified outputs.
 Generic process/report-reader and selector tests remain in `Infrastructure.Tests`.
