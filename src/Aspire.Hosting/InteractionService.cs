@@ -32,14 +32,16 @@ internal class InteractionService : IInteractionService
     private readonly IServiceProvider _serviceProvider;
     private readonly IConfiguration _configuration;
     private readonly IInteractionFileUploadStore _fileUploadStore;
+    private readonly InteractionServiceConsumerState _consumerState;
 
-    public InteractionService(ILogger<InteractionService> logger, DistributedApplicationOptions distributedApplicationOptions, IServiceProvider serviceProvider, IConfiguration configuration, IInteractionFileUploadStore fileUploadStore)
+    public InteractionService(ILogger<InteractionService> logger, DistributedApplicationOptions distributedApplicationOptions, IServiceProvider serviceProvider, IConfiguration configuration, IInteractionFileUploadStore fileUploadStore, InteractionServiceConsumerState consumerState)
     {
         _logger = logger;
         _distributedApplicationOptions = distributedApplicationOptions;
         _serviceProvider = serviceProvider;
         _configuration = configuration;
         _fileUploadStore = fileUploadStore;
+        _consumerState = consumerState;
     }
 
     public bool IsAvailable
@@ -52,6 +54,11 @@ internal class InteractionService : IInteractionService
             }
 
             if (_distributedApplicationOptions.DisableDashboard)
+            {
+                return false;
+            }
+
+            if (!_consumerState.Ready)
             {
                 return false;
             }
@@ -729,7 +736,7 @@ internal class InteractionService : IInteractionService
     {
         if (!IsAvailable)
         {
-            throw new InvalidOperationException($"{nameof(InteractionService)} is not available because the dashboard is not enabled or because this command is running in non-interactive CLI mode.");
+            throw new InvalidOperationException($"{nameof(InteractionService)} is not available because the dashboard is not enabled, because the app host has not started yet (for example, during {nameof(BeforeStartEvent)}), or because this command is running in non-interactive CLI mode.");
         }
     }
 }

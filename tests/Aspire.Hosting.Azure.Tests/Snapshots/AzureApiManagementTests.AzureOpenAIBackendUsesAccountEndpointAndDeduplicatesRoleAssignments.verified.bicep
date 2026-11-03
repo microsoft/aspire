@@ -1,0 +1,609 @@
+﻿@description('The location for the resource(s) to be deployed.')
+param location string = resourceGroup().location
+
+param apim_identity_outputs_id string
+
+param _apim_backendUrl_openai_backend string
+
+param apim_identity_outputs_clientid string
+
+resource apim 'Microsoft.ApiManagement/service@2025-03-01-preview' = {
+  name: take('apim${uniqueString(resourceGroup().id)}', 24)
+  location: location
+  properties: {
+    publisherEmail: 'api-owners@example.com'
+    publisherName: 'Contoso APIs'
+    virtualNetworkType: 'None'
+  }
+  sku: {
+    name: 'Developer'
+    capacity: 1
+  }
+  identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${apim_identity_outputs_id}': { }
+    }
+  }
+  tags: {
+    'aspire-resource-name': 'apim'
+  }
+}
+
+resource openai_backend 'Microsoft.ApiManagement/service/backends@2024-05-01' = {
+  name: 'openai-backend'
+  properties: {
+    circuitBreaker: {
+      rules: [
+        {
+          name: 'openAIThrottling'
+          failureCondition: {
+            count: 1
+            interval: 'PT10S'
+            statusCodeRanges: [
+              {
+                min: 429
+                max: 429
+              }
+            ]
+          }
+          tripDuration: 'PT10S'
+          acceptRetryAfter: true
+        }
+      ]
+    }
+    protocol: 'http'
+    title: 'openai-backend'
+    tls: {
+      validateCertificateChain: true
+      validateCertificateName: true
+    }
+    type: 'Single'
+    url: _apim_backendUrl_openai_backend
+  }
+  parent: apim
+}
+
+resource chat_api 'Microsoft.ApiManagement/service/apis@2024-05-01' = {
+  name: 'chat-api'
+  properties: {
+    type: 'http'
+    displayName: 'chat-api'
+    subscriptionRequired: true
+    path: 'chat'
+    protocols: [
+      'https'
+    ]
+  }
+  parent: apim
+}
+
+resource _apim_proxyDELETERootOperation_chat_api 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
+  name: 'proxy-delete-root'
+  properties: {
+    displayName: 'Proxy DELETE root'
+    method: 'DELETE'
+    urlTemplate: '/'
+  }
+  parent: chat_api
+}
+
+resource _apim_proxyDELETEOperation_chat_api 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
+  name: 'proxy-delete'
+  properties: {
+    displayName: 'Proxy DELETE'
+    method: 'DELETE'
+    templateParameters: [
+      {
+        name: 'path'
+        type: 'string'
+        required: true
+      }
+    ]
+    urlTemplate: '/{*path}'
+  }
+  parent: chat_api
+}
+
+resource _apim_proxyGETRootOperation_chat_api 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
+  name: 'proxy-get-root'
+  properties: {
+    displayName: 'Proxy GET root'
+    method: 'GET'
+    urlTemplate: '/'
+  }
+  parent: chat_api
+}
+
+resource _apim_proxyGETOperation_chat_api 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
+  name: 'proxy-get'
+  properties: {
+    displayName: 'Proxy GET'
+    method: 'GET'
+    templateParameters: [
+      {
+        name: 'path'
+        type: 'string'
+        required: true
+      }
+    ]
+    urlTemplate: '/{*path}'
+  }
+  parent: chat_api
+}
+
+resource _apim_proxyHEADRootOperation_chat_api 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
+  name: 'proxy-head-root'
+  properties: {
+    displayName: 'Proxy HEAD root'
+    method: 'HEAD'
+    urlTemplate: '/'
+  }
+  parent: chat_api
+}
+
+resource _apim_proxyHEADOperation_chat_api 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
+  name: 'proxy-head'
+  properties: {
+    displayName: 'Proxy HEAD'
+    method: 'HEAD'
+    templateParameters: [
+      {
+        name: 'path'
+        type: 'string'
+        required: true
+      }
+    ]
+    urlTemplate: '/{*path}'
+  }
+  parent: chat_api
+}
+
+resource _apim_proxyOPTIONSRootOperation_chat_api 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
+  name: 'proxy-options-root'
+  properties: {
+    displayName: 'Proxy OPTIONS root'
+    method: 'OPTIONS'
+    urlTemplate: '/'
+  }
+  parent: chat_api
+}
+
+resource _apim_proxyOPTIONSOperation_chat_api 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
+  name: 'proxy-options'
+  properties: {
+    displayName: 'Proxy OPTIONS'
+    method: 'OPTIONS'
+    templateParameters: [
+      {
+        name: 'path'
+        type: 'string'
+        required: true
+      }
+    ]
+    urlTemplate: '/{*path}'
+  }
+  parent: chat_api
+}
+
+resource _apim_proxyPATCHRootOperation_chat_api 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
+  name: 'proxy-patch-root'
+  properties: {
+    displayName: 'Proxy PATCH root'
+    method: 'PATCH'
+    urlTemplate: '/'
+  }
+  parent: chat_api
+}
+
+resource _apim_proxyPATCHOperation_chat_api 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
+  name: 'proxy-patch'
+  properties: {
+    displayName: 'Proxy PATCH'
+    method: 'PATCH'
+    templateParameters: [
+      {
+        name: 'path'
+        type: 'string'
+        required: true
+      }
+    ]
+    urlTemplate: '/{*path}'
+  }
+  parent: chat_api
+}
+
+resource _apim_proxyPOSTRootOperation_chat_api 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
+  name: 'proxy-post-root'
+  properties: {
+    displayName: 'Proxy POST root'
+    method: 'POST'
+    urlTemplate: '/'
+  }
+  parent: chat_api
+}
+
+resource _apim_proxyPOSTOperation_chat_api 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
+  name: 'proxy-post'
+  properties: {
+    displayName: 'Proxy POST'
+    method: 'POST'
+    templateParameters: [
+      {
+        name: 'path'
+        type: 'string'
+        required: true
+      }
+    ]
+    urlTemplate: '/{*path}'
+  }
+  parent: chat_api
+}
+
+resource _apim_proxyPUTRootOperation_chat_api 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
+  name: 'proxy-put-root'
+  properties: {
+    displayName: 'Proxy PUT root'
+    method: 'PUT'
+    urlTemplate: '/'
+  }
+  parent: chat_api
+}
+
+resource _apim_proxyPUTOperation_chat_api 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
+  name: 'proxy-put'
+  properties: {
+    displayName: 'Proxy PUT'
+    method: 'PUT'
+    templateParameters: [
+      {
+        name: 'path'
+        type: 'string'
+        required: true
+      }
+    ]
+    urlTemplate: '/{*path}'
+  }
+  parent: chat_api
+}
+
+resource _apim_proxyTRACERootOperation_chat_api 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
+  name: 'proxy-trace-root'
+  properties: {
+    displayName: 'Proxy TRACE root'
+    method: 'TRACE'
+    urlTemplate: '/'
+  }
+  parent: chat_api
+}
+
+resource _apim_proxyTRACEOperation_chat_api 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
+  name: 'proxy-trace'
+  properties: {
+    displayName: 'Proxy TRACE'
+    method: 'TRACE'
+    templateParameters: [
+      {
+        name: 'path'
+        type: 'string'
+        required: true
+      }
+    ]
+    urlTemplate: '/{*path}'
+  }
+  parent: chat_api
+}
+
+resource chat_api_chat_completions 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
+  name: 'chat-completions'
+  properties: {
+    displayName: 'Create chat completion'
+    method: 'POST'
+    urlTemplate: '/chat/completions'
+  }
+  parent: chat_api
+}
+
+resource _apim_apiPolicy_chat_api 'Microsoft.ApiManagement/service/apis/policies@2024-05-01' = {
+  name: 'policy'
+  properties: {
+    format: 'rawxml'
+    value: '<policies>\n  <inbound>\n    <base />\n    <authentication-managed-identity resource="https://cognitiveservices.azure.com" client-id="${apim_identity_outputs_clientid}" />\n    <set-backend-service backend-id="openai-backend" />\n  </inbound>\n  <backend><base /></backend>\n  <outbound><base /></outbound>\n  <on-error><base /></on-error>\n</policies>'
+  }
+  parent: chat_api
+  dependsOn: [
+    openai_backend
+    _apim_proxyDELETERootOperation_chat_api
+    _apim_proxyDELETEOperation_chat_api
+    _apim_proxyGETRootOperation_chat_api
+    _apim_proxyGETOperation_chat_api
+    _apim_proxyHEADRootOperation_chat_api
+    _apim_proxyHEADOperation_chat_api
+    _apim_proxyOPTIONSRootOperation_chat_api
+    _apim_proxyOPTIONSOperation_chat_api
+    _apim_proxyPATCHRootOperation_chat_api
+    _apim_proxyPATCHOperation_chat_api
+    _apim_proxyPOSTRootOperation_chat_api
+    _apim_proxyPOSTOperation_chat_api
+    _apim_proxyPUTRootOperation_chat_api
+    _apim_proxyPUTOperation_chat_api
+    _apim_proxyTRACERootOperation_chat_api
+    _apim_proxyTRACEOperation_chat_api
+    chat_api_chat_completions
+  ]
+}
+
+resource responses_api 'Microsoft.ApiManagement/service/apis@2024-05-01' = {
+  name: 'responses-api'
+  properties: {
+    type: 'http'
+    displayName: 'responses-api'
+    subscriptionRequired: true
+    path: 'responses'
+    protocols: [
+      'https'
+    ]
+  }
+  parent: apim
+}
+
+resource _apim_proxyDELETERootOperation_responses_api 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
+  name: 'proxy-delete-root'
+  properties: {
+    displayName: 'Proxy DELETE root'
+    method: 'DELETE'
+    urlTemplate: '/'
+  }
+  parent: responses_api
+}
+
+resource _apim_proxyDELETEOperation_responses_api 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
+  name: 'proxy-delete'
+  properties: {
+    displayName: 'Proxy DELETE'
+    method: 'DELETE'
+    templateParameters: [
+      {
+        name: 'path'
+        type: 'string'
+        required: true
+      }
+    ]
+    urlTemplate: '/{*path}'
+  }
+  parent: responses_api
+}
+
+resource _apim_proxyGETRootOperation_responses_api 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
+  name: 'proxy-get-root'
+  properties: {
+    displayName: 'Proxy GET root'
+    method: 'GET'
+    urlTemplate: '/'
+  }
+  parent: responses_api
+}
+
+resource _apim_proxyGETOperation_responses_api 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
+  name: 'proxy-get'
+  properties: {
+    displayName: 'Proxy GET'
+    method: 'GET'
+    templateParameters: [
+      {
+        name: 'path'
+        type: 'string'
+        required: true
+      }
+    ]
+    urlTemplate: '/{*path}'
+  }
+  parent: responses_api
+}
+
+resource _apim_proxyHEADRootOperation_responses_api 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
+  name: 'proxy-head-root'
+  properties: {
+    displayName: 'Proxy HEAD root'
+    method: 'HEAD'
+    urlTemplate: '/'
+  }
+  parent: responses_api
+}
+
+resource _apim_proxyHEADOperation_responses_api 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
+  name: 'proxy-head'
+  properties: {
+    displayName: 'Proxy HEAD'
+    method: 'HEAD'
+    templateParameters: [
+      {
+        name: 'path'
+        type: 'string'
+        required: true
+      }
+    ]
+    urlTemplate: '/{*path}'
+  }
+  parent: responses_api
+}
+
+resource _apim_proxyOPTIONSRootOperation_responses_api 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
+  name: 'proxy-options-root'
+  properties: {
+    displayName: 'Proxy OPTIONS root'
+    method: 'OPTIONS'
+    urlTemplate: '/'
+  }
+  parent: responses_api
+}
+
+resource _apim_proxyOPTIONSOperation_responses_api 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
+  name: 'proxy-options'
+  properties: {
+    displayName: 'Proxy OPTIONS'
+    method: 'OPTIONS'
+    templateParameters: [
+      {
+        name: 'path'
+        type: 'string'
+        required: true
+      }
+    ]
+    urlTemplate: '/{*path}'
+  }
+  parent: responses_api
+}
+
+resource _apim_proxyPATCHRootOperation_responses_api 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
+  name: 'proxy-patch-root'
+  properties: {
+    displayName: 'Proxy PATCH root'
+    method: 'PATCH'
+    urlTemplate: '/'
+  }
+  parent: responses_api
+}
+
+resource _apim_proxyPATCHOperation_responses_api 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
+  name: 'proxy-patch'
+  properties: {
+    displayName: 'Proxy PATCH'
+    method: 'PATCH'
+    templateParameters: [
+      {
+        name: 'path'
+        type: 'string'
+        required: true
+      }
+    ]
+    urlTemplate: '/{*path}'
+  }
+  parent: responses_api
+}
+
+resource _apim_proxyPOSTRootOperation_responses_api 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
+  name: 'proxy-post-root'
+  properties: {
+    displayName: 'Proxy POST root'
+    method: 'POST'
+    urlTemplate: '/'
+  }
+  parent: responses_api
+}
+
+resource _apim_proxyPOSTOperation_responses_api 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
+  name: 'proxy-post'
+  properties: {
+    displayName: 'Proxy POST'
+    method: 'POST'
+    templateParameters: [
+      {
+        name: 'path'
+        type: 'string'
+        required: true
+      }
+    ]
+    urlTemplate: '/{*path}'
+  }
+  parent: responses_api
+}
+
+resource _apim_proxyPUTRootOperation_responses_api 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
+  name: 'proxy-put-root'
+  properties: {
+    displayName: 'Proxy PUT root'
+    method: 'PUT'
+    urlTemplate: '/'
+  }
+  parent: responses_api
+}
+
+resource _apim_proxyPUTOperation_responses_api 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
+  name: 'proxy-put'
+  properties: {
+    displayName: 'Proxy PUT'
+    method: 'PUT'
+    templateParameters: [
+      {
+        name: 'path'
+        type: 'string'
+        required: true
+      }
+    ]
+    urlTemplate: '/{*path}'
+  }
+  parent: responses_api
+}
+
+resource _apim_proxyTRACERootOperation_responses_api 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
+  name: 'proxy-trace-root'
+  properties: {
+    displayName: 'Proxy TRACE root'
+    method: 'TRACE'
+    urlTemplate: '/'
+  }
+  parent: responses_api
+}
+
+resource _apim_proxyTRACEOperation_responses_api 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
+  name: 'proxy-trace'
+  properties: {
+    displayName: 'Proxy TRACE'
+    method: 'TRACE'
+    templateParameters: [
+      {
+        name: 'path'
+        type: 'string'
+        required: true
+      }
+    ]
+    urlTemplate: '/{*path}'
+  }
+  parent: responses_api
+}
+
+resource responses_api_chat_completions 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
+  name: 'chat-completions'
+  properties: {
+    displayName: 'Create chat completion'
+    method: 'POST'
+    urlTemplate: '/chat/completions'
+  }
+  parent: responses_api
+}
+
+resource _apim_apiPolicy_responses_api 'Microsoft.ApiManagement/service/apis/policies@2024-05-01' = {
+  name: 'policy'
+  properties: {
+    format: 'rawxml'
+    value: '<policies>\n  <inbound>\n    <base />\n    <authentication-managed-identity resource="https://cognitiveservices.azure.com" client-id="${apim_identity_outputs_clientid}" />\n    <set-backend-service backend-id="openai-backend" />\n  </inbound>\n  <backend><base /></backend>\n  <outbound><base /></outbound>\n  <on-error><base /></on-error>\n</policies>'
+  }
+  parent: responses_api
+  dependsOn: [
+    openai_backend
+    _apim_proxyDELETERootOperation_responses_api
+    _apim_proxyDELETEOperation_responses_api
+    _apim_proxyGETRootOperation_responses_api
+    _apim_proxyGETOperation_responses_api
+    _apim_proxyHEADRootOperation_responses_api
+    _apim_proxyHEADOperation_responses_api
+    _apim_proxyOPTIONSRootOperation_responses_api
+    _apim_proxyOPTIONSOperation_responses_api
+    _apim_proxyPATCHRootOperation_responses_api
+    _apim_proxyPATCHOperation_responses_api
+    _apim_proxyPOSTRootOperation_responses_api
+    _apim_proxyPOSTOperation_responses_api
+    _apim_proxyPUTRootOperation_responses_api
+    _apim_proxyPUTOperation_responses_api
+    _apim_proxyTRACERootOperation_responses_api
+    _apim_proxyTRACEOperation_responses_api
+    responses_api_chat_completions
+  ]
+}
+
+output gatewayUrl string = apim.properties.gatewayUrl
+
+output name string = apim.name
+
+output id string = apim.id

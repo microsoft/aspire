@@ -79,7 +79,8 @@ public sealed class CustomTemplateTests(ITestOutputHelper output)
                 await auto.TypeAsync(
                     $"aspire template source add company --path \"$PWD/template\" --nologo; test $? -eq {expectedExitCode}");
                 await auto.EnterAsync();
-                await auto.WaitUntilTextAsync("Templates can run code. Do you trust template source 'company'", timeout: TimeSpan.FromSeconds(30));
+                await auto.WaitUntilTextAsync("Only use sources you trust.", timeout: TimeSpan.FromSeconds(30));
+                await auto.WaitUntilTextAsync("Do you trust template source 'company'", timeout: TimeSpan.FromSeconds(30));
                 await auto.WaitUntilTextAsync(sourceLocation, timeout: TimeSpan.FromSeconds(30));
                 await auto.WaitUntilTextAsync("[y/N]:", timeout: TimeSpan.FromSeconds(30));
                 if (response is null)

@@ -595,6 +595,12 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
                     continue;
                 }
 
+                // TLS state comes from the endpoint annotation; the Kubernetes endpoint mapping does not track it.
+                if (epExpr.Property == EndpointProperty.TlsEnabled)
+                {
+                    return epExpr.Endpoint.TlsEnabled ? bool.TrueString : bool.FalseString;
+                }
+
                 var referencedResource = epExpr.Endpoint.Resource == this
                     ? this
                     : await context.CreateKubernetesResourceAsync(epExpr.Endpoint.Resource, executionContext, default).ConfigureAwait(false);

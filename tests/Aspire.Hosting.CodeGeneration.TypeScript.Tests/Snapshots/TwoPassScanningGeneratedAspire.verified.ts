@@ -1939,6 +1939,15 @@ export interface WithOtlpExporterOptions {
     protocol?: OtlpProtocol | null;
 }
 
+export interface WithOutputDiffingOptions {
+    /** The step whose completed output is compared. Defaults to `publish`. */
+    targetStep?: string;
+    /** The comparison target name. When null, uses the target name followed by `-and-diff`. */
+    diffStepName?: string;
+    /** An optional description of the comparison target. */
+    description?: string;
+}
+
 export interface WithPersistenceOptions {
     mode?: TestPersistenceMode;
 }
@@ -9884,6 +9893,13 @@ export interface DistributedApplicationBuilder {
      */
     addCSharpApp(name: string, path: string, options?: AddCSharpAppOptions): CSharpAppResourcePromise;
     /**
+     * Adds an opt-in target that checks for stale generated pipeline output.
+     * @param options Additional options.
+     * @returns The `IDistributedApplicationBuilder` for chaining.
+     * @experimental
+     */
+    withOutputDiffing(options?: WithOutputDiffingOptions): DistributedApplicationBuilderPromise;
+    /**
      * Gets the application configuration.
      * @returns The configuration handle.
      */
@@ -10100,6 +10116,13 @@ export interface DistributedApplicationBuilderPromise extends PromiseLike<Distri
      * @deprecated Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.
      */
     addCSharpApp(name: string, path: string, options?: AddCSharpAppOptions): CSharpAppResourcePromise;
+    /**
+     * Adds an opt-in target that checks for stale generated pipeline output.
+     * @param options Additional options.
+     * @returns The `IDistributedApplicationBuilder` for chaining.
+     * @experimental
+     */
+    withOutputDiffing(options?: WithOutputDiffingOptions): DistributedApplicationBuilderPromise;
     /**
      * Gets the application configuration.
      * @returns The configuration handle.
@@ -10602,6 +10625,32 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
     }
 
     /** @internal */
+    async _withOutputDiffingInternal(targetStep?: string, diffStepName?: string, description?: string): Promise<DistributedApplicationBuilder> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (targetStep !== undefined) rpcArgs.targetStep = targetStep;
+        if (diffStepName !== undefined) rpcArgs.diffStepName = diffStepName;
+        if (description !== undefined) rpcArgs.description = description;
+        const result = await this._client.invokeCapability<IDistributedApplicationBuilderHandle>(
+            'Aspire.Hosting/withOutputDiffing',
+            rpcArgs
+        );
+        return new DistributedApplicationBuilderImpl(result, this._client);
+    }
+
+    /**
+     * Adds an opt-in target that checks for stale generated pipeline output.
+     * @param options Additional options.
+     * @returns The `IDistributedApplicationBuilder` for chaining.
+     * @experimental
+     */
+    withOutputDiffing(options?: WithOutputDiffingOptions): DistributedApplicationBuilderPromise {
+        const targetStep = options?.targetStep;
+        const diffStepName = options?.diffStepName;
+        const description = options?.description;
+        return new DistributedApplicationBuilderPromiseImpl(this._withOutputDiffingInternal(targetStep, diffStepName, description), this._client);
+    }
+
+    /** @internal */
     async _getConfigurationInternal(): Promise<Configuration> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         const result = await this._client.invokeCapability<IConfigurationHandle>(
@@ -10852,6 +10901,7 @@ const DistributedApplicationBuilderPromiseImpl = $aspireCreateFluentPromiseClass
     ["addConnectionString"]: () => ResourceWithConnectionStringPromiseImpl,
     ["addProject"]: () => ProjectResourcePromiseImpl,
     ["addCSharpApp"]: () => CSharpAppResourcePromiseImpl,
+    ["withOutputDiffing"]: () => DistributedApplicationBuilderPromiseImpl,
     ["getConfiguration"]: () => ConfigurationPromiseImpl,
     ["subscribeBeforeStart"]: null,
     ["subscribeBeforePublish"]: null,
