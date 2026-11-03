@@ -2,6 +2,7 @@
 
 @using Aspire.Dashboard.Model
 @using Aspire.Dashboard.Otlp.Model
+@using Aspire.Dashboard.Otlp.Storage
 @using MetricsResources = Aspire.Dashboard.Resources.Metrics
 
 @implements IDisposable
@@ -34,6 +35,9 @@
     [Parameter, EditorRequired]
     public required OtlpInstrumentKey InstrumentKey { get; set; }
 
+    [Parameter, EditorRequired]
+    public required ResourceKey ResourceKey { get; set; }
+
     [Parameter]
     public string? Class { get; set; }
 
@@ -51,20 +55,20 @@
 
     protected override void OnParametersSet()
     {
-        _isPinned = PinStore.IsPinned(InstrumentKey);
+        _isPinned = PinStore.IsPinned(ResourceKey, InstrumentKey);
     }
 
     private void TogglePinned()
     {
-        PinStore.SetPinned(InstrumentKey, !_isPinned);
-        _isPinned = PinStore.IsPinned(InstrumentKey);
+        PinStore.SetPinned(ResourceKey, InstrumentKey, !_isPinned);
+        _isPinned = PinStore.IsPinned(ResourceKey, InstrumentKey);
     }
 
     private void OnPinsChanged()
     {
         _ = InvokeAsync(() =>
         {
-            _isPinned = PinStore.IsPinned(InstrumentKey);
+            _isPinned = PinStore.IsPinned(ResourceKey, InstrumentKey);
             StateHasChanged();
         });
     }
