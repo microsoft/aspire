@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using Aspire.Cli.Agents.Hooks;
+using Aspire.Cli.Mcp;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
@@ -25,6 +26,8 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
 {
     private const string CaptureFileEnvName = "ASPIRE_HOOK_TEST_CAPTURE_FILE";
     private const string ContinueResponse = """{"continue":true}""";
+
+    public static TheoryData<string> McpToolNames => new(KnownMcpTools.All);
 
     [Theory]
     [InlineData("aspire")]
@@ -87,19 +90,20 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
         AssertArg(args, "--skill-name", "aspire");
     }
 
-    [Fact]
+    [Theory]
+    [MemberData(nameof(McpToolNames))]
     [RequiresTools(["bash"])]
     [SkipOnPlatform(TestPlatforms.Windows, "The shell hook targets POSIX shells; the PowerShell hook covers Windows.")]
-    public async Task Bash_McpTool_Claude_ForwardsToolName()
+    public async Task Bash_McpTool_Claude_ForwardsToolName(string toolName)
     {
         var run = await RunBashHookAsync(
-            """{"hook_event_name":"PostToolUse","tool_name":"mcp__aspire__list_resources"}""");
+            $$"""{"hook_event_name":"PostToolUse","tool_name":"mcp__aspire__{{toolName}}"}""");
 
         AssertContinue(run);
         var args = AssertInvoked(run);
         AssertArg(args, "--event-type", "tool_invocation");
         AssertArg(args, "--client-name", "claude-code");
-        AssertArg(args, "--tool-name", "mcp__aspire__list_resources");
+        AssertArg(args, "--tool-name", $"mcp__aspire__{toolName}");
     }
 
     [Theory]
@@ -342,18 +346,19 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
         AssertArg(args, "--skill-name", "aspire");
     }
 
-    [Fact]
+    [Theory]
+    [MemberData(nameof(McpToolNames))]
     [RequiresTools(["pwsh"])]
-    public async Task Pwsh_McpTool_Claude_ForwardsToolName()
+    public async Task Pwsh_McpTool_Claude_ForwardsToolName(string toolName)
     {
         var run = await RunPwshHookAsync(
-            """{"hook_event_name":"PostToolUse","tool_name":"mcp__aspire__list_resources"}""");
+            $$"""{"hook_event_name":"PostToolUse","tool_name":"mcp__aspire__{{toolName}}"}""");
 
         AssertContinue(run);
         var args = AssertInvoked(run);
         AssertArg(args, "--event-type", "tool_invocation");
         AssertArg(args, "--client-name", "claude-code");
-        AssertArg(args, "--tool-name", "mcp__aspire__list_resources");
+        AssertArg(args, "--tool-name", $"mcp__aspire__{toolName}");
     }
 
     [Fact]
