@@ -11,7 +11,7 @@ public sealed class ConfigSourceTests(ITestOutputHelper output)
     [Fact]
     [CaptureWorkspaceOnFailure]
     public Task Add_UsesAllMaterializedIntegrationSources()
-        => ConfigSourceTestContext.RunAsync(output, async context =>
+        => ConfigSourceTestContext.RunAsync(output, "sha1", async context =>
         {
             await context.CreateProjectAsync();
             await context.AssertSourceAppliedAsync("original");

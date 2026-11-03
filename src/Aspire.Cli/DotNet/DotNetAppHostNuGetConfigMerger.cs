@@ -301,6 +301,11 @@ internal sealed class DotNetAppHostNuGetConfigMerger(BundleNuGetService nuGetSer
         await stream.WriteAsync(candidate.ProposedContent, CancellationToken.None);
     }
 
+    internal static DirectoryInfo GetRecommendedNuGetConfigDirectory(IReadOnlyList<string> configPaths, DirectoryInfo appHostDirectory)
+        => configPaths.Count > 0 && !IsGlobalNuGetConfig(configPaths[0])
+            ? new DirectoryInfo(Path.GetDirectoryName(configPaths[0])!)
+            : appHostDirectory;
+
     internal static bool TryFindNuGetConfigInDirectory(
         DirectoryInfo directory,
         [NotNullWhen(true)] out FileInfo? nugetConfigFile)
@@ -316,5 +321,18 @@ internal sealed class DotNetAppHostNuGetConfigMerger(BundleNuGetService nuGetSer
 
         nugetConfigFile = matches.SingleOrDefault();
         return matches.Length == 1;
+    }
+
+    private static bool IsGlobalNuGetConfig(string path)
+    {
+        if (Environment.OSVersion.Platform == PlatformID.Win32NT)
+        {
+            return path.StartsWith(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), StringComparison.Ordinal);
+        }
+        else
+        {
+            var globalNuGetFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".nuget");
+            return path.StartsWith(globalNuGetFolder, StringComparison.Ordinal);
+        }
     }
 }

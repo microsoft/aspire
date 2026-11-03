@@ -29,6 +29,7 @@ public class TemplateEngineFactoryGitTests(ITestOutputHelper outputHelper)
         commands.RunCallback = (command, token) =>
         {
             var warning = Assert.Single(interaction.DisplayedMessages);
+            Assert.Equal(KnownEmojis.PoliceCarLight, warning.Emoji);
             Assert.Equal(SharedCommandStrings.SourceTrustWarning, warning.Message);
             Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
             return run(command, token);

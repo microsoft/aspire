@@ -124,7 +124,7 @@ internal sealed class AddCommand : BaseCommand
                     ExecutionContext.WorkingDirectory);
             if (source is not null)
             {
-                InteractionService.DisplayMessage(KnownEmojis.Warning, SharedCommandStrings.SourceTrustWarning, consoleOverride: ConsoleOutput.Error);
+                InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight, SharedCommandStrings.SourceTrustWarning, consoleOverride: ConsoleOutput.Error);
             }
             addActivity = _profilingTelemetry.StartAddCommand(integrationName, version, source, passedAppHostProjectFile);
 
@@ -393,8 +393,11 @@ internal sealed class AddCommand : BaseCommand
                     }],
                     overrideIntegrationSources: false,
                     cancellationToken);
+                var targetDirectory = DotNetAppHostNuGetConfigMerger.GetRecommendedNuGetConfigDirectory(
+                    configuration.Settings.ConfigPaths,
+                    effectiveAppHostProjectFile.Directory!);
                 await new DotNetAppHostNuGetConfigMerger(_nugetService).CreateOrUpdateAsync(
-                    effectiveAppHostProjectFile.Directory!,
+                    targetDirectory,
                     configuration,
                     createIfMissing: true,
                     globalPackagesFolder: null,

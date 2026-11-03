@@ -43,6 +43,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
             ReadConfiguration = (source, _) =>
             {
                 var warning = Assert.Single(interaction.DisplayedMessages);
+                Assert.Equal(KnownEmojis.PoliceCarLight, warning.Emoji);
                 Assert.Equal(SharedCommandStrings.SourceTrustWarning, warning.Message);
                 Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
                 Assert.Equal("https://git.example/configuration", source.Repository);
@@ -149,7 +150,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
 
     [Theory]
     [InlineData("""{"templateSources":null}""")]
-    [InlineData("""{"templateSources":{"invalid.name":{"repository":"https://git.example/templates"}}}""")]
+    [InlineData("""{"templateSources":{".invalid":{"repository":"https://git.example/templates"}}}""")]
     [InlineData("""{"templateSources":{"enterprise":{}}}""")]
     [InlineData("""{"templateSources":{"enterprise":{"path":"relative"}}}""")]
     public async Task TemplateSources_InvalidInheritedDefinitionsFailWithoutWritingSettings(string json)

@@ -179,7 +179,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         File.WriteAllText(Path.Combine(workspace.Path, AspireConfigFile.FileName), """
             {"integrationSources":{"default":{"enabled":false},"old":{"source":"https://example.com/old","patterns":["Old.*"]}}}
             """);
-        File.WriteAllText(Path.Combine(appDirectory.FullName, "nuget.config"), """
+        File.WriteAllText(Path.Combine(workspace.Path, "nuget.config"), """
             <configuration>
               <packageSources><clear /><add key="sdk" value="https://example.com/sdk" /><add key="public" value="https://api.nuget.org/v3/index.json" /></packageSources>
               <packageSourceMapping><clear /><packageSource key="sdk"><package pattern="Aspire*" /></packageSource><packageSource key="public"><package pattern="*" /></packageSource></packageSourceMapping>
@@ -233,7 +233,10 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         Assert.Null(added.Source);
         Assert.Null(added.SourcePackagePattern);
         Assert.Null(added.RequestedChannel);
-        await Verify(await File.ReadAllTextAsync(Path.Combine(appDirectory.FullName, "nuget.config")), "xml").UseParameters(specifyVersion);
+        Assert.Equal(
+            ["apphost.ts", AspireConfigFile.FileName],
+            appDirectory.EnumerateFiles().Select(file => file.Name).Order(StringComparer.Ordinal));
+        await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "nuget.config")), "xml").UseParameters(specifyVersion);
     }
 
     [Fact]

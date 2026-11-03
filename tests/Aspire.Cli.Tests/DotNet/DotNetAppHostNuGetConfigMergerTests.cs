@@ -33,6 +33,40 @@ public class DotNetAppHostNuGetConfigMergerTests
     private static PackageChannel CreateChannel(PackageMapping[] mappings) => PackageChannel.CreateExplicitChannel("test", PackageChannelQuality.Both, mappings, new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void GetRecommendedNuGetConfigDirectory_PrefersNearestExistingConfiguration(bool appHostConfigExists)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
+        var appHostDirectory = workspace.CreateDirectory("apphost");
+        var expectedDirectory = appHostConfigExists ? appHostDirectory : workspace.WorkspaceRoot;
+        var configPaths = appHostConfigExists
+            ? new[] { Path.Combine(appHostDirectory.FullName, "NuGet.Config"), Path.Combine(workspace.Path, "nuget.config") }
+            : [Path.Combine(workspace.Path, "nuget.config")];
+
+        var directory = DotNetAppHostNuGetConfigMerger.GetRecommendedNuGetConfigDirectory(configPaths, appHostDirectory);
+
+        Assert.Equal(expectedDirectory.FullName, directory.FullName);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void GetRecommendedNuGetConfigDirectory_FallsBackToAppHostWithoutLocalConfiguration(bool globalConfigExists)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
+        var appHostDirectory = workspace.CreateDirectory("apphost");
+        var globalDirectory = Environment.OSVersion.Platform == PlatformID.Win32NT
+            ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NuGet")
+            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".nuget", "NuGet");
+        string[] configPaths = globalConfigExists ? [Path.Combine(globalDirectory, "NuGet.Config")] : [];
+
+        var directory = DotNetAppHostNuGetConfigMerger.GetRecommendedNuGetConfigDirectory(configPaths, appHostDirectory);
+
+        Assert.Equal(appHostDirectory.FullName, directory.FullName);
+    }
+
+    [Theory]
     [InlineData(true)]
     [InlineData(false)]
     public async Task PrepareAsync_UnmappedAmbientSourceDoesNotRequireAliasOwnership(bool enabled)

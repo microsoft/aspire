@@ -219,7 +219,7 @@ public partial class NewCommandLocalTemplateTests
             },
             warning =>
             {
-                Assert.Equal(KnownEmojis.Warning, warning.Emoji);
+                Assert.Equal(KnownEmojis.PoliceCarLight, warning.Emoji);
                 Assert.Equal(string.Format(CultureInfo.CurrentCulture,
                     NewCommandStrings.TemplateSourceSearchFailed, "broken", expectedError), warning.Message);
             });

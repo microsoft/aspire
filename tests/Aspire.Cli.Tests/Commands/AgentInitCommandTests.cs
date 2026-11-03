@@ -222,6 +222,10 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
                   "openCodeV2Catalog": "https://team.example/skills/"
                 },
                 "pluginsOnly": { "repository": "example/plugins" },
+                "teamAlias": {
+                  "repository": "example/team",
+                  "openCodeV1Catalog": "https://team.example/skills/"
+                },
                 "disabled": {
                   "enabled": false,
                   "repository": "example/disabled",
@@ -230,16 +234,16 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
               }
             }
             """);
-        var warningsBeforeRegistration = new List<string>();
+        var messagesBeforeRegistration = new List<string>();
         var interaction = new TestInteractionService
         {
             DisplayMessageCallback = (emoji, message, _) =>
             {
-                if (emoji.Equals(KnownEmojis.Warning))
+                if (emoji.Equals(KnownEmojis.Information) || emoji.Equals(KnownEmojis.PoliceCarLight))
                 {
                     Assert.All(context.Clients, client => Assert.False(File.Exists(
                         client.GetIntegrationConfigPath(AgentConfigurationScope.Project, context.Project))));
-                    warningsBeforeRegistration.Add(message);
+                    messagesBeforeRegistration.Add(message);
                 }
             },
             PromptForSelectionCallback = (_, _, _, _) => throw new InvalidOperationException("No source or scope prompt is expected.")
@@ -253,11 +257,14 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             $"agent init --agents {agents} --scope project --skills aspire");
 
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
-        Assert.NotEmpty(warningsBeforeRegistration);
-        Assert.Equal(warningsBeforeRegistration, interaction.DisplayedMessages
-            .Where(message => message.Emoji.Equals(KnownEmojis.Warning))
+        Assert.Equal(2, messagesBeforeRegistration.Count);
+        var warning = Assert.Single(interaction.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.PoliceCarLight));
+        Assert.Equal(SharedCommandStrings.SourceTrustWarning, warning.Message);
+        Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
+        Assert.Equal(messagesBeforeRegistration, interaction.DisplayedMessages
+            .Where(message => message.Emoji.Equals(KnownEmojis.Information) || message.Emoji.Equals(KnownEmojis.PoliceCarLight))
             .Select(message => message.Message));
-        await Verify(warningsBeforeRegistration).UseParameters(agents);
+        await Verify(messagesBeforeRegistration).UseParameters(agents);
     }
 
     [Fact]
@@ -743,14 +750,20 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(client == "opencode" ? ["skills"] : new[] { "enabledPlugins", "extraKnownMarketplaces" }, config.Select(property => property.Key).Order());
         Assert.Empty(messages);
         var sourceUrls = client == "opencode"
-            ? string.Join(", ", SkillSource.DefaultV1Catalog, SkillSource.DefaultV2Catalog)
+            ? string.Join(System.Environment.NewLine, SkillSource.DefaultV1Catalog, SkillSource.DefaultV2Catalog)
             : AspireSkillsRemoteConfiguration.RepositoryUrl;
         Assert.Collection(interaction.DisplayedMessages,
             message =>
             {
-                Assert.Equal(KnownEmojis.Warning, message.Emoji);
-                Assert.Equal(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_PluginRiskWarning,
+                Assert.Equal(KnownEmojis.Information, message.Emoji);
+                Assert.Equal(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_SkillSources,
                     sourceUrls), message.Message);
+            },
+            message =>
+            {
+                Assert.Equal(KnownEmojis.PoliceCarLight, message.Emoji);
+                Assert.Equal(SharedCommandStrings.SourceTrustWarning, message.Message);
+                Assert.Equal(ConsoleOutput.Error, message.ConsoleOverride);
             },
             message =>
             {
@@ -793,11 +806,26 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
 
             Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
             var messages = interaction.DisplayedMessages.Skip(previousMessageCount).ToArray();
-            Assert.Equal(2, messages.Length);
-            Assert.Equal(KnownEmojis.Warning, messages[0].Emoji);
-            Assert.Equal(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_ConfiguredTargets,
-                string.Join($"{System.Environment.NewLine}  ", targetEntries)),
-                Assert.Single(messages, message => message.Emoji.Equals(KnownEmojis.Robot)).Message);
+            Assert.Collection(messages,
+                message =>
+                {
+                    Assert.Equal(KnownEmojis.Information, message.Emoji);
+                    Assert.Equal(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_SkillSources,
+                        string.Join(System.Environment.NewLine, AspireSkillsRemoteConfiguration.RepositoryUrl, SkillSource.DefaultV1Catalog, SkillSource.DefaultV2Catalog)),
+                        message.Message);
+                },
+                message =>
+                {
+                    Assert.Equal(KnownEmojis.PoliceCarLight, message.Emoji);
+                    Assert.Equal(SharedCommandStrings.SourceTrustWarning, message.Message);
+                    Assert.Equal(ConsoleOutput.Error, message.ConsoleOverride);
+                },
+                message =>
+                {
+                    Assert.Equal(KnownEmojis.Robot, message.Emoji);
+                    Assert.Equal(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_ConfiguredTargets,
+                        string.Join($"{System.Environment.NewLine}  ", targetEntries)), message.Message);
+                });
             Assert.Empty(interaction.DisplayedErrors);
         }
     }
@@ -898,7 +926,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
         Assert.Empty(interaction.DisplayedErrors);
-        Assert.Contains(interaction.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.Warning) &&
+        Assert.Contains(interaction.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.PoliceCarLight) &&
             message.Message == string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocalSkillsConflict,
                 "  team-skills/aspire/SKILL.md"));
         Assert.Equal(skill, await File.ReadAllTextAsync(skillPath));

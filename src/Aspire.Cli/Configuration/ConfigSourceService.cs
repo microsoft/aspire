@@ -122,7 +122,7 @@ internal sealed class ConfigSourceService(
         }
         foreach (var pending in notifications)
         {
-            interaction.DisplayMessage(KnownEmojis.Warning, pending.Message, consoleOverride: ConsoleOutput.Error);
+            interaction.DisplayMessage(KnownEmojis.PoliceCarLight, pending.Message, consoleOverride: ConsoleOutput.Error);
             DisplayGitTimeoutOutput(interaction, pending.GitOutput);
         }
     }
@@ -554,7 +554,7 @@ internal sealed class ConfigSourceService(
             _sourceTrustWarningDisplayed = true;
         }
 
-        interaction.DisplayMessage(KnownEmojis.Warning, SharedCommandStrings.SourceTrustWarning, consoleOverride: ConsoleOutput.Error);
+        interaction.DisplayMessage(KnownEmojis.PoliceCarLight, SharedCommandStrings.SourceTrustWarning, consoleOverride: ConsoleOutput.Error);
     }
 
     private async Task<ConfigSourceSnapshot> AcquireAsync(

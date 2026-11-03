@@ -213,7 +213,7 @@ internal sealed class DoctorCommand : BaseCommand
         return status switch
         {
             EnvironmentCheckStatus.Pass => (KnownEmojis.CheckMarkButton, "green"),
-            EnvironmentCheckStatus.Warning => (KnownEmojis.Warning, "yellow"),
+            EnvironmentCheckStatus.Warning => (KnownEmojis.PoliceCarLight, "yellow"),
             EnvironmentCheckStatus.Fail => (KnownEmojis.CrossMark, "red"),
             _ => (KnownEmojis.Information, "grey")
         };

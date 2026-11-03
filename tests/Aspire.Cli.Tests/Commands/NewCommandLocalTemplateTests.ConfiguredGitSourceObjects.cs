@@ -201,13 +201,13 @@ public partial class NewCommandLocalTemplateTests
         Assert.Collection(interaction.DisplayedMessages,
             warning =>
             {
-                Assert.Equal(KnownEmojis.Warning, warning.Emoji);
+                Assert.Equal(KnownEmojis.PoliceCarLight, warning.Emoji);
                 Assert.Equal(SharedCommandStrings.SourceTrustWarning, warning.Message);
                 Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
             },
             warning =>
             {
-                Assert.Equal(KnownEmojis.Warning, warning.Emoji);
+                Assert.Equal(KnownEmojis.PoliceCarLight, warning.Emoji);
                 Assert.Equal(string.Format(CultureInfo.CurrentCulture,
                     NewCommandStrings.TemplateSourceSearchFailed, "broken", NewCommandStrings.TemplateRepositoryPathInvalid),
                     warning.Message);
@@ -254,7 +254,7 @@ public partial class NewCommandLocalTemplateTests
             },
             warning =>
             {
-                Assert.Equal(KnownEmojis.Warning, warning.Emoji);
+                Assert.Equal(KnownEmojis.PoliceCarLight, warning.Emoji);
                 Assert.Equal(string.Format(CultureInfo.CurrentCulture,
                     NewCommandStrings.TemplateSourceSearchFailed, "missing",
                     string.Format(CultureInfo.CurrentCulture, NewCommandStrings.TemplateDirectoryNotFound, missingPath)),
@@ -303,7 +303,7 @@ public partial class NewCommandLocalTemplateTests
             },
             warning =>
             {
-                Assert.Equal(KnownEmojis.Warning, warning.Emoji);
+                Assert.Equal(KnownEmojis.PoliceCarLight, warning.Emoji);
                 Assert.Equal(string.Format(CultureInfo.CurrentCulture,
                     NewCommandStrings.TemplateSourceSearchFailed, "missing",
                     string.Format(CultureInfo.CurrentCulture, NewCommandStrings.TemplateRepositoryRefNotFound, "missing")),
