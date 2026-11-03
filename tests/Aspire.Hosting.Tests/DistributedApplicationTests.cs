@@ -32,6 +32,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Testing;
 using Microsoft.Extensions.Options;
 using Xunit.Sdk;
 using TestConstants = Microsoft.AspNetCore.InternalTesting.TestConstants;
@@ -182,6 +183,59 @@ public class DistributedApplicationTests
 
         var hostStartupActivity = Assert.Single(activities, activity => activity.OperationName == ProfilingTelemetry.Activities.AppHostHostStartup);
         Assert.DoesNotContain(hostStartupActivity.Events, @event => @event.Name == ProfilingTelemetry.Events.AppHostHostStarted);
+    }
+
+    [Theory]
+    [InlineData(nameof(DistributedApplication.StartAsync))]
+    [InlineData(nameof(DistributedApplication.RunAsync))]
+    public async Task StartupInformationIsLoggedBeforeBeforeStartEvent(string entryPoint)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(_testOutputHelper);
+        builder.Services.AddLogging(b => b.AddFakeLogging());
+
+        string[]? messagesAtBeforeStart = null;
+        builder.Eventing.Subscribe<BeforeStartEvent>((e, _) =>
+        {
+            messagesAtBeforeStart = e.Services.GetFakeLogCollector().GetSnapshot()
+                .Where(r => r.Category == typeof(DistributedApplication).FullName)
+                .Select(r => r.Message)
+                .ToArray();
+
+            // Stop startup here: this test only cares about what was logged before the event was raised.
+            throw new InvalidOperationException("Stop after BeforeStartEvent.");
+        });
+
+        using var app = builder.Build();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => entryPoint == nameof(DistributedApplication.StartAsync)
+            ? app.StartAsync()
+            : app.RunAsync()).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+
+        Assert.NotNull(messagesAtBeforeStart);
+        Assert.Contains(messagesAtBeforeStart, m => m.StartsWith("Aspire AppHost version: ", StringComparison.Ordinal));
+        Assert.Contains("Distributed application starting.", messagesAtBeforeStart);
+        Assert.Contains(messagesAtBeforeStart, m => m.StartsWith("Application host directory is: ", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task DistributedApplicationLifecycle_StartupInformationIsOnlyLoggedOnce()
+    {
+        var configuration = CreateConfiguration();
+        var logCollector = new FakeLogCollector();
+        var lifecycle = new DistributedApplicationLifecycle(
+            new FakeLogger<DistributedApplication>(logCollector),
+            configuration,
+            new ProfilingTelemetry(configuration),
+            new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run),
+            new LocaleOverrideContext());
+
+        lifecycle.LogStartupInformation();
+        await lifecycle.StartingAsync(CancellationToken.None);
+        await lifecycle.StopAsync(CancellationToken.None);
+
+        var messages = logCollector.GetSnapshot().Select(r => r.Message).ToArray();
+        Assert.Single(messages, m => m == "Distributed application starting.");
+        Assert.Single(messages, m => m.StartsWith("Aspire AppHost version: ", StringComparison.Ordinal));
     }
 
     [Fact]

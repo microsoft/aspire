@@ -40,6 +40,7 @@ internal sealed partial class TemplateEngineFactory(
     private readonly List<IDisposable> _resources = [];
     private readonly Dictionary<string, ITemplate[]> _discoveredTemplates = new(StringComparer.Ordinal);
     private bool _disposed;
+    private bool _sourceTrustWarningDisplayed;
 
     public IEnumerable<ITemplate> GetTemplates() => [];
 
@@ -144,6 +145,11 @@ internal sealed partial class TemplateEngineFactory(
         var pathRoot = Path.Combine(cacheRoot, "repository");
         var relativePath = TemplateSource.GetRepositoryRelativePath(templatePath, pathRoot);
 
+        if (!_sourceTrustWarningDisplayed)
+        {
+            interactionService.DisplayMessage(KnownEmojis.Warning, SharedCommandStrings.SourceTrustWarning, consoleOverride: ConsoleOutput.Error);
+            _sourceTrustWarningDisplayed = true;
+        }
         try
         {
             var sha = await interactionService.ShowStatusAsync(NewCommandStrings.ResolvingTemplateRepository,

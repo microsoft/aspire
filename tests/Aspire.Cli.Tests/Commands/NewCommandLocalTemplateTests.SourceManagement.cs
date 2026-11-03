@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Templating;
 using Aspire.Cli.Tests.TestServices;
@@ -44,13 +45,16 @@ public partial class NewCommandLocalTemplateTests
             .InvokeAsync().DefaultTimeout();
 
         var prompt = Assert.Single(interaction.BooleanPromptCalls);
+        var warning = Assert.Single(interaction.DisplayedMessages);
+        Assert.Equal(SharedCommandStrings.SourceTrustWarning, warning.Message);
+        Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
         Assert.False(prompt.DefaultValue);
         Assert.Equal(string.Format(CultureInfo.CurrentCulture, NewCommandStrings.TemplateSourceTrustPrompt, "company", location),
             prompt.PromptText);
         if (trust == true)
         {
             Assert.Equal(CliExitCodes.Success, result);
-            var source = Assert.Single(await provider.GetRequiredService<TemplateSourceStore>().ListAsync(default));
+            var source = Assert.Single(await provider.GetRequiredService<TemplateSourceStore>().ListAsync(null, default));
             Assert.Equal("company", source.Key);
             Assert.Equal(location, source.Value![repository ? "repository" : "path"]!.GetValue<string>());
             Assert.Single(interaction.DisplayedSuccess);
@@ -83,7 +87,10 @@ public partial class NewCommandLocalTemplateTests
 
         Assert.Equal(CliExitCodes.Success, result);
         Assert.Empty(interaction.BooleanPromptCalls);
-        Assert.Equal("company", Assert.Single(await provider.GetRequiredService<TemplateSourceStore>().ListAsync(default)).Key);
+        var warning = Assert.Single(interaction.DisplayedMessages);
+        Assert.Equal(SharedCommandStrings.SourceTrustWarning, warning.Message);
+        Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
+        Assert.Equal("company", Assert.Single(await provider.GetRequiredService<TemplateSourceStore>().ListAsync(null, default)).Key);
     }
 
     [Theory]
@@ -124,7 +131,7 @@ public partial class NewCommandLocalTemplateTests
         Assert.Equal(yes ? CliExitCodes.Success : CliExitCodes.MissingRequiredArgument, result);
         if (yes)
         {
-            Assert.Equal("company", Assert.Single(await provider.GetRequiredService<TemplateSourceStore>().ListAsync(default)).Key);
+            Assert.Equal("company", Assert.Single(await provider.GetRequiredService<TemplateSourceStore>().ListAsync(null, default)).Key);
         }
         else
         {
@@ -327,7 +334,7 @@ public partial class NewCommandLocalTemplateTests
         var source = Assert.Single(await provider.GetRequiredService<ConfiguredTemplateSourceService>().GetSourcesAsync(default));
         Assert.Equal("Company", source.Key);
         Assert.Equal(new TemplateSource("templates/api", "https://example.test/repo", null), source.Value.Template);
-        Assert.Equal("Company", Assert.Single(await provider.GetRequiredService<TemplateSourceStore>().ListAsync(default)).Key);
+        Assert.Equal("Company", Assert.Single(await provider.GetRequiredService<TemplateSourceStore>().ListAsync(null, default)).Key);
 
         Assert.Equal(CliExitCodes.Success, await root.Parse("template source add other --repository https://example.test/other --yes").InvokeAsync().DefaultTimeout());
         Assert.Equal(CliExitCodes.Success, await root.Parse("template source remove company").InvokeAsync().DefaultTimeout());

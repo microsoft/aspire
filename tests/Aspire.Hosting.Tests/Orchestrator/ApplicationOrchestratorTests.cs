@@ -1204,7 +1204,8 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
             options ?? new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
             new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build(),
-            new TestInteractionFileUploadStore());
+            new TestInteractionFileUploadStore(),
+            new InteractionServiceConsumerState());
     }
 
     private sealed class MockDeploymentStateManager : IDeploymentStateManager

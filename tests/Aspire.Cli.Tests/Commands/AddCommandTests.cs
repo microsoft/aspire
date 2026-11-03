@@ -2117,6 +2117,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     public async Task AddCommandUsesSourceForDiscoveryAndPackageRestore()
     {
         string? addUsedSource = null;
+        var interaction = new TestInteractionService();
         var searchSources = new ConcurrentBag<string[]>();
         const string expectedSource = "https://custom-nuget-source.test/v3/index.json";
 
@@ -2128,6 +2129,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             """);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
+            options.InteractionServiceFactory = _ => interaction;
             options.NuGetClientFactory = _ => NuGetTestHelper.CreateClient();
             // Makes it easier to isolate behavior in test case by disabling one
             // of the concurrent calls to the NuGetCache from the prefetcher.
@@ -2146,6 +2148,9 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                 var runner = new TestDotNetCliRunner();
                 runner.SearchPackagesAsyncCallback = (dir, query, exactMatch, prerelease, take, skip, nugetConfigFile, useCache, options, cancellationToken) =>
                 {
+                    var warning = Assert.Single(interaction.DisplayedMessages,
+                        message => message.Message == SharedCommandStrings.SourceTrustWarning);
+                    Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
                     Assert.Null(nugetConfigFile);
                     Assert.True(File.Exists(Path.Combine(dir.FullName, "NuGet.Config")));
                     var settings = NuGetTestHelper.LoadSettings(dir.FullName);
@@ -2191,6 +2196,8 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(expectedSource, addUsedSource);
         Assert.NotEmpty(searchSources);
         Assert.All(searchSources, sources => Assert.Equal([expectedSource], sources));
+        Assert.Single(interaction.DisplayedMessages,
+            message => message.Message == SharedCommandStrings.SourceTrustWarning);
     }
 
     [Fact]
