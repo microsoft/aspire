@@ -3177,6 +3177,94 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
+    public async Task GetRequestSpans_ReturnsNewestServerAndConsumerSpansInWindow()
+    {
+        using var repositoryContext = await CreateRepositoryAsync();
+
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>()
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(traceId: "1", spanId: "1-1", startTime: s_testTime.AddMinutes(1), endTime: s_testTime.AddMinutes(2), kind: Span.Types.SpanKind.Server,
+                                attributes: [new("http.route", "/items/{id}"), new("http.request.method", "GET")]),
+                            CreateSpan(traceId: "1", spanId: "1-2", startTime: s_testTime.AddMinutes(1), endTime: s_testTime.AddMinutes(2), parentSpanId: "1-1", kind: Span.Types.SpanKind.Client),
+                            CreateSpan(traceId: "2", spanId: "2-1", startTime: s_testTime.AddMinutes(3), endTime: s_testTime.AddMinutes(4), kind: Span.Types.SpanKind.Consumer,
+                                status: new Status { Code = Status.Types.StatusCode.Error }),
+                            CreateSpan(traceId: "3", spanId: "3-1", startTime: s_testTime.AddMinutes(5), endTime: s_testTime.AddMinutes(8), kind: Span.Types.SpanKind.Server,
+                                attributes: [new("http.route", "/orders"), new("http.method", "POST")]),
+                            CreateSpan(traceId: "4", spanId: "4-1", startTime: s_testTime.AddMinutes(20), endTime: s_testTime.AddMinutes(21), kind: Span.Types.SpanKind.Server)
+                        }
+                    }
+                }
+            }
+        });
+
+        var request = new GetRequestSpansRequest
+        {
+            ResourceKeys = [],
+            StartTime = s_testTime,
+            EndTime = s_testTime.AddMinutes(10),
+            MaxCount = int.MaxValue
+        };
+        var result = await repositoryContext.Repository.GetRequestSpansAsync(request, CancellationToken.None);
+
+        // Client spans and spans outside the window aren't requests of the window. The newest come first.
+        Assert.Equal(3, result.TotalItemCount);
+        Assert.Collection(result.Items,
+            span =>
+            {
+                Assert.Equal(s_testTime.AddMinutes(5), span.StartTime);
+                Assert.Equal(TimeSpan.FromMinutes(3), span.Duration);
+                Assert.Equal(OtlpSpanStatusCode.Unset, span.Status);
+                Assert.Equal("/orders", span.HttpRoute);
+                Assert.Equal("POST", span.HttpMethod);
+                Assert.Equal("TestService", span.Resource.ResourceName);
+            },
+            span =>
+            {
+                Assert.Equal(s_testTime.AddMinutes(3), span.StartTime);
+                Assert.Equal(OtlpSpanStatusCode.Error, span.Status);
+                Assert.Null(span.HttpRoute);
+                Assert.Null(span.HttpMethod);
+            },
+            span =>
+            {
+                Assert.Equal(s_testTime.AddMinutes(1), span.StartTime);
+                Assert.Equal("/items/{id}", span.HttpRoute);
+                Assert.Equal("GET", span.HttpMethod);
+            });
+
+        // A capped window keeps the newest spans and still reports how many the window has.
+        var capped = await repositoryContext.Repository.GetRequestSpansAsync(new GetRequestSpansRequest
+        {
+            ResourceKeys = [],
+            StartTime = request.StartTime,
+            EndTime = request.EndTime,
+            MaxCount = 1
+        }, CancellationToken.None);
+        Assert.Equal(3, capped.TotalItemCount);
+        Assert.Equal([s_testTime.AddMinutes(5)], capped.Items.Select(span => span.StartTime));
+
+        var other = await repositoryContext.Repository.GetRequestSpansAsync(new GetRequestSpansRequest
+        {
+            ResourceKeys = [new ResourceKey("other", InstanceId: null)],
+            StartTime = request.StartTime,
+            EndTime = request.EndTime,
+            MaxCount = int.MaxValue
+        }, CancellationToken.None);
+        Assert.Equal(0, other.TotalItemCount);
+        Assert.Empty(other.Items);
+    }
+
+    [Fact]
     public async Task GetSpans_FilterByTraceId_ReturnsMatchingSpans()
     {
         // Arrange

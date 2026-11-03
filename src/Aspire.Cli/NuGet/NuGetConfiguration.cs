@@ -1,10 +1,12 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.DotNet;
+
 namespace Aspire.Cli.NuGet;
 
 /// <summary>
-/// Holds the evaluated ambient snapshot, selected source aliases, and composed policy overlay.
+/// Holds the evaluated ambient snapshot, selected source aliases, and composed operation and persistence policies.
 /// </summary>
 internal sealed class NuGetConfiguration
 {
@@ -32,6 +34,8 @@ internal sealed class NuGetConfiguration
     public IReadOnlyList<NuGetConfigSource> ConfigSources { get; }
 
     public NuGetConfigOverlay? Overlay { get; }
+
+    public DotNetAppHostNuGetConfig? AppHostConfig { get; init; }
 
     /// <summary>
     /// Gets whether the composed overlay changes the evaluated source or mapping policy.

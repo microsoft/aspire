@@ -6,6 +6,7 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Aspire.Hosting.Dotnet;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Lifecycle;
 using Aspire.TestProject;
@@ -71,14 +72,16 @@ public class TestProgram : IDisposable
 
         string testPrefix = string.IsNullOrEmpty(testName) ? "" : $"{testName}-";
 
-        ServiceABuilder = AppBuilder.AddProject<Projects.ServiceA>($"{testPrefix}servicea", launchProfileName: "http");
-        ServiceBBuilder = AppBuilder.AddProject<Projects.ServiceB>($"{testPrefix}serviceb", launchProfileName: "http");
-        ServiceCBuilder = AppBuilder.AddProject<Projects.ServiceC>($"{testPrefix}servicec", launchProfileName: "http");
-        WorkerABuilder = AppBuilder.AddProject<Projects.WorkerA>($"{testPrefix}workera");
+        // Consuming tests can supply their own AppHost assembly, which changes AppHostDirectory.
+        // Keep the generated absolute paths and their fixture build dependencies in that case.
+        ServiceABuilder = AppBuilder.AddDotnetProject($"{testPrefix}servicea", new Projects.ServiceA().ProjectPath, projectOptions => projectOptions.LaunchProfileName = "http");
+        ServiceBBuilder = AppBuilder.AddDotnetProject($"{testPrefix}serviceb", new Projects.ServiceB().ProjectPath, projectOptions => projectOptions.LaunchProfileName = "http");
+        ServiceCBuilder = AppBuilder.AddDotnetProject($"{testPrefix}servicec", new Projects.ServiceC().ProjectPath, projectOptions => projectOptions.LaunchProfileName = "http");
+        WorkerABuilder = AppBuilder.AddDotnetProject($"{testPrefix}workera", new Projects.WorkerA().ProjectPath);
 
         if (includeIntegrationServices)
         {
-            IntegrationServiceABuilder = AppBuilder.AddProject<Projects.IntegrationServiceA>($"{testPrefix}integrationservicea");
+            IntegrationServiceABuilder = AppBuilder.AddDotnetProject($"{testPrefix}integrationservicea", new Projects.IntegrationServiceA().ProjectPath);
             IntegrationServiceABuilder = IntegrationServiceABuilder.WithEnvironment("SKIP_RESOURCES", string.Join(',', resourcesToSkip));
 
             if (!resourcesToSkip.HasFlag(TestResourceNames.redis))
@@ -135,14 +138,14 @@ public class TestProgram : IDisposable
     }
 
     public IDistributedApplicationBuilder AppBuilder { get; private set; }
-    public IResourceBuilder<ProjectResource> ServiceABuilder { get; private set; }
-    public IResourceBuilder<ProjectResource> ServiceBBuilder { get; private set; }
-    public IResourceBuilder<ProjectResource> ServiceCBuilder { get; private set; }
-    public IResourceBuilder<ProjectResource> WorkerABuilder { get; private set; }
-    public IResourceBuilder<ProjectResource>? IntegrationServiceABuilder { get; private set; }
+    public IResourceBuilder<DotnetProjectResource> ServiceABuilder { get; private set; }
+    public IResourceBuilder<DotnetProjectResource> ServiceBBuilder { get; private set; }
+    public IResourceBuilder<DotnetProjectResource> ServiceCBuilder { get; private set; }
+    public IResourceBuilder<DotnetProjectResource> WorkerABuilder { get; private set; }
+    public IResourceBuilder<DotnetProjectResource>? IntegrationServiceABuilder { get; private set; }
     public DistributedApplication? App { get; private set; }
 
-    public List<IResourceBuilder<ProjectResource>> ServiceProjectBuilders => [ServiceABuilder, ServiceBBuilder, ServiceCBuilder];
+    public List<IResourceBuilder<DotnetProjectResource>> ServiceProjectBuilders => [ServiceABuilder, ServiceBBuilder, ServiceCBuilder];
 
     public async Task RunAsync(CancellationToken cancellationToken = default)
     {
@@ -172,7 +175,7 @@ public class TestProgram : IDisposable
         public async Task OnAfterResourcesCreated(AfterResourcesCreatedEvent @event, CancellationToken cancellationToken)
         {
             var root = new JsonObject();
-            foreach (var project in @event.Model.Resources.OfType<ProjectResource>())
+            foreach (var project in @event.Model.Resources.OfType<IDotnetProgramResource>())
             {
                 var projectJson = new JsonObject();
                 root[project.Name] = projectJson;
@@ -209,4 +212,3 @@ public class TestProgram : IDisposable
         }
     }
 }
-

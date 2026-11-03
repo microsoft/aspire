@@ -59,7 +59,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
     public string Name { get; } = name;
     public PackageChannelQuality Quality { get; } = quality;
     public PackageMapping[]? Mappings { get; } = mappings;
-    public PackageChannelType Type { get; } = mappings is null ? PackageChannelType.Implicit : PackageChannelType.Explicit;
+    public PackageChannelType Type { get; private init; } = mappings is null ? PackageChannelType.Implicit : PackageChannelType.Explicit;
     public bool ConfigureGlobalPackagesFolder { get; } = configureGlobalPackagesFolder;
     public string? CliDownloadBaseUrl { get; } = cliDownloadBaseUrl;
     public string? PinnedVersion { get; } = pinnedVersion;
@@ -1037,7 +1037,11 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
 
     public static PackageChannel CreateExplicitChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, IFeatures features, ILogger logger, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null, string? pinnedVersion = null, string? currentCliVersion = null, Action? validateTemplatePackageMetadataPrefetching = null)
     {
-        return new PackageChannel(name, quality, mappings, nuGetPackageCache, features, logger, configureGlobalPackagesFolder, cliDownloadBaseUrl, pinnedVersion, currentCliVersion, validateTemplatePackageMetadataPrefetching);
+        // An explicitly selected stable channel can use ambient sources without mappings.
+        return new PackageChannel(name, quality, mappings, nuGetPackageCache, features, logger, configureGlobalPackagesFolder, cliDownloadBaseUrl, pinnedVersion, currentCliVersion, validateTemplatePackageMetadataPrefetching)
+        {
+            Type = PackageChannelType.Explicit
+        };
     }
 
     public static PackageChannel CreateImplicitChannel(INuGetPackageCache nuGetPackageCache, IFeatures features, ILogger logger, string? currentCliVersion = null, Action? validateTemplatePackageMetadataPrefetching = null)

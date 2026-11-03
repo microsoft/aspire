@@ -513,6 +513,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
             '**/apphost.mjs',
             '**/apphost.cjs',
             '**/apphost.rs',
+            '**/apphost.go',
             // Java requires the file name to match the public class name, so this is always
             // AppHost.java. Watcher globs are case-sensitive on Linux, so the pattern has to
             // carry the real casing rather than the lowercase form used by the other entries.

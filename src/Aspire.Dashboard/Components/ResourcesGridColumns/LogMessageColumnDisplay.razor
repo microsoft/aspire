@@ -9,7 +9,7 @@
 <GridValue Value="@FormatHelpers.TruncateText(LogEntry.Message, FormatHelpers.ColumnMaximumTextLength)"
            ValueToVisualize="@LogEntry.Message"
            ValueDescription="@Loc[nameof(StructuredLogs.StructuredLogsMessageColumnHeader)]"
-           ToolTip="@FormatHelpers.TruncateText(LogEntry.Message, FormatHelpers.TooltipMaximumTextLength)"
+           ShowToolTip="false"
            EnableHighlighting="true"
            HighlightText="@FilterText"
            StopClickPropagation="true">
@@ -18,7 +18,7 @@
         {
             <FluentButton Appearance="ButtonAppearance.Transparent"
                           IconOnly="true"
-                          Title="@ControlStringsLoc[nameof(ControlsStrings.GenAIDetailsTitle)]"
+                          data-tooltip="@ControlStringsLoc[nameof(ControlsStrings.GenAIDetailsTitle)]" aria-label="@ControlStringsLoc[nameof(ControlsStrings.GenAIDetailsTitle)]"
                           OnClick="OnLaunchGenAIVisualizerAsync">
                 <FluentIcon Icon="Icons.Regular.Size20.Sparkle"
                             Color="Color.Primary" />

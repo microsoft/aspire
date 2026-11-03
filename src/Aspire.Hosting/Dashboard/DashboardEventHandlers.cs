@@ -462,6 +462,7 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
             context,
             DashboardConfigNames.DashboardDataDirectoryName,
             DashboardConfigNames.DashboardDataDirectoryName.ConfigKey);
+        ResolveDashboardDataDirectory(context);
         SetEnvironmentVariableWithFallback(
             context,
             DashboardConfigNames.DashboardPersistenceModeName,
@@ -576,6 +577,30 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
         if (options.TelemetryOptOut is { } optOutValue)
         {
             context.EnvironmentVariables[DashboardConfigNames.Legacy.DebugSessionTelemetryOptOutName.EnvVarName] = optOutValue;
+        }
+    }
+
+    // The dashboard process runs with its own install directory as the working directory, so a relative
+    // data directory (from either the config key or the forwarded environment alias) is resolved against
+    // the AppHost directory. Otherwise data would be written under the dashboard bundle, which may be read-only.
+    private void ResolveDashboardDataDirectory(EnvironmentCallbackContext context)
+    {
+        if (configuration["AppHost:Directory"] is not { Length: > 0 } appHostDirectory)
+        {
+            return;
+        }
+
+        // Automatic forwarding preserves the configured key's spelling, so match it case-insensitively.
+        var envVarName = DashboardConfigNames.DashboardDataDirectoryName.EnvVarName;
+        foreach (var name in context.EnvironmentVariables.Keys.ToList())
+        {
+            if (string.Equals(name, envVarName, StringComparison.OrdinalIgnoreCase) &&
+                context.EnvironmentVariables[name] is string dataDirectory &&
+                !string.IsNullOrWhiteSpace(dataDirectory) &&
+                !Path.IsPathFullyQualified(dataDirectory))
+            {
+                context.EnvironmentVariables[name] = Path.GetFullPath(dataDirectory, appHostDirectory);
+            }
         }
     }
 

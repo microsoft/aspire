@@ -45,9 +45,9 @@ public static class AzureFrontDoorExtensions
     /// <example>
     /// Add an Azure Front Door resource with origins:
     /// <code lang="C#">
-    /// var api = builder.AddProject&lt;Projects.Api&gt;("api")
+    /// var api = builder.AddDotnetProject("api", "../Api/Api.csproj")
     ///     .WithExternalHttpEndpoints();
-    /// var web = builder.AddProject&lt;Projects.Web&gt;("web")
+    /// var web = builder.AddDotnetProject("web", "../Web/Web.csproj")
     ///     .WithExternalHttpEndpoints();
     /// var frontDoor = builder.AddAzureFrontDoor("frontdoor")
     ///     .WithOrigin(api)
@@ -271,7 +271,9 @@ public static class AzureFrontDoorExtensions
     private sealed class PrivateLinkConfigurator(AzureResourceInfrastructure infrastructure, AzureFrontDoorResource frontDoor)
     {
         // Container Apps origins share an environment target; App Service origins each target their own website.
-        private readonly Dictionary<BicepOutputReference, (ProvisioningParameter ResourceId, BicepValue<string> Location)> _targets = [];
+        // Keyed by the output's resource and name rather than the reference, because a target can return a new reference per call.
+        private readonly Dictionary<(string Resource, string Output), (ProvisioningParameter ResourceId, BicepValue<string> Location)> _targets = [];
+        private readonly HashSet<string> _parameterNames = [];
         private readonly HashSet<AzureFrontDoorPrivateLinkAnnotation> _usedConnections = [];
 
         private ProvisioningVariable? _regions;
@@ -301,10 +303,11 @@ public static class AzureFrontDoorExtensions
             }
 
             var resourceId = environment.GetPrivateLinkResourceId(originResource);
-            if (!_targets.TryGetValue(resourceId, out var target))
+            var key = (resourceId.Resource.Name, resourceId.Name);
+            if (!_targets.TryGetValue(key, out var target))
             {
                 target = CreateTarget(resourceId, environment.GetPrivateLinkLocation(originResource));
-                _targets.Add(resourceId, target);
+                _targets.Add(key, target);
             }
             _usedConnections.Add(connection);
 
@@ -348,6 +351,15 @@ public static class AzureFrontDoorExtensions
             BicepOutputReference location)
         {
             var targetIdentifier = Infrastructure.NormalizeBicepIdentifier(resourceId.Resource.Name);
+
+            // Distinct outputs of one module, such as per-origin IDs, must not share a parameter, because the parameter
+            // name identifies the binding and a repeated name would replace the earlier one.
+            if (!_parameterNames.Add($"{targetIdentifier}_environment_id"))
+            {
+                targetIdentifier = Infrastructure.NormalizeBicepIdentifier($"{targetIdentifier}_{resourceId.Name}");
+                _parameterNames.Add($"{targetIdentifier}_environment_id");
+            }
+
             var targetId = resourceId.AsProvisioningParameter(infrastructure, $"{targetIdentifier}_environment_id");
 
             // The environment's region is an output of the environment module, so it is only known at deployment. The output

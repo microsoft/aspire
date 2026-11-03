@@ -3,9 +3,10 @@
 
 using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Components.Tests.Shared;
-using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Configuration;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
 
 namespace Aspire.Dashboard.Components.Tests.Dialogs;
@@ -13,101 +14,79 @@ namespace Aspire.Dashboard.Components.Tests.Dialogs;
 [UseCulture("en-US")]
 public class HelpDialogTests : DashboardTestContext
 {
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void PageNavigation_OnlyShowsTerminalsShortcutWhenAvailable(bool expectTerminalsShortcut)
+    [Fact]
+    public void Render_ShowsDocumentationShortcutsAndAgentsTabs()
     {
-        FluentUISetupHelpers.SetupDialogInfrastructure(this);
-        var shortcutManager = Services.GetRequiredService<ShortcutManager>();
-        shortcutManager.AddGlobalKeydownListener(new TestGlobalKeydownListener(AspireKeyboardShortcut.GoToMetrics));
-        if (expectTerminalsShortcut)
-        {
-            shortcutManager.AddGlobalKeydownListener(new TestGlobalKeydownListener(AspireKeyboardShortcut.GoToTerminals));
-        }
+        var cut = RenderHelpDialog();
 
-        var cut = Render<HelpDialog>();
-
-        var heading = Assert.Single(cut.FindAll("h6"), h => h.TextContent == Resources.Dialogs.HelpDialogCategoryPageNavigation);
-        var navigationShortcuts = cut.Find($"dl[aria-labelledby='{heading.Id}']");
-        List<string> expectedDescriptions = [Resources.Dialogs.HelpDialogGoToMetrics];
-        List<string> expectedKeys = ["m"];
-        if (expectTerminalsShortcut)
-        {
-            expectedDescriptions.Add(Resources.Dialogs.HelpDialogGoToTerminals);
-            expectedKeys.Add("e");
-        }
-
-        Assert.Equal(expectedDescriptions, navigationShortcuts.QuerySelectorAll("dt").Select(element => element.TextContent));
-        Assert.Equal(expectedKeys, navigationShortcuts.QuerySelectorAll("kbd").Select(element => element.TextContent));
-    }
-
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void SiteWideNavigation_OnlyShowsTerminalShortcutWhenAvailable(bool expectTerminalShortcut)
-    {
-        FluentUISetupHelpers.SetupDialogInfrastructure(this);
-        var shortcutManager = Services.GetRequiredService<ShortcutManager>();
-        shortcutManager.AddGlobalKeydownListener(new TestGlobalKeydownListener(
-            AspireKeyboardShortcut.Help,
-            AspireKeyboardShortcut.Settings));
-        if (expectTerminalShortcut)
-        {
-            shortcutManager.AddGlobalKeydownListener(new TestGlobalKeydownListener(AspireKeyboardShortcut.ToggleTerminalDock));
-        }
-
-        var cut = Render<HelpDialog>();
-
-        var heading = Assert.Single(cut.FindAll("h6"), h => h.TextContent == Resources.Dialogs.HelpDialogCategoryNavigation);
-        var navigationShortcuts = cut.Find($"dl[aria-labelledby='{heading.Id}']");
-        List<string> expectedDescriptions = [Resources.Dialogs.HelpDialogGoToHelp, Resources.Dialogs.HelpDialogGoToSettings];
-        List<string> expectedKeys = ["?", "shift", "s"];
-        if (expectTerminalShortcut)
-        {
-            expectedDescriptions.Add(Resources.Dialogs.HelpDialogToggleTerminalDock);
-            expectedKeys.Add("`");
-        }
-
-        Assert.Equal(expectedDescriptions, navigationShortcuts.QuerySelectorAll("dt").Select(element => element.TextContent));
-        Assert.Equal(expectedKeys, navigationShortcuts.QuerySelectorAll("kbd").Select(element => element.TextContent));
-        Assert.Equal(expectTerminalShortcut ? 1 : 0, cut.FindAll("kbd").Count(element => element.TextContent == "`"));
+        Assert.Equal(
+            [
+                Resources.Dialogs.HelpDialogDocumentationTab,
+                Resources.Layout.MainLayoutKeyboardShortcuts,
+                Resources.Dialogs.AIAgentsDialogTitle
+            ],
+            cut.FindComponents<FluentTab>().Select(tab => tab.Instance.Header));
     }
 
     [Fact]
-    public void Shortcuts_AlwaysShowsPanelsAndOnlyAvailableNavigation()
+    public void Render_DocumentationTab_LinksOpenInNewTab()
+    {
+        var cut = RenderHelpDialog();
+
+        var links = cut.FindAll("a.help-link");
+
+        Assert.Equal(
+            [
+                "https://aspire.dev/dashboard/overview/",
+                "https://aspire.dev/",
+                "https://discord.com/invite/raNPcaaSj8",
+                "https://aka.ms/aspire/repo",
+                "https://github.com/microsoft/aspire/issues/new/choose",
+                DashboardFeedbackDialog.DiscussionUrl
+            ],
+            links.Select(link => link.GetAttribute("href")));
+        Assert.All(links, link =>
+        {
+            Assert.Equal("_blank", link.GetAttribute("target"));
+            Assert.Equal("noreferrer noopener", link.GetAttribute("rel"));
+        });
+    }
+
+    [Theory]
+    [InlineData(HelpDialogTab.Documentation)]
+    [InlineData(HelpDialogTab.KeyboardShortcuts)]
+    [InlineData(HelpDialogTab.AIAgents)]
+    public void Render_OpensOnRequestedTab(HelpDialogTab tab)
+    {
+        var cut = RenderHelpDialog(content: tab);
+
+        Assert.Equal($"help-tab-{tab}", cut.FindComponent<FluentTabs>().Instance.ActiveTabId);
+    }
+
+    [Fact]
+    public void Render_AgentHelpDisabled_HidesAgentsTabAndOpensOnDocumentation()
+    {
+        var cut = RenderHelpDialog(content: HelpDialogTab.AIAgents, disableAgentHelp: true);
+
+        Assert.Equal(
+            [Resources.Dialogs.HelpDialogDocumentationTab, Resources.Layout.MainLayoutKeyboardShortcuts],
+            cut.FindComponents<FluentTab>().Select(tab => tab.Instance.Header));
+        Assert.Equal($"help-tab-{HelpDialogTab.Documentation}", cut.FindComponent<FluentTabs>().Instance.ActiveTabId);
+    }
+
+    private IRenderedComponent<HelpDialog> RenderHelpDialog(HelpDialogTab content = HelpDialogTab.KeyboardShortcuts, bool disableAgentHelp = false)
     {
         FluentUISetupHelpers.SetupDialogInfrastructure(this);
-        var shortcutManager = Services.GetRequiredService<ShortcutManager>();
-        shortcutManager.AddGlobalKeydownListener(new TestGlobalKeydownListener(
-            AspireKeyboardShortcut.Help,
-            AspireKeyboardShortcut.Settings,
-            AspireKeyboardShortcut.GoToStructuredLogs,
-            AspireKeyboardShortcut.GoToTraces,
-            AspireKeyboardShortcut.GoToMetrics));
+        FluentUISetupHelpers.SetupFluentTab(this);
+        JSInterop.SetupModule("/Components/Controls/MarkdownRenderer.razor.js").SetupVoid();
+        Services.AddOptions<DashboardOptions>().Configure(options =>
+        {
+            options.UI.DisableAgentHelp = disableAgentHelp;
+            // The agents tab builds the dashboard's URL from its parsed endpoints.
+            options.Frontend.EndpointUrls = "http://localhost:18888";
+            Assert.True(options.Frontend.TryParseOptions(out _));
+        });
 
-        var cut = Render<HelpDialog>();
-
-        Assert.Equal(
-            [
-                Resources.Dialogs.HelpDialogCategoryPageNavigation,
-                Resources.Dialogs.HelpDialogCategoryPanels,
-                Resources.Dialogs.HelpDialogCategoryNavigation
-            ],
-            cut.FindAll("h6").Select(element => element.TextContent));
-        Assert.Equal(
-            [
-                Resources.Dialogs.HelpDialogGoToStructuredLogs,
-                Resources.Dialogs.HelpDialogGoToTraces,
-                Resources.Dialogs.HelpDialogGoToMetrics,
-                Resources.Dialogs.HelpDialogIncreasePanelSize,
-                Resources.Dialogs.HelpDialogDecreasePanelSize,
-                Resources.Dialogs.HelpDialogResetPanelSize,
-                Resources.Dialogs.HelpDialogTogglePanelOrientation,
-                Resources.Dialogs.HelpDialogTogglePanelOpen,
-                Resources.Dialogs.HelpDialogGoToHelp,
-                Resources.Dialogs.HelpDialogGoToSettings
-            ],
-            cut.FindAll("dt").Select(element => element.TextContent));
+        return Render<HelpDialog>(builder => builder.Add(p => p.Content, content));
     }
 }

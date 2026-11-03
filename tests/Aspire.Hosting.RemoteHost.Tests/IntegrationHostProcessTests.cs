@@ -21,7 +21,14 @@ public class IntegrationHostProcessTests(IntegrationHostProcessFixture fixture, 
             DiscoveryTimeout = TimeSpan.FromSeconds(5),
             StallDiscovery = discovery
         });
-        await server.WaitForFileAsync(discovery ? "discovery-started" : "host-pids");
+        if (discovery)
+        {
+            await server.WaitForFileAsync("discovery-started");
+        }
+        else
+        {
+            await server.WaitForHostProcessIdsAsync(1);
+        }
         await server.Exit.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
         await server.DisposeAsync();
 
@@ -180,12 +187,13 @@ public class IntegrationHostProcessTests(IntegrationHostProcessFixture fixture, 
         Assert.Equal(2, server.HostProcessIds.Length);
     }
 
-    [Fact]
-    public async Task ShutdownDuringRegistration_ReapsTheUnregisteredHost()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ShutdownDuringRegistration_ReapsTheUnregisteredHost(bool delayHostPidWrite)
     {
-        await using var server = await fixture.StartAsync(output, skipRegistration: true);
-        await server.WaitForFileAsync("host-pids");
-        var host = Assert.Single(server.HostProcessIds);
+        await using var server = await fixture.StartAsync(output, skipRegistration: true, options: new() { DelayHostPidWrite = delayHostPidWrite });
+        var host = Assert.Single(await server.WaitForHostProcessIdsAsync(1));
 
         await server.DisposeAsync();
 

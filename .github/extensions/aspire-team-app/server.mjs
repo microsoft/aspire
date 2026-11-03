@@ -85,6 +85,19 @@ export function setBrowserOpen(fn) {
   browserOpen = typeof fn === "function" ? fn : null;
 }
 
+export function agentActionAvailability(sessionContext, previewSidebar = false) {
+  // Sidebar providers still join a runtime control session, so sessionId and session.send
+  // do not prove that agent work is supported. Use the active-session context supplied
+  // to canvas.open, not process.cwd() or the SDK's session-artifact workspacePath.
+  const available = !previewSidebar && typeof sessionContext?.workingDirectory === "string"
+    && sessionContext.workingDirectory.trim().length > 0;
+  return {
+    available,
+    reason: available ? null
+      : "Agent actions require an active repository session. Open Aspire Team App from a session in the relevant repository; pinned sidebar canvases cannot start Copilot work.",
+  };
+}
+
 // Account resolution probes every candidate credential against its account's
 // watched repos, so we cache the result and only re-probe when the cache is stale
 // or the per-account configuration (repos / active flags) changed.
@@ -218,26 +231,40 @@ async function computeDashboard({ progress = true, background = false } = {}) {
   const stream = sseClients.size > 0;
   const previous = cache?.dashboard ?? null;
   const prefs = await loadPrefs();
-  const auth = await resolveAuth(prefs);
+  const healthMode = prefs.mode === "health";
+  let auth;
+  let githubDiscoveryError = null;
+  try {
+    auth = await resolveAuth(prefs);
+  } catch (error) {
+    if (!["gh_cli_missing", "gh_cli_lookup_failed", "gh_cli_discovery_failed"].includes(error.code)) {
+      throw error;
+    }
+    // Discovery failures must leave navigation available so Azure-only users can
+    // reach Health and Settings. Preserve the diagnostic without claiming GitHub access.
+    githubDiscoveryError = error.message;
+    auth = { accounts: [], tokenById: new Map() };
+  }
   const active = auth.accounts.filter((a) => a.active && a.status !== "failed");
   const accountsForLoad = active
     .map((a) => ({ token: auth.tokenById.get(a.id), login: a.login, repos: a.repos, graphql: a.graphql }))
     .filter((a) => a.token && a.login);
 
-  const healthMode = prefs.mode === "health";
   let dashboard;
   if (accountsForLoad.length === 0 && !healthMode) {
     const anyDetected = auth.accounts.length > 0;
     const anyActive = auth.accounts.some((a) => a.active);
     dashboard = {
       authenticated: false,
-      message: !anyDetected
+      mode: prefs.mode,
+      message: githubDiscoveryError ?? (!anyDetected
         ? "No GitHub credentials detected. Run `gh auth login` so the canvas can read your review queue."
         : anyActive
           ? "The active GitHub account can't read its watched repositories. Adjust its repos or enable another account below."
-          : "No account is active. Enable an account in the Accounts tab to load your review queue.",
+          : "No account is active. Enable an account in the Accounts tab to load your review queue."),
       accounts: auth.accounts,
       activeAccounts: [],
+      errors: [],
     };
   } else {
     dashboard = healthMode
@@ -255,6 +282,10 @@ async function computeDashboard({ progress = true, background = false } = {}) {
           showDrafts: prefs.showDrafts,
           onProgress: stream && progress ? broadcastProgress : undefined,
         });
+  }
+  dashboard.githubDiscoveryError = githubDiscoveryError;
+  if (githubDiscoveryError) {
+    dashboard.errors.push(`GitHub account discovery: ${githubDiscoveryError}`);
   }
 
   // A preference mutation can finish while GitHub requests are in flight. Auto is a publish choice,
@@ -641,7 +672,8 @@ async function handle(req, res, log, instanceId) {
       return send(res, 200, STYLES, "text/css");
     }
     if (req.method === "GET" && path === "/app.js") {
-      return send(res, 200, APP_JS, "text/javascript");
+      const availability = servers.get(instanceId)?.agentActions ?? agentActionAvailability();
+      return send(res, 200, `const agentActions = ${JSON.stringify(availability)};\n${APP_JS}`, "text/javascript");
     }
     if (req.method === "GET" && path === "/api/state") {
       const next = await getDashboard(false);
@@ -678,6 +710,7 @@ async function handle(req, res, log, instanceId) {
       await updatePrefs((prefs) => {
         if (typeof body.release === "string" && body.release.trim()) prefs.release = body.release.trim();
         if (typeof body.showDrafts === "boolean") prefs.showDrafts = body.showDrafts;
+        if (typeof body.detachedSessions === "boolean") prefs.detachedSessions = body.detachedSessions;
         if (body.notifications) prefs.notifications = { ...prefs.notifications, ...body.notifications };
       });
       const next = await getDashboard(true);
@@ -750,6 +783,10 @@ async function handle(req, res, log, instanceId) {
       }
     }
     if (req.method === "POST" && path === "/api/health/action") {
+      const availability = servers.get(instanceId)?.agentActions ?? agentActionAvailability();
+      if (!availability.available) {
+        return send(res, 409, { error: availability.reason, code: "agent_session_required" });
+      }
       const { kind, target, source } = await readBody(req);
       if (!agentSend) {
         return send(res, 503, { error: "The Copilot session is not ready yet. Try again in a moment." });
@@ -758,9 +795,10 @@ async function handle(req, res, log, instanceId) {
       if (!resolvedSource) {
         return send(res, 400, { error: "This health source is no longer in view. Refresh and try again." });
       }
+      const prefs = await loadPrefs();
       let prompt;
       try {
-        prompt = buildHealthActionPrompt(kind, resolvedSource, target);
+        prompt = buildHealthActionPrompt(kind, resolvedSource, target, prefs);
       } catch (error) {
         return send(res, 400, { error: error.message });
       }
@@ -783,6 +821,10 @@ async function handle(req, res, log, instanceId) {
       // the main session via the injected bridge; the agent then opens a sub-session or
       // works the PR. This route does not touch the dashboard cache, so it neither
       // refreshes nor broadcasts.
+      const availability = servers.get(instanceId)?.agentActions ?? agentActionAvailability();
+      if (!availability.available) {
+        return send(res, 409, { error: availability.reason, code: "agent_session_required" });
+      }
       const { kind, target, pr } = await readBody(req);
       if (!agentSend) {
         return send(res, 503, { error: "The Copilot session is not ready yet. Try again in a moment." });
@@ -797,9 +839,10 @@ async function handle(req, res, log, instanceId) {
       if (!resolvedPr) {
         return send(res, 400, { error: "This pull request is no longer in view. Refresh and try again." });
       }
+      const prefs = await loadPrefs();
       let prompt;
       try {
-        prompt = buildAgentActionPrompt(kind, resolvedPr, target);
+        prompt = buildAgentActionPrompt(kind, resolvedPr, target, prefs);
       } catch (e) {
         return send(res, 400, { error: e.message });
       }
@@ -903,14 +946,18 @@ async function handle(req, res, log, instanceId) {
   }
 }
 
-export async function startInstance(instanceId, log) {
+export async function startInstance(instanceId, log, sessionContext, previewSidebar = false) {
+  const agentActions = agentActionAvailability(sessionContext, previewSidebar);
   let entry = servers.get(instanceId);
-  if (entry) return entry;
+  if (entry) {
+    entry.agentActions = agentActions;
+    return entry;
+  }
   if (log) bgLog = log;
   const server = createServer((req, res) => handle(req, res, log, instanceId));
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const port = server.address().port;
-  entry = { server, url: `http://127.0.0.1:${port}/` };
+  entry = { server, url: `http://127.0.0.1:${port}/`, agentActions };
   servers.set(instanceId, entry);
   return entry;
 }

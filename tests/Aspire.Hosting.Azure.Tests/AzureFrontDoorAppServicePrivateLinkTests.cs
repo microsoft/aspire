@@ -4,6 +4,7 @@
 #pragma warning disable ASPIREAZURE003 // Private networking APIs are experimental.
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Dotnet;
 using Aspire.Hosting.Utils;
 using static Aspire.Hosting.Utils.AzureManifestUtils;
 
@@ -20,9 +21,7 @@ public class AzureFrontDoorAppServicePrivateLinkTests(ITestOutputHelper testOutp
         var environment = builder.AddAzureAppServiceEnvironment("env").WithDashboard(false);
         var frontDoor = builder.AddAzureFrontDoor("frontdoor");
         environment.WithAzureFrontDoorPrivateLink(frontDoor);
-        var api = builder.AddProject<Project>("api", launchProfileName: null)
-            .WithHttpEndpoint(targetPort: 8080)
-            .WithExternalHttpEndpoints();
+        var api = AddProject(builder, "api");
         frontDoor.WithOrigin(api);
 
         using var app = builder.Build();
@@ -46,12 +45,8 @@ public class AzureFrontDoorAppServicePrivateLinkTests(ITestOutputHelper testOutp
             environment.WithAzureFrontDoorPrivateLink(frontDoor);
         }
 
-        var api = builder.AddProject<Project>("api", launchProfileName: null)
-            .WithHttpEndpoint(targetPort: 8080)
-            .WithExternalHttpEndpoints();
-        var web = builder.AddProject<Project>("web", launchProfileName: null)
-            .WithHttpEndpoint(targetPort: 8080)
-            .WithExternalHttpEndpoints();
+        var api = AddProject(builder, "api");
+        var web = AddProject(builder, "web");
         frontDoor.WithOrigin(api).WithOrigin(web);
         if (!connectBeforeOrigins)
         {
@@ -78,9 +73,7 @@ public class AzureFrontDoorAppServicePrivateLinkTests(ITestOutputHelper testOutp
             .WithDashboard(false);
         var frontDoor = builder.AddAzureFrontDoor("frontdoor");
         environment.WithAzureFrontDoorPrivateLink(frontDoor);
-        var api = builder.AddProject<Project>("api", launchProfileName: null)
-            .WithHttpEndpoint(targetPort: 8080)
-            .WithExternalHttpEndpoints();
+        var api = AddProject(builder, "api");
         frontDoor.WithOrigin(api);
 
         using var app = builder.Build();
@@ -107,9 +100,7 @@ public class AzureFrontDoorAppServicePrivateLinkTests(ITestOutputHelper testOutp
         }
         var frontDoor = builder.AddAzureFrontDoor("frontdoor");
         environment.WithAzureFrontDoorPrivateLink(frontDoor);
-        var api = builder.AddProject<Project>("api", launchProfileName: null)
-            .WithHttpEndpoint(targetPort: 8080)
-            .WithExternalHttpEndpoints();
+        var api = AddProject(builder, "api");
         frontDoor.WithOrigin(api);
 
         using var app = builder.Build();
@@ -127,18 +118,9 @@ public class AzureFrontDoorAppServicePrivateLinkTests(ITestOutputHelper testOutp
         var frontDoor = builder.AddAzureFrontDoor("frontdoor");
         appService.WithAzureFrontDoorPrivateLink(frontDoor);
         containerApps.WithAzureFrontDoorPrivateLink(frontDoor);
-        var web = builder.AddProject<Project>("web", launchProfileName: null)
-            .WithHttpEndpoint(targetPort: 8080)
-            .WithExternalHttpEndpoints()
-            .WithComputeEnvironment(appService);
-        var api = builder.AddProject<Project>("api", launchProfileName: null)
-            .WithHttpEndpoint(targetPort: 8080)
-            .WithExternalHttpEndpoints()
-            .WithComputeEnvironment(containerApps);
-        var publicApp = builder.AddProject<Project>("public-app", launchProfileName: null)
-            .WithHttpEndpoint(targetPort: 8080)
-            .WithExternalHttpEndpoints()
-            .WithComputeEnvironment(publicEnvironment);
+        var web = AddProject(builder, "web").WithComputeEnvironment(appService);
+        var api = AddProject(builder, "api").WithComputeEnvironment(containerApps);
+        var publicApp = AddProject(builder, "public-app").WithComputeEnvironment(publicEnvironment);
         frontDoor.WithOrigin(web).WithOrigin(api).WithOrigin(publicApp);
 
         using var app = builder.Build();
@@ -156,12 +138,8 @@ public class AzureFrontDoorAppServicePrivateLinkTests(ITestOutputHelper testOutp
         var environment = builder.AddAzureAppServiceEnvironment("env").WithDashboard(false);
         var frontDoor = builder.AddAzureFrontDoor("frontdoor");
         environment.WithAzureFrontDoorPrivateLink(frontDoor);
-        var api = builder.AddProject<Project>("api", launchProfileName: null)
-            .WithHttpEndpoint(targetPort: 8080)
-            .WithExternalHttpEndpoints();
-        var other = builder.AddProject<Project>("other", launchProfileName: null)
-            .WithHttpEndpoint(targetPort: 8080)
-            .WithExternalHttpEndpoints();
+        var api = AddProject(builder, "api");
+        var other = AddProject(builder, "other");
         frontDoor.WithOrigin(api);
 
         using var app = builder.Build();
@@ -179,9 +157,7 @@ public class AzureFrontDoorAppServicePrivateLinkTests(ITestOutputHelper testOutp
         var connected = builder.AddAzureFrontDoor("connected");
         var unconnected = builder.AddAzureFrontDoor("unconnected");
         environment.WithAzureFrontDoorPrivateLink(connected);
-        var api = builder.AddProject<Project>("api", launchProfileName: null)
-            .WithHttpEndpoint(targetPort: 8080)
-            .WithExternalHttpEndpoints();
+        var api = AddProject(builder, "api");
         connected.WithOrigin(api);
         unconnected.WithOrigin(api);
 
@@ -218,8 +194,8 @@ public class AzureFrontDoorAppServicePrivateLinkTests(ITestOutputHelper testOutp
     private static AzureAppServiceWebSiteResource GetWebsite(IResource resource, AzureAppServiceEnvironmentResource environment) =>
         Assert.IsType<AzureAppServiceWebSiteResource>(resource.GetDeploymentTargetAnnotation(environment)?.DeploymentTarget);
 
-    private sealed class Project : IProjectMetadata
-    {
-        public string ProjectPath => "project";
-    }
+    private static IResourceBuilder<DotnetProjectResource> AddProject(IDistributedApplicationBuilder builder, string name) =>
+        builder.AddDotnetProject(name, "project.csproj", options => options.ExcludeLaunchProfile = true)
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints();
 }

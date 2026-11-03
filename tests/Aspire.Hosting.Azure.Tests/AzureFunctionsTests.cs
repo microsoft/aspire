@@ -187,16 +187,21 @@ public class AzureFunctionsTests(ITestOutputHelper outputHelper)
     public async Task AddAzureFunctionsProject_WorksWithMultipleProjects()
     {
         using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+        using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
         builder.AddAzureFunctionsProject<TestProject>("funcapp");
         builder.AddAzureFunctionsProject<TestProject>("funcapp2");
 
         using var host = builder.Build();
-        await host.StartAsync();
+        await host.StartAsync(cts.Token);
 
         // Assert that the default storage resource is not present
         var model = host.Services.GetRequiredService<DistributedApplicationModel>();
-        Assert.Single(model.Resources.OfType<AzureStorageResource>(),
+        var storage = Assert.Single(model.Resources.OfType<AzureStorageResource>(),
             r => r.Name.StartsWith(AzureFunctionsProjectResourceExtensions.DefaultAzureFunctionsHostStorageName));
+
+        // StartAsync returns before the storage emulator container is created. Wait for it so that
+        // StopAsync does not also have to absorb a cold image pull within the host shutdown timeout.
+        await host.ResourceNotifications.WaitForResourceAsync(storage.Name, KnownResourceStates.Running, cts.Token);
 
         await host.StopAsync();
     }

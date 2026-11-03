@@ -4,11 +4,16 @@
 using Aspire.Hosting.Dcp;
 
 namespace Aspire.Hosting.Tests.Dcp;
-internal sealed class TestDcpDependencyCheckService : IDcpDependencyCheckService
+internal sealed class TestDcpDependencyCheckService(DcpInfo? dcpInfo = null) : IDcpDependencyCheckService
 {
     public Task<DcpInfo?> GetDcpInfoAsync(bool force = false, CancellationToken cancellationToken = default)
     {
-        var dcpInfo = new DcpInfo
+        if (dcpInfo is not null)
+        {
+            return Task.FromResult<DcpInfo?>(dcpInfo);
+        }
+
+        var defaultDcpInfo = new DcpInfo
         {
             VersionString = DcpVersion.Dev.ToString(),
             Version = DcpVersion.Dev,
@@ -19,6 +24,6 @@ internal sealed class TestDcpDependencyCheckService : IDcpDependencyCheckService
                 Running = true
             }
         };
-        return Task.FromResult((DcpInfo?)dcpInfo);
+        return Task.FromResult((DcpInfo?)defaultDcpInfo);
     }
 }

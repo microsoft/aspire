@@ -200,6 +200,10 @@
     <value>Computed value '{0}' must target a non-reserved string parameter and specify kind 'nugetPackageVersion', a valid 'packageId' and 'versionRange', an optional Boolean 'allowPrerelease', and an optional output-relative 'workingDirectory'.</value>
     <comment>{0} is the template parameter name.</comment>
   </data>
+  <data name="InvalidTemplatePromptDefault" xml:space="preserve">
+    <value>Prompt default '{0}' must target an optional, empty-default string parameter and reference its native coalesce symbol, depending only on the project name and regex/coalesce symbols. It cannot also specify a computed value source.</value>
+    <comment>{0} is the template parameter name.</comment>
+  </data>
   <data name="ComputedTemplateParameterCondition" xml:space="preserve">
     <value>Parameter '{0}' uses a NuGet-computed value in a prompting condition. Computed values are resolved after prompting and cannot control parameter conditions.</value>
     <comment>{0} is the template parameter name.</comment>

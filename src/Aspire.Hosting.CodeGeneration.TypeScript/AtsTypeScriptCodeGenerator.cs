@@ -4,6 +4,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using Aspire.Shared.CodeGeneration;
 using Aspire.TypeSystem;
 
 namespace Aspire.Hosting.CodeGeneration.TypeScript;

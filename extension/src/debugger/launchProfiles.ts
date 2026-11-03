@@ -360,18 +360,21 @@ export async function readLaunchSettings(projectPath: string): Promise<LaunchSet
         } else {
             const projectDir = path.dirname(projectPath);
             const projectName = path.basename(projectPath, path.extname(projectPath));
-            const launchSettingsDirectory = path.extname(projectPath).toLowerCase() === '.vbproj'
-                ? 'My Project'
-                : 'Properties';
-            const propertiesLaunchSettingsPath = path.join(projectDir, launchSettingsDirectory, 'launchSettings.json');
+            const propertiesLaunchSettingsPath = path.join(projectDir, 'Properties', 'launchSettings.json');
+            // V2 VB services prefer the conventional My Project location, then Properties.
+            // Fall back only when a file is absent, not when the preferred file is invalid.
+            const projectLaunchSettingsPaths = path.extname(projectPath).toLowerCase() === '.vbproj'
+                ? [path.join(projectDir, 'My Project', 'launchSettings.json'), propertiesLaunchSettingsPath]
+                : [propertiesLaunchSettingsPath];
+            const projectLaunchSettingsPath = projectLaunchSettingsPaths.find(candidate => fs.existsSync(candidate));
             const runJsonPath = path.join(projectDir, `${projectName}.run.json`);
 
-            if (fs.existsSync(propertiesLaunchSettingsPath)) {
+            if (projectLaunchSettingsPath) {
                 if (fs.existsSync(runJsonPath)) {
-                    extensionLogOutputChannel.warn(`Both '${propertiesLaunchSettingsPath}' and '${runJsonPath}' exist; using '${propertiesLaunchSettingsPath}' to match 'dotnet run'. '${runJsonPath}' is ignored.`);
+                    extensionLogOutputChannel.warn(`Both '${projectLaunchSettingsPath}' and '${runJsonPath}' exist; using '${projectLaunchSettingsPath}'. '${runJsonPath}' is ignored.`);
                 }
 
-                launchSettingsPath = propertiesLaunchSettingsPath;
+                launchSettingsPath = projectLaunchSettingsPath;
             } else {
                 launchSettingsPath = runJsonPath;
             }

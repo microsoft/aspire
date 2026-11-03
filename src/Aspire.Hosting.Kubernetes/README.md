@@ -6,7 +6,7 @@ Use this integration to model, configure, and deploy Aspire compute resources to
 
 ### Prerequisites
 
-- [Helm](https://helm.sh/docs/intro/install/) **v4.2.0 or later** on your `PATH`.
+- [Helm](https://helm.sh/docs/intro/install/) **v4.0.0 or later** on your `PATH`.
 
 Aspire shells out to `helm upgrade --install` to deploy the generated chart and validates the Helm version up front, so missing or older installs produce a clear actionable error instead of cryptic flag failures.
 
@@ -16,6 +16,7 @@ From your AppHost directory, add the `Aspire.Hosting.Kubernetes` integration wit
 
 ```bash
 aspire add Aspire.Hosting.Kubernetes
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Usage example
@@ -45,7 +46,7 @@ Assign a registry to a project or Dockerfile-backed resource to include its regi
 ```csharp
 var registry = builder.AddContainerRegistry("registry", "registry.example.com", "apps");
 
-builder.AddProject<Projects.Api>("api")
+builder.AddDotnetProject("api", "../Api/Api.csproj")
     .WithContainerRegistry(registry);
 ```
 
@@ -68,7 +69,7 @@ Use a target-neutral volume when the Kubernetes environment's default storage po
 **C#**
 
 ```csharp
-builder.AddProject<Projects.Api>("api")
+builder.AddDotnetProject("api", "../Api/Api.csproj")
     .WithVolume("data", "/data", env: "DATA_PATH");
 ```
 
@@ -92,7 +93,7 @@ var k8s = builder.AddKubernetesEnvironment("k8s");
 var data = k8s.AddPersistentVolume("data")
     .WithCapacity("20Gi");
 
-builder.AddProject<Projects.Api>("api")
+builder.AddDotnetProject("api", "../Api/Api.csproj")
     .WithPersistentVolume(data, "/data", env: "DATA_PATH");
 ```
 
