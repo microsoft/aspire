@@ -193,7 +193,7 @@
                     {
                         var url = group.Primary;
                         var label = url.DisplayName is { } displayName && url.Name == "-" ? displayName : url.Name;
-                        var maskedUrl = DashboardUIHelpers.MaskQueryStringValues(url.OriginalUrlString);
+                        var maskedUrl = DashboardUIHelpers.MaskUrlForDisplay(url.OriginalUrlString);
                         <li class="overview-endpoint">
                             <span class="overview-list-label" data-tooltip="@label">@label</span>
                             <div class="overview-endpoint-addresses">
@@ -211,7 +211,7 @@
                                 }
                                 @if (group.Secondary is { } secondary)
                                 {
-                                    var maskedSecondaryUrl = DashboardUIHelpers.MaskQueryStringValues(secondary.OriginalUrlString);
+                                    var maskedSecondaryUrl = DashboardUIHelpers.MaskUrlForDisplay(secondary.OriginalUrlString);
                                     <span class="overview-endpoint-address overview-muted overview-mono" data-tooltip="@maskedSecondaryUrl" tabindex="0">@maskedSecondaryUrl</span>
                                 }
                             </div>

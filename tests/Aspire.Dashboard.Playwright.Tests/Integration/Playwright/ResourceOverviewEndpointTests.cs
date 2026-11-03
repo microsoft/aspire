@@ -64,23 +64,14 @@ public sealed class ResourceOverviewEndpointTests : PlaywrightTestsBase<Resource
             await page.Keyboard.PressAsync("Escape");
             await Assertions.Expect(tooltip).ToHaveCountAsync(0);
             var secondary = catalog.Locator("span.overview-endpoint-address");
-            await secondary.ScrollIntoViewIfNeededAsync();
-            await link.FocusAsync();
-            await page.Keyboard.PressAsync("Tab");
-            await Assertions.Expect(secondary).ToBeFocusedAsync();
-            await Assertions.Expect(tooltip).ToBeVisibleAsync();
-            await Assertions.Expect(tooltip).ToHaveTextAsync(MaskedInternalUrl);
-            await page.Keyboard.PressAsync("Escape");
+            await AssertKeyboardTooltipAfterScrollingAsync(link, MaskedPublicUrl, scrollToEnd: true);
+            await AssertKeyboardTooltipAfterScrollingAsync(secondary, MaskedInternalUrl, scrollToEnd: true);
 
             var tcp = rows.Filter(new() { Has = page.GetByText("Cache connection", new() { Exact = true }) });
             await Assertions.Expect(tcp.Locator(".overview-endpoint-address")).ToHaveTextAsync(MaskedTcpUrl);
             await Assertions.Expect(tcp.GetByRole(AriaRole.Link)).ToHaveCountAsync(0);
             await Assertions.Expect(tcp.Locator(".overview-badge")).ToHaveTextAsync("Internal");
-            await tcp.Locator(".overview-endpoint-address").ScrollIntoViewIfNeededAsync();
-            await tcp.Locator(".overview-endpoint-address").FocusAsync();
-            await Assertions.Expect(tooltip).ToBeVisibleAsync();
-            await Assertions.Expect(tooltip).ToHaveTextAsync(MaskedTcpUrl);
-            await page.Keyboard.PressAsync("Escape");
+            await AssertKeyboardTooltipAfterScrollingAsync(tcp.Locator(".overview-endpoint-address"), MaskedTcpUrl, scrollToEnd: false);
             await page.Mouse.MoveAsync(0, 0);
 
             var docs = rows.Filter(new() { Has = page.GetByText("Documentation", new() { Exact = true }) });
@@ -90,16 +81,11 @@ public sealed class ResourceOverviewEndpointTests : PlaywrightTestsBase<Resource
             var plain = rows.Filter(new() { Has = page.GetByText("http", new() { Exact = true }) });
             await Assertions.Expect(plain.GetByRole(AriaRole.Link)).ToHaveTextAsync("http://localhost:5080");
 
-            await card.ScrollIntoViewIfNeededAsync();
-            await card.Locator(".overview-list").EvaluateAsync("el => el.scrollTop = 0");
-            await page.ScreenshotAsync(new() { Path = Path.Combine(AppContext.BaseDirectory, $"endpoints-compact-{width}x{height}.png") });
-
             var longAddress = card.GetByRole(AriaRole.Link, new() { Name = s_maskedLongUrl, Exact = true });
             await Assertions.Expect(longAddress).ToHaveAttributeAsync("href", s_longUrl);
             await longAddress.Locator("..").ScrollIntoViewIfNeededAsync();
             await Assertions.Expect(longAddress).ToBeVisibleAsync();
             await Assertions.Expect(longAddress.Locator("..").Locator(".overview-endpoint-name")).ToHaveTextAsync(s_longFriendlyName);
-            await page.ScreenshotAsync(new() { Path = Path.Combine(AppContext.BaseDirectory, $"endpoints-compact-long-{width}x{height}.png") });
 
             // Ellipsis clips only the displayed address. The complete masked value remains available through
             // the shared tooltip on hover and keyboard focus, while the link retains the original destination.
@@ -117,7 +103,6 @@ public sealed class ResourceOverviewEndpointTests : PlaywrightTestsBase<Resource
             await longAddress.HoverAsync();
             await Assertions.Expect(tooltip).ToBeVisibleAsync();
             await Assertions.Expect(tooltip).ToHaveTextAsync(s_maskedLongUrl);
-            await page.ScreenshotAsync(new() { Path = Path.Combine(AppContext.BaseDirectory, $"endpoints-compact-hover-{width}x{height}.png") });
             await page.Mouse.MoveAsync(0, 0);
             await page.Keyboard.PressAsync("Escape");
             await longAddress.FocusAsync();
@@ -125,7 +110,33 @@ public sealed class ResourceOverviewEndpointTests : PlaywrightTestsBase<Resource
             await Assertions.Expect(tooltip).ToBeVisibleAsync();
             await Assertions.Expect(tooltip).ToHaveTextAsync(s_maskedLongUrl);
             await Assertions.Expect(longAddress).ToHaveAttributeAsync("href", s_longUrl);
-            await page.ScreenshotAsync(new() { Path = Path.Combine(AppContext.BaseDirectory, $"endpoints-compact-focus-{width}x{height}.png") });
+
+            async Task AssertKeyboardTooltipAfterScrollingAsync(ILocator address, string expectedText, bool scrollToEnd)
+            {
+                await address.EvaluateAsync("address => address.focus({ preventScroll: true })");
+                await page.Keyboard.PressAsync("Shift+Tab");
+                var list = card.Locator(".overview-list");
+                await list.EvaluateAsync("(list, end) => list.scrollTop = end ? list.scrollHeight : 0", scrollToEnd);
+                await AfterScrollEventsAsync();
+                var before = await list.EvaluateAsync<double>("list => list.scrollTop");
+
+                await page.Keyboard.PressAsync("Tab");
+                await Assertions.Expect(address).ToBeFocusedAsync();
+                // Scroll events are dispatched after focus. Wait through rendering frames so a tooltip
+                // that appears briefly during focus but is cleared by scrolling cannot pass this assertion.
+                await AfterScrollEventsAsync();
+                Assert.NotEqual(before, await list.EvaluateAsync<double>("list => list.scrollTop"));
+                await Assertions.Expect(tooltip).ToBeVisibleAsync();
+                await Assertions.Expect(tooltip).ToHaveTextAsync(expectedText);
+                await page.Keyboard.PressAsync("Escape");
+                await Assertions.Expect(tooltip).ToHaveCountAsync(0);
+                await list.EvaluateAsync("(list, end) => list.scrollTop = end ? list.scrollHeight : 0", scrollToEnd);
+                await AfterScrollEventsAsync();
+                await Assertions.Expect(tooltip).ToHaveCountAsync(0);
+            }
+
+            Task AfterScrollEventsAsync() => page.EvaluateAsync(
+                "() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))");
         });
     }
 
