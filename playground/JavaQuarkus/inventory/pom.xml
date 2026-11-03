@@ -19,6 +19,12 @@
 
     <dependencyManagement>
         <dependencies>
+            <!-- Keep this override until Quarkus's BOM includes this Guava version. -->
+            <dependency>
+                <groupId>com.google.guava</groupId>
+                <artifactId>guava</artifactId>
+                <version>33.7.2-jre</version>
+            </dependency>
             <!-- Import first so the patched Jackson modules take precedence over Quarkus's BOM. -->
             <dependency>
                 <groupId>com.fasterxml.jackson</groupId>
