@@ -14,6 +14,7 @@ From your AppHost directory, add the `Aspire.Hosting.Azure.Storage` integration 
 
 ```bash
 aspire add Aspire.Hosting.Azure.Storage
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Configure Azure Provisioning for local development
@@ -40,7 +41,7 @@ In the AppHost, add a Blob (can use tables or queues also) Storage connection an
 ```csharp
 var blobs = builder.AddAzureStorage("storage").AddBlobs("blobs");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(blobs);
 ```
 
@@ -67,7 +68,7 @@ var container = storage.AddBlobContainer("my-container");
 The container reference can be passed to another resource:
 
 ```csharp
-builder.AddProject<Projects.MyService>()
+builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
        .WithReference(container);
 ```
 
@@ -81,7 +82,7 @@ var queue = storage.AddQueue("my-queue");
 The queue reference can be passed to another resource:
 
 ```csharp
-builder.AddProject<Projects.MyService>()
+builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
        .WithReference(queue);
 ```
 

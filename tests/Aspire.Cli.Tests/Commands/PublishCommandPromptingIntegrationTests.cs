@@ -1158,7 +1158,7 @@ internal sealed class TestConsoleInteractionServiceWithPromptTracking : IInterac
         }
     }
 
-    public Task<string> PromptForStringAsync(string promptText, Func<string, ValidationResult>? validator = null, bool isSecret = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default)
+    public Task<string> PromptForStringAsync(string promptText, Func<string, ValidationResult>? validator = null, bool isSecret = false, bool required = false, PromptBinding<string?>? binding = null, bool logResponse = true, CancellationToken cancellationToken = default)
     {
         StringPromptCalls.Add(new StringPromptCall(promptText, binding?.DefaultValue, isSecret, required));
         if (_shouldCancel || cancellationToken.IsCancellationRequested)
@@ -1175,7 +1175,7 @@ internal sealed class TestConsoleInteractionServiceWithPromptTracking : IInterac
     }
 
     public Task<string> PromptForFilePathAsync(string promptText, Func<string, ValidationResult>? validator = null, bool directory = false, bool required = false, PromptBinding<string?>? binding = null, bool retryOnValidationFailure = false, CancellationToken cancellationToken = default)
-        => PromptForStringAsync(promptText, validator, isSecret: false, required, binding, cancellationToken);
+        => PromptForStringAsync(promptText, validator, isSecret: false, required, binding, cancellationToken: cancellationToken);
 
     public Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull
     {

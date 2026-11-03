@@ -9,27 +9,27 @@
       </trans-unit>
       <trans-unit id="DashboardDisabledExceptionMessage">
         <source>The dashboard is not enabled for this application.</source>
-        <target state="new">The dashboard is not enabled for this application.</target>
+        <target state="translated">Řídicí panel není pro tuto aplikaci povolený.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardTestingPublishModeExceptionMessage">
         <source>Dashboard testing is not supported in publish mode.</source>
-        <target state="new">Dashboard testing is not supported in publish mode.</target>
+        <target state="translated">Testování řídicího panelu se v režimu publikování nepodporuje.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardUrlApplicationNotStartedExceptionMessage">
         <source>The application must be started before retrieving the dashboard URL.</source>
-        <target state="new">The application must be started before retrieving the dashboard URL.</target>
+        <target state="translated">Před získáním adresy URL řídicího panelu je nutné spustit aplikaci.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardUrlPublishModeExceptionMessage">
         <source>The dashboard URL is not available in publish mode.</source>
-        <target state="new">The dashboard URL is not available in publish mode.</target>
+        <target state="translated">Adresa URL řídicího panelu není v režimu publikování k dispozici.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardUrlUnavailableExceptionMessage">
         <source>The dashboard URL is not available.</source>
-        <target state="new">The dashboard URL is not available.</target>
+        <target state="translated">Adresa URL řídicího panelu není k dispozici.</target>
         <note />
       </trans-unit>
       <trans-unit id="EndpointForResourceNotFoundExceptionMessage">

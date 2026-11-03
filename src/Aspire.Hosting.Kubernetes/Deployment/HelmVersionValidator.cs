@@ -19,13 +19,19 @@ namespace Aspire.Hosting.Kubernetes;
 /// Validating up-front turns errors like <c>unknown flag: --force-conflicts</c> or
 /// <c>Flag --force has been deprecated, use --force-replace instead</c> into a single
 /// clear actionable message.
+/// <para>
+/// The minimum is the first Helm 4 release because every flag Aspire passes to
+/// <c>helm upgrade --install</c> and <c>helm uninstall</c> exists from Helm 4.0.0 onward.
+/// Requiring a newer minor would reject Helm builds commonly preinstalled on CI images
+/// (for example, Helm 4.1.x on GitHub-hosted Windows runners) without any functional benefit.
+/// </para>
 /// </remarks>
 internal static partial class HelmVersionValidator
 {
     /// <summary>
     /// Minimum supported Helm version. See class remarks for rationale.
     /// </summary>
-    public static readonly Version MinimumHelmVersion = new(4, 2, 0);
+    public static readonly Version MinimumHelmVersion = new(4, 0, 0);
 
     private const string InstallDocsUrl = "https://helm.sh/docs/intro/install/";
 

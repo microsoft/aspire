@@ -6,14 +6,5 @@
   <packageSources>
     <add key="aspire-apphost-source" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json" />
   </packageSources>
-  <packageSourceMapping>
-    <clear />
-    <packageSource key="default">
-      <package pattern="*" />
-    </packageSource>
-    <packageSource key="aspire-apphost-source">
-      <package pattern="Aspire*" />
-    </packageSource>
-  </packageSourceMapping>
 </configuration>
 }

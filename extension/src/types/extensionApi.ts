@@ -1,5 +1,5 @@
 import type * as vscode from 'vscode';
-import type { DebugLaunchSettings, EnvVar, ExecutableLaunchConfiguration } from '../dcp/types';
+import type { DebugLaunchSettings, EnvVar, ExecutableLaunchConfiguration, ProjectLaunchConfiguration } from '../dcp/types';
 import type { ViewMode } from '../data/AppHostDataRepository';
 import type { CommandInvocationEvent } from '../utils/telemetry';
 import type { AspireTerminalCommandEvent } from '../utils/AspireTerminalProvider';
@@ -238,7 +238,7 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'getRegisteredAspireCommands' }
     | { name: 'getRegisteredLanguageModelTools' }
     | { name: 'prepareLanguageModelToolInvocation'; toolName: string; input: Record<string, unknown> }
-    | { name: 'invokeLanguageModelTool'; toolName: string; input: Record<string, unknown>; times?: number; cancelBeforeInvocation?: boolean; invokeRegisteredToolDirectly?: boolean }
+    | { name: 'invokeLanguageModelTool'; toolName: string; input: Record<string, unknown>; times?: number; cancelAfterMs?: number; cancelBeforeInvocation?: boolean; invokeRegisteredToolDirectly?: boolean }
     | { name: 'setDashboardBrowserForE2E'; value: 'integratedBrowser' | null }
     | { name: 'getDebugSessionProcessInfo'; appHostPath?: string }
     | { name: 'getExtensionPackageJson' }
@@ -262,7 +262,7 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'addWorkspaceFolder'; folderPath: string }
     | { name: 'getActiveEditor' }
     | { name: 'getOpenEditors' }
-    | { name: 'runAspireCli'; args: readonly string[]; workingDirectory: string; timeoutMs?: number; allowNonZeroExit?: boolean }
+    | { name: 'runAspireCli'; args: readonly string[]; workingDirectory: string; timeoutMs?: number; noExtensionVariables?: boolean; allowNonZeroExit?: boolean }
     | { name: 'getResourceDebuggerExtensions' }
     | { name: 'getSupportedCapabilities' }
     | { name: 'getVisibleExtensionIds' }
@@ -277,8 +277,31 @@ export type AspireExtensionE2EControlCommand =
         debuggers?: Readonly<Record<string, DebugLaunchSettings>>;
         environmentKeys?: readonly string[];
         csharpExtensionVersion?: string | null;
+        expectedErrorMessage?: string;
+    }
+    | {
+        name: 'proveAttachedResourceDebugging';
+        appHostPath: string;
+        resourceName: string;
+        sourcePath: string;
+        breakpointLine: number;
+        expectedDebugType: 'coreclr' | 'go';
+        expectedResponse: string;
+        resourceRequestPath?: string;
+        timeoutMs?: number;
     }
     | { name: 'proveAppHostAndResourceDebugging'; appHostPath: string; resourceName: string; appHostSourcePath: string; appHostBreakpointLine: number; resourceSourcePath: string; resourceBreakpointLine: number; resourceRequestPath?: string; continueExceptionStops?: boolean; timeoutMs?: number }
+    | {
+        name: 'proveDotnetResourceLaunch';
+        launchConfig: ProjectLaunchConfiguration;
+        sourcePath: string;
+        breakpointLine: number;
+        readyFilePath: string;
+        debug: boolean;
+        args?: readonly string[];
+        env?: readonly EnvVar[];
+        timeoutMs?: number;
+    }
     | { name: 'prepareBlazorWasmDebugger' }
     | {
         name: 'proveBlazorWasmDebugging';

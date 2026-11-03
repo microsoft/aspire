@@ -9,25 +9,25 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	storage := builder.AddAzureStorage("storage")
 	if storage.Err() != nil {
-		log.Fatalf(aspire.FormatError(storage.Err()))
+		log.Fatal(aspire.FormatError(storage.Err()))
 	}
 
 	vnet := builder.AddAzureVirtualNetwork("vnet")
 	if vnet.Err() != nil {
-		log.Fatalf(aspire.FormatError(vnet.Err()))
+		log.Fatal(aspire.FormatError(vnet.Err()))
 	}
 	deploymentSubnet := vnet.AddSubnet("deployment-subnet", "10.0.1.0/24")
 	if deploymentSubnet.Err() != nil {
-		log.Fatalf(aspire.FormatError(deploymentSubnet.Err()))
+		log.Fatal(aspire.FormatError(deploymentSubnet.Err()))
 	}
 	aciSubnet := vnet.AddSubnet("aci-subnet", "10.0.2.0/29")
 	if aciSubnet.Err() != nil {
-		log.Fatalf(aspire.FormatError(aciSubnet.Err()))
+		log.Fatal(aspire.FormatError(aciSubnet.Err()))
 	}
 
 	sqlServer := builder.AddAzureSqlServer("sql")
@@ -36,19 +36,19 @@ func main() {
 		server.Tags().Set("provisioning-proxy", "go")
 	})
 	if sqlServer.Err() != nil {
-		log.Fatalf(aspire.FormatError(sqlServer.Err()))
+		log.Fatal(aspire.FormatError(sqlServer.Err()))
 	}
 
 	db := sqlServer.AddDatabase("mydb")
 	if db.Err() != nil {
-		log.Fatalf(aspire.FormatError(db.Err()))
+		log.Fatal(aspire.FormatError(db.Err()))
 	}
 
 	db2 := sqlServer.AddDatabase("inventory", &aspire.AddDatabaseOptions{
 		DatabaseName: aspire.StringPtr("inventorydb"),
 	})
 	if db2.Err() != nil {
-		log.Fatalf(aspire.FormatError(db2.Err()))
+		log.Fatal(aspire.FormatError(db2.Err()))
 	}
 	db2.WithDefaultAzureSku()
 
@@ -56,7 +56,7 @@ func main() {
 		ConfigureContainer: func(container aspire.SqlServerServerResource) {},
 	})
 	if sqlServer.Err() != nil {
-		log.Fatalf(aspire.FormatError(sqlServer.Err()))
+		log.Fatal(aspire.FormatError(sqlServer.Err()))
 	}
 
 	sqlServer.WithAdminDeploymentScriptSubnet(deploymentSubnet)
@@ -78,7 +78,7 @@ func main() {
 	_, _ = sqlServer.AzureSqlDatabases()
 
 	if sqlServer.Err() != nil {
-		log.Fatalf(aspire.FormatError(sqlServer.Err()))
+		log.Fatal(aspire.FormatError(sqlServer.Err()))
 	}
 
 	_ = db.Parent()
@@ -89,14 +89,14 @@ func main() {
 	_ = db.JdbcConnectionString()
 
 	if db.Err() != nil {
-		log.Fatalf(aspire.FormatError(db.Err()))
+		log.Fatal(aspire.FormatError(db.Err()))
 	}
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	if err := app.Run(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 }

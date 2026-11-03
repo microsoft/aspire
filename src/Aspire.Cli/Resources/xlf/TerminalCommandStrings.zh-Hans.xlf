@@ -4,107 +4,107 @@
     <body>
       <trans-unit id="DiscoveringSessions">
         <source>Discovering terminal sessions...</source>
-        <target state="new">Discovering terminal sessions...</target>
+        <target state="translated">正在发现终端会话...</target>
         <note />
       </trans-unit>
       <trans-unit id="InstanceTerminalUnavailable">
         <source>Cannot resolve the terminal endpoint for instance '{0}' because its replica metadata is missing, invalid, or unavailable. Use 'aspire ps' or 'aspire describe' to check the current resource instances.</source>
-        <target state="new">Cannot resolve the terminal endpoint for instance '{0}' because its replica metadata is missing, invalid, or unavailable. Use 'aspire ps' or 'aspire describe' to check the current resource instances.</target>
+        <target state="translated">无法解析实例 '{0}' 的终端终结点，因为其副本元数据缺失、无效或不可用。请使用 'aspire ps' 或 'aspire describe' 检查当前资源实例。</target>
         <note />
       </trans-unit>
       <trans-unit id="LookingUpResource">
         <source>Looking up resource...</source>
-        <target state="new">Looking up resource...</target>
+        <target state="translated">正在查找资源...</target>
         <note />
       </trans-unit>
       <trans-unit id="ReplicaNotFound">
         <source>Replica index {0} is not available for resource '{1}'. Available indices: {2}.</source>
-        <target state="new">Replica index {0} is not available for resource '{1}'. Available indices: {2}.</target>
+        <target state="translated">副本索引 {0} 不适用于资源“{1}”。可用索引: {2}。</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceAmbiguous">
         <source>Resource '{0}' matches multiple instances. Specify an exact instance ID. Available instance IDs: {1}.</source>
-        <target state="new">Resource '{0}' matches multiple instances. Specify an exact instance ID. Available instance IDs: {1}.</target>
+        <target state="translated">资源 '{0}' 匹配多个实例。指定确切的实例 ID。可用的实例 ID： {1}。</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
         <source>The resource display name for a singleton, or the exact resource instance ID for a replica. Use 'aspire ps' or 'aspire describe' to discover instance IDs.</source>
-        <target state="new">The resource display name for a singleton, or the exact resource instance ID for a replica. Use 'aspire ps' or 'aspire describe' to discover instance IDs.</target>
+        <target state="translated">单一实例的资源显示名称，或副本的确切资源实例 ID。请使用 'aspire ps' 或 'aspire describe' 来发现实例 ID。</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceInstanceRequired">
         <source>Resource '{0}' has multiple terminal instances. Specify an exact instance ID from 'aspire ps' or 'aspire describe'.</source>
-        <target state="new">Resource '{0}' has multiple terminal instances. Specify an exact instance ID from 'aspire ps' or 'aspire describe'.</target>
+        <target state="translated">资源 '{0}' 有多个终端实例。请从 'aspire ps' 或 'aspire describe' 中指定确切的实例 ID。</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceNotFound">
         <source>Resource '{0}' was not found.</source>
-        <target state="new">Resource '{0}' was not found.</target>
+        <target state="translated">未找到资源“{0}”。</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceRequired">
         <source>A resource name is required.</source>
-        <target state="new">A resource name is required.</target>
+        <target state="translated">资源名称为必填项。</target>
         <note />
       </trans-unit>
       <trans-unit id="TapeConnectionClosed">
         <source>The terminal connection closed before tape playback completed.</source>
-        <target state="new">The terminal connection closed before tape playback completed.</target>
+        <target state="translated">在磁带播放完成之前，终端连接已关闭。</target>
         <note />
       </trans-unit>
       <trans-unit id="TapeDescription">
         <source>Run VHS tape scripts against resource terminals.</source>
-        <target state="new">Run VHS tape scripts against resource terminals.</target>
+        <target state="translated">针对资源终端运行 VHS 磁带脚本。</target>
         <note />
       </trans-unit>
       <trans-unit id="TapeFileDescription">
         <source>The path to the VHS .tape file to play.</source>
-        <target state="new">The path to the VHS .tape file to play.</target>
+        <target state="translated">要播放的 VHS .tape 文件的路径。</target>
         <note />
       </trans-unit>
       <trans-unit id="TapeFileReadFailed">
         <source>Could not read tape file '{0}': {1}</source>
-        <target state="new">Could not read tape file '{0}': {1}</target>
+        <target state="translated">无法读取磁带文件“{0}”: {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="TapePlayDescription">
         <source>Play a VHS tape against a running resource terminal and print its final screen.</source>
-        <target state="new">Play a VHS tape against a running resource terminal and print its final screen.</target>
+        <target state="translated">针对正在运行的资源终端播放 VHS 磁带并打印其最终屏幕。</target>
         <note />
       </trans-unit>
       <trans-unit id="TapePlaybackFailed">
         <source>Tape playback failed: {0}</source>
-        <target state="new">Tape playback failed: {0}</target>
+        <target state="translated">磁带播放失败: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="TapeSelectAppHostAction">
         <source>play a terminal tape</source>
-        <target state="new">play a terminal tape</target>
+        <target state="translated">播放终端磁带</target>
         <note />
       </trans-unit>
       <trans-unit id="TapeTimeout">
         <source>Terminal tape playback did not finish within {0} seconds.</source>
-        <target state="new">Terminal tape playback did not finish within {0} seconds.</target>
+        <target state="translated">终端磁带播放未在 {0} 秒内完成。</target>
         <note />
       </trans-unit>
       <trans-unit id="TapeTimeoutDescription">
         <source>Maximum time in seconds to connect and play the tape. Defaults to 120 seconds.</source>
-        <target state="new">Maximum time in seconds to connect and play the tape. Defaults to 120 seconds.</target>
+        <target state="translated">连接和播放磁带的最长时间(以秒为单位)。默认值为 120 秒。</target>
         <note />
       </trans-unit>
       <trans-unit id="TapeTimeoutInvalid">
         <source>The timeout must be between 1 and {0} seconds.</source>
-        <target state="new">The timeout must be between 1 and {0} seconds.</target>
+        <target state="translated">超时必须介于 1 到 {0} 秒之间。</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalIncompatible">
         <source>The connected AppHost does not support 'aspire terminal'. Update Aspire.Hosting to 13.4 or later.</source>
-        <target state="new">The connected AppHost does not support 'aspire terminal'. Update Aspire.Hosting to 13.4 or later.</target>
+        <target state="translated">连接的 AppHost 不支持 'aspire terminal'。将 Aspire.Hosting 更新为 13.4 或更高版本。</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalUnavailable">
         <source>Resource '{0}' is not available for terminal attachment. Make sure the resource was registered with '.WithTerminal()' and that the terminal host has started.</source>
-        <target state="new">Resource '{0}' is not available for terminal attachment. Make sure the resource was registered with '.WithTerminal()' and that the terminal host has started.</target>
+        <target state="translated">资源 '{0}' 不可用于终端连接。请确保已向 ' 注册资源。WithTerminal()“，并且终端主机已启动。</target>
         <note />
       </trans-unit>
     </body>

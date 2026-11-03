@@ -14,6 +14,7 @@ From your AppHost directory, add the `Aspire.Hosting.Azure.ServiceBus` integrati
 
 ```bash
 aspire add Aspire.Hosting.Azure.ServiceBus
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Configure Azure Provisioning for local development
@@ -40,7 +41,7 @@ In the AppHost, add a Service Bus connection and reference it from another resou
 ```csharp
 var serviceBus = builder.AddAzureServiceBus("sb");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(serviceBus);
 ```
 

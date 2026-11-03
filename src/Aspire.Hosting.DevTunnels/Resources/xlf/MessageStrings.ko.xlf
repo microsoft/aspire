@@ -19,17 +19,17 @@
       </trans-unit>
       <trans-unit id="DevTunnelHostDisconnected">
         <source>The local host for dev tunnel '{0}' is disconnected.</source>
-        <target state="new">The local host for dev tunnel '{0}' is disconnected.</target>
+        <target state="translated">개발 터널 '{0}'의 로컬 호스트 연결이 끊겼습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DevTunnelHostHealthy">
         <source>Dev tunnel '{0}' is connected and hosting all expected ports.</source>
-        <target state="new">Dev tunnel '{0}' is connected and hosting all expected ports.</target>
+        <target state="translated">개발 터널 '{0}'이 연결되어 예상한 모든 포트를 호스팅하고 있습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DevTunnelHostNotReady">
         <source>Waiting for dev tunnel '{0}' to connect and expose its ports.</source>
-        <target state="new">Waiting for dev tunnel '{0}' to connect and expose its ports.</target>
+        <target state="translated">개발 터널 '{0}'이 연결되어 포트를 노출할 때까지 기다리는 중입니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DevTunnelPortHealthy">
@@ -79,47 +79,47 @@
       </trans-unit>
       <trans-unit id="ShowTunnelUrlsCommandClose">
         <source>Close</source>
-        <target state="new">Close</target>
+        <target state="translated">닫기</target>
         <note />
       </trans-unit>
       <trans-unit id="ShowTunnelUrlsCommandDescription">
         <source>Opens available public, inspect, and local URLs for the dev tunnel port.</source>
-        <target state="new">Opens available public, inspect, and local URLs for the dev tunnel port.</target>
+        <target state="translated">개발 터널 포트에 사용할 수 있는 공개 URL, 검사 URL 및 로컬 URL을 엽니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ShowTunnelUrlsCommandDisplayName">
         <source>Show tunnel URLs</source>
-        <target state="new">Show tunnel URLs</target>
+        <target state="translated">터널 URL 표시</target>
         <note />
       </trans-unit>
       <trans-unit id="ShowTunnelUrlsCommandInspectUrlLabel">
         <source>Inspect URL</source>
-        <target state="new">Inspect URL</target>
+        <target state="translated">URL 검사</target>
         <note />
       </trans-unit>
       <trans-unit id="ShowTunnelUrlsCommandInteractionUnavailable">
         <source>Dev tunnel URLs can only be shown in an interactive environment.</source>
-        <target state="new">Dev tunnel URLs can only be shown in an interactive environment.</target>
+        <target state="translated">개발 터널 URL은 대화형 환경에서만 표시할 수 있습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ShowTunnelUrlsCommandLocalEndpointUrlLabel">
         <source>Local endpoint URL</source>
-        <target state="new">Local endpoint URL</target>
+        <target state="translated">로컬 엔드포인트 URL</target>
         <note />
       </trans-unit>
       <trans-unit id="ShowTunnelUrlsCommandResultHeading">
         <source>Dev tunnel URLs</source>
-        <target state="new">Dev tunnel URLs</target>
+        <target state="translated">개발 터널 URL</target>
         <note />
       </trans-unit>
       <trans-unit id="ShowTunnelUrlsCommandTunnelUrlLabel">
         <source>Tunnel URL</source>
-        <target state="new">Tunnel URL</target>
+        <target state="translated">터널 URL</target>
         <note />
       </trans-unit>
       <trans-unit id="ShowTunnelUrlsCommandUnavailable">
         <source>Dev tunnel URLs are not available yet.</source>
-        <target state="new">Dev tunnel URLs are not available yet.</target>
+        <target state="translated">개발 터널 URL은 아직 사용할 수 없습니다.</target>
         <note />
       </trans-unit>
     </body>

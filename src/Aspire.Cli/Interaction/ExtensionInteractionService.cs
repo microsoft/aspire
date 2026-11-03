@@ -142,7 +142,7 @@ internal class ExtensionInteractionService : IExtensionInteractionService, IDisp
         }
     }
 
-    public async Task<string> PromptForStringAsync(string promptText, Func<string, ValidationResult>? validator = null, bool isSecret = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default)
+    public async Task<string> PromptForStringAsync(string promptText, Func<string, ValidationResult>? validator = null, bool isSecret = false, bool required = false, PromptBinding<string?>? binding = null, bool logResponse = true, CancellationToken cancellationToken = default)
     {
         // Check binding first — if a CLI arg was explicitly provided, return it immediately
         // without prompting through either the extension or console path.
@@ -195,7 +195,7 @@ internal class ExtensionInteractionService : IExtensionInteractionService, IDisp
         }
         else
         {
-            return await _consoleInteractionService.PromptForStringAsync(promptText, validator, isSecret, required, binding, cancellationToken).ConfigureAwait(false);
+            return await _consoleInteractionService.PromptForStringAsync(promptText, validator, isSecret, required, binding, logResponse, cancellationToken).ConfigureAwait(false);
         }
     }
 
@@ -262,7 +262,7 @@ internal class ExtensionInteractionService : IExtensionInteractionService, IDisp
             }
 
             // Fall back to string prompt for older extensions without file picker support
-            return await PromptForStringAsync(promptText, validator, isSecret: false, required, binding, cancellationToken).ConfigureAwait(false);
+            return await PromptForStringAsync(promptText, validator, isSecret: false, required, binding, cancellationToken: cancellationToken).ConfigureAwait(false);
         }
 
         return await _consoleInteractionService.PromptForFilePathAsync(promptText, validator, directory, required, binding, retryOnValidationFailure, cancellationToken).ConfigureAwait(false);

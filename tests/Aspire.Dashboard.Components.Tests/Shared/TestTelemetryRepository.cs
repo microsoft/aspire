@@ -42,6 +42,7 @@ internal sealed class TestTelemetryRepository(ITelemetryRepository inner) : ITel
     public Task<GetTracesResponse> GetTracesAsync(GetTracesRequest context, CancellationToken cancellationToken) => inner.GetTracesAsync(context, cancellationToken);
     public Task<GetTraceSummariesResponse> GetTraceSummariesAsync(GetTracesRequest context, CancellationToken cancellationToken) => inner.GetTraceSummariesAsync(context, cancellationToken);
     public Task<GetSpansResponse> GetSpansAsync(GetSpansRequest context, CancellationToken cancellationToken) => inner.GetSpansAsync(context, cancellationToken);
+    public Task<GetRequestSpansResponse> GetRequestSpansAsync(GetRequestSpansRequest request, CancellationToken cancellationToken) => inner.GetRequestSpansAsync(request, cancellationToken);
     public Task<Dictionary<string, int>> GetTraceFieldValuesAsync(string attributeName, CancellationToken cancellationToken) => inner.GetTraceFieldValuesAsync(attributeName, cancellationToken);
     public Task<Dictionary<string, int>> GetLogsFieldValuesAsync(string attributeName, CancellationToken cancellationToken) => inner.GetLogsFieldValuesAsync(attributeName, cancellationToken);
     public bool HasUpdatedTrace(OtlpTrace trace) => inner.HasUpdatedTrace(trace);

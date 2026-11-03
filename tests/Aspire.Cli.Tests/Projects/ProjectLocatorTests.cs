@@ -3565,6 +3565,39 @@ builder.Build().Run();");
         Assert.Empty(found);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task FindAppHostProjectFilesAsync_HonorsSkipValidationForConfiguredAppHostOutsideSearchDepth(bool skipValidation)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHost = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHost.FullName, """<Project Sdk="Aspire.AppHost.Sdk" />""");
+        await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName), """
+            {"appHost":{"path":"AppHost/AppHost.csproj"}}
+            """);
+        var validationCalls = 0;
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            ValidateAppHostCallback = file =>
+            {
+                Assert.Equal(appHost.FullName, file.FullName);
+                validationCalls++;
+                return new AppHostValidationResult(IsValid: true);
+            }
+        };
+        var projectLocator = CreateProjectLocator(
+            CreateExecutionContext(workspace.WorkspaceRoot), projectFactory: projectFactory);
+
+        var found = await projectLocator.FindAppHostProjectFilesAsync(
+            workspace.WorkspaceRoot, AppHostDiscoveryScope.DefaultFiltered, maxDepth: 0,
+            CancellationToken.None, skipValidation).DefaultTimeout();
+
+        Assert.Equal([appHost.FullName], found.Select(file => file.FullName));
+        Assert.Equal(skipValidation ? 0 : 1, validationCalls);
+    }
+
     [Fact]
     public async Task FindAppHostProjectsAsync_DefaultFiltered_GitMode_OnlyIncludesGitListedFiles()
     {

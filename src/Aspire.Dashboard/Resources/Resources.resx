@@ -181,6 +181,16 @@
   <data name="ResourcesDetailsContainerLifetimeProperty" xml:space="preserve">
     <value>Container lifetime</value>
   </data>
+  <data name="ResourcePersistentLifetime" xml:space="preserve">
+    <value>Persistent</value>
+  </data>
+  <data name="ResourcePersistentLifetimeDescription" xml:space="preserve">
+    <value>Not automatically stopped when the AppHost stops. This lifetime does not guarantee durable data.</value>
+  </data>
+  <data name="ResourcePersistentType" xml:space="preserve">
+    <value>{0} (persistent)</value>
+    <comment>{0} is the resource type, for example Container. Persistence describes the container lifetime, not durable data.</comment>
+  </data>
   <data name="ResourcesDetailsDisplayNameProperty" xml:space="preserve">
     <value>Display name</value>
   </data>
@@ -348,5 +358,263 @@
   </data>
   <data name="ResourceActionUrlsText" xml:space="preserve">
     <value>URLs</value>
+  </data>
+  <data name="ResourceOverviewPageTitle" xml:space="preserve">
+    <value>Resource overview</value>
+  </data>
+  <data name="ResourceOverviewNotFound" xml:space="preserve">
+    <value>Resource '{0}' was not found.</value>
+  </data>
+  <data name="ResourceOverviewStatusTitle" xml:space="preserve">
+    <value>Status</value>
+  </data>
+  <data name="ResourceOverviewStopTime" xml:space="preserve">
+    <value>Stop time</value>
+  </data>
+  <data name="ResourceOverviewExitCode" xml:space="preserve">
+    <value>Exit code</value>
+  </data>
+  <data name="ResourceOverviewEndpointsTitle" xml:space="preserve">
+    <value>Endpoints</value>
+  </data>
+  <data name="ResourceOverviewNoEndpoints" xml:space="preserve">
+    <value>No endpoints</value>
+  </data>
+  <data name="ResourceOverviewRelationshipsTitle" xml:space="preserve">
+    <value>Relationships</value>
+  </data>
+  <data name="ResourceOverviewNoRelationships" xml:space="preserve">
+    <value>No relationships</value>
+  </data>
+  <data name="ResourceOverviewConsoleTitle" xml:space="preserve">
+    <value>Console</value>
+  </data>
+  <data name="ResourceOverviewOpenConsole" xml:space="preserve">
+    <value>Open console</value>
+  </data>
+  <data name="ResourceOverviewNoConsoleLogs" xml:space="preserve">
+    <value>No console output</value>
+  </data>
+  <data name="ResourceOverviewLogsTitle" xml:space="preserve">
+    <value>Structured logs</value>
+  </data>
+  <data name="ResourceOverviewTracesTitle" xml:space="preserve">
+    <value>Traces</value>
+  </data>
+  <data name="ResourceOverviewMetricsTitle" xml:space="preserve">
+    <value>Metrics</value>
+  </data>
+  <data name="ResourceOverviewViewAll" xml:space="preserve">
+    <value>View all</value>
+  </data>
+  <data name="ResourceOverviewNoTelemetry" xml:space="preserve">
+    <value>This resource hasn't sent telemetry</value>
+  </data>
+  <data name="ResourceOverviewTotal" xml:space="preserve">
+    <value>Total</value>
+  </data>
+  <data name="ResourceOverviewWarnings" xml:space="preserve">
+    <value>Warnings</value>
+  </data>
+  <data name="ResourceOverviewErrors" xml:space="preserve">
+    <value>Errors</value>
+  </data>
+  <data name="ResourceOverviewFailed" xml:space="preserve">
+    <value>Failed</value>
+  </data>
+  <data name="ResourceOverviewNoAttentionLogs" xml:space="preserve">
+    <value>No warnings or errors</value>
+  </data>
+  <data name="ResourceOverviewNoTraces" xml:space="preserve">
+    <value>No traces</value>
+  </data>
+  <data name="ResourceOverviewNoMetrics" xml:space="preserve">
+    <value>No metrics</value>
+  </data>
+  <data name="ResourceOverviewInstruments" xml:space="preserve">
+    <value>Instruments</value>
+  </data>
+  <data name="ResourceOverviewMeters" xml:space="preserve">
+    <value>Meters</value>
+  </data>
+  <data name="HomeSummaryLandmark" xml:space="preserve">
+    <value>Summary</value>
+  </data>
+  <data name="HomeResourcesLabel" xml:space="preserve">
+    <value>Resources</value>
+  </data>
+  <data name="HomeResourceColumn" xml:space="preserve">
+    <value>Resource</value>
+  </data>
+  <data name="HomeResourceActions" xml:space="preserve">
+    <value>Actions for {0}</value>
+    <comment>{0} is the resource name.</comment>
+  </data>
+  <data name="HomeRunningLabel" xml:space="preserve">
+    <value>Running</value>
+  </data>
+  <data name="HomeNeedsAttentionLabel" xml:space="preserve">
+    <value>Need attention</value>
+  </data>
+  <data name="HomeUnviewedErrors" xml:space="preserve">
+    <value>{0} unviewed error logs</value>
+  </data>
+  <data name="HomeRecentErrorsTitle" xml:space="preserve">
+    <value>Recent errors</value>
+  </data>
+  <data name="HomeNoRecentErrors" xml:space="preserve">
+    <value>No errors logged</value>
+  </data>
+  <data name="ParametersPageTitle" xml:space="preserve">
+    <value>Parameters</value>
+  </data>
+  <data name="GraphPageTitle" xml:space="preserve">
+    <value>Graph</value>
+  </data>
+  <data name="LayoutLabel" xml:space="preserve">
+    <value>Layout</value>
+  </data>
+  <data name="ResourceOverviewRelationshipGraph" xml:space="preserve">
+    <value>Relationship graph</value>
+  </data>
+  <data name="ResourceOverviewPropertiesTitle" xml:space="preserve">
+    <value>Properties</value>
+  </data>
+  <data name="ResourceOverviewNoProperties" xml:space="preserve">
+    <value>No properties</value>
+  </data>
+  <data name="ResourceOverviewNoVolumes" xml:space="preserve">
+    <value>No volumes</value>
+  </data>
+  <data name="ResourceOverviewNoHealthChecks" xml:space="preserve">
+    <value>No health checks</value>
+  </data>
+  <data name="ResourceOverviewNoEnvironmentVariables" xml:space="preserve">
+    <value>No environment variables</value>
+  </data>
+  <data name="ResourceOverviewNoMatchingEnvironmentVariables" xml:space="preserve">
+    <value>No environment variables match the filter</value>
+  </data>
+  <data name="ResourceOverviewShowAllEnvironmentVariables" xml:space="preserve">
+    <value>Show all environment variables</value>
+  </data>
+  <data name="ResourceOverviewShowAppModelEnvironmentVariables" xml:space="preserve">
+    <value>Show only environment variables from the app model</value>
+  </data>
+  <data name="ResourceOverviewFilterEnvironmentVariables" xml:space="preserve">
+    <value>Filter environment variables</value>
+  </data>
+  <data name="ResourceOverviewInternalEndpoint" xml:space="preserve">
+    <value>Internal</value>
+  </data>
+  <data name="ResourceOverviewCountOfTotal" xml:space="preserve">
+    <value>{0} of {1}</value>
+  </data>
+  <data name="ResourceOverviewShowMore" xml:space="preserve">
+    <value>{0} more</value>
+  </data>
+  <data name="ResourceOverviewShowLess" xml:space="preserve">
+    <value>Show less</value>
+  </data>
+  <data name="HomeHeadlineAttention" xml:space="preserve">
+    <value>{0} of {1} resources need attention</value>
+  </data>
+  <data name="HomeHeadlinePending" xml:space="preserve">
+    <value>{0} of {1} resources are pending</value>
+  </data>
+  <data name="HomeHeadlineAllRunning" xml:space="preserve">
+    <value>All {0} resources are running</value>
+  </data>
+  <data name="HomeHeadlineHealthy" xml:space="preserve">
+    <value>No resources need attention</value>
+  </data>
+  <data name="HomeStartedAt" xml:space="preserve">
+    <value>Started {0}</value>
+  </data>
+  <data name="HomePendingLabel" xml:space="preserve">
+    <value>Pending</value>
+  </data>
+  <data name="HomeInactiveLabel" xml:space="preserve">
+    <value>Inactive</value>
+  </data>
+  <data name="HomeTelemetryLandmark" xml:space="preserve">
+    <value>Telemetry</value>
+  </data>
+  <data name="HomeRecentFailedTracesTitle" xml:space="preserve">
+    <value>Recent failed traces</value>
+  </data>
+  <data name="HomeNoFailedTraces" xml:space="preserve">
+    <value>No failed traces</value>
+  </data>
+  <data name="HomeResourceStatesLabel" xml:space="preserve">
+    <value>Resource states</value>
+  </data>
+  <data name="ResourceTagsLabel" xml:space="preserve">
+    <value>Tags</value>
+  </data>
+  <data name="ResourceTagsAdd" xml:space="preserve">
+    <value>Add tag</value>
+  </data>
+  <data name="ResourceTagsInputPlaceholder" xml:space="preserve">
+    <value>Tag name</value>
+  </data>
+  <data name="ResourceTagsInputLabel" xml:space="preserve">
+    <value>Add a tag to {0}</value>
+  </data>
+  <data name="ResourceTagsRemove" xml:space="preserve">
+    <value>Remove tag {0}</value>
+  </data>
+  <data name="ResourceTagsAppHostDefined" xml:space="preserve">
+    <value>Defined by the AppHost. This tag cannot be removed.</value>
+  </data>
+  <data name="ResourceTraitDashboardTags" xml:space="preserve">
+    <value>Dashboard tags</value>
+    <comment>Name of the property listing the tags a resource declares in the AppHost.</comment>
+  </data>
+  <data name="ResourceTraitDashboardPosition" xml:space="preserve">
+    <value>Dashboard position</value>
+    <comment>Name of the property holding the default position a resource declares in the AppHost.</comment>
+  </data>
+  <data name="ResourceTagsCreate" xml:space="preserve">
+    <value>Create tag "{0}"</value>
+  </data>
+  <data name="ResourceTagsSuggestions" xml:space="preserve">
+    <value>Tags</value>
+  </data>
+  <data name="ResourceOverviewNoPinnedMetrics" xml:space="preserve">
+    <value>Pin the metrics you want to keep an eye on and they'll show up here.</value>
+  </data>
+  <data name="ResourceOverviewBrowseMeters" xml:space="preserve">
+    <value>Browse meters</value>
+  </data>
+  <data name="MissingParametersCount" xml:space="preserve">
+    <value>{0} parameters need values</value>
+  </data>
+  <data name="MissingParameterCount" xml:space="preserve">
+    <value>{0} parameter needs a value</value>
+  </data>
+  <data name="MissingParametersReview" xml:space="preserve">
+    <value>Review missing parameters</value>
+  </data>
+  <data name="ParametersAllValuesSet" xml:space="preserve">
+    <value>All values are set</value>
+  </data>
+  <data name="ParameterValueRequired" xml:space="preserve">
+    <value>Value required</value>
+  </data>
+  <data name="ParameterValueSet" xml:space="preserve">
+    <value>Value set</value>
+  </data>
+  <data name="MissingParametersPanelDescription" xml:space="preserve">
+    <value>Enter the missing values together, then apply them without leaving the resource overview.</value>
+  </data>
+  <data name="MissingParametersCardTitle" xml:space="preserve">
+    <value>Missing parameter values</value>
+  </data>
+  <data name="MissingParametersSaveToUserSecrets" xml:space="preserve">
+    <value>Save values to user secrets</value>
+  </data>
+  <data name="MissingParametersSetValues" xml:space="preserve">
+    <value>Set parameter values</value>
   </data>
 </root>

@@ -9,6 +9,7 @@ using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Testing;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 
@@ -870,6 +871,46 @@ public class ConsoleInteractionServiceTests
         Assert.DoesNotContain("[[Prod]]", outputString);
     }
 
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData(null, true)]
+    [InlineData("Stopping Aspire.", false)]
+    [InlineData("Stopping Aspire.", true)]
+    [InlineData("Stopping dashboard.", false)]
+    [InlineData("Stopping dashboard.", true)]
+    public void DisplayCancellationMessage_UsesDefaultOrCustomMessageAndConsoleOverride(string? message, bool useStderr)
+    {
+        var stdoutOutput = new StringBuilder();
+        var stderrOutput = new StringBuilder();
+        var stdoutConsole = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(stdoutOutput)),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+        });
+        var stderrConsole = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(stderrOutput)),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+        });
+        var consoleEnvironment = new ConsoleEnvironment(stdoutConsole, stderrConsole, TextReader.Null);
+        var interactionService = new ConsoleInteractionService(consoleEnvironment, CreateExecutionContext(), TestHelpers.CreateInteractiveHostEnvironment(), new EnvironmentProcessPathProvider(), NullLoggerFactory.Instance, new ConsoleLogBufferContext());
+        ConsoleOutput? consoleOverride = useStderr ? ConsoleOutput.Error : null;
+
+        interactionService.DisplayCancellationMessage(message, consoleOverride);
+
+        var targetConsole = useStderr ? stderrConsole : stdoutConsole;
+        var expectedOutput = Environment.NewLine
+            + ConsoleHelpers.FormatEmojiPrefix(KnownEmojis.StopSign, targetConsole, replaceEmoji: true)
+            + (message ?? InteractionServiceStrings.OperationCancelled)
+            + Environment.NewLine;
+        Assert.Equal(useStderr ? string.Empty : expectedOutput, stdoutOutput.ToString());
+        Assert.Equal(useStderr ? expectedOutput : string.Empty, stderrOutput.ToString());
+    }
+
     [Fact]
     public void DisplayError_WritesToStderr_RegardlessOfConsoleSetting()
     {
@@ -1404,6 +1445,26 @@ public class ConsoleInteractionServiceTests
         var result = await interactionService.PromptForStringAsync("Enter value:", validator: validator, binding: binding, cancellationToken: CancellationToken.None);
 
         Assert.Equal("good-value", result);
+    }
+
+    [Fact]
+    public async Task PromptForStringAsync_ResponseLoggingCanBeDisabledWithoutMaskingInput()
+    {
+        const string query = "private-template-search";
+        var output = new StringBuilder();
+        var console = CreateInteractiveConsoleWithInput(output, "\n");
+        var sink = new TestSink();
+        using var loggerFactory = new TestLoggerFactory(sink, enabled: true);
+        var interaction = CreateInteractionService(console, loggerFactory: loggerFactory);
+
+        var result = await interaction.PromptForStringAsync(
+            "Search:", binding: PromptBinding.CreateDefault<string?>(query), logResponse: false).DefaultTimeout();
+
+        Assert.Equal(query, result);
+        Assert.Contains(query, output.ToString());
+        Assert.Equal(
+            ["Prompt: Search: (default: ****, secret: False)", "Prompt result: ****"],
+            sink.Writes.Select(write => write.Message));
     }
 
     [Fact]

@@ -1062,6 +1062,10 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
     [Theory]
     [InlineData("Aspire.Hosting.Redis")]
     [InlineData("Aspire.StackExchange.Redis")]
+    [InlineData("Aspire.Hosting.Go")]
+    [InlineData("Aspire.Hosting.CodeGeneration.Go")]
+    [InlineData("Aspire.Hosting.Azure.Storage")]
+    [InlineData("Aspire.Azure.Storage.Blobs")]
     public void RealMapRepresentativeCliE2eRuntimeConsumerSelectsCliE2e(string project)
     {
         var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
@@ -1076,9 +1080,7 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
     {
         // The regular PR test selects the published Azure Redis package rather than this repo-built package.
         "Aspire.Hosting.Azure.Redis",
-        // These Hosting/client pairs are consumed only by quarantined tests.
-        "Aspire.Hosting.Azure.Storage",
-        "Aspire.Azure.Storage.Blobs",
+        // This Hosting/client pair is consumed only by quarantined tests.
         "Aspire.Hosting.Nats",
         "Aspire.NATS.Net",
         // This package is consumed only by a LocalHive-only test that regular PR CI skips.

@@ -10,6 +10,7 @@ From your AppHost directory, add the `Aspire.Hosting.Oracle` integration with th
 
 ```bash
 aspire add Aspire.Hosting.Oracle
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Usage example
@@ -21,7 +22,7 @@ In the AppHost, add an Oracle database resource and reference it from another re
 ```csharp
 var db = builder.AddOracle("oracle").AddDatabase("mydb");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(db);
 ```
 

@@ -4,132 +4,132 @@
     <body>
       <trans-unit id="AllowAnonymousOptionDescription">
         <source>Allow anonymous access to the dashboard</source>
-        <target state="new">Allow anonymous access to the dashboard</target>
+        <target state="translated">Consentire l'accesso anonimo alla dashboard</target>
         <note />
       </trans-unit>
       <trans-unit id="ApplicationNameOptionDescription">
         <source>The application name displayed in the dashboard and used to scope persisted dashboard data</source>
-        <target state="new">The application name displayed in the dashboard and used to scope persisted dashboard data</target>
+        <target state="translated">Nome dell'applicazione visualizzato nel dashboard e usato per definire l'ambito dei dati persistenti del dashboard</target>
         <note />
       </trans-unit>
       <trans-unit id="BundleLayoutNotFound">
         <source>The 'aspire dashboard' command requires the CLI bundle, but no bundle layout was found. The bundle provides the dashboard binary and supporting files. Run 'aspire setup --force' to extract the bundle, or reinstall the Aspire CLI.</source>
-        <target state="new">The 'aspire dashboard' command requires the CLI bundle, but no bundle layout was found. The bundle provides the dashboard binary and supporting files. Run 'aspire setup --force' to extract the bundle, or reinstall the Aspire CLI.</target>
+        <target state="translated">Il comando 'aspire dashboard' richiede il pacchetto CLI, ma non è stata trovata alcuna struttura del pacchetto. Il pacchetto contiene il file binario della dashboard e i file di supporto. Eseguire 'aspire setup --force' per estrarre il pacchetto, oppure reinstallare la CLI di Aspire.</target>
         <note />
       </trans-unit>
       <trans-unit id="BundleNotAvailable">
         <source>The Aspire dashboard requires the CLI bundle. The bundle was not found.</source>
-        <target state="new">The Aspire dashboard requires the CLI bundle. The bundle was not found.</target>
+        <target state="translated">La dashboard di Aspire richiede il pacchetto CLI. Il pacchetto non è stato trovato.</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigFilePathOptionDescription">
         <source>The path for a JSON configuration file</source>
-        <target state="new">The path for a JSON configuration file</target>
+        <target state="translated">Il percorso di un file di configurazione JSON</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardExitedAddressInUse">
         <source>Dashboard could not start because a configured port is already in use. Use a different port or stop the conflicting process.</source>
-        <target state="new">Dashboard could not start because a configured port is already in use. Use a different port or stop the conflicting process.</target>
+        <target state="translated">Non è stato possibile avviare il dashboard perché una porta configurata è già in uso. Utilizzare una porta diversa o interrompere il processo in conflitto.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardExitedUnexpectedError">
         <source>Dashboard exited unexpectedly due to an error. See logs for details.</source>
-        <target state="new">Dashboard exited unexpectedly due to an error. See logs for details.</target>
+        <target state="translated">La dashboard si è chiusa in modo imprevisto a causa di un errore. Per informazioni dettagliate, vedere i log.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardExitedValidationFailure">
         <source>Dashboard configuration is invalid. Check the provided options and try again.</source>
-        <target state="new">Dashboard configuration is invalid. Check the provided options and try again.</target>
+        <target state="translated">La configurazione del dashboard non è valida. Controlla le opzioni fornite e riprova.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardExitedWithError">
         <source>Dashboard exited with exit code {0}.</source>
-        <target state="new">Dashboard exited with exit code {0}.</target>
+        <target state="translated">Il processo si è chiuso con il codice di uscita {0}.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFailedToStart">
         <source>Failed to start Aspire dashboard: {0}</source>
-        <target state="new">Failed to start Aspire dashboard: {0}</target>
+        <target state="translated">Non è stato possibile avviare la dashboard di Aspire: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardLabel">
         <source>Dashboard</source>
-        <target state="new">Dashboard</target>
+        <target state="translated">Dashboard</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardStartTimedOut">
         <source>Dashboard did not become ready within the expected time.</source>
-        <target state="new">Dashboard did not become ready within the expected time.</target>
+        <target state="translated">La dashboard non era pronta entro il tempo previsto.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardStarted">
         <source>Dashboard started (PID {0}).</source>
-        <target state="new">Dashboard started (PID {0}).</target>
+        <target state="translated">Dashboard avviata (PID {0}).</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
         <source>Manage the Aspire dashboard (Preview)</source>
-        <target state="new">Manage the Aspire dashboard (Preview)</target>
+        <target state="translated">Gestire la dashboard di Aspire (anteprima)</target>
         <note />
       </trans-unit>
       <trans-unit id="EnsuringDashboardBundle">
         <source>Preparing dashboard bits...</source>
-        <target state="new">Preparing dashboard bits...</target>
+        <target state="translated">Preparazione dei componenti della dashboard in corso...</target>
         <note />
       </trans-unit>
       <trans-unit id="FrontendUrlOptionDescription">
         <source>One or more HTTP endpoints through which the dashboard frontend is served</source>
-        <target state="new">One or more HTTP endpoints through which the dashboard frontend is served</target>
+        <target state="translated">Uno o più endpoint HTTP attraverso i quali viene fornito il front-end della dashboard</target>
         <note />
       </trans-unit>
       <trans-unit id="LogsLabel">
         <source>Logs</source>
-        <target state="new">Logs</target>
+        <target state="translated">Log</target>
         <note />
       </trans-unit>
       <trans-unit id="ManagedBinaryNotFound">
         <source>The CLI bundle layout was found, but the Dashboard executable is missing. The bundle may be corrupted or incomplete. Run 'aspire setup --force' to re-extract the bundle, or reinstall the Aspire CLI.</source>
-        <target state="new">The CLI bundle layout was found, but the Dashboard executable is missing. The bundle may be corrupted or incomplete. Run 'aspire setup --force' to re-extract the bundle, or reinstall the Aspire CLI.</target>
+        <target state="translated">La struttura del pacchetto CLI è stata trovata, ma manca l'eseguibile della dashboard. Il pacchetto potrebbe essere danneggiato o incompleto. Eseguire 'aspire setup --force' per estrarre nuovamente il pacchetto, oppure reinstallare la CLI di Aspire.</target>
         <note />
       </trans-unit>
       <trans-unit id="OtlpGrpcLabel">
         <source>OTLP/gRPC</source>
-        <target state="new">OTLP/gRPC</target>
+        <target state="translated">OTLP/gRPC</target>
         <note />
       </trans-unit>
       <trans-unit id="OtlpGrpcUrlOptionDescription">
         <source>The OTLP/gRPC endpoint. This endpoint hosts an OTLP service and receives telemetry using gRPC</source>
-        <target state="new">The OTLP/gRPC endpoint. This endpoint hosts an OTLP service and receives telemetry using gRPC</target>
+        <target state="translated">L'endpoint OTLP/gRPC. Questo endpoint ospita un servizio OTLP e riceve i dati di telemetria tramite gRPC</target>
         <note />
       </trans-unit>
       <trans-unit id="OtlpHttpLabel">
         <source>OTLP/HTTP</source>
-        <target state="new">OTLP/HTTP</target>
+        <target state="translated">OTLP/HTTP</target>
         <note />
       </trans-unit>
       <trans-unit id="OtlpHttpUrlOptionDescription">
         <source>The OTLP/HTTP endpoint. This endpoint hosts an OTLP service and receives telemetry using Protobuf over HTTP</source>
-        <target state="new">The OTLP/HTTP endpoint. This endpoint hosts an OTLP service and receives telemetry using Protobuf over HTTP</target>
+        <target state="translated">L'endpoint OTLP/HTTP. Questo endpoint ospita un servizio OTLP e riceve i dati di telemetria tramite Protobuf su HTTP</target>
         <note />
       </trans-unit>
       <trans-unit id="PersistenceModeOptionDescription">
         <source>The dashboard data persistence mode: None, Run, or Resume</source>
-        <target state="new">The dashboard data persistence mode: None, Run, or Resume</target>
+        <target state="translated">Modalità di salvataggio permanente dei dati del dashboard: Nessuna, Esegui o Riprendi</target>
         <note />
       </trans-unit>
       <trans-unit id="RunDescription">
         <source>Start the Aspire dashboard (Preview)</source>
-        <target state="new">Start the Aspire dashboard (Preview)</target>
+        <target state="translated">Avviare la dashboard di Aspire (anteprima)</target>
         <note />
       </trans-unit>
       <trans-unit id="StartingDashboard">
         <source>Starting dashboard...</source>
-        <target state="new">Starting dashboard...</target>
+        <target state="translated">Avvio del dashboard in corso...</target>
         <note />
       </trans-unit>
       <trans-unit id="StoppingDashboard">
         <source>Stopping dashboard.</source>
-        <target state="new">Stopping dashboard.</target>
+        <target state="translated">Arresto della dashboard.</target>
         <note />
       </trans-unit>
     </body>

@@ -18,6 +18,7 @@ on:
       - 'eng/scripts/get-aspire-cli-pr.sh'
       - 'tests/Shared/Docker/Dockerfile.e2e'
       - 'tests/Shared/Docker/Dockerfile.e2e-polyglot-base'
+      - 'tests/Shared/Docker/Dockerfile.e2e-polyglot-go'
       - 'tests/Shared/Docker/Dockerfile.e2e-polyglot-java'
       - 'tests/Shared/Docker/NuGet.DotnetTool.config'
       - 'tests/Shared/Docker/configure-ubuntu-apt-mirror.sh'

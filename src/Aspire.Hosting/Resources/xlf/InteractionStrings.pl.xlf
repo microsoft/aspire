@@ -4,7 +4,7 @@
     <body>
       <trans-unit id="CommandProgressCancelButtonText">
         <source>Cancel</source>
-        <target state="new">Cancel</target>
+        <target state="translated">Anuluj</target>
         <note />
       </trans-unit>
       <trans-unit id="ContainerRuntimeDockerAdvice">
@@ -49,7 +49,7 @@
       </trans-unit>
       <trans-unit id="DeleteParameterMessage">
         <source>Are you sure you want to delete the value for parameter `{0}`?</source>
-        <target state="needs-review-translation">Czy na pewno chcesz usunąć wartość parametru „{0}”? </target>
+        <target state="translated">Czy na pewno chcesz usunąć wartość parametru '{0}'?</target>
         <note>Contains markdown. {0} is the parameter name.</note>
       </trans-unit>
       <trans-unit id="DeleteParameterPrimaryButtonText">
@@ -64,22 +64,22 @@
       </trans-unit>
       <trans-unit id="DeveloperCertificateNotFullyTrustedMessage">
         <source>The most recent development certificate isn't fully trusted. See https://aka.ms/aspire/devcerts for more information.</source>
-        <target state="new">The most recent development certificate isn't fully trusted. See https://aka.ms/aspire/devcerts for more information.</target>
+        <target state="translated">Najnowszy certyfikat deweloperski nie jest w pełni zaufany. Aby uzyskać więcej informacji, zobacz https://aka.ms/aspire/devcerts.</target>
         <note />
       </trans-unit>
       <trans-unit id="DeveloperCertificateNotFullyTrustedTitle">
         <source>Development certificate not fully trusted</source>
-        <target state="new">Development certificate not fully trusted</target>
+        <target state="translated">Certyfikat programistyczny nie jest w pełni zaufany</target>
         <note />
       </trans-unit>
       <trans-unit id="NoDeveloperCertificateTrustedMessage">
         <source>No trusted development certificate was found. See https://aka.ms/aspire/devcerts for more information.</source>
-        <target state="new">No trusted development certificate was found. See https://aka.ms/aspire/devcerts for more information.</target>
+        <target state="translated">Nie znaleziono zaufanego certyfikatu programistycznego. Aby uzyskać więcej informacji, zobacz https://aka.ms/aspire/devcerts.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoDeveloperCertificateTrustedTitle">
         <source>No trusted development certificate</source>
-        <target state="new">No trusted development certificate</target>
+        <target state="translated">Brak zaufanego certyfikatu programistycznego</target>
         <note />
       </trans-unit>
       <trans-unit id="ParametersBarMessage">
@@ -99,7 +99,7 @@
       </trans-unit>
       <trans-unit id="ParametersInputsDeleteDescription">
         <source>Delete a value that is saved in [user secrets](https://aka.ms/aspire/user-secrets).</source>
-        <target state="new">Delete a value that is saved in [user secrets](https://aka.ms/aspire/user-secrets).</target>
+        <target state="translated">Usuń wartość zapisaną w [sekretach użytkownika](https://aka.ms/aspire/user-secrets).</target>
         <note>Contains markdown</note>
       </trans-unit>
       <trans-unit id="ParametersInputsDeleteLabel">
@@ -129,12 +129,12 @@
       </trans-unit>
       <trans-unit id="ParametersInputsRememberDescriptionConfigured">
         <source>Save value to [user secrets](https://aka.ms/aspire/user-secrets) for future use.</source>
-        <target state="new">Save value to [user secrets](https://aka.ms/aspire/user-secrets) for future use.</target>
+        <target state="translated">Zapisz wartość w [user secrets](https://aka.ms/aspire/user-secrets) do użycia w przyszłości.</target>
         <note>Contains markdown</note>
       </trans-unit>
       <trans-unit id="ParametersInputsRememberDescriptionNotConfigured">
         <source>Requires user secrets to be configured for the AppHost. Run `aspire secret set &lt;key&gt; &lt;value&gt;` to initialize user secrets, or see [user secrets](https://aka.ms/aspire/user-secrets) for more information.</source>
-        <target state="new">Requires user secrets to be configured for the AppHost. Run `aspire secret set &lt;key&gt; &lt;value&gt;` to initialize user secrets, or see [user secrets](https://aka.ms/aspire/user-secrets) for more information.</target>
+        <target state="translated">Wymaga skonfigurowania wpisów tajnych użytkownika dla hosta apphost. Uruchom polecenie `aspire secret set &lt;key&gt; &lt;value&gt;`, aby zainicjować wpisy tajne użytkownika, lub zobacz [wpisy tajne użytkownika](https://aka.ms/aspire/user-secrets), aby uzyskać więcej informacji.</target>
         <note>Contains markdown</note>
       </trans-unit>
       <trans-unit id="ParametersInputsRememberLabel">
@@ -169,9 +169,7 @@
       </trans-unit>
       <trans-unit id="SetParameterMessage">
         <source>Please provide a value for the parameter. New parameter values may not be used until dependent resources are restarted.</source>
-        <target state="needs-review-translation">Podaj wartość parametru. Parametr możesz zapisać we [wpisach tajnych użytkownika](https://learn.microsoft.com/aspnet/core/security/app-secrets), aby użyć go później.
-
-Nowe wartości parametrów nie będą używane, dopóki nie zostaną ponownie uruchomione zasoby zależne.</target>
+        <target state="translated">Podaj wartość parametru. Nowe wartości parametrów nie mogą być używane, dopóki zasoby zależne nie zostaną uruchomione.</target>
         <note>Contains markdown</note>
       </trans-unit>
       <trans-unit id="SetParameterTitle">

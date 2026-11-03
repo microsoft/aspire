@@ -124,11 +124,68 @@ document.addEventListener("cancel", function (event) {
     }
 }, true);
 
+// AspireTooltip renders fluent-tooltip as manual popovers so they don't light-dismiss open menus.
+// beforetoggle doesn't bubble, so listen in the capture phase.
+// https://developer.mozilla.org/en-US/docs/Web/API/HTMLElement/beforetoggle_event
+document.addEventListener("beforetoggle", function (event) {
+    const target = event.target;
+    if (event.newState !== "open" || !(target instanceof HTMLElement)) {
+        return;
+    }
+
+    // A menu opening hides tooltips, e.g. the tooltip of the button that was just clicked to open it.
+    if (target.matches("fluent-menu-list")) {
+        hideAspireTooltips(null);
+        return;
+    }
+
+    if (!target.matches("fluent-tooltip.aspire-tooltip")) {
+        return;
+    }
+
+    const tooltip = target;
+    const anchor = document.getElementById(tooltip.getAttribute("anchor") ?? "");
+
+    // Don't cover a menu with the tooltip of the button that opened it.
+    if (anchor?.getAttribute("aria-expanded") === "true") {
+        event.preventDefault();
+        return;
+    }
+
+    // Opening a menu focuses an item, which would immediately show that item's tooltip. Menu item tooltips are
+    // shown on hover only, like the title attribute they replace. Screen readers still announce them through
+    // the aria-describedby that fluent-tooltip sets on the item.
+    if (anchor?.matches("fluent-menu-item") && !anchor.matches(":hover")) {
+        event.preventDefault();
+        return;
+    }
+
+    // fluent-tooltip names its anchor (anchor-name: --<anchor id>) when it connects, but fluent-menu later
+    // renames its trigger to --anchor-<trigger id>. Follow the anchor's current name so the tooltip isn't
+    // positioned at the viewport origin.
+    const anchorName = anchor?.style.anchorName;
+    if (anchorName) {
+        tooltip.style.positionAnchor = anchorName;
+    }
+
+    // Manual popovers don't close each other. Keep a single tooltip visible, e.g. when a menu item's tooltip
+    // is shown because the item has focus while the pointer hovers another item or the item's action button.
+    hideAspireTooltips(tooltip);
+}, true);
+
+function hideAspireTooltips(except) {
+    for (const tooltip of document.querySelectorAll("fluent-tooltip.aspire-tooltip:popover-open")) {
+        if (tooltip !== except) {
+            tooltip.hidePopover();
+        }
+    }
+}
+
 // Register a global click event listener to handle copy/open button clicks.
 // Required because an "onclick" attribute is denied by CSP.
 document.addEventListener("click", function (e) {
     // The copy 'button' could either be a button or a menu item.
-    const targetElement = isElementTagName(e.target, "fluent-button") ? e.target : getFluentMenuItemForTarget(e.target);
+    const targetElement = e.target.closest("fluent-button") ?? getFluentMenuItemForTarget(e.target);
     if (targetElement) {
         if (targetElement.getAttribute("data-copybutton")) {
             buttonCopyTextToClipboard(targetElement);
@@ -228,7 +285,7 @@ window.copyTextToClipboard = function (id, text, precopy, postcopy) {
                     checkmarkIcon.style.display = 'none';
                 }
                 delete button.dataset.copyTimeout;
-            }, 1500);
+            }, Number(button.dataset.copyDuration) || 1500);
         });
 };
 
@@ -236,8 +293,42 @@ window.copyText = function (text) {
     return navigator.clipboard.writeText(text);
 };
 
+window.copyTextAndOpen = async function (text, url) {
+    window.open(url, '_blank', 'noopener,noreferrer');
+    try {
+        await navigator.clipboard.writeText(text);
+        return true;
+    } catch {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        textarea.style.pointerEvents = 'none';
+        document.body.appendChild(textarea);
+        textarea.select();
+        try {
+            return typeof document.execCommand === 'function' && document.execCommand('copy');
+        } finally {
+            textarea.remove();
+        }
+    }
+};
+
+window.setDashboardExperience = function (experience, targetPath) {
+    const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+    document.cookie = `Aspire_Dashboard_Experience=${experience}; Path=/; Max-Age=31536000; SameSite=Lax${secure}`;
+    // replace() keeps the page being left out of the history, so Back can't return to the other experience.
+    window.location.replace(targetPath);
+};
+
 function isActiveElementInput() {
     let currentElement = document.activeElement;
+    // Hex1b can focus a non-editable <div class="hex1b-terminal" tabindex="-1">
+    // for canvas keyboard input. The whole viewport owns those keys, not only its textarea.
+    if (currentElement.closest(".terminal-container")) {
+        return true;
+    }
+
     // Document.activeElement is the shadow host when Hex1b's textarea has
     // focus. Follow focused shadow roots so printable keys remain terminal
     // input rather than triggering dashboard navigation shortcuts. Stop at
@@ -256,7 +347,8 @@ function isActiveElementInput() {
     const tagName = currentElement.tagName.toLowerCase();
 
     // fluent components may have shadow roots that contain inputs
-    return tagName === "input" || tagName === "textarea" || tagName.startsWith("fluent") ? isInputElement(currentElement, false) : false;
+    return currentElement.isContentEditable || tagName === "select" ||
+        ((tagName === "input" || tagName === "textarea" || tagName.startsWith("fluent")) && isInputElement(currentElement, false));
 }
 
 function isInputElement(element, isRoot, isShadowRoot) {
@@ -344,6 +436,14 @@ window.registerGlobalKeydownListener = function (shortcutManager) {
                     return 240;
                 case "e": // go to terminals
                     return 250;
+                case "p": // go to parameters
+                    return 270;
+                case "g": // go to graph
+                    return 280;
+                case "x": // go to extensions
+                    return 290;
+                case "o": // go to telemetry sources (observability)
+                    return 295;
             }
         }
 
@@ -351,7 +451,7 @@ window.registerGlobalKeydownListener = function (shortcutManager) {
     }
 
     const keydownListener = function (e) {
-        if (isActiveElementInput()) {
+        if (e.defaultPrevented || e.isComposing || isActiveElementInput()) {
             return;
         }
 
@@ -429,6 +529,94 @@ window.disposeMobileNavMenuKeyboardNavigation = function (obj) {
     document.removeEventListener("keydown", obj.keydownListener, true);
     obj.menu?.removeEventListener("focusout", obj.focusoutListener);
 };
+
+// Fluent buttons and checkboxes render as focusable custom elements without exposing their native roles,
+// so assistive technology receives their names but not their control types or checked state. Keep the host
+// semantics explicit until Fluent exposes them itself. Related upstream accessibility history:
+// https://github.com/microsoft/fluentui-blazor/issues/2671
+function updateFluentButtonSemantics(button) {
+    button.setAttribute("role", "button");
+    if (button.disabled) {
+        button.setAttribute("aria-disabled", "true");
+    } else {
+        button.removeAttribute("aria-disabled");
+    }
+}
+
+function updateFluentCheckboxSemantics(checkbox) {
+    checkbox.setAttribute("role", "checkbox");
+    checkbox.setAttribute("aria-checked", checkbox.indeterminate ? "mixed" : String(checkbox.checked));
+    if (checkbox.disabled) {
+        checkbox.setAttribute("aria-disabled", "true");
+    } else {
+        checkbox.removeAttribute("aria-disabled");
+    }
+}
+
+function applyFluentControlRoles(root) {
+    // Mutation records also report text nodes and the document, which have no matches().
+    if (root.matches?.("fluent-button")) {
+        updateFluentButtonSemantics(root);
+    }
+    if (root.matches?.("fluent-checkbox")) {
+        updateFluentCheckboxSemantics(root);
+    }
+
+    root.querySelectorAll?.("fluent-button").forEach(updateFluentButtonSemantics);
+    root.querySelectorAll?.("fluent-checkbox").forEach(updateFluentCheckboxSemantics);
+}
+
+applyFluentControlRoles(document);
+
+// The observer sees every node the dashboard adds, including streamed console log lines and grid rows, which can be
+// thousands per second. Scanning each added subtree as it arrives puts that work on the busiest paths, so added
+// elements are collected and scanned together a little later. Text nodes, which most log output is, are skipped
+// without any work. A timer is used rather than requestAnimationFrame because animation frames don't run in a
+// background tab, where the pending set would otherwise keep growing.
+const pendingFluentControlRoots = new Set();
+let pendingFluentControlTimer = null;
+
+function applyPendingFluentControlRoles() {
+    pendingFluentControlTimer = null;
+    for (const root of pendingFluentControlRoots) {
+        // Rows of a virtualized grid or log viewer are often removed again before the scan runs.
+        if (root.isConnected) {
+            applyFluentControlRoles(root);
+        }
+    }
+    pendingFluentControlRoots.clear();
+}
+
+new MutationObserver(records => {
+    for (const record of records) {
+        if (record.type === "attributes") {
+            // Only "disabled" is observed, and it changes the semantics of the element itself, not its children.
+            if (record.target.matches("fluent-button")) {
+                updateFluentButtonSemantics(record.target);
+            } else if (record.target.matches("fluent-checkbox")) {
+                updateFluentCheckboxSemantics(record.target);
+            }
+            continue;
+        }
+
+        for (const node of record.addedNodes) {
+            if (node.nodeType === Node.ELEMENT_NODE) {
+                pendingFluentControlRoots.add(node);
+            }
+        }
+    }
+
+    if (pendingFluentControlRoots.size > 0 && pendingFluentControlTimer === null) {
+        pendingFluentControlTimer = setTimeout(applyPendingFluentControlRoles, 50);
+    }
+}).observe(document.body, { attributes: true, attributeFilter: ["disabled"], childList: true, subtree: true });
+
+document.addEventListener("change", event => {
+    const checkbox = event.composedPath().find(element => element instanceof Element && element.matches("fluent-checkbox"));
+    if (checkbox) {
+        updateFluentCheckboxSemantics(checkbox);
+    }
+});
 
 window.getWindowDimensions = function() {
     return {

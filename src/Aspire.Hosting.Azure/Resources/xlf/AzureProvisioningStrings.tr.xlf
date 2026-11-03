@@ -4,311 +4,311 @@
     <body>
       <trans-unit id="CancelCommandConfirmation">
         <source>This requests cancellation of the active Azure operation that includes this resource, or the active Azure deployment for this resource. If the operation includes other Azure resources, they will be canceled too. Azure may continue work that cannot be canceled immediately, and resources already created are not deleted. Do you want to continue?</source>
-        <target state="new">This requests cancellation of the active Azure operation that includes this resource, or the active Azure deployment for this resource. If the operation includes other Azure resources, they will be canceled too. Azure may continue work that cannot be canceled immediately, and resources already created are not deleted. Do you want to continue?</target>
+        <target state="translated">Bu eylem bu kaynağı içeren etkin Azure işleminin veya bu kaynak için etkin Azure dağıtımının iptalini ister. İşlem başka Azure kaynaklarını içeriyorsa bunlar da iptal edilir. Azure, hemen iptal edilemeyen işi sürdürebilir ve önceden oluşturulmuş kaynaklar silinmez. Devam etmek istiyor musunuz?</target>
         <note />
       </trans-unit>
       <trans-unit id="CancelCommandDescription">
         <source>Requests cancellation of the active Azure operation or deployment for this resource.</source>
-        <target state="new">Requests cancellation of the active Azure operation or deployment for this resource.</target>
+        <target state="translated">Bu eylem bu kaynak için etkin Azure işleminin veya dağıtımının iptalini ister.</target>
         <note />
       </trans-unit>
       <trans-unit id="CancelCommandName">
         <source>Cancel</source>
-        <target state="new">Cancel</target>
+        <target state="translated">İptal</target>
         <note />
       </trans-unit>
       <trans-unit id="CancelCommandSuccess">
         <source>Azure cancellation requested.</source>
-        <target state="new">Azure cancellation requested.</target>
+        <target state="translated">Azure iptali istendi.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeAzureContextCommandConfirmation">
         <source>This updates the Azure context for this AppHost and reprovisions all Azure resources using the values you enter next.</source>
-        <target state="new">This updates the Azure context for this AppHost and reprovisions all Azure resources using the values you enter next.</target>
+        <target state="translated">Bu eylem bu AppHost için Azure bağlamını güncelleştirir ve sonraki adımda gireceğiniz değerleri kullanarak tüm Azure kaynaklarını yeniden sağlar.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeAzureContextCommandDescription">
         <source>Updates the Azure tenant, subscription, resource group, or location for this AppHost and reprovisions all Azure resources.</source>
-        <target state="new">Updates the Azure tenant, subscription, resource group, or location for this AppHost and reprovisions all Azure resources.</target>
+        <target state="translated">Bu AppHost için Azure kiracıyı, aboneliği, kaynak grubunu veya konumu Güncelleştirmeler ve tüm Azure kaynaklarını yeniden sağlar.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeAzureContextCommandName">
         <source>Change Azure context</source>
-        <target state="new">Change Azure context</target>
+        <target state="translated">Azure bağlamını değiştir</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeAzureContextCommandSuccess">
         <source>Azure context updated and resources reprovisioned.</source>
-        <target state="new">Azure context updated and resources reprovisioned.</target>
+        <target state="translated">Azure bağlamı güncelleştirildi ve kaynaklar yeniden sağlandı.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeResourceLocationCommandDescription">
         <source>Changes the Azure location for this resource. If Aspire must delete and recreate the existing Azure resource, any data in it may be permanently lost.</source>
-        <target state="new">Changes the Azure location for this resource. If Aspire must delete and recreate the existing Azure resource, any data in it may be permanently lost.</target>
+        <target state="translated">Bu eylem bu kaynağın Azure konumunu değiştirir. Aspire’ın mevcut Azure kaynağını silip yeniden oluşturması gerekirse, kaynaktaki veriler kalıcı olarak kaybolabilir.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeResourceLocationCommandName">
         <source>Change location</source>
-        <target state="new">Change location</target>
+        <target state="translated">Konumu değiştir</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeResourceLocationCommandSuccess">
         <source>Azure resource location updated and reprovisioning completed.</source>
-        <target state="new">Azure resource location updated and reprovisioning completed.</target>
+        <target state="translated">Azure kaynak konumu güncelleştirildi ve yeniden sağlama işlemi tamamlandı.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeResourceLocationConfirmDeleteDescription">
         <source>Allow Aspire to delete and recreate the existing Azure resource when changing its location. Any data in the deleted resource may be permanently lost.</source>
-        <target state="new">Allow Aspire to delete and recreate the existing Azure resource when changing its location. Any data in the deleted resource may be permanently lost.</target>
+        <target state="translated">Kaynağın konumu değiştirilirken Aspire hizmetinin mevcut Azure kaynağını silmesine ve yeniden oluşturmasına izin verin. Silinen kaynaktaki veriler kalıcı olarak kaybolabilir.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeResourceLocationConfirmDeleteLabel">
         <source>Allow deletion and possible permanent data loss</source>
-        <target state="new">Allow deletion and possible permanent data loss</target>
+        <target state="translated">Silmeye ve olası kalıcı veri kaybına izin ver</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeResourceLocationDeleteConfirmationRequiredFormat">
         <source>Changing the location of Azure resource '{0}' requires deleting and recreating it. Any data in the deleted resource may be permanently lost. Set the '{1}' command argument to true to continue.</source>
-        <target state="new">Changing the location of Azure resource '{0}' requires deleting and recreating it. Any data in the deleted resource may be permanently lost. Set the '{1}' command argument to true to continue.</target>
+        <target state="translated">'{0}' Azure kaynağının konumunu değiştirmek, kaynağın silinip yeniden oluşturulmasını gerektirir. Silinen kaynaktaki tüm veriler kalıcı olarak kaybolabilir. Devam etmek için '{1}' komutu bağımsız değişkenini true olarak ayarlayın.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeResourceLocationKeyVaultUnsupported">
         <source>Azure Key Vault resources cannot change location because soft-deleted vault names remain reserved globally. Use delete, reprovision, or forget state to recover this resource.</source>
-        <target state="new">Azure Key Vault resources cannot change location because soft-deleted vault names remain reserved globally. Use delete, reprovision, or forget state to recover this resource.</target>
+        <target state="translated">Geçici olarak silinen kasa adları genel olarak ayrıldığından Azure Key Vault kaynaklarının konumu değiştirilemez. Bu kaynağı kurtarmak için silme, yeniden sağlama veya durumu unutma seçeneklerini kullanın.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeResourceLocationPromptMessage">
         <source>Select or enter a new Azure location for '{0}'. If Aspire must delete and recreate the existing Azure resource, any data in it may be permanently lost.</source>
-        <target state="new">Select or enter a new Azure location for '{0}'. If Aspire must delete and recreate the existing Azure resource, any data in it may be permanently lost.</target>
+        <target state="translated">'{0}' için yeni bir Azure konumu seçin veya girin. Aspire mevcut Azure kaynağını silip yeniden oluşturması gerekirse, içindeki tüm veriler kalıcı olarak kaybolabilir.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeResourceLocationPromptTitle">
         <source>Change Azure resource location</source>
-        <target state="new">Change Azure resource location</target>
+        <target state="translated">Azure kaynak konumunu değiştirin</target>
         <note />
       </trans-unit>
       <trans-unit id="ContextPropertyLocationDisplayName">
         <source>Azure location</source>
-        <target state="new">Azure location</target>
+        <target state="translated">Azure konumu</target>
         <note />
       </trans-unit>
       <trans-unit id="ContextPropertyResourceGroupDisplayName">
         <source>Azure resource group</source>
-        <target state="new">Azure resource group</target>
+        <target state="translated">Azure kaynak grubu</target>
         <note />
       </trans-unit>
       <trans-unit id="ContextPropertySubscriptionIdDisplayName">
         <source>Azure subscription ID</source>
-        <target state="new">Azure subscription ID</target>
+        <target state="translated">Azure abonelik kimliği</target>
         <note />
       </trans-unit>
       <trans-unit id="ContextPropertyTenantDomainDisplayName">
         <source>Azure tenant domain</source>
-        <target state="new">Azure tenant domain</target>
+        <target state="translated">Azure kiracısı etki alanı</target>
         <note />
       </trans-unit>
       <trans-unit id="ContextPropertyTenantIdDisplayName">
         <source>Azure tenant ID</source>
-        <target state="new">Azure tenant ID</target>
+        <target state="translated">Azure kiracısı kimliği</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteAzureResourceCommandConfirmation">
         <source>This cancels the cached Azure deployment, deletes Azure resources targeted by this resource's deployment, purges recoverable Key Vaults so their names can be reused, and clears cached deployment state. Do you want to continue?</source>
-        <target state="new">This cancels the cached Azure deployment, deletes Azure resources targeted by this resource's deployment, purges recoverable Key Vaults so their names can be reused, and clears cached deployment state. Do you want to continue?</target>
+        <target state="translated">Bu eylem önbelleğe alınmış Azure dağıtımını iptal eder, bu kaynağın dağıtımı tarafından hedeflenen Azure kaynaklarını siler, adlarının yeniden kullanılabilmesi için kurtarılabilir Key Vault’ları temizler ve önbelleğe alınmış dağıtım durumunu temizler. Devam etmek istiyor musunuz?</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteAzureResourceCommandDescription">
         <source>Cancels the cached Azure deployment, deletes Azure resources targeted by the deployment, purges recoverable Key Vaults so their names can be reused, and clears cached deployment state for this resource.</source>
-        <target state="new">Cancels the cached Azure deployment, deletes Azure resources targeted by the deployment, purges recoverable Key Vaults so their names can be reused, and clears cached deployment state for this resource.</target>
+        <target state="translated">Bu eylem önbelleğe alınmış Azure dağıtımını iptal eder, dağıtım tarafından hedeflenen Azure kaynaklarını siler, adlarının yeniden kullanılabilmesi için kurtarılabilir Key Vault’ları temizler ve bu kaynak için önbelleğe alınmış dağıtım durumunu temizler.</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteAzureResourceCommandName">
         <source>Delete Azure resource</source>
-        <target state="new">Delete Azure resource</target>
+        <target state="translated">Azure kaynağını sil</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteAzureResourceCommandSuccess">
         <source>Azure resources deleted and provisioning state reset.</source>
-        <target state="new">Azure resources deleted and provisioning state reset.</target>
+        <target state="translated">Azure kaynakları silindi ve hazırlama durumu sıfırlandı.</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteAzureResourcesCommandConfirmation">
         <source>This deletes the current Azure resource group and every Azure resource inside it for this AppHost, then clears the cached deployment state. Do you want to continue?</source>
-        <target state="new">This deletes the current Azure resource group and every Azure resource inside it for this AppHost, then clears the cached deployment state. Do you want to continue?</target>
+        <target state="translated">Bu eylem bu AppHost için geçerli Azure kaynak grubunu ve içerdiği tüm Azure kaynaklarını siler, ardından önbelleğe alınmış dağıtım durumunu temizler. Devam etmek istiyor musunuz?</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteAzureResourcesCommandDescription">
         <source>Deletes the current Azure resource group for this AppHost, clears cached deployment state, and leaves the Azure context intact for reprovisioning.</source>
-        <target state="new">Deletes the current Azure resource group for this AppHost, clears cached deployment state, and leaves the Azure context intact for reprovisioning.</target>
+        <target state="translated">Bu AppHost için geçerli Azure kaynak grubunu siler, önbelleğe alınmış dağıtım durumunu temizler ve Azure bağlamını yeniden sağlama için olduğu gibi bırakır.</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteAzureResourcesCommandName">
         <source>Delete Azure resources</source>
-        <target state="new">Delete Azure resources</target>
+        <target state="translated">Azure kaynaklarını sil</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteAzureResourcesCommandSuccess">
         <source>Azure resources deleted and provisioning state reset.</source>
-        <target state="new">Azure resources deleted and provisioning state reset.</target>
+        <target state="translated">Azure kaynakları silindi ve hazırlama durumu sıfırlandı.</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteAzureResourcesRemainingResourcesFormat">
         <source>Resource-group deletion completed. These resources were not deleted: {0}.</source>
-        <target state="new">Resource-group deletion completed. These resources were not deleted: {0}.</target>
+        <target state="translated">Kaynak grubu silme işlemi tamamlandı. Bu kaynaklar silinmedi: {0}.</target>
         <note>{0} is a list of resource names, provider types, and object IDs.</note>
       </trans-unit>
       <trans-unit id="DeleteAzureResourcesRemainingResourcesWarning">
         <source>The listed resources were not deleted because they exist outside the resource group. Delete them separately using their service's portal or API.</source>
-        <target state="new">The listed resources were not deleted because they exist outside the resource group. Delete them separately using their service's portal or API.</target>
+        <target state="translated">Listelenen kaynaklar, kaynak grubunun dışında bulundukları için silinmedi. Bu kaynakları kendi hizmetlerinin portalını veya API'sini kullanarak ayrı ayrı silin.</target>
         <note />
       </trans-unit>
       <trans-unit id="DeploymentOperationCanceledResourcesFormat">
         <source>Canceled Azure resources: {0}</source>
-        <target state="new">Canceled Azure resources: {0}</target>
+        <target state="translated">İptal edilen Azure kaynakları: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="DeploymentOperationFailedResourcesFormat">
         <source>Failed Azure resources: {0}</source>
-        <target state="new">Failed Azure resources: {0}</target>
+        <target state="translated">Başarısız Azure kaynakları: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="DeploymentOperationRunningResourcesFormat">
         <source>Provisioning Azure resources: {0}</source>
-        <target state="new">Provisioning Azure resources: {0}</target>
+        <target state="translated">Azure kaynakları sağlanıyor: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="DeploymentOperationSummaryDisplayName">
         <source>Azure deployment diagnostics</source>
-        <target state="new">Azure deployment diagnostics</target>
+        <target state="translated">Azure dağıtım tanılaması</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyCodeDisplayName">
         <source>Azure error code</source>
-        <target state="new">Azure error code</target>
+        <target state="translated">Azure hata kodu</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyCorrelationIdDisplayName">
         <source>Azure correlation ID</source>
-        <target state="new">Azure correlation ID</target>
+        <target state="translated">Azure bağıntı kimliği</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyCurrentLocationDisplayName">
         <source>Azure current location</source>
-        <target state="new">Azure current location</target>
+        <target state="translated">Azure geçerli konumu</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyFailedResourcesDisplayName">
         <source>Failed Azure resources</source>
-        <target state="new">Failed Azure resources</target>
+        <target state="translated">Başarısız Azure kaynakları</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyHttpStatusDisplayName">
         <source>Azure HTTP status</source>
-        <target state="new">Azure HTTP status</target>
+        <target state="translated">Azure HTTP durumu</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyMessageDisplayName">
         <source>Azure error message</source>
-        <target state="new">Azure error message</target>
+        <target state="translated">Azure hata iletisi</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyOperationDisplayName">
         <source>Azure operation</source>
-        <target state="new">Azure operation</target>
+        <target state="translated">Azure işlemi</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyProviderDisplayName">
         <source>Azure provider</source>
-        <target state="new">Azure provider</target>
+        <target state="translated">Azure sağlayıcısı</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyRecommendedActionsDisplayName">
         <source>Azure recommended actions</source>
-        <target state="new">Azure recommended actions</target>
+        <target state="translated">Azure tarafından önerilen eylemler</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyRequestIdDisplayName">
         <source>Azure request ID</source>
-        <target state="new">Azure request ID</target>
+        <target state="translated">Azure istek kimliği</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyResourceNameDisplayName">
         <source>Azure resource name</source>
-        <target state="new">Azure resource name</target>
+        <target state="translated">Azure kaynağı adı</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyResourceTypeDisplayName">
         <source>Azure resource type</source>
-        <target state="new">Azure resource type</target>
+        <target state="translated">Azure kaynak türü</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertySupportedLocationsDisplayName">
         <source>Azure supported locations</source>
-        <target state="new">Azure supported locations</target>
+        <target state="translated">Azure tarafından desteklenen konumlar</target>
         <note />
       </trans-unit>
       <trans-unit id="FailurePropertyTargetResourceIdDisplayName">
         <source>Azure target resource ID</source>
-        <target state="new">Azure target resource ID</target>
+        <target state="translated">Azure hedef kaynak kimliği</target>
         <note />
       </trans-unit>
       <trans-unit id="ForgetStateCommandConfirmation">
         <source>This clears the cached Azure deployment state for this resource and resets its provisioning snapshot.</source>
-        <target state="new">This clears the cached Azure deployment state for this resource and resets its provisioning snapshot.</target>
+        <target state="translated">Bu eylem bu kaynak için önbelleğe alınmış Azure dağıtım durumunu temizler ve sağlama anlık görüntüsünü sıfırlar.</target>
         <note />
       </trans-unit>
       <trans-unit id="ForgetStateCommandDescription">
         <source>Clears the cached Azure deployment state for this resource so it can be provisioned again using the current Azure context.</source>
-        <target state="new">Clears the cached Azure deployment state for this resource so it can be provisioned again using the current Azure context.</target>
+        <target state="translated">Bu eylem kaynağın Geçerli Azure bağlamı kullanılarak yeniden sağlanabilmesi amacıyla bu kaynak için önbelleğe alınmış Azure dağıtım durumunu temizler.</target>
         <note />
       </trans-unit>
       <trans-unit id="ForgetStateCommandName">
         <source>Forget state</source>
-        <target state="new">Forget state</target>
+        <target state="translated">Durumu unut</target>
         <note />
       </trans-unit>
       <trans-unit id="ForgetStateCommandSuccess">
         <source>Azure resource provisioning state reset.</source>
-        <target state="new">Azure resource provisioning state reset.</target>
+        <target state="translated">Azure kaynak hazırlama durumu sıfırlandı.</target>
         <note />
       </trans-unit>
       <trans-unit id="GetAzureResourceCommandDescription">
         <source>Returns cached deployment state and live Azure existence information for this resource.</source>
-        <target state="new">Returns cached deployment state and live Azure existence information for this resource.</target>
+        <target state="translated">Bu kaynak için önbelleğe alınan dağıtım durumunu ve canlı Azure varlık bilgilerini döndürür.</target>
         <note />
       </trans-unit>
       <trans-unit id="GetAzureResourceCommandName">
         <source>Get Azure resource</source>
-        <target state="new">Get Azure resource</target>
+        <target state="translated">Azure kaynağını al</target>
         <note />
       </trans-unit>
       <trans-unit id="GetAzureResourceCommandSuccess">
         <source>Azure resource information retrieved.</source>
-        <target state="new">Azure resource information retrieved.</target>
+        <target state="translated">Azure kaynak bilgileri alındı.</target>
         <note />
       </trans-unit>
       <trans-unit id="InputsMessage">
         <source>Select the Azure tenant, subscription, resource group, and location Aspire should use for provisioning.
 
 To learn more, see the [Azure provisioning docs](https://aka.ms/aspire/azure/provisioning).</source>
-        <target state="needs-review-translation">Modelde Azure aboneliği gerektiren Azure kaynakları bulunuyor.
+        <target state="translated">Aspire hizmetinin hazırlama için kullanacağı Azure kiracısını, aboneliğini, kaynak grubunu ve konumunu seçin.
 
-Daha fazla bilgi için [Azure sağlama belgelerine](https://aka.ms/aspire/azure/provisioning) bakın.</target>
+Daha fazla bilgi için [Azure hazırlama belgelerine](https://aka.ms/aspire/azure/provisioning) bakın.</target>
         <note>Contains markdown</note>
       </trans-unit>
       <trans-unit id="InputsPrimaryButtonText">
         <source>Save</source>
-        <target state="new">Save</target>
+        <target state="translated">Kaydet</target>
         <note />
       </trans-unit>
       <trans-unit id="InputsSecondaryButtonText">
         <source>Cancel</source>
-        <target state="new">Cancel</target>
+        <target state="translated">İptal</target>
         <note />
       </trans-unit>
       <trans-unit id="InputsTitle">
         <source>Configure Azure context</source>
-        <target state="needs-review-translation">Azure sağlama</target>
+        <target state="translated">Azure bağlamını yapılandırın</target>
         <note />
       </trans-unit>
       <trans-unit id="LocationDialogTitle">
@@ -338,7 +338,7 @@ Daha fazla bilgi için [Azure sağlama belgelerine](https://aka.ms/aspire/azure/
       </trans-unit>
       <trans-unit id="NotificationPrimaryButtonText">
         <source>Configure</source>
-        <target state="needs-review-translation">Değer girin</target>
+        <target state="translated">Yapılandır</target>
         <note />
       </trans-unit>
       <trans-unit id="NotificationTitle">
@@ -348,157 +348,157 @@ Daha fazla bilgi için [Azure sağlama belgelerine](https://aka.ms/aspire/azure/
       </trans-unit>
       <trans-unit id="OperationAlreadyRunningOrQueued">
         <source>Azure operation '{0}' is already running or queued for the same resource scope. Wait for it to finish or run '{2}' before starting '{1}'.</source>
-        <target state="new">Azure operation '{0}' is already running or queued for the same resource scope. Wait for it to finish or run '{2}' before starting '{1}'.</target>
+        <target state="translated">Azure işlemi '{0}' aynı kaynak kapsamı için zaten çalışıyor veya kuyruğa alınmış. Bitmesini bekleyin veya '{1}' başlatmadan önce '{2}' çalıştırın.</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhaseApplyingAzureContext">
         <source>Applying Azure context</source>
-        <target state="new">Applying Azure context</target>
+        <target state="translated">Azure bağlamı uygulanıyor</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhaseChangingAzureContext">
         <source>Changing Azure context</source>
-        <target state="new">Changing Azure context</target>
+        <target state="translated">Azure bağlamı değiştiriliyor</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhaseChangingLocationToFormat">
         <source>Changing location to {0}</source>
-        <target state="new">Changing location to {0}</target>
+        <target state="translated">Konum {0} olarak değiştiriliyor</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhaseDeletingAzureResource">
         <source>Deleting Azure resource</source>
-        <target state="new">Deleting Azure resource</target>
+        <target state="translated">Azure kaynağı siliniyor</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhaseDeletingAzureResources">
         <source>Deleting Azure resources</source>
-        <target state="new">Deleting Azure resources</target>
+        <target state="translated">Azure kaynakları siliniyor</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhaseDeletingExistingAzureResourceBeforeChangingLocationFormat">
         <source>Deleting existing Azure resource before changing location to {0}</source>
-        <target state="new">Deleting existing Azure resource before changing location to {0}</target>
+        <target state="translated">Konumu {0} olarak değiştirmeden önce mevcut Azure kaynağı siliniyor</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhaseProvisioningAzureResources">
         <source>Provisioning Azure resources</source>
-        <target state="new">Provisioning Azure resources</target>
+        <target state="translated">Azure kaynakları sağlanıyor</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhasePurgingDeletedKeyVault">
         <source>Purging deleted Key Vault</source>
-        <target state="new">Purging deleted Key Vault</target>
+        <target state="translated">Silinen Key Vault temizleniyor</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhasePurgingRecoverableKeyVaultFormat">
         <source>Purging recoverable Key Vault {0}</source>
-        <target state="new">Purging recoverable Key Vault {0}</target>
+        <target state="translated">Kurtarılabilir Key Vault {0} temizleniyor</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhaseReprovisioning">
         <source>Reprovisioning</source>
-        <target state="new">Reprovisioning</target>
+        <target state="translated">Yeniden sağlama</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhaseReprovisioningAzureResources">
         <source>Reprovisioning Azure resources</source>
-        <target state="new">Reprovisioning Azure resources</target>
+        <target state="translated">Azure kaynakları yeniden sağlanıyor</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhaseReprovisioningInLocationFormat">
         <source>Reprovisioning in {0}</source>
-        <target state="new">Reprovisioning in {0}</target>
+        <target state="translated">{0} konumunda yeniden sağlanıyor</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPhaseResettingProvisioningState">
         <source>Resetting provisioning state</source>
-        <target state="new">Resetting provisioning state</target>
+        <target state="translated">Hazırlama durumu sıfırlanıyor</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPropertyNameDisplayName">
         <source>Azure operation</source>
-        <target state="new">Azure operation</target>
+        <target state="translated">Azure işlemi</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPropertyPhaseDisplayName">
         <source>Azure operation phase</source>
-        <target state="new">Azure operation phase</target>
+        <target state="translated">Azure işlemi aşaması</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPropertyStartedAtDisplayName">
         <source>Azure operation started</source>
-        <target state="new">Azure operation started</target>
+        <target state="translated">Azure işlemi başlatıldı</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPropertyStatusDisplayName">
         <source>Azure operation status</source>
-        <target state="new">Azure operation status</target>
+        <target state="translated">Azure işlemi durumu</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationPropertyTargetLocationDisplayName">
         <source>Azure operation target location</source>
-        <target state="new">Azure operation target location</target>
+        <target state="translated">Azure işlem hedefi konumu</target>
         <note />
       </trans-unit>
       <trans-unit id="ReprovisionAllCommandConfirmation">
         <source>This clears the cached Azure deployment state for this AppHost and reprovisions all Azure resources again using the current Azure tenant, subscription, resource group, and location.</source>
-        <target state="new">This clears the cached Azure deployment state for this AppHost and reprovisions all Azure resources again using the current Azure tenant, subscription, resource group, and location.</target>
+        <target state="translated">Bu eylem bu AppHost için önbelleğe alınmış Azure dağıtım durumunu temizler ve geçerli Azure kiracısını, aboneliğini, kaynak grubunu ve konumunu kullanarak tüm Azure kaynaklarını yeniden sağlar.</target>
         <note />
       </trans-unit>
       <trans-unit id="ReprovisionAllCommandDescription">
         <source>Clears the cached Azure deployment state for this AppHost and provisions all Azure resources again using the current Azure context.</source>
-        <target state="new">Clears the cached Azure deployment state for this AppHost and provisions all Azure resources again using the current Azure context.</target>
+        <target state="translated">Bu eylem bu AppHost için önbelleğe alınmış Azure dağıtım durumunu temizler ve geçerli Azure bağlamını kullanarak tüm Azure kaynaklarını yeniden sağlar.</target>
         <note />
       </trans-unit>
       <trans-unit id="ReprovisionAllCommandName">
         <source>Reprovision all</source>
-        <target state="new">Reprovision all</target>
+        <target state="translated">Tümünü yeniden sağla</target>
         <note />
       </trans-unit>
       <trans-unit id="ReprovisionAllCommandSuccess">
         <source>Azure reprovisioning completed.</source>
-        <target state="new">Azure reprovisioning completed.</target>
+        <target state="translated">Azure yeniden sağlama işlemi tamamlandı.</target>
         <note />
       </trans-unit>
       <trans-unit id="ReprovisionResourceCommandConfirmation">
         <source>This clears the cached Azure deployment state for this resource and reprovisions it again using the current Azure tenant, subscription, resource group, and location.</source>
-        <target state="new">This clears the cached Azure deployment state for this resource and reprovisions it again using the current Azure tenant, subscription, resource group, and location.</target>
+        <target state="translated">Bu eylem bu kaynak için önbelleğe alınmış Azure dağıtım durumunu temizler ve geçerli Azure kiracısını, aboneliğini, kaynak grubunu ve konumunu kullanarak kaynağı yeniden sağlar.</target>
         <note />
       </trans-unit>
       <trans-unit id="ReprovisionResourceCommandDescription">
         <source>Clears the cached Azure deployment state for this resource and provisions it again using the current Azure context.</source>
-        <target state="new">Clears the cached Azure deployment state for this resource and provisions it again using the current Azure context.</target>
+        <target state="translated">Bu eylem bu kaynak için önbelleğe alınmış Azure dağıtım durumunu temizler ve geçerli Azure bağlamını kullanarak kaynağı yeniden sağlar.</target>
         <note />
       </trans-unit>
       <trans-unit id="ReprovisionResourceCommandName">
         <source>Reprovision</source>
-        <target state="new">Reprovision</target>
+        <target state="translated">Yeniden sağla</target>
         <note />
       </trans-unit>
       <trans-unit id="ReprovisionResourceCommandSuccess">
         <source>Azure resource reprovisioning completed.</source>
-        <target state="new">Azure resource reprovisioning completed.</target>
+        <target state="translated">Azure kaynağı yeniden sağlama işlemi tamamlandı.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResetProvisioningStateCommandConfirmation">
         <source>This only clears the cached Azure tenant, subscription, resource group, location, and deployment state stored for this AppHost. Live Azure resources are not deleted and may be left orphaned. Do you want to continue?</source>
-        <target state="new">This only clears the cached Azure tenant, subscription, resource group, location, and deployment state stored for this AppHost. Live Azure resources are not deleted and may be left orphaned. Do you want to continue?</target>
+        <target state="translated">Bu eylem yalnızca bu AppHost için depolanan önbelleğe alınmış Azure kiracısını, aboneliğini, kaynak grubunu, konumunu ve dağıtım durumunu temizler. Etkin Azure kaynakları silinmez ve yalnız bırakılmış olabilir. Devam etmek istiyor musunuz?</target>
         <note />
       </trans-unit>
       <trans-unit id="ResetProvisioningStateCommandDescription">
         <source>Clears the cached Azure context and deployment state for this AppHost. This does not delete live Azure resources and may leave them orphaned.</source>
-        <target state="new">Clears the cached Azure context and deployment state for this AppHost. This does not delete live Azure resources and may leave them orphaned.</target>
+        <target state="translated">Bu eylem bu AppHost için önbelleğe alınmış Azure bağlamını ve dağıtım durumunu temizler. Bu eylem etkin Azure kaynaklarını silmez ve bu kaynaklar yalnız bırakılmış kalabilir.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResetProvisioningStateCommandName">
         <source>Reset provisioning state</source>
-        <target state="new">Reset provisioning state</target>
+        <target state="translated">Hazırlama durumunu sıfırla</target>
         <note />
       </trans-unit>
       <trans-unit id="ResetProvisioningStateCommandSuccess">
         <source>Azure provisioning state reset.</source>
-        <target state="new">Azure provisioning state reset.</target>
+        <target state="translated">Azure hazırlama durumu sıfırlandı.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceGroupDialogTitle">
@@ -523,102 +523,102 @@ Daha fazla bilgi için [Azure sağlama belgelerine](https://aka.ms/aspire/azure/
       </trans-unit>
       <trans-unit id="ResourceStateAzureDeploymentCanceled">
         <source>Azure deployment canceled</source>
-        <target state="new">Azure deployment canceled</target>
+        <target state="translated">Azure dağıtımı iptal edildi</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateAzureDeploymentFailed">
         <source>Azure deployment failed</source>
-        <target state="new">Azure deployment failed</target>
+        <target state="translated">Azure dağıtımı başarısız oldu.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateCanceled">
         <source>Canceled</source>
-        <target state="new">Canceled</target>
+        <target state="translated">İptal edildi</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateCanceling">
         <source>Canceling</source>
-        <target state="new">Canceling</target>
+        <target state="translated">İptal ediliyor</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateChangingLocation">
         <source>Changing location</source>
-        <target state="new">Changing location</target>
+        <target state="translated">Konum değiştiriliyor</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateCompilingArmTemplate">
         <source>Compiling ARM template</source>
-        <target state="new">Compiling ARM template</target>
+        <target state="translated">ARM şablonu derleniyor</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateCreatingArmDeployment">
         <source>Creating ARM Deployment</source>
-        <target state="new">Creating ARM Deployment</target>
+        <target state="translated">ARM Dağıtımı oluşturuluyor</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateDeleting">
         <source>Deleting</source>
-        <target state="new">Deleting</target>
+        <target state="translated">Siliniyor</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateDrifted">
         <source>Drifted</source>
-        <target state="new">Drifted</target>
+        <target state="translated">Kaydırıldı</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateFailedToDelete">
         <source>Failed to Delete</source>
-        <target state="new">Failed to Delete</target>
+        <target state="translated">Silinemedi</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateFailedToProvision">
         <source>Failed to Provision</source>
-        <target state="new">Failed to Provision</target>
+        <target state="translated">Sağlanamadı</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateMissingInAzure">
         <source>Missing in Azure</source>
-        <target state="new">Missing in Azure</target>
+        <target state="translated">Azure’da eksik</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateMissingSubscriptionConfiguration">
         <source>Missing subscription configuration</source>
-        <target state="new">Missing subscription configuration</target>
+        <target state="translated">Abonelik yapılandırması eksik</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateProvisioned">
         <source>Provisioned</source>
-        <target state="new">Provisioned</target>
+        <target state="translated">Sağlandı</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateProvisionedMultipleAzureResourcesFormat">
         <source>Provisioned {0} Azure resources</source>
-        <target state="new">Provisioned {0} Azure resources</target>
+        <target state="translated">{0} Azure kaynağı sağlandı</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateProvisioningMultipleAzureResourcesFormat">
         <source>Provisioning {0} Azure resources</source>
-        <target state="new">Provisioning {0} Azure resources</target>
+        <target state="translated">{0} Azure kaynağı sağlanıyor</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateProvisioningPrefix">
         <source>Provisioning </source>
-        <target state="new">Provisioning </target>
+        <target state="translated">Sağlanıyor </target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateProvisioningResourceFormat">
         <source>Provisioning {0}</source>
-        <target state="new">Provisioning {0}</target>
+        <target state="translated">{0} sağlanıyor</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateStarting">
         <source>Starting</source>
-        <target state="new">Starting</target>
+        <target state="translated">Başlatılıyor</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceStateWaitingForDeployment">
         <source>Waiting for Deployment</source>
-        <target state="new">Waiting for Deployment</target>
+        <target state="translated">Dağıtım Bekleniyor</target>
         <note />
       </trans-unit>
       <trans-unit id="SubscriptionDialogTitle">
@@ -668,17 +668,17 @@ Daha fazla bilgi için [Azure sağlama belgelerine](https://aka.ms/aspire/azure/
       </trans-unit>
       <trans-unit id="TenantResourceSuffixDescription">
         <source>Optional. Appended to the names of tenant-wide resources created by this AppHost. Leave empty to use the names from AppHost code unchanged. Changing the suffix targets different resources; previous resources are not renamed or deleted.</source>
-        <target state="new">Optional. Appended to the names of tenant-wide resources created by this AppHost. Leave empty to use the names from AppHost code unchanged. Changing the suffix targets different resources; previous resources are not renamed or deleted.</target>
+        <target state="translated">İsteğe bağlı. Bu AppHost tarafından oluşturulan kiracı genelindeki kaynak adlarına eklenir. AppHost kodundaki adları değiştirmeden kullanmak için boş bırakın. Son eki değiştirdiğinizde farklı kaynakları hedeflersiniz; önceki kaynaklar yeniden adlandırılmaz veya silinmez.</target>
         <note />
       </trans-unit>
       <trans-unit id="TenantResourceSuffixLabel">
         <source>Tenant-scoped resource suffix</source>
-        <target state="new">Tenant-scoped resource suffix</target>
+        <target state="translated">Kiracı kapsamındaki kaynak son eki</target>
         <note />
       </trans-unit>
       <trans-unit id="TenantResourceSuffixSelectionMessage">
         <source>Add a suffix to tenant-wide resources created by this AppHost (optional).</source>
-        <target state="new">Add a suffix to tenant-wide resources created by this AppHost (optional).</target>
+        <target state="translated">Bu AppHost tarafından oluşturulan kiracı genelindeki kaynaklara bir son ek ekleyin (isteğe bağlı).</target>
         <note />
       </trans-unit>
       <trans-unit id="TenantSelectionMessage">

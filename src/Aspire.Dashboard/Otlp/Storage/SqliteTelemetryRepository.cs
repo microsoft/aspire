@@ -253,6 +253,8 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IT
         RunReadAsync(token => GetTraceSummariesFromDatabase(context, token), cancellationToken);
     public Task<GetSpansResponse> GetSpansAsync(GetSpansRequest context, CancellationToken cancellationToken) =>
         RunReadAsync(token => GetSpansFromDatabase(context, token), cancellationToken);
+    public Task<GetRequestSpansResponse> GetRequestSpansAsync(GetRequestSpansRequest request, CancellationToken cancellationToken) =>
+        RunReadAsync(token => GetRequestSpansFromDatabase(request, token), cancellationToken);
     public Task<Dictionary<string, int>> GetTraceFieldValuesAsync(string attributeName, CancellationToken cancellationToken) =>
         RunReadAsync(token => GetTraceFieldValuesFromDatabase(attributeName, token), cancellationToken);
     public Task<Dictionary<string, int>> GetLogsFieldValuesAsync(string attributeName, CancellationToken cancellationToken) =>

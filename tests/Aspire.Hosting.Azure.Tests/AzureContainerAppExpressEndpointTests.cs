@@ -25,10 +25,14 @@ public class AzureContainerAppExpressEndpointTests(ITestOutputHelper outputHelpe
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
         var environment = builder.AddAzureContainerAppEnvironment("env").AsExpress();
         var enabled = builder.AddParameter("enabled");
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
         var api = builder.AddProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
+#pragma warning restore CS0618
             .WithHttpEndpoint(targetPort: 8080)
             .WithExternalHttpEndpoints();
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
         var web = builder.AddProject("web", "web.csproj", options => options.ExcludeLaunchProfile = true)
+#pragma warning restore CS0618
             .WithHttpEndpoint()
             .WithReference(api);
         var endpoint = api.GetEndpoint("http");

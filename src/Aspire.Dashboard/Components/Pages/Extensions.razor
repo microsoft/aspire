@@ -1,0 +1,10 @@
+@page "/extensions"
+@using Aspire.Dashboard.Components.Layout
+@using Aspire.Dashboard.Resources
+@inject IStringLocalizer<Dashboard.Resources.Layout> Loc
+
+<PageTitle><ApplicationName ResourceName="@nameof(Dashboard.Resources.Layout.NavMenuExtensionsTab)" Loc="@Loc" /></PageTitle>
+
+<ComingSoonPlaceholder Icon="@DesktopNavMenu.ExtensionsIcon()"
+                       Title="@Loc[nameof(Dashboard.Resources.Layout.NavMenuExtensionsTab)]"
+                       Description="@Loc[nameof(Dashboard.Resources.Layout.ExtensionsPageDescription)]" />

@@ -121,6 +121,12 @@
     <value>Aspire repo</value>
   </data>
   <data name="MainLayoutAspireDashboardHelpLink" xml:space="preserve">
+    <value>Dashboard documentation</value>
+  </data>
+  <data name="MainLayoutKeyboardShortcuts" xml:space="preserve">
+    <value>Keyboard shortcuts</value>
+  </data>
+  <data name="MainLayoutHelp" xml:space="preserve">
     <value>Help</value>
   </data>
   <data name="MainLayoutLaunchSettings" xml:space="preserve">
@@ -147,6 +153,9 @@
   <data name="NavMenuResourcesTab" xml:space="preserve">
     <value>Resources</value>
   </data>
+  <data name="NavMenuTelemetrySourcesTab" xml:space="preserve">
+    <value>Telemetry sources</value>
+  </data>
   <data name="NavMenuConsoleLogsTab" xml:space="preserve">
     <value>Console logs</value>
   </data>
@@ -161,12 +170,6 @@
   </data>
   <data name="NavMenuMetricsTab" xml:space="preserve">
     <value>Metrics</value>
-  </data>
-  <data name="NavMenuToggleExpand" xml:space="preserve">
-    <value>Expand navigation labels</value>
-  </data>
-  <data name="NavMenuToggleCollapse" xml:space="preserve">
-    <value>Collapse navigation to icons</value>
   </data>
   <data name="MainLayoutAspire" xml:space="preserve">
     <value>Aspire</value>
@@ -189,28 +192,274 @@
   <data name="MainLayoutLaunchAIAgents" xml:space="preserve">
     <value>AI agents</value>
   </data>
-  <data name="DashboardRunSelectTitle" xml:space="preserve">
+  <data name="DashboardRunMenuTitle" xml:space="preserve">
     <value>Select dashboard run</value>
   </data>
-  <data name="DashboardRunSelectAccessibleLabel" xml:space="preserve">
+  <data name="DashboardRunMenuAccessibleLabel" xml:space="preserve">
     <value>Select run: {0}</value>
   </data>
-  <data name="DashboardRunSelectCurrent" xml:space="preserve">
+  <data name="DashboardRunMenuCurrent" xml:space="preserve">
     <value>Live run</value>
   </data>
-  <data name="DashboardRunSelectPin" xml:space="preserve">
-    <value>Pin run</value>
-  </data>
-  <data name="DashboardRunSelectUnpin" xml:space="preserve">
-    <value>Unpin run</value>
-  </data>
-  <data name="DashboardRunSelectIncompatibleTooltip" xml:space="preserve">
+  <data name="DashboardRunMenuIncompatibleTooltip" xml:space="preserve">
     <value>This run can't be viewed because it was created by an incompatible version of the dashboard.</value>
   </data>
-  <data name="DashboardRunSelectHelp" xml:space="preserve">
+  <data name="DashboardRunMenuUnpin" xml:space="preserve">
+    <value>Unpin run</value>
+  </data>
+  <data name="DashboardRunMenuPin" xml:space="preserve">
+    <value>Pin run</value>
+  </data>
+  <data name="DashboardRunMenuHelp" xml:space="preserve">
     <value>Learn about runs</value>
   </data>
-  <data name="DashboardRunSelectHelpTooltip" xml:space="preserve">
+  <data name="DashboardRunMenuHelpTooltip" xml:space="preserve">
     <value>Switch between the live run and read-only data from previous runs. Pin a run to keep it from being automatically deleted.</value>
+  </data>
+  <data name="DashboardRunSelectTitle" xml:space="preserve">
+    <value>Recordings</value>
+  </data>
+  <data name="DashboardRunSelectAccessibleLabel" xml:space="preserve">
+    <value>Recordings, viewing {0}</value>
+  </data>
+  <data name="DashboardRunSelectCurrent" xml:space="preserve">
+    <value>Live view</value>
+  </data>
+  <data name="DashboardRunSelectMomentAgo" xml:space="preserve">
+    <value>a moment ago</value>
+  </data>
+  <data name="DashboardRunSelectMinuteAgo" xml:space="preserve">
+    <value>1 minute ago</value>
+  </data>
+  <data name="DashboardRunSelectMinutesAgo" xml:space="preserve">
+    <value>{0} minutes ago</value>
+    <comment>{0} is the number of minutes</comment>
+  </data>
+  <data name="DashboardRunSelectHoursAgo" xml:space="preserve">
+    <value>{0}h ago</value>
+    <comment>{0} is the number of hours</comment>
+  </data>
+  <data name="DashboardRunSelectDayAgo" xml:space="preserve">
+    <value>1 day ago</value>
+  </data>
+  <data name="DashboardRunSelectDaysAgo" xml:space="preserve">
+    <value>{0} days ago</value>
+    <comment>{0} is the number of days</comment>
+  </data>
+  <data name="DashboardRunSelectRecordings" xml:space="preserve">
+    <value>Past recordings</value>
+  </data>
+  <data name="DashboardRunSelectNoRecordings" xml:space="preserve">
+    <value>No existing recordings</value>
+  </data>
+  <data name="DashboardRunSelectPin" xml:space="preserve">
+    <value>Protect from deletion</value>
+  </data>
+  <data name="DashboardRunSelectUnpin" xml:space="preserve">
+    <value>Allow deletion</value>
+  </data>
+  <data name="DashboardRunSelectIncompatibleTooltip" xml:space="preserve">
+    <value>This recording can't be viewed because it was created by an incompatible version of the dashboard.</value>
+  </data>
+  <data name="DashboardRunSelectHelp" xml:space="preserve">
+    <value>Learn about recordings</value>
+  </data>
+  <data name="DashboardRunSelectHelpTooltip" xml:space="preserve">
+    <value>Switch between the live view and read-only recordings of previous runs. Protect a recording from deletion to keep it when older recordings are automatically removed.</value>
+  </data>
+  <data name="NavMenuLandmark" xml:space="preserve">
+    <value>Main navigation</value>
+  </data>
+  <data name="NavMenuNoParameters" xml:space="preserve">
+    <value>No parameters</value>
+  </data>
+  <data name="NavMenuParametersTab" xml:space="preserve">
+    <value>Parameters</value>
+  </data>
+  <data name="NavMenuGraphTab" xml:space="preserve">
+    <value>Graph</value>
+  </data>
+  <data name="ResourcePaneLandmark" xml:space="preserve">
+    <value>Resources</value>
+  </data>
+  <data name="ResourcePaneExpand" xml:space="preserve">
+    <value>Expand resource list</value>
+  </data>
+  <data name="ResourcePaneCollapse" xml:space="preserve">
+    <value>Collapse resource list</value>
+  </data>
+  <data name="ResourcePaneOpen" xml:space="preserve">
+    <value>Show resource list</value>
+  </data>
+  <data name="ResourcePaneClose" xml:space="preserve">
+    <value>Hide resource list</value>
+  </data>
+  <data name="ResourcePaneGrouping" xml:space="preserve">
+    <value>Group resources</value>
+  </data>
+  <data name="ResourcePaneGroupingNone" xml:space="preserve">
+    <value>None</value>
+  </data>
+  <data name="ResourcePaneGroupingResourceType" xml:space="preserve">
+    <value>Resource type</value>
+  </data>
+  <data name="ResourcePaneGroupingState" xml:space="preserve">
+    <value>State</value>
+  </data>
+  <data name="ResourcePaneResourceActions" xml:space="preserve">
+    <value>Actions for {0}</value>
+  </data>
+  <data name="ResourcePaneSelectAll" xml:space="preserve">
+    <value>Select all</value>
+  </data>
+  <data name="ResourcePaneAllSelected" xml:space="preserve">
+    <value>All selected</value>
+  </data>
+  <data name="ResourcePaneUnviewedErrors" xml:space="preserve">
+    <value>{0} unviewed error logs</value>
+  </data>
+  <data name="ResourcePaneTelemetryOnlyGroup" xml:space="preserve">
+    <value>Telemetry sources</value>
+  </data>
+  <data name="ResourcePaneTelemetryOnly" xml:space="preserve">
+    <value>Telemetry sources</value>
+  </data>
+  <data name="ResourcePaneCountSingular" xml:space="preserve">
+    <value>{0} resource</value>
+  </data>
+  <data name="ResourcePaneCountPlural" xml:space="preserve">
+    <value>{0} resources</value>
+  </data>
+  <data name="ResourcePaneParameterCountSingular" xml:space="preserve">
+    <value>{0} parameter</value>
+  </data>
+  <data name="ResourcePaneParameterCountPlural" xml:space="preserve">
+    <value>{0} parameters</value>
+  </data>
+  <data name="ResourcePaneMixedCount" xml:space="preserve">
+    <value>{0}, {1}</value>
+  </data>
+  <data name="ResourceHeaderStarted" xml:space="preserve">
+    <value>Started</value>
+  </data>
+  <data name="ResourceHeaderNotFound" xml:space="preserve">
+    <value>Resource not found</value>
+  </data>
+  <data name="ResourceHeaderAllResources" xml:space="preserve">
+    <value>All resources</value>
+  </data>
+  <data name="TelemetryHeaderAllSources" xml:space="preserve">
+    <value>All sources</value>
+  </data>
+  <data name="TelemetryHeaderSelectedSources" xml:space="preserve">
+    <value>{0} sources selected</value>
+  </data>
+  <data name="TelemetryPaneCountSingular" xml:space="preserve">
+    <value>{0} telemetry source</value>
+  </data>
+  <data name="TelemetryPaneCountPlural" xml:space="preserve">
+    <value>{0} telemetry sources</value>
+  </data>
+  <data name="TelemetryPaneNoSources" xml:space="preserve">
+    <value>No telemetry sources</value>
+  </data>
+  <data name="ResourceTabsLandmark" xml:space="preserve">
+    <value>Resource views</value>
+  </data>
+  <data name="ResourcePaneFilterDone" xml:space="preserve">
+    <value>OK</value>
+  </data>
+  <data name="ResourcePaneFilterReset" xml:space="preserve">
+    <value>Reset</value>
+  </data>
+  <data name="ResourcePaneKindShow" xml:space="preserve">
+    <value>Select to show {0}</value>
+  </data>
+  <data name="ResourcePaneKindHide" xml:space="preserve">
+    <value>Select to hide {0}</value>
+  </data>
+  <data name="ResourcePaneNoKindsHint" xml:space="preserve">
+    <value>Turn on a type above to list it.</value>
+  </data>
+  <data name="ResourcePaneNoKindsShown" xml:space="preserve">
+    <value>Nothing shown</value>
+  </data>
+  <data name="ResourcePaneKindsLandmark" xml:space="preserve">
+    <value>Types to show</value>
+  </data>
+  <data name="ResourceTabsMore" xml:space="preserve">
+    <value>More views</value>
+  </data>
+  <data name="ResourceTabUnavailable" xml:space="preserve">
+    <value>Not available for this resource</value>
+  </data>
+  <data name="ResourceTabOverview" xml:space="preserve">
+    <value>Overview</value>
+  </data>
+  <data name="ResourceHeaderSelectedResources" xml:space="preserve">
+    <value>{0} selected resources</value>
+  </data>
+  <data name="ResourceHeaderSelectedParameters" xml:space="preserve">
+    <value>{0} selected parameters</value>
+  </data>
+  <data name="ResourcePaneResize" xml:space="preserve">
+    <value>Resize resource list</value>
+  </data>
+  <data name="NavMenuTagsTab" xml:space="preserve">
+    <value>Tags</value>
+  </data>
+  <data name="NavMenuExtensionsTab" xml:space="preserve">
+    <value>Extensions</value>
+  </data>
+  <data name="ResourcePaneUntaggedGroup" xml:space="preserve">
+    <value>Untagged</value>
+  </data>
+  <data name="ResourcePaneNoTagsTitle" xml:space="preserve">
+    <value>No tags yet</value>
+  </data>
+  <data name="ResourcePaneNoTagsDescription" xml:space="preserve">
+    <value>Add tags to a resource from its overview to group related resources here.</value>
+  </data>
+  <data name="ResourcePaneTagGroupLabel" xml:space="preserve">
+    <value>{0}, {1}</value>
+  </data>
+  <data name="ResourcePaneTagGroupToggle" xml:space="preserve">
+    <value>Expand or collapse {0}</value>
+    <comment>{0} is the group name</comment>
+  </data>
+  <data name="PlaceholderPageComingSoon" xml:space="preserve">
+    <value>Coming soon</value>
+  </data>
+  <data name="TerminalsPageDescription" xml:space="preserve">
+    <value>Open and switch between the terminals of your resources from one place.</value>
+  </data>
+  <data name="ExtensionsPageDescription" xml:space="preserve">
+    <value>Extend the dashboard with views and tools for your app.</value>
+  </data>
+  <data name="ResourcePaneReorderUnavailable" xml:space="preserve">
+    <value>Clear search, filters and grouping, and move resources within the same parent.</value>
+  </data>
+  <data name="ResourcePaneReorderFailed" xml:space="preserve">
+    <value>Unable to save the resource order. Try again.</value>
+  </data>
+  <data name="ResourcePaneMovedBefore" xml:space="preserve">
+    <value>{0} moved before {1}.</value>
+    <comment>{0} is the moved resource name; {1} is the target resource name.</comment>
+  </data>
+  <data name="ResourcePaneMovedAfter" xml:space="preserve">
+    <value>{0} moved after {1}.</value>
+    <comment>{0} is the moved resource name; {1} is the target resource name.</comment>
+  </data>
+  <data name="ResourcePaneGroupReorderUnavailable" xml:space="preserve">
+    <value>Clear search and filters, and try reordering groups again.</value>
+  </data>
+  <data name="ResourcePaneGroupReorderFailed" xml:space="preserve">
+    <value>Unable to save the group order. Try again.</value>
+  </data>
+  <data name="NavMenuToggleExpand" xml:space="preserve">
+    <value>Expand navigation labels</value>
+  </data>
+  <data name="NavMenuToggleCollapse" xml:space="preserve">
+    <value>Collapse navigation to icons</value>
   </data>
 </root>

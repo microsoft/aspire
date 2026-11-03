@@ -10,7 +10,7 @@
             disabled="@IsSetCommandDisabled"
             @onclick="OnClickAsync"
             @onkeydown:stopPropagation="true"
-            title="@ControlsStringsLoc[nameof(ControlsStrings.ParameterSetValueAction)]">
+            data-tooltip="@ControlsStringsLoc[nameof(ControlsStrings.ParameterSetValueAction)]">
         @ControlsStringsLoc[nameof(ControlsStrings.ParameterValueNotSet)]
     </button>
 }

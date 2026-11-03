@@ -99,8 +99,18 @@ internal static partial class ConfigurationHelper
         }
     }
 
-    internal static async Task<FileLock?> TryAcquireWorkspaceConfigLockAsync(
+    // Both global formats must contend on one destination, even before migration creates it.
+    internal static FileInfo GetCanonicalGlobalSettingsFile(FileInfo settingsFile) =>
+        settingsFile.Name.Equals("globalsettings.json", StringComparison.OrdinalIgnoreCase)
+            ? new FileInfo(Path.Combine(settingsFile.Directory!.FullName, AspireConfigFile.FileName))
+            : settingsFile;
+
+    internal static Task<FileLock?> TryAcquireWorkspaceConfigLockAsync(
         CliExecutionContext executionContext, FileInfo settingsFile, ILogger logger, CancellationToken cancellationToken)
+        => TryAcquireWorkspaceConfigLockAsync(executionContext.CacheDirectory, settingsFile, logger, cancellationToken);
+
+    internal static async Task<FileLock?> TryAcquireWorkspaceConfigLockAsync(
+        DirectoryInfo cacheDirectory, FileInfo settingsFile, ILogger logger, CancellationToken cancellationToken)
     {
         // Lock files live in the cache so read-only workspaces remain usable. Canonicalizing and
         // folding the config path makes aliases on symlinked or case-insensitive volumes contend;
@@ -109,7 +119,7 @@ internal static partial class ConfigurationHelper
             .Normalize(NormalizationForm.FormC)
             .ToUpperInvariant();
         var lockFileName = Convert.ToHexString(XxHash3.Hash(Encoding.UTF8.GetBytes(normalizedSettingsPath))).ToLowerInvariant();
-        var lockPath = Path.Combine(executionContext.CacheDirectory.FullName, "workspace-config-locks", $"{lockFileName}.lock");
+        var lockPath = Path.Combine(cacheDirectory.FullName, "workspace-config-locks", $"{lockFileName}.lock");
         try
         {
             return await FileLock.AcquireAsync(lockPath, cancellationToken, s_workspaceConfigLockTimeout);
@@ -118,7 +128,7 @@ internal static partial class ConfigurationHelper
         {
             // Preserve the existing best-effort workspace bookkeeping when the cache
             // cannot host a lock. Reads use the same policy as workspace-default writes.
-            logger.LogDebug(ex, "Proceeding without the workspace config lock at {LockPath}.", lockPath);
+            logger.LogDebug(ex, "Could not acquire the workspace config lock at {LockPath}.", lockPath);
             return null;
         }
     }
@@ -627,8 +637,8 @@ internal static partial class ConfigurationHelper
             var node = JsonNode.Parse(content, documentOptions: ParseOptions);
             if (!persistNormalization && node is JsonObject settings)
             {
-                // Completion must resolve the same flat/nested key collisions without
-                // rewriting user files merely because the shell requested suggestions.
+                // Read-only commands must resolve the same flat/nested key collisions
+                // without rewriting configuration as a side effect of startup.
                 NormalizeSettings(settings);
             }
 

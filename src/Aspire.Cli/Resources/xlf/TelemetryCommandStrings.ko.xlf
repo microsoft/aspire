@@ -4,112 +4,112 @@
     <body>
       <trans-unit id="ApiKeyOptionDescription">
         <source>API key for authenticating with the dashboard (optional, for dashboards with API key authentication)</source>
-        <target state="new">API key for authenticating with the dashboard (optional, for dashboards with API key authentication)</target>
+        <target state="translated">대시보드 인증에 사용할 API 키(선택 사항. API 키 인증을 사용하는 대시보드에 필요)</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfiguredDashboardDisplayValue">
         <source>the configured dashboard</source>
-        <target state="new">the configured dashboard</target>
+        <target state="translated">설정된 대시보드</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardApiNotEnabled">
         <source>Could not fetch telemetry data from the dashboard. The dashboard at '{0}' does not have the telemetry API enabled.</source>
-        <target state="new">Could not fetch telemetry data from the dashboard. The dashboard at '{0}' does not have the telemetry API enabled.</target>
+        <target state="translated">대시보드에서 텔레메트리 데이터를 가져올 수 없습니다. '{0}'의 대시보드에서 텔레메트리 API가 사용하도록 설정되지 않았습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardApiNotEnabledHint">
         <source>Start the dashboard with 'aspire dashboard run' or set Dashboard:Api:Enabled to true.</source>
-        <target state="new">Start the dashboard with 'aspire dashboard run' or set Dashboard:Api:Enabled to true.</target>
+        <target state="translated">'aspire dashboard run'으로 대시보드를 시작하거나 Dashboard:Api:Enabled를 true로 설정하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardAuthFailed">
         <source>Could not fetch telemetry data from the dashboard. Authentication failed.</source>
-        <target state="new">Could not fetch telemetry data from the dashboard. Authentication failed.</target>
+        <target state="translated">대시보드에서 텔레메트리 데이터를 가져올 수 없습니다. 인증에 실패했습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardAuthFailedAnonymousHint">
         <source>Alternatively, allow anonymous access with 'aspire dashboard run --allow-anonymous' or by setting the ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS environment variable to true.</source>
-        <target state="new">Alternatively, allow anonymous access with 'aspire dashboard run --allow-anonymous' or by setting the ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS environment variable to true.</target>
+        <target state="translated">또는 'aspire dashboard run --allow-anonymous'를 사용하거나 ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS 환경 변수를 true로 설정하여 익명 액세스를 허용하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardAuthFailedHint">
         <source>Authenticate with the dashboard either with a --dashboard-url including a valid login token (e.g. http://localhost:18888/login?t=TOKEN), or with an --api-key matching the dashboard's configured API key.</source>
-        <target state="new">Authenticate with the dashboard either with a --dashboard-url including a valid login token (e.g. http://localhost:18888/login?t=TOKEN), or with an --api-key matching the dashboard's configured API key.</target>
+        <target state="translated">유효한 로그인 토큰이 포함된 --dashboard-url(예: http://localhost:18888/login?t=TOKEN) 또는 대시보드에 구성된 API 키와 일치하는 --api-key를 사용하여 대시보드에 인증하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardConnectionFailed">
         <source>Could not fetch telemetry data from the dashboard. Unable to connect to '{0}'.</source>
-        <target state="new">Could not fetch telemetry data from the dashboard. Unable to connect to '{0}'.</target>
+        <target state="translated">대시보드에서 텔레메트리 데이터를 가져올 수 없습니다. ‘{0}’에 연결할 수 없습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardConnectionFailedHint">
         <source>Verify the dashboard is running and the URL is correct.</source>
-        <target state="new">Verify the dashboard is running and the URL is correct.</target>
+        <target state="translated">대시보드가 실행 중이고 URL이 올바른지 확인하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardConnectionLost">
         <source>The connection to the dashboard was lost.</source>
-        <target state="new">The connection to the dashboard was lost.</target>
+        <target state="translated">대시보드 연결이 끊어졌습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardLoginTokenFailed">
         <source>Could not fetch telemetry data from the dashboard. The login token in the URL is invalid or expired.</source>
-        <target state="new">Could not fetch telemetry data from the dashboard. The login token in the URL is invalid or expired.</target>
+        <target state="translated">대시보드에서 텔레메트리 데이터를 가져올 수 없습니다. URL의 로그인 토큰이 잘못되었거나 만료되었습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardLoginTokenFailedAnonymousHint">
         <source>Alternatively, allow anonymous access with 'aspire dashboard run --allow-anonymous' or by setting the ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS environment variable to true.</source>
-        <target state="new">Alternatively, allow anonymous access with 'aspire dashboard run --allow-anonymous' or by setting the ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS environment variable to true.</target>
+        <target state="translated">또는 'aspire dashboard run --allow-anonymous'를 사용하거나 ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS 환경 변수를 true로 설정하여 익명 액세스를 허용하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardLoginTokenFailedHint">
         <source>Ensure you are using the login URL from the currently running dashboard instance.</source>
-        <target state="new">Ensure you are using the login URL from the currently running dashboard instance.</target>
+        <target state="translated">현재 실행 중인 대시보드 인스턴스의 로그인 URL을 사용하고 있는지 확인하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardNotAvailable">
         <source>Could not fetch telemetry data from the dashboard. The dashboard is not available.</source>
-        <target state="new">Could not fetch telemetry data from the dashboard. The dashboard is not available.</target>
+        <target state="translated">대시보드에서 텔레메트리 데이터를 가져올 수 없습니다. 대시보드를 사용할 수 없습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardNotAvailableHint">
         <source>Ensure the AppHost is running with the dashboard enabled.</source>
-        <target state="new">Ensure the AppHost is running with the dashboard enabled.</target>
+        <target state="translated">대시보드를 사용하도록 설정한 상태에서 apphost가 실행되고 있는지 확인합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardUrlAndAppHostExclusive">
         <source>The --dashboard-url and --apphost options cannot be used together. Specify one or the other.</source>
-        <target state="new">The --dashboard-url and --apphost options cannot be used together. Specify one or the other.</target>
+        <target state="translated">--dashboard-url 옵션과 --apphost 옵션은 함께 사용할 수 없습니다. 둘 중 하나만 지정하십시오.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardUrlInvalid">
         <source>Could not fetch telemetry data from the dashboard. The value '{0}' is not a valid URL.</source>
-        <target state="new">Could not fetch telemetry data from the dashboard. The value '{0}' is not a valid URL.</target>
+        <target state="translated">대시보드에서 텔레메트리 데이터를 가져올 수 없습니다. 값 '{0}'이(가) 유효한 URI가 아닙니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardUrlInvalidHint">
         <source>Specify an absolute URL like 'http://localhost:18888'.</source>
-        <target state="new">Specify an absolute URL like 'http://localhost:18888'.</target>
+        <target state="translated">'http://localhost:18888'와 같은 절대 URL을 지정합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardUrlNotReachable">
         <source>Could not fetch telemetry data from the dashboard. The specified URL '{0}' does not appear to be a valid dashboard address.</source>
-        <target state="new">Could not fetch telemetry data from the dashboard. The specified URL '{0}' does not appear to be a valid dashboard address.</target>
+        <target state="translated">대시보드에서 텔레메트리 데이터를 가져올 수 없습니다. 지정한 URL '{0}'은(는) 유효한 대시보드 주소가 아닌 것 같습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardUrlNotReachableHint">
         <source>Verify the URL is correct.</source>
-        <target state="new">Verify the URL is correct.</target>
+        <target state="translated">URL이 올바른지 확인하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardUrlOptionDescription">
         <source>Base URL of a standalone Aspire Dashboard (e.g. http://localhost:18888). Login URLs are also accepted and automatically normalized.</source>
-        <target state="new">Base URL of a standalone Aspire Dashboard (e.g. http://localhost:18888). Login URLs are also accepted and automatically normalized.</target>
+        <target state="translated">독립 실행형 Aspire 대시보드의 기본 URL(예: http://localhost:18888). 로그인 URL도 허용되며 자동으로 정규화됩니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
         <source>View OpenTelemetry data (logs, spans, traces) from a running AppHost</source>
-        <target state="needs-review-translation">실행 중인 Aspire 애플리케이션의 원격 분석 데이터(로그, 범위, 추적)를 확인합니다.</target>
+        <target state="translated">실행 중인 apphost에서 OpenTelemetry 데이터(로그, 범위, 추적) 보기</target>
         <note />
       </trans-unit>
       <trans-unit id="FailedToFetchTelemetry">
@@ -119,17 +119,17 @@
       </trans-unit>
       <trans-unit id="FollowOptionDescription">
         <source>Stream telemetry in real-time as it arrives</source>
-        <target state="needs-review-translation">원격 분석 데이터를 실시간으로 스트림합니다.</target>
+        <target state="translated">도착 시 실시간으로 원격 분석 스트리밍</target>
         <note />
       </trans-unit>
       <trans-unit id="FormatOptionDescription">
         <source>Output format (Table or Json)</source>
-        <target state="needs-review-translation">출력 형식(테이블 또는 JSON)입니다.</target>
+        <target state="translated">출력 형식(테이블 또는 Json)</target>
         <note />
       </trans-unit>
       <trans-unit id="HasErrorOptionDescription">
         <source>Filter by error status (true to show only errors, false to exclude errors)</source>
-        <target state="needs-review-translation">오류 상태로 필터링합니다(true면 오류만, false면 오류 제외).</target>
+        <target state="translated">오류 상태별로 필터링(오류만 표시하려면 true, 오류를 제외하려면 false)</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderDuration">
@@ -159,7 +159,7 @@
       </trans-unit>
       <trans-unit id="InvalidDashboardUrlDisplayValue">
         <source>not an absolute HTTP(S) URL</source>
-        <target state="new">not an absolute HTTP(S) URL</target>
+        <target state="translated">절대 HTTP(S) URL이 아님</target>
         <note />
       </trans-unit>
       <trans-unit id="LimitMustBePositive">
@@ -169,22 +169,22 @@
       </trans-unit>
       <trans-unit id="LimitOptionDescription">
         <source>Maximum number of items to return</source>
-        <target state="needs-review-translation">반환할 최대 항목 수입니다.</target>
+        <target state="translated">반환할 최대 항목 수</target>
         <note />
       </trans-unit>
       <trans-unit id="LogsDescription">
         <source>View structured logs from the Dashboard telemetry API</source>
-        <target state="needs-review-translation">대시보드 원격 분석 API에서 구조화된 로그를 확인합니다.</target>
+        <target state="translated">대시보드 원격 분석 API에서 구조적 로그 보기</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
         <source>Filter by resource name</source>
-        <target state="needs-review-translation">리소스 이름으로 필터링</target>
+        <target state="translated">리소스 이름별 필터링</target>
         <note />
       </trans-unit>
       <trans-unit id="SearchOptionDescription">
         <source>Search and filter telemetry fields such as log messages, attribute values, names, source, and IDs. Supports full-text search and field filters. See https://aka.ms/aspire/cli-search for more details</source>
-        <target state="new">Search and filter telemetry fields such as log messages, attribute values, names, source, and IDs. Supports full-text search and field filters. See https://aka.ms/aspire/cli-search for more details</target>
+        <target state="translated">로그 메시지, 특성 값, 이름, 원본, ID와 같은 텔레메트리 필드를 검색하고 필터링합니다. 전체 텍스트 검색과 필드 필터를 지원합니다. 자세한 내용은 https://aka.ms/aspire/cli-search를 참조하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAppHostAction">
@@ -194,22 +194,22 @@
       </trans-unit>
       <trans-unit id="SeverityOptionDescription">
         <source>Filter logs by minimum severity (Trace, Debug, Information, Warning, Error, Critical)</source>
-        <target state="needs-review-translation">최소 심각도(Trace, Debug, Information, Warning, Error, Critical)로 로그를 필터링합니다.</target>
+        <target state="translated">최소 심각도로 로그 필터링(추적, 디버그, 정보, 경고, 오류, 위험)</target>
         <note />
       </trans-unit>
       <trans-unit id="SpansDescription">
         <source>View spans from the Dashboard telemetry API</source>
-        <target state="needs-review-translation">대시보드 원격 분석 API에서 범위를 확인합니다.</target>
+        <target state="translated">대시보드 원격 분석 API에서 범위 보기</target>
         <note />
       </trans-unit>
       <trans-unit id="TraceIdArgumentDescription">
         <source>The trace ID to view. If not specified, lists all traces.</source>
-        <target state="needs-review-translation">조회할 추적 ID입니다. 지정하지 않으면 모든 추적이 나열됩니다.</target>
+        <target state="translated">조회할 추적 ID입니다. 지정하지 않으면 모든 추적이 나열됩니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="TraceIdOptionDescription">
         <source>Filter by trace ID</source>
-        <target state="needs-review-translation">추적 ID로 필터링합니다.</target>
+        <target state="translated">추적 ID로 필터링</target>
         <note />
       </trans-unit>
       <trans-unit id="TraceNotFound">
@@ -219,12 +219,12 @@
       </trans-unit>
       <trans-unit id="TracesDescription">
         <source>View traces from the Dashboard telemetry API</source>
-        <target state="needs-review-translation">대시보드 원격 분석 API에서 추적을 확인하세요.</target>
+        <target state="translated">대시보드 원격 분석 API에서 추적 보기</target>
         <note />
       </trans-unit>
       <trans-unit id="UnexpectedContentType">
         <source>Dashboard API returned unexpected content type '{0}'. Expected JSON response.</source>
-        <target state="new">Dashboard API returned unexpected content type '{0}'. Expected JSON response.</target>
+        <target state="translated">대시보드 API에서 예기치 않은 콘텐츠 형식 '{0}'을 반환했습니다. JSON 응답이 필요합니다.</target>
         <note />
       </trans-unit>
     </body>

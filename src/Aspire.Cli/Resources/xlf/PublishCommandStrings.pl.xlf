@@ -4,7 +4,7 @@
     <body>
       <trans-unit id="Description">
         <source>Generate deployment artifacts for an AppHost</source>
-        <target state="needs-review-translation">Generuje artefakty wdrożenia dla hosta AppHost platformy Aspire. (Wersja zapoznawcza)</target>
+        <target state="translated">Generuj artefakty wdrożenia dla hosta aplikacji</target>
         <note />
       </trans-unit>
       <trans-unit id="GeneratingArtifacts">
@@ -19,7 +19,7 @@
       </trans-unit>
       <trans-unit id="NoBuildArgumentDescription">
         <source>Do not build or restore the project before running</source>
-        <target state="new">Do not build or restore the project before running</target>
+        <target state="translated">Nie kompiluj ani nie przywracaj projektu przed uruchomieniem</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationCompletedPrefix">
@@ -34,12 +34,12 @@
       </trans-unit>
       <trans-unit id="OutputPathArgumentDescription">
         <source>The output path for the generated artifacts. Defaults to the AppHost directory's 'aspire-output' folder if not specified.</source>
-        <target state="needs-review-translation">Ścieżka danych wyjściowych dla wygenerowanych artefaktów. Wartością domyślną jest „./jpg-output”, jeśli nie została określona.</target>
+        <target state="translated">Ścieżka danych wyjściowych dla wygenerowanych artefaktów. Jeśli jej nie określisz, domyślnie będzie to folder „aspire-output” w katalogu AppHost.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
         <source>The path to the Aspire AppHost project file or a directory to search</source>
-        <target state="needs-review-translation">Ścieżka do pliku projektu hosta AppHost platformy Aspire.</target>
+        <target state="translated">Ścieżka do pliku projektu Aspire AppHost lub katalog do przeszukania</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAPublisher">

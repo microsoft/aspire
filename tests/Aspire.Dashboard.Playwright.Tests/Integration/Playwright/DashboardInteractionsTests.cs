@@ -11,13 +11,75 @@ using Xunit;
 
 namespace Aspire.Dashboard.Tests.Integration.Playwright;
 
-// Browser coverage for terminal keyboard shortcuts, grid auto-fit, and the <aspire-scroll-to-bottom> custom element.
+// Browser coverage for reconnect dialogs, terminal keyboard shortcuts, grid auto-fit, and the <aspire-scroll-to-bottom> custom element.
 [RequiresFeature(TestFeature.Playwright)]
 public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteractionsTests.InteractionsDashboardServerFixture>
 {
     public DashboardInteractionsTests(InteractionsDashboardServerFixture dashboardServerFixture)
         : base(dashboardServerFixture)
     {
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task ReconnectModal_RemainsAboveInteractionDialog()
+    {
+        await RunTestAsync(async page =>
+        {
+            await GoToResourcesAndWaitAsync(page);
+            await page.WaitForFunctionAsync("() => customElements.get('fluent-dialog') !== undefined").DefaultTimeout();
+            await page.EvaluateAsync("""
+                async () => {
+                    const reconnect = document.getElementById('components-reconnect-modal');
+                    const retry = document.createElement('button');
+                    retry.id = 'reconnect-layer-probe';
+                    retry.textContent = 'Reconnect action';
+                    retry.addEventListener('click', () => retry.dataset.clicked = 'true');
+                    reconnect.appendChild(retry);
+
+                    const interaction = document.createElement('fluent-dialog');
+                    interaction.id = 'interaction-layer-probe';
+                    interaction.setAttribute('type', 'alert');
+                    const action = document.createElement('button');
+                    action.id = 'interaction-layer-action';
+                    action.textContent = 'Interaction action';
+                    action.addEventListener('click', () => action.dataset.clicked = 'true');
+                    interaction.appendChild(action);
+                    document.body.appendChild(interaction);
+
+                    reconnect.dispatchEvent(new CustomEvent('components-reconnect-state-changed', {
+                        detail: { state: 'show' }
+                    }));
+                    await new Promise(resolve => {
+                        interaction.addEventListener('toggle', resolve, { once: true });
+                        interaction.show();
+                    });
+                }
+                """);
+
+            await page.WaitForFunctionAsync("""
+                () => {
+                    const interaction = document.getElementById('interaction-layer-probe');
+                    return interaction.shadowRoot?.querySelector('dialog')?.open;
+                }
+                """).DefaultTimeout();
+
+            var reconnectAction = page.Locator("#reconnect-layer-probe");
+            await reconnectAction.ClickAsync();
+            await Assertions.Expect(reconnectAction).ToHaveAttributeAsync("data-clicked", "true");
+
+            await page.EvaluateAsync("""
+                () => {
+                    document.getElementById('components-reconnect-modal').dispatchEvent(
+                        new CustomEvent('components-reconnect-state-changed', { detail: { state: 'hide' } }));
+                }
+                """);
+
+            await Assertions.Expect(page.Locator("#components-reconnect-modal")).Not.ToHaveAttributeAsync("open", "");
+            var interactionAction = page.Locator("#interaction-layer-action");
+            await interactionAction.ClickAsync();
+            await Assertions.Expect(interactionAction).ToHaveAttributeAsync("data-clicked", "true");
+        });
     }
 
     [Fact]
@@ -101,10 +163,13 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
     {
         await RunTestAsync(async page =>
         {
-            await GoToResourcesAndWaitAsync(page);
+            var baseUrl = DashboardServerFixture.DashboardApp.FrontendSingleEndPointAccessor().GetResolvedAddress();
+            await page.Context.AddCookiesAsync([new Cookie { Name = "Aspire_Dashboard_Experience", Value = "legacy", Url = baseUrl }]);
+            await page.GotoAsync("/legacy/resources");
+            await page.GetByRole(AriaRole.Tab, new() { Name = Resources.Layout.NavMenuParametersTab, Exact = true }).ClickAsync();
 
             var grid = page.Locator(".main-grid").First;
-            await Assertions.Expect(grid).ToBeVisibleAsync();
+            await Assertions.Expect(grid.Locator(".resource-row").First).ToBeVisibleAsync();
 
             // Guard against a Fluent UI Blazor rename of the resize handle marker: the auto-fit
             // double-click handler keys off exactly these selectors, so if none is present the
@@ -552,7 +617,7 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
 
             var bottomButton = page.Locator(".scroll-to-bottom");
             await Assertions.Expect(bottomButton).ToHaveAttributeAsync("aria-label", "Jump to latest");
-            await Assertions.Expect(bottomButton).ToHaveAttributeAsync("title", "Jump to latest");
+            await Assertions.Expect(bottomButton).ToHaveAttributeAsync("data-tooltip", "Jump to latest");
         });
     }
 
@@ -599,6 +664,10 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
                 [
                     new UrlViewModel("http", new Uri("about:blank#parent-url"), isInternal: false, isInactive: false, UrlDisplayPropertiesViewModel.Empty)
                 ]),
+            ModelTestHelpers.CreateResource(
+                resourceName: "connection-string",
+                resourceType: KnownResourceTypes.Parameter,
+                state: KnownResourceState.Running),
         ];
     }
 }

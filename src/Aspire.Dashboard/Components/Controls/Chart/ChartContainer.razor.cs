@@ -54,6 +54,38 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
     [Parameter, EditorRequired]
     public required List<OtlpResource> Resources { get; set; }
 
+    /// <summary>
+    /// Gets or sets whether a counter shows its running total instead of its change per interval.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public required bool ShowRunningTotal { get; set; }
+
+    /// <summary>
+    /// Raised when the user switches between a counter's change per interval and its running total,
+    /// so the page can keep the choice in the URL.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public required Func<bool, Task> OnShowRunningTotalChangedAsync { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether a counter offers the choice between its change per interval and its running total.
+    /// The previous dashboard experience doesn't offer it and always shows the running total, as it did before.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public required bool ShowChangePerIntervalOption { get; set; }
+
+    /// <summary>
+    /// Gets or sets the label of the back button, e.g. "Back to System.Runtime". No back button when null.
+    /// </summary>
+    [Parameter]
+    public string? BackLabel { get; set; }
+
+    /// <summary>
+    /// Navigates back to the instruments the chart was opened from.
+    /// </summary>
+    [Parameter]
+    public Func<Task>? OnBackAsync { get; set; }
+
     [Inject]
     public required DashboardDataSource DataSource { get; init; }
 
@@ -189,6 +221,24 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
         await _instrumentViewModel.UpdateDataAsync(instrument.Summary, instrument.Dimensions, instrument.HasOverflow);
     }
 
+    private async Task ShowChangePerIntervalChangedAsync(bool showChangePerInterval)
+    {
+        var showRunningTotal = !showChangePerInterval;
+        if (_instrumentViewModel.ShowRunningTotal == showRunningTotal)
+        {
+            return;
+        }
+
+        // Update the chart right away rather than waiting for the URL round trip through the page.
+        _instrumentViewModel.ShowRunningTotal = showRunningTotal;
+        if (_instrument is not null)
+        {
+            await UpdateInstrumentDataAsync(_instrument);
+        }
+
+        await OnShowRunningTotalChangedAsync(showRunningTotal);
+    }
+
     private async Task ShowCountChangedAsync(bool showCount)
     {
         if (_instrumentViewModel.ShowCount == showCount)
@@ -206,6 +256,16 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
     protected override async Task OnParametersSetAsync()
     {
         _activeView = ActiveView;
+
+        // The URL owns this choice, so a link or back navigation restores it.
+        if (_instrumentViewModel.ShowRunningTotal != ShowRunningTotal)
+        {
+            _instrumentViewModel.ShowRunningTotal = ShowRunningTotal;
+            if (_instrument is not null)
+            {
+                await UpdateInstrumentDataAsync(_instrument);
+            }
+        }
 
         var requestKey = (ResourceKey, MeterName, InstrumentName, Duration);
         if (_instrumentRequestKey != requestKey)

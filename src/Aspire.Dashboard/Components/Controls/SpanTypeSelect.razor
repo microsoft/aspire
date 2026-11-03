@@ -1,16 +1,12 @@
-﻿@{
-    var spanTypeSelectId = $"span-type-select-{Guid.NewGuid():N}";
-}
-
 @if (ViewportInformation.IsDesktop)
 {
-    <label for="@spanTypeSelectId">@Loc[nameof(Dashboard.Resources.Traces.SpanTypeLabel)]</label>
+    <label for="@_spanTypeSelectId">@Loc[nameof(Dashboard.Resources.Traces.SpanTypeLabel)]</label>
 
     <DesktopToolbarDivider />
 
     <FluentSelect TOption="SelectViewModel<SpanType>" TValue="SelectViewModel<SpanType>"
-                  Class="toolbar-select"
-                  Id="@spanTypeSelectId"
+                  Class="toolbar-select toolbar-select-compact"
+                  Id="@_spanTypeSelectId"
                   Items="@SpanTypes"
                   Position="SelectPosition.Below"
                   OptionText="@(c => c?.Name)"
@@ -24,7 +20,7 @@ else
     <div>
         <FluentSelect TOption="SelectViewModel<SpanType>" TValue="SelectViewModel<SpanType>"
                       Class="toolbar-select"
-                      Id="@spanTypeSelectId"
+                      Id="@_spanTypeSelectId"
                       Items="@SpanTypes"
                       Position="SelectPosition.Below"
                       OptionText="@(c => c?.Name)"

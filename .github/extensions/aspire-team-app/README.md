@@ -109,6 +109,9 @@ Authenticate with an existing `az` session or `AZURE_DEVOPS_EXT_PAT`. The app st
 only normalized pipeline coordinates and branch preferences; it never stores tokens
 or other credentials. GitHub and Azure DevOps sources are loaded independently, so
 an unavailable provider does not hide results from the other provider.
+GitHub CLI discovery failures appear in Health's error bar without blocking
+configured Azure pipelines. GitHub-only modes show an unauthenticated dashboard
+with the discovery diagnostic while keeping Health and Settings accessible.
 
 When a configured Azure pipeline builds a watched GitHub repository directly, provider
 metadata links both sources into one repository group. Azure Repos mirrors do not expose
@@ -153,6 +156,7 @@ without refetching provider data.
 | `extension.mjs` | Wiring: `joinSession` + `createCanvas`, agent-facing actions. |
 | `server.mjs` | Per-instance loopback HTTP server, atomic complete-snapshot cache, background polling, SSE refresh, multi-account interleave, and health orchestration. |
 | `accounts.mjs` | Credential discovery, per-account repo-access probing, host/enterprise detection. |
+| `cli.mjs` | Shared CLI execution with login-shell executable discovery for restricted desktop environments. |
 | `github.mjs` | GraphQL queries, lane bucketing, signals, avatars, cross-account merge. |
 | `health.mjs` | GitHub default-branch health and provider-neutral health aggregation. |
 | `azure-devops.mjs` | Pipeline URL validation, read-only Azure CLI queries, build timelines, Azure health inference. |
@@ -167,6 +171,17 @@ The canvas reads each account's token from `GH_TOKEN` / `GITHUB_TOKEN`, the
 per-account Copilot credentials, or `gh auth token`, and queries the matching
 GitHub GraphQL API. Azure DevOps queries use the existing Azure CLI authentication.
 No credential is written to the extension preferences.
+
+On macOS and Linux, a standalone canvas launched with a restricted `PATH` falls
+back to the user's login shell to locate `gh` and `az`, then uses their absolute
+executables for GitHub account/token reads and Azure DevOps queries. Shell selection
+uses `SHELL`, then the OS account's configured shell, then a platform default.
+POSIX-style shells and Fish use their respective argument syntax. This reuses
+existing CLI logins without relying on Copilot-injected credentials. Only executable
+paths are discovered; the shell's environment is not imported. If discovery fails,
+the canvas reports a CLI or shell configuration error rather than asking an
+already-authenticated user to log in again. Copilot-only accounts still require
+credentials supplied by the app.
 
 ## Agent actions
 

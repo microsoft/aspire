@@ -321,6 +321,10 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
     [InlineData("do deploy --list-steps --format json", "do", "deploy")]
     [InlineData("publish --list-steps --format=json --operation run", "publish", "publish")]
     [InlineData("deploy --list-steps --format=json --operation run", "deploy", "deploy")]
+    [InlineData("destroy --list-steps --format=json", "destroy", null)]
+    [InlineData("destroy --list-steps --format json", "destroy", null)]
+    [InlineData("destroy --list-steps --format=JSON", "destroy", null)]
+    [InlineData("destroy --list-steps --format JsOn", "destroy", null)]
     public async Task PipelineCommandWithListStepsUsesInspectOperation(string commandLine, string commandName, string? expectedStep)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -408,6 +412,7 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
                 "do" => ["--operation", "inspect", "--operation", "inspect", "--list-steps", "true"],
                 "publish" => ["--operation", "publish", "--step", "publish", "--operation", "run", "--operation", "inspect", "--list-steps", "true"],
                 "deploy" => ["--operation", "publish", "--step", "deploy", "--operation", "run", "--operation", "inspect", "--list-steps", "true"],
+                "destroy" => ["--operation", "publish", "--step", "destroy", "--operation", "inspect", "--list-steps", "true"],
                 _ => throw new InvalidOperationException()
             },
             capturedArgs);

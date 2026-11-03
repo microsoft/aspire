@@ -6,7 +6,6 @@ using Aspire.Cli.DotNet;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
-using Aspire.TestUtilities;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging;
 using static Aspire.Cli.Tests.TestServices.ProcessTestHelpers;
@@ -141,20 +140,20 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
-    [QuarantinedTest("https://github.com/microsoft/aspire/issues/18880")]
     public async Task LaunchAsync_WithGracefulServices_BlockingSignalerDoesNotConsumeGracefulBudget()
     {
         // Regression coverage for DCP's stop-process-tree behavior: the graceful signaler can
         // deliver the signal quickly and then block until the target exits. The ladder must wait
-        // for process exit in parallel with that signaler instead of awaiting the signaler first.
+        // for process exit in parallel with that signaler instead of awaiting the signaler first,
+        // and must cancel the still-blocked signaler once the child is gone.
         var launcher = CreateLauncher();
         var (command, args) = GetLongRunningCommand();
 
         using var cts = new CancellationTokenSource();
         using var shutdownService = new TestGracefulShutdownWindow();
         // Model the run path: graceful shutdown is enabled so the launcher routes through the ladder.
-        var signalerNeverCompletes = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var signaler = new RecordingGracefulSignaler(onSignal: pid =>
+        var signalerCancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var signaler = new RecordingGracefulSignaler(onSignal: async (pid, cancellationToken) =>
         {
             try
             {
@@ -166,7 +165,17 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper) : IDispos
                 // Already exited; treat as graceful success.
             }
 
-            return signalerNeverCompletes.Task;
+            // Like DCP's stop-process-tree run, block until the caller cancels the request.
+            try
+            {
+                await Task.Delay(Timeout.Infinite, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                signalerCancelled.TrySetResult();
+                throw;
+            }
+            return true;
         });
 
         var options = new GuestLaunchOptions(
@@ -192,6 +201,7 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper) : IDispos
 
         Assert.NotEqual(0, exitCode);
         Assert.Single(signaler.Pids);
+        Assert.True(signalerCancelled.Task.IsCompleted, "Expected the ladder to cancel the still-blocked signaler after the child exited.");
         Assert.False(shutdownService.GracefulShutdownToken.IsCancellationRequested);
         Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(5),
             $"Expected process exit to win over the still-blocked signaler but it took {stopwatch.Elapsed}.");

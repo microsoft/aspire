@@ -15,8 +15,18 @@ else if (Item.IsHeader)
         {
             <FluentIcon Value="@Item.Icon" Width="16px" Class="aspire-menu-header-icon" Color="Color.Primary" />
         }
-        <span class="aspire-menu-header-text" title="@Item.Text">@Item.Text</span>
+        <span class="aspire-menu-header-text" data-tooltip="@ItemTooltip">@Item.Text</span>
     </div>
+}
+else if (Item.IsGroupHeader)
+{
+    <div id="@Item.Id" class="aspire-menu-group-header" role="presentation">
+        <span class="aspire-menu-header-text" data-tooltip="@ItemTooltip">@Item.Text</span>
+    </div>
+}
+else if (Item.IsEmptyGroupText)
+{
+    <div id="@Item.Id" class="aspire-menu-empty-group-text" role="presentation">@Item.Text</div>
 }
 else
 {
@@ -29,7 +39,8 @@ else
                 <AspireMenuItem @key="nestedItem.RenderKey"
                                 Item="nestedItem"
                                 OnItemActivated="OnItemActivated"
-                                OnSecondaryActionClicked="OnSecondaryActionClicked" />
+                                OnSecondaryActionClicked="OnSecondaryActionClicked"
+                                OnItemToggled="OnItemToggled" />
             }
         </text>;
     }
@@ -42,26 +53,61 @@ else
                     Role="@Item.Role"
                     Checked="@Item.Checked"
                     AdditionalAttributes="@AdditionalMenuItemAttributes"
-                    Label="@Item.Text"
+                    Label="@(Item.StartIcon is null ? Item.Text : null)"
                     MenuItems="@nestedMenuItems">
+        @if (Item.Role is MenuItemRole.Checkbox or MenuItemRole.Radio)
+        {
+            @* Supplying the indicator slot replaces Fluent's leading fallback checkmark. Keeping the slot
+               for unchecked options reserves one trailing column, so labels and icons never shift. *@
+            <span slot="indicator" class="aspire-menu-item-indicator" aria-hidden="true">
+                @if (Item.Checked)
+                {
+                    <FluentIcon Value="@(new Icons.Regular.Size16.Checkmark())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
+                }
+            </span>
+        }
         @if (Item.Icon is not null)
         {
             <span slot="@GetIconSlot(Item.Role)">
                 <FluentIcon Value="@Item.Icon" Style="vertical-align: text-bottom;" Width="16px" Color="Color.Primary" />
             </span>
         }
-        @if (Item.SecondaryActionIcon is not null)
+        @if (Item.StartIcon is not null)
+        {
+            @* Rendered inline with the text rather than in the "start" slot: FluentUI only sizes the
+               start column when it computes an extra indent for the whole list, so a slotted icon on a
+               single checkable item would overlap its checkmark indicator. *@
+            <span class="aspire-menu-item-label">
+                <FluentIcon Value="@Item.StartIcon" Width="12px" Color="@Item.StartIconColor" />
+                @Item.Text
+            </span>
+        }
+        @if (Item.Description is not null || Item.Count is not null || Item.SecondaryActionIcon is not null)
         {
             <span class="aspire-menu-secondary-action-container" slot="end">
-                <FluentButton Id="@($"{Item.Id}-secondary-action")"
-                              Class="@($"aspire-menu-secondary-action{(Item.IsSecondaryActionSelected ? " selected" : null)}")"
-                              Appearance="ButtonAppearance.Transparent"
-                              Title="@Item.SecondaryActionAriaLabel"
-                              AriaLabel="@Item.SecondaryActionAriaLabel"
-                              aria-pressed="@(Item.IsSecondaryActionSelected ? "true" : "false")"
-                              @onclick="HandleSecondaryActionClicked">
-                    <FluentIcon Value="@Item.SecondaryActionIcon" Width="16px" Color="Color.Primary" />
-                </FluentButton>
+                @if (Item.Description is not null)
+                {
+                    <span class="aspire-menu-item-description">@Item.Description</span>
+                }
+                @if (Item.Count is { } count)
+                {
+                    <span class="aspire-menu-item-count">@count.ToString(CultureInfo.CurrentCulture)</span>
+                }
+                @if (Item.SecondaryActionIcon is not null)
+                {
+                    @* The click stops here, or the item it sits in would also be chosen by its click handler. *@
+                    <span class="aspire-menu-secondary-action-wrapper" @onclick:stopPropagation="true">
+                        <FluentButton Id="@SecondaryActionId"
+                                      Class="@($"aspire-menu-secondary-action{(Item.IsSecondaryActionSelected ? " selected" : null)}")"
+                                      Appearance="ButtonAppearance.Transparent"
+                                      data-tooltip="@Item.SecondaryActionAriaLabel"
+                                      aria-label="@Item.SecondaryActionAriaLabel"
+                                      aria-pressed="@(Item.IsSecondaryActionSelected ? "true" : "false")"
+                                      @onclick="HandleSecondaryActionClicked">
+                            <FluentIcon Value="@Item.SecondaryActionIcon" Width="16px" Color="Color.Primary" />
+                        </FluentButton>
+                    </span>
+                }
             </span>
         }
     </FluentMenuItem>

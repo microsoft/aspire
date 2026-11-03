@@ -1,0 +1,20 @@
+﻿{
+  branch: {
+    Demo.txt: Pinned: Hello
+  },
+  commit: {
+    Demo.txt: Pinned: Hello
+  },
+  default: {
+    Demo.txt: Latest: Hello
+  },
+  head: {
+    Demo.txt: Latest: Hello
+  },
+  qualified-tag: {
+    Demo.txt: Pinned: Hello
+  },
+  tag: {
+    Demo.txt: Pinned: Hello
+  }
+}

@@ -44,6 +44,38 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task NewCommand_ReportsAmbientFeedRefusalAsProjectCreationFailure()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const string source = "https://selected.example/v3/index.json";
+        var configPath = Path.Combine(workspace.Path, "nuget.config");
+        const string original = """
+            <configuration>
+              <packageSources><clear /><add key="company" value="https://selected.example/v3/index.json" /></packageSources>
+              <packageSourceMapping><packageSource key="company"><package pattern="Private.*" /></packageSource></packageSourceMapping>
+            </configuration>
+            """;
+        await File.WriteAllTextAsync(configPath, original);
+        using var provider = CreateServiceCollection(workspace, options =>
+        {
+            options.InteractionServiceFactory = _ => new TestInteractionService();
+        }).BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(
+            $"new {KnownTemplateId.CSharpEmptyAppHost} --language csharp --name TemplateOut --output ./TemplateOut --source {source} --version 13.4.0 --localhost-tld false");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToCreateNewProject, exitCode);
+        var interaction = Assert.IsType<TestInteractionService>(provider.GetRequiredService<IInteractionService>());
+        Assert.Equal([string.Format(CultureInfo.CurrentCulture,
+            UpdateCommandStrings.ChannelFeedAlreadyConfiguredFormat,
+            Path.Combine(workspace.Path, "TemplateOut", "nuget.config"), "company")], interaction.DisplayedErrors);
+        Assert.Equal(original, await File.ReadAllTextAsync(configPath));
+        Assert.Empty(Directory.EnumerateFiles(Path.Combine(workspace.Path, "TemplateOut")));
+    }
+
+    [Fact]
     public void NewCommandWithPolyglotEnabled_ExposesTemplateSubcommands()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -152,7 +184,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         var nugetConfig = await File.ReadAllTextAsync(nugetConfigPath);
         Assert.Contains(stagingFeed, nugetConfig);
-        Assert.Contains("Aspire*", nugetConfig);
+        Assert.Null(XDocument.Load(nugetConfigPath).Root!.Element("packageSourceMapping"));
 
         var config = AspireConfigFile.Load(outputDirectory);
         Assert.NotNull(config);
@@ -737,9 +769,11 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         var doc = XDocument.Load(Path.Combine(outputPath, "nuget.config"));
         var packageSources = doc.Root!.Element("packageSources")!;
 
-        Assert.Contains(packageSources.Elements("add"), e => (string?)e.Attribute("value") == sourceOverride);
-        Assert.Equal([sourceOverride], NuGetTestHelper.GetEligiblePackageSources(outputPath, "Aspire.Hosting"));
-        Assert.Equal([PackageSources.NuGetOrg], NuGetTestHelper.GetEligiblePackageSources(outputPath, "Example.Dependency"));
+        var source = Assert.Single(packageSources.Elements("add"));
+        Assert.Equal(sourceOverride, (string?)source.Attribute("value"));
+        Assert.Null(doc.Root.Element("packageSourceMapping"));
+        Assert.Equal(new[] { sourceOverride, PackageSources.NuGetOrg }.Order(StringComparer.Ordinal),
+            NuGetTestHelper.GetEligiblePackageSources(outputPath, "Aspire.Hosting"));
     }
 
     [Fact]
@@ -2336,7 +2370,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task NewCommandNonInteractive_WithClient_InstallsBundledSkills()
+    public async Task NewCommandNonInteractive_WithClient_RegistersAspireRemotely()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CreateServiceCollection(workspace, options =>
@@ -2350,17 +2384,15 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<NewCommand>();
-        var result = command.Parse($"new aspire-empty --name TestApp --output ./output --agents copilot --skills aspire --aspire-source embedded");
+        var result = command.Parse("new aspire-empty --name TestApp --output ./output --agents copilot --skills aspire");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(CliExitCodes.Success, exitCode);
 
         var outputDir = Path.Combine(workspace.WorkspaceRoot.FullName, "output");
-        var aspireSkillPath = Path.Combine(outputDir, ".agents", "skills", CommonAgentApplicators.AspireSkillName, "SKILL.md");
-        Assert.True(File.Exists(aspireSkillPath), $"Expected aspire skill file at {aspireSkillPath}");
-
-        var aspireifySkillPath = Path.Combine(outputDir, ".agents", "skills", CommonAgentApplicators.AspireifySkillName, "SKILL.md");
-        Assert.True(File.Exists(aspireifySkillPath), $"Expected bundled aspireify skill file at {aspireifySkillPath}");
+        Assert.True(AspireSkillsRemoteConfiguration.HasPluginRegistration(
+            [Path.Combine(outputDir, ".github", "copilot", "settings.json")], [SkillSource.BuiltIn]));
+        Assert.False(Directory.Exists(Path.Combine(outputDir, ".agents", "skills")));
     }
 
     [Fact]
@@ -2498,7 +2530,8 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.Contains("my-project", capturedOutputPath);
 
         Assert.True(AspireSkillsRemoteConfiguration.HasPluginRegistration(
-            [Path.Combine(capturedOutputPath, ".github", "copilot", "settings.json")], TestContext.Current.CancellationToken));
+            [Path.Combine(capturedOutputPath, ".github", "copilot", "settings.json")],
+            [new SkillSource { Plugins = ["aspire"], Marketplace = "aspire-skills" }]));
         Assert.False(Directory.Exists(Path.Combine(capturedOutputPath, ".agents", "skills")));
     }
 
@@ -3299,7 +3332,8 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             interactionService.BooleanPromptCalls.Select(call => call.PromptText));
         var outputDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "output");
         Assert.True(AspireSkillsRemoteConfiguration.HasPluginRegistration(
-            [Path.Combine(outputDirectory, ".github", "copilot", "settings.json")], TestContext.Current.CancellationToken));
+            [Path.Combine(outputDirectory, ".github", "copilot", "settings.json")],
+            [new SkillSource { Plugins = ["aspire"], Marketplace = "aspire-skills" }]));
         Assert.False(Directory.Exists(Path.Combine(outputDirectory, ".agents", "skills")));
     }
 
@@ -3353,7 +3387,8 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         var outputDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "output");
         Assert.True(AspireSkillsRemoteConfiguration.HasPluginRegistration(
-            [Path.Combine(outputDirectory, ".github", "copilot", "settings.json")], TestContext.Current.CancellationToken));
+            [Path.Combine(outputDirectory, ".github", "copilot", "settings.json")],
+            [new SkillSource { Plugins = ["aspire"], Marketplace = "aspire-skills" }]));
         Assert.False(Directory.Exists(Path.Combine(outputDirectory, ".agents", "skills")));
     }
 
@@ -3381,12 +3416,13 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         var outputDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "output");
         Assert.True(AspireSkillsRemoteConfiguration.HasPluginRegistration(
-            [Path.Combine(outputDirectory, ".github", "copilot", "settings.json")], TestContext.Current.CancellationToken));
+            [Path.Combine(outputDirectory, ".github", "copilot", "settings.json")],
+            [new SkillSource { Plugins = ["aspire"], Marketplace = "aspire-skills" }]));
         Assert.False(Directory.Exists(Path.Combine(outputDirectory, ".agents", "skills")));
     }
 
     [Fact]
-    public async Task NewCommand_ExplicitUndetectedClientAndGlobalScope_AreForwardedWithoutMcp()
+    public async Task NewCommand_ExplicitUndetectedClientAndGlobalScope_RegistersAspireWithoutMcp()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var homeDirectory = workspace.CreateDirectory("fake-home");
@@ -3398,17 +3434,12 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var result = provider.GetRequiredService<NewCommand>().Parse(
-            "new aspire-empty --name TestApp --output ./output --agents claude --scope global --skills aspire --aspire-source embedded");
+            "new aspire-empty --name TestApp --output ./output --agents claude --scope global --skills aspire");
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
-        var bundle = Assert.IsType<AspireSkillsBundle>(
-            (await provider.GetRequiredService<IAspireSkillsInstaller>().InstallAsync(CancellationToken.None)).Bundle);
-        var expectedFiles = new List<string>();
-        foreach (var skill in bundle.GetSkillDefinitions())
-        {
-            expectedFiles.AddRange((await bundle.GetSkillFilesAsync(skill, CancellationToken.None))
-                .Select(file => Path.Combine(homeDirectory.FullName, ".claude", "skills", skill.Name, file.RelativePath)));
-        }
-        Assert.Equal(expectedFiles.Order(), Directory.EnumerateFiles(homeDirectory.FullName, "*", SearchOption.AllDirectories).Order());
+        var configurationPath = Path.Combine(homeDirectory.FullName, ".claude", "settings.json");
+        Assert.True(AspireSkillsRemoteConfiguration.HasPluginRegistration(
+            [configurationPath], [SkillSource.BuiltIn]));
+        Assert.Equal([configurationPath], Directory.EnumerateFiles(homeDirectory.FullName, "*", SearchOption.AllDirectories));
         var outputDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "output");
         Assert.False(Directory.Exists(Path.Combine(outputDirectory, ".claude", "skills")));
         Assert.False(Directory.Exists(Path.Combine(outputDirectory, ".agents", "skills")));
