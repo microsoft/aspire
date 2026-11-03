@@ -70,9 +70,12 @@ remaining work are recorded once, under their coding sessions.
 | D10 | **Aspire owns a hidden service proxy command in the CLI**, using private-pipe environment delivery rather than sensitive `-e` arguments. Session 6a defines its runtime and wire-contract responsibilities. |
 
 **API maturity is not uniform.** `DotnetProjectResource`, `AddDotnetProject`, and the package's ordinary
-consumer APIs no longer carry the original `ASPIREDOTNETPROJECT001` experimental diagnostic. The package
-still uses `SuppressFinalPackageVersion`; integration-authoring seams such as `IDotnetProgramResource`,
-`WithProjectDefaults`, and .NET publishing/build-completion APIs retain `ASPIREPROJECTS001`.
+consumer APIs no longer carry the original `ASPIREDOTNETPROJECT001` experimental diagnostic. Starting
+with Aspire 17.0, the package follows normal repository versioning, including stable versions for
+stabilized builds. Package stabilization does not graduate integration-authoring seams such as
+`IDotnetProgramResource`, `WithProjectDefaults`, and .NET publishing/build-completion APIs, which retain
+`ASPIREPROJECTS001`. Package validation remains enabled; baseline comparisons skip releases before
+17.0.0 because the package had no stable version in those releases.
 Run configuration retains `ASPIREWATCH001`; other features such as Blazor have their own maturity.
 Do not impose a blanket "all new APIs experimental" requirement or hand-edit generated release
 `api/*.cs`, ATS, or capability baselines. Update codegen test snapshots when behavior requires it.
