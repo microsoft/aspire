@@ -192,11 +192,13 @@ Quit does not disable login startup, and startup never starts an AppHost.
 
 The per-user control socket, persistent singleton lock, and private diagnostic
 log are under `~/.aspire/tray/runtime/`, independent of the invoking installation.
-Startup is acknowledged only after the GTK loop processes successful
-StatusNotifierWatcher registration, a registered StatusNotifierHost, and the GUI's
-bundle lease. Host registration changes also gate repeated start requests. Missing
-tray hosts fail with setup guidance rather than reporting an invisible tray as
-ready. Both frontends re-register after a watcher restart. Repeated
+Startup is acknowledged after the GTK loop initializes and the GUI acquires its
+bundle lease, independently of desktop tray-host availability. If the watcher or
+panel host starts late during login, the tray remains running and registers when
+desktop tray support appears; there is no tray-host startup deadline. While waiting,
+it logs setup guidance to the private diagnostic log. Repeated start and stop
+remain responsive without a host. Missing GTK, display, or required native libraries
+still fail startup. Both frontends re-register after a watcher restart. Repeated
 start restores the existing item; stop shuts down only the tray and its discovery
 child. Missing offline pins are pruned once per second while discovery is live,
 even when discovery has not published a new snapshot. Settings/history use the

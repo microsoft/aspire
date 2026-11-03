@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
-using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -18,7 +17,6 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
     private readonly Dictionary<nint, LinuxTrayMenuItem> _commands = [];
     private readonly TaskCompletionSource _ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly List<Task> _desktopTasks = [];
-    private readonly long _started = Stopwatch.GetTimestamp();
     private TrayViewState? _displayed;
     private nint _indicator;
     private nint _watcher;
@@ -29,6 +27,7 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
     private int _quitRequested;
     private bool _quitting;
     private bool _connected;
+    private bool _waitingForHost;
     private Exception? _failure;
     private long? _lastPinPrune;
     private IReadOnlyList<LinuxFolderApplication> _applications = [];
@@ -114,6 +113,10 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
 
     internal Task ReadyAsync(CancellationToken token) => _ready.Task.WaitAsync(token);
 
+    // The launcher needs an acknowledged UI loop and bundle lease, not a desktop
+    // host that may start later during login. Stop must also work while waiting.
+    internal void CompleteInitialization() => _ready.TrySetResult();
+
     internal async Task RestoreAsync(CancellationToken token)
     {
         await ReadyAsync(token).ConfigureAwait(false);
@@ -126,9 +129,9 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
                 {
                     restored.TrySetCanceled(token);
                 }
-                else if (IsQuitting || !IsAvailable)
+                else if (IsQuitting)
                 {
-                    restored.TrySetException(new InvalidOperationException("No registered StatusNotifierHost is available for the tray. Enable the desktop's tray support."));
+                    restored.TrySetException(new InvalidOperationException("The tray is shutting down."));
                 }
                 else
                 {
@@ -195,15 +198,16 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
         // Watcher registration alone can succeed without any panel displaying items.
         // https://www.freedesktop.org/wiki/Specifications/StatusNotifierItem/StatusNotifierWatcher/
         var available = watcherConnected && hostRegistered;
-        if (IsAvailable && !available)
+        if (!available && !_waitingForHost)
         {
-            Console.Error.WriteLine("The desktop tray watcher or panel host disconnected. Waiting for it to return.");
+            Console.Error.WriteLine("Waiting for desktop tray support. Enable an AppIndicator extension on GNOME or your desktop's tray module. The icon will appear when a StatusNotifierWatcher and panel host are available.");
         }
+        else if (available && _waitingForHost)
+        {
+            Console.Error.WriteLine("Desktop tray support is available. The tray icon is registered.");
+        }
+        _waitingForHost = !available;
         IsAvailable = available;
-        if (available)
-        {
-            _ready.TrySetResult();
-        }
     }
 
     private void Quit()
@@ -256,11 +260,8 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
             }
             if (!app.IsQuitting)
             {
-                if (!app._ready.Task.IsCompleted && Stopwatch.GetElapsedTime(app._started) > TimeSpan.FromSeconds(8))
-                {
-                    throw new InvalidOperationException("The tray requires StatusNotifierWatcher registration and a registered panel host. Enable an AppIndicator extension on GNOME or your desktop's tray module.");
-                }
                 app.Refresh();
+                app.CompleteInitialization();
             }
         }
         catch (Exception ex)

@@ -194,15 +194,18 @@ public class LinuxTrayTests
     [InlineData(true, false)]
     [InlineData(false, true)]
     [InlineData(true, true)]
-    public async Task ReadinessRequiresWatcherRegistrationAndPanelHost(bool watcherConnected, bool hostRegistered)
+    public async Task StartupAcknowledgesTheUiLoopIndependentlyOfHostAvailability(bool watcherConnected, bool hostRegistered)
     {
         await using var controller = new TrayController(new TestAppHostClient());
         using var application = new LinuxTrayApplication(controller, new MemoryTrayStartupSettings());
 
+        Assert.False(application.ReadyAsync(CancellationToken.None).IsCompleted);
         application.UpdateAvailability(watcherConnected, hostRegistered);
+        Assert.False(application.ReadyAsync(CancellationToken.None).IsCompleted);
+        application.CompleteInitialization();
 
         Assert.Equal(watcherConnected && hostRegistered, application.IsAvailable);
-        Assert.Equal(application.IsAvailable, application.ReadyAsync(CancellationToken.None).IsCompletedSuccessfully);
+        Assert.True(application.ReadyAsync(CancellationToken.None).IsCompletedSuccessfully);
     }
 
     [Fact]
@@ -211,14 +214,15 @@ public class LinuxTrayTests
         await using var controller = new TrayController(new TestAppHostClient());
         using var application = new LinuxTrayApplication(controller, new MemoryTrayStartupSettings());
         application.UpdateAvailability(watcherConnected: true, hostRegistered: true);
+        application.CompleteInitialization();
         await application.ReadyAsync(CancellationToken.None);
 
         application.UpdateAvailability(watcherConnected: true, hostRegistered: false);
         Assert.False(application.IsAvailable);
         var restore = application.RestoreAsync(CancellationToken.None);
         application.ProcessPending();
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => restore);
-        Assert.Equal("No registered StatusNotifierHost is available for the tray. Enable the desktop's tray support.", error.Message);
+        await restore;
+        Assert.False(application.IsAvailable);
 
         application.UpdateAvailability(watcherConnected: true, hostRegistered: true);
         Assert.True(application.IsAvailable);
@@ -233,6 +237,7 @@ public class LinuxTrayTests
         await using var controller = new TrayController(new TestAppHostClient());
         using var application = new LinuxTrayApplication(controller, new MemoryTrayStartupSettings());
         application.UpdateAvailability(watcherConnected: true, hostRegistered: true);
+        application.CompleteInitialization();
 
         var restored = application.RestoreAsync(CancellationToken.None);
         application.ProcessPending();
@@ -247,12 +252,60 @@ public class LinuxTrayTests
         await using var controller = new TrayController(new TestAppHostClient());
         using var application = new LinuxTrayApplication(controller, new MemoryTrayStartupSettings());
         application.UpdateAvailability(watcherConnected: true, hostRegistered: true);
+        application.CompleteInitialization();
         var restored = application.RestoreAsync(CancellationToken.None);
         application.RequestQuit();
 
         application.ProcessPending();
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => restored);
+    }
+
+    [Fact]
+    public async Task StopIsAcknowledgedWhileWaitingForTheFirstHost()
+    {
+        await using var controller = new TrayController(new TestAppHostClient());
+        using var application = new LinuxTrayApplication(controller, new MemoryTrayStartupSettings());
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var pipe = $"at-{Guid.NewGuid():N}";
+        var stopped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var activation = new TrayActivation(pipe, application.RestoreAsync, application.ReadyAsync, () =>
+        {
+            application.RequestQuit();
+            stopped.TrySetResult();
+        });
+        application.UpdateAvailability(watcherConnected: false, hostRegistered: false);
+        application.CompleteInitialization();
+
+        var identity = await TrayActivation.StopExistingAsync(pipe, timeout.Token);
+        await stopped.Task.WaitAsync(timeout.Token);
+
+        Assert.Equal(Environment.ProcessId, identity.ProcessId);
+        Assert.False(application.IsAvailable);
+        var restored = application.RestoreAsync(timeout.Token);
+        application.ProcessPending();
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => restored);
+        Assert.Equal("The tray is shutting down.", error.Message);
+    }
+
+    [Fact]
+    public async Task FirstHostCanAppearAfterStartupAndRepeatedStart()
+    {
+        await using var controller = new TrayController(new TestAppHostClient());
+        using var application = new LinuxTrayApplication(controller, new MemoryTrayStartupSettings());
+        application.UpdateAvailability(watcherConnected: false, hostRegistered: false);
+        application.CompleteInitialization();
+        await application.ReadyAsync(CancellationToken.None);
+
+        var restore = application.RestoreAsync(CancellationToken.None);
+        application.ProcessPending();
+        await restore;
+        Assert.False(application.IsAvailable);
+
+        application.UpdateAvailability(watcherConnected: true, hostRegistered: false);
+        Assert.False(application.IsAvailable);
+        application.UpdateAvailability(watcherConnected: true, hostRegistered: true);
+        Assert.True(application.IsAvailable);
     }
 
     [Fact]
