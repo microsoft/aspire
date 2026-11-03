@@ -1079,7 +1079,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public async Task OpenApiDocumentReplacesEndpointDeploymentDependency()
+    public async Task OpenApiDocumentDoesNotRequireEndpointDeploymentDependency()
     {
         using var temporaryWorkspace = TemporaryWorkspace.Create(output);
         var documentPath = Path.Combine(temporaryWorkspace.Path, "catalog.json");
@@ -1100,7 +1100,6 @@ public class AzureApiManagementTests(ITestOutputHelper output)
             PublisherName = "Contoso APIs",
         });
         apim.AddApi("catalog-api", backend, "catalog")
-            .WithOpenApiEndpoint()
             .WithOpenApiDocument(documentPath);
 
         using var app = builder.Build();
@@ -1126,6 +1125,105 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         }
 
         Assert.Empty(provisionStep.DependsOnSteps);
+    }
+
+    [Theory]
+    [InlineData(DistributedApplicationOperation.Run, false, false)]
+    [InlineData(DistributedApplicationOperation.Run, false, true)]
+    [InlineData(DistributedApplicationOperation.Run, true, false)]
+    [InlineData(DistributedApplicationOperation.Run, true, true)]
+    [InlineData(DistributedApplicationOperation.Publish, false, false)]
+    [InlineData(DistributedApplicationOperation.Publish, false, true)]
+    [InlineData(DistributedApplicationOperation.Publish, true, false)]
+    [InlineData(DistributedApplicationOperation.Publish, true, true)]
+    public void OpenApiRejectsConflictingSources(
+        DistributedApplicationOperation operation,
+        bool firstSourceIsFile,
+        bool secondSourceIsFile)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(operation);
+        var target = builder.AddProject<Project>("catalog-backend", launchProfileName: null);
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
+        });
+        var api = apim.AddApi("catalog-api", target, "catalog");
+        if (firstSourceIsFile)
+        {
+            api.WithOpenApiDocument("first.json");
+        }
+        else
+        {
+            api.WithOpenApiEndpoint("/openapi/first.json");
+        }
+        var originalSource = api.Resource.OpenApiSource;
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+        {
+            if (secondSourceIsFile)
+            {
+                api.WithOpenApiDocument("second.json");
+            }
+            else
+            {
+                api.WithOpenApiEndpoint("/openapi/second.json");
+            }
+        });
+
+        Assert.Equal(
+            "API Management API 'catalog-api' already has a different OpenAPI source. " +
+            "An API can use only one OpenAPI source, either a document file or an endpoint.",
+            exception.Message);
+        Assert.Same(originalSource, api.Resource.OpenApiSource);
+    }
+
+    [Fact]
+    public void OpenApiDocumentAllowsIdenticalSourceButRejectsDifferentFormat()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
+        });
+        var api = apim.AddApi("catalog-api", "catalog").WithOpenApiDocument("catalog.json");
+        var originalSource = api.Resource.OpenApiSource;
+
+        Assert.Same(api, api.WithOpenApiDocument(
+            Path.Combine(builder.AppHostDirectory, "catalog.json"),
+            AzureApiManagementOpenApiFormat.OpenApiJson));
+        Assert.Equal(originalSource, api.Resource.OpenApiSource);
+        Assert.Throws<InvalidOperationException>(
+            () => api.WithOpenApiDocument("catalog.json", AzureApiManagementOpenApiFormat.SwaggerJson));
+        Assert.Equal(originalSource, api.Resource.OpenApiSource);
+    }
+
+    [Theory]
+    [InlineData("/openapi/other.json", null, AzureApiManagementOpenApiFormat.OpenApiJson)]
+    [InlineData("/openapi/v1.json", "https", AzureApiManagementOpenApiFormat.OpenApiJson)]
+    [InlineData("/openapi/v1.json", null, AzureApiManagementOpenApiFormat.SwaggerJson)]
+    public void OpenApiEndpointAllowsIdenticalSourceButRejectsDifferentConfiguration(
+        string documentPath,
+        string? endpointName,
+        AzureApiManagementOpenApiFormat format)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var target = builder.AddProject<Project>("catalog-backend", launchProfileName: null);
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
+        });
+        var api = apim.AddApi("catalog-api", target, "catalog").WithOpenApiEndpoint();
+        var originalSource = api.Resource.OpenApiSource;
+
+        Assert.Same(api, api.WithOpenApiEndpoint(
+            "/openapi/v1.json", format: AzureApiManagementOpenApiFormat.OpenApiJson));
+        Assert.Equal(originalSource, api.Resource.OpenApiSource);
+        Assert.Throws<InvalidOperationException>(
+            () => api.WithOpenApiEndpoint(documentPath, endpointName, format));
+        Assert.Equal(originalSource, api.Resource.OpenApiSource);
     }
 
     [Fact]
@@ -2571,14 +2669,21 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         using var app = builder.Build();
         await ExecuteBeforeStartHooksAsync(app, default);
 
-        var privateDns = builder.Resources
-            .OfType<AzureProvisioningResource>()
-            .Single(resource => resource.Name == "env-private-dns");
+        var privateDns = Assert.Single(builder.Resources.OfType<AzurePrivateDnsZoneResource>());
+        Assert.Equal("env-private-dns", privateDns.Name);
+        Assert.Null(privateDns.ZoneName);
+        var ingress = Assert.IsAssignableFrom<IAzureInternalIngressResource>(environment.Resource);
+        var aRecord = Assert.Single(privateDns.ARecords);
+        Assert.Equal("*", aRecord.Name);
+        Assert.Equal(ingress.StaticIp.ValueExpression, aRecord.Address.ValueExpression);
+        var link = Assert.Single(builder.Resources.OfType<AzurePrivateDnsZoneVNetLinkResource>());
+        Assert.Same(privateDns, link.Parent);
+        Assert.Same(vnet.Resource, link.VNet);
+        Assert.Same(link, Assert.Single(privateDns.VNetLinks).Value);
 
         var (_, environmentBicep) = await GetManifestWithBicep(environment.Resource);
         var (_, privateDnsBicep) = await GetManifestWithBicep(privateDns);
 
-        Assert.IsAssignableFrom<IAzureInternalIngressResource>(environment.Resource);
         Assert.Same(vnet.Resource, environment.Resource.Annotations.OfType<InternalLoadBalancerAnnotation>().Single().VirtualNetwork);
         Assert.Contains("internal: true", environmentBicep);
         Assert.Contains("output AZURE_CONTAINER_APPS_ENVIRONMENT_STATIC_IP string", environmentBicep);
@@ -2590,10 +2695,34 @@ public class AzureApiManagementTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void InternalContainerAppEnvironmentBoundsPrivateDnsResourceName()
+    public async Task InternalContainerAppEnvironmentRevalidatesSubnetDelegationDuringGeneration()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var vnet = builder.AddAzureVirtualNetwork("vnet");
+        var subnet = vnet.AddSubnet("container-apps-subnet", "10.0.0.0/23");
+        builder.AddAzureContainerAppEnvironment("env")
+            .WithDelegatedSubnet(subnet)
+            .WithInternalLoadBalancer(vnet);
+        subnet.WithServiceDelegation("Microsoft.Web/serverFarms");
+        var privateDns = Assert.Single(builder.Resources.OfType<AzurePrivateDnsZoneResource>());
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => GetManifestWithBicep(privateDns));
+
+        Assert.Equal(
+            "The delegated subnet for Azure resource 'env' must remain delegated to " +
+            "'Microsoft.App/environments' for an internal load balancer, but it is " +
+            "delegated to 'Microsoft.Web/serverFarms'.",
+            exception.Message);
+    }
+
+    [Theory]
+    [InlineData(4)]
+    [InlineData(64)]
+    public void InternalContainerAppEnvironmentBoundsPrivateDnsResourceName(int virtualNetworkNameLength)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var vnet = builder.AddAzureVirtualNetwork(new string('v', virtualNetworkNameLength));
         var subnet = vnet.AddSubnet("container-apps-subnet", "10.0.0.0/23");
         var environmentName = new string('e', 53);
 
@@ -2601,13 +2730,15 @@ public class AzureApiManagementTests(ITestOutputHelper output)
             .WithDelegatedSubnet(subnet)
             .WithInternalLoadBalancer(vnet);
 
-        var privateDns = builder.Resources
-            .OfType<AzureProvisioningResource>()
-            .Single(resource => resource.Name.Length == 64);
+        var privateDns = Assert.Single(builder.Resources.OfType<AzurePrivateDnsZoneResource>());
 
         Assert.Equal(64, privateDns.Name.Length);
         Assert.StartsWith($"{environmentName}-p", privateDns.Name, StringComparison.Ordinal);
         Assert.Matches("-[0-9a-f]{8}$", privateDns.Name);
+        var link = Assert.Single(builder.Resources.OfType<AzurePrivateDnsZoneVNetLinkResource>());
+        Assert.Equal(64, link.Name.Length);
+        Assert.StartsWith($"{environmentName}-p", link.Name, StringComparison.Ordinal);
+        Assert.Matches("-[0-9a-f]{8}$", link.Name);
     }
 
     [Fact]

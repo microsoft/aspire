@@ -5,10 +5,6 @@ using System.IO.Hashing;
 using System.Text;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
-using Azure.Core;
-using Azure.Provisioning;
-using Azure.Provisioning.Network;
-using Azure.Provisioning.PrivateDns;
 
 namespace Aspire.Hosting;
 
@@ -73,30 +69,41 @@ public static class AzureInternalLoadBalancerExtensions
         }
 
         builder.WithAnnotation(new InternalLoadBalancerAnnotation(virtualNetwork.Resource));
-        var privateDnsResourceName = $"{builder.Resource.Name}-private-dns";
-        if (privateDnsResourceName.Length > 64)
-        {
-            var hash = Convert.ToHexString(XxHash3.Hash(Encoding.UTF8.GetBytes(privateDnsResourceName))).ToLowerInvariant()[..8];
-            privateDnsResourceName = $"{privateDnsResourceName[..55]}-{hash}";
-        }
+        var privateDnsResourceName = GetBoundedResourceName($"{builder.Resource.Name}-private-dns");
 
-        // Capture the resolved subnet resource (rather than re-deriving it from
-        // DelegatedSubnetAnnotation, which only stores a ReferenceExpression ID) so the Bicep-generation
-        // callback below can revalidate its delegation at deployment-model-finalization time.
+        var privateDns = new AzurePrivateDnsZoneResource(privateDnsResourceName, builder.Resource.DefaultDomain);
+        privateDns.ARecords.Add(("*", builder.Resource.StaticIp));
+
+        var vnetLink = new AzurePrivateDnsZoneVNetLinkResource(
+            GetBoundedResourceName($"{privateDnsResourceName}-{virtualNetwork.Resource.Name}-link"),
+            privateDns,
+            virtualNetwork.Resource);
+        privateDns.VNetLinks.Add(virtualNetwork.Resource, vnetLink);
+        builder.ApplicationBuilder.AddResource(vnetLink).ExcludeFromManifest();
+
+        builder.ApplicationBuilder.AddAzureProvisioning();
         builder.ApplicationBuilder
-            .AddAzureInfrastructure(
-                privateDnsResourceName,
-                infrastructure => AddPrivateDns(infrastructure, builder.Resource, virtualNetwork.Resource, subnet))
+            .AddResource(privateDns)
+            .ConfigureInfrastructure(_ => ValidateSubnetDelegation(builder.Resource, subnet))
             .WithParentRelationship(builder.Resource)
             .WithRelationship(virtualNetwork.Resource, "Virtual network link");
 
         return builder.WithRelationship(virtualNetwork.Resource, "Internal network");
     }
 
-    private static void AddPrivateDns(
-        AzureResourceInfrastructure infrastructure,
+    private static string GetBoundedResourceName(string name)
+    {
+        if (name.Length <= 64)
+        {
+            return name;
+        }
+
+        var hash = Convert.ToHexString(XxHash3.Hash(Encoding.UTF8.GetBytes(name))).ToLowerInvariant()[..8];
+        return $"{name[..55]}-{hash}";
+    }
+
+    private static void ValidateSubnetDelegation(
         IAzureInternalIngressResource resource,
-        AzureVirtualNetworkResource virtualNetwork,
         AzureSubnetResource subnet)
     {
         // WithServiceDelegation is explicitly last-write-wins, so the subnet delegation validated at
@@ -112,47 +119,9 @@ public static class AzureInternalLoadBalancerExtensions
                 StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(
-                $"The delegated subnet for Azure resource '{infrastructure.AspireResource.Name}' must remain delegated to " +
+                $"The delegated subnet for Azure resource '{resource.Name}' must remain delegated to " +
                 $"'{resource.DelegatedSubnetServiceName}' for an internal load balancer, but it is " +
                 $"{(delegation is null ? "no longer delegated" : $"delegated to '{delegation.ServiceName}'")}.");
         }
-
-        var virtualNetworkResource = (VirtualNetwork)virtualNetwork.AddAsExistingResource(infrastructure);
-        var dnsZone = new PrivateDnsZone(
-            Infrastructure.NormalizeBicepIdentifier($"{infrastructure.AspireResource.Name}_privateDns"))
-        {
-            // The domain is a runtime output. A separate deployment passes it as a module
-            // parameter, which Bicep permits as a resource name.
-            Name = resource.DefaultDomain.AsProvisioningParameter(infrastructure),
-            Location = new AzureLocation("global"),
-        };
-        infrastructure.Add(dnsZone);
-
-        var wildcardRecord = new PrivateDnsARecord(
-            Infrastructure.NormalizeBicepIdentifier($"{infrastructure.AspireResource.Name}_wildcard"))
-        {
-            Name = "*",
-            Parent = dnsZone,
-            TtlInSeconds = 3600,
-            PrivateDnsARecords =
-            {
-                new PrivateDnsARecordInfo
-                {
-                    IPv4Address = resource.StaticIp.AsProvisioningParameter(infrastructure),
-                },
-            },
-        };
-        infrastructure.Add(wildcardRecord);
-
-        var vnetLink = new VirtualNetworkLink(
-            Infrastructure.NormalizeBicepIdentifier($"{infrastructure.AspireResource.Name}_vnetLink"))
-        {
-            Name = $"{infrastructure.AspireResource.Name}-link",
-            Parent = dnsZone,
-            Location = new AzureLocation("global"),
-            RegistrationEnabled = false,
-            VirtualNetworkId = virtualNetworkResource.Id,
-        };
-        infrastructure.Add(vnetLink);
     }
 }

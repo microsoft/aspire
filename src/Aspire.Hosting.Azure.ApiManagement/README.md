@@ -73,6 +73,8 @@ apim.AddApi("catalog-api", catalog, "catalog")
     .WithOpenApiDocument("../Catalog/openapi.json");
 ```
 
+An API can use only one OpenAPI source: either `WithOpenApiDocument` or `WithOpenApiEndpoint`. Repeating the same configuration is allowed, but configuring a different source, path, endpoint name, or format throws `InvalidOperationException` instead of replacing the source.
+
 JSON and YAML OpenAPI documents are inferred from the file extension. Pass `AzureApiManagementOpenApiFormat.SwaggerJson` explicitly for Swagger 2.0 documents. The file is read during infrastructure generation for publish/deploy, not during `aspire run`, so deploy-only artifacts do not need to exist for local development. Imported operations replace the generated root and catch-all proxy operations; operations added with `AddOperation` are still provisioned in addition to the imported operations.
 
 ## Existing API Management services

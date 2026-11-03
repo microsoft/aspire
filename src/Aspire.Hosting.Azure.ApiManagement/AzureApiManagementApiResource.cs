@@ -88,9 +88,9 @@ public class AzureApiManagementApiResource : Resource, IResourceWithParent<Azure
     internal AzureApiManagementDiagnostic? Diagnostic { get; set; }
 
     /// <summary>
-    /// Gets or sets the OpenAPI document imported for this API.
+    /// Gets the OpenAPI document imported for this API.
     /// </summary>
-    internal AzureApiManagementOpenApiSource? OpenApiSource { get; set; }
+    internal AzureApiManagementOpenApiSource? OpenApiSource { get; private set; }
 
     /// <summary>
     /// Gets the parent API Management service.
@@ -111,6 +111,21 @@ public class AzureApiManagementApiResource : Resource, IResourceWithParent<Azure
     /// Gets the API operations.
     /// </summary>
     internal List<AzureApiManagementOperationResource> Operations { get; } = [];
+
+    /// <summary>
+    /// Configures the API's single OpenAPI source.
+    /// </summary>
+    internal void SetOpenApiSource(AzureApiManagementOpenApiSource source)
+    {
+        if (OpenApiSource is not null && OpenApiSource != source)
+        {
+            throw new InvalidOperationException(
+                $"API Management API '{Name}' already has a different OpenAPI source. " +
+                "An API can use only one OpenAPI source, either a document file or an endpoint.");
+        }
+
+        OpenApiSource = source;
+    }
 
     /// <summary>
     /// Adds an inbound policy statement.

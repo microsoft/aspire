@@ -1,22 +1,21 @@
 ﻿@description('The location for the resource(s) to be deployed.')
 param location string = resourceGroup().location
 
-param vnet_outputs_name string
-
 param env_outputs_azure_container_apps_environment_default_domain string
 
 param env_outputs_azure_container_apps_environment_static_ip string
 
-resource vnet 'Microsoft.Network/virtualNetworks@2025-05-01' existing = {
-  name: vnet_outputs_name
-}
+param vnet_outputs_id string
 
-resource env_private_dns_privateDns 'Microsoft.Network/privateDnsZones@2024-06-01' = {
+resource env_private_dns 'Microsoft.Network/privateDnsZones@2024-06-01' = {
   name: env_outputs_azure_container_apps_environment_default_domain
   location: 'global'
+  tags: {
+    'aspire-resource-name': 'env-private-dns'
+  }
 }
 
-resource env_private_dns_wildcard 'Microsoft.Network/privateDnsZones/A@2024-06-01' = {
+resource env_private_dns_record0 'Microsoft.Network/privateDnsZones/A@2024-06-01' = {
   name: '*'
   properties: {
     ttl: 3600
@@ -26,17 +25,24 @@ resource env_private_dns_wildcard 'Microsoft.Network/privateDnsZones/A@2024-06-0
       }
     ]
   }
-  parent: env_private_dns_privateDns
+  parent: env_private_dns
 }
 
-resource env_private_dns_vnetLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2024-06-01' = {
-  name: 'env-private-dns-link'
+resource vnet_link 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2024-06-01' = {
+  name: 'vnet-link'
   location: 'global'
   properties: {
     registrationEnabled: false
     virtualNetwork: {
-      id: vnet.id
+      id: vnet_outputs_id
     }
   }
-  parent: env_private_dns_privateDns
+  tags: {
+    'aspire-resource-name': 'env-private-dns-vnet-link'
+  }
+  parent: env_private_dns
 }
+
+output id string = env_private_dns.id
+
+output name string = env_outputs_azure_container_apps_environment_default_domain

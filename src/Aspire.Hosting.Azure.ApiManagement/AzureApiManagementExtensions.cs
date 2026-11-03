@@ -1,11 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable AZPROVISION001 // Azure.Provisioning is experimental.
-#pragma warning disable ASPIREAZURE003 // Azure provisioning APIs are experimental.
-#pragma warning disable ASPIRECOMPUTE002 // Compute environment endpoint projection is experimental.
-#pragma warning disable ASPIREPIPELINES001 // Pipeline APIs are experimental.
-
 using System.Diagnostics;
 using System.IO.Hashing;
 using System.Text;
@@ -194,9 +189,12 @@ public static class AzureApiManagementExtensions
     /// <remarks>
     /// The document is read when generating infrastructure for publish or deploy, never during run mode.
     /// It must exist and contain non-whitespace content by the time infrastructure is generated.
+    /// An API can have only one OpenAPI source: either a document file or an endpoint.
+    /// Repeating the same source configuration is allowed; configuring a different source throws.
     /// </remarks>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> is null.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="documentPath"/> is empty or its extension cannot determine the format.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when a different OpenAPI source is already configured.</exception>
     [AspireExport]
     public static IResourceBuilder<AzureApiManagementApiResource> WithOpenApiDocument(
         this IResourceBuilder<AzureApiManagementApiResource> builder,
@@ -207,9 +205,9 @@ public static class AzureApiManagementExtensions
         ArgumentException.ThrowIfNullOrEmpty(documentPath);
 
         var fullPath = Path.GetFullPath(documentPath, builder.ApplicationBuilder.AppHostDirectory);
-        builder.Resource.OpenApiSource = new AzureApiManagementOpenApiFile(
+        builder.Resource.SetOpenApiSource(new AzureApiManagementOpenApiFile(
             fullPath,
-            format ?? InferOpenApiFormat(documentPath));
+            format ?? InferOpenApiFormat(documentPath)));
         return builder;
     }
 
@@ -224,10 +222,12 @@ public static class AzureApiManagementExtensions
     /// <remarks>
     /// Azure API Management retrieves linked documents through its control plane, so the selected endpoint must be
     /// externally reachable during deployment. Use <see cref="WithOpenApiDocument"/> for private backends.
+    /// An API can have only one OpenAPI source: either a document file or an endpoint.
+    /// Repeating the same source configuration is allowed; configuring a different source throws.
     /// </remarks>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> is null.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="documentPath"/> is empty or is not an absolute path.</exception>
-    /// <exception cref="InvalidOperationException">Thrown when the API has no target compute resource or no suitable external endpoint.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when a different OpenAPI source is already configured, or the API has no target compute resource or no suitable external endpoint.</exception>
     [AspireExport]
     public static IResourceBuilder<AzureApiManagementApiResource> WithOpenApiEndpoint(
         this IResourceBuilder<AzureApiManagementApiResource> builder,
@@ -249,10 +249,10 @@ public static class AzureApiManagementExtensions
                 $"API Management API '{builder.Resource.Name}' does not have a target compute resource.");
         }
 
-        builder.Resource.OpenApiSource = new AzureApiManagementOpenApiEndpoint(
+        builder.Resource.SetOpenApiSource(new AzureApiManagementOpenApiEndpoint(
             documentPath,
             endpointName,
-            format ?? InferOpenApiFormat(documentPath));
+            format ?? InferOpenApiFormat(documentPath)));
         return builder;
     }
 
