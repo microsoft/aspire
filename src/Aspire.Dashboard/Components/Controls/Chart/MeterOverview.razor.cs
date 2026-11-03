@@ -29,6 +29,9 @@ public partial class MeterOverview : LiveSparklinesBase
     [Parameter, EditorRequired]
     public required Func<OtlpInstrumentSummary, string> GetInstrumentUrl { get; set; }
 
+    [Parameter]
+    public EventCallback<OtlpInstrumentSummary> InstrumentSelected { get; set; }
+
     /// <summary>
     /// Gets or sets the resource label shown as a pill on each card. Null hides it, for lists of a single resource.
     /// </summary>

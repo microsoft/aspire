@@ -1524,10 +1524,16 @@ public partial class MetricsTests : DashboardTestContext
             CreateReplicaResourceMetrics("first", now.AddMinutes(-1), value: 10),
             CreateReplicaResourceMetrics("second", now.AddMinutes(-1), value: 20)
         });
-        Services.GetRequiredService<MetricPinStore>().SetPinned(
-            new ResourceKey("TestApp", "second"),
-            new OtlpInstrumentKey("test-meter", "shared-instrument"),
-            pinned: true);
+        var pinStore = Services.GetRequiredService<MetricPinStore>();
+        var instrumentKey = new OtlpInstrumentKey("test-meter", "shared-instrument");
+        pinStore.SetPinned(new ResourceKey("TestApp", "first"), instrumentKey, pinned: true);
+        pinStore.SetPinned(new ResourceKey("TestApp", "second"), instrumentKey, pinned: true);
+
+        var resources = telemetryRepository.GetResources();
+        var firstResource = resources.Single(resource => resource.ResourceKey == new ResourceKey("TestApp", "first"));
+        var secondResource = resources.Single(resource => resource.ResourceKey == new ResourceKey("TestApp", "second"));
+        var firstResourceName = OtlpHelpers.GetResourceName(firstResource, resources);
+        var secondResourceName = OtlpHelpers.GetResourceName(secondResource, resources);
 
         Services.GetRequiredService<NavigationManager>()
             .NavigateTo(DashboardUrls.MetricsUrl(resource: "TestApp", duration: 5, pinned: true));
@@ -1540,24 +1546,28 @@ public partial class MetricsTests : DashboardTestContext
 
         cut.WaitForAssertion(() =>
         {
-            Assert.Equal("1", cut.Find(".metric-group.pinned .metric-group-count").TextContent);
+            Assert.Equal("2", cut.Find(".metric-group.pinned .metric-group-count").TextContent);
             var overview = cut.FindComponent<MeterOverview>();
             Assert.Null(overview.Instance.ResourceKey);
-            var instrument = Assert.Single(overview.Instance.Instruments);
-            Assert.Equal(new ResourceKey("TestApp", "second"), instrument.ResourceView.ResourceKey);
-            Assert.Equal("20", cut.Find(".meter-card-value-number").TextContent);
+            Assert.Equal(
+                [new ResourceKey("TestApp", "first"), new ResourceKey("TestApp", "second")],
+                overview.Instance.Instruments.Select(instrument => instrument.ResourceView.ResourceKey));
+            Assert.Equal([firstResourceName, secondResourceName], cut.FindAll(".meter-card-resource-name").Select(element => element.TextContent));
+            Assert.Equal(["10", "20"], cut.FindAll(".meter-card-value-number").Select(element => element.TextContent));
         });
 
-        var resources = telemetryRepository.GetResources();
-        var secondResource = resources.Single(resource => resource.ResourceKey == new ResourceKey("TestApp", "second"));
-        var secondResourceName = OtlpHelpers.GetResourceName(secondResource, resources);
         var instrumentUrl = DashboardUrls.MetricsUrl(
             resource: secondResourceName,
             meter: "test-meter",
             instrument: "shared-instrument",
             duration: 5);
-        Assert.Equal(instrumentUrl, cut.Find(".meter-card-link").GetAttribute("href"));
+        var secondCard = cut.FindAll(".meter-card").Single(card =>
+            card.QuerySelector(".meter-card-resource-name")?.TextContent == secondResourceName);
+        Assert.Equal(instrumentUrl, secondCard.QuerySelector(".meter-card-link")!.GetAttribute("href"));
 
+        var secondInstrument = cut.FindComponent<MeterOverview>().Instance.Instruments.Single(
+            instrument => instrument.ResourceView.ResourceKey == new ResourceKey("TestApp", "second"));
+        await cut.InvokeAsync(() => cut.FindComponent<MeterOverview>().Instance.InstrumentSelected.InvokeAsync(secondInstrument));
         Services.GetRequiredService<NavigationManager>().NavigateTo(instrumentUrl);
         cut.Render(parameters =>
         {
@@ -1567,7 +1577,26 @@ public partial class MetricsTests : DashboardTestContext
         {
             Assert.Equal(new ResourceKey("TestApp", "second"), cut.FindComponent<ChartContainer>().Instance.ResourceKey);
             Assert.Equal(new ResourceKey("TestApp", "second"), cut.FindComponent<MetricPinButton>().Instance.ResourceKey);
+            Assert.Equal("TestApp", cut.Instance.PageViewModel.ReturnTarget?.ResourceName);
             Assert.Equal("Back to Pinned", cut.Find(".metrics-chart-back").GetAttribute("aria-label"));
+        });
+
+        cut.Find(".metrics-chart-back").Click();
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains("/metrics/resource/TestApp", Services.GetRequiredService<NavigationManager>().Uri);
+            Assert.Contains("pinned=true", Services.GetRequiredService<NavigationManager>().Uri);
+        });
+        cut.Render(parameters =>
+        {
+            parameters.Add(component => component.ResourceName, "TestApp");
+        });
+        cut.WaitForAssertion(() =>
+        {
+            Assert.True(cut.Instance.PageViewModel.ShowPinned);
+            Assert.Equal("TestApp", cut.Instance.PageViewModel.SelectedResource.Name);
+            Assert.Equal([firstResourceName, secondResourceName], cut.FindAll(".meter-card-resource-name").Select(element => element.TextContent));
+            Assert.Equal(["10", "20"], cut.FindAll(".meter-card-value-number").Select(element => element.TextContent));
         });
     }
 
