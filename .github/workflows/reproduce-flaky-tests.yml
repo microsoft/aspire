@@ -36,7 +36,7 @@ env:
 
   # Number of parallel runners per OS
   # Total jobs = RUNNERS_PER_OS × number of OSes (must be ≤ 256)
-  RUNNERS_PER_OS: "3"
+  RUNNERS_PER_OS: "1"
 
   # Number of test iterations each runner executes
   ITERATIONS_PER_RUNNER: "1"
