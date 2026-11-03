@@ -253,7 +253,7 @@ public class DockerComposeTests(ITestOutputHelper outputHelper)
                         Delay = "10s",
                         FailureAction = "rollback",
                         Monitor = "5s",
-                        MaxFailureRatio = "0.3",
+                        MaxFailureRatio = 0.3,
                         Order = "start-first"
                     }
                 };
