@@ -4,6 +4,7 @@
 using System.Globalization;
 using System.Text;
 using Aspire.Cli.Resources;
+using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Agents.Hooks;
@@ -39,7 +40,7 @@ internal sealed class TelemetryHookInstaller : ITelemetryHookInstaller
     public async Task<TelemetryHookScripts> EnsureInstalledAsync(CancellationToken cancellationToken)
     {
         var hooksDirectory = Path.Combine(_executionContext.AspireHomeDirectory.FullName, HooksDirectoryName);
-        Directory.CreateDirectory(hooksDirectory);
+        DirectoryHelper.CreateWithOwnerOnlyPermissions(hooksDirectory);
 
         var shellPath = Path.Combine(hooksDirectory, ShellResourceName);
         var powerShellPath = Path.Combine(hooksDirectory, PowerShellResourceName);

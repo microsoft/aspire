@@ -178,6 +178,34 @@ public class TelemetryHookInstallerTests(ITestOutputHelper outputHelper)
         Assert.Equal("# stale hook content", await File.ReadAllTextAsync(powerShellPath).DefaultTimeout());
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    [PlatformSpecific(TestPlatforms.AnyUnix)]
+    public async Task EnsureInstalledAsync_SetsOwnerOnlyDirectoryPermissions(bool directoryExists)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var home = workspace.CreateDirectory("home");
+        var installer = CreateInstaller(workspace, home);
+        var hooksDirectory = Path.Combine(home.FullName, ".aspire", "hooks");
+        var ownerOnlyMode = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
+
+        if (directoryExists)
+        {
+            Directory.CreateDirectory(hooksDirectory);
+            File.SetUnixFileMode(hooksDirectory, ownerOnlyMode | UnixFileMode.GroupRead | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+        }
+
+        await installer.EnsureInstalledAsync(CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(ownerOnlyMode, File.GetUnixFileMode(hooksDirectory));
+    }
+
     [Fact]
     public async Task EnsureInstalledAsync_SetsExecutableBit_OnNonWindows()
     {
