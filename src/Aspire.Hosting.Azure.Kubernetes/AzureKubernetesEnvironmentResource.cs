@@ -7,13 +7,15 @@ using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Kubernetes;
 using Aspire.Hosting.Pipelines;
+using Azure.Provisioning.ContainerService;
+using Azure.Provisioning.Primitives;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Azure.Kubernetes;
 
 /// <summary>
-/// Represents an Azure Kubernetes Service (AKS) environment resource that provisions
+/// Represents an Azure Kubernetes Service (AKS) environment resource that provisions or references
 /// an AKS cluster and serves as a compute environment for Kubernetes workloads.
 /// </summary>
 public partial class AzureKubernetesEnvironmentResource :
@@ -22,6 +24,11 @@ public partial class AzureKubernetesEnvironmentResource :
     IComputeEnvironmentWithVolumeMounts,
     IAzureNspAssociationTarget
 {
+    /// <summary>
+    /// The preview API version exposing application load balancer properties.
+    /// </summary>
+    internal const string PreviewIngressApiVersion = "2026-07-02-preview";
+
     /// <summary>
     /// Initializes a new instance of the <see cref="AzureKubernetesEnvironmentResource"/> class.
     /// </summary>
@@ -222,6 +229,7 @@ public partial class AzureKubernetesEnvironmentResource :
     /// <summary>
     /// Gets the OIDC issuer URL for the AKS cluster, used for workload identity federation.
     /// </summary>
+    /// <remarks>The output is empty when an existing cluster does not have an OIDC issuer.</remarks>
     public BicepOutputReference OidcIssuerUrl => new("oidcIssuerUrl", this);
 
     /// <summary>
@@ -336,4 +344,32 @@ public partial class AzureKubernetesEnvironmentResource :
     /// <c>ingressProfile.applicationLoadBalancer</c>. Gateway API is supported by the stable API.
     /// </summary>
     internal bool RequiresPreviewIngressApi => ApplicationLoadBalancerEnabled;
+
+    /// <inheritdoc/>
+    public override ProvisionableResource AddAsExistingResource(AzureResourceInfrastructure infra)
+    {
+        var bicepIdentifier = this.GetBicepIdentifier();
+        var existingCluster = infra.GetProvisionableResources()
+            .OfType<ContainerServiceManagedCluster>()
+            .SingleOrDefault(cluster => cluster.BicepIdentifier == bicepIdentifier);
+
+        if (existingCluster is not null)
+        {
+            return existingCluster;
+        }
+
+        var cluster = ContainerServiceManagedCluster.FromExisting(bicepIdentifier);
+        if (RequiresPreviewIngressApi)
+        {
+            cluster.ResourceVersion = PreviewIngressApiVersion;
+        }
+
+        if (!TryApplyExistingResourceAnnotation(this, infra, cluster))
+        {
+            cluster.Name = NameOutputReference.AsProvisioningParameter(infra);
+        }
+
+        infra.Add(cluster);
+        return cluster;
+    }
 }

@@ -1,0 +1,127 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+using System.IO.Hashing;
+using System.Text;
+using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Azure;
+
+namespace Aspire.Hosting;
+
+/// <summary>
+/// Provides extension methods for configuring internal load balancers and private DNS.
+/// </summary>
+public static class AzureInternalLoadBalancerExtensions
+{
+    /// <summary>
+    /// Configures the resource with an internal load balancer and private DNS.
+    /// </summary>
+    /// <typeparam name="T">The resource type that supports an internal load balancer.</typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="virtualNetwork">The virtual network containing the resource's delegated subnet.</param>
+    /// <returns>The resource builder.</returns>
+    /// <remarks>
+    /// The resource must first be configured with <c>WithDelegatedSubnet</c>. A private DNS zone named
+    /// after its default domain is linked to <paramref name="virtualNetwork"/>, and a wildcard record
+    /// resolves hostnames to the internal load balancer's static IP. This method has no effect in run mode.
+    /// </remarks>
+    /// <exception cref="ArgumentNullException">Thrown when an argument is null.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the delegated subnet is missing, belongs to a different network, or the resource already uses a different internal network.</exception>
+    [AspireExport("withNetworkInternalLoadBalancer", MethodName = "withInternalLoadBalancer")]
+    public static IResourceBuilder<T> WithInternalLoadBalancer<T>(
+        this IResourceBuilder<T> builder,
+        IResourceBuilder<AzureVirtualNetworkResource> virtualNetwork)
+        where T : IAzureInternalIngressResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(virtualNetwork);
+
+        if (builder.ApplicationBuilder.ExecutionContext.IsRunMode)
+        {
+            return builder;
+        }
+
+        if (!builder.Resource.TryGetLastAnnotation<DelegatedSubnetAnnotation>(out var delegatedSubnet))
+        {
+            throw new InvalidOperationException(
+                $"Azure resource '{builder.Resource.Name}' must use a delegated subnet before it can use an internal load balancer.");
+        }
+
+        var subnet = builder.ApplicationBuilder.Resources
+            .OfType<AzureSubnetResource>()
+            .SingleOrDefault(candidate =>
+                ReferenceExpression.Create($"{candidate.Id}").ValueExpression == delegatedSubnet.SubnetId.ValueExpression);
+        if (subnet is null || !ReferenceEquals(subnet.Parent, virtualNetwork.Resource))
+        {
+            throw new InvalidOperationException(
+                $"The delegated subnet for Azure resource '{builder.Resource.Name}' must belong to virtual network '{virtualNetwork.Resource.Name}'.");
+        }
+
+        if (builder.Resource.TryGetLastAnnotation<InternalLoadBalancerAnnotation>(out var existing))
+        {
+            if (!ReferenceEquals(existing.VirtualNetwork, virtualNetwork.Resource))
+            {
+                throw new InvalidOperationException(
+                    $"Azure resource '{builder.Resource.Name}' is already linked to virtual network '{existing.VirtualNetwork.Name}'.");
+            }
+
+            return builder;
+        }
+
+        builder.WithAnnotation(new InternalLoadBalancerAnnotation(virtualNetwork.Resource));
+        var privateDnsResourceName = GetBoundedResourceName($"{builder.Resource.Name}-private-dns");
+
+        var privateDns = new AzurePrivateDnsZoneResource(privateDnsResourceName, builder.Resource.DefaultDomain);
+        privateDns.ARecords.Add(("*", builder.Resource.StaticIp));
+
+        var vnetLink = new AzurePrivateDnsZoneVNetLinkResource(
+            GetBoundedResourceName($"{privateDnsResourceName}-{virtualNetwork.Resource.Name}-link"),
+            privateDns,
+            virtualNetwork.Resource);
+        privateDns.VNetLinks.Add(virtualNetwork.Resource, vnetLink);
+        builder.ApplicationBuilder.AddResource(vnetLink).ExcludeFromManifest();
+
+        builder.ApplicationBuilder.AddAzureProvisioning();
+        builder.ApplicationBuilder
+            .AddResource(privateDns)
+            .ConfigureInfrastructure(_ => ValidateSubnetDelegation(builder.Resource, subnet))
+            .WithParentRelationship(builder.Resource)
+            .WithRelationship(virtualNetwork.Resource, "Virtual network link");
+
+        return builder.WithRelationship(virtualNetwork.Resource, "Internal network");
+    }
+
+    private static string GetBoundedResourceName(string name)
+    {
+        if (name.Length <= 64)
+        {
+            return name;
+        }
+
+        var hash = Convert.ToHexString(XxHash3.Hash(Encoding.UTF8.GetBytes(name))).ToLowerInvariant()[..8];
+        return $"{name[..55]}-{hash}";
+    }
+
+    private static void ValidateSubnetDelegation(
+        IAzureInternalIngressResource resource,
+        AzureSubnetResource subnet)
+    {
+        // WithServiceDelegation is explicitly last-write-wins, so the subnet delegation validated at
+        // WithInternalLoadBalancer call time can be replaced afterward by an unrelated later call on the
+        // same subnet (for example another WithDelegatedSubnet target, or a direct WithServiceDelegation
+        // call). Revalidate the delegation here, during infrastructure generation, so call order cannot
+        // emit this resource with IsInternal = true (and this private DNS module) while its subnet is no
+        // longer delegated to the resource's required service.
+        subnet.TryGetLastAnnotation<AzureSubnetServiceDelegationAnnotation>(out var delegation);
+        if (delegation is null || !string.Equals(
+                delegation.ServiceName,
+                resource.DelegatedSubnetServiceName,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"The delegated subnet for Azure resource '{resource.Name}' must remain delegated to " +
+                $"'{resource.DelegatedSubnetServiceName}' for an internal load balancer, but it is " +
+                $"{(delegation is null ? "no longer delegated" : $"delegated to '{delegation.ServiceName}'")}.");
+        }
+    }
+}
