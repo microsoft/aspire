@@ -92,6 +92,7 @@
                         <button type="button"
                                 class="resource-select-all-toggle @(IsAllSelected ? "on" : null)"
                                 aria-label="@Loc[nameof(Dashboard.Resources.Layout.ResourcePaneSelectAll)]"
+                                aria-description="@(IsAllSelected ? Loc[nameof(Dashboard.Resources.Layout.ResourcePaneAllSelected)].Value : null)"
                                 data-tooltip="@Loc[IsAllSelected ? nameof(Dashboard.Resources.Layout.ResourcePaneAllSelected) : nameof(Dashboard.Resources.Layout.ResourcePaneSelectAll)]"
                                 data-tooltip-positioning="above"
                                 @onclick="OnAllResourcesClickAsync">

@@ -93,6 +93,8 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Dashboard
             await selectAll.ClickAsync();
             await Assertions.Expect(title).ToHaveTextAsync(Resources.Layout.ResourceHeaderAllResources);
             await Assertions.Expect(selectAll).ToHaveTextAsync(Resources.Layout.ResourcePaneSelectAll);
+            await Assertions.Expect(selectAll).ToHaveAttributeAsync("aria-description", Resources.Layout.ResourcePaneAllSelected);
+            await Assertions.Expect(selectAll).ToHaveAttributeAsync("data-tooltip", Resources.Layout.ResourcePaneAllSelected);
             await Assertions.Expect(pane.Locator("a[aria-current]")).ToHaveCountAsync(0);
 
             var overviewCards = page.Locator(".resource-card-grid");
@@ -108,6 +110,8 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Dashboard
             await Assertions.Expect(page).ToHaveURLAsync(new Regex("/resources$"));
             await Assertions.Expect(overviewCards).ToBeVisibleAsync();
             await Assertions.Expect(selectAll).ToHaveTextAsync(Resources.Layout.ResourcePaneSelectAll);
+            await Assertions.Expect(selectAll).ToHaveAttributeAsync("aria-description", Resources.Layout.ResourcePaneAllSelected);
+            await Assertions.Expect(selectAll).ToHaveAttributeAsync("data-tooltip", Resources.Layout.ResourcePaneAllSelected);
 
             // The cleared selection is remembered when entering the resources view again.
             await page.GotoAsync("/resources");
@@ -160,10 +164,29 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Dashboard
                 await Assertions.Expect(page.Locator(".resource-pane")).ToBeHiddenAsync();
                 await page.Locator(".resource-pane-open-button").ClickAsync();
             }
+            await Assertions.Expect(selectAll).ToHaveAttributeAsync("aria-description", Resources.Layout.ResourcePaneAllSelected);
+            await Assertions.Expect(selectAll).ToHaveAttributeAsync("data-tooltip", Resources.Layout.ResourcePaneAllSelected);
+
+            var resourceRow = page.Locator(".resource-pane").GetByRole(AriaRole.Link, new() { Name = "TestResource", Exact = true });
+            await resourceRow.ClickAsync();
+            await Assertions.Expect(page.Locator("h1.resource-title")).ToHaveTextAsync("TestResource");
+            if (viewportWidth < 769)
+            {
+                await Assertions.Expect(page.Locator(".resource-pane")).ToBeHiddenAsync();
+                await page.Locator(".resource-pane-open-button").ClickAsync();
+            }
+
             await selectAll.FocusAsync();
             await page.Keyboard.PressAsync("Space");
             await Assertions.Expect(page.Locator("h1.resource-title")).ToHaveTextAsync(Resources.Layout.ResourceHeaderAllResources);
             await Assertions.Expect(page.Locator(".resource-pane a[aria-current]")).ToHaveCountAsync(0);
+            if (viewportWidth < 769)
+            {
+                await Assertions.Expect(page.Locator(".resource-pane")).ToBeHiddenAsync();
+                await page.Locator(".resource-pane-open-button").ClickAsync();
+            }
+            await Assertions.Expect(selectAll).ToHaveAttributeAsync("aria-description", Resources.Layout.ResourcePaneAllSelected);
+            await Assertions.Expect(selectAll).ToHaveAttributeAsync("data-tooltip", Resources.Layout.ResourcePaneAllSelected);
         });
     }
 

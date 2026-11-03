@@ -863,6 +863,8 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Equal("resources", navigationManager.ToBaseRelativePath(navigationManager.Uri));
         Assert.Equal("Select all", cut.Find(".resource-select-all-toggle").TextContent.Trim());
         Assert.Null(cut.Find(".resource-select-all-toggle").GetAttribute("aria-pressed"));
+        Assert.Equal("All selected", cut.Find(".resource-select-all-toggle").GetAttribute("aria-description"));
+        Assert.Equal("All selected", cut.Find(".resource-select-all-toggle").GetAttribute("data-tooltip"));
         Assert.Equal("All resources", cut.Find(".resource-header-title").TextContent.Trim());
     }
 
@@ -887,6 +889,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Equal("Select all", selectAll.TextContent.Trim());
         Assert.Null(selectAll.GetAttribute("aria-pressed"));
         Assert.Equal("Select all", selectAll.GetAttribute("aria-label"));
+        Assert.Null(selectAll.GetAttribute("aria-description"));
         Assert.Equal("Select all", selectAll.GetAttribute("data-tooltip"));
 
         await cut.InvokeAsync(() => selectAll.Click());
@@ -899,6 +902,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         selectAll = cut.Find(".resource-select-all-toggle");
         Assert.Equal("Select all", selectAll.TextContent.Trim());
         Assert.Null(selectAll.GetAttribute("aria-pressed"));
+        Assert.Equal("All selected", selectAll.GetAttribute("aria-description"));
         Assert.Equal("All selected", selectAll.GetAttribute("data-tooltip"));
         await cut.InvokeAsync(() => selectAll.Click());
         Assert.Equal("resources", navigationManager.ToBaseRelativePath(navigationManager.Uri));
