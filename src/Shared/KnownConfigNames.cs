@@ -46,6 +46,14 @@ internal static class KnownConfigNames
     public const string CliProcessStarted = "ASPIRE_CLI_STARTED";
     public const string CliProcessStartedStable = "ASPIRE_CLI_STARTED_STABLE";
 
+    // Identity of the host application that launched a long-running CLI command, such as the VS Code
+    // extension host running `aspire ps --follow`. The command watches this process and exits when it
+    // disappears, so a host that is force-killed without running its own cleanup cannot leave the
+    // command behind as an orphan. This is separate from CliProcessId, which is the CLI's own identity
+    // as reported to the AppHosts it launches.
+    public const string CliParentProcessId = "ASPIRE_CLI_PARENT_PID";
+    public const string CliParentProcessStarted = "ASPIRE_CLI_PARENT_STARTED";
+
     // Direct AppHost owner of an aspire-managed terminalhost process. The terminal host watches
     // this identity so it can shut down and unlink its sockets if the AppHost disappears.
     public const string TerminalHostParentProcessId = "ASPIRE_TERMINAL_HOST_PARENT_PID";

@@ -11,6 +11,7 @@ using Aspire.Cli.Interaction;
 using Aspire.Cli.Processes;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
+using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
 
@@ -229,6 +230,10 @@ internal sealed partial class PsCommand : BaseCommand
             return CommandResult.Failure(CliExitCodes.InvalidCommand, PsCommandStrings.FollowRequiresJson);
         }
         using var followCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        // A host that spawns `ps --follow` (the VS Code extension) can be force-killed before it runs
+        // its own cleanup. Watch that host so an orphaned follower exits instead of waiting forever for
+        // a stdout stream nobody reads; an idle follower otherwise never writes and never notices.
+        await using var parentWatchdog = ParentProcessWatchdog.StartForCliParent(followCancellationTokenSource);
         var followCancellationToken = followCancellationTokenSource.Token;
         var updates = Channel.CreateUnbounded<PsFollowUpdate>(new UnboundedChannelOptions
         {
