@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Coordinated .NET build path casing no longer breaks Blazor WebAssembly builds",
+  "mergedAt": "2026-11-03T17:27:47Z",
+  "number": 21623,
+  "runDate": "2026-11-03T18:10:00Z",
+  "status": "included",
+  "title": "Fix coordinated .NET build path casing that breaks Blazor WebAssembly builds"
+}

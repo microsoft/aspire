@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Website/docs-site change, no matching changelog entry",
+  "mergedAt": "2026-11-03T13:09:07Z",
+  "number": 1984,
+  "runDate": "2026-11-03T18:10:00Z",
+  "status": "excluded",
+  "title": "Emit og:type=website for the home page and splash pages"
+}

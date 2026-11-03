@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed path casing in coordinated .NET project builds that caused Blazor WebAssembly builds to fail, and surfaced the underlying build error.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔤",
+  "firstMergedAt": "2026-11-03T17:27:47Z",
+  "lastMergedAt": "2026-11-03T17:27:47Z",
+  "name": "Coordinated .NET build path casing no longer breaks Blazor WebAssembly builds",
+  "owner": "davidfowl",
+  "prs": [
+    21623
+  ]
+}

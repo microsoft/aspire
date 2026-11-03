@@ -1,0 +1,21 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [
+    "@MattKotsenas"
+  ],
+  "description": "Pipeline output can now be regenerated from current source and checked against selected artifacts, failing when committed generated assets have drifted.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🧬",
+  "firstMergedAt": "2026-11-03T17:22:56Z",
+  "lastMergedAt": "2026-11-03T17:22:56Z",
+  "name": "Opt-in drift detection for generated pipeline output",
+  "owner": "eerhardt",
+  "prs": [
+    21681
+  ]
+}

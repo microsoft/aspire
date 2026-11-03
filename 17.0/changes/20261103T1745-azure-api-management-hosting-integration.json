@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "New experimental `Aspire.Hosting.Azure.ApiManagement` integration models an API Management service with its APIs, backends, policies, and products, provisioned on deploy without hand-authored Bicep.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🌉",
+  "firstMergedAt": "2026-11-03T17:45:38Z",
+  "lastMergedAt": "2026-11-03T17:45:38Z",
+  "name": "Azure API Management hosting integration",
+  "owner": "tommasodotNET",
+  "prs": [
+    19664
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "MattKotsenas",
+  "comment": "Opt-in drift detection for generated pipeline output",
+  "mergedAt": "2026-11-03T17:22:56Z",
+  "number": 21681,
+  "runDate": "2026-11-03T18:10:00Z",
+  "status": "included",
+  "title": "Detect drift in generated pipeline output"
+}

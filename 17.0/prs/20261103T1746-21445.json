@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only flaky test fix",
+  "mergedAt": "2026-11-03T17:46:49Z",
+  "number": 21445,
+  "runDate": "2026-11-03T18:10:00Z",
+  "status": "excluded",
+  "title": "Wait for Functions host storage before stopping multi-project test"
+}

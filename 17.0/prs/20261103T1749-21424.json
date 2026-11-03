@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only flaky test fix",
+  "mergedAt": "2026-11-03T17:49:44Z",
+  "number": 21424,
+  "runDate": "2026-11-03T18:10:00Z",
+  "status": "excluded",
+  "title": "Stop DevTunnel test monitor before disposing its host"
+}
