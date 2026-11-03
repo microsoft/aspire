@@ -122,7 +122,7 @@ public static class AzureContainerRegistryExtensions
     }
 
     /// <summary>
-    /// Adds a scheduled ACR purge task to remove old or unused container image tags from the registry.
+    /// Adds a scheduled ACR purge task to remove image tags and optionally untagged manifests.
     /// </summary>
     /// <param name="builder">The resource builder for the <see cref="AzureContainerRegistryResource"/>.</param>
     /// <param name="schedule">The cron schedule for the purge task timer trigger. Must be a five-part cron expression
@@ -136,6 +136,9 @@ public static class AzureContainerRegistryExtensions
     /// <param name="taskName">An optional name for the ACR task resource. If not provided, a name is auto-generated
     /// based on existing purge tasks to avoid conflicts. If a task with the specified name already exists,
     /// an <see cref="ArgumentException"/> is thrown.</param>
+    /// <param name="untagged">Whether to also delete eligible untagged manifests. Defaults to false.</param>
+    /// <param name="dryRun">Whether to preview deletions in the task logs without deleting artifacts. Defaults to false.</param>
+    /// <ats-param name="ago">The age threshold based on last modified time, in milliseconds. Defaults to zero.</ats-param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureContainerRegistryResource}"/> for chaining.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> is <see langword="null"/>.</exception>
@@ -144,86 +147,21 @@ public static class AzureContainerRegistryExtensions
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="keep"/> is less than 1,
     /// or <paramref name="ago"/> is negative or less than 1 minute (when non-zero).</exception>
     /// <remarks>
-    /// This overload removes tag references only, leaving manifests and image layers in the registry.
-    /// To reclaim image storage, use the overload accepting <see cref="AzureContainerRegistryPurgeTaskOptions"/>
-    /// and enable <see cref="AzureContainerRegistryPurgeTaskOptions.Untagged"/>.
+    /// Tag removal alone does not reclaim storage. Enabling <paramref name="untagged"/> also deletes eligible
+    /// previously untagged manifests and can break digest-based pulls and rollbacks. No Premium SKU or retention
+    /// policy is required. Preview deletions with <paramref name="dryRun"/> first.
+    /// The purge tool's version determines how age and keep filters apply to untagged manifests.
     /// </remarks>
     /// <example>
-    /// This example configures a daily purge task that removes tags last modified more than 7 days ago,
+    /// This example previews a daily purge of tags last modified more than 7 days ago and eligible untagged manifests,
     /// keeping the 5 most recent purge candidate tags:
     /// <code>
     /// var acr = builder.AddAzureContainerRegistry("myregistry")
-    ///     .WithPurgeTask("0 1 * * *", ago: TimeSpan.FromDays(7), keep: 5);
+    ///     .WithPurgeTask("0 1 * * *", ago: TimeSpan.FromDays(7), keep: 5, untagged: true, dryRun: true);
     /// </code>
     /// </example>
-    [AspireExportIgnore(Reason = "Polyglot AppHosts use the withPurgeTask dispatcher with flat optional parameters.")]
+    [AspireExport]
     public static IResourceBuilder<AzureContainerRegistryResource> WithPurgeTask(
-        this IResourceBuilder<AzureContainerRegistryResource> builder,
-        string schedule,
-        string? filter = null,
-        TimeSpan? ago = null,
-        int keep = 3,
-        string? taskName = null)
-    {
-        return WithPurgeTaskCore(builder, schedule, filter, ago, keep, taskName, untagged: false, dryRun: false);
-    }
-
-    /// <summary>
-    /// Adds a scheduled ACR purge task with configurable tag and untagged manifest cleanup.
-    /// </summary>
-    /// <param name="builder">The resource builder for the registry.</param>
-    /// <param name="options">The purge task configuration.</param>
-    /// <param name="schedule">The five-part cron schedule (<c>minute hour day-of-month month day-of-week</c>).</param>
-    /// <returns>The resource builder for chaining.</returns>
-    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="options"/> is <see langword="null"/>.</exception>
-    /// <exception cref="ArgumentException">Thrown when the schedule is invalid or the task name is already in use.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when the keep count is less than 1,
-    /// or the age threshold is negative or less than 1 minute (when non-zero).</exception>
-    /// <remarks>
-    /// Enable <see cref="AzureContainerRegistryPurgeTaskOptions.Untagged"/> to delete eligible untagged manifests,
-    /// including previously untagged manifests in matching repositories. Deletion can break digest-based pulls
-    /// and rollbacks. Preview deletions with <see cref="AzureContainerRegistryPurgeTaskOptions.DryRun"/> first.
-    /// </remarks>
-    /// <example>
-    /// <code>
-    /// var acr = builder.AddAzureContainerRegistry("myregistry")
-    ///     .WithPurgeTask(new AzureContainerRegistryPurgeTaskOptions
-    ///     {
-    ///         Ago = TimeSpan.FromDays(7),
-    ///         Keep = 5,
-    ///         Untagged = true,
-    ///         DryRun = true
-    ///     }, "0 1 * * *");
-    /// </code>
-    /// </example>
-    [AspireExportIgnore(Reason = "Polyglot AppHosts use the withPurgeTask dispatcher with flat optional parameters.")]
-    public static IResourceBuilder<AzureContainerRegistryResource> WithPurgeTask(
-        this IResourceBuilder<AzureContainerRegistryResource> builder,
-        AzureContainerRegistryPurgeTaskOptions options,
-        string schedule)
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(options);
-
-        return WithPurgeTaskCore(builder, schedule, options.Filter, options.Ago, options.Keep, options.TaskName, options.Untagged, options.DryRun);
-    }
-
-    /// <summary>
-    /// Adds a scheduled ACR purge task to remove image tags and optionally untagged manifests.
-    /// </summary>
-    /// <param name="builder">The registry resource builder.</param>
-    /// <param name="schedule">The five-part cron schedule (minute hour day-of-month month day-of-week).</param>
-    /// <param name="filter">Repository and tag regular expressions, separated by a colon. Defaults to ".*:.*".</param>
-    /// <param name="ago">The age threshold based on last modified time, in milliseconds. Defaults to zero.</param>
-    /// <param name="keep">The number of recent purge candidates to retain per repository. Defaults to 3.
-    /// The purge tool's version determines how this applies to untagged manifests.</param>
-    /// <param name="taskName">An optional task name. A unique name is generated when not specified.</param>
-    /// <param name="untagged">Whether to also delete eligible untagged manifests in matching repositories.
-    /// Deletion is irreversible and can break digest-based pulls and rollbacks. Defaults to false.</param>
-    /// <param name="dryRun">Whether to preview deletions in the task logs without deleting artifacts. Defaults to false.</param>
-    /// <returns>The registry resource builder.</returns>
-    [AspireExport("withPurgeTask")]
-    internal static IResourceBuilder<AzureContainerRegistryResource> WithPurgeTaskForPolyglot(
         this IResourceBuilder<AzureContainerRegistryResource> builder,
         string schedule,
         string? filter = null,
@@ -232,19 +170,6 @@ public static class AzureContainerRegistryExtensions
         string? taskName = null,
         bool untagged = false,
         bool dryRun = false)
-    {
-        return WithPurgeTaskCore(builder, schedule, filter, ago, keep, taskName, untagged, dryRun);
-    }
-
-    private static IResourceBuilder<AzureContainerRegistryResource> WithPurgeTaskCore(
-        IResourceBuilder<AzureContainerRegistryResource> builder,
-        string schedule,
-        string? filter,
-        TimeSpan? ago,
-        int keep,
-        string? taskName,
-        bool untagged,
-        bool dryRun)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrWhiteSpace(schedule);
@@ -325,6 +250,22 @@ public static class AzureContainerRegistryExtensions
             };
             infra.Add(purgeTask);
         });
+    }
+
+    /// <inheritdoc cref="WithPurgeTask(IResourceBuilder{AzureContainerRegistryResource}, string, string, TimeSpan?, int, string, bool, bool)"/>
+    /// <remarks>
+    /// Preserves the original CLR signature. Defaults are on the extended overload to avoid ambiguous source calls.
+    /// </remarks>
+    [AspireExportIgnore(Reason = "Retained for binary compatibility. Polyglot AppHosts use the overload with optional purge flags.")]
+    public static IResourceBuilder<AzureContainerRegistryResource> WithPurgeTask(
+        this IResourceBuilder<AzureContainerRegistryResource> builder,
+        string schedule,
+        string? filter,
+        TimeSpan? ago,
+        int keep,
+        string? taskName)
+    {
+        return WithPurgeTask(builder, schedule, filter, ago, keep, taskName, untagged: false, dryRun: false);
     }
 
     /// <summary>

@@ -243,24 +243,17 @@ public class AzureContainerRegistryTests(ITestOutputHelper testOutputHelper)
     }
 
     [Theory]
-    [InlineData(false, false)]
     [InlineData(true, false)]
     [InlineData(false, true)]
     [InlineData(true, true)]
-    public async Task WithPurgeTask_Options_GeneratesCorrectBicep(bool untagged, bool dryRun)
+    public async Task WithPurgeTask_Flags_GeneratesCorrectBicep(bool untagged, bool dryRun)
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var acr = builder.AddAzureContainerRegistry("acr");
-        var result = acr.WithPurgeTask(new AzureContainerRegistryPurgeTaskOptions
-        {
-            Filter = "cleanup:.*",
-            Ago = TimeSpan.FromDays(7),
-            Keep = 5,
-            TaskName = "cleanup",
-            Untagged = untagged,
-            DryRun = dryRun
-        }, "0 1 * * *");
+        var result = acr.WithPurgeTask("0 1 * * *",
+            filter: "cleanup:.*", ago: TimeSpan.FromDays(7), keep: 5, taskName: "cleanup",
+            untagged: untagged, dryRun: dryRun);
 
         Assert.Same(acr, result);
         var (_, bicep) = await GetManifestWithBicep(acr.Resource);
@@ -269,131 +262,30 @@ public class AzureContainerRegistryTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public async Task WithPurgeTask_DefaultOptions_MatchesExistingOverload()
+    public async Task WithPurgeTask_PreservesExistingBinarySignature()
     {
+        var method = typeof(AzureContainerRegistryExtensions).GetMethod(nameof(AzureContainerRegistryExtensions.WithPurgeTask),
+        [
+            typeof(IResourceBuilder<AzureContainerRegistryResource>),
+            typeof(string),
+            typeof(string),
+            typeof(TimeSpan?),
+            typeof(int),
+            typeof(string)
+        ]);
+        Assert.NotNull(method);
+
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
-        var original = builder.AddAzureContainerRegistry("original")
-            .WithPurgeTask("0 1 * * *");
-        using var optionsBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper);
-        var configured = optionsBuilder.AddAzureContainerRegistry("original")
-            .WithPurgeTask(new AzureContainerRegistryPurgeTaskOptions(), "0 1 * * *");
-
-        var (_, originalBicep) = await GetManifestWithBicep(original.Resource);
-        var (_, configuredBicep) = await GetManifestWithBicep(configured.Resource);
-
-        Assert.Equal(originalBicep, configuredBicep);
-    }
-
-    [Fact]
-    public async Task WithPurgeTask_NullFilter_MatchesDefaults()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
-        var original = builder.AddAzureContainerRegistry("original")
-            .WithPurgeTask("0 1 * * *");
-        using var nullFilterBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper);
-        var configured = nullFilterBuilder.AddAzureContainerRegistry("original")
+        var original = builder.AddAzureContainerRegistry("original");
+        Assert.Same(original, method.Invoke(null, [original, "0 1 * * *", null, null, 3, null]));
+        using var currentBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var configured = currentBuilder.AddAzureContainerRegistry("original")
             .WithPurgeTask("0 1 * * *", null);
 
         var (_, originalBicep) = await GetManifestWithBicep(original.Resource);
         var (_, configuredBicep) = await GetManifestWithBicep(configured.Resource);
 
         Assert.Equal(originalBicep, configuredBicep);
-    }
-
-    [Fact]
-    public async Task WithPurgeTask_MixedOptions_GeneratesIndependentTasks()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
-
-        var acr = builder.AddAzureContainerRegistry("acr")
-            .WithPurgeTask("0 0 1 1 *", filter: "cleanup:.*", keep: 1)
-            .WithPurgeTask(new AzureContainerRegistryPurgeTaskOptions
-            {
-                Filter = "cleanup:.*",
-                Keep = 1,
-                Untagged = true,
-                DryRun = true
-            }, "0 0 1 1 *")
-            .WithPurgeTask(new AzureContainerRegistryPurgeTaskOptions
-            {
-                Filter = "cleanup:.*",
-                Keep = 1,
-                Untagged = true
-            }, "0 0 1 1 *");
-
-        var (_, bicep) = await GetManifestWithBicep(acr.Resource);
-
-        await Verify(bicep, "bicep");
-    }
-
-    [Theory]
-    [InlineData(false, false)]
-    [InlineData(true, false)]
-    [InlineData(false, true)]
-    [InlineData(true, true)]
-    public async Task WithPurgeTask_Polyglot_MatchesOptionsOverload(bool untagged, bool dryRun)
-    {
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
-        var original = builder.AddAzureContainerRegistry("original")
-            .WithPurgeTask(new AzureContainerRegistryPurgeTaskOptions
-            {
-                Filter = "cleanup:.*",
-                Ago = TimeSpan.FromDays(7),
-                Keep = 5,
-                TaskName = "cleanup",
-                Untagged = untagged,
-                DryRun = dryRun
-            }, "0 1 * * *");
-        using var polyglotBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper);
-        var polyglot = polyglotBuilder.AddAzureContainerRegistry("original")
-            .WithPurgeTaskForPolyglot("0 1 * * *", filter: "cleanup:.*", ago: TimeSpan.FromDays(7),
-                keep: 5, taskName: "cleanup", untagged: untagged, dryRun: dryRun);
-
-        var (_, originalBicep) = await GetManifestWithBicep(original.Resource);
-        var (_, polyglotBicep) = await GetManifestWithBicep(polyglot.Resource);
-
-        Assert.Equal(originalBicep, polyglotBicep);
-    }
-
-    [Fact]
-    public void WithPurgeTask_NullOptions_Throws()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
-        var acr = builder.AddAzureContainerRegistry("acr");
-
-        Assert.Throws<ArgumentNullException>(() => acr.WithPurgeTask((AzureContainerRegistryPurgeTaskOptions)null!, "0 1 * * *"));
-    }
-
-    [Theory]
-    [InlineData(0)]
-    [InlineData(-1)]
-    public void WithPurgeTask_Options_InvalidKeep_Throws(int keep)
-    {
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
-        var acr = builder.AddAzureContainerRegistry("acr");
-
-        Assert.Throws<ArgumentOutOfRangeException>(() => acr.WithPurgeTask(new AzureContainerRegistryPurgeTaskOptions { Keep = keep }, "0 1 * * *"));
-    }
-
-    [Theory]
-    [InlineData("-00:00:01")]
-    [InlineData("00:00:59")]
-    public void WithPurgeTask_Options_InvalidAgo_Throws(string ago)
-    {
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
-        var acr = builder.AddAzureContainerRegistry("acr");
-
-        Assert.Throws<ArgumentOutOfRangeException>(() => acr.WithPurgeTask(
-            new AzureContainerRegistryPurgeTaskOptions { Ago = TimeSpan.Parse(ago) }, "0 1 * * *"));
-    }
-
-    [Fact]
-    public void WithPurgeTask_Options_InvalidSchedule_Throws()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
-        var acr = builder.AddAzureContainerRegistry("acr");
-
-        Assert.Throws<ArgumentException>(() => acr.WithPurgeTask(new AzureContainerRegistryPurgeTaskOptions(), "not a schedule"));
     }
 
     [Fact]

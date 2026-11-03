@@ -76,17 +76,13 @@ the task logs before allowing deletions.
 **C#**
 
 ```csharp
-registry.WithPurgeTask(new AzureContainerRegistryPurgeTaskOptions
-{
-    Filter = "myapp:.*",
-    Ago = TimeSpan.FromDays(7),
-    Keep = 5,
-    Untagged = true,
-    DryRun = true
-}, "0 1 * * *");
+registry.WithPurgeTask("0 1 * * *",
+    filter: "myapp:.*",
+    ago: TimeSpan.FromDays(7),
+    keep: 5,
+    untagged: true,
+    dryRun: true);
 ```
-
-The options type is in the `Aspire.Hosting.Azure` namespace.
 
 **TypeScript**
 
@@ -100,7 +96,7 @@ await registry.withPurgeTask("0 1 * * *", {
 });
 ```
 
-Set `DryRun` / `dryRun` to `false` after reviewing the preview. Manifest deletion works with a
+Set `dryRun` to `false` after reviewing the preview. Manifest deletion works with a
 Basic registry; no Premium SKU or retention policy is required. Previously untagged manifests
 in matching repositories are also eligible, so deletion can break digest-based pulls and
 rollbacks. Shared image layers remain until no retained manifests reference them, and storage
