@@ -628,6 +628,7 @@ internal sealed class NewCommand : BaseCommand
                     missingDirectory));
                 return CommandResult.Failure(CliExitCodes.InvalidCommand);
             }
+            InteractionService.DisplayMessage(KnownEmojis.Warning, SharedCommandStrings.SourceTrustWarning, consoleOverride: ConsoleOutput.Error);
         }
 
         // Resolve which templates are actually available at runtime (performs

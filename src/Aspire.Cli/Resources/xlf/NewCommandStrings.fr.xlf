@@ -388,8 +388,8 @@
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceTrustPrompt">
-        <source>Templates can run code. Do you trust template source '{0}' ({1})?</source>
-        <target state="new">Templates can run code. Do you trust template source '{0}' ({1})?</target>
+        <source>Do you trust template source '{0}' ({1})?</source>
+        <target state="new">Do you trust template source '{0}' ({1})?</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceUnknownField">

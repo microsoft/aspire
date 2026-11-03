@@ -610,7 +610,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to List named template sources from global configuration without discovering templates..
+        ///   Looks up a localized string similar to List named template sources without discovering templates..
         /// </summary>
         internal static string TemplateSourceListDescription {
             get {
@@ -763,7 +763,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Templates can run code. Do you trust template source &apos;{0}&apos; ({1})?.
+        ///   Looks up a localized string similar to Do you trust template source &apos;{0}&apos; ({1})?.
         /// </summary>
         internal static string TemplateSourceTrustPrompt {
             get {

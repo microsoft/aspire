@@ -4,6 +4,14 @@
 
 For example developer journeys, see [Microsoft first-party config-source scenarios](cli-config-sources-1p-scenarios.md).
 
+**Configuration sources provide optional defaults, not policy enforcement.** A source
+configured on a machine, including through organization-managed environment variables,
+or proposed by employee detection is a suggestion, not a requirement for new applications.
+Developers may decline it, choose another source, or edit the resulting application
+configuration. Opting out or overriding these defaults is supported, not a security
+bypass. This feature does not let administrators restrict which configuration,
+templates, or packages developers may use, and it does not establish a security boundary.
+
 Config sources let organizations provide shared Aspire CLI configuration through a Git-hosted `aspire.config.json`. There are two separate phases:
 
 1. **Acquire configuration:** select a remote source, obtain consent, acquire the file using Git, and merge allowlisted values into the application's `aspire.config.json`. Retain the fetched source and metadata in Aspire home for tracking.
@@ -78,13 +86,15 @@ Configuration file: aspire.config.json
 Configuration ref: default branch
 Source origin: Microsoft employee default
 
+Only use sources you trust. Content from these sources can run code on your machine.
+
 Use configuration from this source?
   Yes
   No, use standard Aspire configuration
 ```
 
 - **Accept:** acquire and validate the remote file, then materialize allowlisted values and a `configSource` binding in the created or initialized project's `aspire.config.json`.
-- **Decline:** continue normally without Git acquisition, and save `"configSource": { "optOut": true }` after successful project creation or initialization.
+- **Decline:** continue normally without Git acquisition or template-source inheritance from that source for the rest of the command, and save `"configSource": { "optOut": true }` after successful project creation or initialization. Independently configured global template sources remain available.
 - **Cancel:** stop without creating the application.
 
 The choice applies to the project being created or initialized, not every project beneath the invoking directory. Existing projects use their saved `configSource` or opt-out without repeating the prompt. An opt-out does not require repository, path, ref, or applied-version fields, and source checks and refresh skip that file without falling back to ancestor or global bindings. Initialization checks the target directory's `aspire.config.json`; it does not reuse an ancestor's binding. An environment variable or employee detection alone never enables a source.
@@ -131,13 +141,36 @@ aspire update --yes --non-interactive --use-config-source false
 
 These options affect only initial adoption; an existing binding or opt-out remains authoritative. Adoption failure leaves the existing configuration unchanged and fails the command rather than silently continuing with another source. `aspire update --config-source` remains a refresh-only operation and never discovers or adopts a source.
 
+### Source trust
+
+Only use sources you trust. Review the configuration and the template repositories,
+package feeds, and documentation it references before accepting it. Source content
+can run code on your machine, and documentation can influence AI agents. The CLI's
+correctness checks do not establish that a source or its content is trustworthy.
+
+Optional defaults do not remove the need to trust a source that is used. Explicit source
+settings must still be valid, and failures acquiring a selected source are reported
+rather than silently falling back to other defaults.
+
+The CLI uses one shared localized warning when offering a configuration source in
+`aspire new` or `aspire init`, refreshing it with `aspire update --config-source`,
+or acquiring configuration for runtime template inheritance. Explicit consent flags
+do not suppress the warning. Repeated configuration acquisition in the same command
+does not repeat it, and background update checks remain silent until their ordinary
+advisory notification.
+
+The same warning is used for Git-backed templates, `aspire template source add`,
+and explicit package sources supplied through `aspire new --source` or
+`aspire add --source`. Warnings go to stderr to preserve machine-readable stdout.
+They do not introduce new confirmation prompts or change existing automation flags.
+
 ### Acquire using Git
 
 Use the user's Git installation and normal credential helpers or SSH authentication. Do not introduce a separate login flow or reuse credentials from employee detection.
 
 Configuration sources and repository templates share [GitClient](../../src/Aspire.Cli/Git/GitClient.cs) for repository initialization, shallow fetches, commit identification, and Git object access. [GitCommandRunner](../../src/Aspire.Cli/Git/GitCommandRunner.cs) owns process capture, environment isolation, failure classification, and lifecycle diagnostics. It reuses the existing tree-aware process-capture infrastructure; lifecycle logs contain no repository addresses, command arguments, or captured output. Callers retain their operation-wide timeout budgets and explicitly select interaction policy. Configuration sources use bare repositories and validate blobs without checkout; templates retain their ref-resolution rules, detached checkouts, and immutable cache publication. Template acquisition continues disabling terminal prompts without changing its existing credential-helper policy.
 
-[ConfigSourceService](../../src/Aspire.Cli/Configuration/ConfigSourceService.cs) owns configuration acquisition and version-check policy directly: each operation has a 30-second budget, versions are blob IDs, and acquisition validates regular-file modes, the 4 MiB size limit, and configuration content before publishing a snapshot.
+[ConfigSourceService](../../src/Aspire.Cli/Configuration/ConfigSourceService.cs) owns configuration acquisition and version-check policy directly: each operation has a 30-second budget, versions are blob IDs, and acquisition validates Git blobs and configuration content before publishing a snapshot.
 
 Resolve the configured selector before initializing the bare acquisition repository, and explicitly select SHA-1 or SHA-256 from the resolved commit ID. This also supports SHA-256 repositories selected by branch or default ref, rather than only by a pinned commit. Ref resolution shares the operation's timeout and interactive or unattended authentication policy. Interactive ref resolution captures the advertised refs on stdout but inherits stderr so Git authentication instructions remain visible immediately.
 
@@ -151,7 +184,7 @@ If a non-interactive fetch blocks waiting for a custom authentication helper, th
 
 For creation, initialization, and explicit updates, acquire the selected branch or exact commit, using the current default branch only when no ref was selected. Resolve a branch to one commit and read the selected configuration file from that snapshot. Validate it before applying values to the project or publishing a tracking copy. Record the configured selector, source-file version, and resolved commit separately; a branch name is not the immutable commit actually fetched. Do not turn the tracking copy into runtime configuration.
 
-Git acquisition and advisory checks support cancellation and have a 30-second timeout. Cancellation terminates the running Git process tree, with bounded waits for exit and output draining. Captured output is also drained with a bounded wait after normal process exit, so descendants holding output pipes cannot block indefinitely; incomplete capture fails rather than returning successful empty output. Read the Git blob without checking out the repository, reject symlink configuration entries, and validate the JSON object and known Aspire settings before use. Configuration files are limited to 4 MiB and cannot declare another configuration source. Normalization must scale with the input's property count and key lengths, rather than repeatedly scanning sibling keys or shifting root entries for each flat key. Report missing Git, inaccessible repositories, missing files, and invalid configuration distinctly; classify authentication failures separately when diagnostics are captured non-interactively. Do not silently substitute standard configuration after the user accepts a source.
+Git acquisition and advisory checks support cancellation and have a 30-second timeout. Cancellation terminates the running Git process tree, with bounded waits for exit and output draining. Captured output is also drained with a bounded wait after normal process exit, so descendants holding output pipes cannot block indefinitely; incomplete capture fails rather than returning successful empty output. Read the Git blob without checking out the repository or interpreting file modes, and validate the JSON object and known Aspire settings before use. Symlink blobs contain their target path as text; they are read as content, not followed, and must pass the same JSON validation as other blobs. There is no configuration-file size limit. These checks ensure correctness, not security enforcement. Reject declarations of another configuration source to reserve recursive sources for future support, rather than silently activating previously ignored declarations after an upgrade. Normalization must scale with the input's property count and key lengths, rather than repeatedly scanning sibling keys or shifting root entries for each flat key. Report missing Git, inaccessible repositories, missing files, and invalid configuration distinctly; classify authentication failures separately when diagnostics are captured non-interactively. Do not silently substitute standard configuration after the user accepts a source.
 
 ### Materialize an allowlist into the app configuration
 
@@ -264,7 +297,7 @@ Directory cleanup failures are logged at debug level without displaying a UI war
 | `aspire new` / `aspire init` initially creating source-bound app configuration | After consent, fetch, validate, and materialize allowed values; save the binding, applied version, and tracking copy |
 | `aspire update --config-source` | Fetch and explicitly apply allowed values to the nearest local configuration with a saved binding, regardless of check age |
 | Other commands scoped to an existing source-bound app, including re-running initialization on an already-bound app | Check for updates when due; never apply source values or rewrite the fetched tracking copy |
-| Runtime template discovery in `aspire new` | With an explicit `ASPIRE_INIT_SOURCE_URL`, acquire the source and publish its tracking snapshot; use only `templateSources` at runtime without saving inherited settings |
+| Runtime template discovery in `aspire new` | With an explicit `ASPIRE_INIT_SOURCE_URL` and no decline during creation consent, acquire the source and publish its tracking snapshot; use only `templateSources` at runtime without saving inherited settings |
 | `aspire template source list` | After shared consent (or explicit `--use-config-source` opt-in for JSON), acquire the selected source and publish its tracking snapshot; overlay only `templateSources`, without materializing project files or saving inherited settings |
 | Commands scoped to an app without a `configSource` in the nearest local configuration, excluding the runtime template operations above | No source check or acquisition, regardless of global bindings |
 | Other global commands not scoped to an app, help, and completion | No source check or acquisition |
@@ -361,11 +394,11 @@ For explicit updates, cover fresh/missing tracking, unchanged source versions, `
 
 Verify that global bindings are ignored during advisory checks and explicit refresh, including valid, malformed, and unavailable sources, no local file, and an unbound nearest modern file that hides a farther ancestor binding. With a saved local binding, verify that only that source is checked or refreshed and that global and unrelated files remain unchanged. Preserve shared-cache freshness coverage across different projects' applied versions.
 
-Keep no-source, declined-source materialization, unrelated global-command, help, and completion paths free of source acquisition/checks. Template search and source listing can acquire explicitly configured runtime template sources as described below. Verify plain `aspire update` does not implicitly materialize changes to saved bindings. Cover consented brownfield adoption from environment and employee candidates, persisted opt-outs, repeat invocations, selected AppHost configuration scope, failure preservation, and unattended updates that skip adoption unless explicit consent is supplied.
+Keep no-source, declined-source materialization, unrelated global-command, help, and completion paths free of source acquisition/checks. Verify that both an interactive decline and `--use-config-source false` suppress runtime template inheritance while preserving independently configured global template sources. Template search and source listing can acquire accepted runtime template sources as described below. Verify plain `aspire update` does not implicitly materialize changes to saved bindings. Cover consented brownfield adoption from environment and employee candidates, persisted opt-outs, repeat invocations, selected AppHost configuration scope, failure preservation, and unattended updates that skip adoption unless explicit consent is supplied.
 
 ## Runtime template sources
 
-When `ASPIRE_INIT_SOURCE_URL` is explicitly set, template discovery/search in interactive `aspire new` also reads the remote file's `templateSources` section. The explicit environment setting authorizes discovery acquisition without an additional consent prompt. Employee detection alone does not enable runtime template discovery inheritance. Optional `ASPIRE_INIT_SOURCE_PATH` and `ASPIRE_INIT_SOURCE_REF` use the same validation, branch/commit selection, Git authentication, timeout, and immutable snapshot cache as configuration acquisition. Search and opted-in listing reuse a snapshot within the invocation; later invocations acquire the selected source again rather than silently falling back to stale cached configuration.
+When `ASPIRE_INIT_SOURCE_URL` is explicitly set, template discovery/search in interactive `aspire new` also reads the remote file's `templateSources` section, unless the developer declined that source during creation consent. An interactive decline or `--use-config-source false` disables its runtime template inheritance for the rest of the command, not just project-file materialization. Discovery does not repeat the consent prompt. Employee detection alone does not enable runtime template discovery inheritance. Optional `ASPIRE_INIT_SOURCE_PATH` and `ASPIRE_INIT_SOURCE_REF` use the same validation, branch/commit selection, Git authentication, timeout, and immutable snapshot cache as configuration acquisition. Search and opted-in listing reuse a snapshot within the invocation; later invocations acquire an accepted source again rather than silently falling back to stale cached configuration.
 
 `aspire template source list` uses the same candidate selection and consent prompt as `aspire new`, including the detected employee candidate when no explicit URL is set. Accepting includes the selected source's template definitions; declining lists only explicit global definitions. In a non-interactive host, an available candidate requires `--use-config-source` or `--use-config-source false`, just as for `aspire new`.
 
@@ -401,7 +434,7 @@ Merge source names case-insensitively with global `templateSources`. The user's 
 
 `aspire template source add` and `remove` edit only explicit global definitions. Adding an alias supplied by the init source creates a global override; removing that override reveals the inherited source again. Removing an inherited-only alias reports that no global source was found. Listing preserves inherited fields without discovering templates or fetching template repositories; acquiring the init configuration itself can require Git/network access.
 
-Never save inherited template sources into the user's global configuration or the generated project's configuration. Unsetting `ASPIRE_INIT_SOURCE_URL` removes the explicit runtime source from subsequent search/list invocations; human-readable listing can still offer an employee-detected candidate through its normal consent flow. On `aspire new`, `--use-config-source` (or explicit `true`) and `--use-config-source false` still control project configuration materialization independently; declining materialization does not disable environment-authorized runtime template discovery inheritance. Accepted initialization and runtime discovery share the invocation's acquired snapshot.
+Never save inherited template sources into the user's global configuration or the generated project's configuration. Unsetting `ASPIRE_INIT_SOURCE_URL` removes the explicit runtime source from subsequent search/list invocations; human-readable listing can still offer an employee-detected candidate through its normal consent flow. On `aspire new`, the creation consent decision controls both project configuration materialization and use of the source for runtime template inheritance. Accepted initialization and runtime discovery share the invocation's acquired snapshot.
 
 ## Phase 2: Acquire content from configuration
 
