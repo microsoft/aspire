@@ -20,7 +20,7 @@ on:
 env:
   # Test project shortname (maps to tests/Aspire.{name}.Tests/ or tests/{name}.Tests/)
   # Examples: Hosting, Core, Dashboard, Components.Common, Cli.EndToEnd
-  TEST_PROJECT: "Hosting"
+  TEST_PROJECT: "Cli.EndToEnd"
 
   # Test filter arguments passed to dotnet test (after the -- separator).
   # Use quotes around wildcard patterns to prevent shell glob expansion.
@@ -28,18 +28,18 @@ env:
   #   --filter-method "*.TestMethodName"
   #   --filter-class "*.TestClassName"
   #   --filter-method "*.Test1" --filter-method "*.Test2"
-  TEST_FILTER: '--filter-method "*.YourTestMethodName"'
+  TEST_FILTER: '--filter-class "*.JavaScriptPublishTests" --filter-not-trait "outerloop=true"'
 
   # Target operating systems (comma-separated)
   # Options: ubuntu-latest, windows-latest, macos-latest
-  TARGET_OSES: "ubuntu-latest,windows-latest"
+  TARGET_OSES: "ubuntu-latest"
 
   # Number of parallel runners per OS
   # Total jobs = RUNNERS_PER_OS × number of OSes (must be ≤ 256)
-  RUNNERS_PER_OS: "3"
+  RUNNERS_PER_OS: "25"
 
   # Number of test iterations each runner executes
-  ITERATIONS_PER_RUNNER: "3"
+  ITERATIONS_PER_RUNNER: "1"
 
 jobs:
 
@@ -226,6 +226,47 @@ jobs:
       - name: Unlock macOS keychain
         if: runner.os == 'macOS'
         uses: ./.github/actions/unlock-macos-keychain
+
+
+      # Both source arms use identical product artifacts: this PR only changes test code.
+      - name: Download pinned CLI archive
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: cli-native-archives-linux-x64
+          path: ${{ github.workspace }}/cli-archives
+          run-id: 41242524837
+          github-token: ${{ github.token }}
+
+      - name: Download pinned repository packages
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: built-nugets
+          path: ${{ github.workspace }}/artifacts/packages
+          run-id: 41242524837
+          github-token: ${{ github.token }}
+
+      - name: Download pinned architecture packages
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: built-nugets-for-linux-x64
+          path: ${{ github.workspace }}/arch-specific
+          run-id: 41242524837
+          github-token: ${{ github.token }}
+
+      - name: Prepare identical archive-mode package inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          shipping="$GITHUB_WORKSPACE/artifacts/packages/Debug/Shipping"
+          mkdir -p "$shipping"
+          find "$GITHUB_WORKSPACE/arch-specific" -maxdepth 2 -name '*.nupkg' -exec cp {} "$shipping/" \;
+          find "$shipping" -maxdepth 1 -name '*.nupkg' -exec cp {} "$GITHUB_WORKSPACE/cli-archives/" \;
+          test "$(find "$GITHUB_WORKSPACE/cli-archives" -name 'aspire-cli-linux-x64-*.tar.gz' | wc -l)" -eq 1
+          for package in Aspire.Hosting Aspire.Hosting.CodeGeneration.TypeScript Aspire.Hosting.JavaScript Aspire.Hosting.Docker; do
+            test "$(find "$shipping" -maxdepth 1 -name "$package.[0-9]*.nupkg" | wc -l)" -ge 1
+          done
+          echo "ASPIRE_E2E_CLI_ARCHIVE_DIR=$GITHUB_WORKSPACE/cli-archives" >> "$GITHUB_ENV"
+          find "$GITHUB_WORKSPACE/cli-archives" -maxdepth 2 -type f | sed -n '1,15p'
 
       - name: Compute test project path
         shell: pwsh
