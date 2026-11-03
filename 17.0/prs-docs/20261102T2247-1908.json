@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "CI workflow change, no matching changelog entry",
+  "mergedAt": "2026-11-02T22:47:54Z",
+  "number": 1908,
+  "runDate": "2026-11-03T00:10:00Z",
+  "status": "excluded",
+  "title": "Publish restore binlogs from the AppHost CI build"
+}

@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Adding an identical bind mount is now a no-op, and a different mount on the same target throws immediately instead of failing later at container start. This fixes container restarts when mounts are added from BeforeResourceStartedEvent handlers.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🧲",
+  "firstMergedAt": "2026-11-02T19:24:17Z",
+  "lastMergedAt": "2026-11-02T19:24:17Z",
+  "name": "WithBindMount is idempotent and rejects conflicting targets",
+  "owner": "davidfowl",
+  "prs": [
+    21546
+  ]
+}

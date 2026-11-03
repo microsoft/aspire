@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Extension product fix for taskkill race",
+  "mergedAt": "2026-11-02T18:45:57Z",
+  "number": 21595,
+  "runDate": "2026-11-03T00:10:00Z",
+  "status": "included",
+  "title": "Accept natural ps leader exit racing a failed Windows taskkill (Fixes #20869)"
+}

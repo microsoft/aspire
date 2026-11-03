@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only or CI-health change with no user-facing impact",
+  "mergedAt": "2026-11-02T23:08:34Z",
+  "number": 21477,
+  "runDate": "2026-11-03T00:10:00Z",
+  "status": "excluded",
+  "title": "Isolate OpenAI model WaitFor test from live status.openai.com health check"
+}

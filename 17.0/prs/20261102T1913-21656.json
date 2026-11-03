@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only or CI-health change with no user-facing impact",
+  "mergedAt": "2026-11-02T19:13:50Z",
+  "number": 21656,
+  "runDate": "2026-11-03T00:10:00Z",
+  "status": "excluded",
+  "title": "Target dashboard resource cards in DashboardUrlTests breakpoint test"
+}

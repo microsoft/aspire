@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "New Entra feature",
+  "mergedAt": "2026-11-02T22:08:55Z",
+  "number": 21498,
+  "runDate": "2026-11-03T00:10:00Z",
+  "status": "included",
+  "title": "Add explicit Entra app-role assignments for managed identities"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only or CI-health change with no user-facing impact",
+  "mergedAt": "2026-11-02T22:36:54Z",
+  "number": 21630,
+  "runDate": "2026-11-03T00:10:00Z",
+  "status": "excluded",
+  "title": "Gate the shared ps refresh in the apphost-tree loading E2E test"
+}

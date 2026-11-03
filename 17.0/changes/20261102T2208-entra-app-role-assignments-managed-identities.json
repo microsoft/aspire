@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Added PublishWithAppRoleAssignment overloads so compute resources can call an Entra-protected API as their user-assigned managed identities with explicit application-role assignments, without a separate app registration or federated credential.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🪪",
+  "firstMergedAt": "2026-11-02T22:08:55Z",
+  "lastMergedAt": "2026-11-02T22:08:55Z",
+  "name": "Entra app-role assignments for managed identities",
+  "owner": "eerhardt",
+  "prs": [
+    21498
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "🧩",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The VS Code extension no longer reports a failure when stopping the `aspire ps` process races with the process exiting on its own and Windows taskkill returns an error.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🪟",
+  "firstMergedAt": "2026-11-02T18:45:57Z",
+  "lastMergedAt": "2026-11-02T18:45:57Z",
+  "name": "Windows ps process stop tolerates natural exit",
+  "owner": "davidfowl",
+  "prs": [
+    21595
+  ]
+}

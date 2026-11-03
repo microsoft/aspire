@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "A resource waiting on several children of the same parent now waits for each distinct dependency once, avoiding repeated 'Waiting for resource' and 'Finished waiting' log entries.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔇",
+  "firstMergedAt": "2026-11-02T22:17:03Z",
+  "lastMergedAt": "2026-11-02T22:17:03Z",
+  "name": "Duplicate 'Waiting for resource' logs removed",
+  "owner": "davidfowl",
+  "prs": [
+    21569
+  ]
+}

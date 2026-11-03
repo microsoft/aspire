@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only or CI-health change with no user-facing impact",
+  "mergedAt": "2026-11-02T22:54:19Z",
+  "number": 21629,
+  "runDate": "2026-11-03T00:10:00Z",
+  "status": "excluded",
+  "title": "Fail fast when a VS Code E2E AppHost debug session ends before startup"
+}

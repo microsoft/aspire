@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Fixes duplicate mount failures",
+  "mergedAt": "2026-11-02T19:24:17Z",
+  "number": 21546,
+  "runDate": "2026-11-03T00:10:00Z",
+  "status": "included",
+  "title": "Make WithBindMount idempotent and fail fast on conflicting mount targets"
+}
