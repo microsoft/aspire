@@ -146,6 +146,25 @@ dotnet test tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj
 dotnet test tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj -- --filter-class "Aspire.Cli.EndToEnd.Tests.AspireNewCommandTests"
 ```
 
+### Vite+ compatibility
+
+`VitePlusTests` creates a C# AppHost with `AddViteApp` and a frontend whose
+`dev` script runs the project-local `vp dev`. The HTTP and HTTPS cases exercise
+Aspire's dependency installer, allocated port, custom Vite+ configuration, and
+development-certificate wrapper. They request the frontend through its advertised
+endpoint and verify HTML transformation, Vite client injection, and TypeScript
+module transformation. No global Vite+ installation is required.
+
+Run both cases against a freshly built Linux CLI/package archive:
+
+```bash
+ASPIRE_E2E_ARCHIVE=/path/to/aspire-linux.tar.gz \
+  dotnet test --project tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj \
+  --no-launch-profile -- \
+  --filter-class "*.VitePlusTests" \
+  --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
+```
+
 ### KinD ACME External Account Binding
 
 `KubernetesDeployWithCertManagerTests` runs the same scenario with C# and TypeScript
