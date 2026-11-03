@@ -335,17 +335,20 @@ suite('Node Debugger Tests', () => {
         assert.deepStrictEqual(clock.sleeps, [100]);
     });
 
-    test('keeps processes from an earlier cleanup attempt unconfirmed when the process listing fails', async () => {
+    test('keeps processes from an earlier cleanup attempt unconfirmed without signalling them when the process listing fails', async () => {
         const argument = '--inspect-wait=127.0.0.1:1234';
+        const killed: number[] = [];
+        // PID 21 may have exited and been reused, so it must not be signalled without a matching listing.
         const result = await stopInspectorWaitingProcesses(argument, createFailingListing(Number.MAX_SAFE_INTEGER, argument), createFakeClock(), {
             launcherPid: 10,
             settleTimeoutMs: 2_000,
-            kill: () => { },
+            kill: pid => killed.push(pid),
             knownProcessIds: [21],
             isSpawnSettled: () => true,
         });
 
         assert.deepStrictEqual(result, { stopped: [], running: [21] });
+        assert.deepStrictEqual(killed, []);
     });
 
     // A Windows listing where a deno.cmd shim (pid 20, a child of the extension host, pid 10) started deno.exe (pid 21).

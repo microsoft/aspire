@@ -183,7 +183,9 @@ export async function stopInspectorWaitingProcesses(
             break;
         }
 
-        for (const pid of running) {
+        // Only signal processes a successful listing matched: a PID from a failed lookup or an earlier attempt
+        // may have exited and been reused by an unrelated process.
+        for (const pid of listed ? running : []) {
             if (!signalled.has(pid)) {
                 signalled.add(pid);
                 try {
