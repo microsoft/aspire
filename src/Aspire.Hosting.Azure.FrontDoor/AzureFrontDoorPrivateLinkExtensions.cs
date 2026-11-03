@@ -50,8 +50,11 @@ public static class AzureFrontDoorPrivateLinkExtensions
     /// For Azure App Service, each origin targets its own website with the <c>sites</c> group ID, not the App Service plan.
     /// Public network access is disabled on all workload websites in the connected environment, including websites that
     /// are not Front Door origins. The separately provisioned Aspire dashboard is unchanged. Existing App Service plans
-    /// are supported because Aspire still provisions the websites. Deployment slots are not supported by Front Door
-    /// Private Link. Unlike Container Apps, App Service does not provide an environment-local ingress route between apps:
+    /// are supported because Aspire still provisions the websites. Front Door Private Link cannot target a deployment slot,
+    /// so with <c>WithDeploymentSlot</c> each origin targets the production site and the slot, which has public access
+    /// disabled and no private endpoint, is not reachable through Front Door: deploy to the slot and swap it into production.
+    /// The production site is created only if it does not exist, so enabling this on a site that already exists doesn't
+    /// disable its public access. Unlike Container Apps, App Service does not provide an environment-local ingress route between apps:
     /// service-to-service callers must use Front Door URLs or configure their own private network access and DNS.
     /// </para>
     /// <para>
@@ -86,8 +89,9 @@ public static class AzureFrontDoorPrivateLinkExtensions
     /// <para>
     /// Public network access to the environment is disabled, so the apps are reachable only through the Front Door. The
     /// Container Apps environment must be a workload profiles environment that Aspire provisions. For App Service,
-    /// each origin targets its own website, all workload websites have public access disabled, and deployment slots
-    /// are not supported. The separately provisioned dashboard is unchanged. App Service callers must use Front Door
+    /// each origin targets its own website, all workload websites have public access disabled, and with deployment slots
+    /// each origin targets the production site; the slot isn't reachable through Front Door, so swap it into production.
+    /// The separately provisioned dashboard is unchanged. App Service callers must use Front Door
     /// URLs or their own private networking for service-to-service traffic.
     /// </para>
     /// <para>
@@ -97,7 +101,7 @@ public static class AzureFrontDoorPrivateLinkExtensions
     /// </ats-remarks>
     /// <exception cref="ArgumentNullException"><paramref name="environment"/> or <paramref name="frontDoor"/> is <see langword="null"/>.</exception>
     /// <exception cref="InvalidOperationException">
-    /// Publishing fails for existing or Express Container Apps environments or App Service deployment slots, when
+    /// Publishing fails for existing or Express Container Apps environments, when
     /// <paramref name="frontDoor"/> has no origin in the environment, and when another Front Door has an origin in the
     /// environment without being connected to it.
     /// </exception>

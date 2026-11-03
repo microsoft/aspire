@@ -200,8 +200,13 @@ first, then supply those website outputs to the Front Door infrastructure.
 Public network access is disabled on **all workload websites** in the connected environment, including websites not added
 as Front Door origins. The separately provisioned Aspire dashboard is unchanged; disable it with `WithDashboard(false)`
 if it is not needed. Existing App Service plans are supported, since Aspire still provisions the websites.
-[Front Door Private Link does not support App Service deployment slots](https://learn.microsoft.com/azure/frontdoor/standard-premium/how-to-enable-private-link-web-app),
-so combining it with `WithDeploymentSlot` fails at publish time.
+
+With `WithDeploymentSlot`, Front Door Private Link can't target a slot
+([documented limitation](https://learn.microsoft.com/azure/frontdoor/standard-premium/how-to-enable-private-link-web-app)),
+so each origin targets the **production** site. The slot has public access disabled and no private endpoint, so it is
+not reachable through Front Door; deploy to the slot and swap it into production, and test the slot before the swap
+over a private network connection. Aspire creates the production site only if it does not exist, so adding Private Link
+to a site that already exists does not disable its public access; change it on the site yourself.
 
 After `aspire deploy`, approve the pending connection on **each website**, not on the plan:
 

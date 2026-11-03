@@ -54,7 +54,8 @@ Add the `Aspire.Hosting.Azure.FrontDoor` integration and connect the App Service
 `environment.WithAzureFrontDoorPrivateLink(frontDoor)`, then add workloads with `frontDoor.WithOrigin(app)`.
 This experimental API disables public network access on all workload websites and uses Front Door Premium with a
 separate managed private endpoint per website. Approve each website's pending private endpoint connection after
-deployment. Existing plans are supported; deployment slots are not.
+deployment. Existing plans are supported. With deployment slots, origins target the production site and the slot is not
+reachable through Front Door; swap it into production.
 
 The separately provisioned Aspire dashboard is unchanged. App-to-app calls require Front Door URLs or private
 networking and DNS; sharing an App Service plan does not bypass the public access restriction.

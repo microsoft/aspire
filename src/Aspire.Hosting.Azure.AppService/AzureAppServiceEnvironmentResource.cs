@@ -73,24 +73,7 @@ public class AzureAppServiceEnvironmentResource :
         return website;
     }
 
-    private AzureAppServiceWebSiteResource GetPrivateLinkWebsite(IResource origin)
-    {
-        ValidatePrivateLink();
-
-        return GetOrCreateWebsite(origin);
-    }
-
-    internal void ValidatePrivateLink()
-    {
-        // Front Door doesn't support App Service slots, even though App Service itself supports private endpoints for them.
-        // https://learn.microsoft.com/azure/frontdoor/standard-premium/how-to-enable-private-link-web-app
-        if (IsPublicNetworkAccessDisabled && (DeploymentSlot is not null || DeploymentSlotParameter is not null))
-        {
-            throw new InvalidOperationException(
-                $"Azure App Service environment '{Name}' uses a deployment slot, which Azure Front Door Private Link does not support. " +
-                "Remove the WithDeploymentSlot call or the WithAzureFrontDoorPrivateLink call.");
-        }
-    }
+    private AzureAppServiceWebSiteResource GetPrivateLinkWebsite(IResource origin) => GetOrCreateWebsite(origin);
 
     /// <summary>
     /// Initializes a new instance of the <see cref="AzureAppServiceEnvironmentResource"/> class.

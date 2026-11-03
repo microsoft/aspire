@@ -365,7 +365,6 @@ internal sealed class AzureAppServiceWebsiteContext(
     public void BuildWebSite(AzureResourceInfrastructure infra)
     {
         _infrastructure = infra;
-        environmentContext.Environment.ValidatePrivateLink();
 
         // Check for deployment slot
         // If specified, update hostnames to endpoint references
@@ -441,6 +440,12 @@ internal sealed class AzureAppServiceWebsiteContext(
                     UserAssignedIdentities = []
                 },
             };
+
+            // The slot has no private endpoint, so without this it would stay reachable over the public Internet.
+            if (environmentContext.Environment.IsPublicNetworkAccessDisabled)
+            {
+                slot.PublicNetworkAccess = "Disabled";
+            }
 
             var slotContainer = new SiteSlotSiteContainer("mainContainerSlot")
             {
@@ -805,7 +810,13 @@ internal sealed class AzureAppServiceWebsiteContext(
 
         AddStickySlotSettings(deploymentSlot is null ? (WebSite)webSite : parentWebSite, stickyConfigNames);
 
-        var websiteResource = (WebSite)webSite;
+        AddWebSiteOutputs(infra, (WebSite)webSite);
+    }
+
+    // Front Door Private Link can only target a production site, never a slot, so these outputs always describe the
+    // production site, even when the app is deployed to a slot.
+    private static void AddWebSiteOutputs(AzureResourceInfrastructure infra, WebSite websiteResource)
+    {
         infra.Add(new ProvisioningOutput("resourceId", typeof(string))
         {
             Value = websiteResource.Id
@@ -888,6 +899,7 @@ internal sealed class AzureAppServiceWebsiteContext(
 
         AddWebSiteNetworkConfig(infra, webSite);
         AddStickySlotSettings(webSite, stickyConfigNames);
+        AddWebSiteOutputs(infra, webSite);
     }
 
     private static void AddWebSiteNetworkConfig(AzureResourceInfrastructure infra, WebSite webSite)

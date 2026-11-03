@@ -86,10 +86,10 @@ public class AzureFrontDoorAppServicePrivateLinkTests(ITestOutputHelper testOutp
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task DeploymentSlotsAreRejected(bool parameterized)
+    public async Task DeploymentSlotsTargetProductionSiteAndStayPrivate(bool parameterized)
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
-        var environment = builder.AddAzureAppServiceEnvironment("env");
+        var environment = builder.AddAzureAppServiceEnvironment("env").WithDashboard(false);
         if (parameterized)
         {
             environment.WithDeploymentSlot(builder.AddParameter("slot"));
@@ -104,8 +104,10 @@ public class AzureFrontDoorAppServicePrivateLinkTests(ITestOutputHelper testOutp
         frontDoor.WithOrigin(api);
 
         using var app = builder.Build();
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => ExecuteBeforeStartHooksAsync(app, default));
-        Assert.Contains("uses a deployment slot, which Azure Front Door Private Link does not support", exception.ToString());
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var (_, bicep) = await GetManifestWithBicep(GetWebsite(api.Resource, environment.Resource));
+        await Verify(bicep, "bicep").UseParameters(parameterized);
     }
 
     [Fact]
