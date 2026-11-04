@@ -266,7 +266,10 @@
     <value>Invalid template setting '{0}': {1}</value>
   </data>
   <data name="TemplateSourceUnknownField" xml:space="preserve">
-    <value>Unknown source field. Use an absolute 'path', or 'repository' with optional 'ref'/'path'.</value>
+    <value>Unknown source field. Use 'path', 'repository', 'ref', or 'displayName'.</value>
+  </data>
+  <data name="TemplateSourceDisplayNameInvalid" xml:space="preserve">
+    <value>Expected a display name string without control characters, or null to use the source alias.</value>
   </data>
   <data name="TemplateSourceStringRequired" xml:space="preserve">
     <value>Expected a nonempty string without control characters.</value>

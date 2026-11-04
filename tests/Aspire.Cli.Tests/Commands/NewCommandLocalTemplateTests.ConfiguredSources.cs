@@ -324,8 +324,8 @@ public partial class NewCommandLocalTemplateTests
         using var provider = services.BuildServiceProvider();
         await WriteConfiguredSourcesAsync(provider, new()
         {
-            ["second-source"] = Path.Combine(workspace.Path, "second"),
-            ["first-source"] = Path.Combine(workspace.Path, "first")
+            ["second-source"] = new { path = Path.Combine(workspace.Path, "second"), displayName = "Company [templates]" },
+            ["first-source"] = new { path = Path.Combine(workspace.Path, "first"), displayName = "Company [templates]" }
         });
 
         var exitCode = await provider.GetRequiredService<RootCommand>()
@@ -335,8 +335,8 @@ public partial class NewCommandLocalTemplateTests
         Assert.Equal(1, selectionCount);
         var groupedChoices = Assert.Single(interaction.GroupedSelectionPromptCalls);
         Assert.Equal(
-            [new SelectionChoiceGroup("source:first-source", "first-source"),
-                new SelectionChoiceGroup("source:second-source", "second-source")],
+            [new SelectionChoiceGroup("source:first-source", "Company [templates]"),
+                new SelectionChoiceGroup("source:second-source", "Company [templates]")],
             groupedChoices.TakeLast(2).Select(choice => choice.Group));
         Assert.Equal(["Same template", "Same template"], groupedChoices.TakeLast(2).Select(choice => choice.DisplayLabel));
         Assert.All(groupedChoices.SkipLast(2), choice =>

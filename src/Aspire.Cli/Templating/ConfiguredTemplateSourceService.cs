@@ -47,7 +47,7 @@ internal sealed class ConfiguredTemplateSourceService(
                 throw new TemplateSourceConfigurationException($"{AspireConfigFile.TemplateSourcesSectionName}.{name}", NewCommandStrings.InvalidConfiguredTemplateSource);
             }
             var source = TemplateSourceConfiguration.Parse(
-                definition.Path, definition.Repository, definition.Ref, $"{AspireConfigFile.TemplateSourcesSectionName}.{name}", requireComplete: true);
+                definition.Path, definition.Repository, definition.Ref, definition.DisplayName, $"{AspireConfigFile.TemplateSourcesSectionName}.{name}", requireComplete: true);
             sources.Add(new(name, source));
         }
 
@@ -91,7 +91,7 @@ internal sealed class ConfiguredTemplateSourceService(
                     .Where(template => template.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
                         template.Description.Contains(query, StringComparison.OrdinalIgnoreCase) ||
                         template.SearchDescription?.Contains(query, StringComparison.OrdinalIgnoreCase) is true)
-                    .Select(template => new ConfiguredTemplate(name, template)));
+                    .Select(template => new ConfiguredTemplate(name, template, configuredSource.DisplayName)));
             }
             catch (Exception ex) when (ex is TemplateDiscoveryException or IOException or UnauthorizedAccessException or ArgumentException)
             {
@@ -110,4 +110,4 @@ internal sealed class ConfiguredTemplateSourceService(
             CultureInfo.CurrentCulture, NewCommandStrings.TemplateSourceSearchFailed, source, message));
 }
 
-internal sealed record ConfiguredTemplate(string SourceName, ITemplate Template);
+internal sealed record ConfiguredTemplate(string SourceName, ITemplate Template, string? SourceDisplayName);

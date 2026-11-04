@@ -394,7 +394,7 @@ internal sealed class NewCommand : BaseCommand
             var label = GetUniqueTemplateLabel(
                 $"{result.Template.Description} ({result.Template.Name}) - {result.SourceName}", labels);
             choices.Add(new(label, result.Template, true,
-                new SelectionChoiceGroup($"source:{result.SourceName}", result.SourceName)));
+                new SelectionChoiceGroup($"source:{result.SourceName}", result.SourceDisplayName ?? result.SourceName)));
         }
     }
 

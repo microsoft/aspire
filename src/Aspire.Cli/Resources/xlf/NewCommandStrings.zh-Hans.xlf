@@ -277,6 +277,11 @@
         <target state="new">Configuration</target>
         <note />
       </trans-unit>
+      <trans-unit id="TemplateSourceDisplayNameInvalid">
+        <source>Expected a display name string without control characters, or null to use the source alias.</source>
+        <target state="new">Expected a display name string without control characters, or null to use the source alias.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="TemplateSourceInvalidRepository">
         <source>Expected an HTTPS or SSH Git repository URL without passwords, tokens, queries, or fragments. SSH usernames are allowed.</source>
         <target state="new">Expected an HTTPS or SSH Git repository URL without passwords, tokens, queries, or fragments. SSH usernames are allowed.</target>
@@ -373,8 +378,8 @@
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceUnknownField">
-        <source>Unknown source field. Use an absolute 'path', or 'repository' with optional 'ref'/'path'.</source>
-        <target state="new">Unknown source field. Use an absolute 'path', or 'repository' with optional 'ref'/'path'.</target>
+        <source>Unknown source field. Use 'path', 'repository', 'ref', or 'displayName'.</source>
+        <target state="new">Unknown source field. Use 'path', 'repository', 'ref', or 'displayName'.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceWriteFailed">

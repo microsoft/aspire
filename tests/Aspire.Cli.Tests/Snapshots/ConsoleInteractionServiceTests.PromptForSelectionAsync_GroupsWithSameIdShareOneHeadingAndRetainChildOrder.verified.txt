@@ -1,9 +1,9 @@
 ﻿[?25lSelect:
 
-  First source
+[1m  First source[0m
   > First template - first
     Second template - first
-  Second source
+[1m  Second source[0m
     Other template - second
 
 (Type to search)

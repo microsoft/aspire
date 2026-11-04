@@ -417,7 +417,8 @@ For example, the remote file can supply:
     "enterprise": {
       "repository": "https://git.acme.example/platform/templates",
       "ref": "template-preview",
-      "path": "templates"
+      "path": "templates",
+      "displayName": "Enterprise templates"
     }
   }
 }
@@ -433,7 +434,9 @@ aspire new
 
 Only `templateSources` participates in this runtime overlay. Other remote settings retain their existing allowlisted project-materialization behavior. Project-level `templateSources` are not used. Sources must satisfy the same complete-definition validation as global template discovery; malformed or inaccessible init configuration fails explicitly. Template repository discovery failures retain the normal per-source warnings.
 
-Merge source names case-insensitively with global `templateSources`. The user's entire global definition wins on a collision: do not retain an inherited `repository`, `ref`, or `path` when the user replaces that source with a local directory or a different repository. Non-colliding global and inherited sources are both searchable and listed, including their branch refs.
+The optional `displayName` supplies the terminal selector's source heading. Missing or blank values use the alias; aliases remain the source and group identity even when headings match.
+
+Merge source names case-insensitively with global `templateSources`. The user's entire global definition wins on a collision: do not retain an inherited `repository`, `ref`, `path`, or `displayName` when the user replaces that source with a local directory or a different repository. Non-colliding global and inherited sources are both searchable and listed, including their branch refs.
 
 `aspire template source add` and `remove` edit only explicit global definitions. Adding an alias supplied by the init source creates a global override; removing that override reveals the inherited source again. Removing an inherited-only alias reports that no global source was found. Listing preserves inherited fields without discovering templates or fetching template repositories; acquiring the init configuration itself can require Git/network access.
 

@@ -356,6 +356,7 @@ internal class ConsoleInteractionService : IInteractionService
                 .PageSize(10)
                 .EnableSearch();
             prompt.Mode = SelectionMode.Leaf;
+            prompt.DisabledStyle = new Style(decoration: Decoration.Bold);
             prompt.SearchHighlightStyle = s_searchHighlightStyle;
             Dictionary<string, ISelectionItem<SelectionPromptItem>> groups = [];
             foreach (var choice in choicesList)

@@ -98,6 +98,28 @@ existing warnings without preventing selection from other sources or built-ins.
 The terminal picker shows nonselectable headings for built-in templates and each
 configured source. Group order follows first appearance in the discovered choices,
 with built-ins first; templates retain their existing ordering within each group.
+Source objects can specify an optional `displayName` for their heading:
+
+```json
+{
+  "templateSources": {
+    "company": {
+      "repository": "https://github.com/example/templates",
+      "displayName": "Company templates"
+    }
+  }
+}
+```
+
+This works in global configuration and accepted init-source definitions. Omitted,
+null, empty, or space-only names fall back to the source alias. Non-string values
+and control characters are rejected. Set an existing source's heading with
+`aspire config set templateSources.company.displayName "Company templates" --global`.
+The alias remains the lookup key and group identity, so identical display names do
+not merge sources or alter explicit invocations, warnings, or flat-client labels.
+Global overrides replace the entire inherited definition, including `displayName`;
+inherited values are never saved to global or generated-project configuration.
+
 Terminal choices do not repeat the source alias or short name under these headings.
 Grouping and terminal labels are optional
 interaction-service presentation metadata: clients such as the VS Code extension

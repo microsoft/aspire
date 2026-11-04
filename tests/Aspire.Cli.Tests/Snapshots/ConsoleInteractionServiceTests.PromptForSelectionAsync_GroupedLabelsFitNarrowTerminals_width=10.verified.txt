@@ -1,6 +1,6 @@
 ﻿[?25lPick:
 
-  Company
+[1m  Company[0m
   > Same…
 
 (Type to

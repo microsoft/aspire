@@ -556,6 +556,15 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Expected a display name string without control characters, or null to use the source alias..
+        /// </summary>
+        internal static string TemplateSourceDisplayNameInvalid {
+            get {
+                return ResourceManager.GetString("TemplateSourceDisplayNameInvalid", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Expected an HTTPS or SSH Git repository URL without passwords, tokens, queries, or fragments. SSH usernames are allowed..
         /// </summary>
         internal static string TemplateSourceInvalidRepository {
@@ -736,7 +745,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Unknown source field. Use an absolute &apos;path&apos;, or &apos;repository&apos; with optional &apos;ref&apos;/&apos;path&apos;..
+        ///   Looks up a localized string similar to Unknown source field. Use &apos;path&apos;, &apos;repository&apos;, &apos;ref&apos;, or &apos;displayName&apos;..
         /// </summary>
         internal static string TemplateSourceUnknownField {
             get {
