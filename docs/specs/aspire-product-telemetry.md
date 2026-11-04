@@ -186,9 +186,9 @@ Dashboard shutdown retains its service-style policy, even when the host's cancel
 | --- | --- |
 | `skill_invocation` | An allowlisted Aspire skill invocation or a read of its `SKILL.md`. |
 | `tool_invocation` | An allowlisted Aspire MCP tool invocation. |
-| `reference_file_read` | A read of a manifest-listed reference under an Aspire skill's `references/` directory. |
+| `reference_file_read` | A read of an allowlisted reference under an Aspire skill's `references/` directory. |
 
-[AgentTelemetryCatalog](../../src/Aspire.Cli/Agents/Hooks/AgentTelemetryCatalog.cs) obtains skill and reference inventories from the embedded bundle's `skill-manifest.json`, without extracting files. The MCP tool inventory comes from the embedded canonical hook. Mutable installed scripts, arbitrary local skills, and non-reference assets do not extend the reporting catalog.
+[AgentTelemetryCatalog](../../src/Aspire.Cli/Agents/Hooks/AgentTelemetryCatalog.cs) obtains the skill, reference, and MCP tool inventories from the canonical telemetry hook embedded in the CLI. User-installed scripts, plugin contents, arbitrary local skills, and non-reference assets do not extend the reporting catalog.
 
 The classifier produces event type, client name, timestamp, and the applicable skill, tool, or skills-relative reference identifier. It includes a session ID only when the incoming value is a GUID. It does not export the raw hook payload, prompts, tool arguments, file contents, or absolute paths.
 

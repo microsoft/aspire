@@ -52,6 +52,61 @@ suite('E2E Mocha reporter', () => {
         }
     });
 
+    test('writes failure details before Mocha finishes the run', () => {
+        const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-e2e-reporter-'));
+        const outputPath = path.join(tempDir, 'mocha.json');
+        const constants = require('mocha/lib/runner').constants;
+        const Base = require('mocha/lib/reporters/base');
+        const previousConsoleLog = Base.consoleLog;
+        Base.consoleLog = () => undefined;
+
+        try {
+            const Reporter = require(path.join(__dirname, '..', '..', 'scripts', 'e2e-mocha-reporter.cjs'));
+            const runner = new EventEmitter() as EventEmitter & { stats: Record<string, unknown>; total: number };
+            runner.stats = { suites: 1, tests: 1, passes: 0, pending: 0, failures: 1, duration: 7 };
+            runner.total = 2;
+
+            new Reporter(runner, { reporterOption: { output: outputPath } });
+            const failedTest = createReporterTest('starts an AppHost');
+            const error = new Error('Stopped waiting for debug AppHost startup');
+
+            runner.emit(constants.EVENT_RUN_BEGIN);
+            runner.emit(constants.EVENT_SUITE_BEGIN, { title: 'Aspire E2E' });
+            runner.emit(constants.EVENT_TEST_FAIL, failedTest, error);
+            runner.emit(constants.EVENT_TEST_END, { ...failedTest, err: error });
+
+            // run-e2e kills Mocha at the shard process timeout, so EVENT_RUN_END is never emitted.
+            const partial = JSON.parse(fs.readFileSync(outputPath, 'utf8'));
+            assert.strictEqual(partial.complete, false);
+            assert.deepStrictEqual(partial.failures.map((failure: { fullTitle: string }) => failure.fullTitle), [
+                'Aspire E2E starts an AppHost',
+            ]);
+            assert.deepStrictEqual(partial.tests.map((test: { fullTitle: string }) => test.fullTitle), [
+                'Aspire E2E starts an AppHost',
+            ]);
+
+            runner.emit(constants.EVENT_SUITE_END);
+            runner.emit(constants.EVENT_RUN_END);
+
+            assert.strictEqual(JSON.parse(fs.readFileSync(outputPath, 'utf8')).complete, true);
+        }
+        finally {
+            Base.consoleLog = previousConsoleLog;
+            removeDirectorySafely(tempDir);
+        }
+    });
+
+    test('never classifies failures from an unfinished Mocha run as advisory', () => {
+        const { hasCompletedMochaTestFailures } = require(path.join(__dirname, '..', '..', 'scripts', 'e2e-mocha-results.cjs'));
+        const failedTest = {
+            title: 'starts an AppHost',
+            fullTitle: 'Aspire E2E starts an AppHost',
+        };
+
+        assert.strictEqual(hasCompletedMochaTestFailures({ complete: false, tests: [failedTest], failures: [failedTest] }), false);
+        assert.strictEqual(hasCompletedMochaTestFailures({ complete: true, tests: [failedTest], failures: [failedTest] }), true);
+    });
+
     test('only classifies completed test failures as advisory', () => {
         const { hasCompletedMochaTestFailures } = require(path.join(__dirname, '..', '..', 'scripts', 'e2e-mocha-results.cjs'));
         const failedTest = {

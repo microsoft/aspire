@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Templating;
 using Aspire.Cli.Tests.TestServices;
@@ -44,6 +45,9 @@ public partial class NewCommandLocalTemplateTests
             .InvokeAsync().DefaultTimeout();
 
         var prompt = Assert.Single(interaction.BooleanPromptCalls);
+        var warning = Assert.Single(interaction.DisplayedMessages);
+        Assert.Equal(SharedCommandStrings.SourceTrustWarning, warning.Message);
+        Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
         Assert.False(prompt.DefaultValue);
         Assert.Equal(string.Format(CultureInfo.CurrentCulture, NewCommandStrings.TemplateSourceTrustPrompt, "company", location),
             prompt.PromptText);
@@ -83,6 +87,9 @@ public partial class NewCommandLocalTemplateTests
 
         Assert.Equal(CliExitCodes.Success, result);
         Assert.Empty(interaction.BooleanPromptCalls);
+        var warning = Assert.Single(interaction.DisplayedMessages);
+        Assert.Equal(SharedCommandStrings.SourceTrustWarning, warning.Message);
+        Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
         Assert.Equal("company", Assert.Single(await provider.GetRequiredService<TemplateSourceStore>().ListAsync(null, default)).Key);
     }
 

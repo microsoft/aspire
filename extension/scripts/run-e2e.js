@@ -2864,6 +2864,10 @@ function printFailureDiagnosticsSummary() {
   console.error(`Workspace diagnostics directory: ${path.relative(extensionRoot, workspaceDiagnosticsDir)}`);
 
   const results = readMochaResults();
+  if (results?.complete === false) {
+    console.error('Mocha did not finish the run; mocha.json contains only the tests that completed before it stopped.');
+  }
+
   if (results?.failures?.length > 0) {
     console.error('Failed E2E tests:');
     for (const failure of results.failures) {

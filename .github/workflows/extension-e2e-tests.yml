@@ -1121,6 +1121,13 @@ jobs:
           # https://docs.github.com/actions/reference/workflows-and-actions/workflow-syntax#exit-codes-and-error-action-preference
           exit 0
 
+      - name: Pin container runtime to Docker (Windows)
+        # Prevents DCP from probing wslc.exe on every AppHost start. See the matching step in
+        # run-tests.yml and https://github.com/microsoft/aspire/issues/21570
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: '"ASPIRE_CONTAINER_RUNTIME=docker" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append'
+
       - name: Run extension E2E tests
         working-directory: extension
         env:
