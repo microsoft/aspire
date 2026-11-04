@@ -407,6 +407,7 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
             await page.Keyboard.PressAsync("Escape");
             await Assertions.Expect(game).ToHaveCountAsync(0);
             await Assertions.Expect(play).ToBeVisibleAsync();
+            Assert.True(await page.EvaluateAsync<bool>("() => document.activeElement?.closest('.graph-game') != null"));
 
             await graphContainer.FocusAsync();
             await page.Keyboard.PressAsync("o");

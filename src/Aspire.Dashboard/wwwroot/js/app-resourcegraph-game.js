@@ -99,7 +99,7 @@ export function computeWorldSize(rectWidth, rectHeight) {
 export function isLaunchKey(event) {
     return (event.key === 'o' || event.key === 'O') &&
         !event.repeat && !event.ctrlKey && !event.metaKey && !event.altKey &&
-        !event.target?.closest?.('a, button, [role="button"], input, textarea, select, [contenteditable=""], [contenteditable="true"]');
+        !event.target?.closest?.('a, button, fluent-button, [role="button"], input, textarea, select, [contenteditable=""], [contenteditable="true"]');
 }
 
 /**
@@ -132,44 +132,56 @@ export class ResourceOutage {
         this.retryDelayMs = retryDelayMs;
         // Stop was requested since the last cleared wave, whatever came of it: one attempt per resource per wave.
         this.attempted = new Set();
-        // Stop was requested and hasn't finished. Counted as down so that the count doesn't dip while it runs.
-        this.stopping = new Set();
         // Stop succeeded and start hasn't, so the resource is really down because of the game.
         this.stopped = new Set();
+        this.stopsCancelled = false;
         this.queues = new Map();
     }
 
     get downCount() {
-        return new Set([...this.stopping, ...this.stopped]).size;
+        return this.stopped.size;
     }
 
-    /** Returns true when this call is the one that stops the resource. */
-    stop(id) {
+    /** Returns true when this call is the one that requests the stop. onStopped runs if the stop succeeds. */
+    stop(id, onStopped) {
         if (this.attempted.has(id)) {
             return false;
         }
         this.attempted.add(id);
-        this.stopping.add(id);
         this.enqueue(id, async () => {
-            // Again here, because an earlier wave's stop of this resource can have finished since this one was requested.
-            this.stopping.add(id);
             if (await this.attempt(id, 'stop') === true) {
                 this.stopped.add(id);
+                onStopped?.();
             }
-            this.stopping.delete(id);
         });
         return true;
     }
 
     restartAll() {
-        for (const id of new Set([...this.stopping, ...this.stopped])) {
+        for (const id of new Set([...this.attempted, ...this.stopped])) {
             this.enqueue(id, async () => {
-                if (this.stopped.has(id) && await this.attempt(id, 'start') === true) {
+                if (!this.stopped.has(id)) {
+                    return;
+                }
+                const started = await this.attempt(id, 'start');
+                if (started === true) {
                     this.stopped.delete(id);
+                } else if (started === null) {
+                    // A failed command has its own toast, but nothing else reports this one. It's what happens when the
+                    // user leaves the page before a queued start has run, because its interop reference is then disposed.
+                    console.warn(`Aspire Outage couldn't start resource '${id}'. It stays stopped.`);
                 }
             });
         }
         this.attempted.clear();
+    }
+
+    /**
+     * The game is over for good: a stop that is still waiting must not take effect behind the user's back, when they may
+     * already be working with the resource again. Starts carry on, since they put resources back.
+     */
+    cancelPendingStops() {
+        this.stopsCancelled = true;
     }
 
     enqueue(id, work) {
@@ -180,6 +192,9 @@ export class ResourceOutage {
 
     async attempt(id, command) {
         for (let i = 0; i < COMMAND_ATTEMPTS; i++) {
+            if (command === 'stop' && this.stopsCancelled) {
+                return null;
+            }
             try {
                 const result = await this.execute(id, command);
                 if (result !== null) {
@@ -822,7 +837,8 @@ const STYLES = `
 .resource-graph-game-buttons { position: absolute; right: 8px; bottom: 6px; display: flex; gap: 6px; opacity: 0; }
 .resource-graph-game-button { font: 700 11px/1 ui-monospace, Menlo, Consolas, monospace; letter-spacing: 1px; text-transform: uppercase; color: #e8e2ff; background: rgba(20, 10, 40, 0.85); border: 2px solid #7455dd; border-radius: 0; padding: 4px 8px; cursor: pointer; }
 .resource-graph-game-button:hover, .resource-graph-game-button:focus-visible { background: #512bd4; outline: none; }
-.resource-graph-game-modes { position: absolute; left: 8px; right: 8px; bottom: 32px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.resource-graph-game-modes { position: absolute; left: 8px; right: 8px; bottom: 32px; display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none; }
+.resource-graph-game-modes .resource-graph-game-button { pointer-events: auto; }
 .resource-graph-game-modes[hidden], .resource-graph-game-note[hidden] { display: none; }
 .resource-graph-game-mode-buttons { display: flex; gap: 6px; }
 .resource-graph-game-modes .resource-graph-game-button[aria-pressed="true"] { background: #512bd4; }
@@ -859,10 +875,6 @@ function restoreStyle(element, style) {
     }
 }
 
-function isEditable(target) {
-    return target instanceof Element && target.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"]') !== null;
-}
-
 // ---------------------------------------------------------------------------------------------------------------------
 // Game
 // ---------------------------------------------------------------------------------------------------------------------
@@ -871,8 +883,9 @@ let activeGame = null;
 const attachedGraphs = new WeakSet();
 
 class ResourceGraphGame {
-    constructor(graph, svg, container, strings, onClosed) {
+    constructor(graph, svg, container, opener, strings, onClosed) {
         this.graph = graph;
+        this.opener = opener;
         this.strings = strings;
         this.svg = svg;
         this.container = container;
@@ -1086,8 +1099,10 @@ class ResourceGraphGame {
     // --- Listeners ---------------------------------------------------------------------------------------------------
 
     addListeners() {
-        window.addEventListener('keydown', this.onKeyDown, true);
-        window.addEventListener('keyup', this.onKeyUp, true);
+        // On the overlay rather than the window: keys belong to the game only while it has focus, so the rest of the
+        // dashboard (search boxes, the resource list, its keyboard shortcuts) keeps working when the user clicks away.
+        this.root.addEventListener('keydown', this.onKeyDown);
+        this.root.addEventListener('keyup', this.onKeyUp);
         window.addEventListener('blur', this.onBlur);
         document.addEventListener('visibilitychange', this.onVisibilityChange);
         this.root.addEventListener('focusout', this.onFocusOut);
@@ -1103,8 +1118,8 @@ class ResourceGraphGame {
     }
 
     removeListeners() {
-        window.removeEventListener('keydown', this.onKeyDown, true);
-        window.removeEventListener('keyup', this.onKeyUp, true);
+        this.root.removeEventListener('keydown', this.onKeyDown);
+        this.root.removeEventListener('keyup', this.onKeyUp);
         window.removeEventListener('blur', this.onBlur);
         document.removeEventListener('visibilitychange', this.onVisibilityChange);
         this.root.removeEventListener('focusout', this.onFocusOut);
@@ -1119,17 +1134,8 @@ class ResourceGraphGame {
         this.root.removeEventListener('mousedown', this.onButtonMouseDown);
     }
 
-    // Keys are only taken while the game has focus, so the rest of the dashboard (search boxes, the resource list,
-    // its keyboard shortcuts) keeps working when the user clicks away from it.
-    ownsKeyboard(event) {
-        if (isEditable(event.target)) {
-            return false;
-        }
-        return this.root.contains(document.activeElement);
-    }
-
     onKeyDown = (event) => {
-        if (this.state === 'morph-out' || !this.ownsKeyboard(event) || event.ctrlKey || event.metaKey || event.altKey) {
+        if (this.state === 'morph-out' || event.ctrlKey || event.metaKey || event.altKey) {
             return;
         }
 
@@ -1207,7 +1213,7 @@ class ResourceGraphGame {
             default:
                 return;
         }
-        if (this.ownsKeyboard(event) && !isButtonTarget(event.target)) {
+        if (!isButtonTarget(event.target)) {
             event.preventDefault();
             event.stopImmediatePropagation();
         }
@@ -1407,6 +1413,7 @@ class ResourceGraphGame {
         if (this.state === 'morph-out' || this.closed) {
             return;
         }
+        this.outage.cancelPendingStops();
         this.recordBestScore();
         this.sound.satelliteStop();
         this.sound.powerDown();
@@ -1442,6 +1449,7 @@ class ResourceGraphGame {
             return;
         }
         this.closed = true;
+        this.outage.cancelPendingStops();
         // Leaving the page or switching layout closes the game without going through quit() or gameOver().
         this.recordBestScore();
         cancelAnimationFrame(this.frameHandle);
@@ -1454,7 +1462,7 @@ class ResourceGraphGame {
         this.root.remove();
         removeStyles();
         if (hadFocus && isShown(this.container)) {
-            this.container.focus({ preventScroll: true });
+            (this.opener ?? this.container).focus({ preventScroll: true });
         }
         this.onClosed();
     }
@@ -1650,8 +1658,12 @@ class ResourceGraphGame {
         this.explode(enemy.resource.sprite, position.x, position.y, 1);
         this.flashes.push({ x: position.x, y: position.y, life: 0.12 });
         const name = shorten(enemy.resource.label, 12);
-        const stopped = this.hardcore && !enemy.resource.placeholder && this.outage.stop(enemy.resource.id);
-        this.addText(`${name}: ${stopped ? 'STOPPED' : pick(DESTROYED_STATES)}`, position.x + (SPRITE / 2), position.y, enemy.resource.color);
+        const x = position.x + (SPRITE / 2);
+        // In hard core the text describes the real resource, so STOPPED has to wait for the command's outcome.
+        const requested = this.hardcore && !enemy.resource.placeholder &&
+            this.outage.stop(enemy.resource.id, () => this.addText(`${name}: STOPPED`, x, position.y, enemy.resource.color));
+        const state = requested ? 'STOPPING...' : this.hardcore ? 'HIT' : pick(DESTROYED_STATES);
+        this.addText(`${name}: ${state}`, x, position.y, enemy.resource.color);
         this.sound.enemyExplosion();
     }
 
@@ -2046,6 +2058,15 @@ class ResourceGraphGame {
         ctx.fillRect(left + width - 1, top, 1, height);
     }
 
+    // The mode controls are DOM, sized in CSS pixels, so how much of the playfield they take depends on its scale.
+    modesTop() {
+        return this.screenToWorld(0, this.modes.getBoundingClientRect().top).y;
+    }
+
+    panelTop(height) {
+        return Math.max(HUD_HEIGHT + 2, Math.min(Math.round((this.height - height) / 2), Math.round(this.modesTop() - height - 2)));
+    }
+
     renderOverlay() {
         const ctx = this.ctx;
         const cx = this.width / 2;
@@ -2053,10 +2074,11 @@ class ResourceGraphGame {
 
         switch (this.state) {
             case 'title': {
-                const shown = this.roster.slice(0, 5);
+                // On a short graph the panel lists fewer resources, to end above the mode controls.
+                const rows = clamp(Math.floor((this.modesTop() - HUD_HEIGHT - 2 - 136) / 14), 0, 5);
+                const shown = this.roster.slice(0, rows);
                 const height = 126 + (shown.length * 14) + (this.roster.length > shown.length ? 10 : 0);
-                // A little above the center, to leave room for the mode buttons under the panel.
-                const top = Math.max(HUD_HEIGHT + 2, Math.round((this.height - height) / 2) - 20);
+                const top = this.panelTop(height);
                 this.renderPanel(top, height);
                 drawText(ctx, 'ASPIRE', cx, top + 8, '#dcd5f6', 2, 'center');
                 drawText(ctx, 'OUTAGE', cx, top + 26, '#9780e5', 2, 'center');
@@ -2095,7 +2117,8 @@ class ResourceGraphGame {
             case 'paused':
                 this.renderPanel(Math.round(this.height / 2) - 20, 40);
                 drawText(ctx, 'PAUSED', cx, Math.round(this.height / 2) - 12, '#ffffff', 2, 'center');
-                drawText(ctx, 'P TO RESUME', cx, Math.round(this.height / 2) + 6, '#b9aaee', 1, 'center');
+                // P only reaches the game while it has focus. Otherwise it's the dashboard's shortcut to the parameters page.
+                drawText(ctx, this.root.contains(document.activeElement) ? 'P OR CLICK TO RESUME' : 'CLICK TO RESUME', cx, Math.round(this.height / 2) + 6, '#b9aaee', 1, 'center');
                 break;
             case 'cleared':
                 drawText(ctx, `WAVE ${this.wave} CLEARED`, cx, Math.round(this.height * 0.45), '#7dffa0', 2, 'center');
@@ -2103,7 +2126,7 @@ class ResourceGraphGame {
                 drawText(ctx, `BONUS +${50 * this.wave}`, cx, Math.round(this.height * 0.45) + 32, '#ffd36b', 1, 'center');
                 break;
             case 'gameover': {
-                const top = Math.round((this.height - 100) / 2);
+                const top = this.panelTop(100);
                 this.renderPanel(top, 100);
                 drawText(ctx, 'GAME OVER', cx, top + 8, '#ff5f5f', 2, 'center');
                 drawText(ctx, this.gameOverMessage, cx, top + 28, '#b9aaee', 1, 'center');
@@ -2281,12 +2304,12 @@ export function attachResourceGraphGame(graph, strings) {
         if (!activeGame && svg.isConnected && isLaunchKey(event)) {
             event.preventDefault();
             event.stopPropagation();
-            launchGame(graph, svg, strings);
+            launchGame(graph, svg, null, strings);
         }
     };
-    const onPlayClick = () => {
+    const onPlayClick = (event) => {
         if (svg.isConnected) {
-            launchGame(graph, svg, strings);
+            launchGame(graph, svg, event.currentTarget, strings);
         }
     };
 
@@ -2294,7 +2317,7 @@ export function attachResourceGraphGame(graph, strings) {
     container.querySelector('.graph-game')?.addEventListener('click', onPlayClick);
 }
 
-function launchGame(graph, svg, strings) {
+function launchGame(graph, svg, opener, strings) {
     if (activeGame) {
         return;
     }
@@ -2302,7 +2325,7 @@ function launchGame(graph, svg, strings) {
     if (!container || !isShown(container)) {
         return;
     }
-    activeGame = new ResourceGraphGame(graph, svg, container, strings, () => {
+    activeGame = new ResourceGraphGame(graph, svg, container, opener, strings, () => {
         activeGame = null;
     });
 }

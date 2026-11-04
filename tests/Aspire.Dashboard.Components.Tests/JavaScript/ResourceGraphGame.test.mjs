@@ -167,8 +167,8 @@ test("hard core stops a resource once however many of its enemies are destroyed"
     assert.equal(outage.stop("api"), true);
     assert.equal(outage.stop("api"), false);
     assert.equal(outage.stop("cache"), true);
-    assert.equal(outage.downCount, 2);
     await outage.whenIdle();
+    assert.equal(outage.downCount, 2);
     assert.deepEqual(calls, ["stop api", "stop cache"]);
 });
 
@@ -176,7 +176,6 @@ test("hard core restarts what it stopped when the wave is cleared, after the sto
     const { outage, calls } = outageWith();
     outage.stop("api");
     outage.restartAll();
-    assert.equal(outage.downCount, 1);
     await outage.whenIdle();
     assert.equal(outage.downCount, 0);
     assert.deepEqual(calls, ["stop api", "start api"]);
@@ -276,6 +275,49 @@ test("hard core leaves alone a resource it couldn't stop", async () => {
     assert.equal(calls.length, 10);
 });
 
+test("hard core only counts and announces a resource once its stop has succeeded", async () => {
+    let finishStop;
+    let stopped = 0;
+    const outage = new ResourceOutage(() => new Promise(resolve => { finishStop = resolve; }), () => { }, 0);
+    outage.stop("api", () => { stopped++; });
+    await new Promise(resolve => setTimeout(resolve));
+    assert.equal(outage.downCount, 0);
+    assert.equal(stopped, 0);
+
+    finishStop(true);
+    await outage.whenIdle();
+    assert.equal(outage.downCount, 1);
+    assert.equal(stopped, 1);
+});
+
+test("hard core gives up waiting stops when the game closes, but not starts", async () => {
+    const { outage, calls } = outageWith((_, command, list) => command === "stop" && list.length < 3 ? null : true);
+    outage.stop("api");
+    outage.stop("cache");
+    await new Promise(resolve => setTimeout(resolve));
+    outage.cancelPendingStops();
+    await outage.whenIdle();
+    assert.ok(calls.length < 10, "stops were tried again after the game closed");
+
+    const running = outageWith();
+    running.outage.stop("api");
+    await running.outage.whenIdle();
+    running.outage.cancelPendingStops();
+    running.outage.restartAll();
+    await running.outage.whenIdle();
+    assert.deepEqual(running.calls, ["stop api", "start api"]);
+});
+
+test("hard core logs a start it could never run", async (t) => {
+    const warn = t.mock.method(console, "warn", () => { });
+    const { outage } = outageWith((_, command) => command === "stop" ? true : null);
+    outage.stop("api");
+    outage.restartAll();
+    await outage.whenIdle();
+    assert.equal(warn.mock.callCount(), 1);
+    assert.equal(outage.downCount, 1);
+});
+
 test("hard core survives a page that went away", async () => {
     const outage = new ResourceOutage(async () => { throw new Error("circuit disconnected"); }, () => { }, 0);
     outage.stop("api");
@@ -311,6 +353,7 @@ test("the launch key only applies to the graph itself", () => {
     assert.equal(isLaunchKey({ key: "o", repeat: true, target: {} }), false);
     assert.equal(isLaunchKey({ key: "o", ctrlKey: true, target: {} }), false);
     assert.equal(isLaunchKey({ key: "o", target: { closest } }), false);
+    assert.equal(isLaunchKey({ key: "o", target: { closest: (selector) => selector.split(", ").includes("fluent-button") ? {} : null } }), false);
 });
 
 test("Enter and Space stay with a focused button", () => {
