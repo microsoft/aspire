@@ -29,6 +29,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var feed = workspace.CreateDirectory("feed");
         var ids = Enumerable.Range(0, packageCount).Select(index => $"Paging.Package{index:D4}").ToArray();
+        var expectedIds = ids.ToHashSet(StringComparer.Ordinal);
         foreach (var id in ids)
         {
             NuGetTestHelper.CreatePackage(feed, id, "1.0.0", new Dictionary<string, string>());
@@ -40,24 +41,22 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
             MachineWideSettingsFactory = () => new TestMachineWideSettings(NullSettings.Instance)
         };
 
-        foreach (var take in new[] { 3500, 4000 })
+        foreach (var (take, expectedLimitReached) in new[] { (3500, false), (4000, false), (int.MaxValue, expectLimitReached) })
         {
-            var limitedResults = await client.SearchAsync(
+            var results = await client.SearchAsync(
                 "Paging.Package", prerelease: true, take,
                 explicitSources: [feed.FullName], nugetConfigPath: null,
                 workingDirectory: workspace.Path, TestContext.Current.CancellationToken);
 
-            Assert.Equal(ids.Take(take), limitedResults.Packages.Select(package => package.Id));
-            Assert.False(limitedResults.LimitReached);
+            // Local feeds limit results before the client sorts them, so the bounded subset
+            // is not guaranteed to contain the first IDs in lexicographic order.
+            var packageIds = results.Packages.Select(package => package.Id).ToArray();
+            Assert.Equal(Math.Min(packageCount, Math.Min(take, 4000)), packageIds.Length);
+            Assert.Distinct(packageIds);
+            Assert.All(packageIds, packageId => Assert.Contains(packageId, expectedIds));
+            Assert.Equal(packageIds.Order(), packageIds);
+            Assert.Equal(expectedLimitReached, results.LimitReached);
         }
-
-        var results = await client.SearchAsync(
-            "Paging.Package", prerelease: true, take: int.MaxValue,
-            explicitSources: [feed.FullName], nugetConfigPath: null,
-            workingDirectory: workspace.Path, TestContext.Current.CancellationToken);
-
-        Assert.Equal(ids.Take(4000), results.Packages.Select(package => package.Id));
-        Assert.Equal(expectLimitReached, results.LimitReached);
     }
 
     [Fact]
