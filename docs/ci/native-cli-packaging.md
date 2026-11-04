@@ -37,6 +37,10 @@ The tool packaging flow therefore extracts the signed `aspire` binary from the s
 
 Linux native jobs do not sign ELF binaries in `build_sign_native`. For Linux, extracting from the native archive gives the same unsigned ELF payload, and the resulting NuGet packages are signed later as packages by the main Windows build.
 
+## Native AOT Dashboard package signing
+
+All seven Dashboard SDK NuGet packages follow the CLI package-signing path: `assemble` stages them together in `Shipping` before its Windows signing pass. There is no second Dashboard staging pass after signing. This ensures Linux packages receive NuGet signatures even though Linux native jobs skip ELF signing. Assembly verifies every staged NuGet release package's signature before publishing the build artifacts, including Dashboard, CLI, and managed packages. The unsigned `*.symbols.nupkg` files also staged in `Shipping` are excluded because they are symbol-server inputs, not NuGet release packages.
+
 ## Nix flake packaging
 
 The root `flake.nix` packages the stable Aspire CLI from the versioned GitHub release archive URLs and hashes tracked in `eng/nix/versions.json`. It is a binary package, not a Nix source build of this repository. This keeps the Nix package aligned with the same canonical signed native archive consumed by the other installers.

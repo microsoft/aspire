@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Git;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Templating;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
@@ -109,10 +110,8 @@ public partial class NewCommandLocalTemplateTests
         Assert.Equal(1, git.Calls);
     }
 
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task InitConfigSources_SearchAndGenerateWithGlobalSourcesWithoutPersistingInheritedSources(bool materialize)
+    [Fact]
+    public async Task InitConfigSources_SearchAndGenerateWithGlobalSourcesWithoutPersistingInheritedSources()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await CreateSearchTemplateAsync(workspace, "enterprise", "enterprise", "Enterprise", "Enterprise");
@@ -139,6 +138,7 @@ public partial class NewCommandLocalTemplateTests
             ReadConfiguration = (_, _) => Task.FromResult(("version-1", JsonNode.Parse($$"""
                 {
                   "templateSources": { "enterprise": { "path": {{JsonSerializer.Serialize(Path.Combine(workspace.Path, "enterprise"))}} } },
+                  "skillSources": { "team": { "repository": "example/team", "plugins": ["deployment"] } },
                   "docs": { "llmsTxtUrl": "https://docs.example/llms.txt" }
                 }
                 """)!.AsObject()))
@@ -149,7 +149,7 @@ public partial class NewCommandLocalTemplateTests
         var originalGlobal = await File.ReadAllTextAsync(globalPath);
 
         var result = await provider.GetRequiredService<RootCommand>()
-            .Parse($"new --use-config-source{(materialize ? "" : " false")} --name Demo --output out --suppress-agent-init")
+            .Parse("new --use-config-source --name Demo --output out --suppress-agent-init")
             .InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, result);
@@ -160,6 +160,57 @@ public partial class NewCommandLocalTemplateTests
         var projectConfig = Path.Combine(workspace.Path, "out", AspireConfigFile.FileName);
         await Verify(await File.ReadAllTextAsync(projectConfig), "json");
         Assert.Equal("Enterprise: Hello", await File.ReadAllTextAsync(Path.Combine(workspace.Path, "out", "Demo.txt")));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(false)]
+    public async Task InitConfigSources_DeclinedSourceDoesNotAffectGlobalTemplateDiscovery(bool? consent)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await CreateSearchTemplateAsync(workspace, "personal", "personal", "Personal", "Personal");
+        var interaction = new TestInteractionService();
+        interaction.SetupStringPromptResponse("");
+        interaction.SetupStringPromptResponse("Hello");
+        var selectionCount = 0;
+        interaction.PromptForSelectionCallback = (prompt, choices, formatter, _) =>
+        {
+            if (prompt == ConfigSourceStrings.UseSourcePrompt)
+            {
+                return ConfigSourceStrings.Decline;
+            }
+            var options = choices.Cast<object>().ToArray();
+            if (++selectionCount == 1)
+            {
+                Assert.Equal(NewCommandStrings.SearchForMoreTemplates, formatter(options[^1]));
+                return options[^1];
+            }
+            Assert.Equal(
+                ["Personal (personal) - personal", NewCommandStrings.SearchTemplatesAgain, NewCommandStrings.BackToDefaultTemplates],
+                options.Select(formatter));
+            return options[0];
+        };
+        var git = new TestConfigSourceRepository
+        {
+            ReadConfiguration = (_, _) => throw new InvalidOperationException("Declined configuration must not be acquired.")
+        };
+        using var provider = CreateInheritedTemplateServices(workspace, interaction, git, interactive: true).BuildServiceProvider();
+        await WriteConfiguredSourcesAsync(provider, new() { ["personal"] = Path.Combine(workspace.Path, "personal") });
+        var globalPath = provider.GetRequiredService<IConfigurationService>().GetSettingsFilePath(true);
+        var originalGlobal = await File.ReadAllTextAsync(globalPath);
+
+        var result = await provider.GetRequiredService<RootCommand>()
+            .Parse($"new {(consent is false ? "--use-config-source false " : "")}--name Demo --output out --suppress-agent-init")
+            .InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, result);
+        Assert.Empty(interaction.DisplayedErrors);
+        Assert.Equal(2, selectionCount);
+        Assert.Equal(0, git.Calls);
+        Assert.Empty(git.FetchModes);
+        Assert.Equal(originalGlobal, await File.ReadAllTextAsync(globalPath));
+        await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "out", AspireConfigFile.FileName)), "json");
+        Assert.Equal("Personal: Hello", await File.ReadAllTextAsync(Path.Combine(workspace.Path, "out", "Demo.txt")));
     }
 
     [Fact]

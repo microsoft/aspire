@@ -54,6 +54,10 @@
 /* Condense to the key icon and the count when the header row is short on room, so the notice stays readable and the
    title and layout switcher keep their space. */
 @container (max-width: 700px) {
+    .overview-header-actions:has(.missing-parameters-link) ::deep .icon-toggle-label {
+        display: none;
+    }
+
     .missing-parameters-label {
         display: none;
     }
@@ -66,6 +70,12 @@
 
     .missing-parameters-link {
         padding: 0 8px;
+    }
+}
+
+@media (max-width: 480px) {
+    .overview-header-actions ::deep .icon-toggle-label {
+        display: none;
     }
 }
 

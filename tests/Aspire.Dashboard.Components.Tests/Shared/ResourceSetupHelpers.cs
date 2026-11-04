@@ -24,18 +24,20 @@ namespace Aspire.Dashboard.Components.Tests.Shared;
 
 internal static class ResourceSetupHelpers
 {
-    public static void SetupResourceOverview(BunitContext context, ViewportInformation viewport, IDashboardClient dashboardClient)
+    public static void SetupResourceOverview(BunitContext context, ViewportInformation viewport, IDashboardClient dashboardClient,
+        Action<IServiceCollection>? configureServices = null)
     {
         context.Services.AddSingleton<IVolumePathLauncher, VolumePathLauncher>();
         context.Services.AddSingleton<IInstrumentUnitResolver, TestInstrumentUnitResolver>();
         context.Services.AddSingleton<ConsoleLogsManager>();
-        SetupResourcesLayout(context, viewport, dashboardClient);
+        SetupResourcesLayout(context, viewport, dashboardClient, configureServices);
         context.JSInterop.Setup<string>("Blazor._internal.PageTitle.getAndRemoveExistingTitle", _ => true).SetResult(string.Empty);
     }
 
-    public static void SetupResourcesLayout(BunitContext context, ViewportInformation viewport, IDashboardClient dashboardClient)
+    public static void SetupResourcesLayout(BunitContext context, ViewportInformation viewport, IDashboardClient dashboardClient,
+        Action<IServiceCollection>? configureServices = null)
     {
-        SetupResourcesPage(context, viewport, dashboardClient);
+        SetupResourcesPage(context, viewport, dashboardClient, configureServices: configureServices);
         context.Services.AddLogging();
         FluentUISetupHelpers.SetupFluentTextField(context);
         context.JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Utilities.Attributes.observeAttributeChange", _ => true).SetVoidResult();
@@ -45,10 +47,19 @@ internal static class ResourceSetupHelpers
         var module = context.JSInterop.SetupModule(invocation => invocation.Arguments[0] is string path && path.Contains(nameof(ResourcesLayout), StringComparison.Ordinal));
         module.SetupVoid("registerPaneResizer", _ => true).SetVoidResult();
         module.SetupVoid("unregisterPaneResizer", _ => true).SetVoidResult();
-        module.Setup<bool>("fitPaneToActions", _ => true).SetResult(true);
+        module.Setup<bool>("usesCommandSelectionModifier", _ => true).SetResult(false);
         module.SetupVoid("setTabListAriaLabel", _ => true).SetVoidResult();
+        module.Setup<bool>("isResourceTabFocused", _ => true).SetResult(true);
         module.SetupVoid("registerResourceOrdering", _ => true).SetVoidResult();
         module.SetupVoid("unregisterResourceOrdering", _ => true).SetVoidResult();
+        module.SetupVoid("registerResourceContextMenu", _ => true).SetVoidResult();
+        module.SetupVoid("unregisterResourceContextMenu", _ => true).SetVoidResult();
+        module.SetupVoid("registerPaneActivityVisibility", _ => true).SetVoidResult();
+        module.SetupVoid("unregisterPaneActivityVisibility", _ => true).SetVoidResult();
+        module.SetupVoid("restoreResourceContextMenuFocus", _ => true).SetVoidResult();
+        module.SetupVoid("startPaneSelectionReveal", _ => true).SetVoidResult();
+        module.SetupVoid("focusPaneSelectionReveal", _ => true).SetVoidResult();
+        module.SetupVoid("cancelPaneSelectionReveal", _ => true).SetVoidResult();
         module.SetupVoid("registerTabOverflow", _ => true).SetVoidResult();
         module.SetupVoid("unregisterTabOverflow", _ => true).SetVoidResult();
     }
@@ -80,7 +91,8 @@ internal static class ResourceSetupHelpers
         IDashboardClient? dashboardClient = null,
         ILocalStorage? localStorage = null,
         ISessionStorage? sessionStorage = null,
-        IDialogService? dialogService = null)
+        IDialogService? dialogService = null,
+        Action<IServiceCollection>? configureServices = null)
     {
         FluentUISetupHelpers.SetupFluentDivider(context);
         FluentUISetupHelpers.SetupFluentInputLabel(context);
@@ -108,6 +120,8 @@ internal static class ResourceSetupHelpers
         {
             context.Services.AddSingleton(dialogService);
         }
+
+        configureServices?.Invoke(context.Services);
 
         var dimensionManager = context.Services.GetRequiredService<DimensionManager>();
         dimensionManager.InvokeOnViewportInformationChanged(viewport);

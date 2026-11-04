@@ -1,0 +1,16 @@
+﻿{
+  "skillSources": {
+    "team": {
+      "repository": "example/team",
+      "plugins": [
+        "deployment"
+      ]
+    }
+  },
+  "configSource": {
+    "repository": "https://git.example/configuration",
+    "path": "aspire.config.json",
+    "ref": "config-preview",
+    "appliedVersion": "version-1"
+  }
+}

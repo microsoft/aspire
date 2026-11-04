@@ -76,7 +76,7 @@ public sealed class ResourcePaneFilterTests : PlaywrightTestsBase<ResourcePaneFi
             await Assertions.Expect(filter).ToBeVisibleAsync();
             await page.Locator(".resource-pane-search").ClickAsync();
             await Assertions.Expect(filter).ToBeHiddenAsync();
-            await Assertions.Expect(page.Locator("h1.resource-title")).ToHaveTextAsync("TestResource");
+            await Assertions.Expect(page.Locator(".resource-row[data-resource-name='TestResource'] .resource-row-link")).ToHaveAttributeAsync("aria-current", "page");
             Assert.EndsWith("/resources/TestResource", page.Url, StringComparison.Ordinal);
         });
     }
@@ -208,12 +208,11 @@ public sealed class ResourcePaneLongFilterTests : PlaywrightTestsBase<ResourcePa
             foreach (var viewport in new[] { (Width: 1440, Height: 900), (Width: 768, Height: 1024), (Width: 390, Height: 844) })
             {
                 await page.SetViewportSizeAsync(viewport.Width, viewport.Height);
-                // Wait for the responsive header: the throttled resize callback can leave desktop markup briefly visible.
-                var drawerButton = page.Locator("h1.resource-title").GetByRole(AriaRole.Button, new() { Name = "resource-00", Exact = true });
-                await Assertions.Expect(drawerButton).ToHaveCountAsync(viewport.Width <= 768 ? 1 : 0);
-                if (viewport.Width <= 768 && await drawerButton.GetAttributeAsync("aria-expanded") == "false")
+                // The narrow header keeps its tabs while the drawer is open, but removes its title button.
+                await Assertions.Expect(page.Locator(".resource-context-header > .resource-tabs")).ToHaveCountAsync(viewport.Width <= 768 ? 1 : 0);
+                if (viewport.Width <= 768 && !await page.Locator(".resource-pane").IsVisibleAsync())
                 {
-                    await drawerButton.ClickAsync();
+                    await page.Locator("h1.resource-title").GetByRole(AriaRole.Button, new() { Name = "resource-00", Exact = true }).ClickAsync();
                 }
                 await Assertions.Expect(trigger).ToBeVisibleAsync();
                 if (!await filter.IsVisibleAsync())
@@ -226,7 +225,7 @@ public sealed class ResourcePaneLongFilterTests : PlaywrightTestsBase<ResourcePa
             await filter.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.ResourcePaneFilterDone, Exact = true }).ClickAsync();
             await Assertions.Expect(filter).ToBeHiddenAsync();
             await Assertions.Expect(trigger).ToHaveAttributeAsync("aria-expanded", "false");
-            await Assertions.Expect(page.Locator("h1.resource-title")).ToHaveTextAsync("resource-00");
+            await Assertions.Expect(page.Locator(".resource-row[data-resource-name='resource-00'] .resource-row-link")).ToHaveAttributeAsync("aria-current", "page");
             Assert.EndsWith("/resources/resource-00", page.Url, StringComparison.Ordinal);
         });
     }

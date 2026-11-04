@@ -209,7 +209,8 @@ public sealed class TestSelector
             // path_rules: a glob set -> a target set (test: / job: / group / ALL).
             foreach (var rule in map.PathRules)
             {
-                if (rule.Paths.Any(g => TriggerMap.GlobMatches(g, file)))
+                if (rule.Paths.Any(g => TriggerMap.GlobMatches(g, file)) &&
+                    !rule.ExcludePaths.Any(g => TriggerMap.GlobMatches(g, file)))
                 {
                     ApplyTargets(rule.Targets, map, _allTestProjects, testCauses, jobCauses, dotnetTestsCauses, ref selectsAll, ref reason,
                         new Cause(CauseKind.PathRule, file, rule.Reason));

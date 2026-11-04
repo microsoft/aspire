@@ -7,6 +7,7 @@ using System.IO.Hashing;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
@@ -31,7 +32,7 @@ internal sealed class ConfigSourceService(
     ILogger<ConfigSourceService> logger) : IDisposable
 {
     internal const string MicrosoftRepository = "https://msft.ghe.com/coreai/aspire-1p-init";
-    private static readonly string[][] s_allowedSettings = [["docs", "llmsTxtUrl"], ["docs", "api", "sitemapUrl"]];
+    private static readonly string[] s_allowedSettings = [SkillSource.SectionName];
     private static readonly TimeSpan s_gitTimeout = TimeSpan.FromSeconds(30);
     private readonly Dictionary<ConfigSourceIdentity, ConfigSourceSnapshot> _snapshots = [];
     private string? _projectDirectory;
@@ -40,6 +41,8 @@ internal sealed class ConfigSourceService(
     private readonly Lock _checksLock = new();
     private readonly CancellationTokenSource _stopping = new();
     private Task? _check;
+    private bool _sourceTrustWarningDisplayed;
+    private bool _sourceDeclined;
 
     internal static readonly Option<bool?> s_useSourceOption = new("--use-config-source")
     {
@@ -139,7 +142,7 @@ internal sealed class ConfigSourceService(
     }
 
     /// <summary>
-    /// Resolves a candidate configuration source from the environment or employee detection,
+    /// Resolves an optional configuration source from the environment or employee detection,
     /// obtains consent, and acquires the accepted source.
     /// </summary>
     public Task<ConfigSource?> ResolveAndAcquireConfigSourceAsync(ParseResult parseResult, CancellationToken cancellationToken) =>
@@ -175,7 +178,11 @@ internal sealed class ConfigSourceService(
         interaction.DisplayMessage(KnownEmojis.Information, string.Format(CultureInfo.CurrentCulture, ConfigSourceStrings.Candidate,
             source.Repository, source.Path, source.Ref ?? ConfigSourceStrings.DefaultBranch,
             explicitSource ? CliConfigNames.InitSourceUrl : ConfigSourceStrings.EmployeeOrigin));
+        DisplaySourceTrustWarning();
 
+        // Machine-configured or detected sources suggest useful defaults for new apps;
+        // they do not enforce organizational policy or establish a security boundary.
+        // Declining the source is supported, not a security bypass.
         var accepted = parseResult.GetValue(s_useSourceOption);
         if (accepted is null)
         {
@@ -190,7 +197,8 @@ internal sealed class ConfigSourceService(
                 cancellationToken: cancellationToken);
             accepted = selection == ConfigSourceStrings.Accept;
         }
-        if (!accepted.Value)
+        _sourceDeclined = !accepted.Value;
+        if (_sourceDeclined)
         {
             return new ConfigSource { OptOut = true };
         }
@@ -205,7 +213,7 @@ internal sealed class ConfigSourceService(
         EnsureSameProject(projectDirectory);
         var path = Path.Combine(projectDirectory.FullName, AspireConfigFile.FileName);
         var configuration = await ReadProjectConfigurationAsync(path, cancellationToken);
-        if (configuration is not null && TryGetValue(configuration, [ConfigSource.SectionName], out _))
+        if (configuration is not null && configuration.ContainsKey(GetKey(configuration, ConfigSource.SectionName)))
         {
             CheckForConfigSourceUpdates(projectDirectory, cancellationToken);
             return null;
@@ -226,7 +234,7 @@ internal sealed class ConfigSourceService(
         var path = ConfigurationHelper.FindNearestConfigFilePath(projectDirectory)
             ?? Path.Combine(projectDirectory.FullName, AspireConfigFile.FileName);
         var configuration = await ReadProjectConfigurationAsync(path, cancellationToken);
-        if (configuration is not null && TryGetValue(configuration, [ConfigSource.SectionName], out _))
+        if (configuration is not null && configuration.ContainsKey(GetKey(configuration, ConfigSource.SectionName)))
         {
             return;
         }
@@ -268,8 +276,14 @@ internal sealed class ConfigSourceService(
 
     internal async Task<JsonObject> GetTemplateSourcesAsync(CancellationToken cancellationToken)
     {
-        // An explicitly configured URL authorizes runtime template inheritance, not
-        // project-file materialization. Do not infer this authority from employee detection.
+        // Discovery runs after creation consent and must not re-enable a declined source.
+        if (_sourceDeclined)
+        {
+            return new JsonObject();
+        }
+
+        // An explicitly configured URL opts into optional runtime template-source inheritance,
+        // not project-file materialization. Employee detection alone does not opt in.
         var repository = environment.GetEnvironmentVariable(CliConfigNames.InitSourceUrl);
         if (repository is null)
         {
@@ -340,9 +354,27 @@ internal sealed class ConfigSourceService(
         var previous = configuration.ToJsonString();
         foreach (var setting in s_allowedSettings)
         {
-            if (TryGetValue(snapshot.Configuration, setting, out var value))
+            var supplied = snapshot.Configuration
+                .Where(property => property.Key.Equals(setting, StringComparison.OrdinalIgnoreCase)).ToArray();
+            if (supplied.Length == 0)
             {
-                SetValue(configuration, setting, value);
+                continue;
+            }
+
+            // Replace all case-equivalent local sections, preserving every source section
+            // that IConfiguration combines (for example {"SKILLSOURCES":{...},"skillSources":{...}}).
+            // Keep the original position so an unchanged section does not reorder the file
+            // and make an otherwise identical refresh report changes.
+            var insertionIndex = configuration.Count;
+            foreach (var key in configuration.Select(property => property.Key)
+                .Where(key => key.Equals(setting, StringComparison.OrdinalIgnoreCase)).ToArray())
+            {
+                insertionIndex = Math.Min(insertionIndex, configuration.IndexOf(key));
+                configuration.Remove(key);
+            }
+            foreach (var (key, value) in supplied)
+            {
+                configuration.Insert(insertionIndex++, key, value?.DeepClone());
             }
         }
         var binding = new ConfigSource
@@ -358,9 +390,6 @@ internal sealed class ConfigSourceService(
         {
             try
             {
-                // A preserved nested literal key can collide with a newly supplied leaf:
-                // {"docs":{"api:sitemapUrl":"local","api":{"sitemapUrl":"remote"}}}.
-                // Reject the merge rather than persisting settings startup cannot load.
                 using var parsed = new ConfigurationManager();
                 using var stream = new MemoryStream(Encoding.UTF8.GetBytes(configuration.ToJsonString()));
                 parsed.AddJsonStream(stream);
@@ -513,6 +542,20 @@ internal sealed class ConfigSourceService(
     internal Task<ConfigSourceSnapshot> AcquireAsync(ConfigSource source, bool force, CancellationToken cancellationToken) =>
         AcquireAsync(source, force, allowInteractiveInput: true, cancellationToken);
 
+    private void DisplaySourceTrustWarning()
+    {
+        lock (_checksLock)
+        {
+            if (_sourceTrustWarningDisplayed)
+            {
+                return;
+            }
+            _sourceTrustWarningDisplayed = true;
+        }
+
+        interaction.DisplayMessage(KnownEmojis.Warning, SharedCommandStrings.SourceTrustWarning, consoleOverride: ConsoleOutput.Error);
+    }
+
     private async Task<ConfigSourceSnapshot> AcquireAsync(
         ConfigSource source, bool force, bool allowInteractiveInput, CancellationToken cancellationToken)
     {
@@ -526,6 +569,7 @@ internal sealed class ConfigSourceService(
             }
         }
 
+        DisplaySourceTrustWarning();
         var cacheDirectory = GetCacheDirectory(source);
         DirectoryHelper.CreateWithOwnerOnlyPermissions(Path.GetDirectoryName(cacheDirectory)!);
         DirectoryHelper.CreateWithOwnerOnlyPermissions(cacheDirectory);
@@ -655,19 +699,15 @@ internal sealed class ConfigSourceService(
         try
         {
             var (repositoryDirectory, commit, version) = await FetchVersionAsync(source, directory, allowInteractiveInput, timeout.Token);
-            var size = await git.GetObjectSizeAsync(repositoryDirectory, version, GitCommandMode.Interactive, timeout.Token);
-            if (size is null or > 4 * 1024 * 1024)
-            {
-                throw new ConfigSourceException(ConfigSourceStrings.InvalidConfiguration);
-            }
-
             var json = await git.ReadBlobAsync(repositoryDirectory, version, GitCommandMode.Interactive, timeout.Token);
             try
             {
+                // These checks ensure configuration can be consumed correctly; they do not
+                // enforce a security boundary or police the contents of a trusted source.
                 var configuration = JsonNode.Parse(json, documentOptions: ConfigurationHelper.ParseOptions) as JsonObject
                     ?? throw new ConfigSourceException(ConfigSourceStrings.InvalidConfiguration);
-                // Validate the known settings as well as JSON syntax. Unknown content settings
-                // are retained for future schemas, but a source cannot enable another source.
+                // Reserve recursive sources for future support, so a later implementation
+                // cannot unexpectedly activate declarations that were previously ignored.
                 if (configuration.Any(p => p.Key.Equals(ConfigSource.SectionName, StringComparison.OrdinalIgnoreCase)
                     || p.Key.StartsWith(ConfigSource.SectionName + ":", StringComparison.OrdinalIgnoreCase)
                     || p.Key.StartsWith(ConfigSource.SectionName + ".", StringComparison.OrdinalIgnoreCase)))
@@ -750,7 +790,8 @@ internal sealed class ConfigSourceService(
             allowInteractive ? GitCommandMode.Interactive : GitCommandMode.Unattended, cancellationToken);
         var commit = await git.GetCommitAsync(repositoryDirectory, "FETCH_HEAD^{commit}", GitCommandMode.Interactive, cancellationToken);
         var entry = await git.GetFileAsync(repositoryDirectory, commit, source.Path, GitCommandMode.Interactive, cancellationToken);
-        if (entry is not { Mode: GitTreeEntry.RegularFileMode or GitTreeEntry.ExecutableFileMode, Type: "blob" })
+        // Read blob contents directly, without interpreting file modes or creating filesystem links.
+        if (entry is not { Type: "blob" })
         {
             throw new ConfigSourceException(ConfigSourceStrings.MissingFile);
         }
@@ -816,62 +857,6 @@ internal sealed class ConfigSourceService(
 
     private static string GetKey(JsonObject configuration, string key)
         => configuration.Select(p => p.Key).FirstOrDefault(p => p.Equals(key, StringComparison.OrdinalIgnoreCase)) ?? key;
-
-    private static bool TryGetValue(JsonObject configuration, string[] path, out JsonNode? value)
-    {
-        if (FindPropertyParent(configuration, path) is { } parent)
-        {
-            value = parent[GetKey(parent, path[^1])];
-            return true;
-        }
-
-        value = null;
-        return false;
-    }
-
-    private static JsonObject? FindPropertyParent(JsonObject configuration, ReadOnlySpan<string> path)
-    {
-        if (path.Length == 1)
-        {
-            return configuration.ContainsKey(GetKey(configuration, path[0])) ? configuration : null;
-        }
-
-        // IConfiguration combines sections such as {"DOCS":{"llmsTxtUrl":"a"},"docs":{"api":{"sitemapUrl":"b"}}}.
-        // Search every matching section so an earlier partial section cannot hide a later leaf.
-        foreach (var (key, value) in configuration)
-        {
-            if (key.Equals(path[0], StringComparison.OrdinalIgnoreCase)
-                && value is JsonObject section
-                && FindPropertyParent(section, path[1..]) is { } parent)
-            {
-                return parent;
-            }
-        }
-
-        return null;
-    }
-
-    private static void SetValue(JsonObject configuration, string[] path, JsonNode? value)
-    {
-        if (FindPropertyParent(configuration, path) is { } parent)
-        {
-            parent[GetKey(parent, path[^1])] = value?.DeepClone();
-            return;
-        }
-
-        var current = configuration;
-        foreach (var segment in path[..^1])
-        {
-            var key = GetKey(current, segment);
-            if (current[key] is not JsonObject nested)
-            {
-                nested = new JsonObject();
-                current[key] = nested;
-            }
-            current = nested;
-        }
-        current[GetKey(current, path[^1])] = value?.DeepClone();
-    }
 
     private readonly record struct ConfigSourceIdentity(string Repository, string Path, string? Ref);
 }

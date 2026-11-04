@@ -6,6 +6,7 @@
 using System.Collections.Immutable;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
+using Azure.Provisioning.KeyVault;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
@@ -1045,7 +1046,7 @@ public static class EntraIdResourceExtensions
     /// <param name="keyVaultUrl">The URL of the Key Vault (e.g., <c>"https://myvault.vault.azure.net"</c>).</param>
     /// <param name="certificateName">The name of the certificate in Key Vault.</param>
     /// <returns>The resource builder for chaining.</returns>
-    [AspireExport]
+    [AspireExportIgnore(Reason = "The withCertificateFromKeyVault export accepts a URL or a Key Vault resource using a union.")]
     public static IResourceBuilder<EntraIdApplicationResource> WithCertificateFromKeyVault(
         this IResourceBuilder<EntraIdApplicationResource> builder,
         string keyVaultUrl,
@@ -1062,6 +1063,71 @@ public static class EntraIdResourceExtensions
         });
 
         return builder;
+    }
+
+    /// <summary>
+    /// Adds a certificate credential from an Azure Key Vault resource to this Entra ID application.
+    /// </summary>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="keyVault">The Key Vault containing the certificate.</param>
+    /// <param name="certificateName">The name of the certificate in Key Vault.</param>
+    /// <returns>The resource builder for chaining.</returns>
+    /// <remarks>
+    /// The vault URI remains a resource reference during run and publish. The Key Vault Certificate User role is added to the
+    /// vault's default roles when running, and assigned to each resource referencing this application when publishing, which
+    /// requires an environment that supports role assignments. The certificate must already exist, and its public key must
+    /// be registered with the Entra application. Microsoft.Identity.Web loads the latest certificate version.
+    /// </remarks>
+    /// <example>
+    /// <code lang="csharp">
+    /// var vault = builder.AddAzureKeyVault("vault");
+    /// var entra = builder.AddExistingEntraApplication("entra", tenantId, clientId)
+    ///     .WithCertificateFromKeyVault(vault, "web-certificate");
+    /// builder.AddProject&lt;Projects.Web&gt;("web").WithReference(entra);
+    /// </code>
+    /// </example>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="keyVault"/> is null.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="certificateName"/> is null or empty.</exception>
+    [AspireExportIgnore(Reason = "The withCertificateFromKeyVault export accepts a URL or a Key Vault resource using a union.")]
+    public static IResourceBuilder<EntraIdApplicationResource> WithCertificateFromKeyVault(
+        this IResourceBuilder<EntraIdApplicationResource> builder,
+        IResourceBuilder<AzureKeyVaultResource> keyVault,
+        string certificateName)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(keyVault);
+        ArgumentException.ThrowIfNullOrEmpty(certificateName);
+
+        return builder.WithCredential(new EntraIdKeyVaultCertificateCredential
+        {
+            KeyVault = keyVault.Resource,
+            CertificateNameInKeyVault = certificateName
+        });
+    }
+
+    /// <summary>
+    /// Adds a certificate credential using a vault URL or Key Vault resource.
+    /// </summary>
+    /// <param name="builder">The registration builder.</param>
+    /// <param name="keyVaultUrl">The vault URL or Key Vault resource containing the certificate.</param>
+    /// <param name="certificateName">The name of the certificate in Key Vault.</param>
+    /// <returns>The registration builder.</returns>
+    /// <remarks>The latest certificate version is used. Resource-backed vaults grant consumers the Key Vault Certificate User role by default.</remarks>
+    [AspireExport("withCertificateFromKeyVault")]
+    internal static IResourceBuilder<EntraIdApplicationResource> WithCertificateFromKeyVaultForExport(
+        this IResourceBuilder<EntraIdApplicationResource> builder,
+        [AspireUnion(typeof(string), typeof(IResourceBuilder<AzureKeyVaultResource>))] object keyVaultUrl,
+        string certificateName)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(keyVaultUrl);
+
+        return keyVaultUrl switch
+        {
+            string url => builder.WithCertificateFromKeyVault(url, certificateName),
+            IResourceBuilder<AzureKeyVaultResource> vault => builder.WithCertificateFromKeyVault(vault, certificateName),
+            _ => throw new ArgumentException("Expected a vault URL or a Key Vault resource.", nameof(keyVaultUrl))
+        };
     }
 
     /// <summary>
@@ -1173,8 +1239,53 @@ public static class EntraIdResourceExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(credential);
 
+        if (credential is EntraIdKeyVaultCertificateCredential { KeyVault: { } keyVault })
+        {
+            GrantKeyVaultCertificateAccess(builder, keyVault);
+        }
+
         builder.Resource.ClientCredentials.Add(credential);
         return builder;
+    }
+
+    private static readonly RoleDefinition s_keyVaultCertificateUserRole =
+        new(KeyVaultBuiltInRole.KeyVaultCertificateUser.ToString(), nameof(KeyVaultBuiltInRole.KeyVaultCertificateUser));
+
+    private static void GrantKeyVaultCertificateAccess(IResourceBuilder<EntraIdApplicationResource> builder, AzureKeyVaultResource keyVault)
+    {
+        // Microsoft.Identity.Web reads the certificate with its private key, which the vault's default
+        // Secrets User role does not allow, so the certificate role has to be in place before the Azure
+        // resource preparer decides role assignments.
+        if (builder.ApplicationBuilder.ExecutionContext.IsRunMode)
+        {
+            // Run-mode roles are global to the vault and granted to the developer, and the preparer ignores consumers that
+            // are not compute resources (executables, resources excluded from the manifest), so extend the vault's defaults.
+            // Without a default annotation the defaults were cleared, which means the roles are managed explicitly.
+            if (keyVault.TryGetLastAnnotation<DefaultRoleAssignmentsAnnotation>(out var defaults) &&
+                !defaults.Roles.Contains(s_keyVaultCertificateUserRole))
+            {
+                keyVault.Annotations.Remove(defaults);
+                keyVault.Annotations.Add(new DefaultRoleAssignmentsAnnotation(
+                    new HashSet<RoleDefinition>(defaults.Roles) { s_keyVaultCertificateUserRole }));
+            }
+
+            return;
+        }
+
+        // Publish-mode roles are assigned per consumer. A consumer that is added later is handled when it references this application.
+        foreach (var consumer in builder.Resource.Consumers)
+        {
+            AddKeyVaultCertificateAccess(consumer, keyVault);
+        }
+    }
+
+    private static void AddKeyVaultCertificateAccess(IResource consumer, AzureKeyVaultResource keyVault)
+    {
+        // Explicit roles on the consumer replace the default, including an empty set that opts out.
+        if (!consumer.Annotations.OfType<RoleAssignmentAnnotation>().Any(a => a.Target == keyVault))
+        {
+            consumer.Annotations.Add(new RoleAssignmentAnnotation(keyVault, new HashSet<RoleDefinition> { s_keyVaultCertificateUserRole }));
+        }
     }
 
     /// <summary>
@@ -1842,6 +1953,160 @@ public static class EntraIdResourceExtensions
         }
 
         return builder.WithAppRole(new EntraIdAppRole(value, displayName, description, allowedMemberTypes, roleId, isEnabled ?? true));
+    }
+
+    /// <summary>
+    /// When published, assigns application roles of this API to a user-assigned managed identity.
+    /// </summary>
+    /// <param name="builder">The API registration builder.</param>
+    /// <param name="identity">The managed identity receiving the roles. Workloads attach it with <c>WithAzureUserAssignedIdentity</c>.</param>
+    /// <param name="roleValues">The values of enabled roles declared with <c>WithAppRole</c> that allow <c>Application</c> members.</param>
+    /// <returns>The API registration builder for chaining.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when an argument is null.</exception>
+    /// <exception cref="ArgumentException">Thrown when no roles are supplied or a role is unknown, disabled, or does not allow application members.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the API references an existing registration.</exception>
+    /// <remarks>
+    /// <para>
+    /// This explicitly grants access to the identity's service-principal object ID, not its client ID. The caller authenticates
+    /// directly as its managed identity; no caller registration or federated credential is created. This does not attach the
+    /// identity to a workload or configure its token acquisition. The API must validate tokens and enforce the required role.
+    /// </para>
+    /// <para>
+    /// Assignments are published only; this has no effect during local run. Removing this call does not revoke a deployed
+    /// assignment: remove it explicitly with Microsoft Graph or the Entra admin center. Already-issued tokens remain valid
+    /// until expiration, and managed-identity token caches can delay revocation.
+    /// </para>
+    /// <para>
+    /// Deployment requires the Microsoft Graph permissions <c>AppRoleAssignment.ReadWrite.All</c> and <c>Application.Read.All</c>
+    /// (or a higher permission covering application reads), with administrator consent. Delegated deployments also need a
+    /// supported Entra directory role. Azure RBAC permissions alone do not authorize directory assignments.
+    /// See <see href="https://learn.microsoft.com/graph/api/serviceprincipal-post-approleassignedto"/>.
+    /// </para>
+    /// </remarks>
+    /// <example>
+    /// <code lang="csharp">
+    /// var identity = builder.AddAzureUserAssignedIdentity("worker-identity");
+    /// var apiRegistration = builder.AddEntraIdApplication("orders-api")
+    ///     .WithApplicationIdUri()
+    ///     .WithAppRole(new EntraIdAppRole("Orders.Read", "Read orders", "Read orders.", ["Application"]))
+    ///     .PublishWithAppRoleAssignment(identity, "Orders.Read");
+    /// var api = builder.AddDotnetProject("api", "../Api/Api.csproj")
+    ///     .WithReference(apiRegistration);
+    /// </code>
+    /// </example>
+    [AspireExportIgnore(Reason = "The publishWithAppRoleAssignment export accepts an identity or compute resource using a union.")]
+    public static IResourceBuilder<EntraIdApplicationResource> PublishWithAppRoleAssignment(
+        this IResourceBuilder<EntraIdApplicationResource> builder,
+        IResourceBuilder<AzureUserAssignedIdentityResource> identity,
+        params string[] roleValues)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(identity);
+        return PublishWithAppRoleAssignmentCore(builder, identity.Resource, roleValues);
+    }
+
+    /// <summary>
+    /// When published, assigns application roles of this API to a compute resource's user-assigned managed identity.
+    /// </summary>
+    /// <typeparam name="T">The type of the compute resource.</typeparam>
+    /// <param name="builder">The API registration builder.</param>
+    /// <param name="computeResource">The compute resource whose managed identity receives the roles.</param>
+    /// <param name="roleValues">The values of enabled roles declared with <c>WithAppRole</c> that allow <c>Application</c> members.</param>
+    /// <returns>The API registration builder for chaining.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when an argument is null.</exception>
+    /// <exception cref="ArgumentException">Thrown when no roles are supplied or a role is unknown, disabled, or does not allow application members.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the API references an existing registration or the published compute resource has no user-assigned managed identity.</exception>
+    /// <remarks>
+    /// The Azure environment reuses the compute resource's attached identity or creates one during deployment preparation.
+    /// The identity is resolved after preparation; the compute resource need not reference this registration.
+    /// An excluded compute resource receives no assignment. This does not configure federation or token acquisition.
+    /// Like the explicit-identity overload, this is publish-only, requires directory assignment privileges, and does not
+    /// revoke assignments when a call is removed.
+    /// </remarks>
+    /// <example>
+    /// <code lang="csharp">
+    /// var worker = builder.AddDotnetProject("worker", "../Worker/Worker.csproj");
+    /// var apiRegistration = builder.AddEntraIdApplication("orders-api")
+    ///     .WithApplicationIdUri()
+    ///     .WithAppRole(new EntraIdAppRole("Orders.Read", "Read orders", "Read orders.", ["Application"]));
+    /// var api = builder.AddDotnetProject("api", "../Api/Api.csproj")
+    ///     .WithReference(apiRegistration);
+    ///
+    /// apiRegistration.PublishWithAppRoleAssignment(worker, "Orders.Read");
+    /// </code>
+    /// </example>
+    [AspireExportIgnore(Reason = "The publishWithAppRoleAssignment export accepts an identity or compute resource using a union.")]
+    public static IResourceBuilder<EntraIdApplicationResource> PublishWithAppRoleAssignment<T>(
+        this IResourceBuilder<EntraIdApplicationResource> builder,
+        IResourceBuilder<T> computeResource,
+        params string[] roleValues)
+        where T : IComputeResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(computeResource);
+        return PublishWithAppRoleAssignmentCore(builder, computeResource.Resource, roleValues);
+    }
+
+    /// <summary>
+    /// Publishes explicit application-role assignments to a managed identity or a compute resource's managed identity.
+    /// </summary>
+    /// <param name="builder">The API registration builder.</param>
+    /// <param name="identity">The user-assigned identity or compute resource receiving the roles.</param>
+    /// <param name="roleValues">Enabled role values declared on this API that allow Application members.</param>
+    /// <returns>The API registration builder.</returns>
+    /// <remarks>
+    /// Has no effect during local run. Existing registrations are not modified. No caller registration or federation is created.
+    /// Requires Graph AppRoleAssignment.ReadWrite.All and Application.Read.All (or higher application-read permission), administrator
+    /// consent and, for delegated deployment, a supported Entra directory role. Removing a call does not revoke a deployed grant.
+    /// </remarks>
+    [AspireExport("publishWithAppRoleAssignment")]
+    internal static IResourceBuilder<EntraIdApplicationResource> PublishWithAppRoleAssignmentForExport(
+        this IResourceBuilder<EntraIdApplicationResource> builder,
+        [AspireUnion(typeof(IResourceBuilder<AzureUserAssignedIdentityResource>), typeof(IResourceBuilder<IComputeResource>))] object identity,
+        string[] roleValues)
+    {
+        ArgumentNullException.ThrowIfNull(identity);
+        return identity switch
+        {
+            IResourceBuilder<AzureUserAssignedIdentityResource> managedIdentity => builder.PublishWithAppRoleAssignment(managedIdentity, roleValues),
+            IResourceBuilder<IComputeResource> compute => builder.PublishWithAppRoleAssignment(compute, roleValues),
+            _ => throw new ArgumentException("Expected a user-assigned managed identity or a compute resource.", nameof(identity))
+        };
+    }
+
+    private static IResourceBuilder<EntraIdApplicationResource> PublishWithAppRoleAssignmentCore(
+        IResourceBuilder<EntraIdApplicationResource> builder,
+        IResource target,
+        string[] roleValues)
+    {
+        ArgumentNullException.ThrowIfNull(roleValues);
+        if (builder.Resource.IsExistingApplication)
+        {
+            throw new InvalidOperationException(
+                $"Entra ID application '{builder.Resource.Name}' is an existing registration. Application role assignments can only be published for registrations created by Aspire.");
+        }
+
+        if (roleValues.Length == 0)
+        {
+            throw new ArgumentException("At least one application role value is required.", nameof(roleValues));
+        }
+
+        foreach (var value in roleValues)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(value, nameof(roleValues));
+            _ = builder.Resource.GetAssignableAppRole(value);
+        }
+
+        if (builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
+        {
+            builder.Resource.AppRoleAssignments.Add(new EntraIdAppRoleAssignment(target, [.. roleValues.Distinct(StringComparer.Ordinal)]));
+            if (target is IComputeResource)
+            {
+                EnsureManagedIdentityRequired(target);
+            }
+        }
+
+        return builder;
     }
 
     /// <summary>
@@ -2798,6 +3063,17 @@ public static class EntraIdResourceExtensions
         // Create a reference relationship so the dashboard shows the connection
         builder.WithReferenceRelationship(entra);
         entra.Consumers.Add(builder.Resource);
+
+        if (builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
+        {
+            foreach (var credential in entra.ClientCredentials.OfType<EntraIdKeyVaultCertificateCredential>())
+            {
+                if (credential.KeyVault is { } keyVault)
+                {
+                    AddKeyVaultCertificateAccess(builder.Resource, keyVault);
+                }
+            }
+        }
 
         // That section is a sibling of AzureAd, not part of it, so a .NET program's entries ignore the connection name.
         var environmentVariablePrefix = isDotnetProgram ? $"{downstreamApisPrefix}__" : $"{keyPrefix}{downstreamApisPrefix}_";

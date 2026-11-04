@@ -4,6 +4,7 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Aspire.Shared;
@@ -17,7 +18,7 @@ internal sealed class AgentConfiguration
 
     public static async Task<IReadOnlyList<AgentTargetResult>> ApplyRemoteAsync(
         IEnumerable<IAgentClient> clients, DirectoryInfo workspaceRoot, AgentConfigurationScope scope,
-        CancellationToken cancellationToken)
+        IReadOnlyList<SkillSource> sources, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var results = new List<AgentTargetResult>();
@@ -26,6 +27,7 @@ internal sealed class AgentConfiguration
             cancellationToken.ThrowIfCancellationRequested();
             var status = AgentConfigurationStatus.Configured;
             string? message = null;
+            JsonObject? configuration = null;
             try
             {
                 var edit = new AgentConfiguration();
@@ -33,7 +35,7 @@ internal sealed class AgentConfiguration
                 var root = original?.DeepClone().AsObject() ?? new JsonObject();
                 foreach (var client in targets)
                 {
-                    await client.UpdateIntegrationConfigAsync(root, workspaceRoot, scope, edit, cancellationToken);
+                    await client.UpdateIntegrationConfigAsync(root, workspaceRoot, scope, edit, sources, cancellationToken);
                 }
 
                 if (JsonNode.DeepEquals(original ?? new JsonObject(), root))
@@ -47,6 +49,8 @@ internal sealed class AgentConfiguration
                 {
                     await edit.PublishAsync(targets.Key, root, cancellationToken);
                 }
+
+                configuration = root;
             }
             catch (Exception ex) when (ex is JsonException or InvalidOperationException or IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
             {
@@ -54,7 +58,10 @@ internal sealed class AgentConfiguration
                 message = ex.Message;
             }
 
-            results.Add(new(targets.ToArray(), targets.Key, status, message));
+            results.Add(new(targets.ToArray(), targets.Key, status, message)
+            {
+                Configuration = configuration
+            });
         }
 
         return results;
@@ -68,9 +75,8 @@ internal sealed class AgentConfiguration
         return root.AsObject();
     }
 
-    public static JsonObject? ReadObject(string path, CancellationToken cancellationToken)
+    public static JsonObject? ReadObject(string path)
     {
-        cancellationToken.ThrowIfCancellationRequested();
         FileStream stream;
         try
         {
@@ -259,4 +265,7 @@ internal sealed record AgentTargetResult(
     IReadOnlyList<IAgentClient> Clients,
     string TargetPath,
     AgentConfigurationStatus Status,
-    string? Message);
+    string? Message)
+{
+    public JsonObject? Configuration { get; init; }
+}
