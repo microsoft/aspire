@@ -68,18 +68,17 @@ internal static class ConfluentKafkaCommon
 
     internal static async Task<string?> GetOrFetchClusterIdAsync(Handle handle, string? bootstrapServers)
     {
-        if (string.IsNullOrEmpty(bootstrapServers))
+        if (bootstrapServers is not { Length: > 0 } key)
         {
             return await FetchClusterIdAsync(handle).ConfigureAwait(false);
         }
 
 #if NET
-        var key = bootstrapServers;
+        var task = ClusterIdCache.GetOrAdd(key, static (_, handle) => FetchClusterIdAsync(handle), handle);
 #else
-        var key = bootstrapServers!;
+        var task = ClusterIdCache.GetOrAdd(key, _ => FetchClusterIdAsync(handle));
 #endif
 
-        var task = ClusterIdCache.GetOrAdd(key, _ => FetchClusterIdAsync(handle));
         var result = await task.ConfigureAwait(false);
 
         if (result == null)

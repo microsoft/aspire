@@ -89,10 +89,11 @@ public class OtelMetricsTests
         {
             consumer.Subscribe(topic);
 
+            using var consumeCancellation = new CancellationTokenSource(TimeSpan.FromSeconds(30));
             int j = 0;
             while (true)
             {
-                var consumerResult = consumer.Consume();
+                var consumerResult = consumer.Consume(consumeCancellation.Token);
                 if (consumerResult == null)
                 {
                     continue;
@@ -137,6 +138,7 @@ public class OtelMetricsTests
         var durationMetric = metrics.Last(metric =>
             metric.MeterName == "OpenTelemetry.Instrumentation.ConfluentKafka"
             && metric.Name == "messaging.client.operation.duration");
+        Assert.Equal("s", durationMetric.Unit);
         var durationPoints = new List<MetricPoint>();
         foreach (ref readonly var point in durationMetric.GetMetricPoints())
         {
@@ -149,7 +151,21 @@ public class OtelMetricsTests
         Assert.Equal(2, durationPoints.Count);
         var sendPoint = Assert.Single(durationPoints, point => Equals(GetTagValue(point, "messaging.operation.name"), "send"));
         Assert.Equal(5, sendPoint.GetHistogramCount());
+        Assert.Equal("send", GetTagValue(sendPoint, "messaging.operation.type"));
+        Assert.True(sendPoint.GetHistogramSum() >= 0);
         var pollPoint = Assert.Single(durationPoints, point => Equals(GetTagValue(point, "messaging.operation.name"), "poll"));
         Assert.Equal(pollCount, pollPoint.GetHistogramCount());
+        Assert.Equal("receive", GetTagValue(pollPoint, "messaging.operation.type"));
+        Assert.True(pollPoint.GetHistogramSum() >= 0);
+
+        foreach (var metricName in new[] { "messaging.client.sent.messages", "messaging.client.consumed.messages" })
+        {
+            var metric = metrics.Last(metric =>
+                metric.MeterName == "OpenTelemetry.Instrumentation.ConfluentKafka"
+                && metric.Name == metricName);
+            Assert.Equal("{message}", metric.Unit);
+            var point = Assert.IsType<MetricPoint>(GetMetricPointWithTag(metric, "messaging.destination.name", topic));
+            Assert.Equal(5, point.GetSumLong());
+        }
     }
 }

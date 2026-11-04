@@ -160,6 +160,7 @@ public class OtelInstrumentationTests
         {
             Assert.Equal(hasConsumerRecord ? "poll error-topic" : "poll", activity.DisplayName);
             Assert.Equal(ActivityStatusCode.Error, activity.Status);
+            Assert.Null(activity.StatusDescription);
             Assert.Equal(error.Code.ToString(), activity.GetTagItem("error.type"));
         });
 
@@ -183,6 +184,46 @@ public class OtelInstrumentationTests
         {
             Assert.Null(consumedPoint);
         }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ProduceExceptionRecordsErrorTelemetryWithoutStatusDescription(bool isKafkaError)
+    {
+        var activityExporter = new TestActivityExporter();
+        using var tracerProvider = Sdk.CreateTracerProviderBuilder()
+            .AddSource(OpenTelemetry.Instrumentation.ConfluentKafka.ConfluentKafkaCommon.ActivitySource.Name)
+            .AddProcessor(new SimpleActivityExportProcessor(activityExporter))
+            .Build();
+        var topic = $"produce-error-{Guid.NewGuid()}";
+        var error = new Error(ErrorCode.Local_ValueSerialization, "sensitive message");
+        Exception exception = isKafkaError
+            ? new ProduceException<string, string>(error, new DeliveryResult<string, string> { Topic = topic })
+            : new ArgumentException("sensitive message");
+        using var producer = new InstrumentedProducer<string, string>(
+            new FakeKafkaProducer<string, string> { ExceptionToThrow = exception },
+            new ConfluentKafkaProducerInstrumentationOptions<string, string> { Traces = true, Metrics = false });
+        var message = new Message<string, string> { Key = "key", Value = "value" };
+        var partition = new TopicPartition(topic, new Partition(0));
+
+        Assert.Same(exception, await Record.ExceptionAsync(() => producer.ProduceAsync(topic, message)));
+        Assert.Same(exception, await Record.ExceptionAsync(() => producer.ProduceAsync(partition, message)));
+        Assert.Same(exception, Record.Exception(() => producer.Produce(topic, message)));
+        Assert.Same(exception, Record.Exception(() => producer.Produce(partition, message)));
+        tracerProvider.ForceFlush();
+
+        var activities = activityExporter.GetActivities()
+            .Where(activity => Equals(activity.GetTagItem("messaging.destination.name"), topic))
+            .ToArray();
+        Assert.Equal(4, activities.Length);
+        Assert.All(activities, activity =>
+        {
+            Assert.Equal($"send {topic}", activity.DisplayName);
+            Assert.Equal(ActivityStatusCode.Error, activity.Status);
+            Assert.Null(activity.StatusDescription);
+            Assert.Equal(isKafkaError ? error.Code.ToString() : exception.GetType().FullName, activity.GetTagItem("error.type"));
+        });
     }
 
     [Fact]
@@ -209,7 +250,7 @@ public class OtelInstrumentationTests
         Assert.Equal("processing failed", exception.Message);
         var processActivity = Assert.Single(activityExporter.GetActivities(), activity => activity.DisplayName == "process process-error");
         Assert.Equal(ActivityStatusCode.Error, processActivity.Status);
-        Assert.Equal("processing failed", processActivity.StatusDescription);
+        Assert.Null(processActivity.StatusDescription);
         Assert.Equal(typeof(InvalidOperationException).FullName, processActivity.GetTagItem("error.type"));
     }
 

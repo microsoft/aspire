@@ -54,7 +54,6 @@ internal class InstrumentedConsumer<TKey, TValue> : IConsumer<TKey, TValue>
         ConsumeResult<TKey, TValue>? result = null;
         ConsumeResult consumeResult = default;
         string? errorType = null;
-        string? errorMessage = null;
         var pollCompleted = false;
         try
         {
@@ -66,7 +65,6 @@ internal class InstrumentedConsumer<TKey, TValue> : IConsumer<TKey, TValue>
         catch (ConsumeException e)
         {
             (consumeResult, errorType) = ExtractConsumeResult(e);
-            errorMessage = e.Message;
             throw;
         }
         finally
@@ -74,7 +72,7 @@ internal class InstrumentedConsumer<TKey, TValue> : IConsumer<TKey, TValue>
             if (pollCompleted || errorType is not null)
             {
                 var end = DateTimeOffset.UtcNow;
-                this.InstrumentConsumption(start, end, consumeResult, errorType, errorMessage, IsEmptyPoll(result, errorType));
+                this.InstrumentConsumption(start, end, consumeResult, errorType, IsEmptyPoll(result, errorType));
             }
         }
     }
@@ -85,7 +83,6 @@ internal class InstrumentedConsumer<TKey, TValue> : IConsumer<TKey, TValue>
         ConsumeResult<TKey, TValue>? result = null;
         ConsumeResult consumeResult = default;
         string? errorType = null;
-        string? errorMessage = null;
         var pollCompleted = false;
         try
         {
@@ -97,7 +94,6 @@ internal class InstrumentedConsumer<TKey, TValue> : IConsumer<TKey, TValue>
         catch (ConsumeException e)
         {
             (consumeResult, errorType) = ExtractConsumeResult(e);
-            errorMessage = e.Message;
             throw;
         }
         finally
@@ -105,7 +101,7 @@ internal class InstrumentedConsumer<TKey, TValue> : IConsumer<TKey, TValue>
             if (pollCompleted || errorType is not null)
             {
                 var end = DateTimeOffset.UtcNow;
-                this.InstrumentConsumption(start, end, consumeResult, errorType, errorMessage, IsEmptyPoll(result, errorType));
+                this.InstrumentConsumption(start, end, consumeResult, errorType, IsEmptyPoll(result, errorType));
             }
         }
     }
@@ -116,7 +112,6 @@ internal class InstrumentedConsumer<TKey, TValue> : IConsumer<TKey, TValue>
         ConsumeResult<TKey, TValue>? result = null;
         ConsumeResult consumeResult = default;
         string? errorType = null;
-        string? errorMessage = null;
         var pollCompleted = false;
         try
         {
@@ -128,7 +123,6 @@ internal class InstrumentedConsumer<TKey, TValue> : IConsumer<TKey, TValue>
         catch (ConsumeException e)
         {
             (consumeResult, errorType) = ExtractConsumeResult(e);
-            errorMessage = e.Message;
             throw;
         }
         finally
@@ -136,7 +130,7 @@ internal class InstrumentedConsumer<TKey, TValue> : IConsumer<TKey, TValue>
             if (pollCompleted || errorType is not null)
             {
                 var end = DateTimeOffset.UtcNow;
-                this.InstrumentConsumption(start, end, consumeResult, errorType, errorMessage, IsEmptyPoll(result, errorType));
+                this.InstrumentConsumption(start, end, consumeResult, errorType, IsEmptyPoll(result, errorType));
             }
         }
     }
@@ -309,7 +303,6 @@ internal class InstrumentedConsumer<TKey, TValue> : IConsumer<TKey, TValue>
         DateTimeOffset endTime,
         ConsumeResult consumeResult,
         string? errorType,
-        string? errorMessage,
         bool isEmptyPoll)
     {
         // Empty polls contribute to operation duration, but not message counts or spans.
@@ -324,7 +317,7 @@ internal class InstrumentedConsumer<TKey, TValue> : IConsumer<TKey, TValue>
             {
                 if (errorType != null)
                 {
-                    activity.SetStatus(ActivityStatusCode.Error, errorMessage);
+                    activity.SetStatus(ActivityStatusCode.Error);
                     if (activity.IsAllDataRequested)
                     {
                         activity.SetTag(SemanticConventions.AttributeErrorType, errorType);

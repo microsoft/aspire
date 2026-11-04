@@ -108,6 +108,7 @@ Aspire.Azure.Storage.Queues:
   - none (currently not supported by the Azure SDK)
 
 Aspire.Confluent.Kafka:
+- Breaking-change release note and migration guidance: [Kafka telemetry migration](../../docs/migrate-confluent-kafka-telemetry.md).
 - Log categories:
   - "Aspire.Confluent.Kafka"
 - Activity source names:
@@ -121,9 +122,9 @@ Aspire.Confluent.Kafka:
     - "messaging.kafka.network.transmitted"
     - "messaging.kafka.network.rx"
     - "messaging.kafka.network.received"
-    - "messaging.client.sent.messages"
+    - "messaging.publish.messages"
     - "messaging.kafka.message.transmitted"
-    - "messaging.client.consumed.messages"
+    - "messaging.receive.messages"
     - "messaging.kafka.message.received"
   - "OpenTelemetry.Instrumentation.ConfluentKafka"
     - "messaging.client.operation.duration"
