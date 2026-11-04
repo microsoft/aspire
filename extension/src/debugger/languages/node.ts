@@ -87,6 +87,19 @@ function findDescendantsOfKnownProcesses(rootPids: readonly number[], processes:
     return descendants;
 }
 
+// A process-detail lookup that fails because the process no longer exists (for example a missing /proc entry).
+function isProcessGoneError(error: unknown): boolean {
+    const code = (error as NodeJS.ErrnoException | undefined)?.code;
+    return code === 'ENOENT' || code === 'ESRCH';
+}
+
+export interface InspectorWaitingProcessIds {
+    /** Listed processes confirmed to have been started with the inspector argument. */
+    readonly matches: readonly number[];
+    /** Listed processes whose command line could not be read, so whether they match is unknown. */
+    readonly unidentified: readonly number[];
+}
+
 /**
  * Finds the extension host's descendants that were started with the given inspector argument. Every match is
  * returned because a Windows .cmd shim (for example an npm-installed deno.cmd) leaves both cmd.exe and deno.exe with the argument.
@@ -94,12 +107,16 @@ function findDescendantsOfKnownProcesses(rootPids: readonly number[], processes:
  * Stopping the shim detaches deno.exe from the extension host's process tree, so processes matched earlier are
  * passed as `knownProcessIds`: they are matched again while still listed, and their descendants are searched
  * even after they have exited.
+ *
+ * POSIX listings only carry pids and parent pids, so each candidate's command line is read separately. A failed
+ * read (for example a timeout or I/O error) does not show the process exited, so it is reported as unidentified
+ * rather than as a non-match; only a lookup that finds the process gone confirms it is not running.
  */
 export async function findInspectorWaitingProcessIds(
     inspectorArgument: string,
     query: LaunchedChildProcessQuery,
     launcherPid: number = process.pid,
-    knownProcessIds: readonly number[] = []): Promise<number[]> {
+    knownProcessIds: readonly number[] = []): Promise<InspectorWaitingProcessIds> {
     const processes = await query.listProcesses(undefined, inspectorWaitingProcessQueryTimeoutMs);
     const candidatePids = new Set<number>(findDescendantProcessIds(launcherPid, false, processes) ?? []);
     for (const pid of knownProcessIds) {
@@ -113,17 +130,31 @@ export async function findInspectorWaitingProcessIds(
     }
 
     const matches: number[] = [];
+    const unidentified: number[] = [];
     for (const pid of candidatePids) {
-        const listed = processes.find(candidate => candidate.pid === pid);
-        const candidate = query.canTrustListedProcessIdentity === true || !query.getProcess
-            ? listed
-            : await query.getProcess(pid, undefined, inspectorWaitingProcessQueryTimeoutMs).catch(() => undefined);
+        let candidate: LaunchedChildProcess | undefined;
+        if (query.canTrustListedProcessIdentity === true || !query.getProcess) {
+            candidate = processes.find(listed => listed.pid === pid);
+        }
+        else {
+            try {
+                candidate = await query.getProcess(pid, undefined, inspectorWaitingProcessQueryTimeoutMs);
+            }
+            catch (error) {
+                if (!isProcessGoneError(error)) {
+                    unidentified.push(pid);
+                }
+
+                continue;
+            }
+        }
+
         if (candidate && hasCommandLineArgument(candidate, inspectorArgument)) {
             matches.push(pid);
         }
     }
 
-    return matches;
+    return { matches, unidentified };
 }
 
 export interface InspectorWaitingProcessStopResult {
@@ -131,6 +162,8 @@ export interface InspectorWaitingProcessStopResult {
     readonly stopped: readonly number[];
     /** Processes still listed when the settle window ended. */
     readonly running: readonly number[];
+    /** Processes still listed when the settle window ended whose identity could not be read, so they may be the runtime. */
+    readonly unidentified: readonly number[];
 }
 
 /**
@@ -141,7 +174,9 @@ export interface InspectorWaitingProcessStopResult {
  * signalled and their descendants, so a deno.exe left behind by a stopped deno.cmd shim is still found.
  * Once `isSpawnSettled` reports that the runtime can no longer be spawned, an empty listing ends the search.
  * A failed listing is never treated as empty: known processes are reported as still running, and if none
- * are known when the settle window ends, the listing error is thrown.
+ * are known when the settle window ends, the listing error is thrown. Likewise a listed process whose identity
+ * cannot be read keeps the search going and is never signalled; it is only confirmed gone once a later listing
+ * no longer shows it, and is otherwise reported as unidentified.
  */
 export async function stopInspectorWaitingProcesses(
     inspectorArgument: string,
@@ -162,24 +197,28 @@ export async function stopInspectorWaitingProcesses(
     const deadline = clock.now() + (options.settleTimeoutMs ?? inspectorWaitingProcessSettleTimeoutMs);
     const signalled = new Set<number>();
     let running: number[] = [];
+    let unidentified: readonly number[] = [];
     let listed = false;
     let listingError: unknown;
     let retryDelayMs = inspectorWaitingProcessInitialRetryDelayMs;
 
     while (true) {
         try {
-            running = await findInspectorWaitingProcessIds(inspectorArgument, query, options.launcherPid ?? process.pid, [...knownProcessIds, ...signalled]);
+            const found = await findInspectorWaitingProcessIds(inspectorArgument, query, options.launcherPid ?? process.pid, [...knownProcessIds, ...signalled]);
+            running = [...found.matches];
+            unidentified = found.unidentified;
             listed = true;
         }
         catch (error) {
             // Without a listing nothing can be confirmed: processes known from an earlier attempt or already
             // signalled stay unconfirmed, and a failed listing never counts as proof that nothing is running.
+            // Processes the previous listing could not identify stay unidentified.
             listed = false;
             listingError = error;
             running = [...new Set([...knownProcessIds, ...signalled])];
         }
 
-        if (listed && running.length === 0 && (signalled.size > 0 || options.isSpawnSettled?.() === true)) {
+        if (listed && running.length === 0 && unidentified.length === 0 && (signalled.size > 0 || options.isSpawnSettled?.() === true)) {
             break;
         }
 
@@ -206,12 +245,13 @@ export async function stopInspectorWaitingProcesses(
         retryDelayMs = Math.min(inspectorWaitingProcessMaximumRetryDelayMs, retryDelayMs * 2);
     }
 
-    if (!listed && running.length === 0) {
+    unidentified = unidentified.filter(pid => !running.includes(pid));
+    if (!listed && running.length === 0 && unidentified.length === 0) {
         // Nothing was identified and the last listing failed, so it is unknown whether a runtime is running.
         throw listingError;
     }
 
-    return { stopped: [...signalled].filter(pid => !running.includes(pid)), running };
+    return { stopped: [...signalled].filter(pid => !running.includes(pid) && !unidentified.includes(pid)), running, unidentified };
 }
 
 /**
@@ -290,14 +330,19 @@ export function registerDenoAppHostInspectorCleanup(
             const cleanup = stopInspectorWaitingProcesses(inspectorArgument, query, clock, {
                 knownProcessIds: unconfirmedProcessIds,
                 isSpawnSettled: () => launchFinished,
-            }).then(({ stopped, running }) => {
-                unconfirmedProcessIds = running;
+            }).then(({ stopped, running, unidentified }) => {
+                // A retry matches these again before signalling any of them, so a reused PID is never stopped.
+                unconfirmedProcessIds = [...running, ...unidentified];
                 if (stopped.length > 0) {
                     extensionLogOutputChannel.info(`Stopped Deno AppHost process ${stopped.join(', ')} that never attached to the debugger.`);
                 }
 
                 if (running.length > 0) {
                     throw new Error(`Deno AppHost process ${running.join(', ')} waiting for a debugger at ${inspectorAddress} was still running after cleanup.`);
+                }
+
+                if (unidentified.length > 0) {
+                    throw new Error(`Could not read the command line of process ${unidentified.join(', ')} to confirm whether it is the Deno AppHost waiting for a debugger at ${inspectorAddress}.`);
                 }
 
                 if (stopped.length === 0) {

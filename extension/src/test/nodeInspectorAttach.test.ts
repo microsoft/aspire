@@ -6,6 +6,7 @@ import * as path from 'path';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { AspireDebugSession } from '../debugger/AspireDebugSession';
+import { SystemLaunchedChildProcessQuery } from '../debugger/launchedChildProcessDiscovery';
 import { denoAppHostInspectorAttachTimeoutMs, nodeDebuggerExtension } from '../debugger/languages/node';
 import { AspireResourceExtendedDebugConfiguration, NodeLaunchConfiguration } from '../dcp/types';
 
@@ -295,6 +296,43 @@ suite('Node Debugger Deno AppHost inspector attach (js-debug)', function () {
         await fixture.closed;
         assert.ok(!fixture.lines.includes('attached'));
         assert.strictEqual(await started, false);
+    });
+
+    test('keeps cleanup unconfirmed and retryable when the runtime is listed but its command line cannot be read', async function () {
+        if (process.platform === 'win32') {
+            // Windows listings carry each command line, so no separate process-detail lookup can fail.
+            this.skip();
+        }
+
+        const name = 'unreadable-process-details';
+        const cleanups: (() => Promise<void>)[] = [];
+        const debugSession = { ...aspireDebugSession, trackPendingResourceCleanup: (_name: string, cleanup: () => Promise<void>) => { cleanups.push(cleanup); } } as unknown as AspireDebugSession;
+        const debugConfig = await createAppHostAttachConfiguration(name, 2000, debugSession);
+        // The process listing (pids and parent pids) succeeds, but every command-line lookup fails, as with a
+        // detail-query timeout or I/O error, until the test allows it.
+        let detailsReadable = false;
+        const getProcess = SystemLaunchedChildProcessQuery.prototype.getProcess;
+        sinon.stub(SystemLaunchedChildProcessQuery.prototype, 'getProcess').callsFake(function (this: SystemLaunchedChildProcessQuery, ...args) {
+            return detailsReadable ? getProcess.apply(this, args) : Promise.reject(new Error('Unable to resolve the running application process.'));
+        });
+        const fixtureStarted = waitForFixture();
+        const launchResponse = captureLaunchResponse(name);
+
+        const started = vscode.debug.startDebugging(undefined, debugConfig);
+        const fixture = await fixtureStarted;
+        assert.strictEqual((await launchResponse).success, false);
+        assert.strictEqual(await started, false);
+        assert.strictEqual(cleanups.length, 1);
+
+        // The launch has finished, so an empty match would end cleanup, but an unreadable process is not a gone one.
+        await assert.rejects(cleanups[0](), /Could not read the command line of process .*127\.0\.0\.1:/);
+        assert.ok(!fixture.isClosed(), 'The runtime should not be signalled without confirming its identity');
+
+        // The owning session's next shutdown retries the same cleanup, which now identifies and stops the runtime.
+        detailsReadable = true;
+        await cleanups[0]();
+        await fixture.closed;
+        assert.ok(!fixture.lines.includes('attached'));
     });
 
     function createOwningSession(): AspireDebugSession {

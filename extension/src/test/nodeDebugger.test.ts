@@ -181,17 +181,28 @@ suite('Node Debugger Tests', () => {
 
         assert.deepStrictEqual(
             await findInspectorWaitingProcessIds(argument, { canTrustListedProcessIdentity: true, listProcesses: async () => windowsProcesses }, 10),
-            [20, 21]);
+            { matches: [20, 21], unidentified: [] });
 
         // POSIX listings only carry the process tree, so each descendant's command line is read separately.
+        // A failed read is unidentified rather than a non-match; a process found gone is neither.
         const posixArguments = new Map<number, string[]>([[11, ['deno', 'run', argument, 'apphost.mts']], [12, ['node', 'server.js']]]);
-        const posixProcesses = [10, 11, 12].map(pid => ({ pid, parentPid: pid === 10 ? 1 : 10, executable: '', command: '' }));
+        const posixProcesses = [10, 11, 12, 13, 14, 15].map(pid => ({ pid, parentPid: pid === 10 ? 1 : 10, executable: '', command: '' }));
         assert.deepStrictEqual(
             await findInspectorWaitingProcessIds(argument, {
                 listProcesses: async () => posixProcesses,
-                getProcess: async pid => ({ pid, parentPid: 10, executable: '', command: '', commandLineArguments: posixArguments.get(pid) }),
+                getProcess: async pid => {
+                    if (pid === 13) {
+                        throw new Error('timed out');
+                    }
+
+                    if (pid === 14) {
+                        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+                    }
+
+                    return pid === 15 ? undefined : { pid, parentPid: 10, executable: '', command: '', commandLineArguments: posixArguments.get(pid) };
+                },
             }, 10),
-            [11]);
+            { matches: [11], unidentified: [13] });
     });
 
     function createFakeClock(): LaunchedChildProcessClock & { sleeps: number[] } {
@@ -233,7 +244,7 @@ suite('Node Debugger Tests', () => {
         });
 
         assert.deepStrictEqual(killed, [21]);
-        assert.deepStrictEqual(result, { stopped: [21], running: [] });
+        assert.deepStrictEqual(result, { stopped: [21], running: [], unidentified: [] });
         assert.deepStrictEqual(clock.sleeps, [100, 200, 400]);
     });
 
@@ -247,7 +258,7 @@ suite('Node Debugger Tests', () => {
         });
 
         assert.deepStrictEqual(killed, []);
-        assert.deepStrictEqual(result, { stopped: [], running: [] });
+        assert.deepStrictEqual(result, { stopped: [], running: [], unidentified: [] });
         assert.strictEqual(clock.now(), inspectorWaitingProcessSettleTimeoutMs);
     });
 
@@ -262,7 +273,7 @@ suite('Node Debugger Tests', () => {
         });
 
         assert.deepStrictEqual(killed, [21]);
-        assert.deepStrictEqual(result, { stopped: [], running: [21] });
+        assert.deepStrictEqual(result, { stopped: [], running: [21], unidentified: [] });
     });
 
     test('does not wait for a Deno AppHost once the launch can no longer spawn one', async () => {
@@ -275,7 +286,7 @@ suite('Node Debugger Tests', () => {
             isSpawnSettled: () => spawnSettled,
         });
         // Still waiting while js-debug could spawn it: the whole settle window.
-        assert.deepStrictEqual(result, { stopped: [], running: [] });
+        assert.deepStrictEqual(result, { stopped: [], running: [], unidentified: [] });
         assert.strictEqual(clock.now(), inspectorWaitingProcessSettleTimeoutMs);
 
         // After js-debug answered the launch request (for example a missing executable), one listing is enough.
@@ -283,7 +294,7 @@ suite('Node Debugger Tests', () => {
         const settledClock = createFakeClock();
         assert.deepStrictEqual(
             await stopInspectorWaitingProcesses(argument, createListing([[]], argument), settledClock, { launcherPid: 10, kill: () => { }, isSpawnSettled: () => spawnSettled }),
-            { stopped: [], running: [] });
+            { stopped: [], running: [], unidentified: [] });
         assert.deepStrictEqual(settledClock.sleeps, []);
     });
 
@@ -297,7 +308,7 @@ suite('Node Debugger Tests', () => {
         ], argument), createFakeClock(), { launcherPid: 10, kill: pid => killed.push(pid), knownProcessIds: [21], isSpawnSettled: () => true });
 
         assert.deepStrictEqual(killed, [21]);
-        assert.deepStrictEqual(result, { stopped: [21], running: [] });
+        assert.deepStrictEqual(result, { stopped: [21], running: [], unidentified: [] });
     });
 
     function createFailingListing(failures: number, argument: string, pids: number[] = []) {
@@ -331,7 +342,7 @@ suite('Node Debugger Tests', () => {
         const clock = createFakeClock();
         assert.deepStrictEqual(
             await stopInspectorWaitingProcesses(argument, createFailingListing(1, argument), clock, { launcherPid: 10, kill: () => { }, isSpawnSettled: () => true }),
-            { stopped: [], running: [] });
+            { stopped: [], running: [], unidentified: [] });
         assert.deepStrictEqual(clock.sleeps, [100]);
     });
 
@@ -347,8 +358,80 @@ suite('Node Debugger Tests', () => {
             isSpawnSettled: () => true,
         });
 
-        assert.deepStrictEqual(result, { stopped: [], running: [21] });
+        assert.deepStrictEqual(result, { stopped: [], running: [21], unidentified: [] });
         assert.deepStrictEqual(killed, []);
+    });
+
+    // A POSIX listing of the extension host (pid 10) and its children, which only carries pids and parent pids,
+    // so each command line comes from getProcess. `details` decides each getProcess call for the Deno runtime.
+    function createPosixListing(listings: number[][], argument: string, details: (call: number) => 'ok' | 'gone' | Error) {
+        let listCall = 0;
+        let detailCall = 0;
+        return {
+            listProcesses: async (): Promise<LaunchedChildProcess[]> => {
+                const pids = listings[Math.min(listCall++, listings.length - 1)];
+                return [{ pid: 10, parentPid: 1, executable: '', command: '' }, ...pids.map(pid => ({ pid, parentPid: 10, executable: '', command: '' }))];
+            },
+            getProcess: async (pid: number): Promise<LaunchedChildProcess | undefined> => {
+                const outcome = details(detailCall++);
+                if (outcome instanceof Error) {
+                    throw outcome;
+                }
+
+                return outcome === 'gone'
+                    ? undefined
+                    : { pid, parentPid: 10, executable: '/usr/bin/deno', command: '', commandLineArguments: ['deno', 'run', argument, 'apphost.mts'] };
+            },
+        };
+    }
+
+    test('does not treat a failed POSIX process-detail lookup as the Deno AppHost having exited', async () => {
+        const argument = '--inspect-wait=127.0.0.1:1234';
+        const killed: number[] = [];
+        // The listing keeps showing pid 21, but its command line can never be read, so it cannot be matched or
+        // signalled. The launch already finished, so an empty match would otherwise end cleanup as a success.
+        const result = await stopInspectorWaitingProcesses(argument, createPosixListing([[21]], argument, () => new Error('Unable to resolve the running application process.')), createFakeClock(), {
+            launcherPid: 10,
+            settleTimeoutMs: 2_000,
+            kill: pid => killed.push(pid),
+            isSpawnSettled: () => true,
+        });
+
+        assert.deepStrictEqual(killed, []);
+        assert.deepStrictEqual(result, { stopped: [], running: [], unidentified: [21] });
+    });
+
+    test('retries a failed POSIX process-detail lookup and stops the Deno AppHost once it is identified', async () => {
+        const argument = '--inspect-wait=127.0.0.1:1234';
+        const killed: number[] = [];
+        const clock = createFakeClock();
+        const result = await stopInspectorWaitingProcesses(
+            argument,
+            createPosixListing([[21], [21], []], argument, call => call === 0 ? new Error('timed out') : 'ok'),
+            clock,
+            { launcherPid: 10, kill: pid => killed.push(pid), isSpawnSettled: () => true });
+
+        assert.deepStrictEqual(killed, [21]);
+        assert.deepStrictEqual(result, { stopped: [21], running: [], unidentified: [] });
+        assert.deepStrictEqual(clock.sleeps, [100, 200]);
+    });
+
+    test('confirms a Deno AppHost exited when its POSIX process details are gone', async () => {
+        const argument = '--inspect-wait=127.0.0.1:1234';
+        const missing = Object.assign(new Error('ENOENT: no such file or directory, readlink \'/proc/21/exe\''), { code: 'ENOENT' });
+        for (const details of [() => missing, () => 'gone' as const]) {
+            const clock = createFakeClock();
+            // Listed, but it exited before its details were read: a later listing is not needed to confirm it.
+            assert.deepStrictEqual(
+                await stopInspectorWaitingProcesses(argument, createPosixListing([[21]], argument, details), clock, { launcherPid: 10, kill: () => { }, isSpawnSettled: () => true }),
+                { stopped: [], running: [], unidentified: [] });
+            assert.deepStrictEqual(clock.sleeps, []);
+        }
+
+        // A pid that is no longer listed has exited, even though its earlier lookup failed.
+        assert.deepStrictEqual(
+            await stopInspectorWaitingProcesses(argument, createPosixListing([[21], []], argument, () => new Error('timed out')), createFakeClock(), { launcherPid: 10, kill: () => { }, isSpawnSettled: () => true }),
+            { stopped: [], running: [], unidentified: [] });
     });
 
     // A Windows listing where a deno.cmd shim (pid 20, a child of the extension host, pid 10) started deno.exe (pid 21).
@@ -379,7 +462,7 @@ suite('Node Debugger Tests', () => {
         ], argument), clock, { launcherPid: 10, kill: pid => killed.push(pid) });
 
         assert.deepStrictEqual(killed, [20, 21]);
-        assert.deepStrictEqual(result, { stopped: [20, 21], running: [] });
+        assert.deepStrictEqual(result, { stopped: [20, 21], running: [], unidentified: [] });
         assert.deepStrictEqual(clock.sleeps, [100, 200]);
 
         // If deno.exe never exits, it is reported as still running rather than as stopped.
@@ -387,7 +470,7 @@ suite('Node Debugger Tests', () => {
             { shim: true, deno: true },
             { shim: false, deno: true },
         ], argument), createFakeClock(), { launcherPid: 10, settleTimeoutMs: 2_000, kill: () => { } });
-        assert.deepStrictEqual(stuck, { stopped: [20], running: [21] });
+        assert.deepStrictEqual(stuck, { stopped: [20], running: [21], unidentified: [] });
     });
 
     test('stops a Deno AppHost that first appears after its Windows shim exited', async () => {
@@ -400,7 +483,7 @@ suite('Node Debugger Tests', () => {
         ], argument), createFakeClock(), { launcherPid: 10, kill: pid => killed.push(pid) });
 
         assert.deepStrictEqual(killed, [20, 21]);
-        assert.deepStrictEqual(result, { stopped: [20, 21], running: [] });
+        assert.deepStrictEqual(result, { stopped: [20, 21], running: [], unidentified: [] });
     });
 
     test('only reports an inspector readiness timeout when the launch ran for the whole timeout', () => {
