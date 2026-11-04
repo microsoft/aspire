@@ -1,7 +1,6 @@
 ﻿@using Aspire.Dashboard.Components.Layout
 @using Aspire.Dashboard.Resources
 @using Aspire.Shared
-@using Aspire.Dashboard.Components.ResourcesGridColumns
 
 <StableSectionContent SectionName="@ResourcesLayout.HeaderActionsSectionName">
     <div class="overview-header-actions">
@@ -47,17 +46,7 @@
         var resources = GetResources();
         var summary = GetHealthSummary(resources);
 
-        @* The "group overview" setting picks between the summary and a table of the resources, which adds what the
-           resource list next to the overview doesn't show: their endpoints and actions. *@
-        @if (ViewPreferences.GroupOverview == GroupOverview.Resources)
-        {
-            @ResourceTableSection(resources)
-        }
-        else if (ViewPreferences.GroupOverview == GroupOverview.Cards)
-        {
-            @ResourceCardsSection()
-        }
-        else if (ViewPreferences.GroupOverview == GroupOverview.Summary)
+        @if (ViewPreferences.GroupOverview == GroupOverview.Summary)
         {
             @HeroSection(summary)
             @ActivitySection()
@@ -115,120 +104,6 @@
 </div>
 
 @code {
-    private RenderFragment ResourceCardsSection() => __builder =>
-    {
-        var cardResources = GetCardResources();
-        <section class="resource-card-grid @CardDensityClass" aria-label="@DialogsLoc[nameof(Dashboard.Resources.Dialogs.SettingsDialogGroupOverviewCards)]">
-            @foreach (var resource in cardResources)
-            {
-                var primaryUrl = resource.IsParameter
-                    ? null
-                    : ResourceUrlHelpers.GetUrls(resource, includeInternalUrls: false, includeNonEndpointUrls: true).FirstOrDefault();
-                var parameterValue = resource.IsParameter
-                    ? GetParameterValue(resource)
-                    : (Value: (string?)null, IsSensitive: false, IsUnresolved: false);
-                <article class="resource-card resource-card-clickable @(resource.IsParameter ? "resource-card-parameter" : null)"
-                         role="link"
-                         tabindex="0"
-                         aria-label="@GetResourceName(resource)"
-                         @onclick="@(() => NavigateToResource(resource))"
-                         @onkeydown="@(e => OnResourceCardKeyDown(e, resource))"
-                         @key="@resource.Name">
-                    <header class="resource-card-header">
-                        <span class="resource-card-title" data-tooltip="@GetResourceName(resource)">
-                            <ResourceNameDisplay Resource="resource" FilterText="" FormatName="GetResourceName" ShowHiddenIndicator="false" />
-                        </span>
-                        <span class="resource-card-type">@resource.GetResourceTypeDisplayName(Loc)</span>
-                    </header>
-                    <div class="resource-card-body">
-                        <div class="resource-card-field">
-                            <span class="resource-card-label">@Loc[nameof(Dashboard.Resources.Resources.ResourcesStateColumnHeader)]</span>
-                            <StateColumnDisplay Resource="@resource" UnviewedErrorCounts="@_unviewedErrorCounts" />
-                        </div>
-                        @if (resource.IsParameter)
-                        {
-                            <div class="resource-card-field resource-card-value">
-                                <span class="resource-card-label">@Loc[nameof(Dashboard.Resources.Resources.ResourcesDetailsParameterValueProperty)]</span>
-                                @if (parameterValue.Value is not null)
-                                {
-                                    <GridValue Value="@parameterValue.Value"
-                                               ValueDescription="@Loc[nameof(Dashboard.Resources.Resources.ResourcesDetailsParameterValueProperty)]"
-                                               EnableMasking="@parameterValue.IsSensitive"
-                                               IsMasked="@parameterValue.IsSensitive"
-                                               StopClickPropagation="true" />
-                                }
-                                else if (parameterValue.IsUnresolved)
-                                {
-                                    <span class="resource-card-unset-value">@ControlsStringsLoc[nameof(ControlsStrings.ParameterValueNotSet)]</span>
-                                }
-                                else
-                                {
-                                    <span class="empty-data"></span>
-                                }
-                            </div>
-                        }
-                        else
-                        {
-                            <div class="resource-card-field resource-card-source-field">
-                                <span class="resource-card-label">@Loc[nameof(Dashboard.Resources.Resources.ResourcesSourceColumnHeader)]</span>
-                                @if (ResourceSourceViewModel.GetSourceViewModel(resource) is { } source)
-                                {
-                                    <span class="resource-card-source" data-tooltip="@source.Tooltip">@source.Value</span>
-                                }
-                                else
-                                {
-                                    <span class="empty-data"></span>
-                                }
-                            </div>
-                        }
-                    </div>
-                    <footer class="resource-card-footer" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">
-                        @if (resource.StartTimeStamp is not null)
-                        {
-                            <span class="resource-card-start-time"
-                                  data-tooltip="@GetResourceStartTimeTooltip(resource)">
-                                <FluentIcon Value="@(new Icons.Regular.Size16.Clock())" Color="Color.Default" />
-                                <span>@GetResourceStartAge(resource)</span>
-                            </span>
-                        }
-                        <div class="resource-card-footer-actions">
-                            @if (parameterValue.Value is { } value)
-                            {
-                                <FluentButton Appearance="ButtonAppearance.Subtle"
-                                              IconOnly="true"
-                                Class="resource-card-copy-value"
-                                              data-tooltip="@ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)]"
-                                              aria-label="@ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)]"
-                                              @attributes="@FluentUIExtensions.GetClipboardCopyAdditionalAttributes(value, ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)], ControlsStringsLoc[nameof(ControlsStrings.GridValueCopied)])">
-                                    <FluentIcon Class="copy-icon" Icon="Icons.Regular.Size16.Copy" Color="Color.Primary" />
-                                    <FluentIcon Class="checkmark-icon" Style="display:none" Icon="Icons.Regular.Size16.Checkmark" Color="Color.Primary" />
-                                </FluentButton>
-                            }
-                            @if (primaryUrl?.Url is not null)
-                            {
-                                <a class="resource-card-primary-endpoint"
-                                   href="@primaryUrl.Url"
-                                   target="_blank"
-                                   rel="noopener noreferrer"
-                                   data-tooltip="@($"{primaryUrl.Text}: {primaryUrl.Url}")"
-                                   aria-label="@($"{primaryUrl.Text}: {primaryUrl.Url}")">
-                                    <FluentIcon Value="@(new Icons.Regular.Size16.Open())" Color="Color.Primary" />
-                                </a>
-                            }
-                            <ResourceActions CommandSelected="@(command => ExecuteCardCommandAsync(resource, command))"
-                                             IsCommandExecuting="@((r, command) => DashboardCommandExecutor.IsExecuting(r.Name, command.Name))"
-                                             OnViewDetails="@(_ => NavigateToResource(resource))"
-                                             Resource="resource"
-                                             MaxHighlightedCount="2"
-                                             ResourceByName="@_resourceByName"
-                                             CardMode="true" />
-                        </div>
-                    </footer>
-                </article>
-            }
-        </section>
-    };
-
     private RenderFragment HeroSection(HealthSummary summary) => __builder =>
     {
         var heroState = GetHeroStateClass(summary);
@@ -273,80 +148,6 @@
                     @HealthLegendItem(summary.Attention, "state-error", Loc[nameof(Dashboard.Resources.Resources.HomeNeedsAttentionLabel)])
                     @HealthLegendItem(summary.Inactive, "state-neutral", Loc[nameof(Dashboard.Resources.Resources.HomeInactiveLabel)])
                 </ul>
-            }
-        </section>
-    };
-
-    // The "Resource list" choice of the group overview: the summarized resources with the same columns and actions as
-    // the resources grid had before the resource list moved to the side pane. It reuses that grid's column components
-    // so the information and the actions stay the same.
-    private RenderFragment ResourceTableSection(List<ResourceViewModel> resources) => __builder =>
-    {
-        var maxHighlightedCount = GetMaxHighlightedCount(resources);
-        <section class="home-section home-resource-table" aria-labelledby="home-resources-title">
-            <div class="home-section-header">
-                <h2 id="home-resources-title">@Loc[nameof(Dashboard.Resources.Resources.HomeResourcesLabel)]</h2>
-                <span class="home-section-count">@FormatCount(resources.Count)</span>
-            </div>
-            @if (resources.Count == 0)
-            {
-                <div class="home-empty">@Loc[nameof(Dashboard.Resources.Resources.ResourcesNoResources)]</div>
-            }
-            else
-            {
-                <table>
-                    <thead>
-                        <tr>
-                            <th scope="col">@ControlsStringsLoc[nameof(ControlsStrings.NameColumnHeader)]</th>
-                            <th scope="col">@Loc[nameof(Dashboard.Resources.Resources.ResourcesStateColumnHeader)]</th>
-                            <th scope="col">@Loc[nameof(Dashboard.Resources.Resources.ResourcesStartTimeColumnHeader)]</th>
-                            <th scope="col">@Loc[nameof(Dashboard.Resources.Resources.ResourcesTypeColumnHeader)]</th>
-                            <th scope="col">@Loc[nameof(Dashboard.Resources.Resources.ResourcesSourceColumnHeader)]</th>
-                            <th scope="col">@Loc[nameof(Dashboard.Resources.Resources.ResourcesUrlsColumnHeader)]</th>
-                            <th scope="col">@Loc[nameof(Dashboard.Resources.Resources.ResourcesActionsColumnHeader)]</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var resource in resources.OrderBy(r => r.ResourceType).ThenBy(r => r, ResourceViewModelNameComparer.Instance))
-                        {
-                            <tr @key="resource.Name">
-                                <td>
-                                    <a class="home-table-resource" href="@DashboardUrls.ResourceOverviewUrl(GetResourceName(resource))">
-                                        <ResourceNameDisplay Resource="resource" FilterText="" FormatName="GetResourceName" ShowHiddenIndicator="true" />
-                                    </a>
-                                </td>
-                                <td><StateColumnDisplay Resource="@resource" UnviewedErrorCounts="@_unviewedErrorCounts" /></td>
-                                <td><StartTimeColumnDisplay Resource="@resource" /></td>
-                                <td class="home-table-type">@resource.GetResourceTypeDisplayName(Loc)</td>
-                                <td>
-                                    @if (ResourceSourceViewModel.GetSourceViewModel(resource) is { } source)
-                                    {
-                                        <SourceColumnDisplay FilterText="" Value="@source.Value" ContentAfterValue="@source.ContentAfterValue" ValueToVisualize="@source.ValueToVisualize" Tooltip="@source.Tooltip" />
-                                    }
-                                    else
-                                    {
-                                        <span class="empty-data"></span>
-                                    }
-                                </td>
-                                <td>
-                                    <UrlsColumnDisplay Resource="resource"
-                                                       HasMultipleReplicas="HasMultipleReplicas(resource)"
-                                                       DisplayedUrls="ResourceUrlHelpers.GetUrls(resource, includeInternalUrls: false, includeNonEndpointUrls: true)" />
-                                </td>
-                                <td>
-                                    <div class="grid-action-container">
-                                        <ResourceActions CommandSelected="@(command => ExecuteCommandAsync(resource, command))"
-                                                         IsCommandExecuting="@((r, command) => DashboardCommandExecutor.IsExecuting(r.Name, command.Name))"
-                                                         OnViewDetails="@(_ => NavigateToResource(resource))"
-                                                         Resource="resource"
-                                                         MaxHighlightedCount="maxHighlightedCount"
-                                                         ResourceByName="@_resourceByName" />
-                                    </div>
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
             }
         </section>
     };
