@@ -30,32 +30,35 @@ internal sealed class CombinedTrxReports
         => _fileNamesByJob.TryGetValue(plan, out var fileNames) ? fileNames : [];
 
     private static TestArtifactExpectation? FindMatchingJob(
-        string entryPath,
-        ILookup<(string Runner, string ShortName), TestArtifactExpectation> jobsByIdentity,
+        string archiveEntryPath,
+        ILookup<(string RunnerBucket, string TestShortName), TestArtifactExpectation> jobsByIdentity,
         TestArtifactExpectation[] knownJobs)
     {
-        var identity = AspireCiWorkflowConventions.GetCombinedReportIdentity(entryPath);
+        var identity = AspireCiWorkflowConventions.ParseCombinedTrxEntryPath(archiveEntryPath);
         if (identity is null)
         {
             return null;
         }
-        var exactMatches = jobsByIdentity[(identity.Value.Runner, identity.Value.ShortName)].ToArray();
-        if (exactMatches.Length > 0 || identity.Value.IsStructured)
+        var exactMatches = jobsByIdentity[(identity.Value.RunnerBucket, identity.Value.TestShortName)].ToArray();
+        // A recognized framework/timestamp suffix identifies the full producer name.
+        // Do not attribute an unknown producer's report to a shorter job-name prefix:
+        // Hosting-Unknown_net10.0_20261103065037.trx must not match Hosting.
+        if (exactMatches.Length > 0 || identity.Value.HasFrameworkAndTimestampSuffix)
         {
             return exactMatches.Length == 1 ? exactMatches[0] : null;
         }
 
-        return FindLegacyClassSuffixedJob(entryPath, knownJobs);
+        return FindJobUsingClassSuffixFallback(archiveEntryPath, knownJobs);
     }
 
-    private static TestArtifactExpectation? FindLegacyClassSuffixedJob(string entryPath, TestArtifactExpectation[] knownJobs)
+    private static TestArtifactExpectation? FindJobUsingClassSuffixFallback(string archiveEntryPath, TestArtifactExpectation[] knownJobs)
     {
-        // Only legacy class-suffixed names need prefix ranking: Hosting-2-BatchTests
+        // Only class-suffixed names need prefix ranking: Hosting-2-BatchTests
         // belongs to Hosting-2 rather than Hosting. Equally specific jobs stay ambiguous.
         var matches = knownJobs.Select(job => new
         {
             Plan = job,
-            MatchingShortNameLength = AspireCiWorkflowConventions.GetLegacyClassSuffixedMatchLength(job, entryPath),
+            MatchingShortNameLength = AspireCiWorkflowConventions.GetClassSuffixFallbackMatchLength(job, archiveEntryPath),
         }).Where(match => match.MatchingShortNameLength > 0).OrderByDescending(match => match.MatchingShortNameLength).ToArray();
 
         return matches.Length > 0 && (matches.Length == 1 || matches[0].MatchingShortNameLength > matches[1].MatchingShortNameLength)

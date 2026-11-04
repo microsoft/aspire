@@ -636,18 +636,18 @@ internal sealed partial class WorkflowRunEvidenceCollector
         {
             var artifacts = await gitHub.GetRowsAsync($"repos/{_repository}/actions/runs/{runId.ToString(CultureInfo.InvariantCulture)}/artifacts", "artifacts");
             CaptureDiagnostic("artifacts.json", artifacts);
-            var plans = new List<TestArtifactExpectation>();
+            var artifactExpectations = new List<TestArtifactExpectation>();
             foreach (var job in failedJobs.OfType<JsonObject>())
             {
-                foreach (var plan in _workflow.DescribeTestArtifacts(job, runAttempt))
+                foreach (var expectation in _workflow.DescribeTestArtifacts(job, runAttempt))
                 {
-                    if (plan.JobName != Text(job["name"]))
+                    if (expectation.JobName != Text(job["name"]))
                     {
                         throw new ValidationException("Workflow conventions cannot change a collected test job's identity: " +
                             $"job='{Display(DiagnosticTextSanitizer.Sanitize(Text(job["name"]) ?? "", limit: 80))}'; " +
-                            $"returned {TestResultArtifacts.Describe(plan)}");
+                            $"returned {TestResultArtifacts.Describe(expectation)}");
                     }
-                    plans.Add(plan);
+                    artifactExpectations.Add(expectation);
                 }
             }
             Directory.CreateDirectory(zipDirectory);
@@ -664,70 +664,70 @@ internal sealed partial class WorkflowRunEvidenceCollector
             var acquiredArtifacts = new List<SelectedTestArtifact>();
             // Keep acquired results visible even if a later fallback fails.
             _selectedArtifacts = acquiredArtifacts;
-            var coveredPlans = new HashSet<TestArtifactExpectation>();
+            var expectationsCoveredByCombinedResults = new HashSet<TestArtifactExpectation>();
             // Prefer the TRX-only aggregate: crash dumps can make a job's diagnostics
             // archive too large to download even when its test reports are small.
-            if (_workflow is AspireCiWorkflowConventions && plans.Any(plan => plan.Format == TestArtifactFormat.Trx))
+            if (_workflow is AspireCiWorkflowConventions && artifactExpectations.Any(expectation => expectation.Format == TestArtifactFormat.Trx))
             {
                 await CollectCombinedResultsAsync();
             }
-            var fallbackPlans = plans.Where(plan => !coveredPlans.Contains(plan)).ToArray();
-            var explainedAbsences = plans.Where(plan => ExplainedRunnerLoss(plan.JobName) &&
-                !artifacts.OfType<JsonObject>().Any(artifact => Text(artifact["name"]) == plan.ArtifactName &&
+            var expectationsNeedingJobArtifacts = artifactExpectations.Where(expectation => !expectationsCoveredByCombinedResults.Contains(expectation)).ToArray();
+            var explainedAbsences = artifactExpectations.Where(expectation => ExplainedRunnerLoss(expectation.JobName) &&
+                !artifacts.OfType<JsonObject>().Any(artifact => Text(artifact["name"]) == expectation.ArtifactName &&
                     (Text(artifact["created_at"]) is not { } created ||
                         string.CompareOrdinal(created, Text(run["run_started_at"]) ?? "") > 0 &&
                         string.CompareOrdinal(created, Text(run["updated_at"]) ?? "") <= 0))).ToHashSet();
             var selectionProblems = new HashSet<TestArtifactExpectation>();
             var selectedTestArtifacts = TestResultArtifacts.SelectAvailable(
                 TestResultArtifacts.ReadArtifacts(artifacts),
-                fallbackPlans,
+                expectationsNeedingJobArtifacts,
                 Text(run["run_started_at"]) ?? "",
                 Text(run["updated_at"]) ?? "",
                 _progress.Diagnostics,
-                (plan, message) =>
+                (expectation, message) =>
                 {
                     if (message.StartsWith("test result artifact is missing", StringComparison.Ordinal) &&
-                        explainedAbsences.Contains(plan))
+                        explainedAbsences.Contains(expectation))
                     {
-                        _progress.Diagnostics.Record("artifact-selection", "runner-loss", new { job = plan.JobName, artifact = plan.ArtifactName });
+                        _progress.Diagnostics.Record("artifact-selection", "runner-loss", new { job = expectation.JobName, artifact = expectation.ArtifactName });
                         return;
                     }
-                    selectionProblems.Add(plan);
+                    selectionProblems.Add(expectation);
                     ReportArtifactProblem(
-                        plan.RequiresResults ? AnalysisProblemCategory.TestEvidence : AnalysisProblemCategory.OptionalContext,
+                        expectation.RequiresResults ? AnalysisProblemCategory.TestEvidence : AnalysisProblemCategory.OptionalContext,
                         "artifacts",
-                        $"{message}; {TestResultArtifacts.Describe(plan)}");
+                        $"{message}; {TestResultArtifacts.Describe(expectation)}");
                 });
             _progress.Diagnostics.Record(
                 "artifact-selection",
                 "selected",
-                new { available = artifacts.Count, planned = plans.Count, selected = acquiredArtifacts.Count + selectedTestArtifacts.Count });
-            foreach (var plan in plans)
+                new { available = artifacts.Count, planned = artifactExpectations.Count, selected = acquiredArtifacts.Count + selectedTestArtifacts.Count });
+            foreach (var expectation in artifactExpectations)
             {
-                var selected = acquiredArtifacts.Concat(selectedTestArtifacts).Where(selection => selection.Expectation == plan).ToArray();
+                var selected = acquiredArtifacts.Concat(selectedTestArtifacts).Where(selection => selection.Expectation == expectation).ToArray();
                 _progress.Diagnostics.Record(
                     "artifact-plan",
                     selected.Length == 0 ? "missing-or-ineligible" : "matched",
                     new
                     {
-                        job = plan.JobName,
-                        artifact = plan.ArtifactName,
+                        job = expectation.JobName,
+                        artifact = expectation.ArtifactName,
                         ids = selected.Select(selection => GetValueText(selection.Artifact.Id)).ToArray()
                     });
             }
             var selectedArtifacts = TestResultArtifacts.SerializeSelection(acquiredArtifacts.Concat(selectedTestArtifacts));
             CaptureDiagnostic("selected-test-result-artifacts.json", selectedArtifacts);
             evidenceState = selectedArtifacts.Count == 0 ? EvidenceState.NotApplicable : EvidenceState.Complete;
-            foreach (var plan in fallbackPlans.Where(plan => plan.RequiresResults &&
-                !selectedTestArtifacts.Any(artifact => artifact.Expectation == plan) && !explainedAbsences.Contains(plan)))
+            foreach (var expectation in expectationsNeedingJobArtifacts.Where(expectation => expectation.RequiresResults &&
+                !selectedTestArtifacts.Any(artifact => artifact.Expectation == expectation) && !explainedAbsences.Contains(expectation)))
             {
                 evidenceState = EvidenceState.Unavailable;
-                if (!selectionProblems.Contains(plan))
+                if (!selectionProblems.Contains(expectation))
                 {
                     ReportArtifactProblem(
                     AnalysisProblemCategory.TestEvidence,
                     "artifacts",
-                    $"Structured test results are unavailable; {TestResultArtifacts.Describe(plan)}");
+                    $"Structured test results are unavailable; {TestResultArtifacts.Describe(expectation)}");
                 }
             }
             foreach (var selection in selectedTestArtifacts)
@@ -744,10 +744,10 @@ internal sealed partial class WorkflowRunEvidenceCollector
 
             async Task CollectCombinedResultsAsync()
             {
-                var combinedPlan = new TestArtifactExpectation("All-TestResults", "All-TestResults", TestArtifactFormat.Trx, TestEvidencePolicy.Required);
+                var combinedArtifactExpectation = new TestArtifactExpectation("All-TestResults", "All-TestResults", TestArtifactFormat.Trx, TestEvidencePolicy.Required);
                 try
                 {
-                    var combined = TestResultArtifacts.Select(TestResultArtifacts.ReadArtifacts(artifacts), [combinedPlan],
+                    var combined = TestResultArtifacts.Select(TestResultArtifacts.ReadArtifacts(artifacts), [combinedArtifactExpectation],
                         Text(run["run_started_at"]) ?? "", Text(run["updated_at"]) ?? "", diagnostics: _progress.Diagnostics).Single();
                     // Establish ownership before acquisition. Reruns can retain reports
                     // from historical producers whose names overlap current jobs.
@@ -756,25 +756,25 @@ internal sealed partial class WorkflowRunEvidenceCollector
                     if (await DownloadAndExtractTestResultsAsync(combined, (entry, file) => extractedReports.Add((entry, file)), reportFailure: false))
                     {
                         var combinedReports = new CombinedTrxReports(extractedReports, producers);
-                        foreach (var plan in plans.Where(plan => plan.Format == TestArtifactFormat.Trx))
+                        foreach (var expectation in artifactExpectations.Where(expectation => expectation.Format == TestArtifactFormat.Trx))
                         {
                             // A rerun's new aggregate can include reports left by an older attempt.
                             // Verify the source artifact's attempt window without imposing the
                             // download limit: oversized logs are precisely why we prefer TRX.
                             try
                             {
-                                var source = TestResultArtifacts.Select(TestResultArtifacts.ReadArtifacts(artifacts), [plan],
+                                var source = TestResultArtifacts.Select(TestResultArtifacts.ReadArtifacts(artifacts), [expectation],
                                     Text(run["run_started_at"]) ?? "", Text(run["updated_at"]) ?? "",
                                     maxArtifactBytes: long.MaxValue, maxTotalBytes: long.MaxValue).Single();
                                 ValidateAssociatedRun(source);
                             }
                             catch (Exception error) when (error is ValidationException or InvalidOperationException)
                             {
-                                _progress.Diagnostics.Record("combined-results", "fallback", new { job = plan.JobName, reason = error.Message });
+                                _progress.Diagnostics.Record("combined-results", "fallback", new { job = expectation.JobName, reason = error.Message });
                                 continue;
                             }
-                            var matchingReportFileNames = combinedReports.GetFileNamesForJob(plan);
-                            var usableReportFileNames = ReadUsableCombinedReports(plan,
+                            var matchingReportFileNames = combinedReports.GetFileNamesForJob(expectation);
+                            var usableReportFileNames = ReadUsableCombinedReports(expectation,
                                 Path.Combine(_scratch.Results, GetValueText(combined.Artifact.Id)), matchingReportFileNames);
                             // Coverage means the available reports are usable, not that every
                             // framework reported. An entirely absent report is undetectable
@@ -784,14 +784,14 @@ internal sealed partial class WorkflowRunEvidenceCollector
                             {
                                 // Preserve valid observations even when another report is corrupt
                                 // and this job still needs its diagnostics archive as a fallback.
-                                acquiredArtifacts.Add(new(combined.Artifact, plan) { ResultFiles = usableReportFileNames });
+                                acquiredArtifacts.Add(new(combined.Artifact, expectation) { ResultFiles = usableReportFileNames });
                             }
                             if (canSkipJobArtifact)
                             {
-                                coveredPlans.Add(plan);
+                                expectationsCoveredByCombinedResults.Add(expectation);
                             }
                             _progress.Diagnostics.Record("combined-results", canSkipJobArtifact ? "covered" : "fallback",
-                                new { job = plan.JobName, matched = matchingReportFileNames.Length, usable = usableReportFileNames.Count, reason = canSkipJobArtifact ? null : "Missing, ambiguous or unusable reports." });
+                                new { job = expectation.JobName, matched = matchingReportFileNames.Length, usable = usableReportFileNames.Count, reason = canSkipJobArtifact ? null : "Missing, ambiguous or unusable reports." });
                         }
                     }
                     else
@@ -901,7 +901,7 @@ internal sealed partial class WorkflowRunEvidenceCollector
         }
     }
 
-    private List<string> ReadUsableCombinedReports(TestArtifactExpectation plan, string resultsDirectory, string[] matchingFileNames)
+    private List<string> ReadUsableCombinedReports(TestArtifactExpectation expectation, string resultsDirectory, string[] matchingFileNames)
     {
         var usable = new List<string>();
         foreach (var fileName in matchingFileNames)
@@ -918,7 +918,7 @@ internal sealed partial class WorkflowRunEvidenceCollector
             }
             catch (Exception error) when (error is ValidationException or IOException or InvalidOperationException or System.Xml.XmlException)
             {
-                _progress.Diagnostics.Record("combined-results", "unusable-report", new { job = plan.JobName, file = fileName, reason = error.Message });
+                _progress.Diagnostics.Record("combined-results", "unusable-report", new { job = expectation.JobName, file = fileName, reason = error.Message });
             }
         }
 

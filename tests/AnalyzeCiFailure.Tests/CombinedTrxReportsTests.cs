@@ -91,7 +91,7 @@ public sealed class CombinedTrxReportsTests
     }
 
     [Fact]
-    public void ClassSuffixedLegacyReportsUseTheLongestJobBoundary()
+    public void ClassSuffixFallbackUsesTheLongestJobBoundary()
     {
         var job = CreateJob("Hosting", "ubuntu-latest");
         var partition = CreateJob("Hosting-2", "ubuntu-latest");
@@ -109,7 +109,7 @@ public sealed class CombinedTrxReportsTests
     }
 
     [Fact]
-    public void AmbiguousExactJobsCannotFallBackToAShorterLegacyPrefix()
+    public void AmbiguousExactJobsCannotUseClassSuffixFallback()
     {
         var job = CreateJob("Hosting", "ubuntu-latest");
         var partition = CreateJob("Hosting-2", "ubuntu-latest");
