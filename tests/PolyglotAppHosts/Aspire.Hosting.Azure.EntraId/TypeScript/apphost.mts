@@ -9,6 +9,7 @@ const certificatePassword = await builder.addParameter("certificate-password", {
 const redirectUris = await builder.addParameter("redirect-uris");
 const redirectHost = await builder.addParameter("redirect-host");
 const ownerId = await builder.addParameter("entra-owner");
+const serviceReference = await builder.addParameter("service-reference");
 const exampleTenant = "aaaabbbb-0000-cccc-1111-dddd2222eeee";
 const exampleClient = "00001111-aaaa-2222-bbbb-3333cccc4444";
 
@@ -60,6 +61,16 @@ await createdEntra.withOwners(ownerId);
 await createdEntra.withApplicationOwners(ownerId);
 await createdEntra.withServicePrincipalOwners(exampleClient);
 await createdEntra.withIdTokenIssuance();
+await createdEntra.configureInfrastructure(async infrastructure => {
+    const application = await infrastructure.getMicrosoftGraphApplicationByIdentifier("application");
+    const tags = await application.tags.get();
+    await tags.add("department:engineering");
+    const bicep = infrastructure.bicep();
+    await application.serviceManagementReference.set(bicep.parameter(serviceReference));
+    const principal = await infrastructure.getMicrosoftGraphServicePrincipalByIdentifier("servicePrincipal");
+    const principalTags = await principal.tags.get();
+    await principalTags.add("department:engineering");
+});
 await createdEntra.withAppRole("User", "User", "Can use the API.");
 await createdEntra.withAppRole("Admin", "Administrator", "Can administer the API.", {
     allowedMemberTypes: ["User", "Application"],

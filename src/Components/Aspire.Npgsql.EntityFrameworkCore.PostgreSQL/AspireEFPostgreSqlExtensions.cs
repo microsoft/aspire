@@ -11,7 +11,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 using Npgsql.EntityFrameworkCore.PostgreSQL;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure.Internal;
-using Npgsql.EntityFrameworkCore.PostgreSQL.Storage.Internal;
 
 namespace Microsoft.Extensions.Hosting;
 
@@ -140,30 +139,16 @@ public static partial class AspireEFPostgreSqlExtensions
 
                         if (!settings.DisableRetry)
                         {
-                            var executionStrategy = extension?.ExecutionStrategyFactory?.Invoke(new ExecutionStrategyDependencies(null!, optionsBuilder.Options, null!));
-
-                            if (executionStrategy != null)
-                            {
-                                if (executionStrategy is NpgsqlRetryingExecutionStrategy)
-                                {
-                                    // Keep custom Retry strategy.
-                                    // Any sub-class of NpgsqlRetryingExecutionStrategy is a valid retry strategy
-                                    // which shouldn't be replaced even with DisableRetry == false
-                                }
-                                else if (executionStrategy.GetType() != typeof(NpgsqlExecutionStrategy))
-                                {
-                                    // Check NpgsqlExecutionStrategy specifically (no 'is'), any sub-class is treated as a custom strategy.
-
-                                    throw new InvalidOperationException($"{nameof(NpgsqlEntityFrameworkCorePostgreSQLSettings)}.{nameof(NpgsqlEntityFrameworkCorePostgreSQLSettings.DisableRetry)} needs to be set when a custom Execution Strategy is configured.");
-                                }
-                                else
-                                {
-                                    options.EnableRetryOnFailure();
-                                }
-                            }
-                            else
+                            // No configured factory means the provider's default strategy is in use. Don't compare against
+                            // the provider's internal default strategy type: it was removed in Npgsql.EntityFrameworkCore.PostgreSQL 11.
+                            if (extension?.ExecutionStrategyFactory is not { } executionStrategyFactory)
                             {
                                 options.EnableRetryOnFailure();
+                            }
+                            else if (executionStrategyFactory(new ExecutionStrategyDependencies(null!, optionsBuilder.Options, null!)) is not NpgsqlRetryingExecutionStrategy)
+                            {
+                                // Any sub-class of NpgsqlRetryingExecutionStrategy is a valid retry strategy which is kept as-is.
+                                throw new InvalidOperationException($"{nameof(NpgsqlEntityFrameworkCorePostgreSQLSettings)}.{nameof(NpgsqlEntityFrameworkCorePostgreSQLSettings.DisableRetry)} needs to be set when a custom Execution Strategy is configured.");
                             }
                         }
 

@@ -829,7 +829,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             var selectAll = page.GetByRole(AriaRole.Button, new() { Name = "Select all", Exact = true });
             await selectAll.FocusAsync();
             await selectAll.PressAsync("Space");
-            await Assertions.Expect(selectAll).ToHaveAttributeAsync("aria-pressed", "true");
+            await Assertions.Expect(selectAll).ToHaveAttributeAsync("aria-description", Resources.Layout.ResourcePaneAllSelected);
             await Assertions.Expect(page.Locator(".resource-row.selected[data-resource-name]")).ToHaveCountAsync(8);
             foreach (var row in await page.Locator(".resource-row[data-resource-name]").AllAsync())
             {
@@ -841,7 +841,8 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                 new[] { selectedBounds.X, selectedBounds.Y, selectedBounds.Width, selectedBounds.Height });
 
             await rest.Locator(".resource-row-link").ClickAsync();
-            await Assertions.Expect(selectAll).ToHaveAttributeAsync("aria-pressed", "false");
+            await Assertions.Expect(selectAll).Not.ToHaveAttributeAsync("aria-description", Resources.Layout.ResourcePaneAllSelected);
+            Assert.Null(await selectAll.GetAttributeAsync("aria-description"));
             await Assertions.Expect(page.Locator(".resource-row.selected[data-resource-name='cache']")).ToHaveCountAsync(2);
             await Assertions.Expect(page.Locator(".resource-row.selected[data-resource-name]")).ToHaveCountAsync(2);
             await page.Mouse.MoveAsync(1, 1);
@@ -1351,23 +1352,25 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             }
             await Assertions.Expect(row.Locator(".resource-relationship-summary")).ToHaveCountAsync(0);
             var selectAll = page.GetByRole(AriaRole.Button, new() { Name = "Select all", Exact = true });
-            await Assertions.Expect(selectAll).ToHaveAttributeAsync("aria-pressed", "false");
+            await Assertions.Expect(selectAll).Not.ToHaveAttributeAsync("aria-description", Resources.Layout.ResourcePaneAllSelected);
+            Assert.Null(await selectAll.GetAttributeAsync("aria-description"));
             await selectAll.FocusAsync();
             await selectAll.PressAsync("Space");
-            await Assertions.Expect(selectAll).ToHaveAttributeAsync("aria-pressed", "true");
+            await Assertions.Expect(selectAll).ToHaveAttributeAsync("aria-description", Resources.Layout.ResourcePaneAllSelected);
             await Assertions.Expect(page.Locator(".resource-row.selected[data-resource-name]")).ToHaveCountAsync(8);
             foreach (var density in new[] { "Compact", "Comfortable", "Spacious" })
             {
                 await page.GetByRole(AriaRole.Button, new() { Name = "Settings", Exact = true }).ClickAsync();
                 await page.GetByRole(AriaRole.Button, new() { Name = density, Exact = true }).ClickAsync();
                 await page.GetByRole(AriaRole.Button, new() { Name = "Close", Exact = true }).Last.ClickAsync();
-                await Assertions.Expect(selectAll).ToHaveAttributeAsync("aria-pressed", "true");
+                await Assertions.Expect(selectAll).ToHaveAttributeAsync("aria-description", Resources.Layout.ResourcePaneAllSelected);
                 Assert.All(await page.Locator(".resource-row.selected[data-resource-name]").EvaluateAllAsync<string[]>(
                     "rows => rows.map(row => getComputedStyle(row).backgroundColor)"),
                     background => Assert.NotEqual("rgba(0, 0, 0, 0)", background));
             }
             await row.Locator(".resource-row-link").ClickAsync();
-            await Assertions.Expect(selectAll).ToHaveAttributeAsync("aria-pressed", "false");
+            await Assertions.Expect(selectAll).Not.ToHaveAttributeAsync("aria-description", Resources.Layout.ResourcePaneAllSelected);
+            Assert.Null(await selectAll.GetAttributeAsync("aria-description"));
             var cache = page.Locator(".resource-row[data-resource-name='cache']").First;
             await page.Mouse.MoveAsync(1, 1);
             await selectAll.FocusAsync();
@@ -1375,7 +1378,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             await cache.Locator(".resource-row-link").ClickAsync(new() { Modifiers = [KeyboardModifier.Control] });
             await Assertions.Expect(page.Locator(".resource-row.selected[data-resource-name]")).ToHaveCountAsync(4);
             await selectAll.ClickAsync();
-            await Assertions.Expect(selectAll).ToHaveAttributeAsync("aria-pressed", "true");
+            await Assertions.Expect(selectAll).ToHaveAttributeAsync("aria-description", Resources.Layout.ResourcePaneAllSelected);
             await Assertions.Expect(page.Locator(".resource-row.selected[data-resource-name]")).ToHaveCountAsync(8);
         });
     }
