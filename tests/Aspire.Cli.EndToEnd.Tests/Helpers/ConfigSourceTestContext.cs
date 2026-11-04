@@ -364,6 +364,7 @@ internal sealed class ConfigSourceTestContext
     {
         var actual = await AssertSourceAppliedAsync("original");
         original["skillSources"] = actual["skillSources"]!.DeepClone();
+        original["integrationSources"] = actual["integrationSources"]!.DeepClone();
         original["configSource"] = actual["configSource"]!.DeepClone();
         Assert.Equal(original.ToJsonString(), actual.ToJsonString());
     }
@@ -470,7 +471,7 @@ internal sealed class ConfigSourceTestContext
         _repository = SshRepository;
     }
 
-    private static void AssertSourceValues(JsonObject config, string version, string appliedVersion)
+    private void AssertSourceValues(JsonObject config, string version, string appliedVersion)
     {
         var expectedSources = JsonNode.Parse($$"""
             {
@@ -484,6 +485,14 @@ internal sealed class ConfigSourceTestContext
             }
             """);
         Assert.True(JsonNode.DeepEquals(expectedSources, config["skillSources"]));
+        var expectedIntegrationSources = JsonNode.Parse($$"""
+            {
+              "default": { "enabled": false },
+              "team": { "source": "{{_feedRoot}}/team", "patterns": ["Contoso.Hosting.*"] },
+              "other": { "source": "{{_feedRoot}}/other", "patterns": ["Fabrikam.Hosting.*"] }
+            }
+            """);
+        Assert.True(JsonNode.DeepEquals(expectedIntegrationSources, config["integrationSources"]));
         Assert.Equal(appliedVersion, config["configSource"]!["appliedVersion"]!.GetValue<string>());
     }
 
