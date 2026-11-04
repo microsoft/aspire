@@ -1214,6 +1214,70 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
     }
 
     [Theory]
+    [InlineData(769)]
+    [InlineData(1440)]
+    [InlineData(2000)]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task ContextMenu_PreservesNativeEndpointActivityAndControlMenus(int width)
+    {
+        await RunTestAsync(async page =>
+        {
+            fixture.StartDynamicSession();
+            await fixture.SeedActivityAsync();
+            await page.SetViewportSizeAsync(width, 900);
+            await page.GotoAsync("/resources/cache?pane=tags");
+            await Assertions.Expect(page.Locator(".resource-row[data-resource-name]")).ToHaveCountAsync(8);
+            await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+            await page.Locator(".resource-pane-canvas-toggle").ClickAsync();
+            var original = page.Url;
+            var row = page.Locator(".resource-row[data-resource-name='api']").First;
+            var menu = page.Locator("fluent-menu[aria-labelledby='resource-pane-context-menu-header'] fluent-menu-list");
+            var targets = new List<ILocator>
+            {
+                row.Locator(".resource-row-primary-endpoint svg").First,
+                row.GetByRole(AriaRole.Button, new() { Name = "Actions for api", Exact = true })
+            };
+            if (width >= 1440)
+            {
+                // Activity is intentionally undisclosed, and its queries suspended, below 1440px.
+                await Assertions.Expect(row.Locator(".resource-row-insight-latency")).ToBeVisibleAsync();
+                targets.Add(row.Locator(".resource-row-insight-requests span").First);
+                targets.Add(row.Locator(".resource-row-insight-latency span").First);
+            }
+            else
+            {
+                await Assertions.Expect(row.Locator(".resource-row-insight")).ToHaveCountAsync(0);
+            }
+            var selected = page.Locator(".resource-row[data-resource-name] > .resource-row-link[aria-current]");
+            var selection = await selected.EvaluateAllAsync<string[]>("links => links.map(link => link.parentElement.dataset.resourceName)");
+            await page.EvaluateAsync("""
+                () => document.addEventListener('contextmenu', event => {
+                    window.resourceContextMenuEvent = event;
+                }, true)
+                """);
+            foreach (var target in targets)
+            {
+                await target.ClickAsync(new() { Button = MouseButton.Right });
+                Assert.False(await page.EvaluateAsync<bool>("() => window.resourceContextMenuEvent.defaultPrevented"));
+                await Assertions.Expect(menu).Not.ToBeVisibleAsync();
+                Assert.Equal(original, page.Url);
+                Assert.Equal(selection, await selected.EvaluateAllAsync<string[]>("links => links.map(link => link.parentElement.dataset.resourceName)"));
+                await Assertions.Expect(page.Locator("[data-resource-name='cache'] .resource-row-link").First)
+                    .ToHaveAttributeAsync("aria-current", "page");
+                await page.Keyboard.PressAsync("Escape");
+            }
+            foreach (var target in new[] { row.Locator(".resource-row-icon"), row.Locator(".resource-row-wide-metadata") })
+            {
+                await target.ClickAsync(new() { Button = MouseButton.Right });
+                await Assertions.Expect(menu).ToBeVisibleAsync();
+                await Assertions.Expect(menu.GetByText("api", new() { Exact = true })).ToBeVisibleAsync();
+                await page.Keyboard.PressAsync("Escape");
+                await Assertions.Expect(row.Locator(".resource-row-link")).ToBeFocusedAsync();
+            }
+        });
+    }
+
+    [Theory]
     [InlineData(false, false)]
     [InlineData(false, true)]
     [InlineData(true, false)]

@@ -517,12 +517,14 @@ export function registerResourceContextMenu(layoutElement, dotNetRef) {
     unregisterResourceContextMenu(layoutElement);
 
     const state = { trigger: null, selectionTrigger: null, disposed: false };
+    const interactiveSelector = 'a, button, fluent-button, fluent-menu-item, input, select, textarea, .resource-relationship-summary, [role="button"], [role="checkbox"], [contenteditable]';
     const open = (event, keyboard) => {
         const row = event.target.closest('.resource-pane-list .resource-row[data-resource-name]');
         const link = row?.querySelector('.resource-row-link');
-        // The ellipsis and other controls retain their own keyboard behavior. Telemetry-only
+        const control = event.target.closest(interactiveSelector);
+        // Nested links and controls retain their native menus and keyboard behavior. Telemetry-only
         // rows have no app-model actions, so keep their native context menu.
-        if (!link || (keyboard && event.target !== link)) {
+        if (!link || (keyboard && event.target !== link) || (control && control !== link)) {
             return;
         }
         event.preventDefault();
@@ -584,7 +586,7 @@ export function registerResourceContextMenu(layoutElement, dotNetRef) {
             state.selectionTrigger = selectedLink;
         }
         if (!layoutElement.classList.contains('pane-full-canvas') || event.button !== 0 || event.detail > 1 || event.defaultPrevented ||
-            event.target.closest('a, button, fluent-button, fluent-menu-item, input, select, textarea, .resource-relationship-summary, [role="button"], [role="checkbox"], [contenteditable]')) {
+            event.target.closest(interactiveSelector)) {
             return;
         }
         const row = event.target.closest('.resource-pane-list .resource-row[data-resource-name], .resource-pane-list .resource-row-kind-telemetry');
