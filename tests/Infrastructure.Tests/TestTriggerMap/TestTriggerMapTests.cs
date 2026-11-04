@@ -855,6 +855,20 @@ public sealed class TestTriggerMapTests
     }
 
     [Theory]
+    [InlineData("tests/Aspire.Cli.EndToEnd.Tests/Fixtures/JsPublish/nextjs/.npmrc")]
+    [InlineData("tests/Aspire.Cli.EndToEnd.Tests/Fixtures/JsPublish/npmscript/.npmrc")]
+    public void JsPublishFixtureNpmrcRunsCliPublicRegistryGuard(string path)
+    {
+        var result = SelectWithRealMap(path, "Aspire.Cli.EndToEnd.Tests");
+
+        Assert.False(result.SelectsAll);
+        Assert.Contains("Aspire.Cli.EndToEnd.Tests", result.TestProjects);
+        Assert.Contains("Aspire.Cli.Tests", result.TestProjects);
+        Assert.Contains(result.TestCauses["Aspire.Cli.Tests"],
+            cause => cause.Kind == CauseKind.PathRule && cause.Trigger == path);
+    }
+
+    [Theory]
     [InlineData("src/Aspire.Hosting.CodeGeneration.Go/AtsGoCodeGenerator.cs")]
     [InlineData("src/Aspire.Hosting.CodeGeneration.Go/GoLanguageSupport.cs")]
     public void GoModTemplatesSelectCliMinimumGoVersionGuard(string path)
