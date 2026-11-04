@@ -16,6 +16,9 @@ internal sealed partial class AspireCiWorkflowConventions : IGitHubWorkflowConve
 
     public string WorkflowPath => ".github/workflows/ci.yml";
 
+    // Match an All-TestResults entry to a producing job's runner and short name.
+    // Return 0 for no match, otherwise the short-name length so the caller can
+    // prefer Hosting-2 over Hosting for Hosting-2_*.trx; tied matches stay ambiguous.
     internal static int GetMatchingTestShortNameLength(TestArtifactExpectation plan, string entry)
     {
         var match = TestArtifactJobNameRegex().Match(plan.JobName);

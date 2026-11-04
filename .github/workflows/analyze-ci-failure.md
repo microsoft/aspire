@@ -441,7 +441,7 @@ Use this alternative inline in the proposal `causes` array (not a separate file)
   "definition": {
     "id": "test-timeout",
     "type": "flaky-test",
-    "title": "Intermittent debugger timeout",
+    "title": "Debugger connection timeout",
     "error_pattern": "Connection timed out"
   },
   "job_ids": ["67890"],
@@ -452,7 +452,10 @@ Use this alternative inline in the proposal `causes` array (not a separate file)
 
 - `id` is a lowercase hyphenated slug absent from the collected catalogue. Existing and new are distinct variants; never mix their fields.
 - `type` is `flaky-test`, `infra-failure`, or `main-repository-breakage`. Never create a PR code-issue cause.
-- `title` is a single-line description of at most 238 characters.
+- `title` is a single-line description of the observed failure, at most 238 characters.
+  Keep new issue titles neutral: do not add a `Flaky:` prefix or assert flakiness
+  in the title, even when `type` is `flaky-test`. Classification belongs in
+  `type`, not the title.
 - Flaky causes reference the exact bundle-local `test_refs` classified flaky, sharing the same mechanism. Each referenced test belongs to a claimed job, and every claimed job contains a referenced observation. Infrastructure/main causes use an empty `test_refs` array.
 - `error_pattern` is the actual diagnostic, up to 500 characters, optionally LF-delimited. Do not include styling/unsafe controls.
 - `job_ids` is a nonempty array of unique trusted string IDs, never names. Infrastructure/main causes require compatible classifications.

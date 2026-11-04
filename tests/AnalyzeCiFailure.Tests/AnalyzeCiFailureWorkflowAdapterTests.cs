@@ -11,19 +11,36 @@ namespace Infrastructure.Tests;
 public sealed class AnalyzeCiFailureWorkflowAdapterTests
 {
     [Theory]
-    [InlineData("ubuntu-latest/testresults/Infrastructure_net10.0_20260904120100.trx", true)]
-    [InlineData("ubuntu-latest/testresults/Infrastructure.trx", true)]
-    [InlineData("ubuntu-latest/testresults/Infrastructure-BatchTests.trx", true)]
-    [InlineData("windows-latest/testresults/Infrastructure_net10.0_20260904120100.trx", false)]
-    [InlineData("ubuntu-latest/testresults/InfrastructureOther_net10.0_20260904120100.trx", false)]
-    [InlineData("ubuntu-latest/Infrastructure.trx", false)]
-    [InlineData("ubuntu-latest/testresults/nested/Infrastructure.trx", false)]
-    public void CombinedResultMappingPreservesRunnerAndProducerBoundaries(string entry, bool expected)
+    [InlineData("ubuntu-latest/testresults/Infrastructure_net10.0_20260904120100.trx", 14)]
+    [InlineData("ubuntu-latest/testresults/Infrastructure.trx", 14)]
+    [InlineData("ubuntu-latest/testresults/Infrastructure-BatchTests.trx", 14)]
+    [InlineData("windows-latest/testresults/Infrastructure_net10.0_20260904120100.trx", 0)]
+    [InlineData("ubuntu-latest/testresults/InfrastructureOther_net10.0_20260904120100.trx", 0)]
+    [InlineData("ubuntu-latest/Infrastructure.trx", 0)]
+    [InlineData("ubuntu-latest/testresults/nested/Infrastructure.trx", 0)]
+    [InlineData("", 0)]
+    [InlineData("ubuntu-latest/testresults/", 0)]
+    [InlineData("ubuntu-latest/testresults/infrastructure.trx", 0)]
+    [InlineData("Ubuntu-latest/testresults/Infrastructure.trx", 0)]
+    public void CombinedResultMappingPreservesRunnerAndProducerBoundaries(string entry, int expectedMatchingShortNameLength)
     {
         var plan = new TestArtifactExpectation("Tests / No-package tests / Infrastructure (ubuntu-latest)",
             "logs-Infrastructure-ubuntu-latest", TestArtifactFormat.Trx, TestEvidencePolicy.Required);
 
-        Assert.Equal(expected, AspireCiWorkflowConventions.GetMatchingTestShortNameLength(plan, entry) > 0);
+        Assert.Equal(expectedMatchingShortNameLength, AspireCiWorkflowConventions.GetMatchingTestShortNameLength(plan, entry));
+    }
+
+    [Theory]
+    [InlineData("", "Trx")]
+    [InlineData("Build", "Trx")]
+    [InlineData("Tests / No-package tests / Infrastructure (ubuntu-latest)", "Mocha")]
+    public void CombinedResultMappingRejectsUnrecognizedOrNonTrxProducers(string jobName, string format)
+    {
+        var plan = new TestArtifactExpectation(jobName, "results",
+            Enum.Parse<TestArtifactFormat>(format), TestEvidencePolicy.Required);
+
+        Assert.Equal(0, AspireCiWorkflowConventions.GetMatchingTestShortNameLength(
+            plan, "ubuntu-latest/testresults/Infrastructure.trx"));
     }
 
     [Theory]

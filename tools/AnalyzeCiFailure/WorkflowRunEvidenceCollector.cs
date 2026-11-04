@@ -651,10 +651,15 @@ internal sealed partial class WorkflowRunEvidenceCollector
                 }
             }
             Directory.CreateDirectory(zipDirectory);
+            const long maximumArtifactDownloadBytes = 100L * 1024 * 1024;
+            const long maximumTotalDownloadedBytes = 1024L * 1024 * 1024;
+            const long maximumTotalExpandedResultBytes = 1024L * 1024 * 1024;
+            const int maximumArtifactAcquisitionAttempts = 20;
+
             // Trying combined results must not reset or bypass the limits used by
             // job-specific fallbacks, including bytes consumed by failed attempts.
-            long remainingExpandedBytes = 1073741824;
-            long remainingDownloadedBytes = 1073741824;
+            var remainingExpandedBytes = maximumTotalExpandedResultBytes;
+            var remainingDownloadedBytes = maximumTotalDownloadedBytes;
             var acquisitionCount = 0;
             var acquiredArtifacts = new List<SelectedTestArtifact>();
             // Keep acquired results visible even if a later fallback fails.
@@ -810,7 +815,7 @@ internal sealed partial class WorkflowRunEvidenceCollector
                 var zipPath = Path.Combine(zipDirectory, artifactId + ".zip");
                 try
                 {
-                    if (remainingExpandedBytes <= 0 || remainingDownloadedBytes <= 0 || acquisitionCount >= 20)
+                    if (remainingExpandedBytes <= 0 || remainingDownloadedBytes <= 0 || acquisitionCount >= maximumArtifactAcquisitionAttempts)
                     {
                         throw new ValidationException("The shared artifact acquisition budget has been exhausted.");
                     }
@@ -821,7 +826,7 @@ internal sealed partial class WorkflowRunEvidenceCollector
                         await gitHub.DownloadFileAsync(
                             $"repos/{_repository}/actions/artifacts/{artifactId}/zip",
                             zipPath,
-                            maximumBytes: Math.Min(104857600, remainingDownloadedBytes));
+                            maximumBytes: Math.Min(maximumArtifactDownloadBytes, remainingDownloadedBytes));
                     }
                     catch (ValidationException error)
                     {

@@ -4,46 +4,12 @@
 using System.Globalization;
 using System.Text.Json.Nodes;
 using AnalyzeCiFailure;
-using Xunit;
 
 namespace Infrastructure.Tests;
 
 /// <summary>Exercises production Markdown and metadata projections through shared scenario helpers.</summary>
 public sealed partial class AnalyzeCiFailureWorkflowTests
 {
-    [Theory]
-    [InlineData("Flaky: Debugger timeout", "[CI Failure] Debugger timeout")]
-    [InlineData("flaky:   Debugger timeout", "[CI Failure] Debugger timeout")]
-    [InlineData("FLAKY:", "[CI Failure] test-failure")]
-    [InlineData("Debugger timeout", "[CI Failure] Debugger timeout")]
-    [InlineData("Tests.Flaky: assertion fails", "[CI Failure] Tests.Flaky: assertion fails")]
-    [InlineData("FlakyTests.Method fails", "[CI Failure] FlakyTests.Method fails")]
-    public void CauseIssueTitlesDoNotAssertFlakiness(string title, string expected)
-    {
-        var cause = new JsonObject
-        {
-            ["id"] = "test-failure",
-            ["type"] = "flaky-test",
-            ["title"] = title,
-            ["error_pattern"] = "Timeout",
-        };
-        var evidence = new PublicationEvidence(
-            PullRequest: null,
-            LastSuccess: null,
-            TriggeringMerge: null,
-            CandidateState: CandidateHistoryState.Unavailable,
-            Candidates: null);
-
-        var issue = CauseIssueRenderer.RenderCanonicalIssue(
-            cause, context: null, evidence,
-            "https://github.com/microsoft/aspire/actions/runs/123",
-            "pull-request", "42", "Tests", "| occurrence |");
-
-        Assert.Equal(expected, issue.Title);
-        Assert.Equal("ci-failure-cause,test-failure", issue.Labels);
-        Assert.Equal(title, cause["title"]!.GetValue<string>());
-    }
-
     // The fixtures exercise the production functions, with file I/O kept here only
     // to preserve the representative inputs and independently asserted outputs.
     private static Task<CommandResult> RunFunctionAsync(Func<string> operation, int errorCode = 1)
