@@ -69,8 +69,10 @@ See the [Container Apps deployment guide](https://aspire.dev/deployment/azure/co
 
 ## Schedule image cleanup
 
-By default, `WithPurgeTask` retains the newest three matching tags per repository and removes
-the remaining matching tags and eligible untagged manifests to reclaim storage.
+`WithPurgeTask` removes matching tags older than `ago` while always retaining the newest `keep`
+matching tags per repository. All younger matching tags are also retained, so more than `keep`
+tags can remain. By default, `ago` is zero, `keep` is three, and eligible untagged manifests are
+also removed to reclaim storage.
 Set `untagged` to `false` to remove tags only, leaving the underlying manifests and image layers.
 
 **C#**
@@ -78,7 +80,8 @@ Set `untagged` to `false` to remove tags only, leaving the underlying manifests 
 ```csharp
 registry.WithPurgeTask("0 1 * * *",
     filter: "myapp:.*",
-    keep: 3);
+    ago: TimeSpan.FromDays(7),
+    keep: 5);
 ```
 
 **TypeScript**
@@ -86,7 +89,8 @@ registry.WithPurgeTask("0 1 * * *",
 ```typescript
 await registry.withPurgeTask("0 1 * * *", {
     filter: "myapp:.*",
-    keep: 3
+    ago: 7 * 24 * 60 * 60 * 1000,
+    keep: 5
 });
 ```
 
@@ -98,7 +102,7 @@ usage reporting can lag behind deletion.
 The task defaults to `mcr.microsoft.com/acr/acr-cli:0.21` and generates:
 
 ```text
-mcr.microsoft.com/acr/acr-cli:0.21 purge --filter 'myapp:.*' --max-tags 3 --untagged --max-untagged-manifests 0
+mcr.microsoft.com/acr/acr-cli:0.21 purge --filter 'myapp:.*' --ago 7d --min-tags 5 --untagged --max-untagged-manifests 0
 ```
 
 Override the image tag with `cliVersion`. The selected image must support the count-retention
@@ -112,14 +116,16 @@ registry.WithPurgeTask("0 1 * * *", filter: "myapp:.*", cliVersion: "0.20");
 await registry.withPurgeTask("0 1 * * *", { filter: "myapp:.*", cliVersion: "0.20" });
 ```
 
-`keep` maps to `--max-tags`, not `--keep`, so it does not retain an extra set of untagged
-manifests. When `ago` is omitted or zero, the task omits `--ago` and uses count-only retention.
-A nonzero `ago` also makes tags older than that duration eligible for deletion, including tags
-within the count limit; tags beyond the limit are eligible regardless of age. Untagged cleanup
-retains no additional untagged manifests regardless of age.
+`keep` sets `--min-tags`, not `--keep` or `--max-tags`. The minimum protects the newest matching
+tags even when all tags are older than `ago`; other tags are eligible only when older than `ago`.
+When `ago` is omitted or zero, the task emits `--ago 0d`, making all tags outside the minimum
+eligible. The C# `ago` parameter accepts a `TimeSpan`; the TypeScript option accepts milliseconds.
+
+Untagged cleanup is independent of tag retention: `--max-untagged-manifests 0` retains no extra
+eligible untagged manifests, including ones younger than `ago`. Use `untagged: false` to disable it.
 
 Locked artifacts and dependencies of retained images remain protected, so these limits do not
-guarantee that only three manifests or three deployable application versions remain. See
+guarantee that only `keep` manifests or `keep` deployable application versions remain. See
 [ACR purge behavior](https://learn.microsoft.com/azure/container-registry/container-registry-auto-purge).
 
 ## Additional documentation

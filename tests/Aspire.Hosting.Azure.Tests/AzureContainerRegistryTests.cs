@@ -235,7 +235,7 @@ public class AzureContainerRegistryTests(ITestOutputHelper testOutputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var acr = builder.AddAzureContainerRegistry("acr")
-            .WithPurgeTask("0 1 * * *", filter: "myapp:.*");
+            .WithPurgeTask("0 1 * * *", ago: TimeSpan.FromDays(7), keep: 5);
 
         var (_, bicep) = await GetManifestWithBicep(acr.Resource);
 
@@ -329,8 +329,10 @@ public class AzureContainerRegistryTests(ITestOutputHelper testOutputHelper)
         await Verify(bicep, "bicep").UseParameters(untagged);
     }
 
-    [Fact]
-    public async Task WithPurgeTask_PreservesExistingBinarySignature()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("7.00:00:00")]
+    public async Task WithPurgeTask_PreservesExistingBinarySignature(string? ago)
     {
         var method = typeof(AzureContainerRegistryExtensions).GetMethod(nameof(AzureContainerRegistryExtensions.WithPurgeTask),
         [
@@ -343,12 +345,13 @@ public class AzureContainerRegistryTests(ITestOutputHelper testOutputHelper)
         ]);
         Assert.NotNull(method);
 
+        var age = ago is null ? (TimeSpan?)null : TimeSpan.Parse(ago);
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var original = builder.AddAzureContainerRegistry("original");
-        Assert.Same(original, method.Invoke(null, [original, "0 1 * * *", null, null, 3, null]));
+        Assert.Same(original, method.Invoke(null, [original, "0 1 * * *", null, age, 3, null]));
         using var currentBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var configured = currentBuilder.AddAzureContainerRegistry("original")
-            .WithPurgeTask("0 1 * * *", null);
+            .WithPurgeTask("0 1 * * *", null, ago: age);
 
         var (_, originalBicep) = await GetManifestWithBicep(original.Resource);
         var (_, configuredBicep) = await GetManifestWithBicep(configured.Resource);
@@ -428,7 +431,12 @@ public class AzureContainerRegistryTests(ITestOutputHelper testOutputHelper)
 
         var acr = builder.AddAzureContainerRegistry("acr");
 
-        Assert.Throws<ArgumentOutOfRangeException>(() => acr.WithPurgeTask("0 1 * * *", ago: TimeSpan.Parse(ago)));
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(() => acr.WithPurgeTask("0 1 * * *", ago: TimeSpan.Parse(ago)));
+        Assert.Equal("ago", exception.ParamName);
+
+        var originalSignatureException = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            acr.WithPurgeTask("0 1 * * *", null, TimeSpan.Parse(ago), 3, null));
+        Assert.Equal("ago", originalSignatureException.ParamName);
     }
 
     [Fact]

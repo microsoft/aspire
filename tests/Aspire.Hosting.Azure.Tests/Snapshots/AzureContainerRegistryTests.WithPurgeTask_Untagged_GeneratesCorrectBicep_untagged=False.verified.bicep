@@ -12,7 +12,7 @@ resource acr 'Microsoft.ContainerRegistry/registries@2025-04-01' = {
   }
 }
 
-var purgeTaskCmd_0 = 'version: v1.1.0\nsteps:\n- cmd: mcr.microsoft.com/acr/acr-cli:0.21 purge --filter \'cleanup:.*\' --ago 7d --max-tags 5'
+var purgeTaskCmd_0 = 'version: v1.1.0\nsteps:\n- cmd: mcr.microsoft.com/acr/acr-cli:0.21 purge --filter \'cleanup:.*\' --ago 7d --min-tags 5'
 
 resource purgeOldImages_0 'Microsoft.ContainerRegistry/registries/tasks@2019-04-01' = {
   name: 'cleanup'
