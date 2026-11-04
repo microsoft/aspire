@@ -54,6 +54,7 @@ All hosting integrations also use base Azure provisioning support, including sha
 | [ConnectorNamespace](../Aspire.Hosting.Azure.ConnectorNamespace/README.md) | Base provisioning support | Uses internal custom `ConnectorGateway` models for `Microsoft.Web/connectorGateways` and its children. These are not a standalone Azure Provisioning SDK and are not projected by an SDK proxy. |
 | [ContainerRegistry](../Aspire.Hosting.Azure.ContainerRegistry/) | `ContainerRegistry` | Registry and task models. |
 | [CosmosDB](../Aspire.Hosting.Azure.CosmosDB/README.md) | `CosmosDB` | `KeyVault` for supporting secrets. |
+| [EntraId](../Aspire.Hosting.Azure.EntraId/README.md) | `EntraId` (custom Graph models) | Public Graph provisioning models; no standalone Azure Provisioning Graph SDK is required. |
 | [EventHubs](../Aspire.Hosting.Azure.EventHubs/README.md) | `EventHubs` | `Storage` for storage-backed scenarios. |
 | [FrontDoor](../Aspire.Hosting.Azure.FrontDoor/README.md) | `Cdn` | Front Door profiles and routing models are in the CDN SDK. |
 | [Functions](../Aspire.Hosting.Azure.Functions/README.md) | `Storage` (shared) | Host storage uses the Storage integration; deployment to Container Apps uses `AppContainers` and its dependencies. No Functions SDK proxy is needed. |
@@ -74,7 +75,7 @@ All hosting integrations also use base Azure provisioning support, including sha
 
 ### SDK proxy projects
 
-Each linked suffix is an exact `Aspire.Hosting.Azure.Provisioning.{suffix}` project and uses `Azure.Provisioning.{suffix}`. "No-argument lookup roots" lists the types marked as infrastructure roots in `AtsTypeMappings.cs`, not an exhaustive supported-model list. Compatible types from the selected SDK assembly are also considered; other resources use identifier-based lookup.
+Each linked suffix is an exact `Aspire.Hosting.Azure.Provisioning.{suffix}` project and uses `Azure.Provisioning.{suffix}`, except `EntraId`, which projects public Microsoft Graph models from `Aspire.Hosting.Azure.EntraId` because no Azure Provisioning SDK exists for Graph. "No-argument lookup roots" lists the types marked as infrastructure roots in `AtsTypeMappings.cs`, not an exhaustive supported-model list. Compatible types from the selected SDK assembly are also considered; other resources use identifier-based lookup.
 
 | SDK proxy | Referenced hosting suffix | No-argument lookup roots |
 | --- | --- | --- |
@@ -87,6 +88,7 @@ Each linked suffix is an exact `Aspire.Hosting.Azure.Provisioning.{suffix}` proj
 | [ContainerRegistry](../Aspire.Hosting.Azure.Provisioning.ContainerRegistry/README.md) | `ContainerRegistry` | `ContainerRegistryService` |
 | [ContainerService](../Aspire.Hosting.Azure.Provisioning.ContainerService/README.md) | `Kubernetes` | `ContainerServiceManagedCluster` |
 | [CosmosDB](../Aspire.Hosting.Azure.Provisioning.CosmosDB/README.md) | `CosmosDB` | `CosmosDBAccount` |
+| [EntraId](../Aspire.Hosting.Azure.Provisioning.EntraId/README.md) | `EntraId` | None; Graph declarations use identifier-based or collection lookups. |
 | [EventHubs](../Aspire.Hosting.Azure.Provisioning.EventHubs/README.md) | `EventHubs` | `EventHubsNamespace` |
 | [KeyVault](../Aspire.Hosting.Azure.Provisioning.KeyVault/README.md) | `KeyVault` | `KeyVaultService` |
 | [Kusto](../Aspire.Hosting.Azure.Provisioning.Kusto/README.md) | `Kusto` | `KustoCluster` |

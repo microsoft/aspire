@@ -134,9 +134,6 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         .Where(option => option.Value != GroupOverview.Graph || ViewPreferences.IsGraphEnabled)
         .ToList();
 
-    private IconToggleOption<GroupOverview> GetCurrentOverviewOption() =>
-        OverviewOptions.First(option => option.Value == ViewPreferences.GroupOverview);
-
     private int GetMissingParameterCount() =>
         _resourceByName.Values.Count(resource => resource.HasMissingParameterValueState() && IsInScope(resource));
 
@@ -147,17 +144,6 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
                 .Where(resource => resource.HasMissingParameterValueState() && IsInScope(resource))
                 .OrderBy(resource => resource.DisplayName, StringComparers.ResourceName)
                 .Select(resource => resource.Name));
-
-    private IList<MenuButtonItem> GetOverviewMenuItems() =>
-        OverviewOptions.Select(option => new MenuButtonItem
-        {
-            Text = option.Text,
-            StartIcon = option.Icon,
-            Role = MenuItemRole.Radio,
-            Checked = option.Value == ViewPreferences.GroupOverview,
-            OnClick = () => ViewPreferences.SetGroupOverviewAsync(option.Value),
-            RenderKey = option.Value
-        }).ToList();
 
     private string CardDensityClass => ViewPreferences.Density switch
     {

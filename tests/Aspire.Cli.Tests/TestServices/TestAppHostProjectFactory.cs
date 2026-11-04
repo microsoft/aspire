@@ -38,6 +38,8 @@ internal sealed class TestAppHostProjectFactory : IAppHostProjectFactory
 
     public Func<AddPackageContext, CancellationToken, Task<bool>>? AddPackageAsyncCallback { get; set; }
 
+    public Func<FileInfo, DirectoryInfo, CancellationToken, Task<RunningInstanceResult>>? FindAndStopRunningInstanceAsyncCallback { get; set; }
+
     public Func<UpdatePackagesContext, CancellationToken, Task<UpdatePackagesResult>>? UpdatePackagesAsyncCallback { get; set; }
 
     public string LanguageId { get; set; } = "csharp";
@@ -234,7 +236,9 @@ internal sealed class TestAppHostProjectFactory : IAppHostProjectFactory
                 : throw new NotImplementedException();
 
         public Task<RunningInstanceResult> FindAndStopRunningInstanceAsync(FileInfo appHostFile, DirectoryInfo homeDirectory, CancellationToken cancellationToken)
-            => Task.FromResult(RunningInstanceResult.NoRunningInstance);
+            => _factory.FindAndStopRunningInstanceAsyncCallback is { } callback
+                ? callback(appHostFile, homeDirectory, cancellationToken)
+                : Task.FromResult(RunningInstanceResult.NoRunningInstance);
 
         public Task<string?> GetUserSecretsIdAsync(FileInfo appHostFile, bool autoInit, CancellationToken cancellationToken)
             => Task.FromResult<string?>(null);

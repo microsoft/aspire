@@ -1,0 +1,57 @@
+﻿{
+  "summary": {
+    "run_id": 123,
+    "run_attempt": 1,
+    "run_url": "https://github.com/microsoft/aspire/actions/runs/123",
+    "run_scope": "pull-request",
+    "analyzed_at": "2026-10-21T01:00:00Z",
+    "verdict": "flaky-test",
+    "pr": null,
+    "triggering_merge_pr": null,
+    "main_context": null,
+    "failed_jobs": [
+      {
+        "name": "Tests",
+        "id": 123,
+        "conclusion": null,
+        "url": "",
+        "classification": "flaky-test",
+        "reason": "",
+        "failed_steps": []
+      }
+    ],
+    "failed_tests": [
+      {
+        "name": "Tests.Method(value: 1/2)",
+        "job": "Tests",
+        "error": "Trusted debugger timeout",
+        "stack_trace": "",
+        "standard_output": "",
+        "standard_error": "",
+        "classification": "flaky",
+        "reason": "Timeout",
+        "job_id": 123,
+        "result_file": "results.trx",
+        "result_format": "trx"
+      },
+      {
+        "name": "Tests.Other",
+        "job": "Tests",
+        "error": "Trusted debugger timeout",
+        "stack_trace": "",
+        "standard_output": "",
+        "standard_error": "",
+        "classification": "flaky",
+        "reason": "Timeout",
+        "job_id": 123,
+        "result_file": "results.trx",
+        "result_format": "trx"
+      }
+    ],
+    "causes": [
+      "debugger-timeout"
+    ]
+  },
+  "issue": "<!-- ci-failure-cause:debugger-timeout -->\n<!-- ci-failure-cause-type:flaky-test -->\n\n## Build Information\n\nBuild: https://github.com/microsoft/aspire/actions/runs/123\nBuild error leg: ` Tests `\nPull request: #42\n\n## Error Message\n\n    Connection timed out\n\n## Description\n\n` Debugger timeout `\n\n**Type**: flaky-test\n\n<!-- ci-failure-tests:start -->\n## Observed tests\n\n- ` Tests.Method(value: 1/2) ` — job 123 (` Tests `)\n- ` Tests.Other ` — job 123 (` Tests `)\n<!-- ci-failure-tests:end -->\n\n<!-- ci-failure-occurrences:start -->\n## Occurrences\n\nShowing 1 most recent of 1 occurrences.\n\n| Date | Build | Job | Context |\n|------|-------|-----|----|\n| 2026-10-21 | [123](https://github.com/microsoft/aspire/actions/runs/123) | ` Tests ` | #42 |\n<!-- ci-failure-occurrences:end -->\n",
+  "comment": "<!-- analyze-ci-failure -->\n⚠️ **CI Failure Analysis: Possible Flaky Test(s)**\n\nThe CI build failed due to test failure(s) that appear unrelated to the PR changes. These may be flaky tests.\n\n**Failed jobs:**\n- ` Tests ` — `  ` (flaky-test)\n\n**Suspected flaky test(s):**\n- ` Tests.Method(value: 1/2) ` in job ` Tests `\n  - **Error**:\n\n        Trusted debugger timeout\n  - **Why likely flaky**: ` Timeout `\n- ` Tests.Other ` in job ` Tests `\n  - **Error**:\n\n        Trusted debugger timeout\n  - **Why likely flaky**: ` Timeout `\n\n**Suggested actions:**\n- Re-run the failed CI jobs to confirm if the failure is intermittent\n- If the test continues to fail, consider [quarantining it](https://github.com/microsoft/aspire/blob/main/docs/quarantined-tests.md) using `/quarantine-test <test name> <issue URL>`\n- Search [existing issues](https://github.com/microsoft/aspire/issues?q=is%3Aissue+label%3Atest-failure) to see if this test is already known to be flaky\n\nYou can re-run the failed jobs from the [workflow run page](https://github.com/microsoft/aspire/actions/runs/123).\n\n"
+}

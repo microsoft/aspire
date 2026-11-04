@@ -223,17 +223,6 @@
         <target state="translated">Playwright CLI 需要 npm，在 PATH 上找不到。正在略過安裝。</target>
         <note />
       </trans-unit>
-      <trans-unit id="InitCommand_PluginRiskWarning">
-        <source>Use the Aspire plugin at your own risk.
-Review the source before enabling it.
-
-Prefer skill files only? Install skills directly from {0}.</source>
-        <target state="new">Use the Aspire plugin at your own risk.
-Review the source before enabling it.
-
-Prefer skill files only? Install skills directly from {0}.</target>
-        <note>{0} lists the comma-separated configured skill source repository and/or catalog URLs for the selected agent clients.</note>
-      </trans-unit>
       <trans-unit id="InitCommand_ProjectScope">
         <source>Project (Install in your workspace root; committed with your project)</source>
         <target state="translated">專案 (安裝在您的工作區根目錄中；會隨專案一起提交)</target>
@@ -263,6 +252,13 @@ Prefer skill files only? Install skills directly from {0}.</target>
         <source>Shared files may be discovered by agents that aren't selected.</source>
         <target state="translated">未選取的代理程式可能會發現共用檔案。</target>
         <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_SkillSources">
+        <source>Skill sources:
+{0}</source>
+        <target state="new">Skill sources:
+{0}</target>
+        <note>{0} lists the configured skill source repository and/or catalog URLs for the selected agent clients, one per line.</note>
       </trans-unit>
       <trans-unit id="InitCommand_SkillsLocationHint">
         <source>Skills: {0}</source>
@@ -398,6 +394,11 @@ Prefer skill files only? Install skills directly from {0}.</target>
         <source>Configuration completed with errors. Please fix the reported issues and re-run the command.</source>
         <target state="translated">已完成設定，但發生錯誤。請修正報告的問題，然後重新執行命令。</target>
         <note />
+      </trans-unit>
+      <trans-unit id="TelemetryHookScriptUpdateFailed">
+        <source>Could not update the telemetry hook script '{0}': {1}</source>
+        <target state="new">Could not update the telemetry hook script '{0}': {1}</target>
+        <note>{0} is the hook script path. {1} is the underlying error message.</note>
       </trans-unit>
     </body>
   </file>

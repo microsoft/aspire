@@ -42,6 +42,8 @@ public class TestDashboardClient : IDashboardClient
     public ConcurrentQueue<string> ClosedTerminals { get; } = new();
     public Action? OnTerminalSubscriptionDisposed { get; set; }
     public Action? OnResourceSubscriptionDisposed { get; set; }
+    public Action<string>? OnConsoleSubscriptionDisposed { get; set; }
+    public Func<string, CancellationToken, Task>? BeforeConsoleLogBatchAsync { get; set; }
     public Func<WatchTerminalsUpdate, Task>? BeforeTerminalUpdateAsync { get; set; }
     public Func<CancellationToken, Task>? BeforeResourceSubscriptionAsync { get; set; }
     public Action<WatchTerminalsUpdate>? OnTerminalUpdateProcessed { get; set; }
@@ -168,9 +170,20 @@ public class TestDashboardClient : IDashboardClient
 
         var channel = _consoleLogsChannelProvider(resourceName);
 
-        await foreach (var item in channel.Reader.ReadAllAsync(cancellationToken))
+        try
         {
-            yield return item;
+            await foreach (var item in channel.Reader.ReadAllAsync(cancellationToken))
+            {
+                if (BeforeConsoleLogBatchAsync is { } beforeBatch)
+                {
+                    await beforeBatch(resourceName, cancellationToken);
+                }
+                yield return item;
+            }
+        }
+        finally
+        {
+            OnConsoleSubscriptionDisposed?.Invoke(resourceName);
         }
     }
 

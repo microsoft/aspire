@@ -28,6 +28,7 @@ internal sealed class JsonRpcServer : BackgroundService
     private Socket? _listenSocket;
     private bool _disposed;
     private int _activeClientCount;
+    private readonly TaskCompletionSource _listening = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     public JsonRpcServer(
         IConfiguration configuration,
@@ -58,6 +59,52 @@ internal sealed class JsonRpcServer : BackgroundService
             socketPath = Path.Combine(home, SocketDirectoryNames.Aspire, SocketDirectoryNames.Cli, SocketDirectoryNames.Backchannels, "remote-app-host.sock");
         }
         _socketPath = socketPath;
+    }
+
+    /// <summary>
+    /// Completes once a client connection attempt can succeed. Faults or cancels if the server stops first.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="BackgroundService"/> runs <see cref="ExecuteAsync"/> asynchronously, so the host can finish
+    /// starting before the named pipe or socket exists.
+    /// </remarks>
+    internal Task Listening => _listening.Task;
+
+    public override async Task StartAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await base.StartAsync(cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            ObserveExecuteTask();
+        }
+    }
+
+    private void ObserveExecuteTask()
+    {
+        // ExecuteAsync may never run (for example, when already canceled), so observe ExecuteTask
+        // to ensure Listening completes on every exit path.
+        _ = ExecuteTask?.ContinueWith(
+            static (task, state) =>
+            {
+                var listening = (TaskCompletionSource)state!;
+                if (task.IsFaulted)
+                {
+                    listening.TrySetException(task.Exception!.InnerExceptions);
+                    // ExecuteTask carries the failure; avoid a second UnobservedTaskException if nobody awaits Listening.
+                    _ = listening.Task.Exception;
+                }
+                else
+                {
+                    listening.TrySetCanceled();
+                }
+            },
+            _listening,
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -121,6 +168,7 @@ internal sealed class JsonRpcServer : BackgroundService
                     pipeSecurity);
 
                 listenActivity.AddJsonRpcServerListening();
+                _listening.TrySetResult();
                 await pipeServer.WaitForConnectionAsync(cancellationToken).ConfigureAwait(false);
 
                 _logger.LogDebug("Client connected");
@@ -162,6 +210,7 @@ internal sealed class JsonRpcServer : BackgroundService
 
         _listenSocket.Listen(10);
         listenActivity.AddJsonRpcServerListening();
+        _listening.TrySetResult();
 
         while (!cancellationToken.IsCancellationRequested)
         {

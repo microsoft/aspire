@@ -223,17 +223,6 @@
         <target state="translated">Playwright CLI에 npm이 필요하지만 PATH에서 npm을 찾을 수 없습니다. 설치를 건너뛰는 중입니다.</target>
         <note />
       </trans-unit>
-      <trans-unit id="InitCommand_PluginRiskWarning">
-        <source>Use the Aspire plugin at your own risk.
-Review the source before enabling it.
-
-Prefer skill files only? Install skills directly from {0}.</source>
-        <target state="new">Use the Aspire plugin at your own risk.
-Review the source before enabling it.
-
-Prefer skill files only? Install skills directly from {0}.</target>
-        <note>{0} lists the comma-separated configured skill source repository and/or catalog URLs for the selected agent clients.</note>
-      </trans-unit>
       <trans-unit id="InitCommand_ProjectScope">
         <source>Project (Install in your workspace root; committed with your project)</source>
         <target state="translated">프로젝트(작업 영역 루트에 설치, 프로젝트와 함께 커밋됨)</target>
@@ -263,6 +252,13 @@ Prefer skill files only? Install skills directly from {0}.</target>
         <source>Shared files may be discovered by agents that aren't selected.</source>
         <target state="translated">선택되지 않은 에이전트가 공유 파일을 검색할 수 있습니다.</target>
         <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_SkillSources">
+        <source>Skill sources:
+{0}</source>
+        <target state="new">Skill sources:
+{0}</target>
+        <note>{0} lists the configured skill source repository and/or catalog URLs for the selected agent clients, one per line.</note>
       </trans-unit>
       <trans-unit id="InitCommand_SkillsLocationHint">
         <source>Skills: {0}</source>
@@ -398,6 +394,11 @@ Prefer skill files only? Install skills directly from {0}.</target>
         <source>Configuration completed with errors. Please fix the reported issues and re-run the command.</source>
         <target state="translated">구성이 완료되었지만 오류가 발생했습니다. 보고된 문제를 해결하고 명령을 다시 실행하세요.</target>
         <note />
+      </trans-unit>
+      <trans-unit id="TelemetryHookScriptUpdateFailed">
+        <source>Could not update the telemetry hook script '{0}': {1}</source>
+        <target state="new">Could not update the telemetry hook script '{0}': {1}</target>
+        <note>{0} is the hook script path. {1} is the underlying error message.</note>
       </trans-unit>
     </body>
   </file>

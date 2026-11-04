@@ -28,7 +28,7 @@ public sealed class FilterNonBlockingTestArtifactsTests(ITestOutputHelper output
         File.WriteAllText(Path.Combine(advisoryResultsPath, "advisory.trx"), "advisory failure");
         File.WriteAllText(Path.Combine(gatingResultsPath, "gating.trx"), "gating failure");
 
-        var result = await ProcessRunner.RunAsync(output, "bash", [s_scriptPath, allLogsPath], RepoRoot.Path);
+        var result = await TestProcessRunner.RunAsync(output, "bash", [s_scriptPath, allLogsPath], RepoRoot.Path);
 
         Assert.Equal(0, result.ExitCode);
         Assert.Equal(
@@ -60,7 +60,7 @@ public sealed class FilterNonBlockingTestArtifactsTests(ITestOutputHelper output
         var markerPath = Path.Combine(unexpectedResultsPath, "ignore-test-failures.marker");
         File.WriteAllText(markerPath, "unexpected");
 
-        var result = await ProcessRunner.RunAsync(output, "bash", [s_scriptPath, allLogsPath], RepoRoot.Path);
+        var result = await TestProcessRunner.RunAsync(output, "bash", [s_scriptPath, allLogsPath], RepoRoot.Path);
 
         Assert.Equal(1, result.ExitCode);
         Assert.Equal($"Unexpected ignore marker location: {markerPath}\n", result.StandardError);
@@ -86,7 +86,7 @@ public sealed class FilterNonBlockingTestArtifactsTests(ITestOutputHelper output
         var markerPath = Path.Combine(misplacedResultsPath, "ignore-test-failures.marker");
         File.WriteAllText(markerPath, "unexpected");
 
-        var result = await ProcessRunner.RunAsync(output, "bash", [s_scriptPath, allLogsPath], RepoRoot.Path);
+        var result = await TestProcessRunner.RunAsync(output, "bash", [s_scriptPath, allLogsPath], RepoRoot.Path);
 
         Assert.Equal(1, result.ExitCode);
         Assert.Equal($"Unexpected ignore marker location: {markerPath}\n", result.StandardError);
@@ -112,7 +112,7 @@ public sealed class FilterNonBlockingTestArtifactsTests(ITestOutputHelper output
         var markerPath = Path.Combine(nestedResultsPath, "ignore-test-failures.marker");
         File.WriteAllText(markerPath, "unexpected");
 
-        var result = await ProcessRunner.RunAsync(output, "bash", [s_scriptPath, allLogsPath], RepoRoot.Path);
+        var result = await TestProcessRunner.RunAsync(output, "bash", [s_scriptPath, allLogsPath], RepoRoot.Path);
 
         Assert.Equal(1, result.ExitCode);
         Assert.Equal($"Unexpected ignore marker location: {markerPath}\n", result.StandardError);

@@ -214,12 +214,12 @@ public partial class NewCommandLocalTemplateTests
         Assert.Collection(interaction.DisplayedMessages,
             warning =>
             {
-                Assert.Equal(SharedCommandStrings.SourceTrustWarning, warning.Message);
+                Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", warning.Message);
                 Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
             },
             warning =>
             {
-                Assert.Equal(KnownEmojis.Warning, warning.Emoji);
+                Assert.Equal(KnownEmojis.PoliceCarLight, warning.Emoji);
                 Assert.Equal(string.Format(CultureInfo.CurrentCulture,
                     NewCommandStrings.TemplateSourceSearchFailed, "broken", expectedError), warning.Message);
             });
@@ -274,7 +274,7 @@ public partial class NewCommandLocalTemplateTests
         Assert.Single(GetGitResolutions(git));
         Assert.Equal(cancelResolution ? 0 : 1, GetGitFetches(git).Count);
         var warning = Assert.Single(interaction.DisplayedMessages);
-        Assert.Equal(SharedCommandStrings.SourceTrustWarning, warning.Message);
+        Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", warning.Message);
         Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
         var cacheRoot = Path.Combine(provider.GetRequiredService<CliExecutionContext>().CacheDirectory.FullName, "git");
         if (cancelResolution)

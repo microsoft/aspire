@@ -88,7 +88,7 @@ conventions:
 prefilter:
   patterns_file: eng/github-ci/ci-skip-entirely-patterns.txt
   keep_routed:
-    - .github/workflows/**                            # routed to Infrastructure.Tests (workflow validation)
+    - .github/workflows/**                            # routed to workflow test projects
     - eng/pipelines/**                                # routed to Infrastructure.Tests (pipeline validation)
     - eng/github-ci/ci-skip-entirely-patterns.txt      # a selector input (read above) -> route to Infrastructure.Tests
 
@@ -113,6 +113,7 @@ ignore:
   # and are routed to their tests in path_rules above.)
   - eng/scripts/debug-*.ps1                             # debug-aspire-channel/stable/staging: local channel-switch helpers
   - eng/scripts/debug-*.sh
+  - eng/scripts/config-sources-demo/**                  # manual demo launchers; no GH-CI consumer
   - eng/scripts/validate-cli-symbols.ps1                # AzDO native-AOT symbol publish validation; no GH-CI consumer
   - eng/scripts/validate-mac-platform-sso.sh            # manual managed-Mac validation; no GH-CI consumer
   - eng/generate-catalog.ps1                            # Windows/AzDO template catalog generation; no GH-CI consumer
@@ -511,6 +512,13 @@ path_rules:
     targets: [CLI_BUNDLE, test:Infrastructure.Tests]
     reason: native CLI bundle assembly and publishing inputs
 
+  - paths:
+      - tools/AnalyzeCiFailure/**
+      - .github/workflows/analyze-ci-failure*
+      - eng/test-retry-patterns.json
+    targets: [test:AnalyzeCiFailure.Tests]
+    reason: analyzer commands, sparse-build fixtures, workflow examples and adapters
+
   # --- Infrastructure.Tests-only inputs ----------------------------------------------------
   # Keep inputs grouped by their current coverage so test ownership and obsolete checks are visible.
   # Other consumers are still routed by the additive rules above.
@@ -623,6 +631,7 @@ affected_project_rules:
       - Aspire.Hosting.Rust
       - Aspire.Hosting
       - Aspire.Hosting.Azure
+      - Aspire.Hosting.Azure.ApiManagement
       - Aspire.Hosting.Azure.AppConfiguration
       - Aspire.Hosting.Azure.AppContainers
       - Aspire.Hosting.Azure.AppService

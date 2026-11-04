@@ -109,7 +109,7 @@ public class TemplateSourceConfigurationTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData("")]
     [InlineData(" ")]
-    [InlineData("name.with.dots")]
+    [InlineData(".leading.dot")]
     [InlineData("name:with:colons")]
     [InlineData("name\n")]
     public void ValidateNameRejectsAmbiguousConfigKeys(string name) =>

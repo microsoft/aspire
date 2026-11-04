@@ -171,6 +171,10 @@
   <data name="InitCommand_TelemetryHookSkippedUnexpectedShape" xml:space="preserve">
     <value>Skipped the telemetry hook for {0} because its configuration has an unexpected shape.</value>
   </data>
+  <data name="TelemetryHookScriptUpdateFailed" xml:space="preserve">
+    <value>Could not update the telemetry hook script '{0}': {1}</value>
+    <comment>{0} is the hook script path. {1} is the underlying error message.</comment>
+  </data>
   <data name="InitCommand_TelemetryHookWriteFailed" xml:space="preserve">
     <value>Skipped the telemetry hook for {0} because its configuration could not be written.</value>
   </data>
@@ -284,12 +288,10 @@
 {0}</value>
     <comment>{0} lists the local skill entry-point paths, one per line.</comment>
   </data>
-  <data name="InitCommand_PluginRiskWarning" xml:space="preserve">
-    <value>Use the Aspire plugin at your own risk.
-Review the source before enabling it.
-
-Prefer skill files only? Install skills directly from {0}.</value>
-    <comment>{0} lists the comma-separated configured skill source repository and/or catalog URLs for the selected agent clients.</comment>
+  <data name="InitCommand_SkillSources" xml:space="preserve">
+    <value>Skill sources:
+{0}</value>
+    <comment>{0} lists the configured skill source repository and/or catalog URLs for the selected agent clients, one per line.</comment>
   </data>
   <data name="InitCommand_ConfiguredTargets" xml:space="preserve">
     <value>Configured Aspire plugin:
