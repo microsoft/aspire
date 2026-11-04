@@ -206,7 +206,27 @@ export function registerPaneResizer(layoutElement, dotNetRef, minimumWidth, maxi
     let startWidth = 0;
     // Use the saved logical width while a full-canvas return is still animating.
     let width = Number(handle.getAttribute('aria-valuenow'));
+    let pendingCommits = 0;
     let disposed = false;
+
+    const applyWidth = () => {
+        if (layoutElement.style.getPropertyValue('--resource-pane-expanded-width') !== `${width}px`) {
+            layoutElement.style.setProperty('--resource-pane-expanded-width', `${width}px`);
+        }
+        if (handle.getAttribute('aria-valuenow') !== `${width}`) {
+            handle.setAttribute('aria-valuenow', `${width}`);
+        }
+    };
+
+    // A render acknowledging 430px can arrive after the next key already requested
+    // 440px. Keep that in-flight client width visible without issuing another save.
+    const widthObserver = new MutationObserver(() => {
+        if (pendingCommits > 0) {
+            applyWidth();
+        }
+    });
+    widthObserver.observe(layoutElement, { attributes: true, attributeFilter: ['style'] });
+    widthObserver.observe(handle, { attributes: true, attributeFilter: ['aria-valuenow'] });
 
     // The pane never takes more than half of the window, so the content next to it stays usable.
     const bounds = () => {
@@ -223,8 +243,7 @@ export function registerPaneResizer(layoutElement, dotNetRef, minimumWidth, maxi
             return false;
         }
         width = nextWidth;
-        layoutElement.style.setProperty('--resource-pane-expanded-width', `${width}px`);
-        handle.setAttribute('aria-valuenow', `${width}`);
+        applyWidth();
         return true;
     };
 
@@ -232,9 +251,15 @@ export function registerPaneResizer(layoutElement, dotNetRef, minimumWidth, maxi
         if (disposed) {
             return;
         }
+        pendingCommits++;
         dotNetRef.invokeMethodAsync('SetPaneWidthAsync', width).catch(error => {
             if (!disposed) {
                 console.error('Failed to save the resource list width.', error);
+            }
+        }).finally(() => {
+            pendingCommits--;
+            if (!disposed) {
+                applyWidth();
             }
         });
     };
@@ -246,7 +271,7 @@ export function registerPaneResizer(layoutElement, dotNetRef, minimumWidth, maxi
         pointerId = e.pointerId;
         handle.focus({ preventScroll: true });
         startX = e.clientX;
-        startWidth = Number(handle.getAttribute('aria-valuenow'));
+        startWidth = pendingCommits > 0 ? width : Number(handle.getAttribute('aria-valuenow'));
         width = startWidth;
         handle.setPointerCapture(e.pointerId);
         handle.classList.add('resizing');
@@ -286,9 +311,11 @@ export function registerPaneResizer(layoutElement, dotNetRef, minimumWidth, maxi
         }
         const step = e.shiftKey ? 50 : 10;
         const { min, max } = bounds();
-        // A persisted width or a queued server render can replace the DOM value
-        // after registration. Keyboard resizing must start from that logical width too.
-        width = Number(handle.getAttribute('aria-valuenow'));
+        // With no outstanding saves, a changed DOM value is an intentional restored
+        // preference. While saving, it can instead be an older render acknowledgement.
+        if (pendingCommits === 0) {
+            width = Number(handle.getAttribute('aria-valuenow'));
+        }
         let nextWidth;
         switch (e.key) {
             case 'ArrowLeft':
@@ -334,6 +361,7 @@ export function registerPaneResizer(layoutElement, dotNetRef, minimumWidth, maxi
     registrations.set(layoutElement, {
         unregister: () => {
             disposed = true;
+            widthObserver.disconnect();
             handle.tabIndex = -1;
             handle.setAttribute('aria-disabled', 'true');
             handle.removeEventListener('pointerdown', onPointerDown);

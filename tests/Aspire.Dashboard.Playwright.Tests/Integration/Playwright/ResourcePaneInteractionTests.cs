@@ -378,6 +378,73 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Dashboard
 
     [Fact]
     [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task ResourcePaneResizer_DelayedRendersDoNotLoseKeyboardSteps()
+    {
+        await RunTestAsync(async page =>
+        {
+            await page.SetViewportSizeAsync(1440, 900);
+            await page.GotoAsync("/structuredlogs");
+            await Assertions.Expect(page.Locator(".resource-pane-resizer")).ToHaveAttributeAsync("aria-disabled", "false");
+            await page.EvaluateAsync("""
+                async () => {
+                    const asset = performance.getEntriesByType('resource').find(entry =>
+                        entry.name.includes('/Components/Layout/ResourcesLayout.') &&
+                        new URL(entry.name).pathname.endsWith('.js'));
+                    if (!asset) throw new Error('Resource layout module was not loaded.');
+                    const module = await import(asset.name);
+                    const layout = document.createElement('div');
+                    layout.id = 'resize-race-fixture';
+                    layout.style.setProperty('--resource-pane-expanded-width', '420px');
+                    layout.innerHTML = '<aside class="resource-pane"><div class="resource-pane-resizer" role="separator" aria-valuenow="420" style="width:10px;height:40px"></div></aside>';
+                    document.body.append(layout);
+                    const handle = layout.querySelector('[role="separator"]');
+                    const requests = [];
+                    module.registerPaneResizer(layout, {
+                        invokeMethodAsync: (_, width) => new Promise(resolve => requests.push({ width, resolve }))
+                    }, 420, 560);
+                    window.resizeRace = {
+                        requests,
+                        render: width => {
+                            layout.style.setProperty('--resource-pane-expanded-width', `${width}px`);
+                            handle.setAttribute('aria-valuenow', `${width}`);
+                        }
+                    };
+                }
+                """);
+            var resizer = page.Locator("#resize-race-fixture [role='separator']");
+            await resizer.PressAsync("ArrowRight");
+            await resizer.PressAsync("ArrowRight");
+            await page.EvaluateAsync("() => window.resizeRace.render(430)");
+            await resizer.PressAsync("ArrowRight");
+            var requests = await page.EvaluateAsync<int[]>("() => window.resizeRace.requests.map(request => request.width)");
+            Assert.Equal([430, 440, 450], requests);
+            await Assertions.Expect(resizer).ToHaveAttributeAsync("aria-valuenow", "450");
+
+            await page.EvaluateAsync("""
+                () => {
+                    window.resizeRace.render(440);
+                    window.resizeRace.requests[1].resolve();
+                    window.resizeRace.render(430);
+                    window.resizeRace.requests[0].resolve();
+                }
+                """);
+            await Assertions.Expect(resizer).ToHaveAttributeAsync("aria-valuenow", "450");
+            await page.EvaluateAsync("""
+                () => {
+                    window.resizeRace.render(450);
+                    window.resizeRace.requests[2].resolve();
+                }
+                """);
+            // Once every commit is acknowledged, a restored preference becomes authoritative again.
+            await page.EvaluateAsync("() => window.resizeRace.render(507)");
+            await resizer.PressAsync("ArrowRight");
+            requests = await page.EvaluateAsync<int[]>("() => window.resizeRace.requests.map(request => request.width)");
+            Assert.Equal([430, 440, 450, 517], requests);
+        });
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
     public async Task ResourceTag_AddedFromOverviewGroupsResourceInResourcePane()
     {
         var resourceName = MockDashboardClient.TestResource1.DisplayName;
