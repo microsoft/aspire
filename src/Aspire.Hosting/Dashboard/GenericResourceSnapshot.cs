@@ -10,7 +10,6 @@ internal sealed class GenericResourceSnapshot(CustomResourceSnapshot state) : Re
 {
     public override string ResourceType => state.ResourceType;
     public override string ResourceTypeDisplayName => state.ResourceTypeDisplayName;
-    public override string ResourceDisplayName => state.ResourceDisplayName ?? DisplayName;
 
     protected override IEnumerable<(string Key, Value Value, bool IsSensitive, string? DisplayName, bool IsHighlighted, int? SortOrder)> GetProperties()
     {

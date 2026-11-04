@@ -7,70 +7,14 @@ using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
 using Aspire.Tests.Shared.DashboardModel;
 using Bunit;
-using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
 
 namespace Aspire.Dashboard.Components.Tests.Model;
 
-[UseCulture("en-US")]
 public class DashboardCommandExecutorTests : DashboardTestContext
 {
-    [Theory]
-    [InlineData(KnownResourceState.Running)]
-    [InlineData(KnownResourceState.Exited)]
-    public async Task ExecuteAsyncCore_FailedCommand_ViewLogsUsesResourceName(KnownResourceState state)
-    {
-        var command = new CommandViewModel(
-            name: "test",
-            state: CommandViewModelState.Enabled,
-            displayName: "Run tests",
-            displayDescription: "Run tests",
-            confirmationMessage: "",
-            argumentInputs: [],
-            isHighlighted: false,
-            iconName: "",
-            iconVariant: IconVariant.Regular);
-        var resource = ModelTestHelpers.CreateResource(
-            resourceName: "api", resourceDisplayName: "frontend", state: state, commands: [command]);
-        var otherResource = ModelTestHelpers.CreateResource(
-            resourceName: "frontend", resourceDisplayName: "Other service", state: KnownResourceState.Running);
-        ResourceViewModel[] resources = [resource, otherResource];
-        var dashboardClient = new TestDashboardClient(
-            isEnabled: true,
-            initialResources: resources,
-            executeResourceCommand: (_, _, _, _, _) => Task.FromResult(new ResourceCommandResponseViewModel
-            {
-                Kind = ResourceCommandResponseKind.Failed
-            }));
-        FluentUISetupHelpers.AddCommonDashboardServices(this);
-        FluentUISetupHelpers.SetupFluentUIComponents(this);
-        Services.AddSingleton<IDashboardClient>(dashboardClient);
-        Services.AddScoped<DashboardCommandExecutor>();
-
-        var toasts = Render<FluentToastProvider>();
-        var executor = Services.GetRequiredService<DashboardCommandExecutor>();
-
-        await toasts.InvokeAsync(() => executor.ExecuteAsyncCore(
-            resource, command, r => ResourceViewModel.GetResourceName(r, resources)))
-            .WaitAsync(TimeSpan.FromSeconds(10));
-        toasts.Render();
-
-        var toast = Assert.Single(toasts.FindComponents<FluentToast>());
-        Assert.Equal("frontend \"Run tests\" failed", toast.Instance.Title);
-        var toastService = Services.GetRequiredService<Microsoft.FluentUI.AspNetCore.Components.INotificationService>();
-        Assert.NotNull(toast.Instance.Id);
-        var toastInstance = toastService.GetToastInstance(toast.Instance.Id);
-        Assert.NotNull(toastInstance);
-        Assert.Equal("View console logs", toastInstance.Options.QuickAction1.Label);
-        Assert.NotNull(toastInstance.Options.QuickAction1.OnClickAsync);
-        await toast.InvokeAsync(() => toastInstance.Options.QuickAction1.OnClickAsync(default!));
-
-        var navigationManager = Services.GetRequiredService<NavigationManager>();
-        Assert.Equal("/consolelogs/resource/api", new Uri(navigationManager.Uri).PathAndQuery);
-    }
-
     [Theory]
     [InlineData("Playwright exited with code 1.\nExpected: <button>Retry</button>\nExpected: 1 > 0")]
     [InlineData("<div>Failure</div>")]

@@ -178,7 +178,7 @@ internal sealed class LogsCommand : BaseCommand
         // Pre-resolve colors for all resource names so that assignment is
         // deterministic regardless of which resources are displayed.
         var allSnapshots = resourceWatcher.GetAllResources();
-        _resourceColorMap.ResolveAll(allSnapshots.Select(s => ResourceSnapshotMapper.GetResourceTargetName(s, allSnapshots)));
+        _resourceColorMap.ResolveAll(allSnapshots.Select(s => ResourceSnapshotMapper.GetResourceName(s, allSnapshots)));
 
         // Validate resource name exists (match by Name or DisplayName since users may pass either)
         if (resourceName is not null)
@@ -500,8 +500,7 @@ internal sealed class LogsCommand : BaseCommand
         var snapshot = snapshots.FirstOrDefault(s => string.Equals(s.Name, resourceName, StringComparisons.ResourceName));
         if (snapshot is not null)
         {
-            // The prefix is also emitted as `resourceName` in JSON output, so it must stay a technical, targetable name.
-            return ResourceSnapshotMapper.GetResourceTargetName(snapshot, snapshots);
+            return ResourceSnapshotMapper.GetResourceName(snapshot, snapshots);
         }
         return resourceName;
     }

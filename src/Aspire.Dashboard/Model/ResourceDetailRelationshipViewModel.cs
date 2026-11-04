@@ -11,8 +11,7 @@ public sealed class ResourceDetailRelationshipViewModel
 
     public bool MatchesFilter(string filter)
     {
-        return Resource.ResourceDisplayName.Contains(filter, StringComparison.CurrentCultureIgnoreCase) ||
-            Resource.DisplayName.Contains(filter, StringComparison.CurrentCultureIgnoreCase) ||
+        return Resource.DisplayName.Contains(filter, StringComparison.CurrentCultureIgnoreCase) ||
             Types.Any(t => t.Contains(filter, StringComparison.CurrentCultureIgnoreCase));
     }
 

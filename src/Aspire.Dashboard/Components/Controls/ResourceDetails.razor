@@ -134,7 +134,7 @@
                                 GridTemplateColumns="1fr 1fr 0.5fr"
                                 ShowHover="true">
                     <AspireTemplateColumn Title="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsResourceHeader)]">
-                        <ResourceNameValue Resource="@context.Resource" Value="@context.ResourceName" GetColorKey="@GetColorKey" />
+                        <ResourceNameValue Resource="@context.Resource" Value="@context.ResourceName" FormatName="@FormatName" />
                     </AspireTemplateColumn>
                     <AspireTemplateColumn Title="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsTypeHeader)]" TooltipText="@(c => string.Join(", ", c.Types))">
                         @string.Join(", ", context.Types)
@@ -159,7 +159,7 @@
                                 GridTemplateColumns="1fr 1fr 0.5fr"
                                 ShowHover="true">
                     <AspireTemplateColumn Title="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsResourceHeader)]">
-                        <ResourceNameValue Resource="@context.Resource" Value="@context.ResourceName" GetColorKey="@GetColorKey" />
+                        <ResourceNameValue Resource="@context.Resource" Value="@context.ResourceName" FormatName="@FormatName" />
                     </AspireTemplateColumn>
                     <AspireTemplateColumn Title="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsTypeHeader)]" TooltipText="@(c => string.Join(", ", c.Types))">
                         @string.Join(", ", context.Types)

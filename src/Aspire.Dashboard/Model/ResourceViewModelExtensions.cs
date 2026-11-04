@@ -133,7 +133,6 @@ internal static class ResourceViewModelExtensions
     public static bool TryGetResolvedWaitingForDependencies(
         this ResourceViewModel resource,
         IEnumerable<ResourceViewModel> allResources,
-        bool useFriendlyNames,
         out ImmutableArray<string> dependencies)
     {
         if (!resource.TryGetWaitingForDependencies(out var waitingForDependencies))
@@ -156,9 +155,7 @@ internal static class ResourceViewModelExtensions
 
             if (matchingResource is not null)
             {
-                resolvedDependency = useFriendlyNames
-                    ? ResourceViewModel.GetResourceName(matchingResource, allResources)
-                    : ResourceViewModel.GetResourceTargetName(matchingResource, allResources);
+                resolvedDependency = ResourceViewModel.GetResourceName(matchingResource, allResources);
             }
 
             if (seenDependencies.Add(resolvedDependency))

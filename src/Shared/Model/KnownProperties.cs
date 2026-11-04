@@ -18,7 +18,6 @@ internal static class KnownProperties
         public const string Name = "resource.name";
         public const string Type = "resource.type";
         public const string ResourceTypeDisplayName = "resource.resourceTypeDisplayName";
-        public const string ResourceDisplayName = "resource.resourceDisplayName";
         public const string DisplayName = "resource.displayName";
         public const string State = "resource.state";
         public const string ExitCode = "resource.exitCode";

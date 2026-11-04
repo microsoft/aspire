@@ -61,7 +61,7 @@ internal static class ExportHelpers
     public static ExportResult GetResourceAsJson(ResourceViewModel resource, IDictionary<string, ResourceViewModel> resourceByName)
     {
         var json = TelemetryExportService.ConvertResourceToJson(resource, resourceByName.Values.ToList());
-        var fileName = $"{ResourceViewModel.GetResourceTargetName(resource, resourceByName)}.json";
+        var fileName = $"{ResourceViewModel.GetResourceName(resource, resourceByName)}.json";
         return new ExportResult(json, fileName);
     }
 
@@ -74,7 +74,7 @@ internal static class ExportHelpers
     public static ExportResult GetEnvironmentVariablesAsEnvFile(ResourceViewModel resource, IDictionary<string, ResourceViewModel> resourceByName)
     {
         var envContent = EnvHelpers.ConvertToEnvFormat(resource.Environment.Where(e => e.FromSpec).Select(e => new KeyValuePair<string, string?>(e.Name, e.Value)));
-        var fileName = $"{ResourceViewModel.GetResourceTargetName(resource, resourceByName)}.env";
+        var fileName = $"{ResourceViewModel.GetResourceName(resource, resourceByName)}.env";
         return new ExportResult(envContent, fileName);
     }
 }

@@ -5114,34 +5114,6 @@ public static class ResourceBuilderExtensions
     }
 
     /// <summary>
-    /// Overrides the human-readable name displayed for the resource.
-    /// </summary>
-    /// <typeparam name="T">The resource type.</typeparam>
-    /// <param name="builder">The resource builder.</param>
-    /// <param name="resourceDisplayName">The friendly name, such as Orders Database.</param>
-    /// <returns>The resource builder.</returns>
-    /// <remarks>
-    /// The default is supplied by the resource class, falling back to its name.
-    /// This setting affects presentation only, not resource identity, service discovery, telemetry identity, or command targeting.
-    /// Repeated calls replace the previous override.
-    /// </remarks>
-    /// <example>
-    /// <code lang="C#">
-    /// builder.AddRedis("cache").WithResourceDisplayName("Shared Cache");
-    /// </code>
-    /// </example>
-    /// <exception cref="ArgumentNullException">The builder is null.</exception>
-    /// <exception cref="ArgumentException">The resource display name is empty or whitespace.</exception>
-    [AspireExport]
-    public static IResourceBuilder<T> WithResourceDisplayName<T>(this IResourceBuilder<T> builder, string resourceDisplayName) where T : IResource
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-        ArgumentException.ThrowIfNullOrWhiteSpace(resourceDisplayName);
-
-        return builder.WithAnnotation(new ResourceDisplayNameAnnotation(resourceDisplayName), ResourceAnnotationMutationBehavior.Replace);
-    }
-
-    /// <summary>
     /// Overrides the human-readable resource type label.
     /// </summary>
     /// <typeparam name="T">The resource type.</typeparam>

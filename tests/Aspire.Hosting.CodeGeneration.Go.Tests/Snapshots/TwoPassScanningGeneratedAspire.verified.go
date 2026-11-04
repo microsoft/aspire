@@ -3245,20 +3245,6 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 
-	// WithResourceDisplayName overrides the human-readable name displayed for the
-	// resource.
-	//
-	// The default is supplied by the resource class, falling back to its name. This
-	// setting affects presentation only, not resource identity, service discovery,
-	// telemetry identity, or command targeting. Repeated calls replace the previous
-	// override.
-	//
-	// Parameters:
-	//   - resourceDisplayName: The friendly name, such as Orders Database.
-	//
-	// Returns: The resource builder.
-	WithResourceDisplayName(resourceDisplayName string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
-
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
 	//
 	// When not specified, the resource class supplies the default label, falling
@@ -5310,19 +5296,6 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithRequiredCo
 	return s
 }
 
-// WithResourceDisplayName overrides the human-readable name displayed for the
-// resource.
-func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithResourceDisplayName(resourceDisplayName string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["resourceDisplayName"] = serializeValue(resourceDisplayName)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceDisplayName", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
 // WithResourceTypeDisplayName overrides the human-readable resource type label.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithResourceTypeDisplayName(resourceTypeDisplayName string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
@@ -6703,20 +6676,6 @@ type CSharpAppResource interface {
 	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
 	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) CSharpAppResource
-
-	// WithResourceDisplayName overrides the human-readable name displayed for the
-	// resource.
-	//
-	// The default is supplied by the resource class, falling back to its name. This
-	// setting affects presentation only, not resource identity, service discovery,
-	// telemetry identity, or command targeting. Repeated calls replace the previous
-	// override.
-	//
-	// Parameters:
-	//   - resourceDisplayName: The friendly name, such as Orders Database.
-	//
-	// Returns: The resource builder.
-	WithResourceDisplayName(resourceDisplayName string) CSharpAppResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
 	//
@@ -8479,19 +8438,6 @@ func (s *cSharpAppResource) WithRequiredCommandValidation(command string, valida
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommandValidation", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithResourceDisplayName overrides the human-readable name displayed for the
-// resource.
-func (s *cSharpAppResource) WithResourceDisplayName(resourceDisplayName string) CSharpAppResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["resourceDisplayName"] = serializeValue(resourceDisplayName)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceDisplayName", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -10716,20 +10662,6 @@ type ContainerRegistryResource interface {
 	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ContainerRegistryResource
 
-	// WithResourceDisplayName overrides the human-readable name displayed for the
-	// resource.
-	//
-	// The default is supplied by the resource class, falling back to its name. This
-	// setting affects presentation only, not resource identity, service discovery,
-	// telemetry identity, or command targeting. Repeated calls replace the previous
-	// override.
-	//
-	// Parameters:
-	//   - resourceDisplayName: The friendly name, such as Orders Database.
-	//
-	// Returns: The resource builder.
-	WithResourceDisplayName(resourceDisplayName string) ContainerRegistryResource
-
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
 	//
 	// When not specified, the resource class supplies the default label, falling
@@ -11704,19 +11636,6 @@ func (s *containerRegistryResource) WithRequiredCommandValidation(command string
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommandValidation", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithResourceDisplayName overrides the human-readable name displayed for the
-// resource.
-func (s *containerRegistryResource) WithResourceDisplayName(resourceDisplayName string) ContainerRegistryResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["resourceDisplayName"] = serializeValue(resourceDisplayName)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceDisplayName", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -13075,20 +12994,6 @@ type ContainerResource interface {
 	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
 	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ContainerResource
-
-	// WithResourceDisplayName overrides the human-readable name displayed for the
-	// resource.
-	//
-	// The default is supplied by the resource class, falling back to its name. This
-	// setting affects presentation only, not resource identity, service discovery,
-	// telemetry identity, or command targeting. Repeated calls replace the previous
-	// override.
-	//
-	// Parameters:
-	//   - resourceDisplayName: The friendly name, such as Orders Database.
-	//
-	// Returns: The resource builder.
-	WithResourceDisplayName(resourceDisplayName string) ContainerResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
 	//
@@ -15135,19 +15040,6 @@ func (s *containerResource) WithRequiredCommandValidation(command string, valida
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommandValidation", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithResourceDisplayName overrides the human-readable name displayed for the
-// resource.
-func (s *containerResource) WithResourceDisplayName(resourceDisplayName string) ContainerResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["resourceDisplayName"] = serializeValue(resourceDisplayName)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceDisplayName", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -18458,20 +18350,6 @@ type DotnetToolResource interface {
 	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) DotnetToolResource
 
-	// WithResourceDisplayName overrides the human-readable name displayed for the
-	// resource.
-	//
-	// The default is supplied by the resource class, falling back to its name. This
-	// setting affects presentation only, not resource identity, service discovery,
-	// telemetry identity, or command targeting. Repeated calls replace the previous
-	// override.
-	//
-	// Parameters:
-	//   - resourceDisplayName: The friendly name, such as Orders Database.
-	//
-	// Returns: The resource builder.
-	WithResourceDisplayName(resourceDisplayName string) DotnetToolResource
-
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
 	//
 	// When not specified, the resource class supplies the default label, falling
@@ -20286,19 +20164,6 @@ func (s *dotnetToolResource) WithRequiredCommandValidation(command string, valid
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommandValidation", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithResourceDisplayName overrides the human-readable name displayed for the
-// resource.
-func (s *dotnetToolResource) WithResourceDisplayName(resourceDisplayName string) DotnetToolResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["resourceDisplayName"] = serializeValue(resourceDisplayName)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceDisplayName", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -22802,20 +22667,6 @@ type ExecutableResource interface {
 	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ExecutableResource
 
-	// WithResourceDisplayName overrides the human-readable name displayed for the
-	// resource.
-	//
-	// The default is supplied by the resource class, falling back to its name. This
-	// setting affects presentation only, not resource identity, service discovery,
-	// telemetry identity, or command targeting. Repeated calls replace the previous
-	// override.
-	//
-	// Parameters:
-	//   - resourceDisplayName: The friendly name, such as Orders Database.
-	//
-	// Returns: The resource builder.
-	WithResourceDisplayName(resourceDisplayName string) ExecutableResource
-
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
 	//
 	// When not specified, the resource class supplies the default label, falling
@@ -24560,19 +24411,6 @@ func (s *executableResource) WithRequiredCommandValidation(command string, valid
 	return s
 }
 
-// WithResourceDisplayName overrides the human-readable name displayed for the
-// resource.
-func (s *executableResource) WithResourceDisplayName(resourceDisplayName string) ExecutableResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["resourceDisplayName"] = serializeValue(resourceDisplayName)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceDisplayName", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
 // WithResourceTypeDisplayName overrides the human-readable resource type label.
 func (s *executableResource) WithResourceTypeDisplayName(resourceTypeDisplayName string) ExecutableResource {
 	if s.err != nil { return s }
@@ -25651,20 +25489,6 @@ type ExternalServiceResource interface {
 	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ExternalServiceResource
 
-	// WithResourceDisplayName overrides the human-readable name displayed for the
-	// resource.
-	//
-	// The default is supplied by the resource class, falling back to its name. This
-	// setting affects presentation only, not resource identity, service discovery,
-	// telemetry identity, or command targeting. Repeated calls replace the previous
-	// override.
-	//
-	// Parameters:
-	//   - resourceDisplayName: The friendly name, such as Orders Database.
-	//
-	// Returns: The resource builder.
-	WithResourceDisplayName(resourceDisplayName string) ExternalServiceResource
-
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
 	//
 	// When not specified, the resource class supplies the default label, falling
@@ -26658,19 +26482,6 @@ func (s *externalServiceResource) WithRequiredCommandValidation(command string, 
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommandValidation", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithResourceDisplayName overrides the human-readable name displayed for the
-// resource.
-func (s *externalServiceResource) WithResourceDisplayName(resourceDisplayName string) ExternalServiceResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["resourceDisplayName"] = serializeValue(resourceDisplayName)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceDisplayName", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -29528,20 +29339,6 @@ type ParameterResource interface {
 	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ParameterResource
 
-	// WithResourceDisplayName overrides the human-readable name displayed for the
-	// resource.
-	//
-	// The default is supplied by the resource class, falling back to its name. This
-	// setting affects presentation only, not resource identity, service discovery,
-	// telemetry identity, or command targeting. Repeated calls replace the previous
-	// override.
-	//
-	// Parameters:
-	//   - resourceDisplayName: The friendly name, such as Orders Database.
-	//
-	// Returns: The resource builder.
-	WithResourceDisplayName(resourceDisplayName string) ParameterResource
-
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
 	//
 	// When not specified, the resource class supplies the default label, falling
@@ -30617,19 +30414,6 @@ func (s *parameterResource) WithRequiredCommandValidation(command string, valida
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommandValidation", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithResourceDisplayName overrides the human-readable name displayed for the
-// resource.
-func (s *parameterResource) WithResourceDisplayName(resourceDisplayName string) ParameterResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["resourceDisplayName"] = serializeValue(resourceDisplayName)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceDisplayName", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -32653,20 +32437,6 @@ type ProjectResource interface {
 	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ProjectResource
 
-	// WithResourceDisplayName overrides the human-readable name displayed for the
-	// resource.
-	//
-	// The default is supplied by the resource class, falling back to its name. This
-	// setting affects presentation only, not resource identity, service discovery,
-	// telemetry identity, or command targeting. Repeated calls replace the previous
-	// override.
-	//
-	// Parameters:
-	//   - resourceDisplayName: The friendly name, such as Orders Database.
-	//
-	// Returns: The resource builder.
-	WithResourceDisplayName(resourceDisplayName string) ProjectResource
-
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
 	//
 	// When not specified, the resource class supplies the default label, falling
@@ -34428,19 +34198,6 @@ func (s *projectResource) WithRequiredCommandValidation(command string, validati
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommandValidation", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithResourceDisplayName overrides the human-readable name displayed for the
-// resource.
-func (s *projectResource) WithResourceDisplayName(resourceDisplayName string) ProjectResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["resourceDisplayName"] = serializeValue(resourceDisplayName)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceDisplayName", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -37877,20 +37634,6 @@ type TestDatabaseResource interface {
 	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) TestDatabaseResource
 
-	// WithResourceDisplayName overrides the human-readable name displayed for the
-	// resource.
-	//
-	// The default is supplied by the resource class, falling back to its name. This
-	// setting affects presentation only, not resource identity, service discovery,
-	// telemetry identity, or command targeting. Repeated calls replace the previous
-	// override.
-	//
-	// Parameters:
-	//   - resourceDisplayName: The friendly name, such as Orders Database.
-	//
-	// Returns: The resource builder.
-	WithResourceDisplayName(resourceDisplayName string) TestDatabaseResource
-
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
 	//
 	// When not specified, the resource class supplies the default label, falling
@@ -39939,19 +39682,6 @@ func (s *testDatabaseResource) WithRequiredCommandValidation(command string, val
 	return s
 }
 
-// WithResourceDisplayName overrides the human-readable name displayed for the
-// resource.
-func (s *testDatabaseResource) WithResourceDisplayName(resourceDisplayName string) TestDatabaseResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["resourceDisplayName"] = serializeValue(resourceDisplayName)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceDisplayName", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
 // WithResourceTypeDisplayName overrides the human-readable resource type label.
 func (s *testDatabaseResource) WithResourceTypeDisplayName(resourceTypeDisplayName string) TestDatabaseResource {
 	if s.err != nil { return s }
@@ -41701,20 +41431,6 @@ type TestRedisResource interface {
 	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
 	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) TestRedisResource
-
-	// WithResourceDisplayName overrides the human-readable name displayed for the
-	// resource.
-	//
-	// The default is supplied by the resource class, falling back to its name. This
-	// setting affects presentation only, not resource identity, service discovery,
-	// telemetry identity, or command targeting. Repeated calls replace the previous
-	// override.
-	//
-	// Parameters:
-	//   - resourceDisplayName: The friendly name, such as Orders Database.
-	//
-	// Returns: The resource builder.
-	WithResourceDisplayName(resourceDisplayName string) TestRedisResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
 	//
@@ -44089,19 +43805,6 @@ func (s *testRedisResource) WithRequiredCommandValidation(command string, valida
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommandValidation", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithResourceDisplayName overrides the human-readable name displayed for the
-// resource.
-func (s *testRedisResource) WithResourceDisplayName(resourceDisplayName string) TestRedisResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["resourceDisplayName"] = serializeValue(resourceDisplayName)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceDisplayName", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 

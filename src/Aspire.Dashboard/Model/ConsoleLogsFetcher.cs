@@ -74,7 +74,7 @@ public sealed class ConsoleLogsFetcher
         {
             var filterDate = _consoleLogsManager.GetFilterDate(resource.Name);
             var logEntries = await FetchLogEntriesAsync(resource.Name, filterDate, cancellationToken).ConfigureAwait(false);
-            var resourceName = ResourceViewModel.GetResourceTargetName(resource, resources);
+            var resourceName = ResourceViewModel.GetResourceName(resource, resources);
             return (ResourceName: resourceName, LogEntries: logEntries);
         });
 

@@ -1426,7 +1426,6 @@ public sealed class TelemetryExportServiceTests(ITestOutputHelper testOutputHelp
         Assert.Equal("Test Resource", deserialized.DisplayName);
         Assert.Equal("Container", deserialized.ResourceType);
         Assert.Equal("Container", deserialized.ResourceTypeDisplayName);
-        Assert.Equal("Test Resource", deserialized.ResourceDisplayName);
         Assert.Equal("Running", deserialized.State);
         Assert.NotNull(deserialized.WaitingFor);
         Assert.Equal(["dependency"], deserialized.WaitingFor);

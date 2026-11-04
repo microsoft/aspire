@@ -3043,16 +3043,6 @@ impl CSharpAppResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Overrides the human-readable name displayed for the resource.
-    pub fn with_resource_display_name(&self, resource_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("resourceDisplayName".to_string(), serde_json::to_value(&resource_display_name).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/withResourceDisplayName", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(IResource::new(handle, self.client.clone()))
-    }
-
     /// Overrides the human-readable resource type label.
     pub fn with_resource_type_display_name(&self, resource_type_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -4669,16 +4659,6 @@ impl ContainerRegistryResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Overrides the human-readable name displayed for the resource.
-    pub fn with_resource_display_name(&self, resource_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("resourceDisplayName".to_string(), serde_json::to_value(&resource_display_name).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/withResourceDisplayName", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(IResource::new(handle, self.client.clone()))
-    }
-
     /// Overrides the human-readable resource type label.
     pub fn with_resource_type_display_name(&self, resource_type_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -6091,16 +6071,6 @@ impl ContainerResource {
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("child".to_string(), child.handle().to_json());
         let result = self.client.invoke_capability("Aspire.Hosting/withBuilderChildRelationship", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(IResource::new(handle, self.client.clone()))
-    }
-
-    /// Overrides the human-readable name displayed for the resource.
-    pub fn with_resource_display_name(&self, resource_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("resourceDisplayName".to_string(), serde_json::to_value(&resource_display_name).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/withResourceDisplayName", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -8079,16 +8049,6 @@ impl DotnetToolResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Overrides the human-readable name displayed for the resource.
-    pub fn with_resource_display_name(&self, resource_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("resourceDisplayName".to_string(), serde_json::to_value(&resource_display_name).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/withResourceDisplayName", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(IResource::new(handle, self.client.clone()))
-    }
-
     /// Overrides the human-readable resource type label.
     pub fn with_resource_type_display_name(&self, resource_type_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -10052,16 +10012,6 @@ impl ExecutableResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Overrides the human-readable name displayed for the resource.
-    pub fn with_resource_display_name(&self, resource_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("resourceDisplayName".to_string(), serde_json::to_value(&resource_display_name).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/withResourceDisplayName", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(IResource::new(handle, self.client.clone()))
-    }
-
     /// Overrides the human-readable resource type label.
     pub fn with_resource_type_display_name(&self, resource_type_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -11035,16 +10985,6 @@ impl ExternalServiceResource {
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("child".to_string(), child.handle().to_json());
         let result = self.client.invoke_capability("Aspire.Hosting/withBuilderChildRelationship", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(IResource::new(handle, self.client.clone()))
-    }
-
-    /// Overrides the human-readable name displayed for the resource.
-    pub fn with_resource_display_name(&self, resource_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("resourceDisplayName".to_string(), serde_json::to_value(&resource_display_name).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/withResourceDisplayName", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -14702,16 +14642,6 @@ impl ParameterResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Overrides the human-readable name displayed for the resource.
-    pub fn with_resource_display_name(&self, resource_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("resourceDisplayName".to_string(), serde_json::to_value(&resource_display_name).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/withResourceDisplayName", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(IResource::new(handle, self.client.clone()))
-    }
-
     /// Overrides the human-readable resource type label.
     pub fn with_resource_type_display_name(&self, resource_type_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -16437,16 +16367,6 @@ impl ProjectResource {
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("child".to_string(), child.handle().to_json());
         let result = self.client.invoke_capability("Aspire.Hosting/withBuilderChildRelationship", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(IResource::new(handle, self.client.clone()))
-    }
-
-    /// Overrides the human-readable name displayed for the resource.
-    pub fn with_resource_display_name(&self, resource_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("resourceDisplayName".to_string(), serde_json::to_value(&resource_display_name).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/withResourceDisplayName", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -18825,16 +18745,6 @@ impl TestDatabaseResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Overrides the human-readable name displayed for the resource.
-    pub fn with_resource_display_name(&self, resource_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("resourceDisplayName".to_string(), serde_json::to_value(&resource_display_name).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/withResourceDisplayName", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(IResource::new(handle, self.client.clone()))
-    }
-
     /// Overrides the human-readable resource type label.
     pub fn with_resource_type_display_name(&self, resource_type_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -20523,16 +20433,6 @@ impl TestRedisResource {
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("child".to_string(), child.handle().to_json());
         let result = self.client.invoke_capability("Aspire.Hosting/withBuilderChildRelationship", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(IResource::new(handle, self.client.clone()))
-    }
-
-    /// Overrides the human-readable name displayed for the resource.
-    pub fn with_resource_display_name(&self, resource_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("resourceDisplayName".to_string(), serde_json::to_value(&resource_display_name).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/withResourceDisplayName", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -22445,16 +22345,6 @@ impl TestVaultResource {
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("child".to_string(), child.handle().to_json());
         let result = self.client.invoke_capability("Aspire.Hosting/withBuilderChildRelationship", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(IResource::new(handle, self.client.clone()))
-    }
-
-    /// Overrides the human-readable name displayed for the resource.
-    pub fn with_resource_display_name(&self, resource_display_name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("resourceDisplayName".to_string(), serde_json::to_value(&resource_display_name).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/withResourceDisplayName", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }

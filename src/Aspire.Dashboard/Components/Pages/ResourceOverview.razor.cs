@@ -649,7 +649,6 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
     }
 
     private string GetResourceName(ResourceViewModel resource) => ResourcesLayout?.GetResourceName(resource) ?? resource.Name;
-    private string GetResourceTargetName(ResourceViewModel resource) => ResourcesLayout?.GetResourceTargetName(resource) ?? resource.Name;
 
     private IEnumerable<RelatedResource> GetRelatedResources(ResourceViewModel resource)
     {
@@ -688,8 +687,8 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
             .Where(r => r.IsIncoming == incoming)
             .Select(r =>
             {
-                var targetName = GetResourceTargetName(r.Resource);
-                return new RelationshipGraphNode(GetResourceName(r.Resource), r.Type, DashboardUrls.ResourceOverviewUrl(targetName), targetName);
+                var name = GetResourceName(r.Resource);
+                return new RelationshipGraphNode(name, r.Type, DashboardUrls.ResourceOverviewUrl(name));
             })
             .ToList();
 

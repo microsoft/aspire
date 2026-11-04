@@ -21,73 +21,6 @@ namespace Aspire.Hosting.Tests;
 public class ResourceNotificationTests
 {
     [Fact]
-    public async Task ResourceDisplayName_OverrideIsIndependentOfResourceIdentityAndType()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-        var resource = builder.AddRedis("cache")
-            .WithResourceDisplayName("Initial label")
-            .WithResourceDisplayName("Shared Cache")
-            .WithResourceTypeDisplayName("Redis Server");
-        var annotation = Assert.Single(resource.Resource.Annotations.OfType<ResourceDisplayNameAnnotation>());
-        Assert.Equal("Shared Cache", annotation.ResourceDisplayName);
-        Assert.Equal("cache", resource.Resource.ResourceDisplayName);
-
-        var notificationService = ResourceNotificationServiceTestHelpers.Create();
-        await notificationService.PublishUpdateAsync(resource.Resource, snapshot => snapshot with
-        {
-            ResourceDisplayName = "Snapshot label"
-        }).DefaultTimeout();
-
-        Assert.True(notificationService.TryGetCurrentState("cache", out var resourceEvent));
-        Assert.Equal("cache", resourceEvent.Resource.Name);
-        Assert.Equal("Shared Cache", resourceEvent.Snapshot.ResourceDisplayName);
-        Assert.Equal("Container", resourceEvent.Snapshot.ResourceType);
-        Assert.Equal("Redis Server", resourceEvent.Snapshot.ResourceTypeDisplayName);
-    }
-
-    [Fact]
-    public async Task ResourceDisplayName_ClassDefaultAndSnapshotOverride()
-    {
-        var resource = new FriendlyNamedResource("technical-name");
-        var notificationService = ResourceNotificationServiceTestHelpers.Create();
-        await notificationService.PublishUpdateAsync(resource, snapshot => snapshot).DefaultTimeout();
-        Assert.True(notificationService.TryGetCurrentState(resource.Name, out var resourceEvent));
-        Assert.Equal("Class label", resourceEvent.Snapshot.ResourceDisplayName);
-
-        await notificationService.PublishUpdateAsync(resource, snapshot => snapshot with
-        {
-            ResourceDisplayName = "Snapshot label"
-        }).DefaultTimeout();
-        Assert.True(notificationService.TryGetCurrentState(resource.Name, out resourceEvent));
-        Assert.Equal("Snapshot label", resourceEvent.Snapshot.ResourceDisplayName);
-        Assert.Equal("technical-name", resourceEvent.Resource.Name);
-    }
-
-    [Theory]
-    [InlineData("")]
-    [InlineData(" \t")]
-    public void ResourceDisplayName_RejectsEmptyOverrides(string label)
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-        var resource = builder.AddResource(new ContainerResource("container"));
-        Assert.Throws<ArgumentException>(() => resource.WithResourceDisplayName(label));
-        Assert.Throws<ArgumentException>(() => new ResourceDisplayNameAnnotation(label));
-        Assert.Throws<ArgumentException>(() => new CustomResourceSnapshot { ResourceType = "Custom", Properties = [], ResourceDisplayName = label });
-    }
-
-    [Fact]
-    public void ResourceDisplayName_SnapshotEqualityIncludesPresentationMetadata()
-    {
-        var initial = new CustomResourceSnapshot { ResourceType = "Custom", Properties = [] };
-        var changed = initial with { ResourceDisplayName = "Friendly label" };
-
-        Assert.Null(initial.ResourceDisplayName);
-        Assert.False(initial.ContentEquals(changed));
-        Assert.True(changed.ContentEquals(changed with { }));
-        Assert.True(initial.ContentEquals(changed with { ResourceDisplayName = null }));
-    }
-
-    [Fact]
     public void InitialStateCanBeSpecified()
     {
         var builder = DistributedApplication.CreateBuilder();
@@ -2364,10 +2297,5 @@ public class ResourceNotificationTests
             Arguments = arguments
         };
 #pragma warning restore CS0618
-    }
-
-    private sealed class FriendlyNamedResource(string name) : Resource(name)
-    {
-        public override string ResourceDisplayName => "Class label";
     }
 }

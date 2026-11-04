@@ -333,7 +333,6 @@ ENTRYPOINT ["dotnet", "App.dll"]
 
 	// WithResourceTypeDisplayName
 	container.WithResourceTypeDisplayName("Validation Service")
-	container.WithResourceDisplayName("Validation Container")
 
 	// WithHttpProbe
 	container.WithHttpProbe(aspire.ProbeTypeLiveness, &aspire.WithHttpProbeOptions{

@@ -28,79 +28,6 @@ namespace Aspire.Dashboard.Components.Tests.Layout;
 public class ResourcesLayoutTests : DashboardTestContext
 {
     [Theory]
-    [InlineData("None", false)]
-    [InlineData("Tags", false)]
-    [InlineData("None", true)]
-    [InlineData("Tags", true)]
-    public async Task RenamedResource_ClickPreservesTechnicalSelection(string grouping, bool replicas)
-    {
-        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
-        var cache = ModelTestHelpers.CreateResource("cache-1", displayName: "cache", resourceDisplayName: "Shared Cache");
-        List<ResourceViewModel> resources =
-        [
-            cache,
-            ModelTestHelpers.CreateResource("Shared Cache", resourceDisplayName: "Other cache")
-        ];
-        if (replicas)
-        {
-            resources.Add(ModelTestHelpers.CreateResource("cache-2", displayName: "cache", resourceDisplayName: "Shared Cache"));
-        }
-        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
-            initialResources: resources, resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
-        var storage = Assert.IsType<TestLocalStorage>(Services.GetRequiredService<ILocalStorage>());
-        storage.OnGetUnprotectedAsync = key => key == BrowserStorageKeys.ResourcePaneGrouping ? (true, grouping) : (false, null);
-        var tags = Services.GetRequiredService<ResourceTagStore>();
-        foreach (var resource in resources)
-        {
-            tags.AddTag(resource.DisplayName, "Backend");
-        }
-        var navigation = Services.GetRequiredService<NavigationManager>();
-        navigation.NavigateTo(DashboardUrls.ResourceListUrl());
-        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
-        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
-
-        var target = replicas ? "cache-1" : "cache";
-        var caption = replicas ? "Shared Cache (cache-1)" : "Shared Cache";
-        var row = cut.Find("[data-resource-name='cache-1'] .resource-row-link");
-        Assert.Equal(caption, row.GetAttribute("aria-label"));
-        Assert.Equal(DashboardUrls.ResourceOverviewUrl(target), row.GetAttribute("href"));
-        await cut.InvokeAsync(() => row.Click());
-        cut.Render();
-
-        Assert.Equal("http://localhost" + DashboardUrls.ResourceOverviewUrl(target), navigation.Uri);
-        Assert.Equal([target], cut.Instance.SelectedResourceNames);
-        Assert.Same(cache, cut.Instance.SelectedResource);
-        Assert.Equal("page", cut.Find("[data-resource-name='cache-1'] .resource-row-link").GetAttribute("aria-current"));
-        Assert.Equal(caption, cut.Find(".resource-header-title").TextContent.Trim());
-        var expectedTargets = replicas ? new[] { "cache-1", "cache-2", "Shared Cache" } : ["cache", "Shared Cache"];
-        Assert.Equal(expectedTargets.Order(StringComparers.ResourceName),
-            cut.Instance.GetAllResourceNames().Order(StringComparers.ResourceName));
-
-        if (grouping == "Tags")
-        {
-            await cut.InvokeAsync(() => cut.Find(".resource-tag-link").Click());
-            cut.Render();
-            Assert.Equal(expectedTargets.Order(StringComparers.ResourceName),
-                cut.Instance.SelectedResourceNames.Order(StringComparers.ResourceName));
-            Assert.Equal(resources.OrderBy(r => r.Name, StringComparers.ResourceName),
-                cut.Instance.SelectedResources.OrderBy(r => r.Name, StringComparers.ResourceName));
-        }
-        else
-        {
-            await cut.InvokeAsync(() => cut.Find("[data-resource-name='Shared Cache'] .resource-row-link")
-                .Click(new Microsoft.AspNetCore.Components.Web.MouseEventArgs { ShiftKey = true }));
-            cut.Render();
-            Assert.Contains(target, cut.Instance.SelectedResourceNames);
-            Assert.Contains("Shared Cache", cut.Instance.SelectedResourceNames);
-            Assert.Equal(cut.Instance.SelectedResourceNames.Count, cut.Instance.SelectedResources.Count());
-        }
-
-        await cut.InvokeAsync(() => cut.Find(".resource-kind-toggle[aria-label='Parameters']").Click());
-        Assert.Equal(cut.Instance.GetAllResourceNames().Order(StringComparers.ResourceName),
-            cut.Instance.GetScopeResourceNames()!.Order(StringComparers.ResourceName));
-    }
-
-    [Theory]
     [InlineData(KnownResourceTypes.Project, KnownProperties.Project.Path, "MyFrontend.csproj")]
     [InlineData(KnownResourceTypes.Container, KnownProperties.Container.Image, "postgres:17")]
     [InlineData(KnownResourceTypes.Executable, KnownProperties.Executable.Path, "worker.exe")]
@@ -1151,7 +1078,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
             initialResources:
             [
-                ModelTestHelpers.CreateResource("shell-instance", displayName: "shell", resourceDisplayName: "Terminal session", state: KnownResourceState.Running,
+                ModelTestHelpers.CreateResource("shell-instance", displayName: "shell", state: KnownResourceState.Running,
                     urls: [new UrlViewModel("https", new Uri("https://localhost:5001"), false, false, UrlDisplayPropertiesViewModel.Empty)],
                     commands: [stop],
                     properties: new()
@@ -1171,8 +1098,8 @@ public class ResourcesLayoutTests : DashboardTestContext
 
         var terminal = Assert.Single(cut.FindAll(".resource-row-terminal"));
         Assert.Equal(terminalUrl, terminal.GetAttribute("href"));
-        Assert.Equal("Open terminal for Terminal session", terminal.GetAttribute("aria-label"));
-        Assert.Equal("Open terminal for Terminal session", terminal.GetAttribute("data-tooltip"));
+        Assert.Equal("Open terminal for shell", terminal.GetAttribute("aria-label"));
+        Assert.Equal("Open terminal for shell", terminal.GetAttribute("data-tooltip"));
         Assert.Collection(terminal.ParentElement!.Children,
             spacer => Assert.True(spacer.ClassList.Contains("resource-row-toggle-spacer")),
             endpoint => Assert.True(endpoint.ClassList.Contains("resource-row-action-priority-0")),
@@ -1198,7 +1125,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         // The narrow-pane overflow menu must have the same navigation semantics as the shortcut.
         navigation.NavigateTo(initialUrl);
         cut.Render();
-        var menu = cut.FindComponents<AspireMenuButton>().Single(button => button.Instance.Title == "Actions for Terminal session");
+        var menu = cut.FindComponents<AspireMenuButton>().Single(button => button.Instance.Title == "Actions for shell");
         var terminalItem = Assert.Single(menu.Instance.ItemsProvider(), item => item.Text == "Terminal");
         await cut.InvokeAsync(Assert.IsType<Func<Task>>(terminalItem.OnClick));
         Assert.Equal("http://localhost" + terminalUrl, navigation.Uri);

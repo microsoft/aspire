@@ -218,7 +218,7 @@ public sealed class DashboardCommandExecutor(
             toastOptions.QuickAction1.Label = loc[nameof(Dashboard.Resources.Resources.ResourceCommandToastViewLogs)];
             toastOptions.QuickAction1.OnClickAsync = _ =>
             {
-                navigationManager.NavigateTo(DashboardUrls.ConsoleLogsUrl(resource: resource.Name));
+                navigationManager.NavigateTo(DashboardUrls.ConsoleLogsUrl(resource: getResourceName(resource)));
                 return Task.CompletedTask;
             };
             // Truncate plain-text command output before encoding it for Fluent's HTML-rendering toast,

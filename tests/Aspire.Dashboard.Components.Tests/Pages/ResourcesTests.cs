@@ -43,14 +43,13 @@ namespace Aspire.Dashboard.Components.Tests.Pages;
 public partial class ResourcesTests : DashboardTestContext
 {
     [Fact]
-    public void Resources_DisplaysFriendlyResourceAndTypeNames()
+    public void Resources_DisplaysFriendlyTypeName()
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var resource = ModelTestHelpers.CreateResource(
             resourceName: "cache-123",
             displayName: "cache",
             resourceType: "Container",
-            resourceDisplayName: "Shared [Cache]",
             resourceTypeDisplayName: "Redis",
             state: KnownResourceState.Running);
         var dashboardClient = new TestDashboardClient(
@@ -70,7 +69,7 @@ public partial class ResourcesTests : DashboardTestContext
 
         cut.WaitForAssertion(() =>
         {
-            Assert.Contains(cut.FindAll("td"), cell => cell.TextContent.Contains("Shared [Cache]", StringComparison.Ordinal));
+            Assert.Contains(cut.FindAll("td"), cell => cell.TextContent.Contains("cache", StringComparison.Ordinal));
             Assert.Contains(cut.FindAll("td"), cell => cell.TextContent.Contains("Redis", StringComparison.Ordinal));
         });
         Assert.Equal("cache-123", resource.Name);

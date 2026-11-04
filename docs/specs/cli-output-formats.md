@@ -297,12 +297,6 @@ Every outcome other than `stopped` has a nonzero exit code. Without
 
 ### `aspire describe`
 
-The standard table's **Name** column shows `ResourceDisplayName`, which defaults to the
-resource's name. `.WithResourceDisplayName("Orders API")` sets a friendly instance label.
-Duplicate labels are disambiguated with the runtime resource name. These labels affect
-presentation only: command targeting, relationships, service discovery, and telemetry
-identity continue using technical resource names.
-
 The standard table's **Type** column shows the resource's type display name, such as
 `Redis` or `PostgreSQL Server`. Integrations supply defaults from their resource classes;
 `.WithResourceTypeDisplayName("ASP.NET Core")` overrides the label for an individual resource.
@@ -329,7 +323,6 @@ Progress and informational messages go to stderr, so redirection captures only M
     {
       "name": "api",
       "displayName": "api",
-      "resourceDisplayName": "Orders API",
       "resourceType": "Project",
       "resourceTypeDisplayName": "ASP.NET Core",
       "state": "Running",
@@ -358,8 +351,8 @@ Progress and informational messages go to stderr, so redirection captures only M
 `aspire describe --format json --follow` emits NDJSON. Each line is a resource object, not the snapshot wrapper:
 
 ```json
-{"name":"api","displayName":"api","resourceDisplayName":"Orders API","resourceType":"Project","resourceTypeDisplayName":"ASP.NET Core","state":"Starting","stateStyle":"info"}
-{"name":"api","displayName":"api","resourceDisplayName":"Orders API","resourceType":"Project","resourceTypeDisplayName":"ASP.NET Core","state":"Running","stateStyle":"success","healthStatus":"Healthy"}
+{"name":"api","displayName":"api","resourceType":"Project","resourceTypeDisplayName":"ASP.NET Core","state":"Starting","stateStyle":"info"}
+{"name":"api","displayName":"api","resourceType":"Project","resourceTypeDisplayName":"ASP.NET Core","state":"Running","stateStyle":"success","healthStatus":"Healthy"}
 ```
 
 #### Resource fields
@@ -369,10 +362,9 @@ Progress and informational messages go to stderr, so redirection captures only M
 | Field | Description |
 | ----- | ----------- |
 | `name` | Stable resource name. |
-| `displayName` | App-model resource name, shared by replicas. Retained as a technical alias; use `resourceDisplayName` for presentation. |
+| `displayName` | User-facing resource name. |
 | `resourceType` | Resource type, such as `Project`, `Container`, or `Executable`. |
 | `resourceTypeDisplayName` | Human-readable type label, such as `Redis` or `PostgreSQL Server`. Falls back to `resourceType` when no label is supplied. Not a stable discriminator for behavior. |
-| `resourceDisplayName` | Human-readable instance label. Falls back to the existing `displayName` or `name`. Not used for command targeting or identity. |
 | `uid` | Resource unique ID, when available. |
 | `state` | Current resource state. |
 | `stateStyle` | UI style hint for the state. |

@@ -31,25 +31,6 @@ public sealed record CustomResourceSnapshot
     public required string ResourceType { get; init; }
 
     /// <summary>
-    /// Gets or initializes the human-readable resource name, or <see langword="null"/> to use the resource's name.
-    /// </summary>
-    /// <remarks>
-    /// This label is presentation metadata and does not change resource identity or command targeting.
-    /// </remarks>
-    public string? ResourceDisplayName
-    {
-        get;
-        init
-        {
-            if (value is not null)
-            {
-                ArgumentException.ThrowIfNullOrWhiteSpace(value);
-            }
-            field = value;
-        }
-    }
-
-    /// <summary>
     /// Gets or initializes the human-readable resource type label, falling back to <see cref="ResourceType"/> when not set.
     /// </summary>
     /// <remarks>
@@ -219,7 +200,6 @@ public sealed record CustomResourceSnapshot
         // Version counts publications rather than describing the resource. HealthStatus is derived
         // from State and HealthReports, so neither property needs an independent comparison.
         if (ResourceType != other.ResourceType ||
-            ResourceDisplayName != other.ResourceDisplayName ||
             _resourceTypeDisplayName != other._resourceTypeDisplayName ||
             CreationTimeStamp != other.CreationTimeStamp ||
             StartTimeStamp != other.StartTimeStamp ||

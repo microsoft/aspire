@@ -11,24 +11,6 @@ namespace Aspire.Hosting.Tests.Dashboard;
 public class ResourcePublisherTests
 {
     [Theory]
-    [InlineData(null, "cache-123")]
-    [InlineData("Shared Cache", "Shared Cache")]
-    public void ResourceDisplayNameIsPublishedWithoutChangingResourceIdentity(string? label, string expected)
-    {
-        var state = new CustomResourceSnapshot { ResourceType = "Container", Properties = [] };
-        if (label is not null)
-        {
-            state = state with { ResourceDisplayName = label };
-        }
-        var snapshot = CreateResourceSnapshot("cache-123", state);
-        var resource = Aspire.DashboardService.Proto.V1.Resource.FromSnapshot(snapshot);
-
-        Assert.Equal("cache-123", resource.Name);
-        Assert.Equal("cache-123", resource.DisplayName);
-        Assert.Equal(expected, resource.ResourceDisplayName);
-    }
-
-    [Theory]
     [InlineData(null, "Container")]
     [InlineData("Redis", "Redis")]
     public void ResourceTypeDisplayNameIsPublishedWithoutChangingResourceType(string? resourceTypeDisplayName, string expectedResourceTypeDisplayName)
@@ -262,7 +244,7 @@ public class ResourcePublisherTests
             CreationTimeStamp = null,
             StartTimeStamp = null,
             StopTimeStamp = null,
-            DisplayName = name,
+            DisplayName = "",
             Urls = [],
             Volumes = [],
             Environment = [],

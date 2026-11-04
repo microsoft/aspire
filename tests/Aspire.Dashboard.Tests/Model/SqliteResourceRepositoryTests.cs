@@ -19,7 +19,6 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
         var resource = CreateResource("api-123", "api");
         resource.ResourceTypeDisplayName = "Orders API";
-        resource.ResourceDisplayName = "Orders Backend";
 
         {
             using var repositoryContext = CreateRepository(workspace.Path);
@@ -1057,7 +1056,6 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
         Assert.Equal(expected.DisplayName, actual.DisplayName);
         Assert.Equal(expected.ResourceType, actual.ResourceType);
         Assert.Equal(expected.HasResourceTypeDisplayName ? expected.ResourceTypeDisplayName : expected.ResourceType, actual.ResourceTypeDisplayName);
-        Assert.Equal(expected.HasResourceDisplayName ? expected.ResourceDisplayName : expected.DisplayName, actual.ResourceDisplayName);
         Assert.Equal(expected.Uid, actual.Uid);
         Assert.Equal(replicaIndex, actual.ReplicaIndex);
         Assert.Equal(state, actual.State);

@@ -11,6 +11,7 @@ using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Tests.Shared.DashboardModel;
 using Bunit;
+using Google.Protobuf.WellKnownTypes;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -18,46 +19,40 @@ using Xunit;
 namespace Aspire.Dashboard.Components.Tests.Pages;
 
 [UseCulture("en-US")]
-public class ResourceOverviewDisplayNameTests : DashboardTestContext
+public class ResourceOverviewTypeDisplayNameTests : DashboardTestContext
 {
     [Fact]
-    public void Overview_LabeledResourceDisplaysLabelsAndTargetsResourceName()
+    public void Overview_DisplaysTypeLabelAndKeepsTechnicalTypeInProperties()
     {
-        var cut = RenderOverview("/resources/postgres", "postgres");
+        var cut = RenderOverview("postgres");
 
         cut.WaitForAssertion(() => Assert.Equal(["postgres"], cut.Instance.SelectedResourceNames));
-        Assert.Equal("postgres", cut.Instance.SelectedResource?.Name);
-
-        var rowLink = cut.Find("[data-resource-name='postgres'] .resource-row-link");
-        Assert.EndsWith("/resources/postgres", rowLink.GetAttribute("href"));
-        Assert.Equal("Orders Database", rowLink.GetAttribute("aria-label"));
-        Assert.Equal("Orders Database", cut.Find("[data-resource-name='postgres'] .resource-row-name").TextContent.Trim());
 
         var status = cut.Find("[aria-labelledby='overview-status-title']");
         var values = status.QuerySelectorAll("dt").ToDictionary(dt => dt.TextContent.Trim(), dt => dt.NextElementSibling!);
         Assert.Equal("PostgreSQL Server", values["Type"].TextContent.Trim());
 
         var graph = cut.FindComponent<ResourceRelationshipGraph>().Instance;
-        Assert.Equal(new RelationshipGraphNode("Orders Database", "PostgreSQL Server", Url: null, ColorKey: "postgres"), graph.Resource);
-        Assert.Equal([new RelationshipGraphNode("Orders API", "Reference", "/resources/api", ColorKey: "api")], graph.Incoming);
+        Assert.Equal(new RelationshipGraphNode("postgres", "PostgreSQL Server", Url: null), graph.Resource);
+
+        Assert.Contains(KnownResourceTypes.Container, cut.Find(".overview-property-grid").TextContent, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Overview_MultipleSelection_LabeledResourcesStaySelectedAndInScope()
+    public void Overview_WithoutTypeLabel_TechnicalTypeOnlyDisplaysInStatus()
     {
-        var cut = RenderOverview("/resources?resource=postgres&resource=api", resourceName: null);
+        var cut = RenderOverview("api");
 
-        cut.WaitForAssertion(() => Assert.Equal(
-            ["Orders API", "Orders Database"],
-            cut.FindAll(".resource-card").Select(card => card.GetAttribute("aria-label")).Order(StringComparer.Ordinal)));
+        cut.WaitForAssertion(() => Assert.Equal(["api"], cut.Instance.SelectedResourceNames));
 
-        Assert.Equal(
-            ["Orders API", "Orders Database"],
-            cut.FindAll(".resource-row.selected .resource-row-name").Select(name => name.TextContent.Trim()).Order(StringComparer.Ordinal));
-        Assert.Equal(["postgres", "api"], cut.Instance.SelectedResourceNames);
+        var status = cut.Find("[aria-labelledby='overview-status-title']");
+        var values = status.QuerySelectorAll("dt").ToDictionary(dt => dt.TextContent.Trim(), dt => dt.NextElementSibling!);
+        Assert.Equal(KnownResourceTypes.Project, values["Type"].TextContent.Trim());
+
+        Assert.Empty(cut.FindAll(".overview-property-grid"));
     }
 
-    private IRenderedComponent<ResourcesLayout> RenderOverview(string url, string? resourceName)
+    private IRenderedComponent<ResourcesLayout> RenderOverview(string resourceName)
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
@@ -65,13 +60,13 @@ public class ResourceOverviewDisplayNameTests : DashboardTestContext
             initialResources:
             [
                 ModelTestHelpers.CreateResource("postgres", resourceType: KnownResourceTypes.Container, state: KnownResourceState.Running,
-                    resourceDisplayName: "Orders Database", resourceTypeDisplayName: "PostgreSQL Server"),
+                    resourceTypeDisplayName: "PostgreSQL Server", properties: CreateTypeProperty(KnownResourceTypes.Container)),
                 ModelTestHelpers.CreateResource("api", resourceType: KnownResourceTypes.Project, state: KnownResourceState.Running,
-                    resourceDisplayName: "Orders API", relationships: [new RelationshipViewModel("postgres", "Reference")])
+                    relationships: [new RelationshipViewModel("postgres", "Reference")], properties: CreateTypeProperty(KnownResourceTypes.Project))
             ],
             resourceChannelProvider: () => channel);
         ResourceSetupHelpers.SetupResourceOverview(this, viewport, client);
-        Services.GetRequiredService<NavigationManager>().NavigateTo(url);
+        Services.GetRequiredService<NavigationManager>().NavigateTo($"/resources/{resourceName}");
 
         return Render<ResourcesLayout>(p => p.AddCascadingValue(viewport).Add(p => p.Body, builder =>
         {
@@ -80,4 +75,9 @@ public class ResourceOverviewDisplayNameTests : DashboardTestContext
             builder.CloseComponent();
         }));
     }
+
+    private static Dictionary<string, ResourcePropertyViewModel> CreateTypeProperty(string resourceType) => new()
+    {
+        [KnownProperties.Resource.Type] = new(KnownProperties.Resource.Type, Value.ForString(resourceType), false, null, 0, null, false)
+    };
 }

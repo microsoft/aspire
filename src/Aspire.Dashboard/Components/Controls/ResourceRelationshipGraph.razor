@@ -41,7 +41,7 @@
     private RenderFragment NodeContent(NodeLayout node, RelationshipGraphNode resourceNode) =>
         @<g>
             <rect x="@node.X" y="@node.Y" width="@_nodeWidth" height="@NodeHeight" rx="6" />
-            <circle cx="@(node.X + 12)" cy="@(node.Y + NodeHeight / 2)" r="4" style="@($"fill: {ColorGenerator.Instance.GetColorVariableByKey(resourceNode.ColorKey)}")" />
+            <circle cx="@(node.X + 12)" cy="@(node.Y + NodeHeight / 2)" r="4" style="@($"fill: {ColorGenerator.Instance.GetColorVariableByKey(resourceNode.Name)}")" />
             <text x="@(node.X + LabelStart)" y="@(node.Y + NodeHeight / 2)" dominant-baseline="central">@GetLabel(resourceNode.Name)</text>
         </g>;
 }

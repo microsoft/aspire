@@ -17,7 +17,6 @@ public partial class ResourceNameValue
     [Parameter, EditorRequired]
     public required ResourceViewModel Resource { get; set; }
 
-    // Colors are keyed by the target name so a resource matches its telemetry, whatever label it displays.
     [Parameter, EditorRequired]
-    public required Func<ResourceViewModel, string> GetColorKey { get; set; }
+    public required Func<ResourceViewModel, string> FormatName { get; set; }
 }

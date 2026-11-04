@@ -236,7 +236,7 @@
                              data-resource-grouping="@_grouping"
                              @key="@GetGroupKey(group)">
                             @{
-                                var groupResourceNames = group.Resources.Select(GetResourceTargetName).ToList();
+                                var groupResourceNames = group.Resources.Select(GetResourceName).ToList();
                                 var isGroupSelected = IsResourceGroupSelected(groupResourceNames);
 
                                 <div class="resource-tag-header @(isGroupSelected ? "selected" : string.Empty)">
@@ -729,7 +729,7 @@
             <span class="resource-header-icon">
                 <FluentIcon Width="20px"
                             Color="Color.Custom"
-                            CustomColor="@ColorGenerator.Instance.GetColorVariableByKey(GetResourceTargetName(selected))"
+                            CustomColor="@ColorGenerator.Instance.GetColorVariableByKey(selectedName)"
                             Value="@ResourceIconHelpers.GetIconForResource(IconResolver, selected, IconSize.Size20)" />
                 <PersistentContainerBadge Resource="@selected" />
             </span>
@@ -888,8 +888,7 @@
     private void RenderResourceRow(RenderTreeBuilder __builder, ResourceViewModel resource, ResourceGridViewModel? row, IReadOnlyList<bool>? treeGuides = null)
     {
         var resourceName = GetResourceName(resource);
-        var resourceTargetName = GetResourceTargetName(resource);
-        var isSelected = IsSelected(resourceTargetName);
+        var isSelected = IsSelected(resourceName);
         var stateViewModel = ResourceStateViewModel.GetStateViewModel(resource, ColumnsLoc);
         var errorCount = GetUnviewedErrorCount(resource);
         var depth = row?.Depth ?? 0;
@@ -921,7 +920,7 @@
                 }
             }
             <a class="resource-row-link"
-               href="@GetRowUrl(resourceTargetName)"
+               href="@GetRowUrl(resourceName)"
                style="@(depth == 0 ? null : $"--resource-row-depth: {depth}")"
                data-resource-depth="@depth"
                aria-current="@GetRowAriaCurrent(isSelected)"
@@ -930,7 +929,7 @@
                draggable="@(canReorder ? "true" : null)"
                data-resource-drag-handle="@canReorder"
                aria-keyshortcuts="@($"{(canReorder ? "Alt+ArrowUp Alt+ArrowDown " : null)}{(row is not null ? "ArrowLeft ArrowRight" : null)}".Trim())"
-               @onclick="@(e => OnRowClickAsync(e, resourceTargetName))"
+               @onclick="@(e => OnRowClickAsync(e, resourceName))"
                @onclick:preventDefault="true">
                 <span class="resource-row-icon">
                     <span class="resource-row-glyph">

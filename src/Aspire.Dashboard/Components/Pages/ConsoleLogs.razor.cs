@@ -1166,7 +1166,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     public ConsoleLogsPageState ConvertViewModelToSerializable()
     {
         var selectedResourceName = GetSelectedResource() is { } selectedResource
-            ? ResourceViewModel.GetResourceTargetName(selectedResource, _resourceByName)
+            ? GetResourceName(selectedResource)
             : null;
         return new ConsoleLogsPageState(selectedResourceName);
     }

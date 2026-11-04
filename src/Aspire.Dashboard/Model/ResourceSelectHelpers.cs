@@ -23,7 +23,7 @@ internal static class ResourceSelectHelpers
                 builder.Add(new()
                 {
                     Id = ResourceTypeDetails.CreateResourceGrouping(grouping.Key, true),
-                    Name = grouping.First().ResourceDisplayName
+                    Name = grouping.Key
                 });
             }
 

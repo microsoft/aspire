@@ -17,15 +17,6 @@ public abstract class Resource : IResource
     public virtual string Name { get; }
 
     /// <summary>
-    /// Gets the default human-readable name of this resource, falling back to <see cref="Name"/>.
-    /// </summary>
-    /// <remarks>
-    /// This is presentation metadata only. Use <see cref="ResourceBuilderExtensions.WithResourceDisplayName{T}"/>
-    /// to override the label without changing resource identity, service discovery, or telemetry identity.
-    /// </remarks>
-    public virtual string ResourceDisplayName => Name;
-
-    /// <summary>
     /// Gets the default human-readable name of this resource's type.
     /// </summary>
     /// <remarks>

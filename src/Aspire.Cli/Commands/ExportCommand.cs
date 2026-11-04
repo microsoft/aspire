@@ -242,7 +242,7 @@ internal sealed class ExportCommand : BaseCommand
                 continue;
             }
 
-            var displayName = ResourceSnapshotMapper.GetResourceTargetName(snapshot, snapshots);
+            var displayName = ResourceSnapshotMapper.GetResourceName(snapshot, snapshots);
             exportArchive.Resources[displayName] = resourceJson;
         }
     }
@@ -277,7 +277,7 @@ internal sealed class ExportCommand : BaseCommand
         {
             var snapshot = snapshots.FirstOrDefault(s => string.Equals(s.Name, name, StringComparisons.ResourceName));
             var displayName = snapshot is not null
-                ? ResourceSnapshotMapper.GetResourceTargetName(snapshot, snapshots)
+                ? ResourceSnapshotMapper.GetResourceName(snapshot, snapshots)
                 : name;
             exportArchive.ConsoleLogs[displayName] = lines;
         }

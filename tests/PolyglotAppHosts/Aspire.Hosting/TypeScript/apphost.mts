@@ -360,7 +360,6 @@ await project.withReference(cache);
 // withIconName
 await container.withIconName("Database", { iconVariant: IconVariant.Filled });
 await container.withResourceTypeDisplayName("Validation Service");
-await container.withResourceDisplayName("Validation Container");
 
 // withHttpProbe
 await container.withHttpProbe(ProbeType.Liveness, { path: "/health" });

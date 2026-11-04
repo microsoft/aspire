@@ -15,10 +15,10 @@ public sealed partial class ResourceOverview
 {
     private const int DetailsPreviewCount = 10;
 
-    // The status card already displays these properties, and the header displays the friendly resource name.
+    // The status card already displays these properties, and the header displays the resource name.
     private static readonly HashSet<string> s_statusCardPropertyNames = new(StringComparers.ResourcePropertyName)
     {
-        KnownProperties.Resource.ResourceDisplayName,
+        KnownProperties.Resource.DisplayName,
         KnownProperties.Resource.State,
         KnownProperties.Resource.HealthState,
         KnownProperties.Resource.ResourceTypeDisplayName,
@@ -28,15 +28,10 @@ public sealed partial class ResourceOverview
         KnownProperties.Resource.Source,
     };
 
-    // The header and status card show the friendly labels. The technical name and type are only redundant when
-    // no custom label replaces them, so keep them in the properties otherwise.
+    // The status card shows the friendly type label. The technical type is only redundant when no custom label
+    // replaces it, so keep it in the properties otherwise.
     private static bool IsDisplayedOutsideProperties(ResourceViewModel resource, string propertyName)
     {
-        if (string.Equals(propertyName, KnownProperties.Resource.DisplayName, StringComparisons.ResourcePropertyName))
-        {
-            return resource.ResourceDisplayName == resource.DisplayName;
-        }
-
         if (string.Equals(propertyName, KnownProperties.Resource.Type, StringComparisons.ResourcePropertyName))
         {
             return resource.ResourceTypeDisplayName == resource.ResourceType;

@@ -139,5 +139,4 @@ public sealed partial class ResourceRelationshipGraph : ComponentBase
 /// <param name="Name">The resource name displayed in the graph.</param>
 /// <param name="Type">The relationship type, such as <c>Reference</c>, or the resource type for the center resource.</param>
 /// <param name="Url">The URL the node links to, or <c>null</c> for the center resource.</param>
-/// <param name="ColorKey">The target resource name that keys the node color, independent of its displayed label.</param>
-public sealed record RelationshipGraphNode(string Name, string Type, string? Url, string ColorKey);
+public sealed record RelationshipGraphNode(string Name, string Type, string? Url);

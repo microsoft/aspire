@@ -1637,7 +1637,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         // A row shortcut selects this resource alone, even from an aggregate page such as
         // /resources?resource=api&resource=worker&pane=tags#output. Keep the remaining view state.
         query.Remove(DashboardUrls.ResourceSelectionQueryName);
-        var url = DashboardUrls.ResourceOverviewUrl(GetResourceTargetName(resource)) +
+        var url = DashboardUrls.ResourceOverviewUrl(GetResourceName(resource)) +
             (query.Count > 0 ? $"?{query}" : string.Empty) + location.Fragment;
         return DashboardUrls.SetResourceTerminalFocus(url, focused: true);
     }
@@ -1653,7 +1653,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         if (resource.IsParameter &&
             string.Equals(command.Name, CommandViewModel.SetParameterCommand, StringComparisons.CommandName))
         {
-            NavigationManager.NavigateTo(DashboardUrls.ResourceOverviewUrl(GetResourceTargetName(resource)));
+            NavigationManager.NavigateTo(DashboardUrls.ResourceOverviewUrl(GetResourceName(resource)));
             return Task.CompletedTask;
         }
 
@@ -1661,10 +1661,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     }
 
     internal string GetResourceName(ResourceViewModel resource) => ResourceViewModel.GetResourceName(resource, _resourceByName);
-
-    // Friendly labels are presentation only and TryGetResourceByName can't resolve them. Selections, URLs and
-    // color keys must use this name so they match the routes and the names reported by telemetry.
-    internal string GetResourceTargetName(ResourceViewModel resource) => ResourceViewModel.GetResourceTargetName(resource, _resourceByName);
 
     private string GetResourceTypeLabel(ResourceViewModel resource) => resource.GetResourceTypeDisplayName(ResourcesLoc);
 
@@ -1803,7 +1799,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         return [.. _resourceByName.Values
             .Where(r => r.IsParameter ? _showParameters : _showResources)
             .Where(r => !r.IsResourceHidden(_filter.ShowHiddenResources))
-            .Select(GetResourceTargetName)];
+            .Select(GetResourceName)];
     }
 
     /// <summary>
@@ -2241,7 +2237,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             .Where(r => !r.IsResourceHidden(_filter.ShowHiddenResources))
             .OrderBy(r => r.ResourceType)
             .ThenBy(r => r, ResourceViewModelNameComparer.Instance)
-            .Select(GetResourceTargetName)
+            .Select(GetResourceName)
             .ToList();
 
         return names;
@@ -2256,7 +2252,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             names = GetResourceGroups()
                 .Where(g => !IsGroupCollapsed(g))
                 .SelectMany(g => g.Resources)
-                .Select(GetResourceTargetName)
+                .Select(GetResourceName)
                 .Distinct(StringComparers.ResourceName)
                 .ToList();
         }
@@ -2264,11 +2260,11 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         {
             names = IsSectionCollapsed(ResourcesSectionKey)
                 ? []
-                : GetPaneRows().Select(r => GetResourceTargetName(r.Resource)).ToList();
+                : GetPaneRows().Select(r => GetResourceName(r.Resource)).ToList();
 
             if (!IsSectionCollapsed(ParametersSectionKey))
             {
-                names.AddRange(GetParameterPaneRows().Select(GetResourceTargetName));
+                names.AddRange(GetParameterPaneRows().Select(GetResourceName));
             }
         }
 

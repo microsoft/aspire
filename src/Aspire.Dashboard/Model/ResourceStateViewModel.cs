@@ -133,7 +133,7 @@ internal class ResourceStateViewModel(string text, Icon icon, Color color)
         else if (resource.IsWaiting())
         {
             if (allResources is not null
-                ? resource.TryGetResolvedWaitingForDependencies(allResources, useFriendlyNames: true, out var dependencies)
+                ? resource.TryGetResolvedWaitingForDependencies(allResources, out var dependencies)
                 : resource.TryGetWaitingForDependencies(out dependencies))
             {
                 return loc.GetString(nameof(Columns.StateColumnResourceWaitingFor), string.Join(", ", dependencies));

@@ -909,16 +909,6 @@ public class ResourceNotificationService : IDisposable
 
             newState = UpdateIcons(resource, newState);
 
-            if (resource.TryGetLastAnnotation<ResourceDisplayNameAnnotation>(out var displayNameAnnotation))
-            {
-                newState = newState with { ResourceDisplayName = displayNameAnnotation.ResourceDisplayName };
-            }
-            else if (newState.ResourceDisplayName is null && resource is Resource namedResource &&
-                namedResource.ResourceDisplayName != resource.Name)
-            {
-                newState = newState with { ResourceDisplayName = namedResource.ResourceDisplayName };
-            }
-
             if (resource.TryGetLastAnnotation<ResourceTypeDisplayNameAnnotation>(out var resourceTypeDisplayNameAnnotation))
             {
                 newState = newState with { ResourceTypeDisplayName = resourceTypeDisplayNameAnnotation.ResourceTypeDisplayName };

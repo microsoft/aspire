@@ -1110,15 +1110,6 @@ internal sealed class ResourceSnapshot
     }
 
     /// <summary>
-    /// Gets the friendly instance name, falling back to the existing display name or runtime name.
-    /// </summary>
-    public string? ResourceDisplayName
-    {
-        get => string.IsNullOrWhiteSpace(field) ? DisplayName ?? Name : field;
-        init;
-    }
-
-    /// <summary>
     /// Gets the type of the resource (e.g., "Project", "Container", "Executable").
     /// </summary>
     [Obsolete("Use ResourceType property instead.")]

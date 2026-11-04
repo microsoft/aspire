@@ -27,7 +27,7 @@ public sealed partial class SqliteResourceRepository
                 "resource_name", "replica_index", "resource_type", "display_name", "uid", "state",
                 "created_at_seconds", "created_at_nanos", "state_style",
                 "started_at_seconds", "started_at_nanos", "stopped_at_seconds", "stopped_at_nanos",
-                "is_hidden", "supports_detailed_telemetry", "icon_name", "icon_variant", "console_logs_loaded", "resource_type_display_name", "resource_display_name"
+                "is_hidden", "supports_detailed_telemetry", "icon_name", "icon_variant", "console_logs_loaded", "resource_type_display_name"
             ],
             static (resourceToSave, parameters) =>
             {
@@ -51,7 +51,6 @@ public sealed partial class SqliteResourceRepository
                 parameters[16].Value = resource.HasIconVariant ? (int)resource.IconVariant : DBNull.Value;
                 parameters[17].Value = resourceToSave.ConsoleLogsLoaded;
                 parameters[18].Value = resource.HasResourceTypeDisplayName ? resource.ResourceTypeDisplayName : DBNull.Value;
-                parameters[19].Value = resource.HasResourceDisplayName ? resource.ResourceDisplayName : DBNull.Value;
             });
 
         var resourceModels = resources.Select(resource => resource.Resource).ToArray();
@@ -368,7 +367,6 @@ public sealed partial class SqliteResourceRepository
                 replica_index AS ReplicaIndex,
                 resource_type AS ResourceType,
                 resource_type_display_name AS ResourceTypeDisplayName,
-                resource_display_name AS ResourceDisplayName,
                 display_name AS DisplayName,
                 uid AS Uid,
                 state AS State,
@@ -621,10 +619,6 @@ public sealed partial class SqliteResourceRepository
         {
             resource.ResourceTypeDisplayName = record.ResourceTypeDisplayName;
         }
-        if (record.ResourceDisplayName is not null)
-        {
-            resource.ResourceDisplayName = record.ResourceDisplayName;
-        }
         if (record.State is not null)
         {
             resource.State = record.State;
@@ -676,7 +670,6 @@ public sealed partial class SqliteResourceRepository
         public required int ReplicaIndex { get; init; }
         public required string ResourceType { get; init; }
         public string? ResourceTypeDisplayName { get; init; }
-        public string? ResourceDisplayName { get; init; }
         public required string DisplayName { get; init; }
         public required string Uid { get; init; }
         public string? State { get; init; }

@@ -19,7 +19,7 @@ namespace Aspire.Cli.Tests.Commands;
 public class DescribeCommandTests(ITestOutputHelper outputHelper)
 {
     [Fact]
-    public async Task DescribeCommand_DefaultTable_UsesResourceDisplayNamesAndFallbacks()
+    public async Task DescribeCommand_DefaultTable_UsesResourceTypeDisplayNamesAndFallbacks()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
@@ -27,7 +27,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
         [
             new ResourceSnapshot { Name = "cache", ResourceType = "Container", ResourceTypeDisplayName = "Redis", State = "Running" },
             new ResourceSnapshot { Name = "postgres", ResourceType = "Container", ResourceTypeDisplayName = "PostgreSQL Server", State = "Running" },
-            new ResourceSnapshot { Name = "orders", ResourceDisplayName = "Orders [API]", ResourceType = "Project", ResourceTypeDisplayName = "ASP.NET Core", State = "Running" },
+            new ResourceSnapshot { Name = "orders", ResourceType = "Project", ResourceTypeDisplayName = "ASP.NET Core", State = "Running" },
             new ResourceSnapshot { Name = "generic", ResourceType = "Container", State = "Running" }
         ], disableAnsi: true);
 

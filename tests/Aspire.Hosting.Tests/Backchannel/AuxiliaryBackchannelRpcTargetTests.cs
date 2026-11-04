@@ -182,7 +182,6 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         await notificationService.PublishUpdateAsync(custom.Resource, s => s with
         {
             ResourceTypeDisplayName = "Custom Service",
-            ResourceDisplayName = "Friendly Resource",
             State = new ResourceStateSnapshot("Running", KnownResourceStateStyles.Success),
             CreationTimeStamp = createdAt,
             StartTimeStamp = startedAt,
@@ -259,7 +258,6 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
 
         Assert.Equal("CustomResource", snapshot.ResourceType);
         Assert.Equal("Custom Service", snapshot.ResourceTypeDisplayName);
-        Assert.Equal("Friendly Resource", snapshot.ResourceDisplayName);
 
         // State
         Assert.Equal("Running", snapshot.State);

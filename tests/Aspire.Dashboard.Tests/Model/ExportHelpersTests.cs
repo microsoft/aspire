@@ -33,18 +33,6 @@ public sealed class ExportHelpersTests
     }
 
     [Fact]
-    public void ExportFileNames_UseTargetNameInsteadOfFriendlyLabel()
-    {
-        var resource = ModelTestHelpers.CreateResource(
-            resourceName: "orders",
-            resourceDisplayName: "Orders/API: Primary");
-        var resourceByName = new Dictionary<string, ResourceViewModel>(StringComparer.OrdinalIgnoreCase) { [resource.Name] = resource };
-
-        Assert.Equal("orders.json", ExportHelpers.GetResourceAsJson(resource, resourceByName).FileName);
-        Assert.Equal("orders.env", ExportHelpers.GetEnvironmentVariablesAsEnvFile(resource, resourceByName).FileName);
-    }
-
-    [Fact]
     public void GetEnvironmentVariablesAsEnvFile_ReturnsExpectedResult()
     {
         // Arrange

@@ -795,8 +795,6 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
     private string GetResourceName(ResourceViewModel resource) => ResourceViewModel.GetResourceName(resource, _resourceByName);
 
-    private string GetResourceTargetName(ResourceViewModel resource) => ResourceViewModel.GetResourceTargetName(resource, _resourceByName);
-
     private bool HasMultipleReplicas(ResourceViewModel resource)
     {
         var count = 0;

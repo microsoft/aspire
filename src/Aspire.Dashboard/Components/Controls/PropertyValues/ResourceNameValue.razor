@@ -5,7 +5,7 @@
     <FluentIcon Width="16px"
                 Class="resource-icon"
                 Color="Color.Custom"
-                CustomColor="@ColorGenerator.Instance.GetColorVariableByKey(GetColorKey(Resource))"
+                CustomColor="@ColorGenerator.Instance.GetColorVariableByKey(FormatName(Resource))"
                 Value="@ResourceIconHelpers.GetIconForResource(IconResolver, Resource, IconSize.Size16)" />
 }
 <FluentHighlighter HighlightedText="@HighlightText" Text="@Value" />

@@ -16,7 +16,6 @@ internal abstract class ResourceSnapshot
 
     public required string Name { get; init; }
     public required string DisplayName { get; init; }
-    public virtual string ResourceDisplayName => DisplayName;
     public required string Uid { get; init; }
     public required string? State { get; init; }
     public required string? StateStyle { get; init; }
@@ -49,10 +48,6 @@ internal abstract class ResourceSnapshot
                 yield return (KnownProperties.Resource.ResourceTypeDisplayName, Value.ForString(ResourceTypeDisplayName), IsSensitive: false, DisplayName: null, IsHighlighted: false, SortOrder: null);
             }
             yield return (KnownProperties.Resource.DisplayName, Value.ForString(DisplayName), IsSensitive: false, DisplayName: null, IsHighlighted: false, SortOrder: null);
-            if (ResourceDisplayName != DisplayName)
-            {
-                yield return (KnownProperties.Resource.ResourceDisplayName, Value.ForString(ResourceDisplayName), IsSensitive: false, DisplayName: null, IsHighlighted: false, SortOrder: null);
-            }
             yield return (KnownProperties.Resource.State, State is null ? Value.ForNull() : Value.ForString(State), IsSensitive: false, DisplayName: null, IsHighlighted: false, SortOrder: null);
             yield return (KnownProperties.Resource.ExitCode, ExitCode is null ? Value.ForNull() : Value.ForString(ExitCode.Value.ToString("D", CultureInfo.InvariantCulture)), IsSensitive: false, DisplayName: null, IsHighlighted: false, SortOrder: null);
             yield return (KnownProperties.Resource.CreateTime, CreationTimeStamp is null ? Value.ForNull() : Value.ForString(CreationTimeStamp.Value.ToString("O")), IsSensitive: false, DisplayName: null, IsHighlighted: false, SortOrder: null);
