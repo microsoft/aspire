@@ -540,7 +540,7 @@ function oldFirstSignal(pullRequest) {
   // Route through isReviewDebt so the emitted signal and the focus-retention predicate share one
   // definition (notably its approved-PR exclusion) and cannot drift.
   if (isReviewDebt(pullRequest)) {
-    return { label: reviewDebtSignalLabel, tone: "danger" };
+    return { label: reviewDebtSignalLabel, tone: "accent" };
   }
   if (activityAge >= 7 * dayMs) {
     return { label: "old first", tone: "warning" };
@@ -1090,7 +1090,7 @@ export function createIssueSignals(issue) {
   }
 
   for (const label of (issue.labels || []).slice(0, 2)) {
-    signals.push({ label, tone: "accent" });
+    signals.push({ label, tone: "accent", kind: "repo-label" });
   }
 
   if (isBotAuthor(issue.author, issue.authorType)) {
