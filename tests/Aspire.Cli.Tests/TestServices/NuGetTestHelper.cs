@@ -72,8 +72,10 @@ internal static class NuGetTestHelper
     }
 
     public static string[] GetEligiblePackageSources(string workingDirectory, string packageId, IMachineWideSettings? machineWideSettings = null)
+        => GetEligiblePackageSources(LoadSettings(workingDirectory, machineWideSettings), packageId);
+
+    public static string[] GetEligiblePackageSources(ISettings settings, string packageId)
     {
-        var settings = LoadSettings(workingDirectory, machineWideSettings);
         var mapping = PackageSourceMapping.GetPackageSourceMapping(settings);
         var keys = mapping.GetConfiguredPackageSources(packageId);
         return new PackageSourceProvider(settings).LoadPackageSources()
