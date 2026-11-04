@@ -1335,7 +1335,7 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Share what works, what is missing, or what feels harder. Your feedback helps improve the dashboard while both experiences are available..
+        ///   Looks up a localized string similar to We'd love your feedback on the new experience..
         /// </summary>
         public static string DashboardFeedbackPromptMessage {
             get {
@@ -1353,7 +1353,7 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Help shape the new dashboard.
+        ///   Looks up a localized string similar to Welcome to the new Aspire dashboard!.
         /// </summary>
         public static string DashboardFeedbackPromptTitle {
             get {
