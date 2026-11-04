@@ -6,8 +6,8 @@ Go application.
 
 ## Getting started
 
-Install the Aspire CLI and Go 1.26 or later. In a new directory for your AppHost,
-initialize it:
+Go AppHost support is in Preview. Install the Aspire CLI and Go 1.26 or later.
+In a new directory for your AppHost, initialize it:
 
 ```bash
 aspire init --language go
