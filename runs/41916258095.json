@@ -1,0 +1,33 @@
+{
+  "run_id": 41916258095,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/41916258095",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-04T22:30:50Z",
+  "verdict": "transient-infra",
+  "pr": null,
+  "triggering_merge_pr": null,
+  "main_context": {
+    "last_successful_main_sha": "d4994d7af558bd42ec3ec36e2499fb4b9ec31ce2",
+    "failed_sha": "fdd1aa4f0229dc50788231e8406a7ff22b4ef541",
+    "candidate_merge_history_state": "incomplete",
+    "candidate_merges": null
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (macos-latest)",
+      "id": 126885858787,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/41916258095/job/126885858787",
+      "classification": "transient-infra",
+      "reason": "macOS Aspire.Cli.Tests test host crashed with exit code 3 (exit 7 overall) with zero failed tests; matches known host-crash mechanism.",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    }
+  ],
+  "failed_tests": [],
+  "causes": [
+    "aspire-cli-tests-macos-testhost-crash-exit-3"
+  ]
+}
