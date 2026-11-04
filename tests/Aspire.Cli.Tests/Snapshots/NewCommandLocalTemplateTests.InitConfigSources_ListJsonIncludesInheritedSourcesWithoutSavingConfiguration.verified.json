@@ -1,0 +1,7 @@
+﻿{
+  "enterprise": {
+    "repository": "https://git.example/templates",
+    "ref": "preview",
+    "future": true
+  }
+}

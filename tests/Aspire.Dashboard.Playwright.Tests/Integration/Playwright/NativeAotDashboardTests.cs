@@ -95,12 +95,11 @@ public class NativeAotDashboardTests(ITestOutputHelper outputHelper)
             Assert.Equal(HttpStatusCode.OK, (HttpStatusCode)response.Status);
             await page.GetByRole(AriaRole.Heading, new() { Name = "Structured logs" }).WaitForAsync();
 
-            await page.GetByTitle(Dialogs.HelpDialogCategoryNavigation).ClickAsync();
+            // The navigation button is named by aria-label. Its tooltip comes from data-tooltip, so it has no title.
+            await page.GetByRole(AriaRole.Button, new() { Name = Dialogs.HelpDialogCategoryNavigation, Exact = true }).ClickAsync();
             await page.GetByRole(AriaRole.Menuitem, new() { Name = Layout.MainLayoutLaunchSettings }).ClickAsync();
-            var darkThemeLabel = page.GetByText(Dialogs.SettingsDialogDarkTheme, new() { Exact = true }).First;
-            var darkThemeRadioId = await darkThemeLabel.GetAttributeAsync("for");
-            Assert.False(string.IsNullOrEmpty(darkThemeRadioId));
-            await page.Locator($"fluent-radio[id='{darkThemeRadioId}']").ClickAsync();
+            var themeGroup = page.GetByRole(AriaRole.Group, new() { Name = Dialogs.SettingsDialogTheme });
+            await themeGroup.GetByRole(AriaRole.Button, new() { Name = Dialogs.SettingsDialogDarkTheme, Exact = true }).ClickAsync();
             await Assertions.Expect(page.Locator("html")).ToHaveAttributeAsync("data-theme", "dark");
 
             await page.WaitForTimeoutAsync(1_000);

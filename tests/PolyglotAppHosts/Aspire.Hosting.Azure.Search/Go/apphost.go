@@ -9,7 +9,7 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	search := builder.AddAzureSearch("resource")
@@ -21,14 +21,14 @@ func main() {
 		aspire.AzureSearchRoleSearchServiceContributor,
 		aspire.AzureSearchRoleSearchIndexDataReader})
 	if search.Err() != nil {
-		log.Fatalf(aspire.FormatError(search.Err()))
+		log.Fatal(aspire.FormatError(search.Err()))
 	}
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	if err := app.Run(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 }

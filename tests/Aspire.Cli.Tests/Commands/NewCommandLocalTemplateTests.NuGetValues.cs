@@ -106,6 +106,8 @@ public partial class NewCommandLocalTemplateTests
         }
         else
         {
+            await File.WriteAllTextAsync(Path.Combine(workspace.Path, "NuGet.Config"),
+                "<configuration><packageSources><clear /></packageSources></configuration>");
             var host = Path.Combine(workspace.Path, "template", ".template.config", "aspirecli.host.json");
             var metadata = JsonNode.Parse(await File.ReadAllTextAsync(host))!;
             metadata["createNuGetConfig"] = true;

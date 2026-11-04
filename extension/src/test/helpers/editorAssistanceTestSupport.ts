@@ -162,6 +162,36 @@ function createFixtureDirectory(prefix: string): string {
     return fs.realpathSync.native(directory);
 }
 
+export function createAppHostAliasFixture() {
+    const root = createFixtureDirectory('apphost-alias');
+    const firstDirectory = path.join(root, 'First');
+    const secondDirectory = path.join(root, 'Second');
+    const aliasDirectory = path.join(root, 'Alias');
+    fs.mkdirSync(firstDirectory);
+    fs.mkdirSync(secondDirectory);
+    const firstAppHost = path.join(firstDirectory, 'AppHost.csproj');
+    const secondAppHost = path.join(secondDirectory, 'AppHost.csproj');
+    fs.writeFileSync(firstAppHost, appHostProjectContents);
+    fs.writeFileSync(secondAppHost, appHostProjectContents);
+    // Directory junctions exercise real retargeting on Windows without symlink privileges.
+    fs.symlinkSync(firstDirectory, aliasDirectory, process.platform === 'win32' ? 'junction' : 'dir');
+    return {
+        root,
+        firstAppHost,
+        secondAppHost,
+        selector: path.join(aliasDirectory, 'AppHost.csproj'),
+        retarget: () => {
+            if (process.platform === 'win32') {
+                fs.rmdirSync(aliasDirectory);
+            } else {
+                fs.unlinkSync(aliasDirectory);
+            }
+            fs.symlinkSync(secondDirectory, aliasDirectory, process.platform === 'win32' ? 'junction' : 'dir');
+        },
+        dispose: () => fs.rmSync(root, { recursive: true, force: true }),
+    };
+}
+
 function createWorkspaceFolder(root: string, name: string, index: number): vscode.WorkspaceFolder {
     return {
         uri: vscode.Uri.file(root),

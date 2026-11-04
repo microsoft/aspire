@@ -4,72 +4,72 @@
     <body>
       <trans-unit id="CleanCancelled">
         <source>Certificate clean operation was cancelled by the user.</source>
-        <target state="new">Certificate clean operation was cancelled by the user.</target>
+        <target state="translated">使用者已取消憑證清除作業。</target>
         <note />
       </trans-unit>
       <trans-unit id="CleanDescription">
         <source>Remove all HTTPS development certificates</source>
-        <target state="new">Remove all HTTPS development certificates</target>
+        <target state="translated">移除所有 HTTPS 開發憑證</target>
         <note />
       </trans-unit>
       <trans-unit id="CleanFailure">
         <source>Failed to clean HTTPS development certificates.</source>
-        <target state="new">Failed to clean HTTPS development certificates.</target>
+        <target state="translated">無法清除 HTTPS 開發憑證。</target>
         <note />
       </trans-unit>
       <trans-unit id="CleanFailureDetailsFormat">
         <source>Certificate clean operation failed: {0}</source>
-        <target state="new">Certificate clean operation failed: {0}</target>
+        <target state="translated">憑證清除作業失敗: {0}</target>
         <note>{0} is the error message from the failed operation</note>
       </trans-unit>
       <trans-unit id="CleanProgress">
         <source>Cleaning development certificates (may require elevated permissions)...</source>
-        <target state="new">Cleaning development certificates (may require elevated permissions)...</target>
+        <target state="translated">正在清除開發憑證 (可能需要提升權限)...</target>
         <note />
       </trans-unit>
       <trans-unit id="CleanSuccess">
         <source>All HTTPS development certificates cleaned successfully.</source>
-        <target state="new">All HTTPS development certificates cleaned successfully.</target>
+        <target state="translated">所有 HTTPS 開發憑證已成功清除。</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
         <source>Manage HTTPS development certificates</source>
-        <target state="new">Manage HTTPS development certificates</target>
+        <target state="translated">管理 HTTPS 開發憑證</target>
         <note />
       </trans-unit>
       <trans-unit id="TrustCancelled">
         <source>Certificate trust operation was cancelled by the user.</source>
-        <target state="new">Certificate trust operation was cancelled by the user.</target>
+        <target state="translated">使用者已取消憑證信任作業。</target>
         <note />
       </trans-unit>
       <trans-unit id="TrustDescription">
         <source>Trust the HTTPS development certificate, creating one if necessary</source>
-        <target state="new">Trust the HTTPS development certificate, creating one if necessary</target>
+        <target state="translated">信任 HTTPS 開發憑證，必要時會建立新的憑證</target>
         <note />
       </trans-unit>
       <trans-unit id="TrustFailure">
         <source>Failed to trust HTTPS development certificate.</source>
-        <target state="new">Failed to trust HTTPS development certificate.</target>
+        <target state="translated">無法信任 HTTPS 開發憑證。</target>
         <note />
       </trans-unit>
       <trans-unit id="TrustFailureDetailsFormat">
         <source>Certificate trust operation returned: {0}</source>
-        <target state="new">Certificate trust operation returned: {0}</target>
+        <target state="translated">憑證信任作業回傳: {0}</target>
         <note>{0} is the EnsureCertificateResult value</note>
       </trans-unit>
       <trans-unit id="TrustPartialSuccess">
         <source>HTTPS development certificate was partially trusted. Continuing because partial trust is usable for CLI HTTPS diagnostics on Linux; browser trust may still be incomplete.</source>
-        <target state="new">HTTPS development certificate was partially trusted. Continuing because partial trust is usable for CLI HTTPS diagnostics on Linux; browser trust may still be incomplete.</target>
+        <target state="translated">HTTPS 開發憑證部分受信任。仍會繼續處理，因為在 Linux 上，CLI HTTPS 診斷可使用部分信任；瀏覽器可能仍無法完整信任該憑證。</target>
         <note />
       </trans-unit>
       <trans-unit id="TrustProgress">
         <source>Trusting development certificate (may require elevated permissions)...</source>
-        <target state="new">Trusting development certificate (may require elevated permissions)...</target>
+        <target state="translated">正在信任開發憑證 (可能需要提升權限)...</target>
         <note />
       </trans-unit>
       <trans-unit id="TrustSuccess">
         <source>HTTPS development certificate trusted successfully.</source>
-        <target state="new">HTTPS development certificate trusted successfully.</target>
+        <target state="translated">HTTPS 開發憑證已成功受信任。</target>
         <note />
       </trans-unit>
     </body>

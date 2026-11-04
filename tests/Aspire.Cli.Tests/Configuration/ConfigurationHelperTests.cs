@@ -17,6 +17,75 @@ namespace Aspire.Cli.Tests.Configuration;
 public class ConfigurationHelperTests(ITestOutputHelper outputHelper)
 {
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task WriteSettingsFileAtomically_CanRejectSymbolicLinks(bool dangling)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
+        var target = Path.Combine(workspace.Path, "shared.json");
+        if (!dangling)
+        {
+            await File.WriteAllTextAsync(target, "{}");
+        }
+        TestSymlinkHelper.TryCreateSymlink(path, target, isDirectory: false);
+
+        await Assert.ThrowsAsync<IOException>(() => ConfigurationHelper.WriteSettingsFileAtomicallyAsync(
+            path, new JsonObject { ["custom"] = "updated" }, CancellationToken.None, rejectSymbolicLinks: true));
+
+        Assert.Equal(target, new FileInfo(path).LinkTarget);
+        Assert.Equal(!dangling, File.Exists(target));
+        if (!dangling)
+        {
+            Assert.Equal("{}", await File.ReadAllTextAsync(target));
+        }
+        Assert.Equal(dangling ? [path] : [path, target], Directory.GetFiles(workspace.Path).Order(StringComparer.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task WriteSettingsFileAtomically_ValidationFailurePreservesDestinationAndCleansStaging(bool preserveOwnershipAndAcl)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
+        const string original = """{"custom":"original"}""";
+        await File.WriteAllTextAsync(path, original);
+        var failure = new IOException("The settings changed during staging.");
+        var validations = 0;
+
+        var error = await Assert.ThrowsAsync<IOException>(() => ConfigurationHelper.WriteSettingsFileAtomicallyAsync(
+            path, new JsonObject { ["custom"] = "updated" }, CancellationToken.None,
+            preserveOwnershipAndAcl: preserveOwnershipAndAcl, beforeReplace: token =>
+            {
+                token.ThrowIfCancellationRequested();
+                validations++;
+                Assert.Equal(2, Directory.GetFiles(workspace.Path).Length);
+                throw failure;
+            }));
+
+        Assert.Same(failure, error);
+        Assert.Equal(1, validations);
+        Assert.Equal(original, await File.ReadAllTextAsync(path));
+        Assert.Equal([path], Directory.GetFiles(workspace.Path));
+    }
+
+    [Fact]
+    public async Task WriteSettingsFileAtomically_TrackedEditDoesNotOverwriteNewCompetingDestination()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
+        const string competing = """{"custom":"competing"}""";
+
+        await Assert.ThrowsAsync<IOException>(() => ConfigurationHelper.WriteSettingsFileAtomicallyAsync(
+            path, new JsonObject { ["custom"] = "updated" }, CancellationToken.None,
+            beforeReplace: token => File.WriteAllTextAsync(path, competing, token)));
+
+        Assert.Equal(competing, await File.ReadAllTextAsync(path));
+        Assert.Equal([path], Directory.GetFiles(workspace.Path));
+    }
+
+    [Theory]
     [InlineData(false, false)]
     [InlineData(true, false)]
     [InlineData(false, true)]

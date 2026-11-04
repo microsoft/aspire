@@ -95,6 +95,6 @@ internal static class MetricInstrumentDataCache
         return clone;
     }
 
-    private static bool AttributesEqual(KeyValuePair<string, string>[] left, KeyValuePair<string, string>[] right)
+    internal static bool AttributesEqual(KeyValuePair<string, string>[] left, KeyValuePair<string, string>[] right)
         => left.AsSpan().SequenceEqual(right);
 }

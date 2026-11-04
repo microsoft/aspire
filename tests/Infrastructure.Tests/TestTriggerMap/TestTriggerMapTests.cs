@@ -53,6 +53,43 @@ public sealed class TestTriggerMapTests
     }
 
     [Theory]
+    [InlineData("tools/AnalyzeCiFailure/Program.cs")]
+    [InlineData("tools/AnalyzeCiFailure/Directory.Build.props")]
+    [InlineData("tools/AnalyzeCiFailure/Directory.Build.targets")]
+    [InlineData("tools/AnalyzeCiFailure/Directory.Packages.props")]
+    [InlineData("tools/AnalyzeCiFailure/GitHubWorkflowCommands.cs")]
+    [InlineData("tools/AnalyzeCiFailure/WorkflowRunEvidenceCollector.cs")]
+    [InlineData("tools/AnalyzeCiFailure/IssueRendering.cs")]
+    [InlineData("tools/AnalyzeCiFailure/Templates/CommentCodeIssue.md.tmpl")]
+    public void AnalysisValidatorInputsSelectDedicatedTests(string path)
+    {
+        var result = SelectWithRealMap(path);
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Equal(["AnalyzeCiFailure.Tests"], result.TestProjects);
+        Assert.Empty(result.Jobs);
+    }
+
+    [Theory]
+    [InlineData(".github/workflows/analyze-ci-failure.md")]
+    [InlineData(".github/workflows/analyze-ci-failure.lock.yml")]
+    [InlineData(".github/workflows/analyze-ci-failure/prepare-report-templates.js")]
+    public void AnalyzerReportingInputsSelectScriptBehaviorTests(string path)
+    {
+        var result = SelectWithRealMap(path);
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Contains("Infrastructure.Tests", result.TestProjects);
+        if (path.EndsWith(".md", StringComparison.Ordinal) || path.EndsWith(".yml", StringComparison.Ordinal))
+        {
+            Assert.Contains("AnalyzeCiFailure.Tests", result.TestProjects);
+        }
+        Assert.Empty(result.Jobs);
+    }
+
+    [Theory]
     [InlineData("eng/scripts/generate-template-cgmanifest.ps1")]
     public void TemplateManifestInputsSelectInfrastructureCoverage(string path)
     {
@@ -112,6 +149,21 @@ public sealed class TestTriggerMapTests
         Assert.False(result.SelectsAll);
         Assert.Empty(result.UnmatchedFiles);
         Assert.Contains("Infrastructure.Tests", result.TestProjects);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void GoHostingChangesSelectExtensionE2e(bool hasAffectedProject)
+    {
+        const string path = "src/Aspire.Hosting.Go/GoHostingExtensions.cs";
+        var result = hasAffectedProject
+            ? SelectWithRealMap(path, "Aspire.Hosting.Go")
+            : SelectWithRealMap(path);
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Contains("job:extension-e2e", result.Jobs);
     }
 
     // Repo-relative '/'-separated project paths listed in Aspire.slnx (the Layer 1 graph root).
@@ -180,11 +232,7 @@ public sealed class TestTriggerMapTests
         },
         {
             "eng/test-retry-patterns.json",
-            ["test:Infrastructure.Tests"]
-        },
-        {
-            "eng/scripts/aspire-skills-bundle.common.ps1",
-            ["test:Infrastructure.Tests"]
+            ["test:AnalyzeCiFailure.Tests", "test:Infrastructure.Tests"]
         },
         {
             "eng/scripts/smoke-installed-cli.ps1",
@@ -498,6 +546,8 @@ public sealed class TestTriggerMapTests
     [InlineData("tests/Aspire.Dashboard.Components.Tests/JavaScript/TerminalDock.test.mjs")]
     [InlineData("src/Aspire.Dashboard/wwwroot/js/app-resourcegraph.js")]
     [InlineData("tests/Aspire.Dashboard.Components.Tests/JavaScript/ResourceGraph.test.mjs")]
+    [InlineData("src/Aspire.Dashboard/wwwroot/js/app-dashboard-experience.js")]
+    [InlineData("tests/Aspire.Dashboard.Components.Tests/JavaScript/DashboardExperience.test.mjs")]
     public void DashboardScriptInputsSelectInfrastructureTests(string path)
     {
         var result = SelectWithRealMap(path);
@@ -512,6 +562,7 @@ public sealed class TestTriggerMapTests
     [InlineData("eng/scripts/gha-testreport.ps1")]
     [InlineData("eng/scripts/split-test-projects-for-ci.ps1")]
     [InlineData("tools/ExtractTestPartitions/Program.cs")]
+    [InlineData("NuGet.config")]
     public void BroadCiInputHasAnExplicitRunAllRule(string path)
     {
         var result = SelectWithRealMap(path);
@@ -574,8 +625,6 @@ public sealed class TestTriggerMapTests
     [InlineData("eng/scripts/verify-cli-tool-nupkg.ps1")]
     [InlineData("eng/scripts/stabilization-smoke-init-restore.sh")]
     [InlineData("eng/generate-catalog.ps1")]
-    [InlineData("eng/scripts/update-aspire-skills-bundle.ps1")]
-    [InlineData("eng/scripts/verify-aspire-skills-bundle.ps1")]
     public void PathHandledOutsideSelectorDoesNotForceTestSelection(string path)
     {
         var result = SelectWithRealMap(path);
@@ -730,6 +779,7 @@ public sealed class TestTriggerMapTests
         Assert.False(result.SelectsAll);
         Assert.Contains("Aspire.Templates.Tests", result.TestProjects);
         Assert.Contains("Aspire.Cli.EndToEnd.Tests", result.TestProjects);
+        Assert.Contains("Aspire.EndToEnd.Tests", result.TestProjects);
         Assert.Contains("job:extension-e2e", result.Jobs);
         Assert.Contains("job:cli-starter-validation", result.Jobs);
     }
@@ -803,6 +853,20 @@ public sealed class TestTriggerMapTests
         Assert.Equal(
             ["job:deployment-e2e", "job:homebrew-installer", "job:winget-installer"],
             result.Jobs.Order(StringComparer.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("src/Aspire.Hosting.CodeGeneration.Go/AtsGoCodeGenerator.cs")]
+    [InlineData("src/Aspire.Hosting.CodeGeneration.Go/GoLanguageSupport.cs")]
+    public void GoModTemplatesSelectCliMinimumGoVersionGuard(string path)
+    {
+        var result = SelectWithRealMap(path, "Aspire.Hosting.CodeGeneration.Go");
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Contains("Aspire.Cli.Tests", result.TestProjects);
+        Assert.Contains(result.TestCauses["Aspire.Cli.Tests"],
+            cause => cause.Kind == CauseKind.PathRule && cause.Trigger == path);
     }
 
     [Fact]

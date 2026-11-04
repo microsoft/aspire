@@ -797,18 +797,10 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     }
 
     /// <summary>
-    /// Locks in the structural invariant that <c>aspire init</c> and <c>aspire new</c> depend
-    /// on: the <c>stable</c> channel is always <see cref="PackageChannelType.Explicit"/> with a
-    /// non-empty <see cref="PackageChannel.Mappings"/> array containing a <see cref="PackageMapping.AllPackages"/>
-    /// pattern. <c>TemplateNuGetConfigService.ConfigureDotNetAppHostNuGetConfigAsync</c>
-    /// short-circuits if the matching channel is not explicit or has no mappings, so a future
-    /// refactor that flipped stable to implicit / removed its mappings would silently turn the
-    /// workspace-NuGet.config write into a no-op for every stable-channel CLI user. The
-    /// InitCommand-level tests use a fake stable channel and cannot catch this regression at the
-    /// real <see cref="PackagingService"/> layer.
+    /// Stable remains an explicit channel selection even when its sources are ambient.
     /// </summary>
     [Fact]
-    public async Task GetChannelsAsync_StableChannel_IsExplicitWithAllPackagesMappingToNuGetOrg()
+    public async Task GetChannelsAsync_StableChannel_IsExplicitWithAmbientSourcePolicy()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
@@ -823,11 +815,89 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
 
         var stableChannel = channels.First(c => c.Name == PackageChannelNames.Stable);
         Assert.Equal(PackageChannelType.Explicit, stableChannel.Type);
-        Assert.NotNull(stableChannel.Mappings);
-        Assert.NotEmpty(stableChannel.Mappings!);
-        Assert.Contains(stableChannel.Mappings!, m =>
-            m.PackageFilter == PackageMapping.AllPackages &&
-            m.Source == PackageSources.NuGetOrg);
+        Assert.Null(stableChannel.Mappings);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("https://mirror.example/v3/index.json")]
+    public async Task GetChannelsAsync_ChannelsDoNotDeclareDefaultPackageSources(string? integrationSourceOverride)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var hives = workspace.CreateDirectory("hives");
+        hives.CreateSubdirectory("local/packages");
+        hives.CreateSubdirectory("pr-1234/packages");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(
+            workspace.WorkspaceRoot, identityChannel: PackageChannelNames.Stable,
+            hivesDirectory: hives, nugetServiceIndexOverride: integrationSourceOverride);
+        var features = new TestFeatures();
+        features.SetFeature(KnownFeatures.StagingChannelEnabled, true);
+        const string stagingSource = "https://staging.example/v3/index.json";
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            [PackagingService.OverrideStagingFeedConfigKey] = stagingSource
+        }).Build();
+        var service = new PackagingService(
+            executionContext, new FakeNuGetPackageCache(), features, configuration, NullLogger<PackagingService>.Instance);
+
+        var channels = (await service.GetChannelsAsync(TestContext.Current.CancellationToken)).ToArray();
+
+        var stable = Assert.Single(channels, static channel => channel.Name == PackageChannelNames.Stable);
+        Assert.Equal(PackageChannelType.Explicit, stable.Type);
+        if (integrationSourceOverride is null)
+        {
+            Assert.Null(stable.Mappings);
+        }
+        else
+        {
+            var mapping = Assert.Single(stable.Mappings!);
+            Assert.Equal("Aspire*", mapping.PackageFilter);
+            Assert.Equal(integrationSourceOverride, mapping.Source);
+        }
+        foreach (var name in new[] { PackageChannelNames.Daily, PackageChannelNames.Staging, PackageChannelNames.Local, "pr-1234" })
+        {
+            var channel = Assert.Single(channels, channel => channel.Name == name);
+            var mapping = Assert.Single(channel.Mappings!);
+            Assert.Equal("Aspire*", mapping.PackageFilter);
+        }
+    }
+
+    [Fact]
+    public async Task GetChannelsAsync_DailyDiscoveryDoesNotReenableAmbientDefaultSource()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var configPath = Path.Combine(workspace.Path, "nuget.config");
+        const string original = """
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="company" value="https://company.example/v3/index.json" />
+                <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
+              </packageSources>
+              <disabledPackageSources><add key="nuget.org" value="true" /></disabledPackageSources>
+              <packageSourceMapping><packageSource key="company"><package pattern="*" /></packageSource></packageSourceMapping>
+            </configuration>
+            """;
+        await File.WriteAllTextAsync(configPath, original);
+        var executionContext = workspace.CreateExecutionContext(identityChannel: PackageChannelNames.Stable);
+        var packagingService = new PackagingService(
+            executionContext, new FakeNuGetPackageCache(), new TestFeatures(),
+            new ConfigurationBuilder().Build(), NullLogger<PackagingService>.Instance);
+        var channels = await packagingService.GetChannelsAsync(TestContext.Current.CancellationToken);
+        var daily = Assert.Single(channels, static channel => channel.Name == PackageChannelNames.Daily);
+        var nugetService = NuGetTestHelper.CreateService();
+        var configuration = nugetService.BuildChannelConfiguration(
+            workspace.WorkspaceRoot, "test", daily, packageSourceOverride: null, nugetServiceIndexOverride: null,
+            TestContext.Current.CancellationToken);
+
+        using var preview = await nugetService.CreateConfigurationPreviewAsync(
+            workspace.WorkspaceRoot, configuration, globalPackagesFolder: null, TestContext.Current.CancellationToken);
+
+        var settings = nugetService.GetNuGetSettings(preview.EffectiveWorkingDirectory.FullName, TestContext.Current.CancellationToken);
+        Assert.False(Assert.Single(settings.Sources, static source => source.Name == "nuget.org").IsEnabled);
+        Assert.Equal(["https://company.example/v3/index.json"],
+            NuGetTestHelper.GetEligiblePackageSources(preview.EffectiveWorkingDirectory.FullName, "Example.Dependency"));
+        Assert.Equal(original, await File.ReadAllTextAsync(configPath));
     }
 
     [Fact]
@@ -864,13 +934,9 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         Assert.True(stagingChannel.ConfigureGlobalPackagesFolder);
         Assert.NotNull(stagingChannel.Mappings);
         
-        var aspireMapping = stagingChannel.Mappings!.FirstOrDefault(m => m.PackageFilter == "Aspire*");
-        Assert.NotNull(aspireMapping);
+        var aspireMapping = Assert.Single(stagingChannel.Mappings!);
+        Assert.Equal("Aspire*", aspireMapping.PackageFilter);
         Assert.Equal(testFeedUrl, aspireMapping.Source);
-        
-        var nugetMapping = stagingChannel.Mappings!.FirstOrDefault(m => m.PackageFilter == "*");
-        Assert.NotNull(nugetMapping);
-        Assert.Equal(PackageSources.NuGetOrg, nugetMapping.Source);
     }
 
     [Fact]
@@ -2082,15 +2148,12 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         var localChannel = channels.First(c => c.Name == PackageChannelNames.Local);
 
         Assert.NotNull(localChannel.Mappings);
-        var aspireMapping = localChannel.Mappings!.FirstOrDefault(m => m.PackageFilter == "Aspire*");
-        Assert.NotNull(aspireMapping);
+        var aspireMapping = Assert.Single(localChannel.Mappings!);
+        Assert.Equal("Aspire*", aspireMapping.PackageFilter);
         var expectedLocalPath = localPackagesDir.FullName.Replace('\\', '/');
         Assert.Equal(expectedLocalPath, aspireMapping.Source);
         Assert.False(UrlHelper.IsHttpUrl(aspireMapping.Source), "Local hive Aspire* mapping must be a filesystem path, not an HTTP feed.");
 
-        var fallbackMapping = localChannel.Mappings!.FirstOrDefault(m => m.PackageFilter == PackageMapping.AllPackages);
-        Assert.NotNull(fallbackMapping);
-        Assert.Equal(PackageSources.NuGetOrg, fallbackMapping.Source);
     }
 
     [Fact]

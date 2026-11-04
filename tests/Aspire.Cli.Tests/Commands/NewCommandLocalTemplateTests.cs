@@ -825,9 +825,12 @@ public partial class NewCommandLocalTemplateTests(ITestOutputHelper outputHelper
             "staging" => "https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-abcdef12/nuget/v3/index.json",
             _ => Path.Combine(context.HivesDirectory.FullName, channel, "packages")
         };
-        Assert.Equal([expectedSource], NuGetTestHelper.GetEligiblePackageSources(outputPath, "Aspire.AppHost.Sdk"), PackageSourceIdentity.Comparer);
-        Assert.Equal([expectedSource], NuGetTestHelper.GetEligiblePackageSources(outputPath, "Aspire.Hosting.Redis"), PackageSourceIdentity.Comparer);
-        Assert.Equal([PackageSources.NuGetOrg], NuGetTestHelper.GetEligiblePackageSources(outputPath, "Other.Dependency"));
+        var expectedSources = channel == "stable"
+            ? [expectedSource]
+            : new[] { expectedSource, PackageSources.NuGetOrg }.Order(StringComparer.Ordinal).ToArray();
+        Assert.Equal(expectedSources, NuGetTestHelper.GetEligiblePackageSources(outputPath, "Aspire.AppHost.Sdk"), PackageSourceIdentity.Comparer);
+        Assert.Equal(expectedSources, NuGetTestHelper.GetEligiblePackageSources(outputPath, "Aspire.Hosting.Redis"), PackageSourceIdentity.Comparer);
+        Assert.Equal(expectedSources, NuGetTestHelper.GetEligiblePackageSources(outputPath, "Other.Dependency"));
         await Verify(ReadOutput(workspace))
             .AddScrubber(builder => builder.Replace('\\', '/').Replace(workspace.Path.Replace('\\', '/'), "{workspace}"))
             .ScrubLinesWithReplace(line => Regex.Replace(line, "aspire-apphost-[a-f0-9]{16}", "aspire-apphost-source"))
@@ -861,7 +864,7 @@ public partial class NewCommandLocalTemplateTests(ITestOutputHelper outputHelper
         Assert.Empty(interaction.DisplayedErrors);
         var outputPath = Path.Combine(workspace.Path, "out");
         Assert.Equal(
-            [localPackagesOverride ? packages.FullName : sourceOverride],
+            new[] { localPackagesOverride ? packages.FullName : sourceOverride, PackageSources.NuGetOrg }.Order(StringComparer.Ordinal),
             NuGetTestHelper.GetEligiblePackageSources(outputPath, "Aspire.Hosting"), PackageSourceIdentity.Comparer);
         await Verify(ReadOutput(workspace))
             .AddScrubber(builder => builder.Replace('\\', '/').Replace(workspace.Path.Replace('\\', '/'), "{workspace}"))
@@ -953,7 +956,7 @@ public partial class NewCommandLocalTemplateTests(ITestOutputHelper outputHelper
         Assert.Equal([PackageSources.NuGetOrg], NuGetTestHelper.GetEligiblePackageSources(outputPath, "Other.Dependency"));
         var expectedSource = channel switch
         {
-            "stable" => PackageSources.NuGetOrg,
+            "stable" => "https://stale.example/v3/index.json",
             "daily" => "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json",
             "staging" => "https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-abcdef12/nuget/v3/index.json",
             _ => Path.Combine(context.HivesDirectory.FullName, channel, "packages")

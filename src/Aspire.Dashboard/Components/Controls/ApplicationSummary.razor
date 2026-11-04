@@ -1,0 +1,698 @@
+﻿@using Aspire.Dashboard.Components.Layout
+@using Aspire.Dashboard.Resources
+@using Aspire.Shared
+@using Aspire.Dashboard.Components.ResourcesGridColumns
+
+<StableSectionContent SectionName="@ResourcesLayout.HeaderActionsSectionName">
+    <div class="overview-header-actions">
+        @if (GetMissingParameterCount() is > 0 and var missingParameterCount)
+        {
+            var missingParametersText = string.Format(
+                CultureInfo.CurrentCulture,
+                Loc[missingParameterCount == 1
+                    ? nameof(Dashboard.Resources.Resources.MissingParameterCount)
+                    : nameof(Dashboard.Resources.Resources.MissingParametersCount)],
+                missingParameterCount);
+            <a class="missing-parameters-link"
+               href="@GetMissingParametersUrl()"
+               aria-label="@missingParametersText"
+               data-tooltip="@missingParametersText. @Loc[nameof(Dashboard.Resources.Resources.MissingParametersReview)]">
+                <FluentIcon Value="@(new Icons.Regular.Size16.Key())" Color="Color.Custom" CustomColor="currentColor" />
+                @* The full text condenses to just the count when the header row has little room. *@
+                <span class="missing-parameters-label" aria-hidden="true">@missingParametersText</span>
+                <span class="missing-parameters-count" aria-hidden="true">@missingParameterCount</span>
+            </a>
+        }
+        @if (ViewportInformation.IsDesktop)
+        {
+            <IconToggleGroup TValue="GroupOverview"
+                             Label="@Loc[nameof(Dashboard.Resources.Resources.LayoutLabel)]"
+                             Options="@OverviewOptions"
+                             Value="@ViewPreferences.GroupOverview"
+                             ValueChanged="@ViewPreferences.SetGroupOverviewAsync"
+                             ShowLabel="true"
+                             ShowCurrentLabel="false" />
+        }
+        else
+        {
+            var currentOverview = GetCurrentOverviewOption();
+            <AspireMenuButton ButtonAppearance="ButtonAppearance.Default"
+                              ButtonClass="overview-layout-menu"
+                              IconStart="@currentOverview.Icon"
+                              Text="@currentOverview.Text"
+                              Title="@($"{Loc[nameof(Dashboard.Resources.Resources.LayoutLabel)]}: {currentOverview.Text}")"
+                              ItemsProvider="GetOverviewMenuItems" />
+        }
+    </div>
+</StableSectionContent>
+
+@* The application summary shown by the resource overview when several or all resources are selected. *@
+<div class="home @(ViewPreferences.GroupOverview == GroupOverview.Graph ? "graph-view" : null)">
+
+    @if (!_isLoaded)
+    {
+        <div class="home-message">
+            <FluentSpinner Size="SpinnerSize.Small" />
+        </div>
+    }
+    else
+    {
+        var resources = GetResources();
+        var summary = GetHealthSummary(resources);
+
+        @* The "group overview" setting picks between the summary and a table of the resources, which adds what the
+           resource list next to the overview doesn't show: their endpoints and actions. *@
+        @if (ViewPreferences.GroupOverview == GroupOverview.Resources)
+        {
+            @ResourceTableSection(resources)
+        }
+        else if (ViewPreferences.GroupOverview == GroupOverview.Cards)
+        {
+            @ResourceCardsSection()
+        }
+        else if (ViewPreferences.GroupOverview == GroupOverview.Summary)
+        {
+            @HeroSection(summary)
+            @ActivitySection()
+            @InsightsSection()
+            <div class="home-problems">
+                @RecentErrorsSection()
+                @RecentTracesSection()
+            </div>
+        }
+
+        <div class="resources-summary-layout home-resource-graph-layout"
+             hidden="@(ViewPreferences.GroupOverview != GroupOverview.Graph)">
+            <div id="@GraphContainerId"
+                 class="resource-graph-container"
+                 tabindex="0"
+                 role="region"
+                 aria-label="@ControlsStringsLoc[nameof(ControlsStrings.ChartContainerGraphAccessibleLabel)]">
+                <svg class="resource-graph"></svg>
+                <div class="resource-graph-controls">
+                    <FluentButton Appearance="ButtonAppearance.Transparent"
+                                  Class="aspire-icon-button graph-export"
+                                  data-tooltip="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphExportMermaidButton)]"
+                                  aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphExportMermaidButton)]"
+                                  OnClick="@ExportResourceGraphAsync">
+                        <FluentIcon Value="new Icons.Regular.Size24.ArrowDownload()" Color="Color.Primary" />
+                    </FluentButton>
+                    <FluentButton Appearance="ButtonAppearance.Transparent"
+                                  Class="aspire-icon-button graph-zoom-in"
+                                  data-tooltip="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphZoomInButton)]"
+                                  aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphZoomInButton)]">
+                        <FluentIcon Value="new Icons.Regular.Size24.ZoomIn()" Color="Color.Primary" />
+                    </FluentButton>
+                    <FluentButton Appearance="ButtonAppearance.Transparent"
+                                  Class="aspire-icon-button graph-zoom-out"
+                                  data-tooltip="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphZoomOutButton)]"
+                                  aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphZoomOutButton)]">
+                        <FluentIcon Value="new Icons.Regular.Size24.ZoomOut()" Color="Color.Primary" />
+                    </FluentButton>
+                    <FluentButton Appearance="ButtonAppearance.Transparent"
+                                  Class="aspire-icon-button graph-reset"
+                                  data-tooltip="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphResetButton)]"
+                                  aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphResetButton)]">
+                        <FluentIcon Value="new Icons.Regular.Size24.ArrowReset()" Color="Color.Primary" />
+                    </FluentButton>
+                </div>
+            </div>
+        </div>
+    }
+    <AspireMenu Open="_contextMenuOpen"
+                OpenChanged="ContextMenuOpenChangedAsync"
+                @ref="_contextMenu"
+                Anchor="application-summary-context-menu-anchor"
+                Anchored="false"
+                Items="_contextMenuItems" />
+</div>
+
+@code {
+    private RenderFragment ResourceCardsSection() => __builder =>
+    {
+        var cardResources = GetCardResources();
+        <section class="resource-card-grid @CardDensityClass" aria-label="@DialogsLoc[nameof(Dashboard.Resources.Dialogs.SettingsDialogGroupOverviewCards)]">
+            @foreach (var resource in cardResources)
+            {
+                var primaryUrl = resource.IsParameter
+                    ? null
+                    : ResourceUrlHelpers.GetUrls(resource, includeInternalUrls: false, includeNonEndpointUrls: true).FirstOrDefault();
+                var parameterValue = resource.IsParameter
+                    ? GetParameterValue(resource)
+                    : (Value: (string?)null, IsSensitive: false, IsUnresolved: false);
+                <article class="resource-card resource-card-clickable @(resource.IsParameter ? "resource-card-parameter" : null)"
+                         role="link"
+                         tabindex="0"
+                         aria-label="@GetResourceName(resource)"
+                         @onclick="@(() => NavigateToResource(resource))"
+                         @onkeydown="@(e => OnResourceCardKeyDown(e, resource))"
+                         @key="@resource.Name">
+                    <header class="resource-card-header">
+                        <span class="resource-card-title" data-tooltip="@GetResourceName(resource)">
+                            <ResourceNameDisplay Resource="resource" FilterText="" FormatName="GetResourceName" ShowHiddenIndicator="false" />
+                        </span>
+                        <span class="resource-card-type">@resource.GetResourceTypeDisplayName(Loc)</span>
+                    </header>
+                    <div class="resource-card-body">
+                        <div class="resource-card-field">
+                            <span class="resource-card-label">@Loc[nameof(Dashboard.Resources.Resources.ResourcesStateColumnHeader)]</span>
+                            <StateColumnDisplay Resource="@resource" UnviewedErrorCounts="@_unviewedErrorCounts" />
+                        </div>
+                        @if (resource.IsParameter)
+                        {
+                            <div class="resource-card-field resource-card-value">
+                                <span class="resource-card-label">@Loc[nameof(Dashboard.Resources.Resources.ResourcesDetailsParameterValueProperty)]</span>
+                                @if (parameterValue.Value is not null)
+                                {
+                                    <GridValue Value="@parameterValue.Value"
+                                               ValueDescription="@Loc[nameof(Dashboard.Resources.Resources.ResourcesDetailsParameterValueProperty)]"
+                                               EnableMasking="@parameterValue.IsSensitive"
+                                               IsMasked="@parameterValue.IsSensitive"
+                                               StopClickPropagation="true" />
+                                }
+                                else if (parameterValue.IsUnresolved)
+                                {
+                                    <span class="resource-card-unset-value">@ControlsStringsLoc[nameof(ControlsStrings.ParameterValueNotSet)]</span>
+                                }
+                                else
+                                {
+                                    <span class="empty-data"></span>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="resource-card-field resource-card-source-field">
+                                <span class="resource-card-label">@Loc[nameof(Dashboard.Resources.Resources.ResourcesSourceColumnHeader)]</span>
+                                @if (ResourceSourceViewModel.GetSourceViewModel(resource) is { } source)
+                                {
+                                    <span class="resource-card-source" data-tooltip="@source.Tooltip">@source.Value</span>
+                                }
+                                else
+                                {
+                                    <span class="empty-data"></span>
+                                }
+                            </div>
+                        }
+                    </div>
+                    <footer class="resource-card-footer" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">
+                        @if (resource.StartTimeStamp is not null)
+                        {
+                            <span class="resource-card-start-time"
+                                  data-tooltip="@GetResourceStartTimeTooltip(resource)">
+                                <FluentIcon Value="@(new Icons.Regular.Size16.Clock())" Color="Color.Default" />
+                                <span>@GetResourceStartAge(resource)</span>
+                            </span>
+                        }
+                        <div class="resource-card-footer-actions">
+                            @if (parameterValue.Value is { } value)
+                            {
+                                <FluentButton Appearance="ButtonAppearance.Subtle"
+                                              IconOnly="true"
+                                Class="resource-card-copy-value"
+                                              data-tooltip="@ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)]"
+                                              aria-label="@ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)]"
+                                              @attributes="@FluentUIExtensions.GetClipboardCopyAdditionalAttributes(value, ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)], ControlsStringsLoc[nameof(ControlsStrings.GridValueCopied)])">
+                                    <FluentIcon Class="copy-icon" Icon="Icons.Regular.Size16.Copy" Color="Color.Primary" />
+                                    <FluentIcon Class="checkmark-icon" Style="display:none" Icon="Icons.Regular.Size16.Checkmark" Color="Color.Primary" />
+                                </FluentButton>
+                            }
+                            @if (primaryUrl?.Url is not null)
+                            {
+                                <a class="resource-card-primary-endpoint"
+                                   href="@primaryUrl.Url"
+                                   target="_blank"
+                                   rel="noopener noreferrer"
+                                   data-tooltip="@($"{primaryUrl.Text}: {primaryUrl.Url}")"
+                                   aria-label="@($"{primaryUrl.Text}: {primaryUrl.Url}")">
+                                    <FluentIcon Value="@(new Icons.Regular.Size16.Open())" Color="Color.Primary" />
+                                </a>
+                            }
+                            <ResourceActions CommandSelected="@(command => ExecuteCardCommandAsync(resource, command))"
+                                             IsCommandExecuting="@((r, command) => DashboardCommandExecutor.IsExecuting(r.Name, command.Name))"
+                                             OnViewDetails="@(_ => NavigateToResource(resource))"
+                                             Resource="resource"
+                                             MaxHighlightedCount="2"
+                                             ResourceByName="@_resourceByName"
+                                             CardMode="true" />
+                        </div>
+                    </footer>
+                </article>
+            }
+        </section>
+    };
+
+    private RenderFragment HeroSection(HealthSummary summary) => __builder =>
+    {
+        var heroState = GetHeroStateClass(summary);
+        <section class="home-hero @heroState" aria-label="@Loc[nameof(Dashboard.Resources.Resources.HomeSummaryLandmark)]">
+            <div class="home-hero-main">
+                <span class="home-hero-icon" aria-hidden="true">
+                    @switch (heroState)
+                    {
+                        case "state-error":
+                            <FluentIcon Value="@(new Icons.Filled.Size24.Warning())" Color="Color.Custom" CustomColor="var(--error)" />
+                            break;
+                        case "state-pending":
+                            <FluentIcon Value="@(new Icons.Regular.Size24.ArrowSync())" Color="Color.Custom" CustomColor="var(--warning)" />
+                            break;
+                        case "state-success":
+                            <FluentIcon Value="@(new Icons.Filled.Size24.CheckmarkCircle())" Color="Color.Custom" CustomColor="var(--success)" />
+                            break;
+                        default:
+                            <FluentIcon Value="@(new Icons.Regular.Size24.Info())" Color="Color.Custom" CustomColor="var(--colorNeutralForeground3)" />
+                            break;
+                    }
+                </span>
+                <div class="home-hero-text">
+                    <h2 class="home-hero-headline">@GetHeadline(summary)</h2>
+                    @if (summary.StartedAt is { } startedAt)
+                    {
+                        <span class="home-hero-sub">@Loc[nameof(Dashboard.Resources.Resources.HomeStartedAt), FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, startedAt)]</span>
+                    }
+                </div>
+            </div>
+            @if (summary.Total > 0)
+            {
+                <div class="home-health-bar" role="img" aria-label="@Loc[nameof(Dashboard.Resources.Resources.HomeResourceStatesLabel)]">
+                    @HealthBarSegment(summary.Running, summary.Total, "state-success")
+                    @HealthBarSegment(summary.Pending, summary.Total, "state-pending")
+                    @HealthBarSegment(summary.Attention, summary.Total, "state-error")
+                    @HealthBarSegment(summary.Inactive, summary.Total, "state-neutral")
+                </div>
+                <ul class="home-legend">
+                    @HealthLegendItem(summary.Running, "state-success", Loc[nameof(Dashboard.Resources.Resources.HomeRunningLabel)])
+                    @HealthLegendItem(summary.Pending, "state-pending", Loc[nameof(Dashboard.Resources.Resources.HomePendingLabel)])
+                    @HealthLegendItem(summary.Attention, "state-error", Loc[nameof(Dashboard.Resources.Resources.HomeNeedsAttentionLabel)])
+                    @HealthLegendItem(summary.Inactive, "state-neutral", Loc[nameof(Dashboard.Resources.Resources.HomeInactiveLabel)])
+                </ul>
+            }
+        </section>
+    };
+
+    // The "Resource list" choice of the group overview: the summarized resources with the same columns and actions as
+    // the resources grid had before the resource list moved to the side pane. It reuses that grid's column components
+    // so the information and the actions stay the same.
+    private RenderFragment ResourceTableSection(List<ResourceViewModel> resources) => __builder =>
+    {
+        var maxHighlightedCount = GetMaxHighlightedCount(resources);
+        <section class="home-section home-resource-table" aria-labelledby="home-resources-title">
+            <div class="home-section-header">
+                <h2 id="home-resources-title">@Loc[nameof(Dashboard.Resources.Resources.HomeResourcesLabel)]</h2>
+                <span class="home-section-count">@FormatCount(resources.Count)</span>
+            </div>
+            @if (resources.Count == 0)
+            {
+                <div class="home-empty">@Loc[nameof(Dashboard.Resources.Resources.ResourcesNoResources)]</div>
+            }
+            else
+            {
+                <table>
+                    <thead>
+                        <tr>
+                            <th scope="col">@ControlsStringsLoc[nameof(ControlsStrings.NameColumnHeader)]</th>
+                            <th scope="col">@Loc[nameof(Dashboard.Resources.Resources.ResourcesStateColumnHeader)]</th>
+                            <th scope="col">@Loc[nameof(Dashboard.Resources.Resources.ResourcesStartTimeColumnHeader)]</th>
+                            <th scope="col">@Loc[nameof(Dashboard.Resources.Resources.ResourcesTypeColumnHeader)]</th>
+                            <th scope="col">@Loc[nameof(Dashboard.Resources.Resources.ResourcesSourceColumnHeader)]</th>
+                            <th scope="col">@Loc[nameof(Dashboard.Resources.Resources.ResourcesUrlsColumnHeader)]</th>
+                            <th scope="col">@Loc[nameof(Dashboard.Resources.Resources.ResourcesActionsColumnHeader)]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var resource in resources.OrderBy(r => r.ResourceType).ThenBy(r => r, ResourceViewModelNameComparer.Instance))
+                        {
+                            <tr @key="resource.Name">
+                                <td>
+                                    <a class="home-table-resource" href="@DashboardUrls.ResourceOverviewUrl(GetResourceName(resource))">
+                                        <ResourceNameDisplay Resource="resource" FilterText="" FormatName="GetResourceName" ShowHiddenIndicator="true" />
+                                    </a>
+                                </td>
+                                <td><StateColumnDisplay Resource="@resource" UnviewedErrorCounts="@_unviewedErrorCounts" /></td>
+                                <td><StartTimeColumnDisplay Resource="@resource" /></td>
+                                <td class="home-table-type">@resource.GetResourceTypeDisplayName(Loc)</td>
+                                <td>
+                                    @if (ResourceSourceViewModel.GetSourceViewModel(resource) is { } source)
+                                    {
+                                        <SourceColumnDisplay FilterText="" Value="@source.Value" ContentAfterValue="@source.ContentAfterValue" ValueToVisualize="@source.ValueToVisualize" Tooltip="@source.Tooltip" />
+                                    }
+                                    else
+                                    {
+                                        <span class="empty-data"></span>
+                                    }
+                                </td>
+                                <td>
+                                    <UrlsColumnDisplay Resource="resource"
+                                                       HasMultipleReplicas="HasMultipleReplicas(resource)"
+                                                       DisplayedUrls="ResourceUrlHelpers.GetUrls(resource, includeInternalUrls: false, includeNonEndpointUrls: true)" />
+                                </td>
+                                <td>
+                                    <div class="grid-action-container">
+                                        <ResourceActions CommandSelected="@(command => ExecuteCommandAsync(resource, command))"
+                                                         IsCommandExecuting="@((r, command) => DashboardCommandExecutor.IsExecuting(r.Name, command.Name))"
+                                                         OnViewDetails="@(_ => NavigateToResource(resource))"
+                                                         Resource="resource"
+                                                         MaxHighlightedCount="maxHighlightedCount"
+                                                         ResourceByName="@_resourceByName" />
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </section>
+    };
+
+    private RenderFragment RecentErrorsSection() => __builder =>
+    {
+        <section class="home-section" aria-labelledby="home-errors-title">
+            <div class="home-section-header">
+                <FluentIcon Value="@(new Icons.Regular.Size16.ErrorCircle())" Color="Color.Custom" CustomColor="var(--error)" />
+                <h2 id="home-errors-title">@Loc[nameof(Dashboard.Resources.Resources.HomeRecentErrorsTitle)]</h2>
+                <a class="home-section-link" href="@DashboardUrls.StructuredLogsUrl(logLevel: "error")">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewViewAll)]</a>
+            </div>
+            @if (_telemetry is null)
+            {
+                <div class="home-empty"><FluentSpinner Size="SpinnerSize.ExtraSmall" /></div>
+            }
+            else if (_telemetry.RecentErrors.Count == 0)
+            {
+                <div class="home-empty">
+                    <FluentIcon Value="@(new Icons.Regular.Size16.CheckmarkCircle())" Color="Color.Success" />
+                    @Loc[nameof(Dashboard.Resources.Resources.HomeNoRecentErrors)]
+                </div>
+            }
+            else
+            {
+                <ul class="home-event-list">
+                    @foreach (var log in _telemetry.RecentErrors)
+                    {
+                        var logResourceName = GetLogResourceName(log.Resource);
+                        <li @key="log.InternalId">
+                            <a href="@DashboardUrls.StructuredLogsUrl(logResourceName, logEntryId: log.InternalId)" data-tooltip="@log.Message">
+                                <span class="home-event-title">@log.Message</span>
+                                <span class="home-event-meta">
+                                    <span class="home-resource-dot" style="background: @ColorGenerator.Instance.GetColorVariableByKey(logResourceName)"></span>
+                                    <span class="home-event-resource">@logResourceName</span>
+                                    <span aria-hidden="true">·</span>
+                                    <span>@FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, log.TimeStamp)</span>
+                                </span>
+                            </a>
+                        </li>
+                    }
+                </ul>
+            }
+        </section>
+    };
+
+    private RenderFragment RecentTracesSection() => __builder =>
+    {
+        <section class="home-section" aria-labelledby="home-traces-title">
+            <div class="home-section-header">
+                <FluentIcon Value="@(new Icons.Regular.Size16.GanttChart())" Color="Color.Custom" CustomColor="var(--error)" />
+                <h2 id="home-traces-title">@Loc[nameof(Dashboard.Resources.Resources.HomeRecentFailedTracesTitle)]</h2>
+                <a class="home-section-link" href="@s_failedTracesUrl">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewViewAll)]</a>
+            </div>
+            @if (_telemetry is null)
+            {
+                <div class="home-empty"><FluentSpinner Size="SpinnerSize.ExtraSmall" /></div>
+            }
+            else if (_telemetry.RecentFailedTraces.Count == 0)
+            {
+                <div class="home-empty">
+                    <FluentIcon Value="@(new Icons.Regular.Size16.CheckmarkCircle())" Color="Color.Success" />
+                    @Loc[nameof(Dashboard.Resources.Resources.HomeNoFailedTraces)]
+                </div>
+            }
+            else
+            {
+                <ul class="home-event-list">
+                    @foreach (var trace in _telemetry.RecentFailedTraces)
+                    {
+                        var traceResourceName = GetLogResourceName(trace.RootResource);
+                        <li @key="trace.TraceId">
+                            <a href="@DashboardUrls.TraceDetailUrl(trace.TraceId)" data-tooltip="@trace.FullName">
+                                <span class="home-event-title">@trace.FullName</span>
+                                <span class="home-event-meta">
+                                    <span class="home-resource-dot" style="background: @ColorGenerator.Instance.GetColorVariableByKey(traceResourceName)"></span>
+                                    <span class="home-event-resource">@traceResourceName</span>
+                                    <span aria-hidden="true">·</span>
+                                    <span>@DurationFormatter.FormatDuration(trace.Duration, CultureInfo.CurrentCulture)</span>
+                                    <span aria-hidden="true">·</span>
+                                    <span>@FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, trace.StartTime)</span>
+                                </span>
+                            </a>
+                        </li>
+                    }
+                </ul>
+            }
+        </section>
+    };
+
+    private const double ChartWidth = 300;
+    private const double ChartHeight = 100;
+
+    private RenderFragment ActivitySection() => __builder =>
+    {
+        var activity = _telemetry?.Activity;
+        var max = activity is null ? 0 : Enumerable.Range(0, ActivityBucketCount).Max(i => activity.OkBuckets[i] + activity.ErrorBuckets[i]);
+        var slot = ChartWidth / ActivityBucketCount;
+        var barWidth = slot * 0.72;
+
+        <section class="home-activity" aria-labelledby="home-activity-title">
+            <div class="home-activity-header">
+                <div class="home-activity-title">
+                    <span class="home-live-dot" aria-hidden="true"></span>
+                    <h2 id="home-activity-title">Live activity</h2>
+                    <span class="home-activity-window">Incoming requests · last 15 min</span>
+                </div>
+                <div class="home-activity-totals">
+                    <a href="@DashboardUrls.StructuredLogsUrl()"><strong>@(_telemetry is { } t1 ? FormatCount(t1.LogCount) : "–")</strong> logs</a>
+                    <a href="@DashboardUrls.TracesUrl()"><strong>@(_telemetry is { } t2 ? FormatCount(t2.TraceCount) : "–")</strong> traces</a>
+                    <a href="@DashboardUrls.MetricsUrl()"><strong>@(_telemetry is { } t3 ? FormatCount(t3.InstrumentCount) : "–")</strong> metrics</a>
+                </div>
+            </div>
+
+            <div class="home-activity-body">
+                <div class="home-activity-stats">
+                    <div class="home-stat">
+                        <span class="home-stat-value">@(activity is null ? "–" : FormatRate(activity.RequestsPerMinute))</span>
+                        <span class="home-stat-label">requests / min</span>
+                    </div>
+                    <div class="home-stat @(activity?.ErrorRate > 0 ? "error" : null)">
+                        <span class="home-stat-value">@(activity?.ErrorRate is { } rate ? rate.ToString("P1", CultureInfo.CurrentCulture) : "–")</span>
+                        <span class="home-stat-label">error rate</span>
+                    </div>
+                    <div class="home-stat">
+                        <span class="home-stat-value">@(activity?.P95 is { } p95 ? DurationFormatter.FormatDuration(p95, CultureInfo.CurrentCulture) : "–")</span>
+                        <span class="home-stat-label">p95 latency</span>
+                    </div>
+                </div>
+
+                <div class="home-chart">
+                    <svg class="home-chart-svg" viewBox="0 0 @Svg(ChartWidth) @Svg(ChartHeight)" preserveAspectRatio="none" role="img" aria-label="Requests per 30 seconds over the last 15 minutes">
+                        <line class="home-chart-grid" x1="0" x2="@Svg(ChartWidth)" y1="8" y2="8" />
+                        <line class="home-chart-grid" x1="0" x2="@Svg(ChartWidth)" y1="54" y2="54" />
+                        <line class="home-chart-baseline" x1="0" x2="@Svg(ChartWidth)" y1="@Svg(ChartHeight)" y2="@Svg(ChartHeight)" />
+                        @if (activity is not null && max > 0)
+                        {
+                            for (var i = 0; i < ActivityBucketCount; i++)
+                            {
+                                var ok = activity.OkBuckets[i];
+                                var errors = activity.ErrorBuckets[i];
+                                if (ok + errors == 0)
+                                {
+                                    continue;
+                                }
+
+                                var x = (i * slot) + ((slot - barWidth) / 2);
+                                var okHeight = ok * 92.0 / max;
+                                var errorHeight = errors * 92.0 / max;
+                                var bucketStart = activity.WindowStart + (s_activityBucketSize * i);
+                                <g class="home-chart-bar @(i == ActivityBucketCount - 1 ? "current" : null)" data-tooltip="@($"{FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, bucketStart)} · {ok + errors} requests, {errors} failed")">
+                                    <rect class="ok" x="@Svg(x)" y="@Svg(ChartHeight - okHeight)" width="@Svg(barWidth)" height="@Svg(okHeight)" />
+                                    @if (errors > 0)
+                                    {
+                                        <rect class="error" x="@Svg(x)" y="@Svg(ChartHeight - okHeight - errorHeight)" width="@Svg(barWidth)" height="@Svg(errorHeight)" />
+                                    }
+                                </g>
+                            }
+                        }
+                    </svg>
+                    @if (activity is not null && max > 0)
+                    {
+                        <span class="home-chart-max">@FormatCount(max)</span>
+                    }
+                    else
+                    {
+                        <div class="home-chart-empty">@(activity is null ? "Loading activity…" : "Waiting for requests. Interact with your app to see live traffic.")</div>
+                    }
+                    <div class="home-chart-axis" aria-hidden="true">
+                        <span>15 min ago</span>
+                        <span>now</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+    };
+
+    private RenderFragment InsightsSection() => __builder =>
+    {
+        var activity = _telemetry?.Activity;
+
+        <section class="home-insights" aria-label="Insights">
+            <div class="home-insight">
+                <div class="home-insight-header">
+                    <span class="card-header-icon slow"><FluentIcon Value="@(new Icons.Regular.Size16.Timer())" Width="16px" Color="Color.Custom" CustomColor="currentColor" /></span>
+                    <h2>Slowest endpoints</h2>
+                    <span class="home-insight-hint">p95</span>
+                </div>
+                @if (activity is null || activity.SlowestEndpoints.Count == 0)
+                {
+                    <div class="home-empty">No requests in the last 15 minutes</div>
+                }
+                else
+                {
+                    var slowest = activity.SlowestEndpoints[0].P95;
+                    <ul class="home-insight-list">
+                        @foreach (var endpoint in activity.SlowestEndpoints)
+                        {
+                            <li>
+                                <a href="@DashboardUrls.TracesUrl(resource: endpoint.ResourceName)" data-tooltip="@($"{endpoint.ResourceName}: {endpoint.Label} ({endpoint.Count} requests)")">
+                                    <span class="home-insight-row">
+                                        <span class="home-insight-name">@endpoint.Label</span>
+                                        <span class="home-insight-value">@DurationFormatter.FormatDuration(endpoint.P95, CultureInfo.CurrentCulture)</span>
+                                    </span>
+                                    <span class="home-insight-meter"><span class="slow" style="width: @FormatPercent(endpoint.P95.Ticks, slowest.Ticks)"></span></span>
+                                    <span class="home-event-meta">
+                                        <span class="home-resource-dot" style="background: @ColorGenerator.Instance.GetColorVariableByKey(endpoint.ResourceName)"></span>
+                                        <span class="home-event-resource">@endpoint.ResourceName</span>
+                                        <span aria-hidden="true">·</span>
+                                        <span>@FormatCount(endpoint.Count) req</span>
+                                    </span>
+                                </a>
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+
+            <div class="home-insight">
+                <div class="home-insight-header">
+                    <span class="card-header-icon"><FluentIcon Value="@(new Icons.Regular.Size16.DataTrending())" Width="16px" Color="Color.Custom" CustomColor="currentColor" /></span>
+                    <h2>Busiest resources</h2>
+                    <span class="home-insight-hint">requests / min</span>
+                </div>
+                @if (activity is null || activity.BusiestResources.Count == 0)
+                {
+                    <div class="home-empty">No requests in the last 15 minutes</div>
+                }
+                else
+                {
+                    var busiest = activity.BusiestResources[0].Requests;
+                    var windowMinutes = s_activityBucketSize.TotalMinutes * ActivityBucketCount;
+                    <ul class="home-insight-list">
+                        @foreach (var busy in activity.BusiestResources)
+                        {
+                            <li>
+                                <a href="@DashboardUrls.TracesUrl(resource: busy.Name)">
+                                    <span class="home-insight-row">
+                                        <span class="home-insight-name">
+                                            <span class="home-resource-dot" style="background: @ColorGenerator.Instance.GetColorVariableByKey(busy.Name)"></span>
+                                            @busy.Name
+                                        </span>
+                                        <span class="home-insight-value">@FormatRate(busy.Requests / windowMinutes)</span>
+                                    </span>
+                                    <span class="home-insight-meter"><span class="busy" style="width: @FormatPercent(busy.Requests, busiest)"></span></span>
+                                    <span class="home-event-meta">
+                                        <span>@FormatCount(busy.Requests) requests</span>
+                                        @if (busy.ErrorSpans > 0)
+                                        {
+                                            <span aria-hidden="true">·</span>
+                                            <span>@FormatCount(busy.ErrorSpans) failed</span>
+                                        }
+                                    </span>
+                                </a>
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+
+            <div class="home-insight">
+                <div class="home-insight-header">
+                    <span class="card-header-icon hot"><FluentIcon Value="@(new Icons.Regular.Size16.Fire())" Width="16px" Color="Color.Custom" CustomColor="currentColor" /></span>
+                    <h2>Error hotspots</h2>
+                    <span class="home-insight-hint">failed requests + error logs</span>
+                </div>
+                @if (activity is null || activity.ErrorHotspots.Count == 0)
+                {
+                    <div class="home-empty">
+                        <FluentIcon Value="@(new Icons.Regular.Size16.CheckmarkCircle())" Color="Color.Success" />
+                        No errors in the last 15 minutes
+                    </div>
+                }
+                else
+                {
+                    var totalErrors = activity.ErrorHotspots.Sum(r => r.TotalErrors);
+                    <ul class="home-insight-list">
+                        @foreach (var hotspot in activity.ErrorHotspots)
+                        {
+                            <li>
+                                <a href="@DashboardUrls.StructuredLogsUrl(hotspot.Name, logLevel: "error")">
+                                    <span class="home-insight-row">
+                                        <span class="home-insight-name">
+                                            <span class="home-resource-dot" style="background: @ColorGenerator.Instance.GetColorVariableByKey(hotspot.Name)"></span>
+                                            @hotspot.Name
+                                        </span>
+                                        <span class="home-insight-value">@FormatPercent(hotspot.TotalErrors, totalErrors)</span>
+                                    </span>
+                                    <span class="home-insight-meter"><span class="hot" style="width: @FormatPercent(hotspot.TotalErrors, totalErrors)"></span></span>
+                                    <span class="home-event-meta">
+                                        <span>@FormatCount(hotspot.ErrorSpans) failed requests</span>
+                                        <span aria-hidden="true">·</span>
+                                        <span>@FormatCount(hotspot.ErrorLogs) error logs</span>
+                                    </span>
+                                </a>
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+        </section>
+    };
+
+    private static string Svg(double value) => value.ToString("0.##", CultureInfo.InvariantCulture);
+
+    private static string FormatPercent(long value, long total) => total == 0
+        ? "0%"
+        : string.Create(CultureInfo.InvariantCulture, $"{value * 100.0 / total:0.#}%");
+
+    private static string FormatRate(double value) => value switch
+    {
+        0 => "0",
+        < 10 => value.ToString("0.#", CultureInfo.CurrentCulture),
+        _ => value.ToString("N0", CultureInfo.CurrentCulture)
+    };
+
+    private static RenderFragment HealthBarSegment(int count, int total, string stateClass) => __builder =>
+    {
+        if (count > 0)
+        {
+            <span class="home-health-segment @stateClass" style="width: @FormatPercent(count, total)"></span>
+        }
+    };
+
+    private RenderFragment HealthLegendItem(int count, string stateClass, string label) => __builder =>
+    {
+        if (count > 0)
+        {
+            <li class="home-legend-item @stateClass">
+                <span class="home-legend-swatch" aria-hidden="true"></span>
+                <span class="home-legend-value">@FormatCount(count)</span>
+                <span>@label</span>
+            </li>
+        }
+    };
+}

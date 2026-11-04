@@ -1,0 +1,36 @@
+/* Centered in the header rather than in the space left between the page context and the header buttons, which
+   changes from page to page. The header is the positioning context. */
+.dashboard-run-pill {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 40%;
+    height: 28px;
+    padding: 0 12px;
+    border: 1px solid color-mix(in srgb, var(--aspire-status-warning) 45%, transparent);
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--aspire-status-warning) 16%, var(--aspire-page-background));
+    color: var(--colorNeutralForeground1);
+    font: inherit;
+    font-size: var(--fontSizeBase300);
+    cursor: pointer;
+}
+
+.dashboard-run-pill:hover {
+    background: color-mix(in srgb, var(--aspire-status-warning) 26%, var(--aspire-page-background));
+}
+
+.dashboard-run-pill:focus-visible {
+    outline: 2px solid var(--colorStrokeFocus2);
+    outline-offset: 2px;
+}
+
+.dashboard-run-pill-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}

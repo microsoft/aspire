@@ -23,6 +23,15 @@ internal static class EntraIdBicepConstants
     /// <summary>The application unique name output name.</summary>
     internal const string UniqueNameOutputName = "uniqueName";
 
+    /// <summary>The application ID URI output name.</summary>
+    internal const string ApplicationIdUriOutputName = "applicationIdUri";
+
+    /// <summary>The Microsoft Graph delegated permission grant resource type.</summary>
+    internal const string OAuth2PermissionGrantResourceType = "Microsoft.Graph/oauth2PermissionGrants";
+
+    /// <summary>The Microsoft Graph app role assignment resource type. The resource is the API's service principal.</summary>
+    internal const string AppRoleAssignedToResourceType = "Microsoft.Graph/appRoleAssignedTo";
+
     /// <summary>The Microsoft Graph application resource type.</summary>
     internal const string ApplicationResourceType = "Microsoft.Graph/applications";
 

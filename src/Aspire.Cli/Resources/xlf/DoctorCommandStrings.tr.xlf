@@ -1,35 +1,35 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="tr" original="../DoctorCommandStrings.resx">
     <body>
       <trans-unit id="AppHostCategoryHeader">
         <source>AppHost</source>
-        <target state="new">AppHost</target>
+        <target state="translated">AppHost</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostVersionCheckFailedMessage">
         <source>Could not determine AppHost version</source>
-        <target state="new">Could not determine AppHost version</target>
+        <target state="translated">AppHost sürümü belirlenemedi</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostVersionMessageFormat">
         <source>AppHost version {0} ({1})</source>
-        <target state="new">AppHost version {0} ({1})</target>
+        <target state="translated">AppHost sürümü {0} ({1})</target>
         <note>{0} is the AppHost Aspire.Hosting version. {1} is the AppHost project path.</note>
       </trans-unit>
       <trans-unit id="AppHostVersionUnknownMessageFormat">
         <source>Could not determine AppHost version ({0})</source>
-        <target state="new">Could not determine AppHost version ({0})</target>
+        <target state="translated">AppHost sürümü ({0}) belirlenemedi</target>
         <note>{0} is the AppHost project path.</note>
       </trans-unit>
       <trans-unit id="AspireCategoryHeader">
         <source>Aspire</source>
-        <target state="new">Aspire</target>
+        <target state="translated">Aspire</target>
         <note />
       </trans-unit>
       <trans-unit id="ChannelSuffixFormat">
         <source> (channel: {0})</source>
-        <target state="new"> (channel: {0})</target>
+        <target state="translated"> (kanal: {0})</target>
         <note>{0} is the Aspire channel name (e.g., "stable", "staging", "daily", "local", "pr-1234"). Appended to CLI / AppHost version messages.</note>
       </trans-unit>
       <trans-unit id="CheckingPrerequisites">
@@ -39,47 +39,47 @@
       </trans-unit>
       <trans-unit id="CliVersionMessageFormat">
         <source>Aspire CLI version {0}</source>
-        <target state="new">Aspire CLI version {0}</target>
+        <target state="translated">Aspire CLI sürümü {0}</target>
         <note>{0} is the current Aspire CLI version.</note>
       </trans-unit>
       <trans-unit id="CliVersionOutOfDateFixFormat">
         <source>Run '{0}' to update Aspire CLI.</source>
-        <target state="new">Run '{0}' to update Aspire CLI.</target>
+        <target state="translated">Aspire CLI'yi güncelleştirmek için '{0}' komutunu çalıştırın.</target>
         <note>{0} is the command to update Aspire CLI.</note>
       </trans-unit>
       <trans-unit id="CliVersionOutOfDateMessageFormat">
         <source>Aspire CLI version {0} is out of date. Latest version is {1}</source>
-        <target state="new">Aspire CLI version {0} is out of date. Latest version is {1}</target>
+        <target state="translated">Aspire CLI sürüm {0} güncel değil. En son sürüm {1}</target>
         <note>{0} is the current Aspire CLI version. {1} is the latest available Aspire CLI version.</note>
       </trans-unit>
       <trans-unit id="CliVersionUpdateCheckFailedMessage">
         <source>Could not check for Aspire CLI updates</source>
-        <target state="new">Could not check for Aspire CLI updates</target>
+        <target state="translated">Aspire CLI güncelleştirmeleri denetlenemedi</target>
         <note />
       </trans-unit>
       <trans-unit id="ColumnChannel">
         <source>Channel</source>
-        <target state="new">Channel</target>
+        <target state="translated">Kanal</target>
         <note />
       </trans-unit>
       <trans-unit id="ColumnPath">
         <source>Path</source>
-        <target state="new">Path</target>
+        <target state="translated">Yol</target>
         <note />
       </trans-unit>
       <trans-unit id="ColumnPathStatus">
         <source>PATH status</source>
-        <target state="new">PATH status</target>
+        <target state="translated">PATH durumu</target>
         <note />
       </trans-unit>
       <trans-unit id="ColumnRoute">
         <source>Route</source>
-        <target state="new">Route</target>
+        <target state="translated">Rota</target>
         <note />
       </trans-unit>
       <trans-unit id="ColumnVersion">
         <source>Version</source>
-        <target state="new">Version</target>
+        <target state="translated">Sürüm</target>
         <note />
       </trans-unit>
       <trans-unit id="ContainerCategoryHeader">
@@ -89,422 +89,422 @@
       </trans-unit>
       <trans-unit id="ContainerRuntimeActiveSuffix">
         <source> ← active</source>
-        <target state="new"> ← active</target>
+        <target state="translated"> ← etkin</target>
         <note>Suffix marking the automatically selected runtime. Preserve the leading space and arrow.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeCheckFailedMessage">
         <source>Failed to check container runtime</source>
-        <target state="new">Failed to check container runtime</target>
+        <target state="translated">Kapsayıcı çalışma zamanı denetlenemedi</target>
         <note />
       </trans-unit>
       <trans-unit id="ContainerRuntimeClientVersionWarningFormat">
         <source>{0} client version {1} is below minimum required {2}</source>
-        <target state="new">{0} client version {1} is below minimum required {2}</target>
+        <target state="translated">{0} istemci sürümü {1}, gereken en düşük {2}sürümünün altında</target>
         <note>{0} is the runtime name, {1} the detected version, {2} the minimum version.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeExplicitSelectionSuffix">
         <source> ← explicitly selected</source>
-        <target state="new"> ← explicitly selected</target>
+        <target state="translated"> ← açıkça seçildi</target>
         <note>Suffix marking a configured runtime. Preserve the leading space and arrow.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeInstallDockerFix">
         <source>Install Docker Desktop: https://www.docker.com/products/docker-desktop</source>
-        <target state="new">Install Docker Desktop: https://www.docker.com/products/docker-desktop</target>
+        <target state="translated">Docker Desktop'ı yükleyin: https://www.docker.com/products/docker-desktop</target>
         <note />
       </trans-unit>
       <trans-unit id="ContainerRuntimeInstallFix">
         <source>Install Docker Desktop: https://www.docker.com/products/docker-desktop or Podman: https://podman.io/getting-started/installation</source>
-        <target state="new">Install Docker Desktop: https://www.docker.com/products/docker-desktop or Podman: https://podman.io/getting-started/installation</target>
+        <target state="translated">Docker Desktop'ı yükleyin: https://www.docker.com/products/docker-desktop veya Podman'ı yükleyin: https://podman.io/getting-started/installation</target>
         <note />
       </trans-unit>
       <trans-unit id="ContainerRuntimeInstallGenericFixFormat">
         <source>Install {0}</source>
-        <target state="new">Install {0}</target>
+        <target state="translated">{0} öğesini yükle</target>
         <note>{0} is the runtime name.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeInstallPodmanFix">
         <source>Install Podman: https://podman.io/getting-started/installation</source>
-        <target state="new">Install Podman: https://podman.io/getting-started/installation</target>
+        <target state="translated">Podman'ı yükleyin: https://podman.io/getting-started/installation</target>
         <note />
       </trans-unit>
       <trans-unit id="ContainerRuntimeInstallWindowsFix">
         <source>Install Docker Desktop: https://www.docker.com/products/docker-desktop or Podman: https://podman.io/getting-started/installation or WSLc: https://aka.ms/aspire/containers</source>
-        <target state="new">Install Docker Desktop: https://www.docker.com/products/docker-desktop or Podman: https://podman.io/getting-started/installation or WSLc: https://aka.ms/aspire/containers</target>
+        <target state="translated">Docker Desktop yükle: https://www.docker.com/products/docker-desktop veya podman: https://podman.io/getting-started/installation ya da WSLc: https://aka.ms/aspire/containers</target>
         <note />
       </trans-unit>
       <trans-unit id="ContainerRuntimeInstallWslcFix">
         <source>Install WSLc on Windows: https://aka.ms/aspire/containers</source>
-        <target state="new">Install WSLc on Windows: https://aka.ms/aspire/containers</target>
+        <target state="translated">WSLc'yi Windows'a yükleyin: https://aka.ms/aspire/containers</target>
         <note />
       </trans-unit>
       <trans-unit id="ContainerRuntimeNotDetectedMessage">
         <source>No container runtime detected</source>
-        <target state="new">No container runtime detected</target>
+        <target state="translated">Kapsayıcı çalışma zamanı algılanmadı</target>
         <note />
       </trans-unit>
       <trans-unit id="ContainerRuntimeNotFoundMessageFormat">
         <source>{0}: not found (configured via ASPIRE_CONTAINER_RUNTIME={1}){2}</source>
-        <target state="new">{0}: not found (configured via ASPIRE_CONTAINER_RUNTIME={1}){2}</target>
+        <target state="translated">{0}: bulunamadı (ASPIRE_CONTAINER_RUNTIME={1} üzerinden yapılandırıldı){2}</target>
         <note>{0} is the runtime name, {1} the configuration value, {2} the selection suffix. Do not translate ASPIRE_CONTAINER_RUNTIME.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeRunningMessageFormat">
         <source>{0}{1}: running{2}</source>
-        <target state="new">{0}{1}: running{2}</target>
+        <target state="translated">{0}{1}: çalışıyor{2}</target>
         <note>{0} is the runtime name, {1} the optional version suffix, {2} the selection suffix.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeSelectAlternativeFix">
         <source>Set ASPIRE_CONTAINER_RUNTIME to docker or podman.</source>
-        <target state="new">Set ASPIRE_CONTAINER_RUNTIME to docker or podman.</target>
+        <target state="translated">ASPIRE_CONTAINER_RUNTIME değerini docker veya podman olarak ayarlayın.</target>
         <note>ASPIRE_CONTAINER_RUNTIME, docker and podman are configuration identifiers. Do not translate them.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeServerVersionWarningFormat">
         <source>{0} server version {1} is below minimum required {2}</source>
-        <target state="new">{0} server version {1} is below minimum required {2}</target>
+        <target state="translated">{0} sunucu sürümü {1}, gereken en düşük {2}sürümünün altında</target>
         <note>{0} is the runtime name, {1} the detected version, {2} the minimum version.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeStartDaemonFixFormat">
         <source>Start {0} daemon</source>
-        <target state="new">Start {0} daemon</target>
+        <target state="translated">{0} arka plan işlemini başlatın</target>
         <note>{0} is the runtime name.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeStartDockerDesktopFix">
         <source>Start Docker Desktop</source>
-        <target state="new">Start Docker Desktop</target>
+        <target state="translated">Docker Desktop'ı başlat</target>
         <note />
       </trans-unit>
       <trans-unit id="ContainerRuntimeStartPodmanFix">
         <source>Start Podman service: sudo systemctl start podman</source>
-        <target state="new">Start Podman service: sudo systemctl start podman</target>
+        <target state="translated">Podman hizmetini başlatın: sudo systemctl start podman</target>
         <note>Do not translate the command sudo systemctl start podman.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeStartWslcFix">
         <source>Ensure the WSLc session manager is running. Check its status with: wslc info --format json</source>
-        <target state="new">Ensure the WSLc session manager is running. Check its status with: wslc info --format json</target>
+        <target state="translated">WSLc oturum yöneticisinin çalıştığından emin olun. Durumunu şu komutla kontrol edin: wslc info --format json</target>
         <note>Do not translate the command wslc info --format json.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeStoppedMessageFormat">
         <source>{0}: installed but not running{1}</source>
-        <target state="new">{0}: installed but not running{1}</target>
+        <target state="translated">{0}: yüklü ancak çalışmıyor{1}</target>
         <note>{0} is the runtime name, {1} the selection suffix.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeUpgradeFixFormat">
         <source>Upgrade {0} to version {1} or later from: {2}</source>
-        <target state="new">Upgrade {0} to version {1} or later from: {2}</target>
+        <target state="translated">{0} {1} veya sonraki bir sürüme yükseltin: {2}</target>
         <note>{0} is the runtime name, {1} the minimum version, {2} the installation URL.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeUpgradeGenericFixFormat">
         <source>Upgrade {0} to a newer version</source>
-        <target state="new">Upgrade {0} to a newer version</target>
+        <target state="translated">{0} çalışma zamanını daha yeni bir sürüme yükseltin</target>
         <note>{0} is the runtime name.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeUpgradeWslcFixFormat">
         <source>Upgrade WSLc to version {0} or later. See: https://aka.ms/aspire/containers</source>
-        <target state="new">Upgrade WSLc to version {0} or later. See: https://aka.ms/aspire/containers</target>
+        <target state="translated">WSLc'yi sürüm {0} veya sonraki bir sürüme yükseltin. Bkz. https://aka.ms/aspire/containers</target>
         <note>{0} is the minimum version.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeVersionSuffixFormat">
         <source> v{0}</source>
-        <target state="new"> v{0}</target>
+        <target state="translated"> v{0}</target>
         <note>{0} is the runtime version. Preserve the leading space.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeVersionUnavailableMessageFormat">
         <source>{0}: required version metadata could not be validated</source>
-        <target state="new">{0}: required version metadata could not be validated</target>
+        <target state="translated">{0}: gerekli sürüm meta verileri doğrulanamadı</target>
         <note>{0} is the runtime name.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeWindowsModeDetails">
         <source>Aspire requires Linux containers. Windows containers are not supported.</source>
-        <target state="new">Aspire requires Linux containers. Windows containers are not supported.</target>
+        <target state="translated">Aspire, Linux kapsayıcıları gerektirir. Windows kapsayıcıları desteklenmiyor.</target>
         <note />
       </trans-unit>
       <trans-unit id="ContainerRuntimeWindowsModeFix">
         <source>Switch Docker Desktop to Linux containers mode (right-click Docker tray icon → 'Switch to Linux containers...')</source>
-        <target state="new">Switch Docker Desktop to Linux containers mode (right-click Docker tray icon → 'Switch to Linux containers...')</target>
+        <target state="translated">Docker Desktop'ı Linux kapsayıcıları moduna geçirin (Docker'ın bildirim alanındaki simgesine sağ tıklayın → 'Linux kapsayıcılarına geç...')</target>
         <note />
       </trans-unit>
       <trans-unit id="ContainerRuntimeWindowsModeMessageFormat">
         <source>{0} is running in Windows container mode</source>
-        <target state="new">{0} is running in Windows container mode</target>
+        <target state="translated">{0} Windows kapsayıcı modunda çalışıyor</target>
         <note>{0} is Docker or Docker Desktop.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeWslcUnsupportedHostMessage">
         <source>WSLc is only supported on Windows</source>
-        <target state="new">WSLc is only supported on Windows</target>
+        <target state="translated">WSLc yalnızca Windows'da desteklenir</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpApiServerReturnedHttpStatusMessageFormat">
         <source>Developer Control Plane (DCP) API server returned HTTP {0} ({1}).</source>
-        <target state="new">Developer Control Plane (DCP) API server returned HTTP {0} ({1}).</target>
+        <target state="translated">Geliştirici Kontrol Düzlemi (DCP) API sunucusu HTTP {0} döndürdü ({1}).</target>
         <note>{0} is the numeric HTTP status code. {1} is the HTTP status code name.</note>
       </trans-unit>
       <trans-unit id="DcpBundleNotFoundDetails">
         <source>The running Aspire CLI is not associated with a bundle layout that contains the Developer Control Plane (DCP).</source>
-        <target state="new">The running Aspire CLI is not associated with a bundle layout that contains the Developer Control Plane (DCP).</target>
+        <target state="translated">Çalışan Aspire CLI, Geliştirici Kontrol Düzlemi (DCP) içeren bir paket düzeniyle ilişkilendirilmiş durumda değil.</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpBundleNotFoundMessage">
         <source>Developer Control Plane (DCP) bundle not found; skipping connection health checks</source>
-        <target state="new">Developer Control Plane (DCP) bundle not found; skipping connection health checks</target>
+        <target state="translated">Geliştirici Kontrol Düzlemi (DCP) paketi bulunamadı, bağlantı sistem durumu denetimleri atlanıyor</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpConnectionCheckFailedMessage">
         <source>Failed to check Developer Control Plane (DCP) connection health</source>
-        <target state="new">Failed to check Developer Control Plane (DCP) connection health</target>
+        <target state="translated">Geliştirici Kontrol Düzlemi (DCP) bağlantısının sistem durumunu denetleme başarısız oldu</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpConnectionSucceededMessage">
         <source>Developer Control Plane (DCP) connection health checks succeeded</source>
-        <target state="new">Developer Control Plane (DCP) connection health checks succeeded</target>
+        <target state="translated">Geliştirici Kontrol Düzlemi (DCP) bağlantısının sistem durumu denetimleri başarılı oldu</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpConnectionTimedOutMessageFormat">
         <source>Timed out after {0} seconds while checking Developer Control Plane (DCP) connection health.</source>
-        <target state="new">Timed out after {0} seconds while checking Developer Control Plane (DCP) connection health.</target>
+        <target state="translated">Geliştirici Kontrol Düzlemi (DCP) bağlantı durumu denetlenirken {0} saniye sonra zaman aşımına uğradı.</target>
         <note>{0} is the timeout in seconds.</note>
       </trans-unit>
       <trans-unit id="DcpDeveloperCertificateConnectionFailedMessage">
         <source>Developer Control Plane (DCP) connection using the developer certificate failed</source>
-        <target state="new">Developer Control Plane (DCP) connection using the developer certificate failed</target>
+        <target state="translated">Geliştirici sertifikası kullanılarak yapılan Geliştirici Kontrol Düzlemi (DCP) bağlantısı başarısız oldu</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpDeveloperCertificateConnectionSucceededMessage">
         <source>Developer Control Plane (DCP) connection using the developer certificate succeeded</source>
-        <target state="new">Developer Control Plane (DCP) connection using the developer certificate succeeded</target>
+        <target state="translated">Geliştirici sertifikası kullanılarak Geliştirici Kontrol Düzlemi (DCP) bağlantısı başarıyla kuruldu</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpDeveloperCertificateInvalidForCacheDetails">
         <source>The developer certificate could not be cached because it was not valid.</source>
-        <target state="new">The developer certificate could not be cached because it was not valid.</target>
+        <target state="translated">Geliştirici sertifikası geçerli olmadığından önbelleğe alınamadı.</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpDeveloperCertificateMissingThumbprintDetails">
         <source>The developer certificate did not have a thumbprint.</source>
-        <target state="new">The developer certificate did not have a thumbprint.</target>
+        <target state="translated">Geliştirici sertifikasında parmak izi bulunamadı.</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpDeveloperCertificateNoTrustedExportableDetails">
         <source>No fully trusted exportable developer certificate with a private key was found.</source>
-        <target state="new">No fully trusted exportable developer certificate with a private key was found.</target>
+        <target state="translated">Özel anahtarı olan, tamamen güvenilir ve dışarı aktarılabilir bir geliştirici sertifikası bulunamadı.</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpDeveloperCertificateRepairTrustFix">
         <source>Run `aspire certs trust` to repair developer certificate trust.</source>
-        <target state="new">Run `aspire certs trust` to repair developer certificate trust.</target>
+        <target state="translated">Geliştirici sertifikasına duyulan güveni onarmak için `aspire certs trust` komutunu çalıştırın.</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpDeveloperCertificateTrustFix">
         <source>Run `aspire certs trust` to create and trust a developer certificate.</source>
-        <target state="new">Run `aspire certs trust` to create and trust a developer certificate.</target>
+        <target state="translated">Bir geliştirici sertifikası oluşturup bu sertifikaya güvenmek için `aspire certs trust` komutunu çalıştırın.</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpDeveloperCertificateUnavailableMessage">
         <source>No trusted developer certificate was available for the Developer Control Plane (DCP) developer certificate connection check</source>
-        <target state="new">No trusted developer certificate was available for the Developer Control Plane (DCP) developer certificate connection check</target>
+        <target state="translated">Geliştirici Kontrol Düzlemi (DCP) geliştirici sertifikası bağlantı denetimi için güvenilir bir geliştirici sertifikası bulunamadı</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpDeveloperCertificateUserProfileMissingDetails">
         <source>The developer certificate could not be cached because the user profile directory could not be determined.</source>
-        <target state="new">The developer certificate could not be cached because the user profile directory could not be determined.</target>
+        <target state="translated">Kullanıcı profili dizini belirlenemediği için geliştirici sertifikası önbelleğe alınamadı.</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpEphemeralCertificateConnectionFailedMessage">
         <source>Developer Control Plane (DCP) connection using an ephemeral DCP-managed certificate failed</source>
-        <target state="new">Developer Control Plane (DCP) connection using an ephemeral DCP-managed certificate failed</target>
+        <target state="translated">Kısa süreli, DCP tarafından yönetilen bir sertifika kullanılarak yapılan Geliştirici Kontrol Düzlemi (DCP) bağlantısı başarısız oldu</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpEphemeralCertificateConnectionSucceededMessage">
         <source>Developer Control Plane (DCP) connection using an ephemeral DCP-managed certificate succeeded</source>
-        <target state="new">Developer Control Plane (DCP) connection using an ephemeral DCP-managed certificate succeeded</target>
+        <target state="translated">Kısa süreli, DCP tarafından yönetilen bir sertifika kullanılarak yapılan Geliştirici Kontrol Düzlemi (DCP) bağlantısı başarılı oldu</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpExecutableNotFoundDetailsFormat">
         <source>Expected Developer Control Plane (DCP) executable at '{0}'.</source>
-        <target state="new">Expected Developer Control Plane (DCP) executable at '{0}'.</target>
+        <target state="translated">Beklenen Geliştirici Kontrol Düzlemi (DCP) yürütülebilir dosyası '{0}'.</target>
         <note>{0} is the expected DCP executable path.</note>
       </trans-unit>
       <trans-unit id="DcpExecutableNotFoundMessage">
         <source>Developer Control Plane (DCP) executable not found</source>
-        <target state="new">Developer Control Plane (DCP) executable not found</target>
+        <target state="translated">Geliştirici Kontrol Düzlemi (DCP) yürütülebilir dosyası bulunamadı</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpExitedBeforeKubeconfigDetailsFormat">
         <source>Developer Control Plane (DCP) exited before writing kubeconfig. Exit code: {0}.{1}{2}</source>
-        <target state="new">Developer Control Plane (DCP) exited before writing kubeconfig. Exit code: {0}.{1}{2}</target>
+        <target state="translated">Kubeconfig yazılmadan önce Geliştirici Kontrol Düzleminden (DCP) çıkıldı. Çıkış kodu: {0}.{1}{2}</target>
         <note>{0} is the DCP process exit code. {1} is a newline. {2} is recent DCP process output.</note>
       </trans-unit>
       <trans-unit id="DcpKubeconfigMissingServerDetails">
         <source>Developer Control Plane (DCP) kubeconfig did not contain a valid server URI.</source>
-        <target state="new">Developer Control Plane (DCP) kubeconfig did not contain a valid server URI.</target>
+        <target state="translated">Geliştirici Kontrol Düzlemi (DCP) kubeconfig geçerli bir sunucu URI'si içermiyordu.</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpNoOutputDetails">
         <source>Developer Control Plane (DCP) did not write any output.</source>
-        <target state="new">Developer Control Plane (DCP) did not write any output.</target>
+        <target state="translated">Geliştirici Kontrol Düzlemi (DCP) herhangi bir çıktı yazmadı.</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpStartFailedMessage">
         <source>Failed to start Developer Control Plane (DCP).</source>
-        <target state="new">Failed to start Developer Control Plane (DCP).</target>
+        <target state="translated">Geliştirici Kontrol Düzlemi (DCP) başlatılamadı.</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpTlsAuthenticationFailedDetailsFormat">
         <source>TLS authentication failed: {0}</source>
-        <target state="new">TLS authentication failed: {0}</target>
+        <target state="translated">TLS kimlik doğrulaması başarısız oldu: {0}</target>
         <note>{0} is the TLS authentication error message.</note>
       </trans-unit>
       <trans-unit id="Description">
         <source>Diagnose Aspire environment issues and verify setup</source>
-        <target state="needs-review-translation">Aspire ortam sorunlarını teşhis edin ve kurulumu doğrulayın</target>
+        <target state="translated">Aspire ortam sorunlarını teşhis edin ve kurulumu doğrulayın</target>
         <note />
       </trans-unit>
       <trans-unit id="DetailedPrerequisitesLink">
         <source>For detailed prerequisites: {0}</source>
-        <target state="new">For detailed prerequisites: {0}</target>
+        <target state="translated">Ayrıntılı önkoşullar için: {0}</target>
         <note>{0} is a clickable URL</note>
       </trans-unit>
       <trans-unit id="DevCertsCleanAndTrustFixFormat">
         <source>Run '{0}' to remove all certificates, then run '{1}' to create and trust a new one.</source>
-        <target state="new">Run '{0}' to remove all certificates, then run '{1}' to create and trust a new one.</target>
+        <target state="translated">'{0}' komutunu çalıştırarak tüm sertifikaları kaldırın, sonra yeni bir sertifika oluşturmak ve güvenmek için '{1}' komutunu çalıştırın.</target>
         <note>{0} is the aspire certs clean command, {1} is the aspire certs trust command (not localizable)</note>
       </trans-unit>
       <trans-unit id="DevCertsInstallOpenSslCleanAndTrustFixFormat">
         <source>Install {0}, run '{1}' to remove all certificates, then run '{2}' to create and trust a new one.</source>
-        <target state="new">Install {0}, run '{1}' to remove all certificates, then run '{2}' to create and trust a new one.</target>
+        <target state="translated">{0} yükleyin, tüm sertifikaları kaldırmak için '{1}' çalıştırın, ardından yeni bir sertifika oluşturup güvenmek için '{2}' çalıştırın.</target>
         <note>{0} is the openssl command/package name, {1} is the aspire certs clean command, {2} is the aspire certs trust command (not localizable)</note>
       </trans-unit>
       <trans-unit id="DevCertsMissingCertUtilDetails">
         <source>Aspire uses certutil to query and update NSS certificate databases used by Firefox and Chromium browsers on Linux.</source>
-        <target state="new">Aspire uses certutil to query and update NSS certificate databases used by Firefox and Chromium browsers on Linux.</target>
+        <target state="translated">Aspire, Linux üzerinde Firefox ve Chromium tarayıcıları tarafından kullanılan NSS sertifika veritabanlarını sorgulamak ve güncellemek için certutil komutunu kullanır.</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsMissingCertUtilFix">
         <source>Install certutil from your distribution's NSS tools package (for example, libnss3-tools).</source>
-        <target state="new">Install certutil from your distribution's NSS tools package (for example, libnss3-tools).</target>
+        <target state="translated">certutil'i dağıtımınızın NSS araçları paketinden (örneğin libnss3-tools) yükleyin.</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsMissingCertUtilMessage">
         <source>certutil is not available; browser certificate trust may be incomplete</source>
-        <target state="new">certutil is not available; browser certificate trust may be incomplete</target>
+        <target state="translated">certutil kullanılamıyor, tarayıcı sertifikasına duyulan güven eksik olabilir</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsMultipleNoneTrustedDetailsFormat">
         <source>Found certificates: {0}. Having multiple certificates can cause confusion.</source>
-        <target state="new">Found certificates: {0}. Having multiple certificates can cause confusion.</target>
+        <target state="translated">Sertifika bulundu: {0}. Birden çok sertifikanın olması karışıklığa neden olabilir.</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsMultipleNoneTrustedMessageFormat">
         <source>Multiple HTTPS development certificates found ({0} certificates), but none are trusted</source>
-        <target state="new">Multiple HTTPS development certificates found ({0} certificates), but none are trusted</target>
+        <target state="translated">Birden çok HTTPS geliştirme sertifikası bulundu ({0} sertifikalar) ancak hiçbiri güvenilir değil</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsMultipleSomeUntrustedDetailsFormat">
         <source>Found certificates: {0}. Having multiple certificates can cause confusion when selecting which one to use.</source>
-        <target state="new">Found certificates: {0}. Having multiple certificates can cause confusion when selecting which one to use.</target>
+        <target state="translated">Sertifika bulundu: {0}. Birden fazla sertifika olması, hangisini kullanacağına karar verirken kafa karışıklığına yol açabilir.</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsMultipleSomeUntrustedMessageFormat">
         <source>Multiple HTTPS development certificates found ({0} certificates)</source>
-        <target state="new">Multiple HTTPS development certificates found ({0} certificates)</target>
+        <target state="translated">Birden çok HTTPS geliştirme sertifikası bulundu ({0} sertifikaları)</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsNoCertificateDetails">
         <source>Aspire uses HTTPS for secure communication between the dashboard and your services during local development.</source>
-        <target state="new">Aspire uses HTTPS for secure communication between the dashboard and your services during local development.</target>
+        <target state="translated">Kullanıcı, yerel geliştirme sırasında pano ve hizmetleriniz arasında güvenli iletişim için HTTPS kullanır.</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsNoCertificateMessage">
         <source>No HTTPS development certificate found</source>
-        <target state="new">No HTTPS development certificate found</target>
+        <target state="translated">HTTPS geliştirme sertifikası bulunamadı</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsNotTrustedDetailsFormat">
         <source>Certificate {0} exists in the personal store but was not found in the trusted root store.</source>
-        <target state="new">Certificate {0} exists in the personal store but was not found in the trusted root store.</target>
+        <target state="translated">Sertifika {0} kişisel depoda var, ancak güvenilen kök depoda bulunamadı.</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsNotTrustedMessage">
         <source>HTTPS development certificate is not trusted</source>
-        <target state="new">HTTPS development certificate is not trusted</target>
+        <target state="translated">HTTPS geliştirme sertifikasına güvenilmiyor</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsOldVersionDetailsFormat">
         <source>Older certificate versions (&lt; v{0}) may not support all certificate trust scenarios.</source>
-        <target state="new">Older certificate versions (&lt; v{0}) may not support all certificate trust scenarios.</target>
+        <target state="translated">Eski sertifika sürümleri (&lt; v{0}) tüm sertifika güven senaryolarını desteklemez.</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsOldVersionMessageFormat">
         <source>HTTPS development certificate has an older version ({0})</source>
-        <target state="new">HTTPS development certificate has an older version ({0})</target>
+        <target state="translated">HTTPS geliştirme sertifikasının eski bir sürümü var ({0})</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsOpenSslCacheMissingCurrentCertificateMessage">
         <source>OpenSSL HTTPS development certificate cache is missing the current certificate</source>
-        <target state="new">OpenSSL HTTPS development certificate cache is missing the current certificate</target>
+        <target state="translated">OpenSSL HTTPS geliştirme sertifikası önbelleğinde geçerli sertifika bulunamadı</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsOpenSslCacheMissingDetailsFormat">
         <source>The OpenSSL certificate cache at '{0}' does not contain certificate {1} from the .NET current user certificate store. Run 'aspire certs clean' and then 'aspire certs trust' to remove stale or corrupt certificates and regenerate trusted development certificates.</source>
-        <target state="new">The OpenSSL certificate cache at '{0}' does not contain certificate {1} from the .NET current user certificate store. Run 'aspire certs clean' and then 'aspire certs trust' to remove stale or corrupt certificates and regenerate trusted development certificates.</target>
+        <target state="translated">'{0}' konumundaki OpenSSL sertifika önbelleğinde .NET geçerli kullanıcı sertifika deposundaki {1} sertifikası bulunmuyor. Eski veya bozuk sertifikaları kaldırmak ve güvenilir geliştirme sertifikalarını yeniden oluşturmak için önce 'aspire certs clean', ardından 'aspire certs trust' komutunu çalıştırın.</target>
         <note>{0} is the OpenSSL certificate cache directory. {1} is the certificate thumbprint.</note>
       </trans-unit>
       <trans-unit id="DevCertsOpenSslCacheMissingHashLinkDetailsFormat">
         <source>The OpenSSL certificate cache at '{0}' contains certificate {1}, but no subject-hash entry points to it. OpenSSL workloads use subject-hash entries when loading CA directories.</source>
-        <target state="new">The OpenSSL certificate cache at '{0}' contains certificate {1}, but no subject-hash entry points to it. OpenSSL workloads use subject-hash entries when loading CA directories.</target>
+        <target state="translated">'{0}' konumundaki OpenSSL sertifika önbelleği sertifika {1} içeriyor ancak konu karması girdilerinden hiçbiri bu sertifikaya işaret etmiyor. OpenSSL iş yükleri, CA dizinlerini yüklerken konu karması girişlerini kullanır.</target>
         <note>{0} is the OpenSSL certificate cache directory. {1} is the certificate thumbprint.</note>
       </trans-unit>
       <trans-unit id="DevCertsOpenSslCacheMissingHashLinkMessage">
         <source>OpenSSL HTTPS development certificate cache is missing subject-hash links</source>
-        <target state="new">OpenSSL HTTPS development certificate cache is missing subject-hash links</target>
+        <target state="translated">OpenSSL HTTPS geliştirme sertifikası önbelleğinde konu karması bağlantıları eksik</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsOpenSslCacheUnreadableFilesDetailsFormat">
         <source>Could not read certificate files under '{0}': {1}. Run 'aspire certs clean' and then 'aspire certs trust' to remove stale or corrupt certificates and regenerate trusted development certificates.</source>
-        <target state="new">Could not read certificate files under '{0}': {1}. Run 'aspire certs clean' and then 'aspire certs trust' to remove stale or corrupt certificates and regenerate trusted development certificates.</target>
+        <target state="translated">'{0}' altındaki sertifika dosyaları okunamadı: {1}. Eski veya bozuk sertifikaları kaldırmak ve güvenilir geliştirme sertifikalarını yeniden oluşturmak için önce 'aspire certs clean', ardından 'aspire certs trust' komutunu çalıştırın.</target>
         <note>{0} is the OpenSSL certificate cache directory. {1} is a comma-separated list of certificate file names.</note>
       </trans-unit>
       <trans-unit id="DevCertsOpenSslCacheUnreadableMessage">
         <source>OpenSSL HTTPS development certificate cache contains unreadable certificate files</source>
-        <target state="new">OpenSSL HTTPS development certificate cache contains unreadable certificate files</target>
+        <target state="translated">OpenSSL HTTPS geliştirme sertifikası önbelleği okunamayan sertifika dosyaları içeriyor</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsPartiallyTrustedDetailsFormat">
         <source>The certificate is in the trusted store, but SSL_CERT_DIR is not configured to include '{0}'. Some applications may not trust the certificate. 'aspire run' will configure this automatically.</source>
-        <target state="new">The certificate is in the trusted store, but SSL_CERT_DIR is not configured to include '{0}'. Some applications may not trust the certificate. 'aspire run' will configure this automatically.</target>
+        <target state="translated">Sertifika güvenilen depoda, ancak SSL_CERT_DIR '{0}' içerecek şekilde yapılandırılmadı. Bazı uygulamalar sertifikaya güvenmeyebilir. 'aspire run' bunu otomatik olarak yapılandıracaktır.</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsPartiallyTrustedFixFormat">
         <source>Set SSL_CERT_DIR in your shell profile: {0}</source>
-        <target state="new">Set SSL_CERT_DIR in your shell profile: {0}</target>
+        <target state="translated">Kabuk profilinizde SSL_CERT_DIR değişkenini ayarlayın: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsPartiallyTrustedMessage">
         <source>HTTPS development certificate is only partially trusted</source>
-        <target state="new">HTTPS development certificate is only partially trusted</target>
+        <target state="translated">HTTPS geliştirme sertifikasına yalnızca kısmen güveniliyor</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsTrustFixFormat">
         <source>Run '{0}' to trust the HTTPS development certificate.</source>
-        <target state="new">Run '{0}' to trust the HTTPS development certificate.</target>
+        <target state="translated">HTTPS geliştirme sertifikasına için '{0}' komutunu çalıştırın.</target>
         <note>{0} is the aspire certs trust command (not localizable)</note>
       </trans-unit>
       <trans-unit id="DevCertsTrustLabelFull">
         <source>[trusted]</source>
-        <target state="new">[trusted]</target>
+        <target state="translated">[güvenilir]</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsTrustLabelPartial">
         <source>[partial]</source>
-        <target state="new">[partial]</target>
+        <target state="translated">[kısmi]</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsTrustedMessage">
         <source>HTTPS development certificate is trusted</source>
-        <target state="new">HTTPS development certificate is trusted</target>
+        <target state="translated">HTTPS geliştirme sertifikasına güveniliyor</target>
         <note />
       </trans-unit>
       <trans-unit id="DevelopmentToolsCategoryHeader">
         <source>Development Tools</source>
-        <target state="new">Development Tools</target>
+        <target state="translated">Geliştirme Araçları</target>
         <note />
       </trans-unit>
       <trans-unit id="EnvironmentCategoryHeader">
@@ -519,61 +519,61 @@
       </trans-unit>
       <trans-unit id="EnvironmentCheckTimedOutMessageFormat">
         <source>Environment check '{0}' timed out after {1} seconds.</source>
-        <target state="new">Environment check '{0}' timed out after {1} seconds.</target>
+        <target state="translated">Ortam denetimi '{0}' {1} saniye sonra zaman aşımına uğradı.</target>
         <note>{0} is the environment check name. {1} is the timeout in seconds.</note>
       </trans-unit>
       <trans-unit id="EnvironmentChecksTimedOutMessageFormat">
         <source>Environment checks timed out after {0} seconds.</source>
-        <target state="new">Environment checks timed out after {0} seconds.</target>
+        <target state="translated">Ortam denetimleri {0} saniye sonra zaman aşımına uğradı.</target>
         <note>{0} is the total timeout in seconds.</note>
       </trans-unit>
       <trans-unit id="HeaderInstallations">
         <source>Aspire CLI Installations</source>
-        <target state="new">Aspire CLI Installations</target>
+        <target state="translated">Aspire CLI yüklemeleri</target>
         <note />
       </trans-unit>
       <trans-unit id="InstallationDiscoveryFailedReason">
         <source>Install discovery failed. See the Aspire CLI logs for details.</source>
-        <target state="new">Install discovery failed. See the Aspire CLI logs for details.</target>
+        <target state="translated">Kurulum keşfi başarısız oldu. Ayrıntılar için Aspire CLI günlüklerine bakın.</target>
         <note />
       </trans-unit>
       <trans-unit id="InstallationDiscoveryTimedOutReasonFormat">
         <source>Install discovery timed out after {0} seconds. See the Aspire CLI logs for details.</source>
-        <target state="new">Install discovery timed out after {0} seconds. See the Aspire CLI logs for details.</target>
+        <target state="translated">Yükleme bulma {0} saniye sonra zaman aşımına uğradı. Ayrıntılar için Aspire CLI günlüklerine bakın.</target>
         <note>{0} is the timeout in seconds.</note>
       </trans-unit>
       <trans-unit id="JsonOptionDescription">
         <source>Output format (Table or Json)</source>
-        <target state="needs-review-translation">Araç tümleştirmesi için sonuçları JSON olarak çıktı</target>
+        <target state="translated">Çıktı biçimi (Tablo veya Json)</target>
         <note />
       </trans-unit>
       <trans-unit id="LegacySettingsDetectedFix">
         <source>Run 'aspire init' (or any aspire run/add/update/pipeline command) to migrate to aspire.config.json.
 The legacy file continues to work — this is a non-blocking warning.</source>
-        <target state="new">Run 'aspire init' (or any aspire run/add/update/pipeline command) to migrate to aspire.config.json.
-The legacy file continues to work — this is a non-blocking warning.</target>
+        <target state="translated">aspire.config.json'a geçiş yapmak için 'aspire init' komutunu veya herhangi bir aspire run/add/update/pipeline komutunu çalıştırın.
+Eski dosya çalışmaya devam eder, bu engelleyici olmayan bir uyarıdır.</target>
         <note />
       </trans-unit>
       <trans-unit id="LegacySettingsDetectedMessageFormat">
         <source>Legacy .aspire/settings.json detected at {0}</source>
-        <target state="new">Legacy .aspire/settings.json detected at {0}</target>
+        <target state="translated">Eski .aspire/settings.json dosyası {0} konumunda algılandı</target>
         <note>{0} is the full path to the legacy settings file.</note>
       </trans-unit>
       <trans-unit id="LegacyTypeScriptAppHostMessageFormat">
         <source>Legacy 'apphost.ts' layout detected at {0}</source>
-        <target state="new">Legacy 'apphost.ts' layout detected at {0}</target>
+        <target state="translated">Eski 'apphost.ts' düzeni {0} konumunda algılandı</target>
         <note>{0} is the full path to the legacy apphost.ts file.</note>
       </trans-unit>
       <trans-unit id="OperatingSystemMessageFormat">
         <source>Operating system: {0}</source>
-        <target state="new">Operating system: {0}</target>
+        <target state="translated">İşletim sistemi: {0}</target>
         <note>{0} is the operating system display name and version, for example "Windows 10.0.22631", "macOS 26.0", or "Linux Ubuntu 24.04".</note>
       </trans-unit>
       <trans-unit id="PendingMigrationFix">
         <source>Run 'aspire update --migrate' to apply the recommended migration.
 The current layout continues to work — this is a non-blocking warning.</source>
-        <target state="new">Run 'aspire update --migrate' to apply the recommended migration.
-The current layout continues to work — this is a non-blocking warning.</target>
+        <target state="translated">'aspire update --migrate' komutunu çalıştırarak önerilen geçişi uygulayın.
+Mevcut düzen çalışmaya devam eder, bu engelleyici olmayan bir uyarıdır.</target>
         <note />
       </trans-unit>
       <trans-unit id="SdkCategoryHeader">
@@ -588,57 +588,57 @@ The current layout continues to work — this is a non-blocking warning.</target
       </trans-unit>
       <trans-unit id="ValueCurrentMarker">
         <source>(current)</source>
-        <target state="new">(current)</target>
+        <target state="translated">(geçerli)</target>
         <note>Suffix appended to the running CLI's path so the user can identify which install is themselves.</note>
       </trans-unit>
       <trans-unit id="ValueNotProbed">
         <source>(not probed)</source>
-        <target state="new">(not probed)</target>
+        <target state="translated">(araştırılmadı)</target>
         <note>Placeholder shown in the table when an install was found but not asked to self-describe (e.g., trust gate).</note>
       </trans-unit>
       <trans-unit id="ValuePathActive">
         <source>active</source>
-        <target state="new">active</target>
+        <target state="translated">etkin</target>
         <note>Shown when an install is the first Aspire CLI resolved from PATH.</note>
       </trans-unit>
       <trans-unit id="ValuePathNotOnPath">
         <source>not on PATH</source>
-        <target state="new">not on PATH</target>
+        <target state="translated">PATH üzerinde değil</target>
         <note>Shown when an install was not discovered from PATH.</note>
       </trans-unit>
       <trans-unit id="ValuePathShadowed">
         <source>shadowed</source>
-        <target state="new">shadowed</target>
+        <target state="translated">gölgelendi</target>
         <note>Shown when an install is on PATH but an earlier Aspire CLI entry shadows it.</note>
       </trans-unit>
       <trans-unit id="ValueProbeFailed">
         <source>(probe failed)</source>
-        <target state="new">(probe failed)</target>
+        <target state="translated">(araştırma başarısız)</target>
         <note>Placeholder shown in the table when an install was probed but did not return usable data.</note>
       </trans-unit>
       <trans-unit id="ValueUnknown">
         <source>(unknown)</source>
-        <target state="new">(unknown)</target>
+        <target state="translated">(bilinmiyor)</target>
         <note>Placeholder shown in the table when a field could not be determined for a discovered install.</note>
       </trans-unit>
       <trans-unit id="VersionUnknown">
         <source>unknown</source>
-        <target state="new">unknown</target>
+        <target state="translated">bilinmiyor</target>
         <note />
       </trans-unit>
       <trans-unit id="VsCodeExtensionInstalledMessage">
         <source>Aspire extension for VS Code is installed</source>
-        <target state="new">Aspire extension for VS Code is installed</target>
+        <target state="translated">VS Code için Aspire uzantısı yüklü</target>
         <note />
       </trans-unit>
       <trans-unit id="VsCodeExtensionMissingFix">
         <source>Install the Aspire extension from the VS Code Marketplace for an integrated Aspire experience.</source>
-        <target state="new">Install the Aspire extension from the VS Code Marketplace for an integrated Aspire experience.</target>
+        <target state="translated">Tümleşik bir Aspire deneyimi için Aspire uzantısını VS Code Marketi'nden yükleyin.</target>
         <note />
       </trans-unit>
       <trans-unit id="VsCodeExtensionMissingMessage">
         <source>VS Code is installed, but the Aspire extension is not installed</source>
-        <target state="new">VS Code is installed, but the Aspire extension is not installed</target>
+        <target state="translated">VS Code yüklü ancak Aspire uzantısı yüklü değil</target>
         <note />
       </trans-unit>
     </body>

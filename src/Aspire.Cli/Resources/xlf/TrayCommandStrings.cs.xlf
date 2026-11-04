@@ -4,62 +4,62 @@
     <body>
       <trans-unit id="BundleRequired">
         <source>The experimental Aspire tray requires a leased, versioned CLI bundle. No usable bundle was found. Install a Windows or macOS Aspire bundle that includes the tray companion.</source>
-        <target state="new">The experimental Aspire tray requires a leased, versioned CLI bundle. No usable bundle was found. Install a Windows or macOS Aspire bundle that includes the tray companion.</target>
+        <target state="translated">Experimentální aplikace Aspire v oznamovací oblasti vyžaduje verzovaný balíček CLI s aktivním zapůjčením. Nenašel se žádný použitelný balíček. Nainstalujte balíček Aspire pro Windows nebo macOS, který obsahuje doprovodnou aplikaci pro oznamovací oblast.</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
         <source>Manage the Windows or macOS tray companion (Experimental)</source>
-        <target state="new">Manage the Windows or macOS tray companion (Experimental)</target>
+        <target state="translated">Spravovat doprovodnou aplikaci pro oznamovací oblast ve Windows nebo macOS (experimentální)</target>
         <note />
       </trans-unit>
       <trans-unit id="HelperFailed">
         <source>The Aspire tray '{0}' helper failed with exit code {1}.</source>
-        <target state="new">The Aspire tray '{0}' helper failed with exit code {1}.</target>
+        <target state="translated">Pomocná rutina pro operaci {0} aplikace Aspire v oznamovací oblasti selhala s ukončovacím kódem {1}.</target>
         <note>{0} is the start or stop subcommand name. {1} is the helper exit code.</note>
       </trans-unit>
       <trans-unit id="HelperTimedOut">
         <source>The Aspire tray '{0}' helper did not acknowledge completion within 30 seconds.</source>
-        <target state="new">The Aspire tray '{0}' helper did not acknowledge completion within 30 seconds.</target>
+        <target state="translated">Pomocná rutina pro operaci {0} aplikace Aspire v oznamovací oblasti nepotvrdila dokončení během 30 sekund.</target>
         <note>{0} is the start or stop subcommand name.</note>
       </trans-unit>
       <trans-unit id="NativeCliRequired">
         <source>Starting the experimental tray requires an installed native Aspire CLI executable. Managed development builds and 'dotnet aspire.dll' are not supported.</source>
-        <target state="new">Starting the experimental tray requires an installed native Aspire CLI executable. Managed development builds and 'dotnet aspire.dll' are not supported.</target>
+        <target state="translated">Spuštění experimentální aplikace v oznamovací oblasti vyžaduje nainstalovaný nativní spustitelný soubor rozhraní Aspire CLI. Spravovaná vývojová sestavení ani dotnet aspire.dll nejsou podporované.</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationFailed">
         <source>Could not complete Aspire tray '{0}': {1}</source>
-        <target state="new">Could not complete Aspire tray '{0}': {1}</target>
+        <target state="translated">Operaci {0} aplikace Aspire v oznamovací oblasti se nepovedlo dokončit: {1}</target>
         <note>{0} is the start or stop subcommand name. {1} is the underlying error message.</note>
       </trans-unit>
       <trans-unit id="PayloadMissing">
         <source>The CLI bundle does not contain the tray companion for this platform (Windows: tray/aspire-tray.exe and tray/Aspire.ico; macOS: tray/Aspire Tray.app). Install a matching native Aspire bundle, or run 'aspire setup --force' to repair an incomplete extraction.</source>
-        <target state="new">The CLI bundle does not contain the tray companion for this platform (Windows: tray/aspire-tray.exe and tray/Aspire.ico; macOS: tray/Aspire Tray.app). Install a matching native Aspire bundle, or run 'aspire setup --force' to repair an incomplete extraction.</target>
+        <target state="translated">Balíček CLI neobsahuje doprovodnou aplikaci pro oznamovací oblast pro tuto platformu (Windows: tray/aspire-tray.exe a tray/Aspire.ico; macOS: tray/Aspire Tray.app). Nainstalujte odpovídající nativní balíček Aspire nebo opravte neúplné rozbalení spuštěním příkazu aspire setup --force.</target>
         <note />
       </trans-unit>
       <trans-unit id="StartDescription">
         <source>Start or restore the tray icon (Experimental)</source>
-        <target state="new">Start or restore the tray icon (Experimental)</target>
+        <target state="translated">Spustit nebo obnovit ikonu v oznamovací oblasti (experimentální)</target>
         <note />
       </trans-unit>
       <trans-unit id="Started">
         <source>The Aspire Tray is starting.</source>
-        <target state="new">The Aspire Tray is starting.</target>
+        <target state="translated">Aplikace Aspire v oznamovací oblasti se spouští.</target>
         <note />
       </trans-unit>
       <trans-unit id="StopDescription">
         <source>Stop the tray without stopping AppHosts (Experimental)</source>
-        <target state="new">Stop the tray without stopping AppHosts (Experimental)</target>
+        <target state="translated">Zastavit aplikaci v oznamovací oblasti bez zastavení AppHostů (experimentální)</target>
         <note />
       </trans-unit>
       <trans-unit id="Stopped">
         <source>The Aspire tray is stopped. AppHosts were not stopped.</source>
-        <target state="new">The Aspire tray is stopped. AppHosts were not stopped.</target>
+        <target state="translated">Aplikace Aspire v oznamovací oblasti je zastavená. AppHosty se nezastavily.</target>
         <note />
       </trans-unit>
       <trans-unit id="UnsupportedPlatform">
         <source>The experimental Aspire tray supports Windows and macOS x64/ARM64 installations. Linux is not supported.</source>
-        <target state="new">The experimental Aspire tray supports Windows and macOS x64/ARM64 installations. Linux is not supported.</target>
+        <target state="translated">Experimentální aplikace Aspire v oznamovací oblasti podporuje instalace Windows a macOS na platformách x64/ARM64. Linux není podporovaný.</target>
         <note />
       </trans-unit>
     </body>

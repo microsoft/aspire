@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Threading.Channels;
-using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
@@ -363,6 +362,109 @@ public partial class InteractionsProviderTests : DashboardTestContext
 
         Assert.Equal(1, update.InteractionId);
         Assert.Equal(WatchInteractionsRequestUpdate.KindOneofCase.InputsDialog, update.KindCase);
+
+        await instance.DisposeAsync().DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task ReceiveData_ParameterInputsShownInlineAndFormRemoved_OpenDialog()
+    {
+        var interactionsChannel = Channel.CreateUnbounded<WatchInteractionsResponseUpdate>();
+        var dashboardClient = new TestDashboardClient(isEnabled: true, interactionChannelProvider: () => interactionsChannel);
+        var dialogService = new TestDialogService(onShowDialog: (data, parameters) => Task.CompletedTask);
+
+        SetupInteractionProviderServices(dashboardClient: dashboardClient, dialogService: dialogService);
+
+        var cut = Render<Components.Interactions.InteractionsProvider>(builder =>
+        {
+            builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+        var instance = cut.Instance;
+        var state = Services.GetRequiredService<ParameterInteractionState>();
+
+        ParameterInteractionState.PanelRegistration? panel = null;
+        await cut.InvokeAsync(() =>
+        {
+            panel = state.RegisterPanel();
+            panel.SetParameterNames(["first"]);
+        });
+
+        var inputsDialog = new InteractionInputsDialog();
+        inputsDialog.InputItems.Add(new InteractionInput { Name = "first", InputType = InputType.Text });
+        await interactionsChannel.Writer.WriteAsync(new WatchInteractionsResponseUpdate
+        {
+            InteractionId = 1,
+            InputsDialog = inputsDialog
+        });
+
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(
+            () => state.Current?.Interaction.InteractionId == 1,
+            "Wait for the prompt to be shown in the parameter form.");
+        Assert.Null(instance._interactionDialogReference);
+
+        // Navigating away removes the form. The prompt must still be visible, so it moves to a dialog.
+        await cut.InvokeAsync(() => panel!.Dispose());
+
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(
+            () => instance._interactionDialogReference?.InteractionId == 1,
+            "Wait for the prompt to be shown in a dialog.");
+        Assert.Null(state.Current);
+
+        await instance.DisposeAsync().DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task ReceiveData_UnresolvedParametersNotification_PrimaryActionOpensParameterForm()
+    {
+        var interactionsChannel = Channel.CreateUnbounded<WatchInteractionsResponseUpdate>();
+        var sendInteractionUpdatesChannel = Channel.CreateUnbounded<WatchInteractionsRequestUpdate>();
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            interactionChannelProvider: () => interactionsChannel,
+            sendInteractionUpdateChannel: sendInteractionUpdatesChannel);
+
+        SetupInteractionProviderServices(dashboardClient: dashboardClient);
+
+        var cut = Render<Components.Interactions.InteractionsProvider>(builder =>
+        {
+            builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+        var instance = cut.Instance;
+        var state = Services.GetRequiredService<ParameterInteractionState>();
+        var navigationManager = Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>();
+
+        var notification = new InteractionNotification { Intent = MessageIntent.Warning };
+        notification.UnresolvedParameterNames.Add(["first", "second"]);
+        await interactionsChannel.Writer.WriteAsync(new WatchInteractionsResponseUpdate
+        {
+            InteractionId = 1,
+            PrimaryButtonText = "Enter values",
+            Notification = notification
+        });
+
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(
+            () => instance.OpenMessageBars.SingleOrDefault()?.InteractionId == 1,
+            "Wait for message created.");
+
+        // The button opens the parameter form without answering the notification.
+        _messageBarProvider!.WaitForElement(".dashboard-message-bar-action").Click();
+
+        Assert.Equal("http://localhost/resources?resource=first&resource=second", navigationManager.Uri);
+        Assert.Equal(1, instance.OpenMessageBars.Single().InteractionId);
+        Assert.False(sendInteractionUpdatesChannel.Reader.TryRead(out _));
+
+        // The form accepts the notification once it shows every parameter.
+        await cut.InvokeAsync(async () =>
+        {
+            using var panel = state.RegisterPanel();
+            panel.SetParameterNames(["first", "second"]);
+            await state.BeginInteractionAsync(panel);
+        });
+
+        var update = await sendInteractionUpdatesChannel.Reader.ReadAsync().AsTask().DefaultTimeout();
+        Assert.Equal(1, update.InteractionId);
+        Assert.Equal(WatchInteractionsRequestUpdate.KindOneofCase.Notification, update.KindCase);
+        Assert.True(update.Notification.Result);
 
         await instance.DisposeAsync().DefaultTimeout();
     }
@@ -741,6 +843,7 @@ public partial class InteractionsProviderTests : DashboardTestContext
         Services.AddSingleton<DimensionManager>();
         Services.AddScoped<DashboardDialogService>();
         Services.AddScoped<DashboardMessageBarService>();
+        Services.AddScoped<ParameterInteractionState>();
 
         _messageBarProvider = Render<FluentMessageBarProvider>(builder =>
         {

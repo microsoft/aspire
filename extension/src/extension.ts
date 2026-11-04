@@ -33,10 +33,17 @@ import { CliPathEnvironmentSynchronizer } from './utils/cliPathEnvironment';
 import { CliPathRejectionNotifier } from './utils/cliPathRejectionNotifier';
 import { cliPathResolver } from './utils/cliPath';
 import { AppHostLifecycleToolService, registerAppHostLifecycleTools } from './lm/appHostLifecycleTools';
+import { AppHostTargetResolverService } from './lm/appHostTargetResolverService';
+import { AspireResourceDebugToolService, registerAspireResourceDebugTool } from './lm/resourceDebugTools';
 import { registerInstrumentedCommand } from './activation/instrumentedCommand';
 import { registerCliCommands } from './activation/registerCliCommands';
 import { registerTreeViewCommands } from './activation/registerTreeViewCommands';
 import { registerCodeLensCommands } from './activation/registerCodeLensCommands';
+import { extensionResourceAttachProviders, ResourceAttachProviderRegistry } from './debugger/resourceAttachProviders';
+import { ResourceDebugService } from './debugger/resourceDebugService';
+import { ResourceDebugSessionRegistry } from './debugger/resourceDebugSessionRegistry';
+import { ExtensionResourceDebugTelemetry, monotonicResourceDebugClock } from './debugger/resourceDebugTelemetry';
+import { compareAppHostIdentity } from './utils/appHostIdentity';
 import { resetEditorAssistanceWindowState } from './services/editorAssistanceWindowState';
 import { SafeAppHostTargetResolver } from './lm/safeAppHostTargetResolver';
 import { EditorStateSnapshotService } from './lm/editorStateSnapshotService';
@@ -160,6 +167,37 @@ export async function activate(context: vscode.ExtensionContext) {
   const cliCommandRegistrations = registerCliCommands(terminalProvider, editorCommandProvider, configInfoProvider);
 
   // Aspire panel - running app hosts tree view
+  const resourceDebugTelemetry = new ExtensionResourceDebugTelemetry();
+  const resourceDebugClock = monotonicResourceDebugClock;
+  const resourceDebugSessionRegistry = new ResourceDebugSessionRegistry(vscode.debug, {
+    telemetry: resourceDebugTelemetry,
+    clock: resourceDebugClock,
+  });
+  const resourceDebugService = new ResourceDebugService({
+    appHostRepository: dataRepository,
+    attachProviders: new ResourceAttachProviderRegistry(extensionResourceAttachProviders),
+    sessionRegistry: resourceDebugSessionRegistry,
+    startDebugging: (workspaceFolder, configuration) =>
+      vscode.debug.startDebugging(workspaceFolder, configuration),
+    isProcessAlreadyDebugged: processId =>
+      aspireExtensionContext.aspireDebugSessions.some(session => session.hasResourceDebugSessionProcess(processId)),
+    getDebugSessionConfiguration: appHost => {
+      const matchingSessions = aspireExtensionContext.aspireDebugSessions.filter(session => {
+        if (compareAppHostIdentity(session.resolvedAppHostPath ?? session.appHostPath, appHost.absolutePath) !== 'same') {
+          return false;
+        }
+
+        return appHost.cliPid !== undefined
+          ? session.cliProcessId === appHost.cliPid
+          : session.operationKind === 'run';
+      });
+
+      return matchingSessions.length === 1 ? matchingSessions[0].configuration : undefined;
+    },
+    telemetry: resourceDebugTelemetry,
+    clock: resourceDebugClock,
+  });
+  context.subscriptions.push(resourceDebugService);
   appHostLaunchService.setEditorSessionProvider(() => aspireExtensionContext.aspireDebugSessions);
   appHostLaunchService.setRunningAppHostProvider(async token => {
     const appHosts = await dataRepository.fetchRunningAppHostsOnce(token);
@@ -167,7 +205,7 @@ export async function activate(context: vscode.ExtensionContext) {
   });
   appHostLaunchService.setExternalAppHostStopper((appHost, token) =>
     stopExternalAppHost(terminalProvider, appHost, token));
-  const appHostTreeProvider = new AspireAppHostTreeProvider(dataRepository, terminalProvider, appHostLaunchService, context.globalState, vscode.env.clipboard, configInfoProvider);
+  const appHostTreeProvider = new AspireAppHostTreeProvider(dataRepository, terminalProvider, appHostLaunchService, resourceDebugService, context.globalState, vscode.env.clipboard, configInfoProvider);
   const appHostTreeView = vscode.window.createTreeView('aspire-vscode.appHosts', {
     treeDataProvider: appHostTreeProvider,
     showCollapseAll: true,
@@ -267,6 +305,13 @@ export async function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(appHostLifecycleToolService);
   const appHostLifecycleToolRegistration = registerAppHostLifecycleTools(appHostLifecycleToolService);
   context.subscriptions.push(appHostLifecycleToolRegistration);
+  const resourceDebugToolService = new AspireResourceDebugToolService({
+    targetResolver: new AppHostTargetResolverService(appHostTargetResolver),
+    resourceDebugger: resourceDebugService,
+  });
+  context.subscriptions.push(resourceDebugToolService);
+  const resourceDebugToolRegistration = registerAspireResourceDebugTool(resourceDebugToolService);
+  context.subscriptions.push(resourceDebugToolRegistration);
 
   // Editor-assistance tools use the same safe AppHost registry and editor-owned session
   // projections as lifecycle tools. UI side effects stay isolated behind the handoff service.
@@ -341,6 +386,12 @@ export async function activate(context: vscode.ExtensionContext) {
     e2eLanguageModelTools.set(name, {
       tool,
       registered: appHostLifecycleToolRegistration.registered,
+    });
+  }
+  for (const [name, tool] of resourceDebugToolRegistration.tools) {
+    e2eLanguageModelTools.set(name, {
+      tool,
+      registered: resourceDebugToolRegistration.registered,
     });
   }
   for (const [name, tool] of editorAssistanceToolRegistration.tools) {

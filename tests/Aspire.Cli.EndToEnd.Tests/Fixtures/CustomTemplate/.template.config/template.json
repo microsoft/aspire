@@ -3,6 +3,7 @@
   "identity": "Aspire.Tests.CustomTemplate",
   "name": "Custom template E2E fixture",
   "shortName": "custom-template-fixture",
+  "description": "Searchable description metadata for the fixture.",
   "sourceName": "TemplateApp",
   "symbols": {
     "Greeting": {

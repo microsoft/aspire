@@ -1,0 +1,307 @@
+@using Aspire.Dashboard.Extensions
+@using Aspire.Dashboard.Model
+@using Aspire.Dashboard.Model.Interaction
+@using Aspire.Dashboard.Resources
+@using Aspire.Dashboard.Components.ResourcesGridColumns
+@using Aspire.DashboardService.Proto.V1
+
+@inject IStringLocalizer<Dashboard.Resources.Resources> Loc
+@inject IStringLocalizer<ControlsStrings> ControlsStringsLoc
+@inject IStringLocalizer<Dialogs> DialogsLoc
+
+<div class="parameter-overview">
+    <div class="parameter-overview-grid">
+        <section class="parameter-card parameter-details-card" aria-labelledby="parameter-details-title">
+            <div class="parameter-card-header">
+                <span class="card-header-icon" aria-hidden="true">
+                    <FluentIcon Value="@(new Icons.Regular.Size16.Info())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
+                </span>
+                <h2 id="parameter-details-title">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewStatusTitle)]</h2>
+            </div>
+
+            <dl class="parameter-properties">
+                <dt>@ControlsStringsLoc[nameof(ControlsStrings.NameColumnHeader)]</dt>
+                <dd>
+                    <span class="parameter-name">@Resource.DisplayName</span>
+                    <FluentButton Appearance="ButtonAppearance.Transparent"
+                                  IconOnly="true"
+                                  Class="aspire-icon-button parameter-card-action parameter-copy-name"
+                                  data-tooltip="@ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)]"
+                                  aria-label="@ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)]"
+                                  @attributes="@FluentUIExtensions.GetClipboardCopyAdditionalAttributes(Resource.DisplayName, ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)], ControlsStringsLoc[nameof(ControlsStrings.GridValueCopied)])">
+                        <FluentIcon Class="copy-icon" Icon="Icons.Regular.Size16.Copy" Color="Color.Primary" />
+                        <FluentIcon Class="checkmark-icon" Style="display:none" Icon="Icons.Regular.Size16.Checkmark" Color="Color.Primary" />
+                    </FluentButton>
+                </dd>
+                <dt>@Loc[nameof(Dashboard.Resources.Resources.ResourcesTypeColumnHeader)]</dt>
+                <dd>@Resource.ResourceType</dd>
+                <dt>@Loc[nameof(Dashboard.Resources.Resources.ResourcesStateColumnHeader)]</dt>
+                <dd>
+                    <StateColumnDisplay Resource="Resource" UnviewedErrorCounts="null" />
+                </dd>
+            </dl>
+        </section>
+
+        <section class="parameter-card parameter-value-card" aria-labelledby="parameter-value-title">
+            <div class="parameter-card-header">
+                <span class="card-header-icon" aria-hidden="true">
+                    <FluentIcon Value="@(new Icons.Regular.Size16.Key())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
+                </span>
+                <h2 id="parameter-value-title">@Loc[nameof(Dashboard.Resources.Resources.ResourcesDetailsParameterValueProperty)]</h2>
+                @if (IsSensitive)
+                {
+                    <span class="parameter-sensitive-badge">
+                        <FluentIcon Value="@(new Icons.Regular.Size12.LockClosed())" Width="12px" Color="Color.Custom" CustomColor="currentColor" />
+                        @DialogsLoc[nameof(Dialogs.TextVisualizerSecretWarningTitle)]
+                    </span>
+                }
+            </div>
+
+            @if (SetCommand is not null && ValueInputViewModel is { } valueInput)
+            {
+                <div class="parameter-value-form">
+                    <InteractionInputField ForId="@valueInput.ElementId"
+                                           InputViewModel="@valueInput"
+                                           MarkdownProcessor="@_markdownProcessor"
+                                           Context="input">
+                        @switch (input.ViewModel.Input.InputType)
+                        {
+                            case InputType.Text:
+                            case InputType.SecretText:
+                                var isSecret = input.ViewModel.Input.InputType == InputType.SecretText;
+                                <FluentTextInput Id="@input.ViewModel.ElementId"
+                                                 Class="aspire-input parameter-value-input"
+                                                 @bind-Value="input.ViewModel.Value"
+                                                 Placeholder="@input.ViewModel.Input.Placeholder"
+                                                 Required="@input.ViewModel.Input.Required"
+                                                 Immediate="true"
+                                                 AutoComplete="@(isSecret ? "one-time-code" : "off")"
+                                                 TextInputType="@(isSecret && !input.ViewModel.IsSecretTextVisible ? TextInputType.Password : TextInputType.Text)"
+                                                 Disabled="@(IsSetCommandDisabled || input.ViewModel.InputDisabled)"
+                                                 aria-describedby="@input.DescriptionId">
+                                    <EndTemplate>
+                                        @if (isSecret)
+                                        {
+                                            <FluentButton Appearance="ButtonAppearance.Transparent"
+                                                          IconOnly="true"
+                                                          Class="aspire-icon-button"
+                                                          Disabled="@(IsSetCommandDisabled || input.ViewModel.InputDisabled)"
+                                                          OnClick="@(() => input.ViewModel.IsSecretTextVisible = !input.ViewModel.IsSecretTextVisible)"
+                                                          data-tooltip="@ControlsStringsLoc[input.ViewModel.IsSecretTextVisible ? nameof(ControlsStrings.GridValueMaskHideValue) : nameof(ControlsStrings.GridValueMaskShowValue)]"
+                                                          aria-label="@ControlsStringsLoc[input.ViewModel.IsSecretTextVisible ? nameof(ControlsStrings.GridValueMaskHideValue) : nameof(ControlsStrings.GridValueMaskShowValue)]">
+                                                @if (input.ViewModel.IsSecretTextVisible)
+                                                {
+                                                    <FluentIcon Value="@(new Icons.Regular.Size16.EyeOff())" Color="Color.Primary" />
+                                                }
+                                                else
+                                                {
+                                                    <FluentIcon Value="@(new Icons.Regular.Size16.Eye())" Color="Color.Primary" />
+                                                }
+                                            </FluentButton>
+                                        }
+                                    </EndTemplate>
+                                </FluentTextInput>
+                                break;
+                            case InputType.Choice:
+                                @if (!input.ViewModel.Input.AllowCustomChoice)
+                                {
+                                    <FluentSelect @key="input.ViewModel.InputKey"
+                                                  Id="@input.ViewModel.ElementId"
+                                                  TOption="SelectViewModel<string>" TValue="string"
+                                                  Class="aspire-input parameter-value-input"
+                                                  @bind-Value="input.ViewModel.Value"
+                                                  Placeholder="@input.ViewModel.Input.Placeholder"
+                                                  Required="@input.ViewModel.Input.Required"
+                                                  Items="@input.ViewModel.SelectOptions"
+                                                  OptionValue="@((SelectViewModel<string>? option) => option?.Id)"
+                                                  OptionText="@((SelectViewModel<string>? option) => option?.Name)"
+                                                  Height="250px"
+                                                  Position="SelectPosition.Below"
+                                                  Disabled="@(IsSetCommandDisabled || input.ViewModel.InputDisabled)"
+                                                  aria-describedby="@input.DescriptionId">
+                                        <OptionTemplate Context="option">
+                                            <span hidden data-tooltip-option="@DashboardUIHelpers.ResolveTooltip(option.Name)"></span>
+                                            @option.Name
+                                        </OptionTemplate>
+                                    </FluentSelect>
+                                }
+                                else
+                                {
+                                    <CascadingValue Name="HideFluentField" Value="@true" IsFixed="true">
+                                        <FluentCombobox @key="input.ViewModel.InputKey"
+                                                        Id="@input.ViewModel.ElementId"
+                                                        TOption="SelectViewModel<string>" TValue="SelectViewModel<string>"
+                                                        Class="aspire-input parameter-value-input"
+                                                        @bind-Value="input.ViewModel.SelectedOption"
+                                                        @bind-Value:after="UpdateChoiceValueState"
+                                                        @bind-ImmediateText:get="input.ViewModel.SelectedOption?.Name ?? input.ViewModel.Value"
+                                                        @bind-ImmediateText:set="OnChoiceTextChanged"
+                                                        Immediate="true"
+                                                        ImmediateDelay="@FluentUIExtensions.InputDelay"
+                                                        Placeholder="@input.ViewModel.Input.Placeholder"
+                                                        Required="@input.ViewModel.Input.Required"
+                                                        Items="@input.ViewModel.FilteredOptions()"
+                                                        OptionText="@((SelectViewModel<string>? option) => option?.Name)"
+                                                        Height="250px"
+                                                        Position="SelectPosition.Below"
+                                                        Disabled="@(IsSetCommandDisabled || input.ViewModel.InputDisabled)"
+                                                        aria-describedby="@input.DescriptionId">
+                                            <FreeOption>
+                                                <FreeOptionOutput />
+                                            </FreeOption>
+                                            <OptionTemplate Context="option">
+                                                <span hidden data-tooltip-option="@DashboardUIHelpers.ResolveTooltip(option.Name)"></span>
+                                                <FluentHighlighter Text="@option.Name" HighlightedText="@input.ViewModel.Value" />
+                                            </OptionTemplate>
+                                        </FluentCombobox>
+                                    </CascadingValue>
+                                }
+                                break;
+                            case InputType.Boolean:
+                                <FluentCheckbox Id="@input.ViewModel.ElementId"
+                                                Class="aspire-checkbox"
+                                                @bind-Value="input.ViewModel.IsChecked"
+                                                Label="@input.ViewModel.Input.Label"
+                                                Placeholder="@input.ViewModel.Input.Placeholder"
+                                                AriaLabel="@input.ViewModel.Input.Label"
+                                                Disabled="@(IsSetCommandDisabled || input.ViewModel.InputDisabled)"
+                                                aria-describedby="@input.DescriptionId" />
+                                break;
+                            case InputType.Number:
+                                <FluentNumberInput TValue="int?"
+                                                   Id="@input.ViewModel.ElementId"
+                                                   Class="aspire-input parameter-value-input"
+                                                   @bind-Value="input.ViewModel.NumberValue"
+                                                   Placeholder="@input.ViewModel.Input.Placeholder"
+                                                   AriaLabel="@input.ViewModel.Input.Description"
+                                                   Required="@input.ViewModel.Input.Required"
+                                                   Immediate="true"
+                                                   Disabled="@(IsSetCommandDisabled || input.ViewModel.InputDisabled)"
+                                                   aria-describedby="@input.DescriptionId" />
+                                break;
+                            case InputType.File:
+                                <FluentButton Appearance="ButtonAppearance.Primary"
+                                              Class="aspire-button"
+                                              IconStart="@(new Icons.Regular.Size16.FolderOpen())"
+                                              Disabled="@(IsSetCommandDisabled || input.ViewModel.InputDisabled)"
+                                              OnClick="SetValueAsync"
+                                              aria-label="@input.ViewModel.Input.Label"
+                                              aria-describedby="@input.DescriptionId">
+                                    @(string.IsNullOrEmpty(input.ViewModel.Input.Placeholder)
+                                        ? SetCommand.GetDisplayName()
+                                        : input.ViewModel.Input.Placeholder)
+                                </FluentButton>
+                                break;
+                        }
+                    </InteractionInputField>
+                    @if (SaveInputViewModel is { } saveInput)
+                    {
+                        <InteractionInputField ForId="@saveInput.ElementId"
+                                               InputViewModel="@saveInput"
+                                               MarkdownProcessor="@_markdownProcessor"
+                                               Context="input">
+                            <FluentCheckbox Id="@input.ViewModel.ElementId"
+                                            Class="aspire-checkbox"
+                                            @bind-Value="input.ViewModel.IsChecked"
+                                            Label="@input.ViewModel.Input.Label"
+                                            Placeholder="@input.ViewModel.Input.Placeholder"
+                                            AriaLabel="@input.ViewModel.Input.Label"
+                                            Disabled="@(IsSetCommandDisabled || input.ViewModel.InputDisabled)"
+                                            aria-describedby="@input.DescriptionId" />
+                        </InteractionInputField>
+                    }
+                    @if (valueInput.Input.InputType != InputType.File || DeleteCommand is not null)
+                    {
+                        <div class="parameter-value-actions">
+                            @if (valueInput.Input.InputType != InputType.File)
+                            {
+                                <FluentButton Class="aspire-button"
+                                              Appearance="ButtonAppearance.Primary"
+                                              Disabled="@IsValueSubmitDisabled"
+                                              OnClick="SetValueAsync"
+                                              IconStart="@(new Icons.Regular.Size16.Save())">
+                                    @SetCommand.GetDisplayName()
+                                </FluentButton>
+                            }
+                            @if (DeleteCommand is not null)
+                            {
+                                <FluentButton Class="aspire-button parameter-delete-button"
+                                              Appearance="ButtonAppearance.Default"
+                                              Disabled="@IsDeleteCommandDisabled"
+                                              OnClick="DeleteValueAsync"
+                                              IconStart="@(new Icons.Regular.Size16.Delete())">
+                                    @ControlsStringsLoc[nameof(ControlsStrings.ParameterDeleteValueAction)]
+                                </FluentButton>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="parameter-empty">@ControlsStringsLoc[nameof(ControlsStrings.ParameterValueNotSet)]</div>
+            }
+        </section>
+
+        <section class="parameter-card parameter-json-card" aria-labelledby="parameter-json-title">
+            <div class="parameter-card-header">
+                <span class="card-header-icon" aria-hidden="true">
+                    <FluentIcon Value="@(new Icons.Regular.Size16.Braces())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
+                </span>
+                <h2 id="parameter-json-title">@ControlsStringsLoc[nameof(ControlsStrings.ViewJson)]</h2>
+                <div class="parameter-json-actions">
+                    <FluentButton Appearance="ButtonAppearance.Transparent"
+                                  IconOnly="true"
+                                  Class="aspire-icon-button parameter-card-action"
+                                  OnClick="ToggleJson"
+                                  data-tooltip="@ControlsStringsLoc[CanShowJson ? nameof(ControlsStrings.GridValueMaskHideValue) : nameof(ControlsStrings.GridValueMaskShowValue)]"
+                                  aria-label="@ControlsStringsLoc[CanShowJson ? nameof(ControlsStrings.GridValueMaskHideValue) : nameof(ControlsStrings.GridValueMaskShowValue)]"
+                                  aria-pressed="@CanShowJson.ToString().ToLowerInvariant()">
+                        @if (CanShowJson)
+                        {
+                            <FluentIcon Value="@(new Icons.Regular.Size16.EyeOff())" Color="Color.Primary" />
+                        }
+                        else
+                        {
+                            <FluentIcon Value="@(new Icons.Regular.Size16.Eye())" Color="Color.Primary" />
+                        }
+                    </FluentButton>
+                    <FluentButton Appearance="ButtonAppearance.Transparent"
+                                  IconOnly="true"
+                                  Class="aspire-icon-button parameter-card-action"
+                                  data-tooltip="@ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)]"
+                                  aria-label="@ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)]"
+                                  @attributes="@FluentUIExtensions.GetClipboardCopyAdditionalAttributes(JsonViewModel.FormattedText, ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)], ControlsStringsLoc[nameof(ControlsStrings.GridValueCopied)])">
+                        <FluentIcon Class="copy-icon" Icon="Icons.Regular.Size16.Copy" Color="Color.Primary" />
+                        <FluentIcon Class="checkmark-icon" Style="display:none" Icon="Icons.Regular.Size16.Checkmark" Color="Color.Primary" />
+                    </FluentButton>
+                    <FluentButton Appearance="ButtonAppearance.Transparent"
+                                  IconOnly="true"
+                                  Class="aspire-icon-button parameter-card-action"
+                                  OnClick="DownloadJsonAsync"
+                                  data-tooltip="@ControlsStringsLoc[nameof(ControlsStrings.Download)]"
+                                  aria-label="@ControlsStringsLoc[nameof(ControlsStrings.Download)]">
+                        <FluentIcon Value="@(new Icons.Regular.Size16.ArrowDownload())" Color="Color.Primary" />
+                    </FluentButton>
+                </div>
+            </div>
+
+            @if (CanShowJson)
+            {
+                <div class="parameter-json-content">
+                    <TextVisualizer ViewModel="JsonViewModel" NoWrap="false" Virtualize="false" />
+                </div>
+            }
+            else
+            {
+                <div class="parameter-secret-warning">
+                    <FluentIcon Value="@(new Icons.Filled.Size16.Warning())" Color="Color.Warning" />
+                    <div>
+                        <strong>@DialogsLoc[nameof(Dialogs.TextVisualizerSecretWarningTitle)]</strong>
+                        <span>@DialogsLoc[nameof(Dialogs.TextVisualizerSecretWarningDescription)]</span>
+                    </div>
+                </div>
+            }
+        </section>
+    </div>
+</div>

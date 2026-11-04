@@ -1,35 +1,35 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="ko" original="../DoctorCommandStrings.resx">
     <body>
       <trans-unit id="AppHostCategoryHeader">
         <source>AppHost</source>
-        <target state="new">AppHost</target>
+        <target state="translated">AppHost</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostVersionCheckFailedMessage">
         <source>Could not determine AppHost version</source>
-        <target state="new">Could not determine AppHost version</target>
+        <target state="translated">AppHost 버전을 확인할 수 없음</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostVersionMessageFormat">
         <source>AppHost version {0} ({1})</source>
-        <target state="new">AppHost version {0} ({1})</target>
+        <target state="translated">AppHost 버전 {0} ({1})</target>
         <note>{0} is the AppHost Aspire.Hosting version. {1} is the AppHost project path.</note>
       </trans-unit>
       <trans-unit id="AppHostVersionUnknownMessageFormat">
         <source>Could not determine AppHost version ({0})</source>
-        <target state="new">Could not determine AppHost version ({0})</target>
+        <target state="translated">AppHost 버전({0})을 확인할 수 없음</target>
         <note>{0} is the AppHost project path.</note>
       </trans-unit>
       <trans-unit id="AspireCategoryHeader">
         <source>Aspire</source>
-        <target state="new">Aspire</target>
+        <target state="translated">Aspire</target>
         <note />
       </trans-unit>
       <trans-unit id="ChannelSuffixFormat">
         <source> (channel: {0})</source>
-        <target state="new"> (channel: {0})</target>
+        <target state="translated"> (채널: {0})</target>
         <note>{0} is the Aspire channel name (e.g., "stable", "staging", "daily", "local", "pr-1234"). Appended to CLI / AppHost version messages.</note>
       </trans-unit>
       <trans-unit id="CheckingPrerequisites">
@@ -39,47 +39,47 @@
       </trans-unit>
       <trans-unit id="CliVersionMessageFormat">
         <source>Aspire CLI version {0}</source>
-        <target state="new">Aspire CLI version {0}</target>
+        <target state="translated">Aspire CLI 버전 {0}</target>
         <note>{0} is the current Aspire CLI version.</note>
       </trans-unit>
       <trans-unit id="CliVersionOutOfDateFixFormat">
         <source>Run '{0}' to update Aspire CLI.</source>
-        <target state="new">Run '{0}' to update Aspire CLI.</target>
+        <target state="translated">Aspire CLI를 업데이트하려면 '{0}'을(를) 실행하세요.</target>
         <note>{0} is the command to update Aspire CLI.</note>
       </trans-unit>
       <trans-unit id="CliVersionOutOfDateMessageFormat">
         <source>Aspire CLI version {0} is out of date. Latest version is {1}</source>
-        <target state="new">Aspire CLI version {0} is out of date. Latest version is {1}</target>
+        <target state="translated">Aspire CLI 버전 {0}은(는) 최신 버전이 아닙니다. 최신 버전은 {1}입니다</target>
         <note>{0} is the current Aspire CLI version. {1} is the latest available Aspire CLI version.</note>
       </trans-unit>
       <trans-unit id="CliVersionUpdateCheckFailedMessage">
         <source>Could not check for Aspire CLI updates</source>
-        <target state="new">Could not check for Aspire CLI updates</target>
+        <target state="translated">Aspire CLI 업데이트를 확인할 수 없습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ColumnChannel">
         <source>Channel</source>
-        <target state="new">Channel</target>
+        <target state="translated">채널</target>
         <note />
       </trans-unit>
       <trans-unit id="ColumnPath">
         <source>Path</source>
-        <target state="new">Path</target>
+        <target state="translated">경로</target>
         <note />
       </trans-unit>
       <trans-unit id="ColumnPathStatus">
         <source>PATH status</source>
-        <target state="new">PATH status</target>
+        <target state="translated">PATH 상태</target>
         <note />
       </trans-unit>
       <trans-unit id="ColumnRoute">
         <source>Route</source>
-        <target state="new">Route</target>
+        <target state="translated">경로</target>
         <note />
       </trans-unit>
       <trans-unit id="ColumnVersion">
         <source>Version</source>
-        <target state="new">Version</target>
+        <target state="translated">버전</target>
         <note />
       </trans-unit>
       <trans-unit id="ContainerCategoryHeader">
@@ -89,422 +89,422 @@
       </trans-unit>
       <trans-unit id="ContainerRuntimeActiveSuffix">
         <source> ← active</source>
-        <target state="new"> ← active</target>
+        <target state="translated"> ← 활성</target>
         <note>Suffix marking the automatically selected runtime. Preserve the leading space and arrow.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeCheckFailedMessage">
         <source>Failed to check container runtime</source>
-        <target state="new">Failed to check container runtime</target>
+        <target state="translated">컨테이너 런타임을 확인하지 못했습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ContainerRuntimeClientVersionWarningFormat">
         <source>{0} client version {1} is below minimum required {2}</source>
-        <target state="new">{0} client version {1} is below minimum required {2}</target>
+        <target state="translated">{0} 클라이언트 버전 {1}이(가) 필요한 최소 버전 {2}보다 낮습니다.</target>
         <note>{0} is the runtime name, {1} the detected version, {2} the minimum version.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeExplicitSelectionSuffix">
         <source> ← explicitly selected</source>
-        <target state="new"> ← explicitly selected</target>
+        <target state="translated"> ← 명시적으로 선택됨</target>
         <note>Suffix marking a configured runtime. Preserve the leading space and arrow.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeInstallDockerFix">
         <source>Install Docker Desktop: https://www.docker.com/products/docker-desktop</source>
-        <target state="new">Install Docker Desktop: https://www.docker.com/products/docker-desktop</target>
+        <target state="translated">Docker Desktop 설치: https://www.docker.com/products/docker-desktop</target>
         <note />
       </trans-unit>
       <trans-unit id="ContainerRuntimeInstallFix">
         <source>Install Docker Desktop: https://www.docker.com/products/docker-desktop or Podman: https://podman.io/getting-started/installation</source>
-        <target state="new">Install Docker Desktop: https://www.docker.com/products/docker-desktop or Podman: https://podman.io/getting-started/installation</target>
+        <target state="translated">Docker Desktop 설치: https://www.docker.com/products/docker-desktop 또는 Podman 설치: https://podman.io/getting-started/installation</target>
         <note />
       </trans-unit>
       <trans-unit id="ContainerRuntimeInstallGenericFixFormat">
         <source>Install {0}</source>
-        <target state="new">Install {0}</target>
+        <target state="translated">{0} 설치</target>
         <note>{0} is the runtime name.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeInstallPodmanFix">
         <source>Install Podman: https://podman.io/getting-started/installation</source>
-        <target state="new">Install Podman: https://podman.io/getting-started/installation</target>
+        <target state="translated">Podman 설치: https://podman.io/getting-started/installation</target>
         <note />
       </trans-unit>
       <trans-unit id="ContainerRuntimeInstallWindowsFix">
         <source>Install Docker Desktop: https://www.docker.com/products/docker-desktop or Podman: https://podman.io/getting-started/installation or WSLc: https://aka.ms/aspire/containers</source>
-        <target state="new">Install Docker Desktop: https://www.docker.com/products/docker-desktop or Podman: https://podman.io/getting-started/installation or WSLc: https://aka.ms/aspire/containers</target>
+        <target state="translated">Docker Desktop: https://www.docker.com/products/docker-desktop 또는 Podman: https://podman.io/getting-started/installation 또는 WSLc: https://aka.ms/aspire/containers 설치</target>
         <note />
       </trans-unit>
       <trans-unit id="ContainerRuntimeInstallWslcFix">
         <source>Install WSLc on Windows: https://aka.ms/aspire/containers</source>
-        <target state="new">Install WSLc on Windows: https://aka.ms/aspire/containers</target>
+        <target state="translated">Windows에 WSL 설치: https://aka.ms/aspire/containers</target>
         <note />
       </trans-unit>
       <trans-unit id="ContainerRuntimeNotDetectedMessage">
         <source>No container runtime detected</source>
-        <target state="new">No container runtime detected</target>
+        <target state="translated">감지된 컨테이너 런타임이 없습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ContainerRuntimeNotFoundMessageFormat">
         <source>{0}: not found (configured via ASPIRE_CONTAINER_RUNTIME={1}){2}</source>
-        <target state="new">{0}: not found (configured via ASPIRE_CONTAINER_RUNTIME={1}){2}</target>
+        <target state="translated">{0}: 찾을 수 없음(ASPIRE_CONTAINER_RUNTIME={1}을(를) 통해 구성됨){2}</target>
         <note>{0} is the runtime name, {1} the configuration value, {2} the selection suffix. Do not translate ASPIRE_CONTAINER_RUNTIME.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeRunningMessageFormat">
         <source>{0}{1}: running{2}</source>
-        <target state="new">{0}{1}: running{2}</target>
+        <target state="translated">{0}{1}: 실행 중{2}</target>
         <note>{0} is the runtime name, {1} the optional version suffix, {2} the selection suffix.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeSelectAlternativeFix">
         <source>Set ASPIRE_CONTAINER_RUNTIME to docker or podman.</source>
-        <target state="new">Set ASPIRE_CONTAINER_RUNTIME to docker or podman.</target>
+        <target state="translated">ASPIRE_CONTAINER_RUNTIME을 docker 또는 podman으로 설정하세요.</target>
         <note>ASPIRE_CONTAINER_RUNTIME, docker and podman are configuration identifiers. Do not translate them.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeServerVersionWarningFormat">
         <source>{0} server version {1} is below minimum required {2}</source>
-        <target state="new">{0} server version {1} is below minimum required {2}</target>
+        <target state="translated">{0} 서버 버전 {1}이(가) 필요한 최소 버전 {2}보다 낮습니다.</target>
         <note>{0} is the runtime name, {1} the detected version, {2} the minimum version.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeStartDaemonFixFormat">
         <source>Start {0} daemon</source>
-        <target state="new">Start {0} daemon</target>
+        <target state="translated">{0} 디먼 시작</target>
         <note>{0} is the runtime name.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeStartDockerDesktopFix">
         <source>Start Docker Desktop</source>
-        <target state="new">Start Docker Desktop</target>
+        <target state="translated">Docker Desktop 시작</target>
         <note />
       </trans-unit>
       <trans-unit id="ContainerRuntimeStartPodmanFix">
         <source>Start Podman service: sudo systemctl start podman</source>
-        <target state="new">Start Podman service: sudo systemctl start podman</target>
+        <target state="translated">Podman 서비스 시작: sudo systemctl start podman</target>
         <note>Do not translate the command sudo systemctl start podman.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeStartWslcFix">
         <source>Ensure the WSLc session manager is running. Check its status with: wslc info --format json</source>
-        <target state="new">Ensure the WSLc session manager is running. Check its status with: wslc info --format json</target>
+        <target state="translated">WSL 세션 관리자가 실행 중인지 확인하세요. 다음 명령으로 상태 확인: wslc info --format json</target>
         <note>Do not translate the command wslc info --format json.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeStoppedMessageFormat">
         <source>{0}: installed but not running{1}</source>
-        <target state="new">{0}: installed but not running{1}</target>
+        <target state="translated">{0}: 설치되었지만 실행되고 있지 않음{1}</target>
         <note>{0} is the runtime name, {1} the selection suffix.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeUpgradeFixFormat">
         <source>Upgrade {0} to version {1} or later from: {2}</source>
-        <target state="new">Upgrade {0} to version {1} or later from: {2}</target>
+        <target state="translated">다음에서 {0}을(를) 버전 {1} 이상으로 업그레이드: {2}</target>
         <note>{0} is the runtime name, {1} the minimum version, {2} the installation URL.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeUpgradeGenericFixFormat">
         <source>Upgrade {0} to a newer version</source>
-        <target state="new">Upgrade {0} to a newer version</target>
+        <target state="translated">{0}을(를) 최신 버전으로 업그레이드</target>
         <note>{0} is the runtime name.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeUpgradeWslcFixFormat">
         <source>Upgrade WSLc to version {0} or later. See: https://aka.ms/aspire/containers</source>
-        <target state="new">Upgrade WSLc to version {0} or later. See: https://aka.ms/aspire/containers</target>
+        <target state="translated">WSLc를 버전 {0} 이상으로 업그레이드합니다. 참조: https://aka.ms/aspire/containers</target>
         <note>{0} is the minimum version.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeVersionSuffixFormat">
         <source> v{0}</source>
-        <target state="new"> v{0}</target>
+        <target state="translated"> v{0}</target>
         <note>{0} is the runtime version. Preserve the leading space.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeVersionUnavailableMessageFormat">
         <source>{0}: required version metadata could not be validated</source>
-        <target state="new">{0}: required version metadata could not be validated</target>
+        <target state="translated">{0}: 필요한 버전 메타데이터의 유효성을 검사할 수 없습니다.</target>
         <note>{0} is the runtime name.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeWindowsModeDetails">
         <source>Aspire requires Linux containers. Windows containers are not supported.</source>
-        <target state="new">Aspire requires Linux containers. Windows containers are not supported.</target>
+        <target state="translated">Aspire를 사용하려면 Linux 컨테이너가 필요합니다. Windows 컨테이너는 지원되지 않습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ContainerRuntimeWindowsModeFix">
         <source>Switch Docker Desktop to Linux containers mode (right-click Docker tray icon → 'Switch to Linux containers...')</source>
-        <target state="new">Switch Docker Desktop to Linux containers mode (right-click Docker tray icon → 'Switch to Linux containers...')</target>
+        <target state="translated">Docker Desktop을 Linux 컨테이너 모드로 전환('Linux 컨테이너로 전환...'→ Docker 트레이 아이콘을 마우스 오른쪽 단추로 클릭)</target>
         <note />
       </trans-unit>
       <trans-unit id="ContainerRuntimeWindowsModeMessageFormat">
         <source>{0} is running in Windows container mode</source>
-        <target state="new">{0} is running in Windows container mode</target>
+        <target state="translated">{0}이(가) Windows 컨테이너 모드에서 실행 중입니다.</target>
         <note>{0} is Docker or Docker Desktop.</note>
       </trans-unit>
       <trans-unit id="ContainerRuntimeWslcUnsupportedHostMessage">
         <source>WSLc is only supported on Windows</source>
-        <target state="new">WSLc is only supported on Windows</target>
+        <target state="translated">WSL은 Windows에서만 지원됩니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpApiServerReturnedHttpStatusMessageFormat">
         <source>Developer Control Plane (DCP) API server returned HTTP {0} ({1}).</source>
-        <target state="new">Developer Control Plane (DCP) API server returned HTTP {0} ({1}).</target>
+        <target state="translated">개발자 컨트롤 플레인(DCP) API 서버가 HTTP {0}({1})를 반환했습니다.</target>
         <note>{0} is the numeric HTTP status code. {1} is the HTTP status code name.</note>
       </trans-unit>
       <trans-unit id="DcpBundleNotFoundDetails">
         <source>The running Aspire CLI is not associated with a bundle layout that contains the Developer Control Plane (DCP).</source>
-        <target state="new">The running Aspire CLI is not associated with a bundle layout that contains the Developer Control Plane (DCP).</target>
+        <target state="translated">실행 중인 Aspire CLI가 DCP(개발자 컨트롤 플레인)을 포함하는 번들 레이아웃과 연결되어 있지 않습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpBundleNotFoundMessage">
         <source>Developer Control Plane (DCP) bundle not found; skipping connection health checks</source>
-        <target state="new">Developer Control Plane (DCP) bundle not found; skipping connection health checks</target>
+        <target state="translated">DCP(개발자 컨트롤 플레인) 번들을 찾을 수 없습니다. 연결 상태 검사 건너뛰기</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpConnectionCheckFailedMessage">
         <source>Failed to check Developer Control Plane (DCP) connection health</source>
-        <target state="new">Failed to check Developer Control Plane (DCP) connection health</target>
+        <target state="translated">DCP(개발자 컨트롤 플레인) 연결 상태 검사 실패</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpConnectionSucceededMessage">
         <source>Developer Control Plane (DCP) connection health checks succeeded</source>
-        <target state="new">Developer Control Plane (DCP) connection health checks succeeded</target>
+        <target state="translated">DCP(개발자 컨트롤 플레인) 연결 상태 검사 성공</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpConnectionTimedOutMessageFormat">
         <source>Timed out after {0} seconds while checking Developer Control Plane (DCP) connection health.</source>
-        <target state="new">Timed out after {0} seconds while checking Developer Control Plane (DCP) connection health.</target>
+        <target state="translated">DCP(개발자 컨트롤 플레인) 연결 상태를 확인하는 동안 {0}초 후 시간 초과가 발생했습니다.</target>
         <note>{0} is the timeout in seconds.</note>
       </trans-unit>
       <trans-unit id="DcpDeveloperCertificateConnectionFailedMessage">
         <source>Developer Control Plane (DCP) connection using the developer certificate failed</source>
-        <target state="new">Developer Control Plane (DCP) connection using the developer certificate failed</target>
+        <target state="translated">개발자 인증서를 사용한 DCP(개발자 컨트롤 플레인) 연결 실패</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpDeveloperCertificateConnectionSucceededMessage">
         <source>Developer Control Plane (DCP) connection using the developer certificate succeeded</source>
-        <target state="new">Developer Control Plane (DCP) connection using the developer certificate succeeded</target>
+        <target state="translated">개발자 인증서를 사용한 DCP(개발자 컨트롤 플레인) 연결 성공</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpDeveloperCertificateInvalidForCacheDetails">
         <source>The developer certificate could not be cached because it was not valid.</source>
-        <target state="new">The developer certificate could not be cached because it was not valid.</target>
+        <target state="translated">개발자 인증서가 유효하지 않으므로 캐시할 수 없습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpDeveloperCertificateMissingThumbprintDetails">
         <source>The developer certificate did not have a thumbprint.</source>
-        <target state="new">The developer certificate did not have a thumbprint.</target>
+        <target state="translated">개발자 인증서에 지문이 없습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpDeveloperCertificateNoTrustedExportableDetails">
         <source>No fully trusted exportable developer certificate with a private key was found.</source>
-        <target state="new">No fully trusted exportable developer certificate with a private key was found.</target>
+        <target state="translated">개인 키를 포함하고 완전히 신뢰할 수 있으며 내보낼 수 있는 개발자 인증서를 찾을 수 없습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpDeveloperCertificateRepairTrustFix">
         <source>Run `aspire certs trust` to repair developer certificate trust.</source>
-        <target state="new">Run `aspire certs trust` to repair developer certificate trust.</target>
+        <target state="translated">`aspire certs trust`를 실행하여 개발자 인증서의 신뢰를 복구하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpDeveloperCertificateTrustFix">
         <source>Run `aspire certs trust` to create and trust a developer certificate.</source>
-        <target state="new">Run `aspire certs trust` to create and trust a developer certificate.</target>
+        <target state="translated">`aspire certs trust`를 실행하여 개발자 인증서를 만들고 신뢰하도록 설정하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpDeveloperCertificateUnavailableMessage">
         <source>No trusted developer certificate was available for the Developer Control Plane (DCP) developer certificate connection check</source>
-        <target state="new">No trusted developer certificate was available for the Developer Control Plane (DCP) developer certificate connection check</target>
+        <target state="translated">DCP(개발자 컨트롤 플레인)의 개발자 인증서 연결을 확인하는 데 사용할 신뢰할 수 있는 개발자 인증서가 없습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpDeveloperCertificateUserProfileMissingDetails">
         <source>The developer certificate could not be cached because the user profile directory could not be determined.</source>
-        <target state="new">The developer certificate could not be cached because the user profile directory could not be determined.</target>
+        <target state="translated">사용자 프로필 디렉터리를 확인할 수 없으므로 개발자 인증서를 캐시할 수 없습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpEphemeralCertificateConnectionFailedMessage">
         <source>Developer Control Plane (DCP) connection using an ephemeral DCP-managed certificate failed</source>
-        <target state="new">Developer Control Plane (DCP) connection using an ephemeral DCP-managed certificate failed</target>
+        <target state="translated">임시 DCP 관리 인증서를 사용한 DCP(개발자 컨트롤 플레인) 연결 실패</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpEphemeralCertificateConnectionSucceededMessage">
         <source>Developer Control Plane (DCP) connection using an ephemeral DCP-managed certificate succeeded</source>
-        <target state="new">Developer Control Plane (DCP) connection using an ephemeral DCP-managed certificate succeeded</target>
+        <target state="translated">임시 DCP 관리 인증서를 사용한 DCP(개발자 컨트롤 플레인) 연결 성공</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpExecutableNotFoundDetailsFormat">
         <source>Expected Developer Control Plane (DCP) executable at '{0}'.</source>
-        <target state="new">Expected Developer Control Plane (DCP) executable at '{0}'.</target>
+        <target state="translated">'{0}'에서 DCP(개발자 컨트롤 플레인) 실행 파일이 필요합니다.</target>
         <note>{0} is the expected DCP executable path.</note>
       </trans-unit>
       <trans-unit id="DcpExecutableNotFoundMessage">
         <source>Developer Control Plane (DCP) executable not found</source>
-        <target state="new">Developer Control Plane (DCP) executable not found</target>
+        <target state="translated">DCP(개발자 컨트롤 플레인) 실행 파일을 찾을 수 없음</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpExitedBeforeKubeconfigDetailsFormat">
         <source>Developer Control Plane (DCP) exited before writing kubeconfig. Exit code: {0}.{1}{2}</source>
-        <target state="new">Developer Control Plane (DCP) exited before writing kubeconfig. Exit code: {0}.{1}{2}</target>
+        <target state="translated">kubeconfig를 쓰기 전에 DCP(개발자 컨트롤 플레인)가 종료되었습니다. 종료 코드: {0}.{1}{2}</target>
         <note>{0} is the DCP process exit code. {1} is a newline. {2} is recent DCP process output.</note>
       </trans-unit>
       <trans-unit id="DcpKubeconfigMissingServerDetails">
         <source>Developer Control Plane (DCP) kubeconfig did not contain a valid server URI.</source>
-        <target state="new">Developer Control Plane (DCP) kubeconfig did not contain a valid server URI.</target>
+        <target state="translated">DCP(개발자 컨트롤 플레인) kubeconfig에 유효한 서버 URI가 없습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpNoOutputDetails">
         <source>Developer Control Plane (DCP) did not write any output.</source>
-        <target state="new">Developer Control Plane (DCP) did not write any output.</target>
+        <target state="translated">DCP(개발자 컨트롤 플레인)에서 출력을 생성하지 않았습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpStartFailedMessage">
         <source>Failed to start Developer Control Plane (DCP).</source>
-        <target state="new">Failed to start Developer Control Plane (DCP).</target>
+        <target state="translated">DCP(개발자 컨트롤 플레인)을 시작하지 못했습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpTlsAuthenticationFailedDetailsFormat">
         <source>TLS authentication failed: {0}</source>
-        <target state="new">TLS authentication failed: {0}</target>
+        <target state="translated">TLS 인증 실패: {0}</target>
         <note>{0} is the TLS authentication error message.</note>
       </trans-unit>
       <trans-unit id="Description">
         <source>Diagnose Aspire environment issues and verify setup</source>
-        <target state="needs-review-translation">Aspire 환경 문제 진단 및 설정 확인</target>
+        <target state="translated">Aspire 환경 문제 진단 및 설정 확인</target>
         <note />
       </trans-unit>
       <trans-unit id="DetailedPrerequisitesLink">
         <source>For detailed prerequisites: {0}</source>
-        <target state="new">For detailed prerequisites: {0}</target>
+        <target state="translated">자세한 필수 구성 요소: {0}</target>
         <note>{0} is a clickable URL</note>
       </trans-unit>
       <trans-unit id="DevCertsCleanAndTrustFixFormat">
         <source>Run '{0}' to remove all certificates, then run '{1}' to create and trust a new one.</source>
-        <target state="new">Run '{0}' to remove all certificates, then run '{1}' to create and trust a new one.</target>
+        <target state="translated">'{0}'을 실행하여 모든 인증서를 제거한 다음 '{1}'을(를) 실행하여 새 인증서를 만들고 신뢰합니다.</target>
         <note>{0} is the aspire certs clean command, {1} is the aspire certs trust command (not localizable)</note>
       </trans-unit>
       <trans-unit id="DevCertsInstallOpenSslCleanAndTrustFixFormat">
         <source>Install {0}, run '{1}' to remove all certificates, then run '{2}' to create and trust a new one.</source>
-        <target state="new">Install {0}, run '{1}' to remove all certificates, then run '{2}' to create and trust a new one.</target>
+        <target state="translated">{0} 설치하고 '{1}' 실행하여 모든 인증서를 제거한 다음 '{2}' 실행하여 새 인증서를 만들고 신뢰합니다.</target>
         <note>{0} is the openssl command/package name, {1} is the aspire certs clean command, {2} is the aspire certs trust command (not localizable)</note>
       </trans-unit>
       <trans-unit id="DevCertsMissingCertUtilDetails">
         <source>Aspire uses certutil to query and update NSS certificate databases used by Firefox and Chromium browsers on Linux.</source>
-        <target state="new">Aspire uses certutil to query and update NSS certificate databases used by Firefox and Chromium browsers on Linux.</target>
+        <target state="translated">Aspire는 certutil을 사용하여 Linux에서 Firefox 및 Chromium 브라우저가 사용하는 NSS 인증서 데이터베이스를 쿼리하고 업데이트합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsMissingCertUtilFix">
         <source>Install certutil from your distribution's NSS tools package (for example, libnss3-tools).</source>
-        <target state="new">Install certutil from your distribution's NSS tools package (for example, libnss3-tools).</target>
+        <target state="translated">배포판의 NSS 도구 패키지(예: libnss3-tools)에서 certutil을 설치하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsMissingCertUtilMessage">
         <source>certutil is not available; browser certificate trust may be incomplete</source>
-        <target state="new">certutil is not available; browser certificate trust may be incomplete</target>
+        <target state="translated">certutil을 사용할 수 없습니다. 브라우저 인증서 신뢰가 불완전할 수 있습니다</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsMultipleNoneTrustedDetailsFormat">
         <source>Found certificates: {0}. Having multiple certificates can cause confusion.</source>
-        <target state="new">Found certificates: {0}. Having multiple certificates can cause confusion.</target>
+        <target state="translated">인증서를 찾았습니다. {0}. 인증서가 여러 개 있으면 혼동을 일으킬 수 있습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsMultipleNoneTrustedMessageFormat">
         <source>Multiple HTTPS development certificates found ({0} certificates), but none are trusted</source>
-        <target state="new">Multiple HTTPS development certificates found ({0} certificates), but none are trusted</target>
+        <target state="translated">여러 HTTPS 개발 인증서({0} 인증서)를 찾았지만 신뢰할 수 있는 인증서가 없습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsMultipleSomeUntrustedDetailsFormat">
         <source>Found certificates: {0}. Having multiple certificates can cause confusion when selecting which one to use.</source>
-        <target state="new">Found certificates: {0}. Having multiple certificates can cause confusion when selecting which one to use.</target>
+        <target state="translated">인증서를 찾았습니다. {0}. 인증서가 여러 개 있으면 사용할 인증서를 선택할 때 혼동을 일으킬 수 있습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsMultipleSomeUntrustedMessageFormat">
         <source>Multiple HTTPS development certificates found ({0} certificates)</source>
-        <target state="new">Multiple HTTPS development certificates found ({0} certificates)</target>
+        <target state="translated">여러 HTTPS 개발 인증서를 찾았습니다(인증서{0}).</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsNoCertificateDetails">
         <source>Aspire uses HTTPS for secure communication between the dashboard and your services during local development.</source>
-        <target state="new">Aspire uses HTTPS for secure communication between the dashboard and your services during local development.</target>
+        <target state="translated">Aspire는 로컬 개발 중에 대시보드와 서비스 간의 보안 통신을 위해 HTTPS를 사용합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsNoCertificateMessage">
         <source>No HTTPS development certificate found</source>
-        <target state="new">No HTTPS development certificate found</target>
+        <target state="translated">HTTPS 개발 인증서를 찾을 수 없음</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsNotTrustedDetailsFormat">
         <source>Certificate {0} exists in the personal store but was not found in the trusted root store.</source>
-        <target state="new">Certificate {0} exists in the personal store but was not found in the trusted root store.</target>
+        <target state="translated">인증서 {0} 개인 저장소에 있지만 신뢰할 수 있는 루트 저장소에서 찾을 수 없습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsNotTrustedMessage">
         <source>HTTPS development certificate is not trusted</source>
-        <target state="new">HTTPS development certificate is not trusted</target>
+        <target state="translated">HTTPS 개발 인증서를 신뢰할 수 없습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsOldVersionDetailsFormat">
         <source>Older certificate versions (&lt; v{0}) may not support all certificate trust scenarios.</source>
-        <target state="new">Older certificate versions (&lt; v{0}) may not support all certificate trust scenarios.</target>
+        <target state="translated">이전 인증서 버전(&lt; v{0})은 일부 인증서 신뢰 시나리오를 지원하지 않을 수 있습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsOldVersionMessageFormat">
         <source>HTTPS development certificate has an older version ({0})</source>
-        <target state="new">HTTPS development certificate has an older version ({0})</target>
+        <target state="translated">HTTPS 개발 인증서의 이전 버전({0})</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsOpenSslCacheMissingCurrentCertificateMessage">
         <source>OpenSSL HTTPS development certificate cache is missing the current certificate</source>
-        <target state="new">OpenSSL HTTPS development certificate cache is missing the current certificate</target>
+        <target state="translated">OpenSSL HTTPS 개발 인증서 캐시에 현재 인증서가 없습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsOpenSslCacheMissingDetailsFormat">
         <source>The OpenSSL certificate cache at '{0}' does not contain certificate {1} from the .NET current user certificate store. Run 'aspire certs clean' and then 'aspire certs trust' to remove stale or corrupt certificates and regenerate trusted development certificates.</source>
-        <target state="new">The OpenSSL certificate cache at '{0}' does not contain certificate {1} from the .NET current user certificate store. Run 'aspire certs clean' and then 'aspire certs trust' to remove stale or corrupt certificates and regenerate trusted development certificates.</target>
+        <target state="translated">'{0}'의 OpenSSL 인증서 캐시에 .NET 현재 사용자 인증서 저장소의 인증서 {1}이(가) 포함되어 있지 않습니다. 오래되었거나 손상된 인증서를 제거하고 신뢰할 수 있는 개발 인증서를 다시 생성하려면 'aspire certs clean'을 실행한 다음 'aspire certs trust'를 실행하세요.</target>
         <note>{0} is the OpenSSL certificate cache directory. {1} is the certificate thumbprint.</note>
       </trans-unit>
       <trans-unit id="DevCertsOpenSslCacheMissingHashLinkDetailsFormat">
         <source>The OpenSSL certificate cache at '{0}' contains certificate {1}, but no subject-hash entry points to it. OpenSSL workloads use subject-hash entries when loading CA directories.</source>
-        <target state="new">The OpenSSL certificate cache at '{0}' contains certificate {1}, but no subject-hash entry points to it. OpenSSL workloads use subject-hash entries when loading CA directories.</target>
+        <target state="translated">'{0}'의 OpenSSL 인증서 캐시에 인증서 {1}이(가) 있지만 이를 가리키는 주체 해시 항목이 없습니다. OpenSSL 워크로드는 CA 디렉터리를 로드할 때 주체 해시 항목을 사용합니다.</target>
         <note>{0} is the OpenSSL certificate cache directory. {1} is the certificate thumbprint.</note>
       </trans-unit>
       <trans-unit id="DevCertsOpenSslCacheMissingHashLinkMessage">
         <source>OpenSSL HTTPS development certificate cache is missing subject-hash links</source>
-        <target state="new">OpenSSL HTTPS development certificate cache is missing subject-hash links</target>
+        <target state="translated">OpenSSL HTTPS 개발 인증서 캐시에 주체 해시 링크가 누락되었습니다</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsOpenSslCacheUnreadableFilesDetailsFormat">
         <source>Could not read certificate files under '{0}': {1}. Run 'aspire certs clean' and then 'aspire certs trust' to remove stale or corrupt certificates and regenerate trusted development certificates.</source>
-        <target state="new">Could not read certificate files under '{0}': {1}. Run 'aspire certs clean' and then 'aspire certs trust' to remove stale or corrupt certificates and regenerate trusted development certificates.</target>
+        <target state="translated">'{0}' 아래의 인증서 파일을 읽을 수 없습니다: {1}. 오래되었거나 손상된 인증서를 제거하고 신뢰할 수 있는 개발 인증서를 다시 생성하려면 'aspire certs clean'을 실행한 다음 'aspire certs trust'를 실행하세요.</target>
         <note>{0} is the OpenSSL certificate cache directory. {1} is a comma-separated list of certificate file names.</note>
       </trans-unit>
       <trans-unit id="DevCertsOpenSslCacheUnreadableMessage">
         <source>OpenSSL HTTPS development certificate cache contains unreadable certificate files</source>
-        <target state="new">OpenSSL HTTPS development certificate cache contains unreadable certificate files</target>
+        <target state="translated">OpenSSL HTTPS 개발 인증서 캐시에 읽을 수 없는 인증서 파일이 포함되어 있습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsPartiallyTrustedDetailsFormat">
         <source>The certificate is in the trusted store, but SSL_CERT_DIR is not configured to include '{0}'. Some applications may not trust the certificate. 'aspire run' will configure this automatically.</source>
-        <target state="new">The certificate is in the trusted store, but SSL_CERT_DIR is not configured to include '{0}'. Some applications may not trust the certificate. 'aspire run' will configure this automatically.</target>
+        <target state="translated">인증서가 신뢰할 수 있는 저장소에 있지만 SSL_CERT_DIR '{0}'을 포함하도록 구성되지 않았습니다. 일부 애플리케이션은 인증서를 신뢰하지 않을 수 있습니다. 'aspire run'이 자동으로 구성됩니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsPartiallyTrustedFixFormat">
         <source>Set SSL_CERT_DIR in your shell profile: {0}</source>
-        <target state="new">Set SSL_CERT_DIR in your shell profile: {0}</target>
+        <target state="translated">셸 프로필에서 SSL_CERT_DIR 설정: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsPartiallyTrustedMessage">
         <source>HTTPS development certificate is only partially trusted</source>
-        <target state="new">HTTPS development certificate is only partially trusted</target>
+        <target state="translated">HTTPS 개발 인증서는 부분적으로만 신뢰할 수 있습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsTrustFixFormat">
         <source>Run '{0}' to trust the HTTPS development certificate.</source>
-        <target state="new">Run '{0}' to trust the HTTPS development certificate.</target>
+        <target state="translated">'{0}'을 실행하여 HTTPS 개발 인증서를 신뢰합니다.</target>
         <note>{0} is the aspire certs trust command (not localizable)</note>
       </trans-unit>
       <trans-unit id="DevCertsTrustLabelFull">
         <source>[trusted]</source>
-        <target state="new">[trusted]</target>
+        <target state="translated">[trusted]</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsTrustLabelPartial">
         <source>[partial]</source>
-        <target state="new">[partial]</target>
+        <target state="translated">[partial]</target>
         <note />
       </trans-unit>
       <trans-unit id="DevCertsTrustedMessage">
         <source>HTTPS development certificate is trusted</source>
-        <target state="new">HTTPS development certificate is trusted</target>
+        <target state="translated">HTTPS 개발 인증서를 신뢰할 수 있습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DevelopmentToolsCategoryHeader">
         <source>Development Tools</source>
-        <target state="new">Development Tools</target>
+        <target state="translated">개발 도구</target>
         <note />
       </trans-unit>
       <trans-unit id="EnvironmentCategoryHeader">
@@ -519,61 +519,61 @@
       </trans-unit>
       <trans-unit id="EnvironmentCheckTimedOutMessageFormat">
         <source>Environment check '{0}' timed out after {1} seconds.</source>
-        <target state="new">Environment check '{0}' timed out after {1} seconds.</target>
+        <target state="translated">환경 검사 '{0}'이(가) {1}초 후 시간이 초과되었습니다.</target>
         <note>{0} is the environment check name. {1} is the timeout in seconds.</note>
       </trans-unit>
       <trans-unit id="EnvironmentChecksTimedOutMessageFormat">
         <source>Environment checks timed out after {0} seconds.</source>
-        <target state="new">Environment checks timed out after {0} seconds.</target>
+        <target state="translated">환경 검사가 {0}초 후 시간이 초과되었습니다.</target>
         <note>{0} is the total timeout in seconds.</note>
       </trans-unit>
       <trans-unit id="HeaderInstallations">
         <source>Aspire CLI Installations</source>
-        <target state="new">Aspire CLI Installations</target>
+        <target state="translated">Aspire CLI 설치</target>
         <note />
       </trans-unit>
       <trans-unit id="InstallationDiscoveryFailedReason">
         <source>Install discovery failed. See the Aspire CLI logs for details.</source>
-        <target state="new">Install discovery failed. See the Aspire CLI logs for details.</target>
+        <target state="translated">설치 검색에 실패했습니다. 자세한 내용은 Aspire CLI 로그를 참조하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="InstallationDiscoveryTimedOutReasonFormat">
         <source>Install discovery timed out after {0} seconds. See the Aspire CLI logs for details.</source>
-        <target state="new">Install discovery timed out after {0} seconds. See the Aspire CLI logs for details.</target>
+        <target state="translated">설치 검색 시간이 {0}초 후 시간 초과되었습니다. 자세한 내용은 Aspire CLI 로그를 참조하세요.</target>
         <note>{0} is the timeout in seconds.</note>
       </trans-unit>
       <trans-unit id="JsonOptionDescription">
         <source>Output format (Table or Json)</source>
-        <target state="needs-review-translation">도구 통합을 위해 결과를 JSON으로 출력</target>
+        <target state="translated">출력 형식(테이블 또는 Json)</target>
         <note />
       </trans-unit>
       <trans-unit id="LegacySettingsDetectedFix">
         <source>Run 'aspire init' (or any aspire run/add/update/pipeline command) to migrate to aspire.config.json.
 The legacy file continues to work — this is a non-blocking warning.</source>
-        <target state="new">Run 'aspire init' (or any aspire run/add/update/pipeline command) to migrate to aspire.config.json.
-The legacy file continues to work — this is a non-blocking warning.</target>
+        <target state="translated">'aspire init'(또는 aspire run/add/update/pipeline 명령)을 실행하여 aspire.config.json으로 마이그레이션하세요.
+레거시 파일은 계속 작동하며, 이는 작업을 차단하지 않는 경고입니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="LegacySettingsDetectedMessageFormat">
         <source>Legacy .aspire/settings.json detected at {0}</source>
-        <target state="new">Legacy .aspire/settings.json detected at {0}</target>
+        <target state="translated">{0}에서 레거시 .aspire/settings.json이 감지됨</target>
         <note>{0} is the full path to the legacy settings file.</note>
       </trans-unit>
       <trans-unit id="LegacyTypeScriptAppHostMessageFormat">
         <source>Legacy 'apphost.ts' layout detected at {0}</source>
-        <target state="new">Legacy 'apphost.ts' layout detected at {0}</target>
+        <target state="translated">{0}에서 레거시 'apphost.ts' 레이아웃이 감지됨</target>
         <note>{0} is the full path to the legacy apphost.ts file.</note>
       </trans-unit>
       <trans-unit id="OperatingSystemMessageFormat">
         <source>Operating system: {0}</source>
-        <target state="new">Operating system: {0}</target>
+        <target state="translated">운영 체제: {0}</target>
         <note>{0} is the operating system display name and version, for example "Windows 10.0.22631", "macOS 26.0", or "Linux Ubuntu 24.04".</note>
       </trans-unit>
       <trans-unit id="PendingMigrationFix">
         <source>Run 'aspire update --migrate' to apply the recommended migration.
 The current layout continues to work — this is a non-blocking warning.</source>
-        <target state="new">Run 'aspire update --migrate' to apply the recommended migration.
-The current layout continues to work — this is a non-blocking warning.</target>
+        <target state="translated">'aspire update --migrate'를 실행하여 권장 마이그레이션을 적용하세요.
+현재 레이아웃은 계속 작동하며, 이는 작업을 차단하지 않는 경고입니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="SdkCategoryHeader">
@@ -588,57 +588,57 @@ The current layout continues to work — this is a non-blocking warning.</target
       </trans-unit>
       <trans-unit id="ValueCurrentMarker">
         <source>(current)</source>
-        <target state="new">(current)</target>
+        <target state="translated">(현재)</target>
         <note>Suffix appended to the running CLI's path so the user can identify which install is themselves.</note>
       </trans-unit>
       <trans-unit id="ValueNotProbed">
         <source>(not probed)</source>
-        <target state="new">(not probed)</target>
+        <target state="translated">(프로브되지 않음)</target>
         <note>Placeholder shown in the table when an install was found but not asked to self-describe (e.g., trust gate).</note>
       </trans-unit>
       <trans-unit id="ValuePathActive">
         <source>active</source>
-        <target state="new">active</target>
+        <target state="translated">활성</target>
         <note>Shown when an install is the first Aspire CLI resolved from PATH.</note>
       </trans-unit>
       <trans-unit id="ValuePathNotOnPath">
         <source>not on PATH</source>
-        <target state="new">not on PATH</target>
+        <target state="translated">PATH에 없음</target>
         <note>Shown when an install was not discovered from PATH.</note>
       </trans-unit>
       <trans-unit id="ValuePathShadowed">
         <source>shadowed</source>
-        <target state="new">shadowed</target>
+        <target state="translated">가려짐</target>
         <note>Shown when an install is on PATH but an earlier Aspire CLI entry shadows it.</note>
       </trans-unit>
       <trans-unit id="ValueProbeFailed">
         <source>(probe failed)</source>
-        <target state="new">(probe failed)</target>
+        <target state="translated">(프로브 실패)</target>
         <note>Placeholder shown in the table when an install was probed but did not return usable data.</note>
       </trans-unit>
       <trans-unit id="ValueUnknown">
         <source>(unknown)</source>
-        <target state="new">(unknown)</target>
+        <target state="translated">(알 수 없음)</target>
         <note>Placeholder shown in the table when a field could not be determined for a discovered install.</note>
       </trans-unit>
       <trans-unit id="VersionUnknown">
         <source>unknown</source>
-        <target state="new">unknown</target>
+        <target state="translated">알 수 없음</target>
         <note />
       </trans-unit>
       <trans-unit id="VsCodeExtensionInstalledMessage">
         <source>Aspire extension for VS Code is installed</source>
-        <target state="new">Aspire extension for VS Code is installed</target>
+        <target state="translated">VS Code용 Aspire 확장이 설치되어 있음</target>
         <note />
       </trans-unit>
       <trans-unit id="VsCodeExtensionMissingFix">
         <source>Install the Aspire extension from the VS Code Marketplace for an integrated Aspire experience.</source>
-        <target state="new">Install the Aspire extension from the VS Code Marketplace for an integrated Aspire experience.</target>
+        <target state="translated">통합된 Aspire 환경을 사용하려면 VS Code Marketplace에서 Aspire 확장을 설치하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="VsCodeExtensionMissingMessage">
         <source>VS Code is installed, but the Aspire extension is not installed</source>
-        <target state="new">VS Code is installed, but the Aspire extension is not installed</target>
+        <target state="translated">VS Code는 설치되어 있지만 Aspire 확장은 설치되어 있지 않습니다.</target>
         <note />
       </trans-unit>
     </body>

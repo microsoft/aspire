@@ -45,6 +45,54 @@ public sealed class EmptyAppHostTemplateTests(ITestOutputHelper output)
 
     [CaptureWorkspaceOnFailure]
     [Fact]
+    public async Task DestroyRejectsUnknownArgumentsBeforeStartingAppHost()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        var workspace = TemporaryWorkspace.Create(output);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+        await auto.AspireNewAsync("DestroySentinel", counter, template: AspireTemplate.EmptyAppHost);
+        await auto.RunCommandAsync("cd DestroySentinel", counter);
+
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "DestroySentinel", "apphost.cs");
+        var appHostSource = await File.ReadAllTextAsync(appHostPath);
+        const string builderStatement = "var builder = DistributedApplication.CreateBuilder(args);";
+        const string sentinelStatement = """
+            System.IO.File.WriteAllText(System.IO.Path.Combine(System.Environment.GetEnvironmentVariable("ASPIRE_E2E_WORKSPACE")!, "destroy-apphost-started"), "started");
+            """;
+        Assert.Contains(builderStatement, appHostSource);
+        await File.WriteAllTextAsync(appHostPath, appHostSource.Replace(
+            builderStatement, sentinelStatement + "\n" + builderStatement, StringComparison.Ordinal));
+
+        await auto.RunCommandAsync(
+            "timeout --kill-after=5s 90s aspire destroy --force > ../destroy-output.txt 2>&1; " +
+            "result=$?; printf '%s' \"$result\" > ../destroy-exit.txt",
+            counter, TimeSpan.FromMinutes(2));
+
+        var exitCode = await File.ReadAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "destroy-exit.txt"));
+        var errorOutput = await File.ReadAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "destroy-output.txt"));
+        var sentinelPath = Path.Combine(workspace.WorkspaceRoot.FullName, "destroy-apphost-started");
+        Assert.Equal("1", exitCode);
+        Assert.Contains("Unrecognized command or argument '--force'.", errorOutput);
+        Assert.False(File.Exists(sentinelPath), "Invalid arguments must be rejected before the AppHost executes.");
+
+        // Prove the same fixture is discoverable and its sentinel detects actual AppHost execution.
+        // This AppHost has no resources, so the positive control cannot destroy a real deployment.
+        await auto.RunCommandAsync(
+            "timeout --kill-after=5s 150s aspire destroy --yes --non-interactive",
+            counter, TimeSpan.FromMinutes(3));
+        Assert.Equal("started", await File.ReadAllTextAsync(sentinelPath));
+    }
+
+    [CaptureWorkspaceOnFailure]
+    [Fact]
     public async Task CreateDotNetTemplateWithSourceOverrideDoesNotContactOtherSources()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
