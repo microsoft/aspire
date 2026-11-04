@@ -751,7 +751,7 @@ internal sealed partial class WorkflowRunEvidenceCollector
                         Text(run["run_started_at"]) ?? "", Text(run["updated_at"]) ?? "", diagnostics: _progress.Diagnostics).Single();
                     // Establish ownership before acquisition. Reruns can retain reports
                     // from historical producers whose names overlap current jobs.
-                    var producers = await LoadCombinedResultProducersAsync(gitHub, runId, runAttempt, allJobs);
+                    var producers = await gitHub.GetCombinedResultProducersAsync(_repository, runId, runAttempt, allJobs, _workflow);
                     var extractedReports = new List<(string EntryPath, string ExtractedFileName)>();
                     if (await DownloadAndExtractTestResultsAsync(combined, (entry, file) => extractedReports.Add((entry, file)), reportFailure: false))
                     {
@@ -899,43 +899,6 @@ internal sealed partial class WorkflowRunEvidenceCollector
             var matches = failedJobs.OfType<JsonObject>().Where(job => Text(job["name"]) == jobName).ToArray();
             return matches.Length == 1 && _runnerFailures.ContainsKey(GetValueText(matches[0]["id"]));
         }
-    }
-
-    // Build the known-job inventory for matching reports in All-TestResults.
-    // Include passing jobs and, on reruns, historical jobs so their reports
-    // cannot be attributed to a similarly named failing job.
-    private async Task<TestArtifactExpectation[]> LoadCombinedResultProducersAsync(
-        AnalysisGitHubClient gitHub,
-        long runId,
-        int runAttempt,
-        JsonArray allJobs)
-    {
-        IEnumerable<JsonObject> producerJobs = allJobs.OfType<JsonObject>();
-        if (runAttempt > 1)
-        {
-            // Include cross-attempt producer context defensively when resolving
-            // ownership of reports carried into a rerun's All-TestResults.
-            // Historical jobs must never enter the actionable failure inventory.
-            JsonArray historicalJobs;
-            try
-            {
-                historicalJobs = await gitHub.GetRowsAsync($"repos/{_repository}/actions/runs/{runId.ToString(CultureInfo.InvariantCulture)}/jobs?filter=all", "jobs");
-                if (historicalJobs.Count == 0 || historicalJobs.Any(job => string.IsNullOrEmpty(Text(Field(job, "name")))))
-                {
-                    throw new ValidationException("Historical job inventory is empty or contains unnamed producers.");
-                }
-            }
-            catch (Exception error) when (error is ValidationException or JsonException or IOException)
-            {
-                throw new ValidationException($"Combined result producer ownership is unavailable: {error.Message}", error);
-            }
-            var currentNames = producerJobs.Select(job => Text(job["name"])).ToHashSet(StringComparer.Ordinal);
-            producerJobs = producerJobs.Concat(historicalJobs.OfType<JsonObject>()
-                .Where(job => !currentNames.Contains(Text(job["name"])))
-                .DistinctBy(job => Text(job["name"]), StringComparer.Ordinal));
-        }
-
-        return producerJobs.SelectMany(job => _workflow.DescribeTestArtifacts(job, runAttempt)).ToArray();
     }
 
     private List<string> ReadUsableCombinedReports(TestArtifactExpectation plan, string resultsDirectory, string[] matchingFileNames)

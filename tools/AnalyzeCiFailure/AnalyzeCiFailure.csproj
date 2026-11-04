@@ -13,6 +13,7 @@
     <PackageReference Include="System.CommandLine" Version="2.0.12" />
     <InternalsVisibleTo Include="AnalyzeCiFailure.Tests" />
     <InternalsVisibleTo Include="AnalyzeCiFailure.TestHost" />
+    <InternalsVisibleTo Include="Infrastructure.Tests" />
     <EmbeddedResource Include="Templates/*.md.tmpl" LogicalName="AnalyzeCiFailure.Templates.%(Filename)%(Extension)" />
     <Compile Include="../Aspire.TestTools/TrxDocument.cs" Link="TrxDocument.cs" />
     <Compile Include="../Aspire.TestTools/TrxReader.cs" Link="TrxReader.cs" />

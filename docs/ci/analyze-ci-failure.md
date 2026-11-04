@@ -147,6 +147,32 @@ and resource limits. Coverage is based on available reports, not a manifest of
 expected target frameworks; an entirely absent framework report cannot be
 detected if another usable report for the same job exists.
 
+The results job checks actual downloaded TRX paths with the same
+`CombinedTrxReports` matcher after uploading `All-TestResults`, so a naming
+contract failure cannot suppress diagnostic evidence. The read-only
+`check-combined-reports` command requires each available, unmerged report to
+identify one known producer. Current jobs retain duplicate identities;
+historical jobs provide rerun context without duplicating current job names.
+Unknown or ambiguous paths, unavailable GitHub metadata, and filesystem errors
+fail the check. Known `testresults/merged/merged-*.trx` summary outputs are excluded.
+
+An empty report set explicitly reports that no associations were validated.
+This is not an expected-framework inventory, XML validation, or a test-success
+check: failed, crashed, and skipped jobs need not produce reports.
+
+```bash
+./dotnet.sh run --project tools/AnalyzeCiFailure/AnalyzeCiFailure.csproj -- \
+  check-combined-reports --repo microsoft/aspire --run-id RUN_ID \
+  --run-attempt ATTEMPT --results-dir testresults
+```
+
+`Infrastructure.Tests` separately feeds discovered job/artifact templates and
+aggregate download layouts from `run-tests.yml` and `tests.yml` through the real
+consumer. Controlled metadata mutations exercise drift detection. Its synthetic
+report names do not verify the filename emitter in
+`tests/Shared/RepoTesting/Aspire.RepoTesting.targets`; the results-job check
+validates the actual available outputs instead.
+
 Evidence policy is separate from the result format:
 
 | Policy | Download resource limits | Missing or unreadable results |

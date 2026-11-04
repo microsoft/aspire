@@ -43,6 +43,7 @@ internal static class AnalysisCommands
             rootCommand.Subcommands.Add(command);
         }
         rootCommand.Subcommands.Add(CreateWorkflowCommand(createGitHubClient));
+        rootCommand.Subcommands.Add(CreateCombinedReportGuardCommand(createGitHubClient));
 
         collectCommand.Options.Add(repositoryOption);
         collectCommand.Options.Add(runIdOption);
@@ -271,6 +272,40 @@ internal static class AnalysisCommands
 
             return 1;
         }
+    }
+
+    private static Command CreateCombinedReportGuardCommand(Func<GitHubApiClient> createGitHubClient)
+    {
+        var command = new Command("check-combined-reports", "Check available combined TRX paths against actual workflow jobs.");
+        var repository = CreateSingleUseStringOption("--repo", "Repository in owner/name form.");
+        var run = CreateSingleUseStringOption("--run-id", "Workflow run producing the reports.");
+        var attempt = CreateSingleUseStringOption("--run-attempt", "Current workflow run attempt.");
+        var directory = CreateSingleUseStringOption("--results-dir", "Downloaded aggregate results directory.");
+        foreach (var option in new[] { repository, run, attempt, directory })
+        {
+            option.Required = true;
+            command.Options.Add(option);
+        }
+        command.SetAction((result, ct) => ExecuteAsync(null, async workingDirectory =>
+        {
+            var runId = TransientJson.ParseId(result.GetValue(run) ?? "");
+            if (!int.TryParse(result.GetValue(attempt), System.Globalization.NumberStyles.None,
+                System.Globalization.CultureInfo.InvariantCulture, out var runAttempt) || runAttempt <= 0 ||
+                string.IsNullOrEmpty(result.GetValue(directory)))
+            {
+                throw new ValidationException("Expected a positive --run-attempt and nonempty --results-dir.");
+            }
+            using var github = createGitHubClient();
+            var count = await CombinedTrxReportGuard.ValidateAsync(
+                GetAbsolutePath(result.GetValue(directory)!, workingDirectory), result.GetValue(repository)!,
+                runId, runAttempt, github, ct);
+            Console.WriteLine(count == 0
+                ? "No unmerged TRX reports are available; no report-to-job associations were validated."
+                : $"Validated {count} available unmerged TRX report-to-job associations.");
+            return 0;
+        }));
+
+        return command;
     }
 
     private static Command CreateWorkflowCommand(Func<GitHubApiClient> createGitHubClient)

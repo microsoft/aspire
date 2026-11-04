@@ -791,6 +791,24 @@ jobs:
           name: All-TestResults
           path: ${{ github.workspace }}/testresults/**/*.trx
 
+      # Check actual available paths after upload, so a contract failure cannot
+      # suppress the evidence needed to diagnose it. This checks available reports,
+      # not an expected-report inventory.
+      - name: Validate combined TRX producer contract
+        if: ${{ always() }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ${{ github.workspace }}/dotnet.sh run \
+            --project ${{ github.workspace }}/tools/AnalyzeCiFailure/AnalyzeCiFailure.csproj \
+            -- \
+            check-combined-reports \
+            --repo "${{ github.repository }}" \
+            --run-id "${{ github.run_id }}" \
+            --run-attempt "${{ github.run_attempt }}" \
+            --results-dir "${{ github.workspace }}/testresults"
+
       - name: Generate test results summary
         if: ${{ always() }}
         shell: bash
