@@ -13,6 +13,44 @@ namespace Aspire.Cli.EndToEnd.Tests;
 public sealed class IntegrationSourceTests(ITestOutputHelper output)
 {
     [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(true, false, false)]
+    [InlineData(true, true, false)]
+    [InlineData(true, true, true)]
+    public void MappedConfigurationIncludesPublicDependencySource(bool hasConfiguration, bool hasHiveSource, bool hasPublicSource)
+    {
+        var originalConfig = hasConfiguration ? new XDocument(new XElement("configuration")) : null;
+        if (hasHiveSource || hasPublicSource)
+        {
+            var sources = new XElement("packageSources");
+            if (hasHiveSource)
+            {
+                sources.Add(new XElement("add", new XAttribute("key", "aspire-apphost-test"),
+                    new XAttribute("value", "https://example.test/cli/v3/index.json")));
+            }
+            if (hasPublicSource)
+            {
+                sources.Add(new XElement("add", new XAttribute("key", "nuget.org"),
+                    new XAttribute("value", "https://api.nuget.org/v3/index.json")));
+            }
+            originalConfig!.Root!.Add(sources);
+        }
+
+        var configuration = CreateMappedNuGetConfiguration(originalConfig);
+
+        string[] expectedKeys = hasHiveSource ? ["aspire-apphost-test", "nuget.org"] : ["nuget.org"];
+        var configuredSources = configuration.Descendants("packageSources").Elements("add").ToArray();
+        Assert.Equal(expectedKeys, configuredSources.Select(source => (string?)source.Attribute("key")));
+        var publicSource = Assert.Single(configuredSources, source => (string?)source.Attribute("key") == "nuget.org");
+        Assert.Equal("https://api.nuget.org/v3/index.json", (string?)publicSource.Attribute("value"));
+        var mappings = Assert.Single(configuration.Descendants("packageSourceMapping"));
+        Assert.Single(mappings.Elements("clear"));
+        Assert.Equal(expectedKeys, mappings.Elements("packageSource").Select(source => (string?)source.Attribute("key")));
+        Assert.All(mappings.Elements("packageSource"), source =>
+            Assert.Equal(["*"], source.Elements("package").Select(package => (string?)package.Attribute("pattern"))));
+    }
+
+    [Theory]
     [InlineData("csharp", false)]
     [InlineData("csharp", true)]
     [InlineData("typescript", false)]
@@ -79,17 +117,7 @@ public sealed class IntegrationSourceTests(ITestOutputHelper output)
         var originalConfig = File.Exists(nugetConfigPath) ? XDocument.Load(nugetConfigPath) : null;
         if (hasMappings)
         {
-            originalConfig ??= new XDocument(new XElement("configuration",
-                new XElement("packageSources",
-                    new XElement("add", new XAttribute("key", "nuget.org"),
-                        new XAttribute("value", "https://api.nuget.org/v3/index.json")))));
-            // Enable mapping explicitly while preserving every existing source's eligibility.
-            originalConfig.Root!.Element("packageSourceMapping")?.Remove();
-            originalConfig.Root.Add(new XElement("packageSourceMapping",
-                new XElement("clear"),
-                originalConfig.Descendants("packageSources").Elements("add").Select(source =>
-                    new XElement("packageSource", new XAttribute("key", source.Attribute("key")!.Value),
-                        new XElement("package", new XAttribute("pattern", "*"))))));
+            originalConfig = CreateMappedNuGetConfiguration(originalConfig);
             originalConfig.Save(nugetConfigPath);
         }
         Assert.Equal(hasMappings, originalConfig?.Descendants("packageSourceMapping").Elements("packageSource").Any() ?? false);
@@ -147,5 +175,32 @@ public sealed class IntegrationSourceTests(ITestOutputHelper output)
 
         var metadata = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(packageCacheDirectory, ".nupkg.metadata"), cancellationToken))!;
         Assert.Equal(containerFeed, metadata["source"]!.GetValue<string>().TrimEnd('/'));
+    }
+
+    private static XDocument CreateMappedNuGetConfiguration(XDocument? originalConfig)
+    {
+        originalConfig ??= new XDocument(new XElement("configuration"));
+        var sources = originalConfig.Root!.Element("packageSources");
+        if (sources is null)
+        {
+            sources = new XElement("packageSources");
+            originalConfig.Root.Add(sources);
+        }
+        // C# scaffolding can declare only its hive and inherit nuget.org. Declare
+        // the public dependency source locally before replacing inherited mappings.
+        if (!sources.Elements("add").Any(source =>
+            string.Equals((string?)source.Attribute("key"), "nuget.org", StringComparison.OrdinalIgnoreCase)))
+        {
+            sources.Add(new XElement("add", new XAttribute("key", "nuget.org"),
+                new XAttribute("value", "https://api.nuget.org/v3/index.json")));
+        }
+        originalConfig.Root!.Element("packageSourceMapping")?.Remove();
+        originalConfig.Root.Add(new XElement("packageSourceMapping",
+            new XElement("clear"),
+            sources.Elements("add").Select(source =>
+                new XElement("packageSource", new XAttribute("key", source.Attribute("key")!.Value),
+                    new XElement("package", new XAttribute("pattern", "*"))))));
+
+        return originalConfig;
     }
 }

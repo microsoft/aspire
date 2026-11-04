@@ -17,11 +17,11 @@ public class NuGetConfigurationTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void BuildStable_RemovesSdkPatternsFromProtectedChannelSources(bool isEnabled)
+    public void BuildStable_PreservesProtectedChannelSourcesWithNarrowMappings(bool isEnabled)
     {
         var settings = CreateSettings(
         [
-            new("aspire-daily", ["Aspire*", "*", "Aspire.Hosting.Private", "Private.*"]),
+            new("aspire-daily", ["Aspire.Hosting.Private", "Private.*"]),
             new("public", ["*"])
         ]) with
         {
@@ -45,9 +45,7 @@ public class NuGetConfigurationTests
             Assert.Single(overlay.PackageSourceMappings, mapping => mapping.SourceKey == "aspire-daily").Patterns);
         var persistence = Assert.IsType<DotNetAppHostNuGetConfig>(configuration.AppHostConfig);
         Assert.Empty(persistence.SourceChanges.RetiredSourceKeys);
-        var removal = Assert.Single(persistence.RemovedPackageSourceMappings);
-        Assert.Equal("aspire-daily", removal.SourceKey);
-        Assert.Equal(["Aspire*", "*"], removal.Patterns);
+        Assert.Empty(persistence.RemovedPackageSourceMappings);
     }
 
     [Theory]
@@ -59,6 +57,37 @@ public class NuGetConfigurationTests
         {
             ConfigPaths = ["nuget.config"],
             Sources = [new("aspire-daily", "integration", true, false, false) { IsIntegrationSource = true }]
+        };
+        var channel = PackageChannel.CreateExplicitChannel(
+            "stable", PackageChannelQuality.Stable, [new("*", PackageSources.NuGetOrg)],
+            new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
+
+        var exception = Assert.Throws<ProjectUpdaterException>(() =>
+            DotNetAppHostNuGetConfigBuilder.BuildStable(settings, "test", channel));
+
+        Assert.Equal(string.Format(CultureInfo.CurrentCulture,
+            UpdateCommandStrings.ChannelFeedAlreadyConfiguredFormat, "nuget.config", "aspire-daily"), exception.Message);
+    }
+
+    [Theory]
+    [InlineData("Aspire*", "Contoso.*", false)]
+    [InlineData("*", "Contoso.*", false)]
+    [InlineData("Aspire*", "Aspire.Hosting.Private", false)]
+    [InlineData("Aspire*", "Contoso.*", true)]
+    [InlineData("Aspire*", "Aspire.Hosting.Private", true)]
+    public void BuildStable_RequiresManualConfigurationWhenNarrowerRoutingIsInsufficient(
+        string broadPattern, string narrowPattern, bool separateAlias)
+    {
+        var settings = CreateSettings(separateAlias
+            ? [new("aspire-daily", [broadPattern]), new("company", [narrowPattern])]
+            : [new("aspire-daily", [broadPattern, narrowPattern])]) with
+        {
+            ConfigPaths = ["nuget.config"],
+            Sources =
+            [
+                new("aspire-daily", "integration", true, false, false) { IsIntegrationSource = true },
+                new("company", "integration", true, false, false) { IsIntegrationSource = true }
+            ]
         };
         var channel = PackageChannel.CreateExplicitChannel(
             "stable", PackageChannelQuality.Stable, [new("*", PackageSources.NuGetOrg)],

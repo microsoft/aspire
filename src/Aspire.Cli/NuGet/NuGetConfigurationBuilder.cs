@@ -54,18 +54,12 @@ internal static class NuGetConfigurationBuilder
                 continue;
             }
 
-            var aliases = settings.Sources.Where(alias => string.Equals(alias.Identity, source.Identity, StringComparison.Ordinal))
-                .Select(static alias => alias.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
-            // Discovery filters do not describe private dependencies. Require an existing
-            // narrower restore route on this feed, including equivalent aliases, rather
-            // than guessing how to replace its only broad mapping.
-            if (!mappings.Any(mapping => aliases.Contains(mapping.SourceKey) &&
-                mapping.Patterns.Any(pattern => !IsObsoleteStableChannelPattern(source, pattern))))
-            {
-                throw new ProjectUpdaterException(string.Format(
-                    CultureInfo.CurrentCulture, UpdateCommandStrings.ChannelFeedAlreadyConfiguredFormat,
-                    string.Join(", ", settings.ConfigPaths), source.Name));
-            }
+            // Neither discovery filters nor surviving narrower mappings establish the
+            // full private dependency graph. Require manual cleanup before removing
+            // broad routing from a shared SDK/integration feed.
+            throw new ProjectUpdaterException(string.Format(
+                CultureInfo.CurrentCulture, UpdateCommandStrings.ChannelFeedAlreadyConfiguredFormat,
+                string.Join(", ", settings.ConfigPaths), source.Name));
         }
         var retiredSourceKeys = channelSources.Values
             .Where(source => !source.IsIntegrationSource && !mappings.Any(mapping =>
@@ -130,8 +124,8 @@ internal static class NuGetConfigurationBuilder
         => source.IsCliManaged || IsCliManagedSourceKey(source.Name, workloadId);
 
     internal static bool IsObsoleteStableChannelPattern(NuGetSourceInfo source, string pattern)
-        // Integration aliases own their mappings, not SDK policy. A shared channel alias
-        // can lose its old SDK wildcards without losing exact or narrower private routes.
+        // Integration aliases own their mappings, not SDK policy. Shared channel
+        // wildcards require manual cleanup because private dependencies may use them.
         => source.IsIntegrationSource
             ? !source.Name.StartsWith(IntegrationSourceKeyPrefix, StringComparison.OrdinalIgnoreCase) &&
                 (pattern == PackageMapping.AllPackages ||
