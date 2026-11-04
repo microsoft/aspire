@@ -23,11 +23,18 @@ Use **Parameters** in the navigation to view parameter values and edit them. Sea
 narrow the sidebar without changing which resources the **All** item covers. **All** appears first and is selected
 instead of individual rows, while including every page-relevant resource in the page's filters.
 Resource, parameter, and telemetry-source section headings are shown only when more than one category is present.
-The header includes **Parameters** throughout AppHost views. Incompatible selections are cleared when switching views.
+The header includes **Parameters** throughout AppHost views. Visiting Parameters preserves the resource selection
+when returning to another page, unless a parameter is selected. Other incompatible selections are cleared when switching views.
 Resource terminals are opened with per-resource shortcuts, not a header navigation item.
+Use **Close** at the right of the resource overview toolbar to clear the selection and return to all resources.
+
+If a selected resource hasn't sent telemetry, Structured logs and Traces name it in their empty-state message
+and offer a link to view data for all resources. Metrics prompts you to select a resource.
 
 When the resource list is collapsed, click the resource name or **All resources** in the toolbar to open
 the list below it. Selecting a resource closes the popup without expanding the sidebar.
+Shift-click and Ctrl-click (Cmd-click on macOS) keep the popup open for multi-selection, including on resource groups.
+Selecting **All** always closes the popup.
 The popup includes search; filter and grouping buttons are available only in the sidebar or mobile drawer.
 
 ## Grouping resources

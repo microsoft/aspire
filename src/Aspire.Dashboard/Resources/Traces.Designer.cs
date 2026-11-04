@@ -151,6 +151,24 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to No traces available for resource &apos;{0}&apos;..
+        /// </summary>
+        public static string TracesNoTracesForResource {
+            get {
+                return ResourceManager.GetString("TracesNoTracesForResource", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to View traces for all resources.
+        /// </summary>
+        public static string TracesViewAllResources {
+            get {
+                return ResourceManager.GetString("TracesViewAllResources", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to {0} traces.
         /// </summary>
         public static string TracesPageTitle {

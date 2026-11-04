@@ -76,6 +76,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private bool _showResources = true;
     private bool _showParameters = true;
     private bool _isResourcePickerOpen;
+    private string? _resourcePickerSelectionLocation;
     private bool _wasResourcePickerOpen;
     private bool _focusResourcePicker;
     private FluentTextInput? _resourcePaneSearch;
@@ -86,6 +87,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private ResourceTab? _navigatingToTab;
     private bool _isDisposed;
     private IReadOnlyList<string> _selectedResourceNames = [];
+    private IReadOnlyList<string>? _selectionBeforeParameters;
     private List<SelectedResourceItem> _selectedItems = [];
     private string? _selectionAnchor;
     private int? _paneWidth;
@@ -227,6 +229,9 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     /// Gets the app model resource that matches <see cref="SelectedResourceName"/>, if any.
     /// </summary>
     internal ResourceViewModel? SelectedResource { get; private set; }
+
+    internal string? SelectedResourceWithoutTelemetryName =>
+        SelectedResource is { } resource && GetTelemetryResource(resource) is null ? GetResourceName(resource) : null;
 
     /// <summary>
     /// Gets the app model resources of a multi-resource selection. Selected resources that only send telemetry are
@@ -471,7 +476,9 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         // its reveal cannot briefly show the previous resource's heading.
         UpdateFromLocation(location);
         _isDrawerOpen = false;
-        _isResourcePickerOpen = false;
+        // Modifier selection changes the URL without dismissing the picker. Other navigation still closes it.
+        _isResourcePickerOpen = _isResourcePickerOpen && string.Equals(location, _resourcePickerSelectionLocation, StringComparison.Ordinal);
+        _resourcePickerSelectionLocation = null;
         if (previousTab != CurrentTab || !previousSelection.SequenceEqual(_selectedResourceNames, StringComparers.ResourceName))
         {
             // Reused pages must replace subscriptions and terminal state before an
@@ -692,7 +699,20 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     {
         var baseRelativePath = NavigationManager.ToBaseRelativePath(location);
         var parsedLocation = ParseLocation(baseRelativePath);
-        var wasAllResources = _hasLocation && _selectedResourceNames.Count == 0;
+        var wasAllResources = _hasLocation && _selectedResourceNames.Count == 0 && _selectionBeforeParameters is not { Count: > 0 };
+        if (parsedLocation.Tab == ResourceTab.Parameters)
+        {
+            if (parsedLocation.SelectedResourceNames.Count > 0)
+            {
+                _selectionBeforeParameters = null;
+            }
+            else if (CurrentTab != ResourceTab.Parameters)
+            {
+                // Parameters have their own selection. Keep the resource selection out of the page's filters
+                // until the user either returns to resources or replaces it by selecting a parameter.
+                _selectionBeforeParameters = _selectedResourceNames;
+            }
+        }
         _hasLocation = true;
 
         CurrentTab = parsedLocation.Tab;
@@ -725,16 +745,10 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     /// </summary>
     internal string GetTabUrl(ResourceTab tab)
     {
-        // Parameters and terminals are app-wide views. Keep only a selection that belongs on the destination page.
-        IReadOnlyList<string> resourceNames = _selectedItems
-            .Where(item => tab switch
-            {
-                ResourceTab.Parameters => item.Resource is { IsParameter: true },
-                ResourceTab.Terminal => item.Resource is { } resource && CanViewResourceTerminal(resource),
-                _ => item.Resource is not { IsParameter: true }
-            })
-            .Select(item => item.Name)
-            .ToList();
+        var selection = CurrentTab == ResourceTab.Parameters && _selectionBeforeParameters is { } previousSelection
+            ? previousSelection.Select(GetSelectedResourceItem)
+            : _selectedItems;
+        var resourceNames = GetTabResourceNames(tab, selection);
 
         if (!IsMultiSelection && resourceNames.Count == 1 && tab is ResourceTab.Overview or ResourceTab.Terminal &&
             CurrentTab is ResourceTab.Overview or ResourceTab.Terminal &&
@@ -752,6 +766,17 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
         return GetTabUrl(tab, resourceNames, RouteResourceName);
     }
+
+    // Parameters and terminals are app-wide views. Keep only a selection that belongs on the destination page.
+    private List<string> GetTabResourceNames(ResourceTab tab, IEnumerable<SelectedResourceItem> selection) =>
+        selection.Where(item => tab switch
+        {
+            ResourceTab.Parameters => item.Resource is { IsParameter: true },
+            ResourceTab.Terminal => item.Resource is { } resource && CanViewResourceTerminal(resource),
+            _ => item.Resource is not { IsParameter: true }
+        })
+        .Select(item => item.Name)
+        .ToList();
 
     internal string AddPaneToUrl(string url) => DashboardClient.IsEnabled && IsTelemetryPane ? DashboardUrls.AddTelemetryPane(url) : url;
 
@@ -910,18 +935,20 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         return new ResourceLocation(tab, routeResourceName, selectedResourceNames, KeepSelection: false);
     }
 
+    private SelectedResourceItem GetSelectedResourceItem(string name)
+    {
+        if (ResourceViewModel.TryGetResourceByName(name, _resourceByName, out var resource))
+        {
+            return new SelectedResourceItem(name, resource, TelemetryOnly: null);
+        }
+
+        var telemetryOnly = _telemetryOnlyResources.FirstOrDefault(r => string.Equals(r.Name, name, StringComparisons.ResourceName));
+        return new SelectedResourceItem(name, Resource: null, telemetryOnly);
+    }
+
     private void UpdateSelection()
     {
-        _selectedItems = _selectedResourceNames.Select(name =>
-        {
-            if (ResourceViewModel.TryGetResourceByName(name, _resourceByName, out var resource))
-            {
-                return new SelectedResourceItem(name, resource, TelemetryOnly: null);
-            }
-
-            var telemetryOnly = _telemetryOnlyResources.FirstOrDefault(r => string.Equals(r.Name, name, StringComparisons.ResourceName));
-            return new SelectedResourceItem(name, Resource: null, telemetryOnly);
-        }).ToList();
+        _selectedItems = _selectedResourceNames.Select(GetSelectedResourceItem).ToList();
 
         SelectedResource = _selectedItems is [{ Resource: { } selected }] ? selected : null;
 
@@ -984,6 +1011,22 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     private async Task TryRedirectLandingAsync()
     {
+        if (_isLoaded && CurrentTab != ResourceTab.Parameters && _selectionBeforeParameters is { } previousSelection)
+        {
+            _selectionBeforeParameters = null;
+            // Header links include the preserved selection. Bare links, including keyboard navigation, need
+            // their URL updated too. The resource overview uses session storage so explicit All links still work.
+            if (CurrentTab != ResourceTab.Overview && !IsTelemetryPane && _selectedResourceNames.Count == 0 && previousSelection.Count > 0)
+            {
+                var restoredSelection = GetTabResourceNames(CurrentTab, previousSelection.Select(GetSelectedResourceItem));
+                if (restoredSelection.Count > 0)
+                {
+                    NavigationManager.NavigateTo(GetTabUrl(CurrentTab, restoredSelection, RouteResourceName), new NavigationOptions { ReplaceHistoryEntry = true });
+                    return;
+                }
+            }
+        }
+
         // Keep existing parameter links working while ensuring their sidebar uses the parameters page's scope.
         if (_isLoaded && CurrentTab == ResourceTab.Overview && _selectedItems.Count > 0 &&
             _selectedItems.All(item => item.Resource is { IsParameter: true }))
@@ -1025,14 +1068,20 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     private async Task PersistSelectedResourcesAsync()
     {
-        // Navigating to a page without a selection, such as all structured logs, doesn't clear the remembered
-        // selection. Only clearing the selection in the resource list does.
+        // Visiting Parameters doesn't change the remembered resources, but choosing a parameter replaces them.
         if (_selectedResourceNames.Count == 0)
         {
             return;
         }
 
-        await SetStoredSelectionAsync(_selectedResourceNames);
+        if (CurrentTab == ResourceTab.Parameters)
+        {
+            await WriteStoredSelectionAsync([]);
+        }
+        else
+        {
+            await SetStoredSelectionAsync(_selectedResourceNames);
+        }
     }
 
     private async Task SetStoredSelectionAsync(IReadOnlyList<string> resourceNames)
@@ -1043,6 +1092,11 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             return;
         }
 
+        await WriteStoredSelectionAsync(resourceNames);
+    }
+
+    private async Task WriteStoredSelectionAsync(IReadOnlyList<string> resourceNames)
+    {
         try
         {
             await SessionStorage.SetAsync(BrowserStorageKeys.LastSelectedResources, resourceNames.ToList());
@@ -2060,15 +2114,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     /// </summary>
     private string GetSelectionUrl(IReadOnlyList<string> resourceNames)
     {
-        var selection = resourceNames.Select(name =>
-        {
-            if (ResourceViewModel.TryGetResourceByName(name, _resourceByName, out var resource))
-            {
-                return new SelectedResourceItem(name, resource, TelemetryOnly: null);
-            }
-
-            return new SelectedResourceItem(name, Resource: null, _telemetryOnlyResources.FirstOrDefault(r => string.Equals(r.Name, name, StringComparisons.ResourceName)));
-        }).ToList();
+        var selection = resourceNames.Select(GetSelectedResourceItem).ToList();
 
         ResourceTab tab;
         if (IsTabAvailable(CurrentTab, selection) || CurrentTab == ResourceTab.Terminal && selection.Count == 0)
@@ -2110,7 +2156,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     /// </summary>
     private async Task OnRowClickAsync(MouseEventArgs e, string resourceName)
     {
-        _isResourcePickerOpen = false;
+        _isResourcePickerOpen &= e.ShiftKey || e.CtrlKey || e.MetaKey;
         // The selection can also change by navigating, for example with a link to a resource. Ranges then start at
         // the last selected resource.
         var anchor = _selectionAnchor is not null && IsSelected(_selectionAnchor) ? _selectionAnchor : _selectedResourceNames is [.., var last] ? last : null;
@@ -2154,11 +2200,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             await SetStoredSelectionAsync(selection);
         }
 
-        var url = GetSelectionUrl(selection);
-        _animatedPaneNavigation = _isPaneFullCanvas && selection.Count == 1
-            ? NavigationManager.ToAbsoluteUri(url).AbsoluteUri
-            : null;
-        NavigationManager.NavigateTo(url);
+        NavigateToSelection(selection);
     }
 
     // A single selected resource is shown by its row alone, so a one-resource group doesn't duplicate the highlight.
@@ -2169,7 +2211,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     private async Task OnResourceGroupClick(MouseEventArgs e, List<string> groupResourceNames)
     {
-        _isResourcePickerOpen = false;
+        _isResourcePickerOpen &= e.ShiftKey || e.CtrlKey || e.MetaKey;
         if (groupResourceNames.Count == 0)
         {
             return;
@@ -2203,7 +2245,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         }
 
         _selectionAnchor = selection is [.., var last] ? last : null;
-        NavigationManager.NavigateTo(GetSelectionUrl(selection));
+        NavigateToSelection(selection);
     }
 
     private async Task OnAllResourcesClickAsync()
@@ -2228,11 +2270,21 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     /// <summary>
     /// Deselects everything without leaving the current tab, e.g. clearing a selection on Metrics stays on Metrics.
     /// </summary>
-    private async Task ClearSelectionAsync()
+    internal async Task ClearSelectionAsync()
     {
         _selectionAnchor = null;
         await SetStoredSelectionAsync([]);
-        NavigationManager.NavigateTo(GetSelectionUrl([]));
+        NavigateToSelection([]);
+    }
+
+    private void NavigateToSelection(IReadOnlyList<string> resourceNames)
+    {
+        var url = GetSelectionUrl(resourceNames);
+        _animatedPaneNavigation = _isPaneFullCanvas && resourceNames.Count == 1
+            ? NavigationManager.ToAbsoluteUri(url).AbsoluteUri
+            : null;
+        _resourcePickerSelectionLocation = _isResourcePickerOpen ? NavigationManager.ToAbsoluteUri(url).AbsoluteUri : null;
+        NavigationManager.NavigateTo(url);
     }
 
     /// <summary>

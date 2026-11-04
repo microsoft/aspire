@@ -1322,6 +1322,11 @@
     margin-left: auto;
 }
 
+.resource-header-row ::deep .resource-header-close-button {
+    flex: 0 0 auto;
+    margin-left: auto;
+}
+
 .resource-title {
     margin: 0;
     overflow: hidden;
@@ -1671,6 +1676,7 @@
 
     .resource-header-text {
         display: block;
+        flex-basis: 0;
         min-height: 0;
     }
 

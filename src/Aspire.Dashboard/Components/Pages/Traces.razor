@@ -136,7 +136,17 @@
                         <EmptyContent>
                             <TelemetryEmptyContent>
                                 <FluentIcon Icon="Icons.Regular.Size24.GanttChart" Color="Color.Primary" />
-                                @Loc[nameof(Dashboard.Resources.Traces.TracesNoTraces)]
+                                @if (ResourcesLayout is { SelectedResourceWithoutTelemetryName: { } resourceName } layout)
+                                {
+                                    <span>
+                                        @Loc[nameof(Dashboard.Resources.Traces.TracesNoTracesForResource), resourceName]
+                                        <a href="@(layout.AddPaneToUrl(DashboardUrls.TracesUrl()))" @onclick="layout.ClearSelectionAsync" @onclick:preventDefault="true">@Loc[nameof(Dashboard.Resources.Traces.TracesViewAllResources)]</a>
+                                    </span>
+                                }
+                                else
+                                {
+                                    @Loc[nameof(Dashboard.Resources.Traces.TracesNoTraces)]
+                                }
                             </TelemetryEmptyContent>
                         </EmptyContent>
                     </AspireFluentDataGrid>

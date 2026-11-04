@@ -160,6 +160,15 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to No structured logs available for resource &apos;{0}&apos;..
+        /// </summary>
+        public static string StructuredLogsNoLogsForResource {
+            get {
+                return ResourceManager.GetString("StructuredLogsNoLogsForResource", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to No structured logs found.
         /// </summary>
         public static string StructuredLogsNoLogsFound {
@@ -210,6 +219,15 @@ namespace Aspire.Dashboard.Resources {
         public static string StructuredLogsTraceColumnHeader {
             get {
                 return ResourceManager.GetString("StructuredLogsTraceColumnHeader", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to View structured logs for all resources.
+        /// </summary>
+        public static string StructuredLogsViewAllResources {
+            get {
+                return ResourceManager.GetString("StructuredLogsViewAllResources", resourceCulture);
             }
         }
 

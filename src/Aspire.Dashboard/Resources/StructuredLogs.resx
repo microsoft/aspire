@@ -152,6 +152,13 @@
   <data name="StructuredLogsNoLogsFound" xml:space="preserve">
     <value>No structured logs found</value>
   </data>
+  <data name="StructuredLogsNoLogsForResource" xml:space="preserve">
+    <value>No structured logs available for resource '{0}'.</value>
+    <comment>{0} is a resource name</comment>
+  </data>
+  <data name="StructuredLogsViewAllResources" xml:space="preserve">
+    <value>View structured logs for all resources</value>
+  </data>
 
   <data name="StructuredLogsMessageFilter" xml:space="preserve">
     <value>Message filter</value>

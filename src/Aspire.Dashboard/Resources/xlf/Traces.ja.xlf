@@ -57,6 +57,11 @@
         <target state="translated">トレースが見つかりません</target>
         <note />
       </trans-unit>
+      <trans-unit id="TracesNoTracesForResource">
+        <source>No traces available for resource '{0}'.</source>
+        <target state="new">No traces available for resource '{0}'.</target>
+        <note>{0} is a resource name</note>
+      </trans-unit>
       <trans-unit id="TracesPageTitle">
         <source>{0} traces</source>
         <target state="translated">{0} のトレース</target>
@@ -85,6 +90,11 @@
       <trans-unit id="TracesTraceId">
         <source>Trace Id: {0}</source>
         <target state="translated">トレース ID: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TracesViewAllResources">
+        <source>View traces for all resources</source>
+        <target state="new">View traces for all resources</target>
         <note />
       </trans-unit>
       <trans-unit id="VirtualizedLimitText">

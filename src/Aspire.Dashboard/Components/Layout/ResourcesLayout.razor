@@ -422,6 +422,16 @@
                             <SectionOutlet SectionName="@TabToolbarSectionName" />
                         </div>
                     }
+                    @if (CurrentTab == ResourceTab.Overview && _selectedResourceNames.Count > 0)
+                    {
+                        <FluentButton Class="resource-header-close-button"
+                                      Appearance="ButtonAppearance.Default"
+                                      IconOnly="true"
+                                      IconStart="@(new Icons.Regular.Size16.Dismiss())"
+                                      OnClick="OnAllResourcesClickAsync"
+                                      data-tooltip="@ControlsStringsLoc[nameof(ControlsStrings.SummaryDetailsViewCloseView)]"
+                                      aria-label="@ControlsStringsLoc[nameof(ControlsStrings.SummaryDetailsViewCloseView)]" />
+                    }
                 </div>
             }
         </header>

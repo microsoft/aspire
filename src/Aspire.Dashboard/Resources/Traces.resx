@@ -130,6 +130,13 @@
   <data name="TracesNoTraces" xml:space="preserve">
     <value>No traces found</value>
   </data>
+  <data name="TracesNoTracesForResource" xml:space="preserve">
+    <value>No traces available for resource '{0}'.</value>
+    <comment>{0} is a resource name</comment>
+  </data>
+  <data name="TracesViewAllResources" xml:space="preserve">
+    <value>View traces for all resources</value>
+  </data>
   <data name="TracesSpansColumnHeader" xml:space="preserve">
     <value>Spans</value>
   </data>
