@@ -35,11 +35,6 @@ public enum ResourceListDensity
 public enum GroupOverview
 {
     /// <summary>
-    /// A responsive grid of cards for resources and parameters.
-    /// </summary>
-    Cards,
-
-    /// <summary>
     /// The app's health, live activity, insights and recent problems.
     /// </summary>
     Summary,
@@ -47,12 +42,7 @@ public enum GroupOverview
     /// <summary>
     /// A relationship graph of the resources.
     /// </summary>
-    Graph,
-
-    /// <summary>
-    /// The former table layout. Stored values are migrated to <see cref="Cards"/>.
-    /// </summary>
-    Resources
+    Graph
 }
 
 /// <summary>
@@ -73,12 +63,15 @@ public enum RecordingsStyle
 
 /// <summary>
 /// The view preferences chosen in the settings. They're kept in the browser's local storage, and shared by the
-/// settings panel and the views that apply them, which update as soon as a preference changes.
+/// settings panel and the views that apply them. The active overview layout is kept separately for the current tab.
 /// </summary>
-public sealed class DashboardViewPreferences(ILocalStorage localStorage, IOptionsMonitor<DashboardOptions> options)
+public sealed class DashboardViewPreferences(
+    ILocalStorage localStorage,
+    ISessionStorage sessionStorage,
+    IJSRuntime js,
+    IOptionsMonitor<DashboardOptions> options)
 {
     private Task? _loadTask;
-    private GroupOverview _groupOverview;
 
     /// <summary>
     /// Gets the resource list's density.
@@ -86,17 +79,14 @@ public sealed class DashboardViewPreferences(ILocalStorage localStorage, IOption
     public ResourceListDensity Density { get; private set; }
 
     /// <summary>
-    /// Gets what the overview of several resources shows.
+    /// Gets the active overview layout. Navigation and reload preserve it; a newly opened tab uses the saved default.
     /// </summary>
-    /// <remarks>
-    /// A graph choice stored before Dashboard:UI:DisableResourceGraph was set shows the cards instead. The stored
-    /// choice is kept, so the graph comes back if the setting is removed.
-    /// </remarks>
-    public GroupOverview GroupOverview
-    {
-        get => _groupOverview == GroupOverview.Graph && !IsGraphEnabled ? GroupOverview.Cards : _groupOverview;
-        private set => _groupOverview = value;
-    }
+    public GroupOverview GroupOverview { get; private set; }
+
+    /// <summary>
+    /// Gets the saved overview layout used when a dashboard tab opens, without changing existing tabs.
+    /// </summary>
+    public GroupOverview DefaultGroupOverview { get; private set; }
 
     /// <summary>
     /// Gets a value indicating whether the overview can show the resource graph, which Dashboard:UI:DisableResourceGraph turns off.
@@ -132,6 +122,8 @@ public sealed class DashboardViewPreferences(ILocalStorage localStorage, IOption
 
     public async Task SetGroupOverviewAsync(GroupOverview groupOverview)
     {
+        await EnsureLoadedAsync().ConfigureAwait(false);
+
         // Graph deep links and shortcuts go through here, so this is where a disabled graph is enforced.
         if (GroupOverview == groupOverview || (groupOverview == GroupOverview.Graph && !IsGraphEnabled))
         {
@@ -139,6 +131,20 @@ public sealed class DashboardViewPreferences(ILocalStorage localStorage, IOption
         }
 
         GroupOverview = groupOverview;
+        Changed?.Invoke();
+        await sessionStorage.SetAsync(BrowserStorageKeys.ActiveGroupOverview, groupOverview.ToString()).ConfigureAwait(false);
+    }
+
+    public async Task SetDefaultGroupOverviewAsync(GroupOverview groupOverview)
+    {
+        await EnsureLoadedAsync().ConfigureAwait(false);
+
+        if (DefaultGroupOverview == groupOverview || (groupOverview == GroupOverview.Graph && !IsGraphEnabled))
+        {
+            return;
+        }
+
+        DefaultGroupOverview = groupOverview;
         Changed?.Invoke();
         await localStorage.SetUnprotectedAsync(BrowserStorageKeys.GroupOverview, groupOverview.ToString()).ConfigureAwait(false);
     }
@@ -161,16 +167,34 @@ public sealed class DashboardViewPreferences(ILocalStorage localStorage, IOption
         {
             var density = await ReadAsync<ResourceListDensity>(BrowserStorageKeys.ResourceListDensity).ConfigureAwait(false);
             var groupOverview = await ReadAsync<GroupOverview>(BrowserStorageKeys.GroupOverview).ConfigureAwait(false);
-            if (groupOverview == GroupOverview.Resources)
+            if (groupOverview == GroupOverview.Graph && !IsGraphEnabled)
             {
-                groupOverview = GroupOverview.Cards;
+                groupOverview = GroupOverview.Summary;
                 await localStorage.SetUnprotectedAsync(BrowserStorageKeys.GroupOverview, groupOverview.ToString()).ConfigureAwait(false);
             }
             var recordingsStyle = await ReadAsync<RecordingsStyle>(BrowserStorageKeys.RecordingsStyle).ConfigureAwait(false);
-            if (density != Density || groupOverview != GroupOverview || recordingsStyle != RecordingsStyle)
+            var activeGroupOverview = groupOverview;
+            // An opener-created tab inherits sessionStorage. Restore the active layout only for an actual
+            // reload, so both ordinary new tabs and opener-created tabs start with the saved default.
+            if (await js.InvokeAsync<bool>("isPageReload").ConfigureAwait(false))
+            {
+                var activeResult = await sessionStorage.GetAsync<string>(BrowserStorageKeys.ActiveGroupOverview).ConfigureAwait(false);
+                // Layouts are enum names such as "Graph"; invalid values use the saved default.
+                if (activeResult.Success && Enum.TryParse<GroupOverview>(activeResult.Value, out var active) && Enum.IsDefined(active))
+                {
+                    activeGroupOverview = active;
+                }
+            }
+            if (activeGroupOverview == GroupOverview.Graph && !IsGraphEnabled)
+            {
+                activeGroupOverview = GroupOverview.Summary;
+            }
+            await sessionStorage.SetAsync(BrowserStorageKeys.ActiveGroupOverview, activeGroupOverview.ToString()).ConfigureAwait(false);
+            if (density != Density || groupOverview != DefaultGroupOverview || activeGroupOverview != GroupOverview || recordingsStyle != RecordingsStyle)
             {
                 Density = density;
-                GroupOverview = groupOverview;
+                DefaultGroupOverview = groupOverview;
+                GroupOverview = activeGroupOverview;
                 RecordingsStyle = recordingsStyle;
                 Changed?.Invoke();
             }

@@ -1019,18 +1019,13 @@ Weitere Informationen zur Verwendung von KI-Agents mit dem Dashboard, einschlie√
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogGroupOverview">
-        <source>Overview layout</source>
-        <target state="new">Overview layout</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SettingsDialogGroupOverviewCards">
-        <source>Cards</source>
-        <target state="new">Cards</target>
+        <source>Default overview layout</source>
+        <target state="new">Default overview layout</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogGroupOverviewSummary">
-        <source>Home</source>
-        <target state="new">Home</target>
+        <source>Summary</source>
+        <target state="new">Summary</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogLanguage">

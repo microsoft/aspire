@@ -1,14 +1,17 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Components.Tests.Shared;
+using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Utils;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components.Tests.Dialogs;
 
@@ -42,6 +45,23 @@ public sealed class SettingsDialogTests : DashboardTestContext
         var cut = Render<SettingsDialog>();
 
         Assert.Equal(GetExpectedIconLabels(), cut.FindAll(".icon-toggle").Select(e => e.GetAttribute("aria-label")));
+        Assert.IsType<Icons.Regular.Size20.DataBarVertical>(
+            cut.FindComponent<IconToggleGroup<GroupOverview>>().Instance.Options.Single(option => option.Value == GroupOverview.Summary).Icon);
+    }
+
+    [Fact]
+    public async Task Render_GraphDisabled_OffersOnlySummaryAndKeepsDensityOptions()
+    {
+        var themeManager = new ThemeManager(new TestThemeResolver());
+        await themeManager.EnsureInitializedAsync();
+        FluentUISetupHelpers.AddCommonDashboardServices(this, themeManager: themeManager);
+        FluentUISetupHelpers.SetupFluentList(this);
+        Services.Configure<DashboardOptions>(options => options.UI.DisableResourceGraph = true);
+
+        var cut = Render<SettingsDialog>();
+
+        Assert.Equal(GetExpectedIconLabels().Where(label => label != "Graph"), cut.FindAll(".icon-toggle").Select(e => e.GetAttribute("aria-label")));
+        Assert.Equal(["System", "Comfortable", "Summary", "System", "New dashboard"], cut.FindAll(".icon-toggle[aria-pressed='true']").Select(e => e.GetAttribute("aria-label")));
     }
 
     [Fact]
@@ -55,7 +75,7 @@ public sealed class SettingsDialogTests : DashboardTestContext
             OnGetUnprotectedAsync = key => key switch
             {
                 BrowserStorageKeys.ResourceListDensity => (true, "Compact"),
-                BrowserStorageKeys.GroupOverview => (true, "Resources"),
+                BrowserStorageKeys.GroupOverview => (true, "Graph"),
                 BrowserStorageKeys.RecordingsStyle => (true, "Menu"),
                 _ => (false, null)
             },
@@ -69,20 +89,22 @@ public sealed class SettingsDialogTests : DashboardTestContext
 
         cut.WaitForAssertion(() => Assert.Empty(cut.FindAll(".icon-toggle-current")));
         Assert.Equal(GetExpectedIconLabels(), cut.FindAll(".icon-toggle").Select(e => e.GetAttribute("aria-label")));
-        Assert.Equal(["System", "Compact", "Cards", "System", "New dashboard"], cut.FindAll(".icon-toggle[aria-pressed='true']").Select(e => e.GetAttribute("aria-label")));
+        Assert.Equal(["System", "Compact", "Graph", "System", "New dashboard"], cut.FindAll(".icon-toggle[aria-pressed='true']").Select(e => e.GetAttribute("aria-label")));
         Assert.Equal(GetExpectedIconLabels(), cut.FindAll(".icon-toggle-option-text").Select(e => e.TextContent));
 
         await cut.InvokeAsync(() => cut.Find(".icon-toggle[aria-label='Dark']").Click());
         await cut.InvokeAsync(() => cut.Find(".icon-toggle[aria-label='Comfortable']").Click());
-        await cut.InvokeAsync(() => cut.Find(".icon-toggle[aria-label='Home']").Click());
+        await cut.InvokeAsync(() => cut.Find(".icon-toggle[aria-label='Summary']").Click());
 
         Assert.Equal(ResourceListDensity.Comfortable, preferences.Density);
-        Assert.Equal(GroupOverview.Summary, preferences.GroupOverview);
+        Assert.Equal(GroupOverview.Graph, preferences.GroupOverview);
+        Assert.Equal(GroupOverview.Summary, preferences.DefaultGroupOverview);
+        Assert.Equal("Summary", cut.Find("[aria-label='Default overview layout'] .icon-toggle[aria-pressed='true']").GetAttribute("aria-label"));
         Assert.Equal(ThemeManager.ThemeSettingDark, themeManager.SelectedTheme);
         Assert.Equal("Comfortable", stored[BrowserStorageKeys.ResourceListDensity]);
         Assert.Equal("Summary", stored[BrowserStorageKeys.GroupOverview]);
         Assert.Equal(RecordingsStyle.Menu, preferences.RecordingsStyle);
-        Assert.Equal(["Dark", "Comfortable", "Home", "System", "New dashboard"], cut.FindAll(".icon-toggle[aria-pressed='true']").Select(e => e.GetAttribute("aria-label")));
+        Assert.Equal(["Dark", "Comfortable", "Summary", "System", "New dashboard"], cut.FindAll(".icon-toggle[aria-pressed='true']").Select(e => e.GetAttribute("aria-label")));
     }
 
     [Theory]
@@ -112,7 +134,7 @@ public sealed class SettingsDialogTests : DashboardTestContext
         {
             "System", "Light", "Dark",
             "Spacious", "Comfortable", "Compact",
-            "Cards", "Home", "Graph",
+            "Summary", "Graph",
             "System", "12-hour", "24-hour",
             "New dashboard"
         };

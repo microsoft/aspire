@@ -321,6 +321,12 @@ window.setDashboardExperience = function (experience, targetPath) {
     window.location.replace(targetPath);
 };
 
+// Unlike sessionStorage alone, the navigation type distinguishes a refresh from a new tab whose
+// opener copied the active layout. https://developer.mozilla.org/en-US/docs/Web/API/PerformanceNavigationTiming/type
+window.isPageReload = function () {
+    return performance.getEntriesByType("navigation")[0]?.type === "reload";
+};
+
 function isActiveElementInput() {
     let currentElement = document.activeElement;
     // Hex1b can focus a non-editable <div class="hex1b-terminal" tabindex="-1">

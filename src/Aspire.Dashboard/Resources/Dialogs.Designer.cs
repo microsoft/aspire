@@ -1857,7 +1857,7 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Overview layout.
+        ///   Looks up a localized string similar to Default overview layout.
         /// </summary>
         public static string SettingsDialogGroupOverview {
             get {
@@ -1871,15 +1871,6 @@ namespace Aspire.Dashboard.Resources {
         public static string SettingsDialogGroupOverviewSummary {
             get {
                 return ResourceManager.GetString("SettingsDialogGroupOverviewSummary", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Cards.
-        /// </summary>
-        public static string SettingsDialogGroupOverviewCards {
-            get {
-                return ResourceManager.GetString("SettingsDialogGroupOverviewCards", resourceCulture);
             }
         }
 
