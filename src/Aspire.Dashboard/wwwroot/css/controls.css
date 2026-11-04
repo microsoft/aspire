@@ -576,6 +576,7 @@ fluent-text-input[appearance="outline"]:focus-within::part(root)::after {
 @supports selector(::-webkit-scrollbar) {
     *,
     fluent-dialog-body::part(content),
+    fluent-drawer-body::part(content),
     fluent-popover-b::part(dialog),
     ::part(listbox) {
         scrollbar-color: auto;
@@ -585,6 +586,7 @@ fluent-text-input[appearance="outline"]:focus-within::part(root)::after {
 @supports not selector(::-webkit-scrollbar) {
     *,
     fluent-dialog-body::part(content),
+    fluent-drawer-body::part(content),
     fluent-popover-b::part(dialog),
     ::part(listbox) {
         scrollbar-width: thin;
@@ -594,6 +596,7 @@ fluent-text-input[appearance="outline"]:focus-within::part(root)::after {
 
 ::-webkit-scrollbar,
 fluent-dialog-body::part(content)::-webkit-scrollbar,
+fluent-drawer-body::part(content)::-webkit-scrollbar,
 fluent-popover-b::part(dialog)::-webkit-scrollbar {
     width: var(--scrollbar-size);
     height: var(--scrollbar-size);
@@ -601,12 +604,32 @@ fluent-popover-b::part(dialog)::-webkit-scrollbar {
 
 ::-webkit-scrollbar-track,
 fluent-dialog-body::part(content)::-webkit-scrollbar-track,
+fluent-drawer-body::part(content)::-webkit-scrollbar-track,
 fluent-popover-b::part(dialog)::-webkit-scrollbar-track {
     background: var(--scrollbar-track-color);
 }
 
+/* Percentages are relative to the whole visible track, not the thumb or either track piece.
+   Transparent ends reveal each scroll container's own background, including console logs.
+   Standard scrollbar-color only accepts solid colors, so Firefox keeps the native fallback.
+   https://drafts.csswg.org/css-scrollbars/#scrollbar-color */
+@media (forced-colors: none) {
+    ::-webkit-scrollbar-track:vertical,
+    fluent-dialog-body::part(content)::-webkit-scrollbar-track:vertical,
+    fluent-drawer-body::part(content)::-webkit-scrollbar-track:vertical,
+    fluent-popover-b::part(dialog)::-webkit-scrollbar-track:vertical {
+        background-image: linear-gradient(
+            to bottom,
+            transparent,
+            color-mix(in srgb, var(--colorBrandStroke1) 12%, transparent) 6%,
+            color-mix(in srgb, var(--colorBrandStroke1) 12%, transparent) 94%,
+            transparent);
+    }
+}
+
 ::-webkit-scrollbar-thumb,
 fluent-dialog-body::part(content)::-webkit-scrollbar-thumb,
+fluent-drawer-body::part(content)::-webkit-scrollbar-thumb,
 fluent-popover-b::part(dialog)::-webkit-scrollbar-thumb {
     background: var(--scrollbar-thumb-color);
     border-radius: 999px;
@@ -614,12 +637,23 @@ fluent-popover-b::part(dialog)::-webkit-scrollbar-thumb {
 
 ::-webkit-scrollbar-thumb:hover,
 fluent-dialog-body::part(content)::-webkit-scrollbar-thumb:hover,
+fluent-drawer-body::part(content)::-webkit-scrollbar-thumb:hover,
 fluent-popover-b::part(dialog)::-webkit-scrollbar-thumb:hover {
     background: var(--scrollbar-thumb-hover-color);
 }
 
+/* Forced colors remap ordinary thumb backgrounds to Canvas; keep the styled drawer thumb visible.
+   https://developer.mozilla.org/docs/Web/CSS/@media/forced-colors */
+@media (forced-colors: active) {
+    fluent-drawer-body::part(content)::-webkit-scrollbar-thumb,
+    fluent-drawer-body::part(content)::-webkit-scrollbar-thumb:hover {
+        background: CanvasText;
+    }
+}
+
 ::-webkit-scrollbar-corner,
 fluent-dialog-body::part(content)::-webkit-scrollbar-corner,
+fluent-drawer-body::part(content)::-webkit-scrollbar-corner,
 fluent-popover-b::part(dialog)::-webkit-scrollbar-corner {
     background: transparent;
 }

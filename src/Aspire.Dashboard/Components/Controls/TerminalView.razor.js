@@ -68,11 +68,15 @@ function scrollbarConfiguration(state) {
             font: "var(--fontSizeBase200)/var(--lineHeightBase200) var(--fontFamilyBase)",
             padding: "8px 12px",
         };
+        const trackTint = forced || state.moreContrast.matches ||
+            !CSS.supports("color", "color-mix(in srgb, red, transparent)")
+            ? null
+            : color("color-mix(in srgb, var(--colorBrandStroke1) 12%, transparent)");
         const renderScrollbar = createDefaultScrollbarRenderer({
             track: {
                 // Omitted colors follow the terminal palette in each upstream renderer frame.
                 color: forced ? color("Canvas") : undefined,
-                opacity: forced || state.moreContrast.matches ? 1 : 0.35,
+                opacity: forced || state.moreContrast.matches ? 1 : trackTint ? 0 : 0.35,
             },
             thumb: {
                 color: forced ? color("CanvasText") : undefined,
@@ -93,7 +97,30 @@ function scrollbarConfiguration(state) {
                 Object.assign(element.style, tooltipStyle);
                 return element;
             },
-            render: renderScrollbar,
+            render(frame) {
+                // Customize only the narrow track through Hex1b's synchronous painter hook.
+                // Keep its thumb, markers, input handling, and auto-hide lifecycle upstream-owned.
+                // https://github.com/mitchdenny/hex1b/blob/main/src/web-terminal/src/scrollbar-types.ts
+                const { context, track } = frame;
+                if (trackTint && frame.opacity > 0 && track.width > 0 && track.height > 0) {
+                    context.save();
+                    try {
+                        const gradient = context.createLinearGradient(0, track.top, 0, track.top + track.height);
+                        gradient.addColorStop(0, "transparent");
+                        gradient.addColorStop(0.06, trackTint);
+                        gradient.addColorStop(0.94, trackTint);
+                        gradient.addColorStop(1, "transparent");
+                        context.globalAlpha *= frame.opacity;
+                        context.fillStyle = gradient;
+                        context.beginPath();
+                        context.roundRect(track.left, track.top, track.width, track.height, Math.min(track.width, track.height) / 2);
+                        context.fill();
+                    } finally {
+                        context.restore();
+                    }
+                }
+                return renderScrollbar(frame);
+            },
         };
     } finally {
         probe.remove();
