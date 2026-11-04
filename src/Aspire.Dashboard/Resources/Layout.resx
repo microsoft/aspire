@@ -312,6 +312,9 @@
   <data name="ResourcePaneSelectAll" xml:space="preserve">
     <value>Select all</value>
   </data>
+  <data name="ResourcePaneAll" xml:space="preserve">
+    <value>All</value>
+  </data>
   <data name="ResourcePaneAllSelected" xml:space="preserve">
     <value>All selected</value>
   </data>

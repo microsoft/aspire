@@ -8,12 +8,35 @@ The dashboard shows:
 - Live console logs of resources.
 - Live telemetry, such as structured logs, traces and metrics.
 
+## Sidebar resources
+
+The sidebar automatically lists the resources relevant to the current page:
+
+- **Resources** and **Console logs** list AppHost resources.
+- **Structured logs**, **Traces**, and **Metrics** list resources with telemetry, including sources outside the AppHost.
+- **Terminals** lists AppHost resources with usable terminals.
+- **Parameters** lists AppHost parameters.
+
+Telemetry sources remain visible even when their corresponding AppHost resources are hidden.
+
+Use **Parameters** in the navigation to view parameter values and edit them. Search and property filters further
+narrow the sidebar without changing which resources the **All** item covers. **All** appears first and is selected
+instead of individual rows, while including every page-relevant resource in the page's filters.
+Resource, parameter, and telemetry-source section headings are shown only when more than one category is present.
+The header includes **Parameters** throughout AppHost views. Incompatible selections are cleared when switching views.
+Resource terminals are opened with per-resource shortcuts, not a header navigation item.
+
+When the resource list is collapsed, click the resource name or **All resources** in the toolbar to open
+the list below it. Selecting a resource closes the popup without expanding the sidebar.
+The popup includes search; filter and grouping buttons are available only in the sidebar or mobile drawer.
+
 ## Grouping resources
 
 Use **Group resources**, between **Filters** and **Collapse resource list** in the resources pane, to group
 the list by **Tags**, **Resource type**, or **State**. **None** restores the default nested resource list.
 Groups can be collapsed or selected to view all of their resources together. Search matches group names as
 well as resources, and the grouping preference is remembered across navigation and reloads.
+Resource-type group headings are hidden when only one resource type is present.
 Tag grouping replaces the separate Tags navigation entry; resources with multiple tags appear under each tag,
 with untagged resources initially listed last. Telemetry sources keep their ungrouped list.
 
@@ -83,12 +106,11 @@ The AppHost automatically configures the dashboard, but you can override values 
 
 ### Standalone dashboard
 
-The **Telemetry sources** navigation icon opens a dedicated sidebar for services sending OpenTelemetry data
-that aren't part of the AppHost model. This view is available in both standalone and AppHost mode; these services
-are not listed under **Resources**. AppHost resources keep their own logs, traces, and metrics tabs.
-Select one or more telemetry sources to view their logs, traces, and metrics, or select **All sources**
-for logs and traces from every telemetry-only source. AppHost-only views and actions,
-such as resource configuration, console logs, parameters, and terminals, are not shown.
+The **Telemetry sources** navigation icon opens the structured logs page. In AppHost mode, telemetry pages list
+both AppHost resources with telemetry and sources outside the AppHost model. In standalone mode, the sidebar is
+populated entirely from received OpenTelemetry data. Select one or more sources to view their logs, traces, and
+metrics, or select **All sources** to include every source. AppHost-only views and actions, such as resource
+configuration, console logs, parameters, and terminals, are not shown in standalone mode.
 
 There are many ways to provide configuration:
 

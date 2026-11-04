@@ -139,6 +139,7 @@ public partial class DesktopNavMenu : ComponentBase, IDisposable
             // The pages of a selection (overview, console logs, structured logs, traces and metrics) are icons at the
             // top of the resources view, so the app navigation has a single entry for them.
             yield return new NavItem(NavSection.Resources, GetSelectionPageUrl(NavigationManager, ResourceTab.Overview), Loc[nameof(Resources.Layout.NavMenuResourcesTab)], ResourcesIcon(), ResourcesIcon(active: true));
+            yield return new NavItem(NavSection.Parameters, DashboardUrls.ParametersUrl(), Loc[nameof(Resources.Layout.NavMenuParametersTab)], ParametersIcon(), ParametersIcon(active: true));
         }
         yield return new NavItem(NavSection.Telemetry, DashboardUrls.TelemetrySourcesUrl(), Loc[nameof(Resources.Layout.NavMenuTelemetrySourcesTab)], TelemetryIcon(), TelemetryIcon(active: true));
     }

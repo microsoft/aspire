@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Threading.Channels;
 using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Controls.Grid;
+using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
@@ -42,6 +43,60 @@ namespace Aspire.Dashboard.Components.Tests.Pages;
 [UseCulture("en-US")]
 public partial class ResourcesTests : DashboardTestContext
 {
+    [Fact]
+    public void ParametersPage_SidebarSelectionFiltersTheTableAndDetails()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources:
+            [
+                ModelTestHelpers.CreateResource("api"),
+                ModelTestHelpers.CreateResource("first", resourceType: KnownResourceTypes.Parameter),
+                ModelTestHelpers.CreateResource("second", resourceType: KnownResourceTypes.Parameter)
+            ],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo(DashboardUrls.ParametersUrl());
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport)
+            .Add(p => p.Body, body =>
+            {
+                body.OpenComponent<Components.Pages.Resources>(0);
+                body.CloseComponent();
+            }));
+        var page = cut.FindComponent<Components.Pages.Resources>();
+        cut.WaitForAssertion(() => Assert.Equal(["first", "second"],
+            page.Instance.GetFilteredResources().Select(resource => resource.Name).Order(StringComparer.Ordinal)));
+        Assert.Equal(Components.Pages.Resources.ResourceViewKind.Parameters, page.Instance.PageViewModel.SelectedViewKind);
+        Assert.Null(page.Instance.PageViewModel.SelectedResource);
+        Assert.Equal(["first", "second"], cut.FindAll(".resource-row:not(.resource-row-all) .resource-row-name").Select(row => row.TextContent.Trim()));
+
+        cut.Find(".resource-row-link[aria-label='first']").Click();
+        cut.Render();
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(["first"], page.Instance.GetFilteredResources().Select(resource => resource.Name));
+            Assert.Equal("first", page.Instance.PageViewModel.SelectedResource?.Name);
+            Assert.Equal("first", page.FindComponent<ParameterOverview>().Instance.Resource.Name);
+        });
+        Assert.Equal("/parameters?resource=first", page.Instance.GetUrlFromSerializableViewModel(page.Instance.ConvertViewModelToSerializable()));
+        cut.Render();
+        Assert.Equal("first", page.Instance.PageViewModel.SelectedResource?.Name);
+        Assert.Equal(ResourceTab.Parameters, cut.Instance.CurrentTab);
+
+        cut.Find(".resource-row-link[aria-label='second']").Click(new Microsoft.AspNetCore.Components.Web.MouseEventArgs { CtrlKey = true });
+        cut.Render();
+        cut.WaitForAssertion(() => Assert.Null(page.Instance.PageViewModel.SelectedResource));
+        Assert.Equal(["first", "second"], page.Instance.GetFilteredResources().Select(resource => resource.Name).Order(StringComparer.Ordinal));
+        Assert.Equal("/parameters?resource=first&resource=second", page.Instance.GetUrlFromSerializableViewModel(page.Instance.ConvertViewModelToSerializable()));
+
+        cut.Find(".resource-row-all a").Click();
+        cut.Render();
+        Assert.Equal("http://localhost/parameters", navigation.Uri);
+        Assert.Empty(cut.Instance.SelectedResourceNames);
+        Assert.Equal("All", Assert.Single(cut.FindAll(".resource-row.selected .resource-row-name")).TextContent.Trim());
+        Assert.Equal(["first", "second"], page.Instance.GetFilteredResources().Select(resource => resource.Name).Order(StringComparer.Ordinal));
+    }
+
     [Theory]
     [InlineData("Persistent", "Container (persistent)")]
     [InlineData("Session", "Container")]

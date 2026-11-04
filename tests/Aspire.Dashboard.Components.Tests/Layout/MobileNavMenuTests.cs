@@ -47,22 +47,40 @@ public class MobileNavMenuTests : DashboardTestContext
         Assert.Equal(["https://aspire.dev/dashboard/overview/", "_blank", "noopener,noreferrer"], invocation.Arguments);
     }
 
+    [Fact]
+    public async Task Parameters_NavigatesAndHighlightsThePage()
+    {
+        var menuClosed = false;
+        var cut = RenderMobileNavMenu(DashboardUrls.ResourceListUrl(), () => menuClosed = true);
+        var parametersItem = cut.FindAll("fluent-menu-item")
+            .Single(item => item.GetAttribute("data-tooltip") == Resources.Layout.NavMenuParametersTab);
+
+        await cut.InvokeAsync(() => parametersItem.TriggerEvent("onmenuitemchange",
+            new MenuItemEventArgs { Id = parametersItem.Id, Text = parametersItem.TextContent }));
+
+        Assert.True(menuClosed);
+        Assert.Equal("http://localhost/parameters", Services.GetRequiredService<NavigationManager>().Uri);
+        cut.Render();
+        AssertMenuItemIsActive(cut, Resources.Layout.NavMenuParametersTab);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public void TerminalsNavigation_IsConditional(bool hasTerminals)
     {
         var cut = RenderMobileNavMenu("/terminals/resource/shell", hasResourceTerminals: hasTerminals);
-        var titles = cut.FindAll("fluent-menu-item").Select(i => i.GetAttribute("data-tooltip")).Take(hasTerminals ? 5 : 4);
+        var titles = cut.FindAll("fluent-menu-item").Select(i => i.GetAttribute("data-tooltip")).Take(hasTerminals ? 6 : 5);
         var expected = new List<string>
         {
+            Resources.Layout.NavMenuParametersTab,
             Resources.Layout.MainLayoutAspireRepoLink,
             Resources.Layout.MainLayoutKeyboardShortcuts,
             Resources.Layout.MainLayoutAspireDashboardHelpLink
         };
         if (hasTerminals)
         {
-            expected.Insert(0, Resources.Layout.NavMenuTerminalsTab);
+            expected.Insert(1, Resources.Layout.NavMenuTerminalsTab);
         }
         expected.Add(Resources.Layout.MainLayoutLaunchNotifications);
         Assert.Equal(expected, titles);

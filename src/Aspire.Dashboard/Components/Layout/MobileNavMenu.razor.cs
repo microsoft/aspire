@@ -143,6 +143,13 @@ public partial class MobileNavMenu : ComponentBase, IAsyncDisposable
     {
         if (DashboardClient.IsEnabled)
         {
+            yield return new MobileNavMenuEntry(
+                Loc[nameof(Resources.Layout.NavMenuParametersTab)],
+                () => NavigateToAsync(DashboardUrls.ParametersUrl()),
+                DesktopNavMenu.ParametersIcon(),
+                ActiveIcon: DesktopNavMenu.ParametersIcon(active: true),
+                LinkMatchRegex: GetNonIndexPageRegex(DashboardUrls.ParametersUrl())
+            );
             if (HasResourceTerminals)
             {
                 yield return new MobileNavMenuEntry(

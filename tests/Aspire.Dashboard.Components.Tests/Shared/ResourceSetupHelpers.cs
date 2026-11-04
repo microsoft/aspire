@@ -51,6 +51,8 @@ internal static class ResourceSetupHelpers
         module.SetupVoid("setTabListAriaLabel", _ => true).SetVoidResult();
         module.Setup<bool>("isResourceTabFocused", _ => true).SetResult(true);
         module.SetupVoid("registerResourceOrdering", _ => true).SetVoidResult();
+        module.SetupVoid("setResourcePickerOpen", _ => true).SetVoidResult();
+        module.SetupVoid("unregisterResourcePicker", _ => true).SetVoidResult();
         module.SetupVoid("unregisterResourceOrdering", _ => true).SetVoidResult();
         module.SetupVoid("registerResourceContextMenu", _ => true).SetVoidResult();
         module.SetupVoid("unregisterResourceContextMenu", _ => true).SetVoidResult();
