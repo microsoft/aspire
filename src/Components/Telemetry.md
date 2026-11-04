@@ -108,7 +108,6 @@ Aspire.Azure.Storage.Queues:
   - none (currently not supported by the Azure SDK)
 
 Aspire.Confluent.Kafka:
-- Breaking-change release note and migration guidance: [Kafka telemetry migration](../../docs/migrate-confluent-kafka-telemetry.md).
 - Log categories:
   - "Aspire.Confluent.Kafka"
 - Activity source names:

@@ -124,11 +124,9 @@ To configure `Confluent.Kafka` builders (for example to setup custom serializers
 
 You can refer to [`ProducerBuilder<TKey, TValue>`](https://docs.confluent.io/platform/current/clients/confluent-kafka-dotnet/_site/api/Confluent.Kafka.ProducerBuilder-2.html) and [`ConsumerBuilder<TKey, TValue>`](https://docs.confluent.io/platform/current/clients/confluent-kafka-dotnet/_site/api/Confluent.Kafka.ConsumerBuilder-2.html) api documentation for more information.
 
-## Telemetry migration
+## Telemetry changes in Aspire 17.0
 
-The update to OpenTelemetry Kafka instrumentation `0.3.0-alpha.4` introduces **breaking telemetry changes**. Update dashboards, alerts, and queries for the renamed metrics and attributes, shared send/poll duration histogram, and changed span names and kinds. Public .NET registration APIs and settings are unchanged.
-
-See the [Kafka telemetry migration guide and breaking-change release note](../../../docs/migrate-confluent-kafka-telemetry.md), including the behavior of the `EnableAspire8ConfluentKafkaMetrics` switch.
+Aspire 17.0 introduces **breaking changes to Kafka metric names, attributes, and span names and kinds**. Existing dashboards, alerts, and queries may need updating. Public .NET registration APIs and settings are unchanged.
 
 ## AppHost extensions
 
