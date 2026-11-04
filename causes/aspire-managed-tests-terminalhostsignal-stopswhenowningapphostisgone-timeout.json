@@ -25,6 +25,27 @@
       "job": "Tests / No-package tests (regular, Aspire.Managed.Tests, Managed, Managed, tests/Aspire.Managed.Tests/Asp... / Managed (windows-latest)",
       "pr_number": 0,
       "observed_at": "2026-10-26T21:20:35Z"
+    },
+    {
+      "run_id": 41765260429,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/41765260429",
+      "job": "Tests / No-package tests (regular, Aspire.Managed.Tests, Managed, Managed, tests/Aspire.Managed.Tests/Asp... / Managed (windows-latest)",
+      "observed_at": "2026-11-04T03:48:49Z",
+      "pr_number": 0,
+      "tests": [
+        {
+          "name": "Aspire.Managed.Tests.TerminalHostSignalTests.TerminalHostSubcommandStopsWhenOwningAppHostIsGone",
+          "job_id": 126363785456,
+          "job": "Tests / No-package tests (regular, Aspire.Managed.Tests, Managed, Managed, tests/Aspire.Managed.Tests/Asp... / Managed (windows-latest)",
+          "error": "aspire-managed exited with code 124.\nstdout: \nstderr: ",
+          "stack_trace": "   at Aspire.Managed.Tests.TerminalHostSignalTests.AssertTerminalHostStopsWhenOwningAppHostIsGoneAsync(String hostAssemblyPath) in D:\\a\\aspire\\aspire\\tests\\Aspire.Managed.Tests\\TerminalHostSignalTests.cs:line 241\n   at Aspire.Managed.Tests.TerminalHostSignalTests.AssertTerminalHostStopsWhenOwningAppHostIsGoneAsync(String hostAssemblyPath) in D:\\a\\aspire\\aspire\\tests\\Aspire.Managed.Tests\\TerminalHostSignalTests.cs:line 254\n   at Aspire.Managed.Tests.TerminalHostSignalTests.AssertTerminalHostStopsWhenOwningAppHostIsGoneAsync(String hostAssemblyPath) in D:\\a\\aspire\\aspire\\tests\\Aspire.Managed.Tests\\TerminalHostSignalTests.cs:line 266\n   at Aspire.Managed.Tests.TerminalHostSignalTests.TerminalHostSubcommandStopsWhenOwningAppHostIsGone() in D:\\a\\aspire\\aspire\\tests\\Aspire.Managed.Tests\\TerminalHostSignalTests.cs:line 99\n--- End of stack trace from previous location ---",
+          "standard_output": "",
+          "standard_error": "",
+          "result_file": "00001.trx",
+          "result_format": "trx",
+          "execution_id": "9f7caf79-bf7b-40c4-a2a2-2076a039c2f6"
+        }
+      ]
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/20902"

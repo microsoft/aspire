@@ -1,0 +1,48 @@
+{
+  "run_id": 41765260429,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/41765260429",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-04T03:48:49Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": null,
+  "main_context": {
+    "last_successful_main_sha": "d4994d7af558bd42ec3ec36e2499fb4b9ec31ce2",
+    "failed_sha": "7926f2c1d811f8404cc9314e83a535d96a7480d4",
+    "candidate_merge_history_state": "incomplete",
+    "candidate_merges": null
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Managed.Tests, Managed, Managed, tests/Aspire.Managed.Tests/Asp... / Managed (windows-latest)",
+      "id": 126363785456,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/41765260429/job/126363785456",
+      "classification": "flaky-test",
+      "reason": "Windows test timed out (exit code 124) with the same recurring mechanism as a recorded flaky cause.",
+      "failed_steps": [
+        "Run tests (Windows)"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Managed.Tests.TerminalHostSignalTests.TerminalHostSubcommandStopsWhenOwningAppHostIsGone",
+      "job": "Tests / No-package tests (regular, Aspire.Managed.Tests, Managed, Managed, tests/Aspire.Managed.Tests/Asp... / Managed (windows-latest)",
+      "error": "aspire-managed exited with code 124.\nstdout: \nstderr: ",
+      "stack_trace": "   at Aspire.Managed.Tests.TerminalHostSignalTests.AssertTerminalHostStopsWhenOwningAppHostIsGoneAsync(String hostAssemblyPath) in D:\\a\\aspire\\aspire\\tests\\Aspire.Managed.Tests\\TerminalHostSignalTests.cs:line 241\n   at Aspire.Managed.Tests.TerminalHostSignalTests.AssertTerminalHostStopsWhenOwningAppHostIsGoneAsync(String hostAssemblyPath) in D:\\a\\aspire\\aspire\\tests\\Aspire.Managed.Tests\\TerminalHostSignalTests.cs:line 254\n   at Aspire.Managed.Tests.TerminalHostSignalTests.AssertTerminalHostStopsWhenOwningAppHostIsGoneAsync(String hostAssemblyPath) in D:\\a\\aspire\\aspire\\tests\\Aspire.Managed.Tests\\TerminalHostSignalTests.cs:line 266\n   at Aspire.Managed.Tests.TerminalHostSignalTests.TerminalHostSubcommandStopsWhenOwningAppHostIsGone() in D:\\a\\aspire\\aspire\\tests\\Aspire.Managed.Tests\\TerminalHostSignalTests.cs:line 99\n--- End of stack trace from previous location ---",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Timeout exit 124 in terminal host stop test matches recurring prior Windows timeout; no deterministic evidence.",
+      "job_id": 126363785456,
+      "execution_id": "9f7caf79-bf7b-40c4-a2a2-2076a039c2f6",
+      "result_file": "00001.trx",
+      "result_format": "trx"
+    }
+  ],
+  "causes": [
+    "aspire-managed-tests-terminalhostsignal-stopswhenowningapphostisgone-timeout"
+  ]
+}
