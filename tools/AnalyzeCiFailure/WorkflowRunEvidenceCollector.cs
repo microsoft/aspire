@@ -755,8 +755,7 @@ internal sealed partial class WorkflowRunEvidenceCollector
                     var extractedReports = new List<(string EntryPath, string ExtractedFileName)>();
                     if (await AcquireAsync(combined, (entry, file) => extractedReports.Add((entry, file)), reportFailure: false))
                     {
-                        var reportOwners = extractedReports.ToDictionary(file => file.ExtractedFileName,
-                            file => FindCombinedReportOwner(file.EntryPath, producers), StringComparer.Ordinal);
+                        var combinedReports = new CombinedTrxReports(extractedReports, producers);
                         foreach (var plan in plans.Where(plan => plan.Format == TestArtifactFormat.Trx))
                         {
                             // A rerun's new aggregate can include reports left by an older attempt.
@@ -774,8 +773,7 @@ internal sealed partial class WorkflowRunEvidenceCollector
                                 _progress.Diagnostics.Record("combined-results", "fallback", new { job = plan.JobName, reason = error.Message });
                                 continue;
                             }
-                            var matchingReportFileNames = extractedReports.Where(file => reportOwners[file.ExtractedFileName] == plan)
-                                .Select(file => file.ExtractedFileName).ToArray();
+                            var matchingReportFileNames = combinedReports.GetFileNamesForJob(plan);
                             var usableReportFileNames = ReadUsableCombinedReports(plan,
                                 Path.Combine(_scratch.Results, GetValueText(combined.Artifact.Id)), matchingReportFileNames);
                             // Coverage means the available reports are usable, not that every
@@ -933,22 +931,6 @@ internal sealed partial class WorkflowRunEvidenceCollector
         }
 
         return producerJobs.SelectMany(job => _workflow.DescribeTestArtifacts(job, runAttempt)).ToArray();
-    }
-
-    private static TestArtifactExpectation? FindCombinedReportOwner(string entryPath, TestArtifactExpectation[] producers)
-    {
-        // Include passing producers when checking ownership: similarly named
-        // jobs must never lend their failures or coverage to an actionable job.
-        // Hosting-2_*.trx belongs to Hosting-2, not Hosting. Prefer the
-        // longest matching short name; equally specific producers stay ambiguous.
-        var matches = producers.Select(producer => new
-        {
-            Plan = producer,
-            MatchingShortNameLength = AspireCiWorkflowConventions.GetMatchingTestShortNameLength(producer, entryPath),
-        }).Where(match => match.MatchingShortNameLength > 0).OrderByDescending(match => match.MatchingShortNameLength).ToArray();
-
-        return matches.Length > 0 && (matches.Length == 1 || matches[0].MatchingShortNameLength > matches[1].MatchingShortNameLength)
-            ? matches[0].Plan : null;
     }
 
     private List<string> ReadUsableCombinedReports(TestArtifactExpectation plan, string resultsDirectory, string[] matchingFileNames)
