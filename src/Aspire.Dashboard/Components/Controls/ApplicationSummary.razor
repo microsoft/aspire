@@ -252,13 +252,13 @@
             <div class="home-activity-header">
                 <div class="home-activity-title">
                     <span class="home-live-dot" aria-hidden="true"></span>
-                    <h2 id="home-activity-title">Live activity</h2>
-                    <span class="home-activity-window">Incoming requests · last 15 min</span>
+                    <h2 id="home-activity-title">@Loc[nameof(Dashboard.Resources.Resources.HomeLiveActivity)]</h2>
+                    <span class="home-activity-window">@Loc[nameof(Dashboard.Resources.Resources.HomeActivityWindow)]</span>
                 </div>
                 <div class="home-activity-totals">
-                    <a href="@DashboardUrls.StructuredLogsUrl()"><strong>@(_telemetry is { } t1 ? FormatCount(t1.LogCount) : "–")</strong> logs</a>
-                    <a href="@DashboardUrls.TracesUrl()"><strong>@(_telemetry is { } t2 ? FormatCount(t2.TraceCount) : "–")</strong> traces</a>
-                    <a href="@DashboardUrls.MetricsUrl()"><strong>@(_telemetry is { } t3 ? FormatCount(t3.InstrumentCount) : "–")</strong> metrics</a>
+                    <a href="@DashboardUrls.StructuredLogsUrl()"><strong>@(_telemetry is { } t1 ? FormatCount(t1.LogCount) : "–")</strong> @Loc[nameof(Dashboard.Resources.Resources.HomeLogsLabel)]</a>
+                    <a href="@DashboardUrls.TracesUrl()"><strong>@(_telemetry is { } t2 ? FormatCount(t2.TraceCount) : "–")</strong> @Loc[nameof(Dashboard.Resources.Resources.HomeTracesLabel)]</a>
+                    <a href="@DashboardUrls.MetricsUrl()"><strong>@(_telemetry is { } t3 ? FormatCount(t3.InstrumentCount) : "–")</strong> @Loc[nameof(Dashboard.Resources.Resources.HomeMetricsLabel)]</a>
                 </div>
             </div>
 
@@ -266,20 +266,20 @@
                 <div class="home-activity-stats">
                     <div class="home-stat">
                         <span class="home-stat-value">@(activity is null ? "–" : FormatRate(activity.RequestsPerMinute))</span>
-                        <span class="home-stat-label">requests / min</span>
+                        <span class="home-stat-label">@Loc[nameof(Dashboard.Resources.Resources.HomeRequestsPerMinute)]</span>
                     </div>
                     <div class="home-stat @(activity?.ErrorRate > 0 ? "error" : null)">
                         <span class="home-stat-value">@(activity?.ErrorRate is { } rate ? rate.ToString("P1", CultureInfo.CurrentCulture) : "–")</span>
-                        <span class="home-stat-label">error rate</span>
+                        <span class="home-stat-label">@Loc[nameof(Dashboard.Resources.Resources.HomeErrorRate)]</span>
                     </div>
                     <div class="home-stat">
                         <span class="home-stat-value">@(activity?.P95 is { } p95 ? DurationFormatter.FormatDuration(p95, CultureInfo.CurrentCulture) : "–")</span>
-                        <span class="home-stat-label">p95 latency</span>
+                        <span class="home-stat-label">@Loc[nameof(Dashboard.Resources.Resources.HomeP95Latency)]</span>
                     </div>
                 </div>
 
                 <div class="home-chart">
-                    <svg class="home-chart-svg" viewBox="0 0 @Svg(ChartWidth) @Svg(ChartHeight)" preserveAspectRatio="none" role="img" aria-label="Requests per 30 seconds over the last 15 minutes">
+                    <svg class="home-chart-svg" viewBox="0 0 @Svg(ChartWidth) @Svg(ChartHeight)" preserveAspectRatio="none" role="img" aria-label="@Loc[nameof(Dashboard.Resources.Resources.HomeActivityChartLabel)]">
                         <line class="home-chart-grid" x1="0" x2="@Svg(ChartWidth)" y1="8" y2="8" />
                         <line class="home-chart-grid" x1="0" x2="@Svg(ChartWidth)" y1="54" y2="54" />
                         <line class="home-chart-baseline" x1="0" x2="@Svg(ChartWidth)" y1="@Svg(ChartHeight)" y2="@Svg(ChartHeight)" />
@@ -298,7 +298,7 @@
                                 var okHeight = ok * 92.0 / max;
                                 var errorHeight = errors * 92.0 / max;
                                 var bucketStart = activity.WindowStart + (s_activityBucketSize * i);
-                                <g class="home-chart-bar @(i == ActivityBucketCount - 1 ? "current" : null)" data-tooltip="@($"{FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, bucketStart)} · {ok + errors} requests, {errors} failed")">
+                                <g class="home-chart-bar @(i == ActivityBucketCount - 1 ? "current" : null)" data-tooltip="@Loc[nameof(Dashboard.Resources.Resources.HomeActivityBucketTooltip), FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, bucketStart), FormatCount(ok + errors), FormatCount(errors)]">
                                     <rect class="ok" x="@Svg(x)" y="@Svg(ChartHeight - okHeight)" width="@Svg(barWidth)" height="@Svg(okHeight)" />
                                     @if (errors > 0)
                                     {
@@ -314,11 +314,11 @@
                     }
                     else
                     {
-                        <div class="home-chart-empty">@(activity is null ? "Loading activity…" : "Waiting for requests. Interact with your app to see live traffic.")</div>
+                        <div class="home-chart-empty">@Loc[activity is null ? nameof(Dashboard.Resources.Resources.HomeActivityLoading) : nameof(Dashboard.Resources.Resources.HomeActivityWaiting)]</div>
                     }
                     <div class="home-chart-axis" aria-hidden="true">
-                        <span>15 min ago</span>
-                        <span>now</span>
+                        <span>@Loc[nameof(Dashboard.Resources.Resources.HomeActivityWindowStart)]</span>
+                        <span>@Loc[nameof(Dashboard.Resources.Resources.HomeActivityWindowEnd)]</span>
                     </div>
                 </div>
             </div>
@@ -329,16 +329,16 @@
     {
         var activity = _telemetry?.Activity;
 
-        <section class="home-insights" aria-label="Insights">
+        <section class="home-insights" aria-label="@Loc[nameof(Dashboard.Resources.Resources.HomeInsightsLabel)]">
             <div class="home-insight">
                 <div class="home-insight-header">
                     <span class="card-header-icon slow"><FluentIcon Value="@(new Icons.Regular.Size16.Timer())" Width="16px" Color="Color.Custom" CustomColor="currentColor" /></span>
-                    <h2>Slowest endpoints</h2>
-                    <span class="home-insight-hint">p95</span>
+                    <h2>@Loc[nameof(Dashboard.Resources.Resources.HomeSlowestEndpoints)]</h2>
+                    <span class="home-insight-hint">@Loc[nameof(Dashboard.Resources.Resources.HomeP95Label)]</span>
                 </div>
                 @if (activity is null || activity.SlowestEndpoints.Count == 0)
                 {
-                    <div class="home-empty">No requests in the last 15 minutes</div>
+                    <div class="home-empty">@Loc[nameof(Dashboard.Resources.Resources.HomeNoRecentRequests)]</div>
                 }
                 else
                 {
@@ -347,7 +347,7 @@
                         @foreach (var endpoint in activity.SlowestEndpoints)
                         {
                             <li>
-                                <a href="@DashboardUrls.TracesUrl(resource: endpoint.ResourceName)" data-tooltip="@($"{endpoint.ResourceName}: {endpoint.Label} ({endpoint.Count} requests)")">
+                                <a href="@DashboardUrls.TracesUrl(resource: endpoint.ResourceName)" data-tooltip="@Loc[nameof(Dashboard.Resources.Resources.HomeEndpointTooltip), endpoint.ResourceName, endpoint.Label, FormatCount(endpoint.Count)]">
                                     <span class="home-insight-row">
                                         <span class="home-insight-name">@endpoint.Label</span>
                                         <span class="home-insight-value">@DurationFormatter.FormatDuration(endpoint.P95, CultureInfo.CurrentCulture)</span>
@@ -357,7 +357,7 @@
                                         <span class="home-resource-dot" style="background: @ColorGenerator.Instance.GetColorVariableByKey(endpoint.ResourceName)"></span>
                                         <span class="home-event-resource">@endpoint.ResourceName</span>
                                         <span aria-hidden="true">·</span>
-                                        <span>@FormatCount(endpoint.Count) req</span>
+                                        <span>@Loc[nameof(Dashboard.Resources.Resources.HomeRequestCountShort), FormatCount(endpoint.Count)]</span>
                                     </span>
                                 </a>
                             </li>
@@ -369,12 +369,12 @@
             <div class="home-insight">
                 <div class="home-insight-header">
                     <span class="card-header-icon"><FluentIcon Value="@(new Icons.Regular.Size16.DataTrending())" Width="16px" Color="Color.Custom" CustomColor="currentColor" /></span>
-                    <h2>Busiest resources</h2>
-                    <span class="home-insight-hint">requests / min</span>
+                    <h2>@Loc[nameof(Dashboard.Resources.Resources.HomeBusiestResources)]</h2>
+                    <span class="home-insight-hint">@Loc[nameof(Dashboard.Resources.Resources.HomeRequestsPerMinute)]</span>
                 </div>
                 @if (activity is null || activity.BusiestResources.Count == 0)
                 {
-                    <div class="home-empty">No requests in the last 15 minutes</div>
+                    <div class="home-empty">@Loc[nameof(Dashboard.Resources.Resources.HomeNoRecentRequests)]</div>
                 }
                 else
                 {
@@ -394,11 +394,11 @@
                                     </span>
                                     <span class="home-insight-meter"><span class="busy" style="width: @FormatPercent(busy.Requests, busiest)"></span></span>
                                     <span class="home-event-meta">
-                                        <span>@FormatCount(busy.Requests) requests</span>
+                                        <span>@Loc[nameof(Dashboard.Resources.Resources.HomeRequestCount), FormatCount(busy.Requests)]</span>
                                         @if (busy.ErrorSpans > 0)
                                         {
                                             <span aria-hidden="true">·</span>
-                                            <span>@FormatCount(busy.ErrorSpans) failed</span>
+                                            <span>@Loc[nameof(Dashboard.Resources.Resources.HomeFailedCount), FormatCount(busy.ErrorSpans)]</span>
                                         }
                                     </span>
                                 </a>
@@ -411,14 +411,14 @@
             <div class="home-insight">
                 <div class="home-insight-header">
                     <span class="card-header-icon hot"><FluentIcon Value="@(new Icons.Regular.Size16.Fire())" Width="16px" Color="Color.Custom" CustomColor="currentColor" /></span>
-                    <h2>Error hotspots</h2>
-                    <span class="home-insight-hint">failed requests + error logs</span>
+                    <h2>@Loc[nameof(Dashboard.Resources.Resources.HomeErrorHotspots)]</h2>
+                    <span class="home-insight-hint">@Loc[nameof(Dashboard.Resources.Resources.HomeErrorHotspotsHint)]</span>
                 </div>
                 @if (activity is null || activity.ErrorHotspots.Count == 0)
                 {
                     <div class="home-empty">
                         <FluentIcon Value="@(new Icons.Regular.Size16.CheckmarkCircle())" Color="Color.Success" />
-                        No errors in the last 15 minutes
+                        @Loc[nameof(Dashboard.Resources.Resources.HomeNoRecentActivityErrors)]
                     </div>
                 }
                 else
@@ -438,9 +438,9 @@
                                     </span>
                                     <span class="home-insight-meter"><span class="hot" style="width: @FormatPercent(hotspot.TotalErrors, totalErrors)"></span></span>
                                     <span class="home-event-meta">
-                                        <span>@FormatCount(hotspot.ErrorSpans) failed requests</span>
+                                        <span>@Loc[nameof(Dashboard.Resources.Resources.HomeFailedRequestCount), FormatCount(hotspot.ErrorSpans)]</span>
                                         <span aria-hidden="true">·</span>
-                                        <span>@FormatCount(hotspot.ErrorLogs) error logs</span>
+                                        <span>@Loc[nameof(Dashboard.Resources.Resources.HomeErrorLogCount), FormatCount(hotspot.ErrorLogs)]</span>
                                     </span>
                                 </a>
                             </li>

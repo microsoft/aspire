@@ -718,17 +718,26 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
 
         if (summary.Attention > 0)
         {
-            return Loc[nameof(Dashboard.Resources.Resources.HomeHeadlineAttention), summary.Attention, summary.Total];
+            return summary.Total == 1
+                ? Loc[nameof(Dashboard.Resources.Resources.HomeHeadlineSingleAttention)]
+                : Loc[nameof(Dashboard.Resources.Resources.HomeHeadlineAttention), summary.Attention, summary.Total];
         }
 
         if (summary.Pending > 0)
         {
-            return Loc[nameof(Dashboard.Resources.Resources.HomeHeadlinePending), summary.Pending, summary.Total];
+            return summary.Total == 1
+                ? Loc[nameof(Dashboard.Resources.Resources.HomeHeadlineSinglePending)]
+                : Loc[nameof(Dashboard.Resources.Resources.HomeHeadlinePending), summary.Pending, summary.Total];
         }
 
-        return summary.Running == summary.Total
-            ? Loc[nameof(Dashboard.Resources.Resources.HomeHeadlineAllRunning), summary.Total]
-            : Loc[nameof(Dashboard.Resources.Resources.HomeHeadlineHealthy)];
+        if (summary.Running == summary.Total)
+        {
+            return summary.Total == 1
+                ? Loc[nameof(Dashboard.Resources.Resources.HomeHeadlineSingleRunning)]
+                : Loc[nameof(Dashboard.Resources.Resources.HomeHeadlineAllRunning), summary.Total];
+        }
+
+        return Loc[nameof(Dashboard.Resources.Resources.HomeHeadlineHealthy)];
     }
 
     private static string GetHeroStateClass(HealthSummary summary) => summary switch
