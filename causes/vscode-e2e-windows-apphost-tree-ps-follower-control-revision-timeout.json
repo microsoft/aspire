@@ -31,6 +31,26 @@
           "result_format": "mocha"
         }
       ]
+    },
+    {
+      "run_id": 41882614042,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/41882614042",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, resource-debug-tools-negative)",
+      "observed_at": "2026-11-04T18:48:54Z",
+      "pr_number": 0,
+      "tests": [
+        {
+          "name": "Aspire resource debug language model tool E2E cancels through the VS Code invocation token and reports a stopped resource without invoking a debugger",
+          "job_id": 126773174289,
+          "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, resource-debug-tools-negative)",
+          "error": "Timed out after 10000ms waiting for E2E control revision 1793816833175.\nLast error: <none>\nLast state: {\n  \"extensionHostSessionId\": \"4f431612-ab8e-455d-a4a7-a12f97e8680c\",\n  \"updatedAt\": \"2026-11-04T18:28:05.159Z\",\n  \"runId\": \"7428-1793816808780\",\n  \"state\": {\n    \"viewMode\": \"workspace\",\n    \"isRepositoryLoading\": false,\n    \"isWorkspaceAppHostDiscoveryComplete\": true,\n    \"hasError\": false,\n    \"workspaceAppHost\": {\n      \"appHostPath\": \"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-bWS2JK\\\\workspace\\\\AspireE2E.AppHost\\\\AspireE2E.AppHost.csproj\",\n      \"appHostPid\": 3500,\n      \"dashboardUrl\": \"https://localhost:59600/login?t=<redacted>\",\n      \"resources\": [\n        {\n          \"name\": \"e2e-no-commands\",\n          \"displayName\": \"e2e-no-commands\",\n          \"resourceType\": \"NoCommandsResource\",\n          \"projectPath\": null,\n          \"dashboardUrl\": \"https://localhost:59600\",\n          \"urls\": [],\n          \"commands\": {}\n        },\n        {\n          \"name\": \"e2e-terminal-db",
+          "stack_trace": "Error: Timed out after 10000ms waiting for E2E control revision 1793816833175.\nLast error: <none>\nLast state: {\n  \"extensionHostSessionId\": \"4f431612-ab8e-455d-a4a7-a12f97e8680c\",\n  \"updatedAt\": \"2026-11-04T18:28:05.159Z\",\n  \"runId\": \"7428-1793816808780\",\n  \"state\": {\n    \"viewMode\": \"workspace\",\n    \"isRepositoryLoading\": false,\n    \"isWorkspaceAppHostDiscoveryComplete\": true,\n    \"hasError\": false,\n    \"workspaceAppHost\": {\n      \"appHostPath\": \"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-bWS2JK\\\\workspace\\\\AspireE2E.AppHost\\\\AspireE2E.AppHost.csproj\",\n      \"appHostPid\": 3500,\n      \"dashboardUrl\": \"https://localhost:59600/login?t=<redacted>\",\n      \"resources\": [\n        {\n          \"name\": \"e2e-no-commands\",\n          \"displayName\": \"e2e-no-commands\",\n          \"resourceType\": \"NoCommandsResource\",\n          \"projectPath\": null,\n          \"dashboardUrl\": \"https://localhost:59600\",\n          \"urls\": [],\n          \"commands\": {}\n        },\n        {\n          \"name\": \"e2e-terminal-dbknmavm\",\n          \"displayName\": \"e2e-terminal\",\n          \"resourceType\": \"Project\",\n          \"state\": \"Running\",\n          \"projectPath\": \"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-bWS2JK\\\\workspace\\\\AspireE2E.Worker\\\\AspireE2E.Worker.csproj\",\n          \"dashboardUrl\": \"https://localhost:59600\",\n          \"urls\": [\n            {\n              \"name\": \"http\",\n              \"url\": \"http://localhost:59598\"\n            }\n          ],\n          \"commands\": {\n            \"rebuild\": {\n              \"displayName\": \"Rebuild\",\n              \"description\": \"Stop the resource, rebuild the project from source, and restart. Use this to apply source code changes.\",\n              \"state\": \"Enabled\"\n            },\n            \"restart\": {\n              \"displayName\": \"Restart\",\n              \"description\": \"Restart resource. Source code is not recompiled.\",\n              \"state\": \"Enabled\"\n            },\n            \"stop\": {\n              \"displayName\": \"Stop\",\n              \"descri",
+          "standard_output": "",
+          "standard_error": "",
+          "result_file": "00001.json",
+          "result_format": "mocha"
+        }
+      ]
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/21697"
