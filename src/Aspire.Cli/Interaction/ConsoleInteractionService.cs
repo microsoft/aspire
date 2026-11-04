@@ -284,16 +284,17 @@ internal class ConsoleInteractionService : IInteractionService
     }
 
     public Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull
-        => PromptForSelectionCoreAsync(promptText, choices, choiceFormatter, null, binding, echoSelected, cancellationToken);
+        => PromptForSelectionCoreAsync(promptText, choices, choiceFormatter, null, choiceFormatter, binding, echoSelected, cancellationToken);
 
-    public Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, Func<T, SelectionChoiceGroup?> choiceGroup, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull
-        => PromptForSelectionCoreAsync(promptText, choices, choiceFormatter, choiceGroup, binding, echoSelected, cancellationToken);
+    public Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, Func<T, SelectionChoiceGroup?> choiceGroup, Func<T, string> groupedChoiceFormatter, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull
+        => PromptForSelectionCoreAsync(promptText, choices, choiceFormatter, choiceGroup, groupedChoiceFormatter, binding, echoSelected, cancellationToken);
 
-    private async Task<T> PromptForSelectionCoreAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, Func<T, SelectionChoiceGroup?>? choiceGroup, PromptBinding<string?>? binding, bool echoSelected, CancellationToken cancellationToken) where T : notnull
+    private async Task<T> PromptForSelectionCoreAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, Func<T, SelectionChoiceGroup?>? choiceGroup, Func<T, string> groupedChoiceFormatter, PromptBinding<string?>? binding, bool echoSelected, CancellationToken cancellationToken) where T : notnull
     {
         ArgumentNullException.ThrowIfNull(promptText, nameof(promptText));
         ArgumentNullException.ThrowIfNull(choices, nameof(choices));
         ArgumentNullException.ThrowIfNull(choiceFormatter, nameof(choiceFormatter));
+        ArgumentNullException.ThrowIfNull(groupedChoiceFormatter, nameof(groupedChoiceFormatter));
 
         // Materialize once to avoid re-enumerating the choices enumerable.
         var choicesList = choices as IReadOnlyList<T> ?? choices.ToList();
@@ -355,7 +356,7 @@ internal class ConsoleInteractionService : IInteractionService
             Dictionary<string, ISelectionItem<SelectionPromptItem>> groups = [];
             foreach (var choice in choicesList)
             {
-                var item = new SelectionPromptValue<T>(choice, choiceFormatter(choice));
+                var item = new SelectionPromptValue<T>(choice, groupedChoiceFormatter(choice));
                 // Spectre starts value-type prompts on default(T), if present (e.g. false
                 // for a confirmation). Wrapping choices must not change that default.
                 if (prompt.DefaultValue is null && default(T) is { } typeDefaultValue && EqualityComparer<T>.Default.Equals(choice, typeDefaultValue))
@@ -393,7 +394,7 @@ internal class ConsoleInteractionService : IInteractionService
         // Echo the prompt text and selected value so the user can see what was chosen.
         if (echoSelected)
         {
-            MessageConsole.MarkupLine($"{promptText} {choiceFormatter(result)}");
+            MessageConsole.MarkupLine($"{promptText} {groupedChoiceFormatter(result)}");
         }
 
         return result;

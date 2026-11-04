@@ -229,9 +229,9 @@ public partial class NewCommandLocalTemplateTests
             selections++;
             var options = choices.Cast<object>().ToArray();
             Assert.Equal(consent is true
-                ? ["Personal (personal) - personal", "Proof (proof) - git-proof", NewCommandStrings.SearchForMoreTemplates]
-                : new[] { "Personal (personal) - personal", NewCommandStrings.SearchForMoreTemplates },
-                options.Select(formatter).TakeLast(consent is true ? 3 : 2));
+                ? ["Personal (personal) - personal", "Proof (proof) - git-proof"]
+                : new[] { "Personal (personal) - personal" },
+                options.Select(formatter).TakeLast(consent is true ? 2 : 1));
             var label = consent is true ? "Proof (proof) - git-proof" : "Personal (personal) - personal";
             return Assert.Single(options, option => formatter(option) == label);
         };

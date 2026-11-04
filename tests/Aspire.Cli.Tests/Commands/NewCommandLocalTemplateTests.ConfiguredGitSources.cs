@@ -65,17 +65,16 @@ public partial class NewCommandLocalTemplateTests
             selectionCount++;
             Assert.False(Directory.Exists(Path.Combine(workspace.Path, "out")));
             Assert.Equal(
-                ["Sample template (sample) - git-source", "Sample template (sample) - local-source",
-                    NewCommandStrings.SearchForMoreTemplates],
-                options.Select(formatter).TakeLast(3));
+                ["Sample template (sample) - git-source", "Sample template (sample) - local-source"],
+                options.Select(formatter).TakeLast(2));
             Assert.Equal(
                 providerTemplates.Select(template => template.Description),
-                options.Select(formatter).SkipLast(3));
+                options.Select(formatter).SkipLast(2));
             Assert.Equal(
                 [string.Format(CultureInfo.CurrentCulture, NewCommandStrings.SearchingTemplateSource, "local-source"),
                     NewCommandStrings.ResolvingTemplateRepository, NewCommandStrings.CloningTemplateRepository],
                 interaction.ShownStatuses);
-            return options[^3];
+            return options[^2];
         };
         var services = CreateServices(workspace, interaction, interactive: true);
         services.AddSingleton<IGitCommandRunner>(git);
@@ -477,8 +476,8 @@ public partial class NewCommandLocalTemplateTests
         {
             selections++;
             var labels = choices.Cast<object>().Select(formatter).ToArray();
-            Assert.Equal(NewCommandStrings.SearchForMoreTemplates, labels[^1]);
-            Assert.Equal(noBuiltIns, labels.Length == 1);
+            Assert.False(noBuiltIns, "No choices should open a picker when there are no built-ins or discovered templates.");
+            Assert.NotEmpty(labels);
             Assert.Equal(3, interaction.DisplayedMessages.Count);
             cancellation.Cancel();
             throw new OperationCanceledException(cancellation.Token);
@@ -500,11 +499,17 @@ public partial class NewCommandLocalTemplateTests
         var result = await provider.GetRequiredService<RootCommand>().Parse("new --name Demo --output out")
             .InvokeAsync(cancellationToken: cancellation.Token).DefaultTimeout();
 
-        Assert.Equal(CliExitCodes.Cancelled, result);
-        Assert.Equal(1, selections);
+        Assert.Equal(noBuiltIns ? CliExitCodes.InvalidCommand : CliExitCodes.Cancelled, result);
+        Assert.Equal(noBuiltIns ? 0 : 1, selections);
+        Assert.Equal(noBuiltIns ? ["No templates are available for the current environment."] : Array.Empty<string>(), interaction.DisplayedErrors);
         Assert.Equal(2, GetGitFetches(git).Count);
-        Assert.Equal(SharedCommandStrings.SourceTrustWarning, interaction.DisplayedMessages[0].Message);
-        Assert.All(interaction.DisplayedMessages.Skip(1), message => Assert.Equal(KnownEmojis.Warning, message.Emoji));
+        Assert.Equal(noBuiltIns ? 4 : 3, interaction.DisplayedMessages.Count);
+        Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", interaction.DisplayedMessages[0].Message);
+        Assert.All(interaction.DisplayedMessages.Skip(1).Take(2), message => Assert.Equal(KnownEmojis.PoliceCarLight, message.Emoji));
+        if (noBuiltIns)
+        {
+            Assert.Equal(KnownEmojis.PageFacingUp, interaction.DisplayedMessages[^1].Emoji);
+        }
         Assert.StartsWith(string.Format(CultureInfo.CurrentCulture, NewCommandStrings.TemplateSourceSearchFailed, "empty", ""),
             interaction.DisplayedMessages[1].Message);
         Assert.Equal(string.Format(CultureInfo.CurrentCulture, NewCommandStrings.TemplateSourceSearchFailed, "broken",

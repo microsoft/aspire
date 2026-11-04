@@ -61,15 +61,6 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Back to default templates.
-        /// </summary>
-        internal static string BackToDefaultTemplates {
-            get {
-                return ResourceManager.GetString("BackToDefaultTemplates", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Looks up a localized string similar to Built-in templates.
         /// </summary>
         internal static string BuiltInTemplates {
@@ -250,15 +241,6 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to No matching templates were found in the configured sources..
-        /// </summary>
-        internal static string NoMatchingConfiguredTemplates {
-            get {
-                return ResourceManager.GetString("NoMatchingConfiguredTemplates", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Looks up a localized string similar to No matching local Aspire.ProjectTemplates package was found for Aspire CLI version &apos;{0}&apos;. Build and stage matching packages with localhive.sh (macOS/Linux) or localhive.ps1 (Windows), set ASPIRE_CLI_PACKAGES to a directory containing the package, or explicitly choose feed-backed templates with --channel, --source, or --version..
         /// </summary>
         internal static string NoMatchingLocalTemplatePackage {
@@ -349,29 +331,11 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Search for more templates.
-        /// </summary>
-        internal static string SearchForMoreTemplates {
-            get {
-                return ResourceManager.GetString("SearchForMoreTemplates", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Looks up a localized string similar to Searching template source &apos;{0}&apos;....
         /// </summary>
         internal static string SearchingTemplateSource {
             get {
                 return ResourceManager.GetString("SearchingTemplateSource", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Search again.
-        /// </summary>
-        internal static string SearchTemplatesAgain {
-            get {
-                return ResourceManager.GetString("SearchTemplatesAgain", resourceCulture);
             }
         }
         
@@ -534,15 +498,6 @@ namespace Aspire.Cli.Resources {
         internal static string TemplateRepositoryRefRequiresRepository {
             get {
                 return ResourceManager.GetString("TemplateRepositoryRefRequiresRepository", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Search templates (leave empty to list all).
-        /// </summary>
-        internal static string TemplateSearchPrompt {
-            get {
-                return ResourceManager.GetString("TemplateSearchPrompt", resourceCulture);
             }
         }
         

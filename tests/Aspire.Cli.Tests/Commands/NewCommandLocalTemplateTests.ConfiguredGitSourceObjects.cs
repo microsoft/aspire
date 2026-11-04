@@ -93,9 +93,9 @@ public partial class NewCommandLocalTemplateTests
             Assert.Equal(
                 ["First template (one) - all", "First template (one) - first",
                     "Local template (local) - local", "Second template (two) - all",
-                    "Second template (two) - second", NewCommandStrings.SearchForMoreTemplates],
-                options.Select(formatter).TakeLast(6));
-            return options[^2];
+                    "Second template (two) - second"],
+                options.Select(formatter).TakeLast(5));
+            return options[^1];
         };
         var services = CreateServices(workspace, interaction, interactive: true);
         services.AddSingleton<IGitCommandRunner>(git);
@@ -343,9 +343,8 @@ public partial class NewCommandLocalTemplateTests
             {
                 var options = choices.Cast<object>().ToArray();
                 selections++;
-                Assert.Equal(["Sample template (sample) - company", NewCommandStrings.SearchForMoreTemplates],
-                    options.Select(formatter).TakeLast(2));
-                return options[^2];
+                Assert.Equal("Sample template (sample) - company", formatter(options[^1]));
+                return options[^1];
             };
             var git = new TestGitCommandRunner();
             var services = CreateServices(workspace, interaction, interactive: true);

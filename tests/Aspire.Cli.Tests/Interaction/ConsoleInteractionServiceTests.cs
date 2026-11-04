@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.InternalTesting;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Templating;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
@@ -12,6 +13,8 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
 using Spectre.Console;
+using NewCommand = Aspire.Cli.Commands.NewCommand;
+using NewCommandPrompter = Aspire.Cli.Commands.NewCommandPrompter;
 
 using System.CommandLine;
 using System.Globalization;
@@ -44,8 +47,7 @@ public class ConsoleInteractionServiceTests
         TestItem[] choices = [
             new("built-in", "Starter"),
             new("first", "Same (same) - first"),
-            new("second", "Same (same) - second"),
-            new("search", "Search for more templates")];
+            new("second", "Same (same) - second")];
 
         var selected = await interaction.PromptForSelectionAsync("Select a template:", choices, choice => choice.Display,
             choice => choice.Id switch
@@ -54,6 +56,11 @@ public class ConsoleInteractionServiceTests
                 "first" => new("source:first", "Company [first]"),
                 "second" => new("source:second", "Company [second]"),
                 _ => null
+            }, choice => choice.Id switch
+            {
+                "built-in" => "Starter",
+                "first" => "Same",
+                _ => "Same - Observable services"
             });
 
         Assert.Same(choices[0], selected);
@@ -77,7 +84,8 @@ public class ConsoleInteractionServiceTests
             new("search", "Search")];
 
         var selected = await interaction.PromptForSelectionAsync("Select:", choices, choice => choice.Display,
-            choice => choice.Id == "search" ? null : new SelectionChoiceGroup(choice.Id, "Same heading"));
+            choice => choice.Id == "search" ? null : new SelectionChoiceGroup(choice.Id, "Same heading"),
+            choice => choice.Id == "search" ? "Other action" : "Same");
 
         Assert.Same(choices[expectedIndex], selected);
     }
@@ -96,7 +104,7 @@ public class ConsoleInteractionServiceTests
         var selected = await interaction.PromptForSelectionAsync("Select:", choices, choice => choice.Display,
             choice => choice.Id.StartsWith("first:", StringComparison.Ordinal)
                 ? new("source:first", "First source")
-                : new SelectionChoiceGroup("source:second", "Second source"));
+                : new SelectionChoiceGroup("source:second", "Second source"), choice => choice.Display);
 
         Assert.Same(choices[0], selected);
         await Verify(output.ToString()).ScrubLinesWithReplace(line => line.TrimEnd());
@@ -113,7 +121,7 @@ public class ConsoleInteractionServiceTests
 
         var selected = grouped
             ? await interaction.PromptForSelectionAsync("Select:", choices, choice => choice.ToString(),
-                _ => new SelectionChoiceGroup("choices", "Choices"))
+                _ => new SelectionChoiceGroup("choices", "Choices"), choice => choice.ToString())
             : await interaction.PromptForSelectionAsync("Select:", choices, choice => choice.ToString());
 
         Assert.False(selected);
@@ -128,9 +136,50 @@ public class ConsoleInteractionServiceTests
         TestItem[] choices = [new("first", "Same (same) - first"), new("second", "Same (same) - second")];
 
         var selected = await interaction.PromptForSelectionAsync("Select:", choices, choice => choice.Display,
-            choice => new SelectionChoiceGroup(choice.Id, "Source"));
+            choice => new SelectionChoiceGroup(choice.Id, "Source"), choice => choice.Display);
 
         Assert.Same(choices[1], selected);
+    }
+
+    [Fact]
+    public async Task PromptForSelectionAsync_DescriptionOnlySearchSelectsExactTemplate()
+    {
+        var keys = "OBSERVABLE".Select(ch => new ConsoleKeyInfo(ch, Enum.Parse<ConsoleKey>(ch.ToString()), true, false, false))
+            .Append(new ConsoleKeyInfo('\r', ConsoleKey.Enter, false, false, false));
+        var interaction = CreateInteractionService(CreateSelectionConsole(new StringBuilder(), keys));
+        ITemplate[] templates = [CreateSearchableTemplate("first", null), CreateSearchableTemplate("second", "Observable [services]")];
+
+        var selected = await interaction.PromptForSelectionAsync("Select:", templates, template => $"Same - {template.Name}",
+            template => new SelectionChoiceGroup(template.Name, template.Name),
+            template => NewCommand.FormatTemplateDisplayLabel(template).EscapeMarkup());
+
+        Assert.Same(templates[1], selected);
+    }
+
+    [Theory]
+    [InlineData(null, "Same")]
+    [InlineData("", "Same")]
+    [InlineData(" ", "Same")]
+    [InlineData("Observable [services]", "Same - Observable [services]")]
+    public void TemplateDisplayLabel_IncludesOnlyNonemptyDescriptions(string? description, string expectedLabel)
+    {
+        var template = CreateSearchableTemplate("sample", description);
+
+        Assert.Equal(expectedLabel, NewCommand.FormatTemplateDisplayLabel(template));
+    }
+
+    [Fact]
+    public async Task BuiltInTemplatePicker_DescriptionOnlySearchWorksWithoutConfiguredSources()
+    {
+        var keys = "OBSERVABLE".Select(ch => new ConsoleKeyInfo(ch, Enum.Parse<ConsoleKey>(ch.ToString()), true, false, false))
+            .Append(new ConsoleKeyInfo('\r', ConsoleKey.Enter, false, false, false));
+        var interaction = CreateInteractionService(CreateSelectionConsole(new StringBuilder(), keys));
+        var prompter = new NewCommandPrompter(interaction);
+        ITemplate[] templates = [CreateSearchableTemplate("first", ""), CreateSearchableTemplate("second", "Observable services")];
+
+        var selected = await prompter.PromptForTemplateAsync(templates, TestContext.Current.CancellationToken);
+
+        Assert.Same(templates[1], selected);
     }
 
     [Fact]
@@ -144,7 +193,8 @@ public class ConsoleInteractionServiceTests
         TestItem[] choices = [new("first", "first"), new("second", "second")];
 
         var selected = await interaction.PromptForSelectionAsync("Select:", choices, choice => choice.Display,
-            _ => throw new InvalidOperationException("Noninteractive binding must not evaluate grouping."), binding);
+            _ => throw new InvalidOperationException("Noninteractive binding must not evaluate grouping."),
+            _ => throw new InvalidOperationException("Noninteractive binding must use flat labels."), binding);
 
         Assert.Same(choices[1], selected);
         Assert.Empty(output.ToString());
@@ -156,7 +206,7 @@ public class ConsoleInteractionServiceTests
         var interaction = CreateInteractionService(CreateInteractiveConsoleWithInput(new StringBuilder(), ""));
 
         await Assert.ThrowsAsync<EmptyChoicesException>(() => interaction.PromptForSelectionAsync("Select:", Array.Empty<string>(), choice => choice,
-            _ => throw new InvalidOperationException("Empty choices must not create groups.")));
+            _ => throw new InvalidOperationException("Empty choices must not create groups."), choice => choice));
     }
 
     [Fact]
@@ -2232,6 +2282,12 @@ public class ConsoleInteractionServiceTests
         console.Profile.Height = 40;
         return new TestAnsiConsoleWithInput(console, keys);
     }
+
+    private static CallbackTemplate CreateSearchableTemplate(string id, string? description) =>
+        new(id, "Same", (_, name) => name, _ => { }, (_, _, _, _) => throw new InvalidOperationException("The picker must not execute a template."))
+        {
+            SearchDescription = description
+        };
 
     private static IAnsiConsole CreateInteractiveConsoleWithInput(StringBuilder output, string input)
     {

@@ -124,10 +124,9 @@ public partial class NewCommandLocalTemplateTests
             var options = choices.Cast<object>().ToArray();
             selectionCount++;
             Assert.Equal(
-                ["Enterprise (enterprise) - enterprise", "Personal (personal) - personal",
-                    NewCommandStrings.SearchForMoreTemplates],
-                options.Select(formatter).TakeLast(3));
-            return options[^3];
+                ["Enterprise (enterprise) - enterprise", "Personal (personal) - personal"],
+                options.Select(formatter).TakeLast(2));
+            return options[^2];
         };
         var git = new TestConfigSourceRepository
         {
@@ -177,9 +176,9 @@ public partial class NewCommandLocalTemplateTests
             var options = choices.Cast<object>().ToArray();
             selectionCount++;
             Assert.Equal(
-                ["Personal (personal) - personal", NewCommandStrings.SearchForMoreTemplates],
-                options.Select(formatter).TakeLast(2));
-            return options[^2];
+                ["Personal (personal) - personal"],
+                options.Select(formatter).TakeLast(1));
+            return options[^1];
         };
         var git = new TestConfigSourceRepository
         {

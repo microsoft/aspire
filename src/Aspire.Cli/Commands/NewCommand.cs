@@ -365,78 +365,43 @@ internal sealed class NewCommand : BaseCommand
         }
 
         var configuredTemplates = await _configuredTemplateSources.SearchAsync("", cancellationToken);
-        HashSet<string> labels = [NewCommandStrings.SearchForMoreTemplates];
-        List<TemplateSearchChoice> choices = [];
+        HashSet<string> labels = [];
+        List<TemplateChoice> choices = [];
         var builtInGroup = new SelectionChoiceGroup("builtin", NewCommandStrings.BuiltInTemplates);
         foreach (var template in templatesForPrompt)
         {
-            choices.Add(new(GetUniqueTemplateLabel(template.Description, labels), template, TemplateSearchAction.Select, false, builtInGroup));
+            choices.Add(new(GetUniqueTemplateLabel(template.Description, labels), template, false, builtInGroup));
         }
         AddConfiguredTemplateChoices(choices, labels, configuredTemplates);
-        choices.Add(new(NewCommandStrings.SearchForMoreTemplates, null, TemplateSearchAction.Search, false, null));
-
-        while (true)
+        if (choices.Count == 0)
         {
-            var selection = await InteractionService.PromptForSelectionAsync(
-                NewCommandStrings.SelectAProjectTemplate, choices, choice => choice.Label.EscapeMarkup(),
-                choice => choice.Group,
-                cancellationToken: cancellationToken);
-            if (selection.Template is { } template)
-            {
-                return (template, selection.IsConfigured);
-            }
-
-            var configuredTemplate = await SearchConfiguredTemplatesAsync(cancellationToken);
-            if (configuredTemplate is not null)
-            {
-                return (configuredTemplate, true);
-            }
+            InteractionService.DisplayError("No templates are available for the current environment.");
+            return (null, false);
         }
-    }
 
-    private async Task<ITemplate?> SearchConfiguredTemplatesAsync(CancellationToken cancellationToken)
-    {
-        while (true)
-        {
-            var query = await InteractionService.PromptForStringAsync(
-                NewCommandStrings.TemplateSearchPrompt, logResponse: false, cancellationToken: cancellationToken);
-            var templates = await _configuredTemplateSources.SearchAsync(query, cancellationToken);
-            if (templates.Count == 0)
-            {
-                InteractionService.DisplayMessage(KnownEmojis.Information, NewCommandStrings.NoMatchingConfiguredTemplates);
-            }
-
-            List<TemplateSearchChoice> choices = [];
-            HashSet<string> labels = [NewCommandStrings.SearchTemplatesAgain, NewCommandStrings.BackToDefaultTemplates];
-            AddConfiguredTemplateChoices(choices, labels, templates);
-            choices.Add(new(NewCommandStrings.SearchTemplatesAgain, null, TemplateSearchAction.Search, false, null));
-            choices.Add(new(NewCommandStrings.BackToDefaultTemplates, null, TemplateSearchAction.Back, false, null));
-            var choice = await InteractionService.PromptForSelectionAsync(
-                NewCommandStrings.SelectAProjectTemplate, choices, choice => choice.Label.EscapeMarkup(),
-                choice => choice.Group,
-                cancellationToken: cancellationToken);
-            if (choice.Action is TemplateSearchAction.Back)
-            {
-                return null;
-            }
-            if (choice.Action is TemplateSearchAction.Select)
-            {
-                return choice.Template;
-            }
-        }
+        var selection = await InteractionService.PromptForSelectionAsync(
+            NewCommandStrings.SelectAProjectTemplate, choices, choice => choice.Label.EscapeMarkup(),
+            choice => choice.Group, choice => FormatTemplateDisplayLabel(choice.Template).EscapeMarkup(),
+            cancellationToken: cancellationToken);
+        return (selection.Template, selection.IsConfigured);
     }
 
     private static void AddConfiguredTemplateChoices(
-        List<TemplateSearchChoice> choices, HashSet<string> labels, IReadOnlyList<ConfiguredTemplate> templates)
+        List<TemplateChoice> choices, HashSet<string> labels, IReadOnlyList<ConfiguredTemplate> templates)
     {
         foreach (var result in templates)
         {
             var label = GetUniqueTemplateLabel(
                 $"{result.Template.Description} ({result.Template.Name}) - {result.SourceName}", labels);
-            choices.Add(new(label, result.Template, TemplateSearchAction.Select, true,
+            choices.Add(new(label, result.Template, true,
                 new SelectionChoiceGroup($"source:{result.SourceName}", result.SourceName)));
         }
     }
+
+    internal static string FormatTemplateDisplayLabel(ITemplate template) =>
+        string.IsNullOrWhiteSpace(template.SearchDescription)
+            ? template.Description
+            : $"{template.Description} - {template.SearchDescription}";
 
     private static string GetUniqueTemplateLabel(string baseLabel, HashSet<string> labels)
     {
@@ -892,24 +857,11 @@ internal sealed class NewCommand : BaseCommand
         return match?.ShouldPersistChannelName() is true ? match.Name : null;
     }
 
-    private enum TemplateSearchAction
-    {
-        Select,
-        Search,
-        Back
-    }
-
-    private sealed record TemplateSearchChoice(string Label, ITemplate? Template, TemplateSearchAction Action, bool IsConfigured, SelectionChoiceGroup? Group);
-}
-
-internal sealed record TemplateSelection(ITemplate? Template)
-{
-    public static TemplateSelection Search { get; } = new(Template: null);
+    private sealed record TemplateChoice(string Label, ITemplate Template, bool IsConfigured, SelectionChoiceGroup Group);
 }
 
 internal interface INewCommandPrompter
 {
-    Task<TemplateSelection> PromptForTemplateOrSearchAsync(ITemplate[] validTemplates, CancellationToken cancellationToken);
     Task<ITemplate> PromptForTemplateAsync(ITemplate[] validTemplates, CancellationToken cancellationToken);
     Task<string> PromptForProjectNameAsync(string defaultName, ParseResult parseResult, CancellationToken cancellationToken);
     Task<string> PromptForOutputPath(string v, ParseResult parseResult, Func<string, ValidationResult>? validator = null, Func<string, string>? outputPathResolver = null, CancellationToken cancellationToken = default);
@@ -928,15 +880,6 @@ internal interface ITemplateVersionPrompter
 
 internal class NewCommandPrompter(IInteractionService interactionService) : INewCommandPrompter, ITemplateVersionPrompter
 {
-    public virtual Task<TemplateSelection> PromptForTemplateOrSearchAsync(ITemplate[] validTemplates, CancellationToken cancellationToken)
-    {
-        return interactionService.PromptForSelectionAsync(
-            NewCommandStrings.SelectAProjectTemplate,
-            validTemplates.Select(template => new TemplateSelection(template)).Append(TemplateSelection.Search),
-            choice => (choice.Template?.Description ?? NewCommandStrings.SearchForMoreTemplates).EscapeMarkup(),
-            cancellationToken: cancellationToken);
-    }
-
     public virtual async Task<(NuGetPackage Package, PackageChannel Channel)> PromptForTemplatesVersionAsync(IEnumerable<(NuGetPackage Package, PackageChannel Channel)> candidatePackages, CancellationToken cancellationToken)
     {
         // Check if we should skip the channel selection prompt
@@ -1070,7 +1013,7 @@ internal class NewCommandPrompter(IInteractionService interactionService) : INew
         return await interactionService.PromptForSelectionAsync(
             NewCommandStrings.SelectAProjectTemplate,
             validTemplates,
-            t => t.Description.EscapeMarkup(),
+            t => NewCommand.FormatTemplateDisplayLabel(t).EscapeMarkup(),
             cancellationToken: cancellationToken
         );
     }

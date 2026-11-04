@@ -325,7 +325,8 @@ public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
         using var interaction = CreateExtensionInteractionService(workspace, backchannel);
 
         var selected = await interaction.PromptForSelectionAsync("Select:", choices, choice => $"[bold]{choice.Label}[/]",
-            _ => throw new InvalidOperationException("Flat extension fallback must not evaluate grouping."));
+            _ => throw new InvalidOperationException("Flat extension fallback must not evaluate grouping."),
+            _ => throw new InvalidOperationException("Flat extension fallback must not evaluate terminal labels."));
 
         Assert.Equal(["Same (same) - first", "Same (same) - second"], capturedChoices);
         Assert.Same(choices[1], selected);
@@ -362,7 +363,7 @@ public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
             {
                 groupedChoices++;
                 return new SelectionChoiceGroup(choice.Label, "Source");
-            });
+            }, _ => "Same - Observable services");
 
         Assert.Equal(2, groupedChoices);
         Assert.Same(choices[1], selected);

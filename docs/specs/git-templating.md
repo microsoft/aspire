@@ -85,18 +85,21 @@ that command. Independently configured global template sources remain available.
 
 Interactive `aspire new` without an explicit template discovers configured sources
 before showing the template picker. Their templates appear alongside built-ins,
-after the existing built-in choices, labeled with the template name and source
-alias. Selecting a configured template uses that exact discovered source snapshot,
-even when display names or short names collide. The existing search action remains
-available to filter configured templates. Empty or unavailable sources report their
+after the existing built-in choices. Selecting a configured template uses that exact
+discovered source snapshot, even when display names or short names collide.
+There is no separate search action: type in the picker to move to a matching name
+or description, case-insensitively. Descriptions, when provided, are shown alongside
+the template name so Spectre's existing search can match them. Empty or unavailable sources report their
 existing warnings without preventing selection from other sources or built-ins.
 The terminal picker shows nonselectable headings for built-in templates and each
 configured source. Group order follows first appearance in the discovered choices,
 with built-ins first; templates retain their existing ordering within each group.
-Search and navigation actions remain outside the groups. Grouping is optional
+Terminal choices do not repeat the source alias or short name under these headings.
+Grouping and terminal labels are optional
 interaction-service presentation metadata: clients such as the VS Code extension
 continue receiving the existing flat string choices with unique source-qualified
-labels. No extension protocol or capability change is required.
+labels. Description search in those flat clients is deferred. No extension
+protocol or capability change is required.
 Discovery does not authorize template post-actions or execution of generated code.
 Help, explicit templates, noninteractive invocations, and built-in-only options
 (`--source`, `--version`, `--channel`, or `--language`) do not trigger this discovery.

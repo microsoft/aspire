@@ -3,10 +3,9 @@
   Built-in templates
   > Starter
   Company [first]
-    Same (same) - first
+    Same
   Company [second]
-    Same (same) - second
-  Search for more templates
+    Same - Observable services
 
 (Type to search)
-[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[?25hSelect a template: Starter
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[?25hSelect a template: Starter
