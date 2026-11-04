@@ -25,11 +25,123 @@ namespace Aspire.Cli.Tests.Commands;
 public class AddCommandTests(ITestOutputHelper outputHelper)
 {
     [Theory]
-    [InlineData("integration list")]
-    [InlineData("integration search redis")]
-    [InlineData("integration list --format Json")]
-    [InlineData("integration search redis --format Json")]
-    public async Task IntegrationDiscoveryDisplaysLimitWarningAfterSearchCompletes(string commandLine)
+    [InlineData(false, true, false)]
+    [InlineData(true, true, false)]
+    [InlineData(false, false, false)]
+    [InlineData(true, false, false)]
+    [InlineData(false, true, true)]
+    [InlineData(true, true, true)]
+    public async Task AddCommandWarnsAboutFailedFeedsBeforeSelection(bool filterPolyglot, bool hasPackages, bool cancelSelection)
+    {
+        const string warningText = "[yellow]Failed to search NuGet source 'private[[feed]]'. Some integrations may be missing. Check the source configuration and authentication. See the CLI logs for details.[/]";
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.Path, "apphost.ts"));
+        File.WriteAllText(appHostFile.FullName, string.Empty);
+        File.WriteAllText(Path.Combine(workspace.Path, AspireConfigFile.FileName), """
+            {
+              "integrationSources": {
+                "default": {"enabled": false},
+                "public": {"source": "https://example.test/public", "patterns": ["Acme.Hosting.*"]},
+                "private": {"source": "https://example.test/private", "patterns": ["Other.Hosting.*"]}
+              }
+            }
+            """);
+        var interactionService = new TestInteractionService();
+        var prompted = false;
+        var added = false;
+        var cache = new FakeNuGetPackageCache
+        {
+            SearchFailedSources = ["private[feed]", "private[feed]"],
+            GetPackagesAsyncCallback = (_, query, _, _, _, _, _) =>
+            {
+                Assert.Equal(0, interactionService.DisplayedMessages.Count(message => message.Message == warningText));
+                return Task.FromResult<IEnumerable<NuGetPackage>>(hasPackages && (query == "Acme.Hosting." || query == "tags:polyglot")
+                    ? [new() { Id = "Acme.Hosting.Redis", Version = "1.0.0", Source = "https://example.test/public" }]
+                    : []);
+            }
+        };
+        var factory = new TestTypeScriptStarterProjectFactory((_, _, _) => Task.FromResult(true));
+        factory.Project.AddPackageAsyncCallback = (_, _) =>
+        {
+            Assert.True(prompted);
+            added = true;
+            return Task.FromResult(true);
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.InteractionServiceFactory = _ => interactionService;
+            options.NuGetClientFactory = _ => NuGetTestHelper.CreateClient();
+            options.EnabledFeatures = filterPolyglot ? [KnownFeatures.PolyglotIntegrationFilterEnabled] : [];
+            options.AddCommandPrompterFactory = sp => new TestAddCommandPrompter(sp.GetRequiredService<IInteractionService>())
+            {
+                PromptForIntegrationCallback = packages =>
+                {
+                    var warning = Assert.Single(interactionService.DisplayedMessages, message => message.Message == warningText);
+                    Assert.Equal(warningText, warning.Message);
+                    Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
+                    prompted = true;
+                    if (cancelSelection)
+                    {
+                        throw new OperationCanceledException();
+                    }
+
+                    return Assert.Single(packages);
+                }
+            };
+        });
+        services.AddSingleton<INuGetPackageCache>(cache);
+        services.AddSingleton<IAppHostProjectFactory>(factory);
+        using var provider = services.BuildServiceProvider();
+
+        var exitCode = await provider.GetRequiredService<AddCommand>()
+            .Parse($"add --apphost \"{appHostFile.FullName}\"").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(
+            !hasPackages ? CliExitCodes.FailedToAddPackage : cancelSelection ? CliExitCodes.Cancelled : CliExitCodes.Success,
+            exitCode);
+        Assert.Equal(hasPackages, prompted);
+        Assert.Equal(hasPackages && !cancelSelection, added);
+        var warning = Assert.Single(interactionService.DisplayedMessages, message => message.Message == warningText);
+        Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
+        Assert.Equal(hasPackages ? [] : [AddCommandStrings.NoIntegrationPackagesFound], interactionService.DisplayedErrors);
+    }
+
+    [Theory]
+    [InlineData("add")]
+    [InlineData("add --version 1.0.0")]
+    public async Task AddCommandNonInteractiveRequiresIntegrationName(string commandLine)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interactionService = new TestInteractionService();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+            options.InteractionServiceFactory = _ => interactionService;
+            options.ProjectLocatorFactory = _ => new TestProjectLocator
+            {
+                UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                    throw new InvalidOperationException("An unnamed non-interactive add must fail before locating or modifying a project.")
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var exitCode = await provider.GetRequiredService<AddCommand>().Parse(commandLine).InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.Equal([AddCommandStrings.NonInteractiveRequiresIntegrationName], interactionService.DisplayedErrors);
+    }
+
+    [Theory]
+    [InlineData("integration list", false)]
+    [InlineData("integration search redis", false)]
+    [InlineData("integration list --format Json", false)]
+    [InlineData("integration search redis --format Json", false)]
+    [InlineData("integration list", true)]
+    [InlineData("integration search redis", true)]
+    [InlineData("integration list --format Json", true)]
+    [InlineData("integration search redis --format Json", true)]
+    public async Task IntegrationDiscoveryDisplaysWarningAfterSearchCompletes(string commandLine, bool sourceFailed)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         File.WriteAllText(Path.Combine(workspace.Path, AspireConfigFile.FileName), """
@@ -39,7 +151,8 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         interactionService.DisplayRawTextCallback = _ => Assert.Single(interactionService.DisplayedMessages);
         var cache = new FakeNuGetPackageCache
         {
-            SearchLimitReached = true,
+            SearchLimitReached = !sourceFailed,
+            SearchFailedSources = sourceFailed ? ["private-feed"] : [],
             GetPackagesAsyncCallback = (_, _, _, _, _, _, _) =>
             {
                 Assert.Empty(interactionService.DisplayedMessages);
@@ -60,7 +173,11 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
         var warning = Assert.Single(interactionService.DisplayedMessages);
         Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
-        Assert.Equal("[yellow]NuGet search results may be incomplete because the limit of 4000 packages per feed was reached. Use narrower integration source patterns.[/]", warning.Message);
+        Assert.Equal(
+            sourceFailed
+                ? "[yellow]Failed to search NuGet source 'private-feed'. Some integrations may be missing. Check the source configuration and authentication. See the CLI logs for details.[/]"
+                : "[yellow]NuGet search results may be incomplete because the limit of 4000 packages per feed was reached. Use narrower integration source patterns.[/]",
+            warning.Message);
     }
 
     [Theory]
@@ -2865,6 +2982,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
             options.InteractionServiceFactory = _ => testInteractionService;
 
             options.ProjectLocatorFactory = _ => new TestProjectLocator();
@@ -4854,8 +4972,12 @@ public class AddCommandFuzzySearchTests(ITestOutputHelper outputHelper)
         Assert.Equal("Aspire.Hosting.Azure", addedPackage);
     }
 
-    [Fact]
-    public async Task AddCommand_Interactive_NoFuzzyMatchSinglePackagePromptsBeforeAdding()
+    [Theory]
+    [InlineData(null, true)]
+    [InlineData("zzzzzzzzzz", true)]
+    [InlineData("redis", false)]
+    [InlineData("Aspire.Hosting.Redis", false)]
+    public async Task AddCommand_Interactive_SinglePackagePromptsUnlessNamedExactly(string? integrationName, bool expectPrompt)
     {
         var promptedPackages = new List<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)>();
         var displayedSubtleMessage = string.Empty;
@@ -4909,14 +5031,15 @@ public class AddCommandFuzzySearchTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<AddCommand>();
-        var result = command.Parse("add zzzzzzzzzz");
+        var result = command.Parse(integrationName is null ? "add" : $"add {integrationName}");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        var promptedPackage = Assert.Single(promptedPackages);
         Assert.Equal(0, exitCode);
-        Assert.Equal(string.Format(AddCommandStrings.NoPackagesMatchedSearchTerm, "zzzzzzzzzz"), displayedSubtleMessage);
-        Assert.Equal("Aspire.Hosting.Redis", promptedPackage.Package.Id);
+        Assert.Equal(
+            integrationName == "zzzzzzzzzz" ? string.Format(AddCommandStrings.NoPackagesMatchedSearchTerm, integrationName) : string.Empty,
+            displayedSubtleMessage);
+        Assert.Equal(expectPrompt ? ["Aspire.Hosting.Redis"] : [], promptedPackages.Select(package => package.Package.Id));
         Assert.Equal("Aspire.Hosting.Redis", addedPackage);
     }
 

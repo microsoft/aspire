@@ -103,7 +103,7 @@ internal sealed class BundleNuGetPackageCache(
             "NuGet search for query '{Query}' returned {ReturnedCount} packages; {MatchedCount} matched in {ElapsedMilliseconds} ms.",
             displayQuery, packages.Packages.Count, matches.Length, Stopwatch.GetElapsedTime(startTimestamp).TotalMilliseconds);
 
-        return new(matches, packages.LimitReached);
+        return new(matches, packages.LimitReached, packages.FailedSources);
     }
 
     public async Task<IEnumerable<NuGetPackage>> GetPackageVersionsAsync(
@@ -157,7 +157,7 @@ internal sealed class BundleNuGetPackageCache(
             Source = package.Source
         }).ToList();
 
-        return new(packages, results.LimitReached);
+        return new(packages, results.LimitReached, results.FailedSources);
     }
 
     private async Task<PackageSearchResult<NuGetSearchResult>> SearchClientAsync(

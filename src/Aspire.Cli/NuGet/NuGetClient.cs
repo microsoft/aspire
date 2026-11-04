@@ -550,7 +550,10 @@ internal sealed class NuGetClient(
                 .Take(take)
                 .ToArray();
 
-            return new(packages, searchResults.Any(result => result.LimitReached));
+            return new(
+                packages,
+                searchResults.Any(result => result.LimitReached),
+                searchResults.SelectMany(result => result.FailedSources).Distinct(StringComparer.OrdinalIgnoreCase).ToArray());
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -582,7 +585,10 @@ internal sealed class NuGetClient(
             // exception message, but NuGet protocol failures format the feed URL into it -- often a derived resource
             // URL rather than the configured source -- which would leak UserInfo/SAS credentials into ~/.aspire/logs.
             output.WriteLine($"Warning: Failed to search {PackageSourceRedactor.RedactForDisplay(source.Name)}: {ex.GetType().Name}");
-            return new([], LimitReached: false);
+            return new(
+                [],
+                LimitReached: false,
+                FailedSources: [PackageSourceRedactor.RedactForDisplay(source.Name)]);
         }
     }
 
@@ -678,7 +684,7 @@ internal sealed class NuGetClient(
         var searchResource = await repository.GetResourceAsync<PackageSearchResource>(cancellationToken).ConfigureAwait(false);
         if (searchResource is null)
         {
-            return new([], LimitReached: false);
+            return new([], LimitReached: false, FailedSources: []);
         }
 
         var packages = new List<NuGetSearchResult>();
@@ -713,7 +719,7 @@ internal sealed class NuGetClient(
             skip += results.Length;
         }
 
-        return new(packages, LimitReached: skip > NuGetSearchLimits.MaxSkip && skip < take);
+        return new(packages, LimitReached: skip > NuGetSearchLimits.MaxSkip && skip < take, FailedSources: []);
     }
 
     internal static List<PackageSource> LoadPackageSources(

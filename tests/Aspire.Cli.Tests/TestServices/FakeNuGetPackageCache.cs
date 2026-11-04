@@ -12,6 +12,7 @@ internal sealed class FakeNuGetPackageCache : INuGetPackageCache
     public Func<DirectoryInfo, bool, FileInfo?, CancellationToken, Task<IEnumerable<NuGetPackage>>>? GetTemplatePackagesAsyncCallback { get; set; }
     public Func<DirectoryInfo, bool, FileInfo?, CancellationToken, Task<IEnumerable<NuGetPackage>>>? GetIntegrationPackagesAsyncCallback { get; set; }
     public bool SearchLimitReached { get; init; }
+    public IReadOnlyList<string> SearchFailedSources { get; init; } = [];
     public bool PolyglotSearchLimitReached { get; init; }
     public Func<DirectoryInfo, bool, FileInfo?, CancellationToken, Task<IEnumerable<NuGetPackage>>>? GetCliPackagesAsyncCallback { get; set; }
     public Func<DirectoryInfo, string, bool, FileInfo?, bool, CancellationToken, Task<IEnumerable<NuGetPackage>>>? GetPackageVersionsAsyncCallback { get; set; }
@@ -41,7 +42,7 @@ internal sealed class FakeNuGetPackageCache : INuGetPackageCache
             ? await GetIntegrationPackagesAsyncCallback.Invoke(configuration.OriginalWorkingDirectory, prerelease, configuration.ConfigurationFile, cancellationToken)
             : [];
 
-        return new(packages.ToArray(), SearchLimitReached);
+        return new(packages.ToArray(), SearchLimitReached, SearchFailedSources);
     }
 
     public Task<IEnumerable<NuGetPackage>> GetCliPackagesAsync(NuGetPackageOperationConfiguration configuration, bool prerelease, CancellationToken cancellationToken)
@@ -57,7 +58,7 @@ internal sealed class FakeNuGetPackageCache : INuGetPackageCache
         if (GetPackagesAsyncCallback is not null)
         {
             var packages = await GetPackagesAsyncCallback.Invoke(configuration.OriginalWorkingDirectory, packageId, filter, prerelease, configuration.ConfigurationFile, useCache, cancellationToken);
-            return new(packages.ToArray(), limitReached);
+            return new(packages.ToArray(), limitReached, SearchFailedSources);
         }
 
         // Polyglot integration discovery resolves the compatible allow-list via a `tags:polyglot` search
@@ -72,7 +73,7 @@ internal sealed class FakeNuGetPackageCache : INuGetPackageCache
             return result with { LimitReached = result.LimitReached || limitReached };
         }
 
-        return new([], limitReached);
+        return new([], limitReached, SearchFailedSources);
     }
 
     public Task<IEnumerable<NuGetPackage>> GetPackageVersionsAsync(NuGetPackageOperationConfiguration configuration, string exactPackageId, bool prerelease, bool useCache, CancellationToken cancellationToken)

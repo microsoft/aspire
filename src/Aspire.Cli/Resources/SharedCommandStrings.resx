@@ -240,4 +240,8 @@
     <value>NuGet search results may be incomplete because the limit of {0} packages per feed was reached. Use narrower integration source patterns.</value>
     <comment>{0} is the maximum number of packages searched per feed.</comment>
   </data>
+  <data name="NuGetSearchSourceFailedWarning" xml:space="preserve">
+    <value>Failed to search NuGet source '{0}'. Some integrations may be missing. Check the source configuration and authentication. See the CLI logs for details.</value>
+    <comment>{0} is the redacted NuGet source name or URL.</comment>
+  </data>
 </root>

@@ -81,6 +81,7 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
             (NuGetPackage Package, PackageChannel Channel)[] packagesWithChannels;
             IReadOnlySet<string> polyglotCompatibleIds = ImmutableHashSet<string>.Empty;
             bool searchLimitReached;
+            IReadOnlyList<string> failedSources;
             if (applyPolyglotFilter)
             {
                 // Resolve the integration list and the polyglot allow-list in a single discovery pass.
@@ -90,6 +91,7 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
                 packagesWithChannels = result.Packages.ToArray();
                 polyglotCompatibleIds = result.PolyglotCompatibleIds;
                 searchLimitReached = result.LimitReached;
+                failedSources = result.FailedSources;
             }
             else
             {
@@ -98,12 +100,15 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
                     async () => await _integrationPackageSearchService.GetIntegrationPackagesWithChannelsAsync(workingDirectory, configuredChannel, cancellationToken));
                 packagesWithChannels = result.Packages.ToArray();
                 searchLimitReached = result.LimitReached;
+                failedSources = result.FailedSources;
             }
 
             if (searchLimitReached)
             {
                 InteractionService.DisplayNuGetSearchLimitWarning();
             }
+
+            InteractionService.DisplayNuGetSearchFailureWarnings(failedSources);
 
             var packagesWithShortName = packagesWithChannels
                 .Select(IntegrationPackageSearchService.GenerateFriendlyName)

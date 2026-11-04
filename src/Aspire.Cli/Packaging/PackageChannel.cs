@@ -295,7 +295,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
                 "Local integration discovery for channel '{ChannelName}' from '{Source}' found {PackageCount} packages in {ElapsedMilliseconds} ms.",
                 channelName, sourceDetails, localPackages.Length, Stopwatch.GetElapsedTime(startTimestamp).TotalMilliseconds);
 
-            return new(localPackages, LimitReached: false);
+            return new(localPackages, LimitReached: false, FailedSources: []);
         }
 
         var tasks = new List<Task<PackageSearchResult<NuGetPackage>>>();
@@ -360,7 +360,10 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
             filteredPackages = filteredPackages.Select(p => new NuGetPackage { Id = p.Id, Version = PinnedVersion, Source = p.Source }).ToArray();
         }
 
-        return new(filteredPackages, packageResults.Any(result => result.LimitReached));
+        return new(
+            filteredPackages,
+            packageResults.Any(result => result.LimitReached),
+            packageResults.SelectMany(result => result.FailedSources).Distinct(StringComparer.OrdinalIgnoreCase).ToArray());
     }
 
     private async Task<PackageSearchResult<NuGetPackage>> SearchIntegrationPackagesAsync(
@@ -550,7 +553,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
                 applyPinnedVersion ? GetLocalPackageVersion(workingDirectory) : null,
                 cancellationToken);
 
-            return new(ids.ToArray(), LimitReached: false);
+            return new(ids.ToArray(), LimitReached: false, FailedSources: []);
         }
 
         using var searchConfiguration = await CreatePackageOperationConfigurationAsync(
@@ -579,7 +582,10 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
             .Distinct(StringComparers.NuGetPackageId)
             .ToArray();
 
-        return new(packageIds, results.Any(result => result.LimitReached));
+        return new(
+            packageIds,
+            results.Any(result => result.LimitReached),
+            results.SelectMany(result => result.FailedSources).Distinct(StringComparer.OrdinalIgnoreCase).ToArray());
     }
 
     private IReadOnlySet<string> GetPolyglotCompatiblePackageIdsFromLocalPackageSource(

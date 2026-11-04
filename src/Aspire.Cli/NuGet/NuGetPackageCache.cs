@@ -181,6 +181,7 @@ internal sealed class NuGetPackageCache(
         logger.LogDebug("Searching NuGet packages for query '{Query}' (prerelease: {Prerelease}).", displayQuery, prerelease);
 
         var collectedPackages = new List<NuGetPackage>();
+        var failedSources = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var skip = 0;
 
         bool continueFetching;
@@ -206,6 +207,7 @@ internal sealed class NuGetPackageCache(
             }
             else
             {
+                failedSources.UnionWith(result.FailedSources);
                 logger.LogTrace(
                     "NuGet search page for query '{Query}': skip {Skip}, take {Take}, returned {PackageCount} packages.",
                     displayQuery, skip, NuGetSearchLimits.PageSize, result.Packages?.Length ?? 0);
@@ -255,7 +257,7 @@ internal sealed class NuGetPackageCache(
             "NuGet search for query '{Query}' returned {ReturnedCount} packages; {MatchedCount} matched in {ElapsedMilliseconds} ms.",
             displayQuery, collectedPackages.Count, packages.Length, Stopwatch.GetElapsedTime(startTimestamp).TotalMilliseconds);
 
-        return new(packages, LimitReached: continueFetching);
+        return new(packages, LimitReached: continueFetching, FailedSources: failedSources.ToArray());
     }
 
     public async Task<IEnumerable<NuGetPackage>> GetPackageVersionsAsync(

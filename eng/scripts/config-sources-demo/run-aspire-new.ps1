@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-Runs the source-built CLI with the configuration-source demo settings.
+Runs aspire new from this checkout with the configuration-source demo settings.
 .DESCRIPTION
 Uses published packages rather than requiring a local package hive. In the template
 picker, choose "Search for more templates" and leave the search empty to list custom templates.
@@ -8,9 +8,9 @@ Defaults to aspire new. The aspire add launcher reuses this setup with the calle
 Uses the checkout's pinned SDK to build the CLI, even when the demo app pins a different SDK.
 Runs the built CLI directly so child dotnet commands honor the demo app's SDK pin.
 .EXAMPLE
-.\eng\scripts\config-sources-demo\run-config-source-demo.ps1
+.\eng\scripts\config-sources-demo\run-aspire-new.ps1
 .EXAMPLE
-& 'C:\Development\Source\aspire\eng\scripts\config-sources-demo\run-config-source-demo.ps1' -WorkingDirectory $PWD.Path
+& 'C:\Development\Source\aspire\eng\scripts\config-sources-demo\run-aspire-new.ps1' -WorkingDirectory $PWD.Path
 #>
 [CmdletBinding()]
 param(

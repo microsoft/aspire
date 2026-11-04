@@ -14,6 +14,7 @@ internal sealed class FakeNuGetClient : INuGetClient
     public int WriteManifestCallCount { get; private set; }
     public int SearchCallCount { get; private set; }
     public bool SearchLimitReached { get; init; }
+    public IReadOnlyList<string> SearchFailedSources { get; init; } = [];
     public int GetSettingsCallCount { get; private set; }
     public int WriteNuGetConfigCallCount { get; private set; }
     public IReadOnlyList<(string Id, string Version)>? LastRestorePackages { get; private set; }
@@ -147,7 +148,7 @@ internal sealed class FakeNuGetClient : INuGetClient
             workingDirectory,
             cancellationToken) : [];
 
-        return new(packages, SearchLimitReached);
+        return new(packages, SearchLimitReached, SearchFailedSources);
     }
 
     public NuGetSettingsInfo GetSettings(string workingDirectory, byte[] sourceIdentityKey)

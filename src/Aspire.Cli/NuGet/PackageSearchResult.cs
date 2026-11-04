@@ -3,4 +3,7 @@
 
 namespace Aspire.Cli.NuGet;
 
-internal sealed record PackageSearchResult<T>(IReadOnlyList<T> Packages, bool LimitReached);
+internal sealed record PackageSearchResult<T>(
+    IReadOnlyList<T> Packages,
+    bool LimitReached,
+    IReadOnlyList<string> FailedSources);

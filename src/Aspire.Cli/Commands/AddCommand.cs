@@ -111,6 +111,11 @@ internal sealed class AddCommand : BaseCommand
             var version = parseResult.GetValue(s_versionOption);
             var source = parseResult.GetValue(s_sourceOption);
             var includeAllIntegrations = parseResult.GetValue(s_allOption);
+            if (integrationName is null && !_hostEnvironment.SupportsInteractiveInput)
+            {
+                return AddCommandFailure(CliExitCodes.InvalidCommand, AddCommandStrings.NonInteractiveRequiresIntegrationName);
+            }
+
             if (!string.IsNullOrWhiteSpace(source) &&
                 PackageSourceOverrideMappings.HasCredentialMaterial(source))
             {
@@ -197,6 +202,7 @@ internal sealed class AddCommand : BaseCommand
             List<(NuGetPackage Package, PackageChannel Channel)> packagesWithChannels;
             IReadOnlySet<string> polyglotCompatibleIds = ImmutableHashSet<string>.Empty;
             bool searchLimitReached;
+            IReadOnlyList<string> failedSources;
             using (var searchPackagesActivity = _profilingTelemetry.StartAddSearchPackages(configuredChannel))
             {
                 if (applyPolyglotFilter)
@@ -211,6 +217,7 @@ internal sealed class AddCommand : BaseCommand
                     packagesWithChannels = result.Packages.ToList();
                     polyglotCompatibleIds = result.PolyglotCompatibleIds;
                     searchLimitReached = result.LimitReached;
+                    failedSources = result.FailedSources;
                 }
                 else
                 {
@@ -223,6 +230,7 @@ internal sealed class AddCommand : BaseCommand
                             cancellationToken));
                     packagesWithChannels = result.Packages.ToList();
                     searchLimitReached = result.LimitReached;
+                    failedSources = result.FailedSources;
                 }
 
                 var packageCount = packagesWithChannels.Count;
@@ -234,6 +242,8 @@ internal sealed class AddCommand : BaseCommand
             {
                 InteractionService.DisplayNuGetSearchLimitWarning();
             }
+
+            InteractionService.DisplayNuGetSearchFailureWarnings(failedSources);
 
             if (packagesWithChannels.Count == 0)
             {
@@ -336,7 +346,7 @@ internal sealed class AddCommand : BaseCommand
                     configuredChannel,
                     source,
                     cancellationToken,
-                    promptForSinglePackage: integrationName is not null),
+                    promptForSinglePackage: true),
                 1 when packageMatchKind == ProfilingTelemetry.Values.AddPackageMatchKindExact
                     && filteredPackagesWithShortName[0].Package.Version == version
                     => filteredPackagesWithShortName[0],
@@ -685,9 +695,8 @@ internal sealed class AddCommand : BaseCommand
     {
         var distinctPackages = possiblePackages.DistinctBy(p => p.Package.Id).ToArray();
 
-        // Exact matches can skip the package prompt when one package remains. Fuzzy/no-match
-        // fallbacks opt into prompting so interactive users confirm the candidate first.
-        // In non-interactive mode, auto-select the first package.
+        // Only exact matches can skip the package prompt. Discovery and fuzzy/no-match
+        // fallbacks require confirmation even when other feeds failed and one package remains.
         var selectedPackage = distinctPackages.Length switch
         {
             1 when promptForSinglePackage && _hostEnvironment.SupportsInteractiveInput => await PromptForIntegrationAsync(distinctPackages, cancellationToken),

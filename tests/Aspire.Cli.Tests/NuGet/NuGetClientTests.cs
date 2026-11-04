@@ -256,6 +256,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
         // Only the winning source's entry survives, so its versions are not merged with the other source's.
         var package = Assert.Single(results.Packages);
         Assert.Equal("Aspire.Test.Package", package.Id);
+        Assert.Empty(results.FailedSources);
         Assert.Equal("2.0.0", package.Version);
         Assert.Equal(secondFeedDirectory.FullName, package.Source);
         Assert.Equal(["2.0.0"], package.AllVersions);
@@ -510,6 +511,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
 
         var package = Assert.Single(results.Packages);
         Assert.Equal("Aspire.Test.Package", package.Id);
+        Assert.Equal(["https://127.0.0.1:1/v3/index.json"], results.FailedSources);
     }
 
     [Fact]
@@ -547,6 +549,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
             TestContext.Current.CancellationToken);
 
         Assert.Empty(results.Packages);
+        Assert.Equal(["https://alias.example/v3/index.json"], results.FailedSources);
         var logRecords = logger.Collector.GetSnapshot();
         Assert.NotEmpty(logRecords);
         Assert.DoesNotContain(logRecords, record => record.Message.Contains(sourceNameSecret, StringComparison.Ordinal));

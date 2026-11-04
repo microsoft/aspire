@@ -8,4 +8,5 @@ namespace Aspire.Cli.Packaging;
 internal sealed record PolyglotPackageSearchResult(
     IReadOnlyList<(NuGetPackage Package, PackageChannel Channel)> Packages,
     IReadOnlySet<string> PolyglotCompatibleIds,
-    bool LimitReached);
+    bool LimitReached,
+    IReadOnlyList<string> FailedSources);

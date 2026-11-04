@@ -286,6 +286,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Failed to search NuGet source &apos;{0}&apos;. Some integrations may be missing. Check the source configuration and authentication. See the CLI logs for details..
+        /// </summary>
+        internal static string NuGetSearchSourceFailedWarning {
+            get {
+                return ResourceManager.GetString("NuGetSearchSourceFailedWarning", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to The environment to use for the operation. The default is &apos;Production&apos;..
         /// </summary>
         internal static string PipelineEnvironmentOptionDescription {

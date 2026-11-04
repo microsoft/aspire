@@ -27,6 +27,15 @@ internal static class ConsoleHelpers
         interactionService.DisplayMessage(KnownEmojis.PoliceCarLight, $"[yellow]{message.EscapeMarkup()}[/]", allowMarkup: true, consoleOverride: ConsoleOutput.Error);
     }
 
+    public static void DisplayNuGetSearchFailureWarnings(this IInteractionService interactionService, IEnumerable<string> failedSources)
+    {
+        foreach (var source in failedSources.Select(PackageSourceRedactor.RedactForDisplay).Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase))
+        {
+            var message = string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.NuGetSearchSourceFailedWarning, source);
+            interactionService.DisplayMessage(KnownEmojis.PoliceCarLight, $"[yellow]{message.EscapeMarkup()}[/]", allowMarkup: true, consoleOverride: ConsoleOutput.Error);
+        }
+    }
+
     /// <summary>
     /// Formats an emoji prefix with trailing space for aligned console output.
     /// </summary>

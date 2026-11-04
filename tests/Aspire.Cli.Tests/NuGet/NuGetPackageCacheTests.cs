@@ -13,6 +13,29 @@ namespace Aspire.Cli.Tests.NuGet;
 
 public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
 {
+    [Fact]
+    public async Task SearchPreservesSdkSourceFailures()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
+            {
+                SearchFailedSources = ["private-feed"],
+                SearchPackagesAsyncCallback = (_, _, _, _, _, _, _, _, _, _) =>
+                    (0, [new() { Id = "Aspire.Hosting.Redis", Version = "1.0.0", Source = "public-feed" }])
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var results = await provider.GetRequiredService<INuGetPackageCache>().GetPackagesAsync(
+            workspace.WorkspaceRoot, "Aspire.Hosting", filter: null, prerelease: false,
+            nugetConfigFile: null, useCache: false, TestContext.Current.CancellationToken);
+
+        Assert.Equal(["private-feed"], results.FailedSources);
+        Assert.Equal("Aspire.Hosting.Redis", Assert.Single(results.Packages).Id);
+    }
+
     [Theory]
     [InlineData(3999, 1, false, true)]
     [InlineData(4000, 1, true, true)]

@@ -19,5 +19,5 @@ param(
     [string[]] $Arguments = @()
 )
 
-& (Join-Path $PSScriptRoot 'run-config-source-demo.ps1') `
+& (Join-Path $PSScriptRoot 'run-aspire-new.ps1') `
     -WorkingDirectory $WorkingDirectory -Command add -CommandArguments $Arguments

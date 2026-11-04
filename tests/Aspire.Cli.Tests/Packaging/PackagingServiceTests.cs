@@ -2411,7 +2411,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
             NuGetPackageOperationConfiguration configuration,
             bool prerelease,
             CancellationToken cancellationToken)
-            => new((await GetTemplatePackagesAsync(configuration, prerelease, cancellationToken)).ToArray(), LimitReached: false);
+            => new((await GetTemplatePackagesAsync(configuration, prerelease, cancellationToken)).ToArray(), LimitReached: false, FailedSources: []);
 
         public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetCliPackagesAsync(
             NuGetPackageOperationConfiguration configuration,
@@ -2426,7 +2426,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
             bool prerelease,
             bool useCache,
             CancellationToken cancellationToken)
-            => new((await GetTemplatePackagesAsync(configuration, prerelease, cancellationToken)).ToArray(), LimitReached: false);
+            => new((await GetTemplatePackagesAsync(configuration, prerelease, cancellationToken)).ToArray(), LimitReached: false, FailedSources: []);
 
         public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetPackageVersionsAsync(
             NuGetPackageOperationConfiguration configuration,

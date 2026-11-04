@@ -16,7 +16,7 @@ namespace Aspire.Cli.Tests.NuGet;
 public class BundleNuGetPackageCacheTests(ITestOutputHelper outputHelper)
 {
     [Fact]
-    public async Task SearchPreservesNativeClientLimitFlag()
+    public async Task SearchPreservesNativeClientDiagnostics()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
@@ -24,6 +24,7 @@ public class BundleNuGetPackageCacheTests(ITestOutputHelper outputHelper)
             options.NuGetClientFactory = _ => new FakeNuGetClient
             {
                 SearchLimitReached = true,
+                SearchFailedSources = ["private-feed"],
                 SearchCallback = (_, _, _, _, _, _, _) => Task.FromResult<IReadOnlyList<NuGetSearchResult>>(
                     [new("Acme.Hosting.Redis", "1.0.0", "feed", ["1.0.0"])])
             };
@@ -35,6 +36,7 @@ public class BundleNuGetPackageCacheTests(ITestOutputHelper outputHelper)
             prerelease: true, nugetConfigFile: null, useCache: true, TestContext.Current.CancellationToken);
 
         Assert.True(packages.LimitReached);
+        Assert.Equal(["private-feed"], packages.FailedSources);
         Assert.Equal("Acme.Hosting.Redis", Assert.Single(packages.Packages).Id);
     }
 

@@ -52,6 +52,7 @@ internal sealed class IntegrationPackageSearchService(
         var packages = new List<(NuGetPackage Package, PackageChannel Channel)>();
         var packagesLock = new object();
         var limitReached = false;
+        var failedSources = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         await Parallel.ForEachAsync(channels, cancellationToken, async (channel, ct) =>
         {
@@ -67,10 +68,11 @@ internal sealed class IntegrationPackageSearchService(
             {
                 packages.AddRange(integrationPackages.Packages.Select(p => (p, channel)));
                 limitReached |= integrationPackages.LimitReached;
+                failedSources.UnionWith(integrationPackages.FailedSources);
             }
         });
 
-        return new(packages, limitReached);
+        return new(packages, limitReached, failedSources.ToArray());
     }
 
     /// <summary>
@@ -107,6 +109,7 @@ internal sealed class IntegrationPackageSearchService(
         var polyglotIds = new HashSet<string>(StringComparers.NuGetPackageId);
         var gate = new object();
         var limitReached = false;
+        var failedSources = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         await Parallel.ForEachAsync(channels, cancellationToken, async (channel, ct) =>
         {
@@ -125,10 +128,12 @@ internal sealed class IntegrationPackageSearchService(
                 packages.AddRange(integrationPackagesTask.Result.Packages.Select(p => (p, channel)));
                 polyglotIds.UnionWith(polyglotIdsTask.Result.Packages);
                 limitReached |= integrationPackagesTask.Result.LimitReached || polyglotIdsTask.Result.LimitReached;
+                failedSources.UnionWith(integrationPackagesTask.Result.FailedSources);
+                failedSources.UnionWith(polyglotIdsTask.Result.FailedSources);
             }
         });
 
-        return new(packages, polyglotIds, limitReached);
+        return new(packages, polyglotIds, limitReached, failedSources.ToArray());
     }
 
     private async Task<IEnumerable<PackageChannel>> GetSearchChannelsAsync(
