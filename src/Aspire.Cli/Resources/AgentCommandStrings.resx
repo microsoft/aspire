@@ -239,7 +239,7 @@
     <value>Invalid scope '{0}'. Use 'project' or 'global'.</value>
   </data>
   <data name="InitCommand_SkillsOptionDescription" xml:space="preserve">
-    <value>Comma-separated skill/tool IDs ({0}), '{1}', or '{2}' (default: aspire)</value>
+    <value>Comma-separated skill/tool IDs ({0}), '{1}', or '{2}' (default: aspire). The 'dotnet-inspect' skill requires a C# AppHost in the workspace</value>
   </data>
   <data name="InitCommand_McpOptionDescription" xml:space="preserve">
     <value>Configure the Aspire MCP server for selected agent environments. Omit to leave MCP unconfigured, pass '--mcp' to opt in, or pass '--mcp=false' to explicitly opt out</value>

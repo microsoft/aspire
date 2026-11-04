@@ -540,7 +540,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Comma-separated skill/tool IDs ({0}), &apos;{1}&apos;, or &apos;{2}&apos; (default: aspire).
+        ///   Looks up a localized string similar to Comma-separated skill/tool IDs ({0}), &apos;{1}&apos;, or &apos;{2}&apos; (default: aspire). The &apos;dotnet-inspect&apos; skill requires a C# AppHost in the workspace.
         /// </summary>
         internal static string InitCommand_SkillsOptionDescription {
             get {
