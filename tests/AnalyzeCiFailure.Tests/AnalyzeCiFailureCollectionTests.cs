@@ -102,6 +102,34 @@ public sealed partial class AnalyzeCiFailureWorkflowTests
             calls.Where(call => call.Contains("actions/artifacts/", StringComparison.Ordinal)));
     }
 
+    [Fact]
+    [RequiresTools(["bash", "git"])]
+    public async Task CombinedReportsSurviveJobFallbackDownloadFailure()
+    {
+        var result = await RunCollectionAsync("combined-malformed", environment: new Dictionary<string, string>
+        {
+            ["FAIL_JOB_ARTIFACT_DOWNLOAD"] = "true",
+        });
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        var evidence = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(EvidenceDirectory, "evidence.json")))!;
+        var testEvidence = evidence["test_evidence"]!;
+        Assert.Equal("unavailable", testEvidence["state"]!.GetValue<string>());
+        var failure = Assert.Single(testEvidence["failures"]!.AsArray())!;
+        Assert.Equal("Suite.Case(value: a/b)", failure["name"]!.GetValue<string>());
+        var source = Assert.Single(failure["sources"]!.AsArray())!;
+        Assert.Equal("12", source["artifact_id"]!.GetValue<string>());
+        Assert.Equal("net10-execution", source["execution_id"]!.GetValue<string>());
+        var problem = Assert.Single(testEvidence["problems"]!.AsArray())!;
+        Assert.Equal("artifacts", problem["stage"]!.GetValue<string>());
+        Assert.Contains("id=10", problem["message"]!.GetValue<string>(), StringComparison.Ordinal);
+        var calls = await File.ReadAllLinesAsync(Path.Combine(_workspace.Path, "gh-calls.log"));
+        var combinedDownload = Array.FindIndex(calls, call => call.Contains("actions/artifacts/12/zip", StringComparison.Ordinal));
+        var fallbackDownload = Array.FindIndex(calls, call => call.Contains("actions/artifacts/10/zip", StringComparison.Ordinal));
+        Assert.True(combinedDownload >= 0 && fallbackDownload > combinedDownload,
+            "Job artifact fallback must follow combined result acquisition.");
+    }
+
     [Theory]
     [InlineData("combined", "complete", false)]
     [InlineData("combined-custom-runner", "complete", false)]
@@ -184,6 +212,28 @@ public sealed partial class AnalyzeCiFailureWorkflowTests
         Assert.Null(job["runner_failure"]);
         Assert.Equal("unavailable", evidence["test_evidence"]!["state"]!.GetValue<string>());
         Assert.Contains("analysis_ready=false", await File.ReadAllLinesAsync(Path.Combine(_workspace.Path, "workflow-output")));
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "git"])]
+    public async Task ConfirmedRunnerLossExplainsMissingRequiredTrxWithoutArtifactProblem()
+    {
+        var result = await RunCollectionAsync("runner-confirmed-loss-required-missing-artifact", useWorkflowAdapter: true);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        Assert.Contains("analysis_ready=true", await File.ReadAllLinesAsync(Path.Combine(_workspace.Path, "workflow-output")));
+        var evidence = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(EvidenceDirectory, "evidence.json")))!;
+        var job = Assert.Single(evidence["jobs"]!.AsArray(), job => job!["id"]!.GetValue<string>() == "77")!;
+        Assert.Equal("The hosted runner lost communication with the server.", job["runner_failure"]!.GetValue<string>());
+        var testEvidence = evidence["test_evidence"]!;
+        Assert.Equal("complete", testEvidence["state"]!.GetValue<string>());
+        Assert.Empty(testEvidence["problems"]!.AsArray());
+        Assert.Equal("Other.Failure", Assert.Single(testEvidence["failures"]!.AsArray())!["name"]!.GetValue<string>());
+        var diagnostics = JsonNode.Parse(await File.ReadAllTextAsync(DiagnosticSummary))!;
+        var runnerLoss = Assert.Single(diagnostics["events"]!.AsArray(), item =>
+            item!["action"]!.GetValue<string>() == "artifact-selection" &&
+            item["result"]!.GetValue<string>() == "runner-loss")!;
+        Assert.Equal("logs-Infrastructure-ubuntu-latest", runnerLoss["detail"]!["artifact"]!.GetValue<string>());
     }
 
     [Theory]
@@ -809,7 +859,8 @@ public sealed partial class AnalyzeCiFailureWorkflowTests
         var jobName = scenario == "combined-custom-runner" ? "Tests / No-package tests / Infrastructure (8-core-ubuntu-latest)" :
             scenario == "combined-split-producer" ? "Tests / No-package tests / Infrastructure-Collection (ubuntu-latest)" :
             scenario == "cancelled-build" ? "Build" :
-            scenario == "runner-confirmed-loss-completed-missing-artifact" ? "Tests / No-package tests / Infrastructure (ubuntu-latest)" :
+            scenario is "runner-confirmed-loss-completed-missing-artifact" or "runner-confirmed-loss-required-missing-artifact"
+                ? "Tests / No-package tests / Infrastructure (ubuntu-latest)" :
             mocha ? "Tests / VS Code extension E2E (Linux, debug)" : "Tests / No-package tests / Infrastructure (ubuntu-latest)";
         var run = new JsonObject
         {
@@ -1213,7 +1264,7 @@ public sealed partial class AnalyzeCiFailureWorkflowTests
                 if [[ "$PR_SCENARIO" = write-evidence-failure* ]]; then mkdir "$evidence_dir/evidence.json"; fi
                 cat responses/artifacts.json ;;
               *"actions/artifacts/10/zip")
-                if [ "$PR_SCENARIO" = runner-download-failure ]; then printf '%s\n' 'injected download failure' >&2; exit 23; fi
+                if [ "$PR_SCENARIO" = runner-download-failure ] || [ "${FAIL_JOB_ARTIFACT_DOWNLOAD:-false}" = true ]; then printf '%s\n' 'injected download failure' >&2; exit 23; fi
                 cat responses/results.zip ;;
               *"actions/artifacts/11/zip") cat responses/other.zip ;;
               *"actions/artifacts/12/zip") cat responses/combined.zip ;;
