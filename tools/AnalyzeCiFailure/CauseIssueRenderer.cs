@@ -43,6 +43,11 @@ internal static partial class CauseIssueRenderer
         var main = type == "main-repository-breakage";
         var title = DiagnosticTextSanitizer.Sanitize(Text(cause["title"]) ?? "", limit: 238);
         var test = DiagnosticTextSanitizer.Sanitize(Text(cause["test_name"]) ?? "", limit: 500);
+        // Model-supplied titles must not present suspected flakiness as confirmed.
+        if (title.StartsWith("Flaky:", StringComparison.OrdinalIgnoreCase))
+        {
+            title = title["Flaky:".Length..].TrimStart();
+        }
         if (string.IsNullOrWhiteSpace(title))
         {
             title = id;

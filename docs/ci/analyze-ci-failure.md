@@ -108,6 +108,10 @@ failed downloads, in addition to metadata and extraction checks.
 
 Issue/comment creation validates returned JSON IDs and `html_url` values.
 Label additions use the additive endpoint so operator labels survive updates.
+New cause issue titles omit a leading model-supplied `Flaky:` prefix rather
+than presenting suspected flakiness as confirmed. Stored cause definitions,
+classification and labels are unchanged, and existing non-main cause issue
+titles remain unchanged.
 Mutations are never automatically retried: a lost or invalid response records
 an unknown receipt and preserves the existing publication recovery behavior.
 Internal progress uses the nullable `HasRelevantFailures` flag; its external
@@ -171,6 +175,9 @@ Coverage is based on those available reports, not aggregate-job step results or
 a manifest of expected target frameworks. Failed downloads for other runners or
 failed upload-step metadata do not force fallback when this job's reports are
 present and usable.
+If an entire framework report is absent while another usable report for the
+same job is present, this policy cannot detect the omission or trigger fallback
+for it.
 
 Missing, ambiguous or unusable reports fall back **per job** to its `logs-*`
 artifact. Usable combined observations survive another unusable report for the
