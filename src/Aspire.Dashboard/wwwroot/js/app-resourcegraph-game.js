@@ -840,7 +840,7 @@ class SoundEffects {
 const STYLE_ID = 'resource-graph-game-style';
 const STYLES = `
 .resource-graph-game { position: absolute; inset: 0; z-index: 20; overflow: hidden; outline: none; cursor: crosshair; user-select: none; touch-action: none; }
-.resource-graph-game canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; image-rendering: crisp-edges; image-rendering: pixelated; filter: saturate(1.2) bomb-shadow(0 0 2px rgba(190, 170, 255, 0.55)); }
+.resource-graph-game canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; image-rendering: crisp-edges; image-rendering: pixelated; filter: saturate(1.2) drop-shadow(0 0 2px rgba(190, 170, 255, 0.55)); }
 .resource-graph-game-crt { position: absolute; inset: 0; pointer-events: none; opacity: 0; background: repeating-linear-gradient(to bottom, rgba(0, 0, 0, 0.3) 0, rgba(0, 0, 0, 0.3) 1px, transparent 1px, transparent 3px), radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.6) 100%); }
 .resource-graph-game-buttons { position: absolute; right: 8px; bottom: 6px; display: flex; gap: 6px; opacity: 0; }
 .resource-graph-game-button { font: 700 11px/1 ui-monospace, Menlo, Consolas, monospace; letter-spacing: 1px; text-transform: uppercase; color: #e8e2ff; background: rgba(20, 10, 40, 0.85); border: 2px solid #7455dd; border-radius: 0; padding: 4px 8px; cursor: pointer; }
@@ -1668,11 +1668,12 @@ class ResourceGraphGame {
         this.flashes.push({ x: position.x, y: position.y, life: 0.12 });
         const name = shorten(enemy.resource.label, 12);
         const x = position.x + (SPRITE / 2);
-        // In hard core the text describes the real resource, so STOPPED has to wait for the command's outcome.
-        const requested = this.hardcore && !enemy.resource.placeholder &&
+        if (this.hardcore && !enemy.resource.placeholder) {
+            // In hard core the text describes the real resource, and many resources have no stop command to run. Only the
+            // command's outcome can tell, so the hit claims nothing about the resource and STOPPED waits for that outcome.
             this.outage.stop(enemy.resource.id, () => this.addText(`${name}: STOPPED`, x, position.y, enemy.resource.color));
-        const state = requested ? 'STOPPING...' : this.hardcore ? 'HIT' : pick(DESTROYED_STATES);
-        this.addText(`${name}: ${state}`, x, position.y, enemy.resource.color);
+        }
+        this.addText(`${name}: ${this.hardcore ? 'HIT' : pick(DESTROYED_STATES)}`, x, position.y, enemy.resource.color);
         this.sound.enemyExplosion();
     }
 
