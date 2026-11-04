@@ -45,6 +45,13 @@
       "job": "Tests / Validate VS Code extension bootstrap (Linux)",
       "pr_number": 0,
       "observed_at": "2026-11-02T17:31:46Z"
+    },
+    {
+      "run_id": 41888675075,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/41888675075",
+      "job": "Tests / Validate VS Code extension bootstrap (Linux)",
+      "observed_at": "2026-11-04T19:28:40Z",
+      "pr_number": 0
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/18691"

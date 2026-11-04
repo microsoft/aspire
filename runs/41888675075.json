@@ -1,0 +1,33 @@
+{
+  "run_id": 41888675075,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/41888675075",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-04T19:28:40Z",
+  "verdict": "transient-infra",
+  "pr": null,
+  "triggering_merge_pr": null,
+  "main_context": {
+    "last_successful_main_sha": "d4994d7af558bd42ec3ec36e2499fb4b9ec31ce2",
+    "failed_sha": "5b73b169f83cc11993f0075c2cbc2d259fc2a3f3",
+    "candidate_merge_history_state": "incomplete",
+    "candidate_merges": null
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Validate VS Code extension bootstrap (Linux)",
+      "id": 126784902393,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/41888675075/job/126784902393",
+      "classification": "transient-infra",
+      "reason": "yarn install failed with 429 Too Many Requests from the dnceng dotnet-public-npm feed.",
+      "failed_steps": [
+        "Validate seeded cache via yarn install"
+      ]
+    }
+  ],
+  "failed_tests": [],
+  "causes": [
+    "npm-registry-rate-limit"
+  ]
+}
