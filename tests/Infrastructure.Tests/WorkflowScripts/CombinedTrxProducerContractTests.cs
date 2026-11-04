@@ -70,7 +70,7 @@ public sealed class CombinedTrxProducerContractTests
     private static void AssertContract(YamlMappingNode producer, YamlMappingNode aggregate, string shortName, string runner, string reportName)
     {
         // These representative report names are inputs to the consumer, not proof
-        // that RepoTesting.targets emits them. The results-job guard checks real files.
+        // that RepoTesting.targets emits them. The advisory job checks real files.
         var workspace = Path.GetFullPath(Path.Combine(RepoRoot.Path, "artifacts", "workflow-contract-workspace"));
         string Resolve(string? value)
         {

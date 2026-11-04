@@ -173,7 +173,7 @@ check: failed, crashed, and skipped jobs need not produce reports.
 aggregate download layouts from `run-tests.yml` and `tests.yml` through the real
 consumer. Controlled metadata mutations exercise drift detection. Its synthetic
 report names do not verify the filename emitter in
-`tests/Shared/RepoTesting/Aspire.RepoTesting.targets`; the results-job check
+`tests/Shared/RepoTesting/Aspire.RepoTesting.targets`; the advisory job
 validates the actual available outputs instead.
 
 Evidence policy is separate from the result format:
