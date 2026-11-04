@@ -2186,8 +2186,8 @@ function signalExplanation(s) {
   if (/^base /.test(label)) return "The PR targets the named release branch. Verify the fix and release or backport requirements for that branch.";
   if (/^\d+ unresolved\b/.test(label)) return signalExplanations["unresolved feedback"];
   if (/^\d+ change requests?$/.test(label)) return signalExplanations["changes requested"];
-  if (/^\d+ approvals?$/.test(label)) return "Number of current approving reviews. Confirm required reviewers and branch rules; an approval count alone does not guarantee merge readiness.";
-  if (/^\d+ reviewers? · 0 approvals$/.test(label)) return "Reviewers have submitted reviews, but none currently approves the PR. Finish the discussion, address requested changes, or seek an approving review.";
+  if (/^\d+ approvals?$/.test(label)) return "Number of recorded approving review submissions, including earlier reviews from the same reviewer. This is not a count of current approvers. Confirm the latest reviews and branch rules before merging.";
+  if (/^\d+ reviewers? · 0 approvals$/.test(label)) return "Reviewers have submitted reviews, but no approving review submissions are recorded. Finish the discussion, address requested changes, or seek an approving review.";
   if (/^\d+ review comments?$/.test(label)) return "Number of comment-only submitted reviews, not individual comments or approvals. Read the feedback and determine what remains before approval.";
   if (/^\d+ open prs?$/.test(label)) return "Open PRs are linked to this issue. Track their progress and validate the outcome before closing the issue.";
   return 'Dashboard tag: "' + s.label + '". Check the item discussion for context and the next step.';
@@ -2518,12 +2518,14 @@ function prCard(item, actions) {
       "<span>by " + esc(pr.author) + "</span>" +
     "</div>" +
     (item.reason ? '<div class="reason">' + esc(item.reason) + "</div>" : "") +
-    ((item.signals && item.signals.length) ? '<div class="pills">' + item.signals.map(pill).join("") + "</div>" : "") +
   "</a>";
+  const signals = (item.signals && item.signals.length)
+    ? '<div class="pills">' + item.signals.map(pill).join("") + "</div>"
+    : "";
   const acts = (actions && actions.length)
     ? '<div class="card-actions">' + actions.map((a) => cardActionBtn(pr, a)).join("") + "</div>"
     : "";
-  return '<div class="card">' + main + acts + "</div>";
+  return '<div class="card">' + main + signals + acts + "</div>";
 }
 
 function issueCard(item) {
@@ -2534,9 +2536,10 @@ function issueCard(item) {
       avatarTag(is.authorAvatarUrl, is.author, "avatar", 36) +
       '<span class="repo">' + esc(shortRepo(is.repository)) + " #" + is.number + "</span>" +
       "<span>by " + esc(is.author) + "</span>" +
-    "</div>" +
-    ((item.signals && item.signals.length) ? '<div class="pills">' + item.signals.map(pill).join("") + "</div>" : "") +
-  "</a>";
+    "</div></a>";
+  const signals = (item.signals && item.signals.length)
+    ? '<div class="pills">' + item.signals.map(pill).join("") + "</div>"
+    : "";
   const linkedPullRequests = (is.linkedPullRequests || []).filter((pr) => pr.state !== "CLOSED");
   const linked = linkedPullRequests.length
     ? linkedPullRequests.map((pr) => {
@@ -2550,7 +2553,7 @@ function issueCard(item) {
         );
       }).join("")
     : "";
-  return '<div class="card">' + main + linked + "</div>";
+  return '<div class="card">' + main + signals + linked + "</div>";
 }
 
 function laneIcon(lane) {

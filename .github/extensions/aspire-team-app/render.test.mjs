@@ -411,7 +411,7 @@ test("card pills explain review debt and the review progress shown in the queue"
   assert.match(html, /tabindex="0" aria-describedby="agent-action-tooltip" data-tooltip="Review activity exists, but the PR has not reached approval\. Finish the review or clarify what is still needed\.">finish review<\/span>/);
   assert.match(html, /data-tooltip="The PR&#39;s relevant activity is less than 12 hours old\./);
   assert.match(html, /<span class="pill warning">open 7d<\/span>/);
-  assert.match(html, /data-tooltip="Reviewers have submitted reviews, but none currently approves the PR\./);
+  assert.match(html, /data-tooltip="Reviewers have submitted reviews, but no approving review submissions are recorded\./);
 });
 
 test("variable signal counts retain their meaning and expected action", () => {
@@ -419,7 +419,7 @@ test("variable signal counts retain their meaning and expected action", () => {
   for (const [label, expected] of [
     ["3 unresolved", /^Review conversations remain unresolved\. Address each thread/],
     ["1 change request", /^Changes have been requested\. Address the feedback/],
-    ["2 approvals", /^Number of current approving reviews\. Confirm required reviewers/],
+    ["2 approvals", /^Number of recorded approving review submissions, including earlier reviews from the same reviewer\. This is not a count of current approvers\. Confirm the latest reviews/],
     ["3 review comments", /^Number of comment-only submitted reviews, not individual comments or approvals\./],
     ["approved 3d", /^The PR is approved and its approval reference is at least 2 days old\./],
     ["reviewed 1d", /^Time since the latest submitted review\. Check for newer commits/],
@@ -429,6 +429,28 @@ test("variable signal counts retain their meaning and expected action", () => {
     ["2 open PRs", /^Open PRs are linked to this issue\. Track their progress/],
   ]) {
     assert.match(api.signalExplanation({ label }), expected, label);
+  }
+});
+
+test("PR and issue card help targets are siblings of their navigation links", () => {
+  const { api } = createRendererHarness();
+  const item = {
+    url: "https://github.com/microsoft/aspire/pull/1",
+    title: "PR",
+    author: "octo",
+    repository: "microsoft/aspire",
+    number: 1,
+  };
+  const signals = [{ label: "review debt", tone: "accent" }];
+  for (const html of [
+    api.prCard({ pr: item, signals }),
+    api.issueCard({ issue: { ...item, url: "https://github.com/microsoft/aspire/issues/1" }, signals }),
+  ]) {
+    const links = html.match(/<a\b[^>]*>[\s\S]*?<\/a>/g);
+    assert.equal(links.length, 1);
+    assert.equal((links[0].match(/tabindex=/g) || []).length, 0);
+    assert.match(html, /<\/a><div class="pills"><span class="pill accent" tabindex="0" aria-describedby="agent-action-tooltip"/);
+    assert.match(html, />review debt<\/span><\/div><\/div>$/);
   }
 });
 
