@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREDOTNETPROJECT001
 #pragma warning disable ASPIREEXTENSION001
 
 using Aspire.Hosting.ApplicationModel;
@@ -42,16 +41,21 @@ public class DotnetProjectOptionsTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task OmittedAndEmptyPolyglotOptionsUseDefaultProfile(bool omitOptions)
+    [InlineData("omitted")]
+    [InlineData("null")]
+    [InlineData("empty")]
+    public async Task OmittedNullAndEmptyPolyglotOptionsUseDefaultProfile(string optionsKind)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var projectPath = await CreateProjectAsync(workspace.Path, includeKestrel: false);
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
-        var resource = omitOptions
-            ? builder.AddDotnetProjectForPolyglot("svc", projectPath)
-            : builder.AddDotnetProjectForPolyglot("svc", projectPath, new DotnetProjectOptions());
+        var resource = optionsKind switch
+        {
+            "omitted" => builder.AddDotnetProjectForPolyglot("svc", projectPath),
+            "null" => builder.AddDotnetProjectForPolyglot("svc", projectPath, options: null),
+            "empty" => builder.AddDotnetProjectForPolyglot("svc", projectPath, new DotnetProjectOptions()),
+            _ => throw new ArgumentOutOfRangeException(nameof(optionsKind))
+        };
 
         var endpoint = Assert.Single(resource.Resource.Annotations.OfType<EndpointAnnotation>());
         Assert.Equal("http", endpoint.Name);

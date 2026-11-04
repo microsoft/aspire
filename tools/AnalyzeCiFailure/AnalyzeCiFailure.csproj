@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Preparation/publication check out this tool and shared test tooling from the trusted workflow ref.
+       Keep its explicit package references isolated from Arcade and PR-owned build inputs.
+       Sparse checkouts include the trusted root NuGet.config for approved restore feeds. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net11.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="System.CommandLine" Version="2.0.12" />
+    <InternalsVisibleTo Include="AnalyzeCiFailure.Tests" />
+    <InternalsVisibleTo Include="AnalyzeCiFailure.TestHost" />
+    <EmbeddedResource Include="Templates/*.md.tmpl" LogicalName="AnalyzeCiFailure.Templates.%(Filename)%(Extension)" />
+    <Compile Include="../Aspire.TestTools/TrxDocument.cs" Link="TrxDocument.cs" />
+    <Compile Include="../Aspire.TestTools/TrxReader.cs" Link="TrxReader.cs" />
+    <Compile Include="../Aspire.TestTools/MochaReader.cs" Link="MochaReader.cs" />
+    <Compile Include="../Aspire.TestTools/ProcessRunner.cs" Link="SharedProcessRunner.cs" />
+    <Compile Include="../Aspire.TestTools/GitHubApiClient.cs" Link="SharedGitHubApiClient.cs" />
+  </ItemGroup>
+</Project>

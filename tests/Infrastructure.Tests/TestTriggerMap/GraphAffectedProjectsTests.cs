@@ -239,6 +239,27 @@ public sealed class GraphAffectedProjectsTests
         Assert.DoesNotContain("Mid", result.AffectedTestProjects);
     }
 
+    // Failure mode: tests that inspect CI-only project properties build a graph without the same
+    // global properties that regular PR CI uses, so conditional properties such as artifact-consumer
+    // metadata are evaluated as if the project were not running in CI.
+    [Fact]
+    public void BuildGraphHonorsAdditionalGlobalProperties()
+    {
+        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var repo = new GraphFixture(workspace);
+
+        Assert.Equal("", repo.GetCorePropertyValue("SelectorGlobalProbeValue"));
+
+        var value = repo.GetCorePropertyValue(
+            "SelectorGlobalProbeValue",
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["SelectorGlobalProbe"] = "artifact-consumer",
+            });
+
+        Assert.Equal("artifact-consumer", value);
+    }
+
     /// <summary>
     /// Creates a disposable temp directory containing a minimal but real MSBuild project graph plus an
     /// <c>Aspire.slnx</c>, and runs <see cref="GraphAffectedProjects.Compute"/> against it using a
@@ -306,6 +327,22 @@ public sealed class GraphAffectedProjectsTests
             return GraphAffectedProjects.Compute(_workspace.Path, System.IO.Path.Combine(_workspace.Path, "Aspire.slnx"), from: null, to: null, changedFilesPath: changedFilesPath);
         }
 
+        public string GetCorePropertyValue(string propertyName, IReadOnlyDictionary<string, string>? additionalGlobalProperties = null)
+        {
+            var graph = GraphAffectedProjects.BuildGraph(
+                _workspace.Path,
+                System.IO.Path.Combine(_workspace.Path, "Aspire.slnx"),
+                additionalGlobalProperties);
+
+            var values = graph.ProjectNodes
+                .Where(node => node.ProjectInstance.FullPath.EndsWith("Core.csproj", StringComparison.Ordinal))
+                .Select(node => node.ProjectInstance.GetPropertyValue(propertyName))
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+
+            return Assert.Single(values);
+        }
+
         private void Write(string relativePath, string contents)
         {
             var fullPath = System.IO.Path.Combine(_workspace.Path, relativePath.Replace('\\', System.IO.Path.DirectorySeparatorChar));
@@ -327,6 +364,7 @@ public sealed class GraphAffectedProjectsTests
                   <PropertyGroup>
                     <TargetFramework>net10.0</TargetFramework>
                     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+                    <SelectorGlobalProbeValue>$(SelectorGlobalProbe)</SelectorGlobalProbeValue>
                   </PropertyGroup>
                   <ItemGroup>
                 {items}

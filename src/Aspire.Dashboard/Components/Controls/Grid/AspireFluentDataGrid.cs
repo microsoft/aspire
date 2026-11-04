@@ -20,6 +20,15 @@ public class AspireFluentDataGrid<TGridItem> : FluentDataGrid<TGridItem>
     [Inject]
     public required IStringLocalizer<ControlsStrings> Loc { get; init; }
 
+    protected override void BuildRenderTree(RenderTreeBuilder builder)
+    {
+        builder.AddContent(0, (RenderFragment)(gridBuilder => base.BuildRenderTree(gridBuilder)));
+        builder.OpenElement(1, "aspire-grid-tooltips");
+        builder.AddAttribute(2, "grid", Id);
+        builder.AddAttribute(3, "hidden", true);
+        builder.CloseElement();
+    }
+
     /// <summary>
     /// Refreshes virtualized data and renders this grid when the refresh originates outside a Blazor event.
     /// </summary>
@@ -69,10 +78,14 @@ internal static class EnumerableGridItemsProvider
     public static IEnumerable<TItem> ApplySorting<TItem>(IEnumerable<TItem> items, GridItemsProviderRequest<TItem> request)
     {
         request.CancellationToken.ThrowIfCancellationRequested();
-        return request.SortByColumn?.SortBy switch
+        if (request.SortColumns is not [var sortColumn, ..])
         {
-            null => items,
-            EnumerableGridSort<TItem> sort => sort.Apply(items, request.SortByAscending),
+            return items;
+        }
+
+        return sortColumn.Column.SortBy switch
+        {
+            EnumerableGridSort<TItem> sort => sort.Apply(items, sortColumn.Ascending),
             _ => throw new InvalidOperationException("In-memory grid columns must use EnumerableGridSort.")
         };
     }

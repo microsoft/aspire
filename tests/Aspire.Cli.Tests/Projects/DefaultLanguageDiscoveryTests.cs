@@ -37,6 +37,27 @@ public class DefaultLanguageDiscoveryTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task GetAvailableLanguagesAsync_CSharpLanguageHasNoDefaultHostingPackages()
+    {
+        var discovery = new DefaultLanguageDiscovery(new TestFeatures());
+
+        var languages = await discovery.GetAvailableLanguagesAsync().DefaultTimeout();
+
+        var csharp = languages.First(l => l.LanguageId.Value == KnownLanguageId.CSharp);
+        Assert.Empty(csharp.DefaultHostingPackages);
+    }
+
+    [Theory]
+    [InlineData(KnownLanguageId.Java)]
+    [InlineData(KnownLanguageId.Rust)]
+    public void AllLanguages_LanguageWithAPreviewHostingPackageHasNoDefaultHostingPackages(string languageId)
+    {
+        var language = DefaultLanguageDiscovery.AllLanguages.Single(l => l.LanguageId.Value == languageId);
+
+        Assert.Empty(language.DefaultHostingPackages);
+    }
+
+    [Fact]
     public async Task GetAvailableLanguagesAsync_ReturnsTypeScriptLanguage()
     {
         var discovery = new DefaultLanguageDiscovery(new TestFeatures());
@@ -80,10 +101,10 @@ public class DefaultLanguageDiscoveryTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(KnownLanguageId.Python, "experimentalPolyglot:python")]
-    [InlineData(KnownLanguageId.Go, "experimentalPolyglot:go")]
-    [InlineData(KnownLanguageId.Java, "experimentalPolyglot:java")]
-    [InlineData(KnownLanguageId.Rust, "experimentalPolyglot:rust")]
+    [InlineData(KnownLanguageId.Python, "experimentalPolyglotPython")]
+    [InlineData(KnownLanguageId.Go, "experimentalPolyglotGo")]
+    [InlineData(KnownLanguageId.Java, "experimentalPolyglotJava")]
+    [InlineData(KnownLanguageId.Rust, "experimentalPolyglotRust")]
     public async Task GetAvailableLanguagesAsync_IncludesExperimentalLanguageWhenFlagEnabled(string languageId, string featureFlag)
     {
         var features = new TestFeatures();

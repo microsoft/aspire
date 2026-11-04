@@ -1,10 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES002
-#pragma warning disable ASPIREPIPELINES001
-#pragma warning disable ASPIREAZURE001
-
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -78,6 +74,8 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
     internal string? TemplateString { get; set; }
 
     internal string? TemplateResourceName { get; }
+
+    internal bool HasLocationParameter { get; set; } = true;
 
     internal HashSet<IAzureResource> GetAzureReferences()
     {
@@ -413,6 +411,16 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
         private const string KeyVaultNameConst = "keyVaultName";
         private const string LocationConst = "location";
         private const string LogAnalyticsWorkspaceIdConst = "logAnalyticsWorkspaceId";
+        private const string TenantResourceSuffixConst = "tenantResourceSuffix";
+
+        /// <summary>
+        /// The optional suffix used to distinguish tenant-wide resources created by this application.
+        /// </summary>
+        /// <remarks>
+        /// Local provisioning resolves this value from <c>Azure:TenantResourceSuffix</c> and saved Azure context.
+        /// Published templates expose it as a deployment parameter. An empty value leaves resource names unchanged.
+        /// </remarks>
+        public static readonly string TenantResourceSuffix = TenantResourceSuffixConst;
 
         /// <summary>
         /// The principal id of the current user or managed identity.
@@ -453,7 +461,7 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
         public static readonly string LogAnalyticsWorkspaceId = LogAnalyticsWorkspaceIdConst;
 
         internal static bool IsKnownParameterName(string name) =>
-            name is PrincipalIdConst or UserPrincipalIdConst or PrincipalNameConst or PrincipalTypeConst or KeyVaultNameConst or LocationConst or LogAnalyticsWorkspaceIdConst;
+            name is PrincipalIdConst or UserPrincipalIdConst or PrincipalNameConst or PrincipalTypeConst or KeyVaultNameConst or LocationConst or LogAnalyticsWorkspaceIdConst or TenantResourceSuffixConst;
 
     }
 

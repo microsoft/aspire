@@ -7,6 +7,7 @@ using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
+using Aspire.Shared;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -177,6 +178,11 @@ public class DashboardResourceTests(ITestOutputHelper testOutputHelper)
             {
                 Assert.Equal("DASHBOARD__FRONTEND__PUBLICURL", e.Key);
                 Assert.Equal("http://localhost:5003", e.Value);
+            },
+            e =>
+            {
+                Assert.Equal(DashboardConfigNames.DashboardLaunchContextName.EnvVarName, e.Key);
+                Assert.Equal(KnownDashboardLaunchContexts.AppHost, e.Value);
             },
             e =>
             {
@@ -782,7 +788,9 @@ public class DashboardResourceTests(ITestOutputHelper testOutputHelper)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
+#pragma warning disable CS0618 // Retain legacy dashboard project metadata and snapshot classification.
         builder.AddProject<DashboardProject>(KnownResourceNames.AspireDashboard);
+#pragma warning restore CS0618
 
         var app = builder.Build();
 

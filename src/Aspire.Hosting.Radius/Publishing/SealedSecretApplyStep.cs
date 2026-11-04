@@ -2,8 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIRERADIUS006 // Secret-store types are experimental; consumed internally by the integration.
-#pragma warning disable ASPIREPIPELINES001
-#pragma warning disable ASPIREPIPELINES004
 
 using System.ComponentModel;
 using System.Diagnostics;

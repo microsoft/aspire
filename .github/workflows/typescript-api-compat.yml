@@ -9,11 +9,11 @@ permissions:
 jobs:
   typescript_api_compat:
     name: TypeScript API Compatibility
-    if: ${{ github.event_name == 'pull_request' }}
+    if: ${{ github.repository == 'microsoft/aspire' && github.event_name == 'pull_request' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Restore
         run: ./restore.sh
@@ -22,8 +22,8 @@ jobs:
         run: |
           ./dotnet.sh build src/Aspire.Cli/Aspire.Cli.csproj --configuration Release
           ./dotnet.sh build tools/TypeScriptApiCompat/TypeScriptApiCompat.csproj --configuration Release
-          test -f artifacts/bin/Aspire.Cli/Release/net10.0/aspire.dll
-          test -f artifacts/bin/TypeScriptApiCompat/Release/net8.0/TypeScriptApiCompat.dll
+          test -f artifacts/bin/Aspire.Cli/Release/net11.0/aspire.dll
+          test -f artifacts/bin/TypeScriptApiCompat/Release/net10.0/TypeScriptApiCompat.dll
 
       - name: Prepare checked-in ATS surface
         shell: bash
@@ -78,7 +78,7 @@ jobs:
           EXCLUDED_PACKAGES_FILE="$TYPESCRIPT_API_COMPAT_EXCLUDED_PACKAGES_FILE"
           PROJECTS_FILE="${RUNNER_TEMP}/ats-projects.txt"
           SORTED_PROJECTS_FILE="${RUNNER_TEMP}/ats-projects-sorted.txt"
-          ASPIRE_CLI=("${GITHUB_WORKSPACE}/dotnet.sh" exec "${GITHUB_WORKSPACE}/artifacts/bin/Aspire.Cli/Release/net10.0/aspire.dll" --nologo)
+          ASPIRE_CLI=("${GITHUB_WORKSPACE}/dotnet.sh" exec "${GITHUB_WORKSPACE}/artifacts/bin/Aspire.Cli/Release/net11.0/aspire.dll" --nologo)
 
           mkdir -p "$CURRENT_DIR/src/Aspire.Hosting/api"
           : > "$PROJECTS_FILE"
@@ -113,6 +113,14 @@ jobs:
             proj_name=$(basename "$proj")
             csproj="$proj/$proj_name.csproj"
             if [ -f "$csproj" ]; then
+              # Native server bindings have their own ATS contract, not a managed
+              # Hosting integration surface that sdk dump can load.
+              polyglot_compatible=$(./dotnet.sh msbuild "$csproj" -nologo -getProperty:IsAspirePolyglotCompatible | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+              if [ "$polyglot_compatible" = "false" ]; then
+                echo "Skipping non-integration project $proj_name"
+                continue
+              fi
+
               disable_package_baseline_validation=$(./dotnet.sh msbuild "$csproj" -nologo -getProperty:DisablePackageBaselineValidation | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
               if [ "$disable_package_baseline_validation" = "true" ]; then
                 echo "$proj_name" >> "$EXCLUDED_PACKAGES_FILE"
@@ -145,7 +153,7 @@ jobs:
           set -euo pipefail
 
           ./dotnet.sh exec \
-            artifacts/bin/TypeScriptApiCompat/Release/net8.0/TypeScriptApiCompat.dll \
+            artifacts/bin/TypeScriptApiCompat/Release/net10.0/TypeScriptApiCompat.dll \
             --baseline "$CHECKED_IN_DIR" \
             --current "$CURRENT_DIR" \
             --suppressions-root "${{ github.workspace }}" \
@@ -156,7 +164,7 @@ jobs:
 
       - name: Upload TypeScript API compatibility report
         if: failure()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: typescript-api-compat-report
           path: ${{ runner.temp }}/typescript-api-compat-report.md

@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenTelemetry;
+using OpenTelemetry.Logs;
 using OpenTelemetry.Trace;
 using Xunit;
 
@@ -78,6 +79,45 @@ public class HealthTests(HealthTests.Fixture fixture) : IClassFixture<HealthTest
         Assert.Equal(testActivity.TraceId, exported.TraceId);
         Assert.Equal(DashboardActivitySource.ActivitySourceName, exported.Source.Name);
         Assert.Equal(ActivityKind.Consumer, exported.Kind);
+    }
+
+    [Theory]
+    [InlineData(null, null, "aspire-dashboard", null)]
+    [InlineData("custom-dashboard", null, "custom-dashboard", null)]
+    [InlineData(null, "service.name=resource-dashboard", "resource-dashboard", null)]
+    [InlineData(null, "service.name=resource-dashboard,service.instance.id=stable-instance", "resource-dashboard", "stable-instance")]
+    [InlineData("custom-dashboard", "service.name=resource-dashboard,service.instance.id=stable-instance", "custom-dashboard", "stable-instance")]
+    [InlineData(null, "service.instance.id=stable-instance", "aspire-dashboard", "stable-instance")]
+    [InlineData(null, "service.name=custom-dashboard,application.secret=must-stay-local", "custom-dashboard", null)]
+    public async Task OtlpExporterConfigured_ConfiguresResourceIdentity(
+        string? configuredServiceName,
+        string? configuredResourceAttributes,
+        string expectedServiceName,
+        string? expectedServiceInstanceId)
+    {
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(
+            NullLoggerFactory.Instance,
+            config =>
+            {
+                config["OTEL_EXPORTER_OTLP_ENDPOINT"] = "http://127.0.0.1:1";
+                config["OTEL_SERVICE_NAME"] = configuredServiceName;
+                config["OTEL_RESOURCE_ATTRIBUTES"] = configuredResourceAttributes;
+            });
+
+        await app.StartAsync().DefaultTimeout();
+
+        var resourceAttributes = app.Services.GetRequiredService<TracerProvider>().GetResource().Attributes.ToDictionary();
+        Assert.Equal(expectedServiceName, resourceAttributes["service.name"]);
+        if (expectedServiceInstanceId is null)
+        {
+            Assert.False(resourceAttributes.ContainsKey("service.instance.id"));
+        }
+        else
+        {
+            Assert.Equal(expectedServiceInstanceId, resourceAttributes["service.instance.id"]);
+        }
+
+        Assert.Null(app.Services.GetService<LoggerProvider>());
     }
 
     public sealed class Fixture : IAsyncLifetime

@@ -85,9 +85,9 @@ public class AzureSubnetResource : Resource, IResourceWithParent<AzureVirtualNet
     internal AzureNatGatewayResource? NatGateway { get; set; }
 
     /// <summary>
-    /// Gets or sets the Network Security Group associated with the subnet.
+    /// Gets the Network Security Group associated with the subnet, including an implicitly created group.
     /// </summary>
-    internal AzureNetworkSecurityGroupResource? NetworkSecurityGroup { get; set; }
+    public AzureNetworkSecurityGroupResource? NetworkSecurityGroup { get; internal set; }
 
     private static string ThrowIfNullOrEmpty([NotNull] string? argument, [CallerArgumentExpression(nameof(argument))] string? paramName = null)
         => !string.IsNullOrEmpty(argument) ? argument : throw new ArgumentNullException(paramName);

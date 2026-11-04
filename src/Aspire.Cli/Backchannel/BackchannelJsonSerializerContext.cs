@@ -9,6 +9,7 @@ using System.Text.Json.Serialization.Metadata;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Commands.Sdk;
 using Aspire.Cli.Projects;
+using Aspire.Shared;
 using Aspire.TypeSystem;
 using Spectre.Console;
 using StreamJsonRpc;
@@ -30,7 +31,6 @@ namespace Aspire.Cli.Backchannel;
 [JsonSerializable(typeof(MessageFormatterEnumerableTracker.EnumeratorResults<BackchannelLogEntry>))]
 [JsonSerializable(typeof(IAsyncEnumerable<PublishingActivity>))]
 [JsonSerializable(typeof(MessageFormatterEnumerableTracker.EnumeratorResults<PublishingActivity>))]
-[JsonSerializable(typeof(RequestId))]
 [JsonSerializable(typeof(IEnumerable<DisplayLineState>))]
 [JsonSerializable(typeof(PublishingPromptInputAnswer[]))]
 [JsonSerializable(typeof(ValidationResult))]
@@ -128,6 +128,7 @@ internal partial class BackchannelJsonSerializerContext : JsonSerializerContext
         var options = new JsonSerializerOptions(ModelContextProtocol.McpJsonUtilities.DefaultOptions);
         options.TypeInfoResolver = JsonTypeInfoResolver.Combine(
             Default,
+            new RequestIdTypeInfoResolver(),
             ModelContextProtocol.McpJsonUtilities.DefaultOptions.TypeInfoResolver
         );
         return options;

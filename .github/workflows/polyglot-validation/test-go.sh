@@ -21,17 +21,6 @@ cd "$WORK_DIR"
 
 # Initialize Go AppHost
 echo "Creating Go apphost project..."
-# TODO: once go is not an experiment feature, remove 
-cat << 'EOF' > aspire.config.json
-{
-  "appHost": {},
-  "features": {
-    "experimentalPolyglot:go": true
-  },
-  "packages": {}
-}
-EOF
-
 aspire init --language go --non-interactive -d
 
 cat <<'EOF' > appsettings.json
@@ -65,8 +54,18 @@ if grep -q "builder.Build()" apphost.go; then
         print "\tif err != nil {"
         print "\t\tlog.Fatalf(\"Failed to read appsettings.json: %v\", err)"
         print "\t}"
-        print "\tif appSettingsValue != \"from-appsettings\" {"
-        print "\t\tlog.Fatalf(\"Expected appsettings.json value, got %q\", appSettingsValue)"
+        print "\tif appSettingsValue == nil {"
+        print "\t\tlog.Fatal(\"Expected appsettings.json value, got nil\")"
+        print "\t}"
+        print "\tif *appSettingsValue != \"from-appsettings\" {"
+        print "\t\tlog.Fatalf(\"Expected appsettings.json value, got %q\", *appSettingsValue)"
+        print "\t}"
+        print "\tmissingValue, err := builder.GetConfiguration().GetConfigValue(\"PolyglotTest:Missing\")"
+        print "\tif err != nil {"
+        print "\t\tlog.Fatalf(\"Failed to read missing configuration key: %v\", err)"
+        print "\t}"
+        print "\tif missingValue != nil {"
+        print "\t\tlog.Fatalf(\"Expected missing configuration key to return nil, got %q\", *missingValue)"
         print "\t}"
         print ""
         print "\t// Add Redis cache resource"

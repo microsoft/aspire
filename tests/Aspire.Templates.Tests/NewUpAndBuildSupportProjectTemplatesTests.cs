@@ -17,8 +17,6 @@ public abstract class NewUpAndBuildSupportProjectTemplatesBase(ITestOutputHelper
 
         var buildEnvToUse = sdk switch
         {
-            TestSdk.Net8 => BuildEnvironment.ForNet8SdkOnly,
-            TestSdk.Net9 => BuildEnvironment.ForNet9SdkOnly,
             TestSdk.Net10 => BuildEnvironment.ForNet10SdkOnly,
             TestSdk.Net11 => BuildEnvironment.ForNet11SdkOnly,
             TestSdk.Net11WithAllSupportedRuntimes => BuildEnvironment.ForNet11SdkWithAllSupportedRuntimes,

@@ -57,6 +57,28 @@ public class DashboardJsonSerializerContextTests
         Assert.NotNull(DashboardJsonSerializerContext.Default.GetTypeInfo(interopType));
     }
 
+    [Fact]
+    public void TerminalToolbarState_RoundTripsMetadataAndPalette()
+    {
+        var value = new TerminalToolbarState
+        {
+            TerminalId = 1,
+            Generation = 2,
+            Connected = true,
+            Title = "build",
+            WorkingDirectory = "/work/app",
+            WorkingDirectoryUri = "file:///work/app",
+            ProgressState = "normal",
+            ProgressPercentage = 42,
+            Palette = "light"
+        };
+
+        var json = JsonSerializer.Serialize(value, DashboardJsonSerializerContext.Default.TerminalToolbarState);
+        var result = JsonSerializer.Deserialize(json, DashboardJsonSerializerContext.Default.TerminalToolbarState);
+
+        Assert.Equal(value, result);
+    }
+
     [Theory]
     [InlineData(typeof(ConsoleLogs.ConsoleLogsPageState))]
     [InlineData(typeof(Metrics.MetricsPageState))]

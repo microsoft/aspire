@@ -1,0 +1,14 @@
+﻿{
+  aspire.config.json: { "sdk": { "version": "17.0.0" } },
+  nuget.config:
+<configuration>
+  <packageSources>
+    <add key="aspire" value="{workspace}/packages &amp; assets" />
+  </packageSources>
+  <packageSourceMapping>
+    <packageSource key="aspire">
+      <package pattern="Aspire*" />
+    </packageSource>
+  </packageSourceMapping>
+</configuration>
+}

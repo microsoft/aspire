@@ -154,7 +154,7 @@ internal sealed class RestoreCommand : BaseCommand
 
                 var success = await _interactionService.ShowStatusAsync(
                     RestoreCommandStrings.RestoringSdkCode,
-                    async () => await guestProject.BuildAndGenerateSdkAsync(directory, updateDependencies: false, cancellationToken: cancellationToken),
+                    async () => await guestProject.BuildAndGenerateSdkAsync(effectiveAppHostFile, updateDependencies: false, cancellationToken: cancellationToken),
                     emoji: KnownEmojis.Gear);
 
                 if (success)

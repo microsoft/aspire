@@ -2,8 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREDOTNETTOOL
-#pragma warning disable ASPIREDOTNETPROJECT001
 #pragma warning disable ASPIREPROJECTS001
+#pragma warning disable CS0618 // Retains legacy project overload and property compatibility alongside V2 coverage.
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
@@ -94,12 +94,10 @@ public class AddEFMigrationsTests
         var migrations = project.AddEFMigrations("mymigrations");
 
         Assert.Same(project.Resource, migrations.Resource.StartupProjectResource);
-#pragma warning disable CS0618
         var exception = Assert.Throws<InvalidOperationException>(() =>
         {
             _ = migrations.Resource.ProjectResource;
         });
-#pragma warning restore CS0618
         Assert.Contains(nameof(EFMigrationResource.StartupProjectResource), exception.Message);
     }
 
@@ -126,9 +124,7 @@ public class AddEFMigrationsTests
         var project = builder.AddProject<Projects.ServiceA>("myproject");
         var migrations = project.AddEFMigrations("mymigrations");
 
-#pragma warning disable CS0618
         Assert.Same(project.Resource, migrations.Resource.ProjectResource);
-#pragma warning restore CS0618
     }
 
     [Fact]

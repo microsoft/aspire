@@ -26,7 +26,17 @@ internal static class PeriodicRestartAsyncEnumerable
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             cts.CancelAfter(restartInterval);
 
-            var enumerable = await enumerableFactory(lastValue, cts.Token).ConfigureAwait(false);
+            IAsyncEnumerable<T> enumerable;
+            try
+            {
+                enumerable = await enumerableFactory(lastValue, cts.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException ex) when (ex.CancellationToken == cts.Token && cts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+            {
+                // The restart interval can expire while the factory is still establishing a streaming
+                // connection. Start a fresh factory call just as we do when enumeration is canceled.
+                continue;
+            }
             var enumerator = enumerable.GetAsyncEnumerator(cts.Token);
 
             try
@@ -42,7 +52,7 @@ internal static class PeriodicRestartAsyncEnumerable
                             break;
                         }
                     }
-                    catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                    catch (OperationCanceledException ex) when (ex.CancellationToken == cts.Token && cts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
                     {
                         // If the restart token threw a cancellation exception, we should resume the outer loop to get a new enumerable if necessary
                         // If the main token is cancelled, we should just bubble up the exception
@@ -82,7 +92,17 @@ internal static class PeriodicRestartAsyncEnumerable
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             cts.CancelAfter(restartInterval);
 
-            var enumerable = await enumerableFactory(lastValue, cts.Token).ConfigureAwait(false);
+            IAsyncEnumerable<T> enumerable;
+            try
+            {
+                enumerable = await enumerableFactory(lastValue, cts.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException ex) when (ex.CancellationToken == cts.Token && cts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+            {
+                // The restart interval can expire while the factory is still establishing a streaming
+                // connection. Start a fresh factory call just as we do when enumeration is canceled.
+                continue;
+            }
             var enumerator = enumerable.GetAsyncEnumerator(cts.Token);
 
             try
@@ -98,7 +118,7 @@ internal static class PeriodicRestartAsyncEnumerable
                             break;
                         }
                     }
-                    catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                    catch (OperationCanceledException ex) when (ex.CancellationToken == cts.Token && cts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
                     {
                         // If the restart token threw a cancellation exception, we should resume the outer loop to get a new enumerable if necessary
                         // If the main token is cancelled, we should just bubble up the exception

@@ -5,6 +5,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Match the EF9 health checks used by the referenced Pomelo integration. -->
+    <PackageVersion Update="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="9.0.20" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Using Include="Aspire.Tests.Utils" />
   </ItemGroup>
   <ItemGroup>
@@ -16,6 +21,7 @@
   </ItemGroup>
 
   <ItemGroup>
+     <Compile Include="..\Shared\ContainerReplCommandTestBase.cs" Link="ContainerReplCommandTestBase.cs" />
      <Compile Include="$(TestsSharedDir)AsyncTestHelpers.cs" Link="shared/AsyncTestHelpers.cs" />
   </ItemGroup>
 

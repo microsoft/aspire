@@ -237,6 +237,13 @@ internal sealed class AzureAppServiceWebsiteContext(
             return (AllocateParameter(output, secretType: secretType), secretType);
         }
 
+#pragma warning disable ASPIREAZURE003 // IBicepOutputReferenceProvider is experimental.
+        if (value is IBicepOutputReferenceProvider outputProvider && outputProvider.GetOutputReference() is { } providedOutput)
+        {
+            return ProcessValue(providedOutput, secretType, parent, isSlot);
+        }
+#pragma warning restore ASPIREAZURE003
+
         if (value is IAzureKeyVaultSecretReference vaultSecretReference)
         {
             if (parent is null)
@@ -672,7 +679,6 @@ internal sealed class AzureAppServiceWebsiteContext(
         }
 
         // Probes
-#pragma warning disable ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         if (resource.TryGetAnnotationsOfType<ProbeAnnotation>(out var probeAnnotations))
         {
             // AppService allow only one "health check" with only path, so prioritize "liveness" and/or take the first one
@@ -693,7 +699,6 @@ internal sealed class AzureAppServiceWebsiteContext(
                 }
             }
         }
-#pragma warning restore ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
         RoleAssignment? webSiteRa = null;
         if (environmentContext.Environment.EnableDashboard)

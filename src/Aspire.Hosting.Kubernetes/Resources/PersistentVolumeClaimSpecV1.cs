@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Hosting.Yaml;
 using YamlDotNet.Serialization;
 
 namespace Aspire.Hosting.Kubernetes.Resources;
@@ -13,6 +14,7 @@ namespace Aspire.Hosting.Kubernetes.Resources;
 /// It serves as an abstraction to request specific storage with desired attributes such as size and access modes.
 /// This class defines the set of properties that can be configured for a PVC.
 /// </remarks>
+[AspireExport]
 [YamlSerializable]
 public sealed class PersistentVolumeClaimSpecV1
 {
@@ -39,12 +41,15 @@ public sealed class PersistentVolumeClaimSpecV1
     /// provisioning or volume binding for the associated PersistentVolumeClaim. Setting this property
     /// allows the claim to specifically request a volume of a particular storage class. It should match
     /// the name of an existing StorageClass in the Kubernetes cluster.
-    /// If set to null or empty, it indicates that the default StorageClass configured in the cluster
-    /// will be used. If no default StorageClass is configured and this value is not set, the claim cannot
-    /// be dynamically provisioned.
+    /// If set to <see langword="null"/>, Kubernetes can assign the cluster's default StorageClass.
+    /// If set to an empty string, the claim requests no StorageClass and can bind only to volumes
+    /// whose <c>storageClassName</c> is also empty. If no default StorageClass is configured and
+    /// this value is not set, the claim cannot be dynamically provisioned.
     /// </remarks>
+    [AspireExport]
     [YamlMember(Alias = "storageClassName")]
-    public string StorageClassName { get; set; } = null!;
+    [PreserveEmptyString]
+    public string? StorageClassName { get; set; } = null;
 
     /// <summary>
     /// Represents the name of the class associated with the attributes of the volume in the
@@ -68,9 +73,11 @@ public sealed class PersistentVolumeClaimSpecV1
     /// - "Block": The volume is used as a raw block device.
     /// This property is important for ensuring compatibility between the volume type
     /// and the application accessing it.
+    /// If <see langword="null"/>, the field is omitted and Kubernetes defaults to filesystem mode.
     /// </remarks>
+    [AspireExport]
     [YamlMember(Alias = "volumeMode")]
-    public string VolumeMode { get; set; } = null!;
+    public string? VolumeMode { get; set; }
 
     /// <summary>
     /// Gets or sets the name of the specific volume to be bound to the PersistentVolumeClaim.
@@ -78,9 +85,11 @@ public sealed class PersistentVolumeClaimSpecV1
     /// <remarks>
     /// This property allows the user to bind the PersistentVolumeClaim to a pre-existing PersistentVolume
     /// by its name. When specified, the claim is directly associated with the named volume.
+    /// If <see langword="null"/>, the field is omitted and the claim is not bound to a specific volume by name.
     /// </remarks>
+    [AspireExport]
     [YamlMember(Alias = "volumeName")]
-    public string VolumeName { get; set; } = null!;
+    public string? VolumeName { get; set; }
 
     /// <summary>
     /// Specifies a reference to a data source object for the Persistent Volume Claim (PVC).
@@ -124,6 +133,7 @@ public sealed class PersistentVolumeClaimSpecV1
     /// - ReadOnlyMany: The volume can be mounted as read-only by many nodes.
     /// - ReadWriteMany: The volume can be mounted as read-write by many nodes.
     /// </remarks>
+    [AspireExport]
     [YamlMember(Alias = "accessModes")]
     public List<string> AccessModes { get; } = [];
 
@@ -132,6 +142,7 @@ public sealed class PersistentVolumeClaimSpecV1
     /// Defines the requested and limit capacities for the volume resources,
     /// including storage and other related attributes.
     /// </summary>
+    [AspireExport]
     [YamlMember(Alias = "resources")]
     public VolumeResourceRequirementsV1 Resources { get; set; } = new();
 }

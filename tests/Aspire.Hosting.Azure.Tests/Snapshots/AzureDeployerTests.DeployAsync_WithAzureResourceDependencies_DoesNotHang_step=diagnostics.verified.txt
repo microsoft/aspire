@@ -229,7 +229,7 @@ Step: validate-azure-app-service
     Dependencies: none
 
 Step: validate-azure-login
-    Description: Validates Azure CLI authentication before deployment.
+    Description: Validates Azure authentication before deployment.
     Dependencies: ✓ deploy-prereq
     Resource: azure-environment (AzureEnvironmentResource)
 

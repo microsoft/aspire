@@ -8,7 +8,6 @@ using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.DashboardService.Proto.V1;
-using Aspire.Tests.Shared.DashboardModel;
 using Bunit;
 using Grpc.Core;
 using Microsoft.AspNetCore.Components;
@@ -24,106 +23,102 @@ namespace Aspire.Dashboard.Components.Tests.Layout;
 [UseCulture("en-US")]
 public partial class TerminalDockTests : DashboardTestContext
 {
-    [Theory]
-    [InlineData("")]
-    [InlineData("/aspire/nested")]
-    public async Task EmptyDock_ListsResourceTerminalsWithReplicaAndPathBaseAwareLinks(string pathBase)
+    [Fact]
+    public async Task Reorder_PreservesSelectionViewersAndOrderAcrossSnapshots()
     {
-        var resources = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
-        var database = TerminalSetupHelpers.CreateTerminalResource("database-id", displayName: "database");
-        var client = new TestDashboardClient(
-            isEnabled: true,
-            resourceChannelProvider: () => resources,
-            initialResources:
-            [
-                TerminalSetupHelpers.CreateTerminalResource("worker-b", 1, 2, "worker"),
-                ModelTestHelpers.CreateResource("web"),
-                TerminalSetupHelpers.CreateTerminalResource("shell-id", displayName: "shell #1/?%+"),
-                TerminalSetupHelpers.CreateTerminalResource("hidden", hidden: true),
-                database,
-                TerminalSetupHelpers.CreateTerminalResource("hidden-state", state: KnownResourceState.Hidden),
-                TerminalSetupHelpers.CreateTerminalResource("worker-a", 0, 2, "worker"),
-                ModelTestHelpers.CreateResource("not-ready", properties: new()
-                {
-                    [KnownProperties.Terminal.Enabled] = database.Properties[KnownProperties.Terminal.Enabled]
-                })
-            ]);
-        Services.AddSingleton<NavigationManager>(new TestNavigationManager($"https://dashboard.example{pathBase}/"));
-        TerminalSetupHelpers.SetupTerminalComponents(this, client, pathBase);
-        Services.GetRequiredService<NavigationManager>().NavigateTo("consolelogs/resource/other");
-        var cut = RenderComponent<TerminalDock>();
+        var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
+        TerminalSetupHelpers.SetupTerminalComponents(this,
+            TerminalSetupHelpers.CreateTerminalDashboardClient(terminalChannelProvider: () => updates));
+        var cut = Render<TerminalDock>();
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
+        await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("first", "second", "third"));
+        cut.WaitForAssertion(() => Assert.Equal(3, cut.FindComponents<TerminalView>().Count));
+        var views = cut.FindComponents<TerminalView>().Select(view => view.Instance).ToArray();
+        await cut.FindAll("[role=tab]")[1].ClickAsync(new());
 
-        cut.WaitForAssertion(() =>
-        {
-            var links = cut.FindAll(".terminal-dock-resource-links a");
-            Assert.Equal(
-                [
-                    ("database", $"https://dashboard.example{pathBase}/consolelogs/resource/database"),
-                    ("shell #1/?%+", $"https://dashboard.example{pathBase}/consolelogs/resource/shell%20%231%2F%3F%25%2B"),
-                    ("worker-a", $"https://dashboard.example{pathBase}/consolelogs/resource/worker-a"),
-                    ("worker-b", $"https://dashboard.example{pathBase}/consolelogs/resource/worker-b")
-                ],
-                links.Select(link => (link.TextContent, link.GetAttribute("href"))));
-            var text = string.Join(' ', cut.Find(".terminal-dock-resource-links").TextContent
-                .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
-            Assert.Equal("Resource terminals: database, shell #1/?%+, worker-a, worker-b", text);
-            Assert.Empty(cut.FindAll("[role=tab]"));
-            Assert.Empty(cut.FindComponents<TerminalView>());
-        });
+        await cut.Instance.ReorderTerminalAsync("first", "third", after: true);
+        Assert.Equal(["second", "third", "first"], cut.FindAll("[role=tab]").Select(tab => tab.TextContent.Trim()));
+        Assert.Equal("second", cut.Find("[aria-selected=true]").TextContent.Trim());
+        Assert.Equal([views[1], views[2], views[0]], cut.FindComponents<TerminalView>().Select(view => view.Instance));
+
+        await cut.Instance.ReorderTerminalAsync("first", "second", after: false);
+        Assert.Equal(["first", "second", "third"], cut.FindAll("[role=tab]").Select(tab => tab.TextContent.Trim()));
+        await cut.Instance.ReorderTerminalAsync("third", "first", after: false);
+        await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("first", "second", "third", "fourth"));
+        cut.WaitForAssertion(() => Assert.Equal(["third", "first", "second", "fourth"],
+            cut.FindAll("[role=tab]").Select(tab => tab.TextContent.Trim())));
+        Assert.Equal("second", cut.Find("[aria-selected=true]").TextContent.Trim());
+        cut.WaitForAssertion(() => Assert.Equal(4, JSInterop.Invocations.Count(i => i.Identifier == "initTerminal")));
+
+        await updates.Writer.WriteAsync(TerminalSetupHelpers.Change(TerminalChangeType.Removed, "second"));
+        cut.WaitForAssertion(() => Assert.Equal("fourth", cut.Find("[aria-selected=true]").TextContent.Trim()));
+        await cut.Instance.ReorderTerminalAsync("second", "first", after: false);
+        await cut.Instance.ReorderTerminalAsync("first", "second", after: false);
+        await cut.Instance.ReorderTerminalAsync("first", "first", after: true);
+        Assert.Equal(["third", "first", "fourth"], cut.FindAll("[role=tab]").Select(tab => tab.TextContent.Trim()));
     }
 
     [Fact]
-    public async Task ResourceUpdates_RefreshLinksAndStopOnDisposal()
+    public async Task WorkloadMetadata_PreservesStaticTabTitlesWithoutExtraHeaderOrRemounting()
     {
-        var resources = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
-        var terminals = Channel.CreateUnbounded<WatchTerminalsUpdate>();
-        var resourcesStopped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var first = TerminalSetupHelpers.CreateTerminalResource("first-id", displayName: "first");
-        var client = new TestDashboardClient(
-            isEnabled: true,
-            resourceChannelProvider: () => resources,
-            terminalChannelProvider: () => terminals,
-            initialResources: [first])
-        {
-            OnResourceSubscriptionDisposed = () => resourcesStopped.TrySetResult()
-        };
-        TerminalSetupHelpers.SetupTerminalComponents(this, client);
-        var cut = RenderComponent<TerminalDock>();
+        var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
+        TerminalSetupHelpers.SetupTerminalComponents(this,
+            TerminalSetupHelpers.CreateTerminalDashboardClient(terminalChannelProvider: () => updates));
+        var cut = Render<TerminalDock>();
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
-        cut.WaitForAssertion(() => Assert.Equal(["first"],
-            cut.FindAll(".terminal-dock-resource-links a").Select(link => link.TextContent)));
+        await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("first", "second"));
+        cut.WaitForAssertion(() => Assert.Equal(2, cut.FindComponents<TerminalView>().Count));
+        var views = cut.FindComponents<TerminalView>().Select(view => view.Instance).ToArray();
+        for (var i = 0; i < views.Length; i++)
+        {
+            var index = i;
+            await cut.InvokeAsync(() => views[index].OnTerminalStateChanged(new TerminalToolbarState
+            {
+                TerminalId = 1, Generation = 1, Connected = true,
+                Title = $"title-{index}", WorkingDirectory = $"/work/{index}",
+                ProgressState = "normal", ProgressPercentage = 20 + index
+            }));
+        }
+        Assert.Equal(["first", "second"], cut.FindAll("[role=tab]").Select(tab => tab.TextContent.Trim()));
+        Assert.Empty(cut.FindComponents<TerminalTitle>());
+        Assert.Equal(string.Empty, cut.Find(".terminal-dock-filler").TextContent);
+        await cut.FindAll(".terminal-dock-tab-select")[1].ClickAsync(new());
+        Assert.Equal(["first", "second"], cut.FindAll("[role=tab]").Select(tab => tab.TextContent.Trim()));
+        Assert.Equal("second", cut.Find("[aria-selected=true]").TextContent.Trim());
+        Assert.Empty(cut.FindComponents<TerminalTitle>());
+        Assert.Equal(string.Empty, cut.Find(".terminal-dock-filler").TextContent);
+        Assert.Equal(views, cut.FindComponents<TerminalView>().Select(view => view.Instance));
+        Assert.Equal(2, JSInterop.Invocations.Count(i => i.Identifier == "initTerminal"));
+    }
 
-        var second = TerminalSetupHelpers.CreateTerminalResource("second-a", displayName: "second");
-        await resources.Writer.WriteAsync([
-            new(ResourceViewModelChangeType.Upsert, ModelTestHelpers.CreateResource(first.Name, displayName: first.DisplayName)),
-            new(ResourceViewModelChangeType.Upsert, second)
-        ]);
-        cut.WaitForAssertion(() => Assert.Equal(["second"],
-            cut.FindAll(".terminal-dock-resource-links a").Select(link => link.TextContent)));
+    [Fact]
+    public async Task EmptyDock_ShowsHeadingDocumentationAndKeyboardHint()
+    {
+        var client = new TestDashboardClient(isEnabled: true);
+        TerminalSetupHelpers.SetupTerminalComponents(this, client);
+        var cut = Render<TerminalDock>();
+        await cut.InvokeAsync(cut.Instance.ToggleAsync);
 
-        var replica = TerminalSetupHelpers.CreateTerminalResource("second-b", 1, 2, "second");
-        await resources.Writer.WriteAsync([new(ResourceViewModelChangeType.Upsert, replica)]);
-        cut.WaitForAssertion(() => Assert.Equal(["second-a", "second-b"],
-            cut.FindAll(".terminal-dock-resource-links a").Select(link => link.TextContent)));
-
-        await resources.Writer.WriteAsync([new(ResourceViewModelChangeType.Delete, replica)]);
-        cut.WaitForAssertion(() => Assert.Equal(["second"],
-            cut.FindAll(".terminal-dock-resource-links a").Select(link => link.TextContent)));
-
-        await resources.Writer.WriteAsync([new(ResourceViewModelChangeType.Delete, second)]);
-        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll(".terminal-dock-resource-links")));
-
-        await terminals.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("docked"));
-        cut.WaitForAssertion(() => Assert.Single(cut.FindComponents<TerminalView>()));
-        await resources.Writer.WriteAsync([new(ResourceViewModelChangeType.Upsert, first)]);
-        await terminals.Writer.WriteAsync(TerminalSetupHelpers.Snapshot());
-        cut.WaitForAssertion(() => Assert.Equal(["first"],
-            cut.FindAll(".terminal-dock-resource-links a").Select(link => link.TextContent)));
-
-        await cut.InvokeAsync(() => cut.Instance.DisposeAsync().AsTask()).DefaultTimeout();
-        await resourcesStopped.Task.DefaultTimeout();
-        Assert.Equal(0, client.ActiveTerminalSubscriptionCount);
+        var panel = cut.Find(".terminal-dock-panel-card");
+        Assert.Collection(panel.Children,
+            icon => Assert.Contains("terminal-dock-panel-icon", icon.ClassList),
+            heading =>
+            {
+                Assert.Equal("H3", heading.TagName);
+                Assert.Equal("No docked terminals", heading.TextContent);
+            },
+            link =>
+            {
+                Assert.Equal("A", link.TagName);
+                Assert.Equal("More information", link.TextContent);
+                Assert.Equal("https://aka.ms/aspire/dashboard-terminal", link.GetAttribute("href"));
+                Assert.Equal("_blank", link.GetAttribute("target"));
+                Assert.Equal("noopener noreferrer", link.GetAttribute("rel"));
+            },
+            hint => Assert.Equal("Press the backtick key (`) to hide this panel.", hint.TextContent));
+        Assert.Empty(cut.FindAll("[role=tab]"));
+        Assert.Empty(cut.FindComponents<TerminalView>());
+        Assert.Equal(0, client.ResourceSubscriptionCount);
     }
 
     [Theory]
@@ -138,7 +133,7 @@ public partial class TerminalDockTests : DashboardTestContext
         Services.AddSingleton<NavigationManager>(new TestNavigationManager($"https://dashboard.example{pathBase}/"));
         TerminalSetupHelpers.SetupTerminalComponents(this, client, pathBase);
         Services.GetRequiredService<NavigationManager>().NavigateTo("consolelogs/resource/other");
-        var cut = RenderComponent<TerminalDock>();
+        var cut = Render<TerminalDock>();
 
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot(terminalId));
@@ -159,7 +154,7 @@ public partial class TerminalDockTests : DashboardTestContext
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
         var client = TerminalSetupHelpers.CreateTerminalDashboardClient(terminalChannelProvider: () => updates);
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
-        var cut = RenderComponent<TerminalDock>();
+        var cut = Render<TerminalDock>();
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("first", "second"));
         cut.WaitForAssertion(() => Assert.Equal(2, cut.FindComponents<TerminalView>().Count));
@@ -198,7 +193,7 @@ public partial class TerminalDockTests : DashboardTestContext
     {
         var client = TerminalSetupHelpers.CreateTerminalDashboardClient();
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
-        var cut = RenderComponent<TerminalDock>();
+        var cut = Render<TerminalDock>();
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
         var height = cut.Find(".terminal-dock").GetAttribute("style");
 
@@ -217,7 +212,7 @@ public partial class TerminalDockTests : DashboardTestContext
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
         var client = TerminalSetupHelpers.CreateTerminalDashboardClient(terminalChannelProvider: () => updates);
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
-        var cut = RenderComponent<TerminalDock>();
+        var cut = Render<TerminalDock>();
 
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
         Assert.Equal("No docked terminals", cut.Find(".terminal-dock-panel-heading").TextContent);
@@ -227,7 +222,7 @@ public partial class TerminalDockTests : DashboardTestContext
         Assert.Equal("https://aka.ms/aspire/dashboard-terminal", helpLink.GetAttribute("href"));
         Assert.Equal("_blank", helpLink.GetAttribute("target"));
         Assert.Equal("noopener noreferrer", helpLink.GetAttribute("rel"));
-        Assert.Equal(["Open terminal in a new window", "Hide terminal panel (`)"],
+        Assert.Equal(["Scroll terminal tabs left", "Scroll terminal tabs right", "Open terminal in a new window", "Hide terminal panel (`)"],
             cut.FindAll(".terminal-dock-tabstrip fluent-button").Select(button => button.GetAttribute("aria-label")));
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("first", "second"));
         cut.WaitForAssertion(() => Assert.Equal("first", cut.Find(".terminal-dock-tab.active").TextContent.Trim()));
@@ -272,7 +267,7 @@ public partial class TerminalDockTests : DashboardTestContext
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
         var client = TerminalSetupHelpers.CreateTerminalDashboardClient(terminalChannelProvider: () => updates);
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
-        var cut = RenderComponent<TerminalDock>();
+        var cut = Render<TerminalDock>();
         if (previouslyOpened)
         {
             await cut.InvokeAsync(cut.Instance.ToggleAsync);
@@ -315,7 +310,7 @@ public partial class TerminalDockTests : DashboardTestContext
         var processed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         client.OnTerminalUpdateProcessed = _ => processed.TrySetResult();
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
-        var cut = RenderComponent<TerminalDock>();
+        var cut = Render<TerminalDock>();
         if (previouslyOpened)
         {
             await cut.InvokeAsync(cut.Instance.ToggleAsync);
@@ -347,7 +342,7 @@ public partial class TerminalDockTests : DashboardTestContext
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
         var client = TerminalSetupHelpers.CreateTerminalDashboardClient(terminalChannelProvider: () => updates);
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
-        var cut = RenderComponent<TerminalDock>();
+        var cut = Render<TerminalDock>();
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("first", "second", "third"));
         cut.WaitForAssertion(() =>
@@ -401,7 +396,7 @@ public partial class TerminalDockTests : DashboardTestContext
             terminalChannelProvider: () => updates,
             closeTerminal: (_, _) => completion.Task);
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
-        var cut = RenderComponent<TerminalDock>();
+        var cut = Render<TerminalDock>();
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
         string[] ids = ["first", "second", "third"];
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot(ids));
@@ -429,12 +424,45 @@ public partial class TerminalDockTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task DisconnectedBanner_ClosesOwningTabAndWaitsForWatchRemoval()
+    {
+        var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var client = TerminalSetupHelpers.CreateTerminalDashboardClient(
+            terminalChannelProvider: () => updates, closeTerminal: (_, _) => completion.Task);
+        TerminalSetupHelpers.SetupTerminalComponents(this, client);
+        var cut = Render<TerminalDock>();
+        await cut.InvokeAsync(cut.Instance.ToggleAsync);
+        await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("first", "second"));
+        cut.WaitForAssertion(() => Assert.Equal(2, cut.FindComponents<TerminalView>().Count));
+        var views = cut.FindComponents<TerminalView>();
+        await cut.InvokeAsync(() => views[0].Instance.OnTerminalStateChanged(new TerminalToolbarState
+        {
+            TerminalId = 1, Generation = 1, Disconnected = true
+        }));
+        var click = cut.InvokeAsync(() => cut.Find(".terminal-close-tab").ClickAsync(new()));
+        cut.WaitForAssertion(() => Assert.Equal(["first"], client.ClosedTerminals.ToArray()));
+        Assert.Equal(2, cut.FindAll("[role=tab]").Count);
+        Assert.Empty(cut.FindAll(".terminal-restart-resource"));
+
+        await updates.Writer.WriteAsync(TerminalSetupHelpers.Change(TerminalChangeType.Removed, "first"));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Single(cut.FindAll("[role=tab]"));
+            Assert.Equal("second", cut.Find("[aria-selected=true]").TextContent.Trim());
+            Assert.Same(views[1].Instance, cut.FindComponent<TerminalView>().Instance);
+        });
+        completion.SetResult();
+        await click;
+    }
+
+    [Fact]
     public async Task LastTabRemoved_EmptyDockCanReceiveAnotherAppHostTerminal()
     {
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
         var client = TerminalSetupHelpers.CreateTerminalDashboardClient(terminalChannelProvider: () => updates);
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
-        var cut = RenderComponent<TerminalDock>();
+        var cut = Render<TerminalDock>();
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Change(TerminalChangeType.Activated, "first"));
         cut.WaitForAssertion(() => Assert.Single(cut.FindAll("[role=tab]")));
 
@@ -444,7 +472,7 @@ public partial class TerminalDockTests : DashboardTestContext
             Assert.Empty(cut.FindAll("[role=tablist]"));
             Assert.Empty(cut.FindAll("[role=tabpanel]"));
             Assert.Equal("No docked terminals", cut.Find(".terminal-dock-panel-heading").TextContent);
-            Assert.Equal(["Open terminal in a new window", "Hide terminal panel (`)"],
+            Assert.Equal(["Scroll terminal tabs left", "Scroll terminal tabs right", "Open terminal in a new window", "Hide terminal panel (`)"],
                 cut.FindAll(".terminal-dock-tabstrip fluent-button").Select(button => button.GetAttribute("aria-label")));
         });
 
@@ -463,7 +491,7 @@ public partial class TerminalDockTests : DashboardTestContext
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
         var client = TerminalSetupHelpers.CreateTerminalDashboardClient(terminalChannelProvider: () => updates);
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
-        var cut = RenderComponent<TerminalDock>();
+        var cut = Render<TerminalDock>();
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("first", "second", "third"));
         cut.WaitForAssertion(() => Assert.Equal(3, cut.FindAll(".terminal-dock-tab").Count));
@@ -492,9 +520,9 @@ public partial class TerminalDockTests : DashboardTestContext
             terminalChannelProvider: () => updates,
             closeTerminal: (_, _) => completion.Task);
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
-        var toasts = RenderComponent<FluentToastProvider>();
+        var toasts = Render<FluentToastProvider>();
         var notifications = Services.GetRequiredService<INotificationService>();
-        var cut = RenderComponent<TerminalDock>();
+        var cut = Render<TerminalDock>();
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
         var snapshot = TerminalSetupHelpers.Snapshot("terminal-id");
         snapshot.Snapshot.Terminals[0].Title = "Setup shell";
@@ -534,7 +562,7 @@ public partial class TerminalDockTests : DashboardTestContext
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
         var client = TerminalSetupHelpers.CreateTerminalDashboardClient(terminalChannelProvider: () => updates);
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
-        var cut = RenderComponent<TerminalDock>();
+        var cut = Render<TerminalDock>();
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("first", "second"));
         cut.WaitForAssertion(() =>
@@ -603,7 +631,7 @@ public partial class TerminalDockTests : DashboardTestContext
                 return Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
             });
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
-        var cut = RenderComponent<TerminalDock>();
+        var cut = Render<TerminalDock>();
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("terminal"));
         cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".terminal-dock-tab")));
@@ -628,8 +656,8 @@ public partial class TerminalDockTests : DashboardTestContext
             terminalChannelProvider: () => updates,
             closeTerminal: (_, _) => completion.Task);
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
-        var toasts = RenderComponent<FluentToastProvider>();
-        var cut = RenderComponent<TerminalDock>();
+        var toasts = Render<FluentToastProvider>();
+        var cut = Render<TerminalDock>();
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("terminal"));
         cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".terminal-dock-tab")));
@@ -656,7 +684,7 @@ public partial class TerminalDockTests : DashboardTestContext
         Services.AddSingleton<NavigationManager>(new TestNavigationManager($"http://localhost{pathBase}/"));
         TerminalSetupHelpers.SetupTerminalComponents(this, client, pathBase);
         Services.GetRequiredService<NavigationManager>().NavigateTo("consolelogs/resource/first");
-        var cut = RenderComponent<TerminalDock>();
+        var cut = Render<TerminalDock>();
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("first", terminalId));
         cut.WaitForAssertion(() => Assert.Equal(2, cut.FindComponents<TerminalView>().Count));
@@ -698,12 +726,38 @@ public partial class TerminalDockTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task Detach_UsesConfiguredRoutePrefix()
+    {
+        var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
+        var client = new TestDashboardClient(
+            isEnabled: true,
+            terminalChannelProvider: () => updates);
+        TerminalSetupHelpers.SetupTerminalComponents(this, client);
+        var cut = Render<TerminalDock>(builder =>
+            builder.Add(p => p.TerminalWindowPathPrefix, "legacy/terminal-window"));
+        await cut.InvokeAsync(cut.Instance.ToggleAsync);
+        await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("first"));
+        cut.WaitForAssertion(() => Assert.Single(cut.FindComponents<TerminalView>()));
+        await cut.InvokeAsync(() => cut.FindComponent<TerminalView>().Instance.OnTerminalStateChanged(new TerminalToolbarState
+        {
+            TerminalId = 1,
+            Generation = 1,
+            Connected = true,
+            FontPx = 13
+        }));
+
+        Assert.Equal(
+            "http://localhost/legacy/terminal-window/apphost/first?fontSize=13",
+            cut.Find(".terminal-dock-detach").GetAttribute("data-terminal-window-url"));
+    }
+
+    [Fact]
     public async Task RecoverySnapshot_ClosesWindowForMissingTerminal()
     {
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
         var client = TerminalSetupHelpers.CreateTerminalDashboardClient(terminalChannelProvider: () => updates);
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
-        var cut = RenderComponent<TerminalDock>();
+        var cut = Render<TerminalDock>();
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Change(TerminalChangeType.Activated, "detached"));
         cut.WaitForAssertion(() => Assert.Single(cut.FindComponents<TerminalView>()));
         await cut.InvokeAsync(() => cut.FindComponent<TerminalView>().Instance.OnTerminalStateChanged(new TerminalToolbarState
@@ -743,7 +797,7 @@ public partial class TerminalDockTests : DashboardTestContext
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
         var client = TerminalSetupHelpers.CreateTerminalDashboardClient(terminalChannelProvider: () => updates);
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
-        var cut = RenderComponent<TerminalDock>();
+        var cut = Render<TerminalDock>();
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("first", "second"));
         cut.WaitForAssertion(() => Assert.Equal(2, cut.FindComponents<TerminalView>().Count));
@@ -786,7 +840,7 @@ public partial class TerminalDockTests : DashboardTestContext
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
         var client = TerminalSetupHelpers.CreateTerminalDashboardClient(terminalChannelProvider: () => updates);
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
-        var cut = RenderComponent<TerminalDock>();
+        var cut = Render<TerminalDock>();
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Change(TerminalChangeType.Activated, "terminal"));
         cut.WaitForAssertion(() => Assert.Single(cut.FindComponents<TerminalView>()));
         Assert.True(cut.Find(".terminal-dock-detach").HasAttribute("disabled"));

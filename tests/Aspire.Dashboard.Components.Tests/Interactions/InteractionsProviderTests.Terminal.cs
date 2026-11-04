@@ -35,7 +35,7 @@ public partial class InteractionsProviderTests
             return Task.CompletedTask;
         });
         SetupInteractionProviderServices(client, dialogs);
-        var cut = RenderComponent<Components.Interactions.InteractionsProvider>();
+        var cut = Render<Components.Interactions.InteractionsProvider>();
         await updates.Writer.WriteAsync(new WatchInteractionsResponseUpdate
         {
             InteractionId = 1,
@@ -94,7 +94,7 @@ public partial class InteractionsProviderTests
             return Task.CompletedTask;
         });
         SetupInteractionProviderServices(client, dialogs);
-        var cut = RenderComponent<Components.Interactions.InteractionsProvider>();
+        var cut = Render<Components.Interactions.InteractionsProvider>();
         await updates.Writer.WriteAsync(new WatchInteractionsResponseUpdate
         {
             InteractionId = 1, PromptProgress = new InteractionPromptProgress()
@@ -146,7 +146,7 @@ public partial class InteractionsProviderTests
         var (inputContent, inputParameters) = await shown.Reader.ReadAsync().AsTask().DefaultTimeout();
         var inputsVM = Assert.IsType<InteractionsInputsDialogViewModel>(inputContent);
         Assert.Equal("normal", Assert.Single(inputsVM.Inputs).Name);
-        Assert.Equal("min(650px, 75vw)", inputParameters.Width);
+        Assert.Equal("min(900px, 90vw)", inputParameters.Width);
         await AsyncTestHelpers.AssertIsTrueRetryAsync(() => cut.Instance._interactionDialogReference?.InteractionId == 4, "Ordinary inputs dialog opened.");
         Assert.False(requests.Reader.TryRead(out _));
         Assert.False(shown.Reader.TryRead(out _));

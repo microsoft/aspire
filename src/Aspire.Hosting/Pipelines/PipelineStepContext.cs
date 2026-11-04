@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Microsoft.Extensions.Logging;
 
@@ -14,7 +13,6 @@ namespace Aspire.Hosting.Pipelines;
 /// This context combines the shared pipeline context with a step-specific publishing step,
 /// allowing each step to track its own tasks and completion state independently.
 /// </remarks>
-[Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 [AspireExport(ExposeProperties = true)]
 public sealed class PipelineStepContext
 {

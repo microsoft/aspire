@@ -10,6 +10,8 @@
       the Aspire.AppHost.SDK targets that will automatically add these references to projects.
     -->
     <SkipAddAspireDefaultReferences Condition="'$(TestsRunningOutsideOfRepo)' != 'true'">true</SkipAddAspireDefaultReferences>
+    <!-- Out-of-repo compatibility fixtures deliberately retain the obsolete SDK. -->
+    <SuppressAspireAppHostSdkObsoleteWarning Condition="'$(TestsRunningOutsideOfRepo)' == 'true'">true</SuppressAspireAppHostSdkObsoleteWarning>
 
     <!-- https://github.com/dotnet/arcade/issues/15654 -->
     <!-- We currently have our own Xunit3.targets in eng/Xunit3, which Arcade will import -->

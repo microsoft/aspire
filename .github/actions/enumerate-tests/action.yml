@@ -3,7 +3,6 @@ description: 'Enumerate list of test projects'
 inputs:
   buildArgs:
     required: false
-    type: string
     default: ''
     description: 'Additional MSBuild arguments passed to the test matrix generation step (e.g., /p:IncludeTemplateTests=true /p:OnlyDeploymentTests=true)'
   checkout:

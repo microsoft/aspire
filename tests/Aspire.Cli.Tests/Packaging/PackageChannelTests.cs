@@ -2,11 +2,16 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.IO.Compression;
+using System.Text.Json;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
+using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
@@ -14,6 +19,104 @@ namespace Aspire.Cli.Tests.Packaging;
 
 public class PackageChannelTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task LocalIntegrationDiscovery_UnavailableSourceReportsFailure(bool sourceIsFile)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var source = Path.Combine(workspace.Path, "unavailable");
+        if (sourceIsFile)
+        {
+            File.WriteAllText(source, string.Empty);
+        }
+
+        var logger = new CapturingLogger<PackageChannel>();
+        var channel = new PackageChannel(
+            "integration:missing", PackageChannelQuality.Both, [new("*", source)],
+            new FakeNuGetPackageCache(), new TestFeatures(), logger)
+        {
+            IntegrationSource = new() { Name = "missing", Source = source, Patterns = ["*"] }
+        };
+
+        var packages = await channel.GetIntegrationPackagesAsync(workspace.WorkspaceRoot, TestContext.Current.CancellationToken);
+        var compatibleIds = await channel.GetPolyglotCompatiblePackageIdsAsync(workspace.WorkspaceRoot, TestContext.Current.CancellationToken);
+
+        Assert.Empty(packages.Packages);
+        Assert.False(packages.LimitReached);
+        Assert.Equal(["missing"], packages.FailedSources);
+        Assert.Empty(compatibleIds.Packages);
+        Assert.False(compatibleIds.LimitReached);
+        Assert.Equal(["missing"], compatibleIds.FailedSources);
+        Assert.Equal(2, logger.Entries.Count(entry => entry.Level == LogLevel.Warning));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task LocalIntegrationDiscovery_PreservesCancellation(bool sourceExists)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var source = Path.Combine(workspace.Path, "packages");
+        if (sourceExists)
+        {
+            Directory.CreateDirectory(source);
+        }
+
+        var channel = new PackageChannel(
+            "integration:team", PackageChannelQuality.Both, [new("*", source)],
+            new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance)
+        {
+            IntegrationSource = new() { Name = "team", Source = source, Patterns = ["*"] }
+        };
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            channel.GetIntegrationPackagesAsync(workspace.WorkspaceRoot, cancellation.Token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            channel.GetPolyglotCompatiblePackageIdsAsync(workspace.WorkspaceRoot, cancellation.Token));
+    }
+
+    [Fact]
+    public async Task LocalIntegrationDiscovery_UnavailableSourcePreservesHealthyResults()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var feed = workspace.CreateDirectory("packages");
+        const string packageId = "Contoso.Hosting.One";
+        CreatePackageWithTags(feed, packageId, "1.0.0", "aspire integration polyglot");
+        File.WriteAllText(Path.Combine(workspace.Path, AspireConfigFile.FileName), $$"""
+            {
+              "integrationSources": {
+                "default": {"enabled": false},
+                "team": {"source": {{JsonSerializer.Serialize(feed.FullName)}}},
+                "missing": {"source": {{JsonSerializer.Serialize(Path.Combine(workspace.Path, "missing"))}}}
+              }
+            }
+            """);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        services.AddSingleton<INuGetPackageCache>(new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) => throw new InvalidOperationException("Local feeds must be enumerated directly."),
+            GetPackagesAsyncCallback = (_, _, _, _, _, _, _) => throw new InvalidOperationException("Local feeds must be enumerated directly.")
+        });
+        using var provider = services.BuildServiceProvider();
+        var search = provider.GetRequiredService<IntegrationPackageSearchService>();
+
+        var packages = await search.GetIntegrationPackagesWithChannelsAsync(
+            workspace.WorkspaceRoot, configuredChannel: null, TestContext.Current.CancellationToken);
+        var compatiblePackages = await search.GetIntegrationPackagesWithPolyglotCompatibilityAsync(
+            workspace.WorkspaceRoot, configuredChannel: null, TestContext.Current.CancellationToken);
+
+        Assert.Equal([packageId], packages.Packages.Select(entry => entry.Package.Id));
+        Assert.False(packages.LimitReached);
+        Assert.Equal(["missing"], packages.FailedSources);
+        Assert.Equal([packageId], compatiblePackages.Packages.Select(entry => entry.Package.Id));
+        Assert.Equal([packageId], compatiblePackages.PolyglotCompatibleIds);
+        Assert.False(compatiblePackages.LimitReached);
+        Assert.Equal(["missing"], compatiblePackages.FailedSources);
+    }
+
     [Fact]
     public void SourceDetails_ImplicitChannel_ReturnsBasedOnNuGetConfig()
     {
@@ -125,7 +228,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
 
         var package = Assert.Single(await channel.GetTemplatePackagesAsync(
             workspace.WorkspaceRoot,
-            PackageSourceOverrideMappings.CreateForTemplateOperations(sourceOverride),
+            PackageSourceOverrideMappings.CreateForSourceOnlyOperations(sourceOverride),
             CancellationToken.None));
 
         Assert.Equal(pinnedVersion, package.Version);
@@ -159,10 +262,61 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
 
         var package = Assert.Single(await channel.GetTemplatePackagesAsync(
             workspace.WorkspaceRoot,
-            PackageSourceOverrideMappings.CreateForTemplateOperations(packageSource),
+            PackageSourceOverrideMappings.CreateForSourceOnlyOperations(packageSource),
             CancellationToken.None).DefaultTimeout());
 
         Assert.Equal("13.6.0", package.Version);
+    }
+
+    [Fact]
+    public async Task SourceScopedIntegrationDiscovery_UsesOnlyLocalOverridePackagesAndVersions()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var channelPackagesDirectory = workspace.CreateDirectory("channel-packages");
+        var overridePackagesDirectory = workspace.CreateDirectory("override-packages");
+        const string packageId = "Aspire.Hosting.Redis";
+
+        CreatePackageWithTags(channelPackagesDirectory, packageId, "99.0.0", string.Empty);
+        CreatePackageWithTags(overridePackagesDirectory, packageId, "13.5.0", "aspire integration hosting cache");
+        CreatePackageWithTags(overridePackagesDirectory, packageId, "13.6.0-preview.1", "aspire integration hosting cache polyglot");
+
+        var cache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) => throw new InvalidOperationException("Local package sources should be enumerated directly."),
+            GetPackageVersionsAsyncCallback = (_, _, _, _, _, _) => throw new InvalidOperationException("Local package sources should be enumerated directly."),
+            GetPackagesAsyncCallback = (_, _, _, _, _, _, _) => throw new InvalidOperationException("Local package sources should be enumerated directly.")
+        };
+        var channel = PackageChannel.CreateExplicitChannel(
+            "local",
+            PackageChannelQuality.Both,
+            [new PackageMapping("Aspire*", channelPackagesDirectory.FullName)],
+            cache,
+            new TestFeatures(),
+            NullLogger.Instance,
+            pinnedVersion: "99.0.0");
+        var sourceMappings = PackageSourceOverrideMappings.CreateForSourceOnlyOperations(
+            overridePackagesDirectory.FullName);
+
+        var packages = (await channel.GetIntegrationPackagesAsync(
+            workspace.WorkspaceRoot,
+            sourceMappings,
+            CancellationToken.None)).Packages.ToArray();
+        var versions = (await channel.GetPackageVersionsAsync(
+            packageId,
+            workspace.WorkspaceRoot,
+            sourceMappings,
+            CancellationToken.None)).ToArray();
+        var polyglotIds = await channel.GetPolyglotCompatiblePackageIdsAsync(
+            workspace.WorkspaceRoot,
+            sourceMappings,
+            CancellationToken.None);
+
+        var package = Assert.Single(packages);
+        Assert.Equal(packageId, package.Id);
+        Assert.Equal("13.6.0-preview.1", package.Version);
+        Assert.Equal(overridePackagesDirectory.FullName, package.Source);
+        Assert.Equal(["13.6.0-preview.1", "13.5.0"], versions.Select(static version => version.Version));
+        Assert.Equal([packageId], polyglotIds.Packages);
     }
 
     [Theory]
@@ -239,7 +393,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
 
         var packages = (await channel.GetTemplatePackagesAsync(
             workspace.WorkspaceRoot,
-            PackageSourceOverrideMappings.CreateForTemplateOperations(packageSource),
+            PackageSourceOverrideMappings.CreateForSourceOnlyOperations(packageSource),
             CancellationToken.None).DefaultTimeout()).ToArray();
 
         if (!packageFileExists)
@@ -288,7 +442,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
 
         var package = Assert.Single(await channel.GetTemplatePackagesAsync(
             workspace.WorkspaceRoot,
-            PackageSourceOverrideMappings.CreateForTemplateOperations(overrideSource),
+            PackageSourceOverrideMappings.CreateForSourceOnlyOperations(overrideSource),
             CancellationToken.None).DefaultTimeout());
 
         Assert.Equal("Aspire.ProjectTemplates", package.Id);
@@ -313,7 +467,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
 
         var package = Assert.Single(await channel.GetTemplatePackagesAsync(
             workspace.WorkspaceRoot,
-            PackageSourceOverrideMappings.CreateForTemplateOperations(source),
+            PackageSourceOverrideMappings.CreateForSourceOnlyOperations(source),
             CancellationToken.None).DefaultTimeout());
 
         Assert.Equal("Aspire.ProjectTemplates", package.Id);
@@ -368,7 +522,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
         };
         var channel = PackageChannel.CreateExplicitChannel("local", PackageChannelQuality.Both, mappings, cache, new TestFeatures(), NullLogger.Instance, pinnedVersion: pinnedVersion);
 
-        var packages = (await channel.GetIntegrationPackagesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout()).ToArray();
+        var packages = (await channel.GetIntegrationPackagesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout()).Packages.ToArray();
 
         Assert.Collection(
             packages,
@@ -416,7 +570,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
         };
         var channel = PackageChannel.CreateExplicitChannel("local", PackageChannelQuality.Both, mappings, cache, new TestFeatures(), NullLogger.Instance, pinnedVersion: pinnedVersion);
 
-        var packageIds = (await channel.GetPolyglotCompatiblePackageIdsAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout())
+        var packageIds = (await channel.GetPolyglotCompatiblePackageIdsAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout()).Packages
             .OrderBy(id => id, StringComparer.Ordinal)
             .ToArray();
 
@@ -449,7 +603,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
 
         var packageIds = await channel.GetPolyglotCompatiblePackageIdsAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
 
-        Assert.Empty(packageIds);
+        Assert.Empty(packageIds.Packages);
     }
 
     [Fact]
@@ -474,14 +628,14 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
         };
         var channel = PackageChannel.CreateExplicitChannel("local", PackageChannelQuality.Both, mappings, cache, new TestFeatures(), NullLogger.Instance);
 
-        var packages = (await channel.GetIntegrationPackagesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout()).ToArray();
+        var packages = (await channel.GetIntegrationPackagesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout()).Packages.ToArray();
         var packageIds = await channel.GetPolyglotCompatiblePackageIdsAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
 
         var package = Assert.Single(packages);
         Assert.Equal("Aspire.Hosting.Redis", package.Id);
         Assert.Equal(version, package.Version);
         Assert.Equal(packageSource, package.Source);
-        Assert.Equal(["Aspire.Hosting.Redis"], packageIds.OrderBy(id => id, StringComparer.Ordinal).ToArray());
+        Assert.Equal(["Aspire.Hosting.Redis"], packageIds.Packages.OrderBy(id => id, StringComparer.Ordinal).ToArray());
     }
 
     [Fact]
@@ -519,7 +673,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
             new TestFeatures(),
             NullLogger.Instance);
 
-        var packages = (await channel.GetIntegrationPackagesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout()).ToArray();
+        var packages = (await channel.GetIntegrationPackagesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout()).Packages.ToArray();
 
         Assert.Equal(1, stableSearches);
         Assert.Equal(0, prereleaseSearches);
@@ -560,7 +714,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
             new TestFeatures(),
             NullLogger.Instance);
 
-        var packages = (await channel.GetIntegrationPackagesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout()).ToArray();
+        var packages = (await channel.GetIntegrationPackagesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout()).Packages.ToArray();
 
         Assert.Equal(0, stableSearches);
         Assert.Equal(1, prereleaseSearches);
@@ -605,7 +759,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
             new TestFeatures(),
             NullLogger.Instance);
 
-        var packages = (await channel.GetIntegrationPackagesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout())
+        var packages = (await channel.GetIntegrationPackagesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout()).Packages
             .OrderBy(package => package.Id, StringComparer.Ordinal)
             .ThenBy(package => package.Version, StringComparer.Ordinal)
             .ToArray();
@@ -643,7 +797,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
 
         var channel = CreateLocalChannel(packagesDirectory, PackageChannelQuality.Stable);
 
-        var packages = (await channel.GetIntegrationPackagesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout()).ToArray();
+        var packages = (await channel.GetIntegrationPackagesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout()).Packages.ToArray();
 
         var package = Assert.Single(packages);
         Assert.Equal("Aspire.Hosting.Redis", package.Id);
@@ -662,7 +816,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
 
         var channel = CreateLocalChannel(packagesDirectory, PackageChannelQuality.Prerelease);
 
-        var packages = (await channel.GetIntegrationPackagesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout()).ToArray();
+        var packages = (await channel.GetIntegrationPackagesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout()).Packages.ToArray();
 
         var package = Assert.Single(packages);
         Assert.Equal("Aspire.Hosting.Redis", package.Id);
@@ -681,7 +835,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
 
         var channel = CreateLocalChannel(packagesDirectory, PackageChannelQuality.Both);
 
-        var packages = (await channel.GetIntegrationPackagesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout()).ToArray();
+        var packages = (await channel.GetIntegrationPackagesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout()).Packages.ToArray();
 
         Assert.Collection(
             packages,
@@ -711,7 +865,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
 
         var channel = CreateLocalChannel(packagesDirectory, PackageChannelQuality.Stable);
 
-        var packages = (await channel.GetIntegrationPackagesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout()).ToArray();
+        var packages = (await channel.GetIntegrationPackagesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout()).Packages.ToArray();
 
         Assert.DoesNotContain(packages, p => string.Equals(p.Id, "Aspire.Hosting.Dapr", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(packages, p => string.Equals(p.Id, "Aspire.Hosting.Sql", StringComparison.OrdinalIgnoreCase));
@@ -732,7 +886,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
         var features = new TestFeatures().SetFeature(KnownFeatures.ShowDeprecatedPackages, true);
         var channel = CreateLocalChannel(packagesDirectory, PackageChannelQuality.Stable, features);
 
-        var packages = (await channel.GetIntegrationPackagesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout()).ToArray();
+        var packages = (await channel.GetIntegrationPackagesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout()).Packages.ToArray();
 
         Assert.Contains(packages, p => string.Equals(p.Id, "Aspire.Hosting.Dapr", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(packages, p => string.Equals(p.Id, "Aspire.Hosting.Sql", StringComparison.OrdinalIgnoreCase));
@@ -762,7 +916,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
             pinnedVersion: "99.0.0",
             currentCliVersion: "13.6.0-dev");
 
-        var packages = (await channel.GetIntegrationPackagesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout()).ToArray();
+        var packages = (await channel.GetIntegrationPackagesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout()).Packages.ToArray();
 
         var package = Assert.Single(packages);
         Assert.Equal("Aspire.Hosting.Redis", package.Id);
@@ -793,7 +947,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
             pinnedVersion: "99.0.0",
             currentCliVersion: "13.6.0-dev");
 
-        var packages = (await channel.GetIntegrationPackagesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout()).ToArray();
+        var packages = (await channel.GetIntegrationPackagesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout()).Packages.ToArray();
 
         var package = Assert.Single(packages);
         Assert.Equal("Aspire.Hosting.Redis", package.Id);
@@ -890,6 +1044,22 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
 
         Assert.True(channel.ShouldPersistChannelName());
         Assert.False(channel.ShouldCreateNuGetConfig());
+    }
+
+    [Theory]
+    [InlineData("stable", "https://api.nuget.org/v3/index.json", false)]
+    [InlineData("preview", "https://api.nuget.org/v3/index.json", true)]
+    [InlineData("stable", "https://enterprise.example/v3/index.json", false)]
+    [InlineData("stable", "/local/packages", false)]
+    [InlineData("daily", "https://daily.example/v3/index.json", true)]
+    public void ShouldCreateNuGetConfig_UsesChannelPolicy(string name, string source, bool expected)
+    {
+        var channel = PackageChannel.CreateExplicitChannel(
+            name, PackageChannelQuality.Prerelease,
+            [new PackageMapping("Aspire*", source)],
+            new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
+
+        Assert.Equal(expected, channel.ShouldCreateNuGetConfig());
     }
 
     [Fact]

@@ -9,6 +9,7 @@ import { ResourceDebuggerExtension } from "../debuggerExtensions";
 import { AspireDebugSession, markDebugConfigurationEnvironmentSensitive } from "../AspireDebugSession";
 import { mergeCliSpawnEnvironment } from "../../utils/process/cliProcess";
 import { processGroupSpawnOptions, terminateProcessTree } from "../../utils/processTree";
+import { AppHostBuildFailureError } from "../appHostBuildFailureError";
 
 const rustBuildStderrTailLimit = 8 * 1024;
 const cargoHostProbeOutputLimit = 16 * 1024;
@@ -223,13 +224,24 @@ export class RustService implements IRustService {
             // build exactly as they do when DCP runs `cargo run` itself.
             const buildEnv = createCargoEnvironment(env);
 
-            const buildProcess = spawn(cargoExecutable, buildArgs, {
-                cwd: workingDirectory,
-                env: buildEnv,
-                // Cargo fans out into rustc, the linker and any build scripts. Making it a process group
-                // leader is what lets the cancellation below take those down with it.
-                ...processGroupSpawnOptions()
-            });
+            let buildProcess: ChildProcessWithoutNullStreams;
+            try {
+                buildProcess = spawn(cargoExecutable, buildArgs, {
+                    cwd: workingDirectory,
+                    env: buildEnv,
+                    // Cargo fans out into rustc, the linker and any build scripts. Making it a process group
+                    // leader is what lets the cancellation below take those down with it.
+                    ...processGroupSpawnOptions()
+                });
+            } catch (error) {
+                const spawnError = error instanceof Error ? error : new Error(String(error));
+                const errorCode = (spawnError as NodeJS.ErrnoException).code ?? spawnError.name;
+                extensionLogOutputChannel.error(`cargo build process failed to start in ${workingDirectory} (${errorCode}).`);
+                reject(new AppHostBuildFailureError(
+                    rustBuildFailedWithError(workingDirectory, spawnError.message),
+                    false));
+                return;
+            }
 
             let cancellationRequested = false;
             let settled = false;
@@ -306,7 +318,9 @@ export class RustService implements IRustService {
 
                     const errorCode = (err as NodeJS.ErrnoException).code ?? err.name;
                     extensionLogOutputChannel.error(`cargo build process failed to start in ${workingDirectory} (${errorCode}).`);
-                    reject(new Error(rustBuildFailedWithError(workingDirectory, err.message)));
+                    reject(new AppHostBuildFailureError(
+                        rustBuildFailedWithError(workingDirectory, err.message),
+                        false));
                 });
             });
 
@@ -328,7 +342,9 @@ export class RustService implements IRustService {
                         const stderrDetails = stderrTruncated
                             ? `${rustBuildStderrTruncated(rustBuildStderrTailLimit)}\n${redactedStderrTail}`
                             : redactedStderrTail;
-                        reject(new Error(stderrDetails ? `${error}\n${stderrDetails}` : error));
+                        reject(new AppHostBuildFailureError(
+                            stderrDetails ? `${error}\n${stderrDetails}` : error,
+                            true));
                         return;
                     }
 

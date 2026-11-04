@@ -10,8 +10,34 @@ using Microsoft.AspNetCore.InternalTesting;
 namespace Aspire.Hosting.Tests;
 
 [Trait("Partition", "2")]
-public class ContainerTunnelTests(ITestOutputHelper testOutputHelper)
+public class ContainerTunnelTests(ITestOutputHelper testOutputHelper) : ContainerTunnelTests<ProjectResource>(testOutputHelper)
 {
+    protected override IResourceBuilder<ProjectResource> AddProject<TProject>(IDistributedApplicationBuilder builder, string name)
+    {
+#pragma warning disable CS0618 // Exercise the same live container-tunnel contracts through both project factories.
+        return builder.AddProject<TProject>(name);
+#pragma warning restore CS0618
+    }
+
+    protected override IResourceBuilder<ProjectResource> AddProject<TProject>(
+        IDistributedApplicationBuilder builder, string name, string? launchProfileName)
+    {
+#pragma warning disable CS0618 // Exercise the same live container-tunnel contracts through both project factories.
+        return builder.AddProject<TProject>(name, launchProfileName);
+#pragma warning restore CS0618
+    }
+}
+
+public abstract class ContainerTunnelTests<TResource>(ITestOutputHelper testOutputHelper)
+    where TResource : class, IResourceWithServiceDiscovery, IResourceWithEnvironment, IResourceWithWaitSupport
+{
+    protected abstract IResourceBuilder<TResource> AddProject<TProject>(IDistributedApplicationBuilder builder, string name)
+        where TProject : IProjectMetadata, new();
+
+    protected abstract IResourceBuilder<TResource> AddProject<TProject>(
+        IDistributedApplicationBuilder builder, string name, string? launchProfileName)
+        where TProject : IProjectMetadata, new();
+
     [Fact]
     [RequiresFeature(TestFeature.ContainerRuntime | TestFeature.ContainerImageBuild)]
     public async Task ContainerTunnelWorksWithYarp()
@@ -20,12 +46,12 @@ public class ContainerTunnelTests(ITestOutputHelper testOutputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         builder.Configuration[KnownConfigNames.EnableContainerTunnel] = "true";
 
-        var servicea = builder.AddProject<Projects.ServiceA>($"{testName}-servicea");
+        var servicea = AddProject<Projects.ServiceA>(builder, $"{testName}-servicea");
 
         var yarp = builder.AddYarp($"{testName}-yarp").WithConfiguration(conf =>
         {
             conf.AddRoute("/servicea/{**catch-all}", servicea).WithTransformPathRemovePrefix("/servicea");
-        });
+        }).WithHttpHealthCheck("/servicea/");
 
         using var app = builder.Build();
 
@@ -33,6 +59,10 @@ public class ContainerTunnelTests(ITestOutputHelper testOutputHelper)
         // getting the base images and building the tunnel (client) proxy image may take a while.
         await app.StartAsync().DefaultTimeout(TestConstants.ExtraLongTimeoutDuration);
         await app.WaitForTextAsync("Application started.").DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
+
+        // Wait until the tunnel (and servicea behind it) is actually able to serve traffic, rather than
+        // relying on HTTP client retries to paper over the container/tunnel still starting up.
+        await app.ResourceNotifications.WaitForResourceHealthyAsync(yarp.Resource.Name).DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
 
         using var clientA = app.CreateHttpClient(yarp.Resource.Name, "http");
         var response = await clientA.GetAsync("/servicea/").DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
@@ -53,7 +83,7 @@ public class ContainerTunnelTests(ITestOutputHelper testOutputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         builder.Configuration[KnownConfigNames.EnableContainerTunnel] = "true";
 
-        var servicea = builder.AddProject<Projects.ServiceA>($"{testName}-servicea")
+        var servicea = AddProject<Projects.ServiceA>(builder, $"{testName}-servicea")
             .WithEndpoint("http", e =>
             {
                 e.Port = port;
@@ -64,7 +94,7 @@ public class ContainerTunnelTests(ITestOutputHelper testOutputHelper)
         var yarp = builder.AddYarp($"{testName}-yarp").WithConfiguration(conf =>
         {
             conf.AddRoute("/servicea/{**catch-all}", servicea).WithTransformPathRemovePrefix("/servicea");
-        });
+        }).WithHttpHealthCheck("/servicea/");
 
         await using var app = builder.Build();
 
@@ -72,6 +102,10 @@ public class ContainerTunnelTests(ITestOutputHelper testOutputHelper)
         // getting the base images and building the tunnel (client) proxy image may take a while.
         await app.StartAsync().DefaultTimeout(TestConstants.ExtraLongTimeoutDuration);
         await app.WaitForTextAsync("Application started.").DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
+
+        // Wait until the tunnel (and servicea behind it) is actually able to serve traffic, rather than
+        // relying on HTTP client retries to paper over the container/tunnel still starting up.
+        await app.ResourceNotifications.WaitForResourceHealthyAsync(yarp.Resource.Name).DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
 
         using var clientA = app.CreateHttpClient(yarp.Resource.Name, "http");
         var response = await clientA.GetAsync("/servicea/").DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
@@ -90,7 +124,7 @@ public class ContainerTunnelTests(ITestOutputHelper testOutputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         builder.Configuration[KnownConfigNames.EnableContainerTunnel] = "true";
 
-        var servicea = builder.AddProject<Projects.ServiceA>($"{testName}-servicea", launchProfileName: null)
+        var servicea = AddProject<Projects.ServiceA>(builder, $"{testName}-servicea", launchProfileName: null)
             .WithHttpEndpoint();
 
         var container = builder.AddContainer($"{testName}-container", "mcr.microsoft.com/cbl-mariner/base/nginx", "1.22")
@@ -126,14 +160,14 @@ public class ContainerTunnelTests(ITestOutputHelper testOutputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         builder.Configuration[KnownConfigNames.EnableContainerTunnel] = "true";
 
-        var upstreamService = builder.AddProject<Projects.ServiceA>($"{testName}-upstream", launchProfileName: null)
+        var upstreamService = AddProject<Projects.ServiceA>(builder, $"{testName}-upstream", launchProfileName: null)
             .WithHttpEndpoint();
 
         var tunnelDependentContainer = builder.AddContainer($"{testName}-container", "mcr.microsoft.com/cbl-mariner/base/nginx", "1.22")
             .WithEnvironment("UPSTREAM_SERVICE_URL", upstreamService.GetEndpoint("http"))
             .WaitFor(upstreamService);
 
-        var downstreamService = builder.AddProject<Projects.ServiceB>($"{testName}-downstream", launchProfileName: null)
+        var downstreamService = AddProject<Projects.ServiceB>(builder, $"{testName}-downstream", launchProfileName: null)
             .WithHttpEndpoint()
             .WaitFor(tunnelDependentContainer);
 

@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREDOTNETPROJECT001, ASPIREPROJECTS001, ASPIREDOTNETTOOL, ASPIREEXTENSION001
+#pragma warning disable ASPIREPROJECTS001, ASPIREDOTNETTOOL, ASPIREEXTENSION001
 
 using System.Reflection;
 using Aspire.Hosting.ApplicationModel;

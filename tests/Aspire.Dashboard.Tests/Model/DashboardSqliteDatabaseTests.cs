@@ -32,21 +32,24 @@ public sealed class DashboardSqliteDatabaseTests(ITestOutputHelper testOutputHel
         Assert.Equal(1, secondConnection.QuerySingle<int>("PRAGMA synchronous;"));
     }
 
-    [Fact]
-    public async Task InitializeSchema_IncompatibleVersionReportsExistingAndExpectedVersions()
+    [Theory]
+    [InlineData(1)]
+    [InlineData(DashboardSqliteDatabase.SchemaVersion - 1)]
+    public async Task InitializeSchema_IncompatibleVersionReportsExistingAndExpectedVersions(int schemaVersion)
     {
         var databasePath = Path.Combine(_workspace.Path, "dashboard.db");
         using (var connection = new SqliteConnection($"Data Source={databasePath};Pooling=False"))
         {
             connection.Open();
-            connection.Execute("CREATE TABLE dashboard_schema (version INTEGER NOT NULL) STRICT; INSERT INTO dashboard_schema VALUES (1);");
+            connection.Execute("CREATE TABLE dashboard_schema (version INTEGER NOT NULL) STRICT; INSERT INTO dashboard_schema VALUES (@SchemaVersion);",
+                new { SchemaVersion = schemaVersion });
         }
         using var database = new DashboardSqliteDatabase(databasePath, pooling: false);
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => database.InitializeSchemaAsync(CancellationToken.None));
 
         Assert.Equal(
-            $"The dashboard database schema version 1 does not match the expected version {DashboardSqliteDatabase.SchemaVersion}.",
+            $"The dashboard database schema version {schemaVersion} does not match the expected version {DashboardSqliteDatabase.SchemaVersion}.",
             exception.Message);
     }
 

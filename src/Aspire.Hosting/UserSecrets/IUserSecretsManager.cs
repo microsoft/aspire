@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.Configuration;
 
@@ -11,7 +10,6 @@ namespace Aspire.Hosting;
 /// Defines an interface for managing user secrets with support for read and write operations.
 /// </summary>
 [AspireExport(ExposeProperties = true, ExposeMethods = true)]
-[Experimental("ASPIREUSERSECRETS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public interface IUserSecretsManager
 {
     /// <summary>

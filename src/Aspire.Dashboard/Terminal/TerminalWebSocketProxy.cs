@@ -112,27 +112,10 @@ internal static class TerminalWebSocketProxy
         }
 
         var resourceName = context.Request.Query["resource"].ToString();
-        var replicaText = context.Request.Query["replica"].ToString();
         if (string.IsNullOrWhiteSpace(resourceName))
         {
             context.Response.StatusCode = StatusCodes.Status400BadRequest;
             await context.Response.WriteAsync("Missing 'resource' query parameter.").ConfigureAwait(false);
-            return;
-        }
-
-        var replicaIndex = 0;
-        if (!string.IsNullOrWhiteSpace(replicaText) &&
-            !int.TryParse(replicaText, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out replicaIndex))
-        {
-            context.Response.StatusCode = StatusCodes.Status400BadRequest;
-            await context.Response.WriteAsync("Invalid 'replica' query parameter.").ConfigureAwait(false);
-            return;
-        }
-
-        if (replicaIndex < 0)
-        {
-            context.Response.StatusCode = StatusCodes.Status400BadRequest;
-            await context.Response.WriteAsync("'replica' must be non-negative.").ConfigureAwait(false);
             return;
         }
 
@@ -148,7 +131,7 @@ internal static class TerminalWebSocketProxy
         {
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted);
             timeout.CancelAfter(s_handshakeTimeout);
-            upstream = await resolver.ConnectAsync(resourceName, replicaIndex, timeout.Token).ConfigureAwait(false);
+            upstream = await resolver.ConnectAsync(resourceName, timeout.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
         {
@@ -163,7 +146,7 @@ internal static class TerminalWebSocketProxy
         if (upstream is null)
         {
             context.Response.StatusCode = StatusCodes.Status404NotFound;
-            await context.Response.WriteAsync("Terminal is not available for the requested resource and replica.").ConfigureAwait(false);
+            await context.Response.WriteAsync("Terminal is not available for the requested resource instance.").ConfigureAwait(false);
             return;
         }
 
@@ -326,11 +309,21 @@ internal static class TerminalWebSocketProxy
             .WithScrollback(10000)
             .Build();
         await using var terminalLifetime = terminal.ConfigureAwait(false);
-        await PumpViewAsync(socket, presentation, workload, upstream, session, logger, cancellationToken).ConfigureAwait(false);
+        using var running = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var completion = terminal.RunAsync(running.Token);
+        try
+        {
+            await PumpViewAsync(socket, presentation, workload, upstream, completion, session, logger, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            await running.CancelAsync().ConfigureAwait(false);
+            await ObserveTeardownAsync(completion, logger).ConfigureAwait(false);
+        }
     }
 
     private static async Task PumpViewAsync(WebSocket socket, Hwt1PresentationAdapter presentation, Hmp1WorkloadAdapter workload,
-        Stream upstream, TerminalViewSession? session, ILogger logger, CancellationToken cancellationToken)
+        Stream upstream, Task completion, TerminalViewSession? session, ILogger logger, CancellationToken cancellationToken)
     {
         using var stopping = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var sending = CancellationTokenSource.CreateLinkedTokenSource(stopping.Token);
@@ -342,12 +335,31 @@ internal static class TerminalWebSocketProxy
         var closeReason = "Terminal closed";
         try
         {
-            var completed = await Task.WhenAny(tasks).ConfigureAwait(false);
+            var completed = await Task.WhenAny(send, receive, disconnected, completion).ConfigureAwait(false);
             await completed.ConfigureAwait(false);
-            if (completed == disconnected)
+            if (completed == disconnected || completed == completion)
             {
                 closeStatus = WebSocketCloseStatus.EndpointUnavailable;
                 closeReason = "Terminal transport disconnected";
+                // HMP disconnect completes its output channel before the mirror has
+                // applied the last bytes. Then HWT needs a final acknowledged frame,
+                // with both WebSocket pumps alive, before we close the browser transport.
+                // https://github.com/mitchdenny/hex1b/blob/98d8766/samples/WebTerminalDemo/Hmp1BrowserView.cs
+                using var drain = CancellationTokenSource.CreateLinkedTokenSource(stopping.Token);
+                drain.CancelAfter(s_closeTimeout);
+                try
+                {
+                    await completion.WaitAsync(drain.Token).ConfigureAwait(false);
+                    await presentation.DrainAsync(drain.Token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (!stopping.IsCancellationRequested)
+                {
+                    logger.LogWarning("Timed out draining the final terminal frame.");
+                }
+                catch (TimeoutException ex)
+                {
+                    logger.LogWarning(ex, "The browser did not acknowledge the final terminal frame.");
+                }
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

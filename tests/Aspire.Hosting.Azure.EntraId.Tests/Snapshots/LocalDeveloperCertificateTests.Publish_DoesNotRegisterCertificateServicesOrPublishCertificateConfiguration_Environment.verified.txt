@@ -1,0 +1,5 @@
+﻿{
+  AzureAd__ClientId: {entra-web.outputs.clientId},
+  AzureAd__Instance: https://login.microsoftonline.com/,
+  AzureAd__TenantId: {entra-web.outputs.tenantId}
+}

@@ -1,0 +1,93 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Nuxt integration > exports builder creation and endpoint-based runtime configuration 1`] = `
+[
+  {
+    "description": "Adds a Nuxt application with a development HTTP endpoint and standalone Nitro publishing.",
+    "id": "@aspire/nuxt/addNuxtApp",
+    "method": "addNuxtApp",
+    "projection": {
+      "capabilityKind": "Method",
+      "parameters": [
+        {
+          "name": "name",
+          "type": {
+            "category": "Primitive",
+            "typeId": "string",
+          },
+        },
+        {
+          "name": "appDirectory",
+          "type": {
+            "category": "Primitive",
+            "typeId": "string",
+          },
+        },
+        {
+          "isOptional": true,
+          "name": "runScriptName",
+          "type": {
+            "category": "Primitive",
+            "typeId": "string",
+          },
+        },
+        {
+          "isOptional": true,
+          "name": "buildScriptName",
+          "type": {
+            "category": "Primitive",
+            "typeId": "string",
+          },
+        },
+      ],
+      "returnType": {
+        "category": "Handle",
+        "typeId": "Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.JavaScriptAppResource",
+      },
+      "returnsBuilder": true,
+      "targetParameterName": "builder",
+      "targetType": {
+        "category": "Handle",
+        "isInterface": true,
+        "typeId": "Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder",
+      },
+      "targetTypeId": "Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder",
+    },
+  },
+  {
+    "description": "Injects a service endpoint into Nuxt runtimeConfig, preserving run and deployment endpoint resolution.",
+    "id": "@aspire/nuxt/withNuxtReference",
+    "method": "withNuxtReference",
+    "projection": {
+      "capabilityKind": "Method",
+      "parameters": [
+        {
+          "name": "runtimeConfigPath",
+          "type": {
+            "category": "Primitive",
+            "typeId": "string",
+          },
+        },
+        {
+          "name": "endpoint",
+          "type": {
+            "category": "Handle",
+            "typeId": "Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference",
+          },
+        },
+      ],
+      "returnType": {
+        "category": "Handle",
+        "typeId": "Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.JavaScriptAppResource",
+      },
+      "returnsBuilder": true,
+      "targetParameterName": "resource",
+      "targetType": {
+        "category": "Handle",
+        "typeId": "Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.JavaScriptAppResource",
+      },
+      "targetTypeId": "Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.JavaScriptAppResource",
+    },
+  },
+]
+`;

@@ -37,6 +37,7 @@ public class ScriptToolCommand : ToolCommand
         // ${XDG_CONFIG_HOME:-$HOME/.config} from reading a real profile
         // outside the temp home when the developer has XDG_CONFIG_HOME set.
         WithEnvironmentVariable("XDG_CONFIG_HOME", Path.Combine(_testEnvironment.MockHome, ".config"));
+        WithEnvironmentVariable("ZDOTDIR", _testEnvironment.MockHome);
 
         // Disable any real PATH modifications during tests
         WithEnvironmentVariable("ASPIRE_TEST_MODE", "true");

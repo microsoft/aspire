@@ -1,10 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREAZURE001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-
 using System.Collections.Immutable;
-using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -22,7 +19,6 @@ public static class AzureEnvironmentResourceExtensions
     /// <returns>The <see cref="IResourceBuilder{AzureEnvironmentResource}"/>.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
-    [Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<AzureEnvironmentResource> AddAzureEnvironment(this IDistributedApplicationBuilder builder)
     {
         if (builder.Resources.OfType<AzureEnvironmentResource>().SingleOrDefault() is { } existingResource)
@@ -110,7 +106,6 @@ public static class AzureEnvironmentResourceExtensions
     /// The location is used to determine where the resources will be deployed.
     /// </remarks>
     [AspireExport]
-    [Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<AzureEnvironmentResource> WithLocation(
         this IResourceBuilder<AzureEnvironmentResource> builder,
         IResourceBuilder<ParameterResource> location)
@@ -135,7 +130,6 @@ public static class AzureEnvironmentResourceExtensions
     /// The resource group name is used to determine where the resources will be deployed.
     /// </remarks>
     [AspireExport]
-    [Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<AzureEnvironmentResource> WithResourceGroup(
         this IResourceBuilder<AzureEnvironmentResource> builder,
         IResourceBuilder<ParameterResource> resourceGroup)

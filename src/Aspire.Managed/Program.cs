@@ -1,13 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.CommandLine;
 using System.Diagnostics;
 using System.Globalization;
 using Aspire.Hosting;
-using Aspire.Managed.NuGet.Commands;
+using Aspire.Managed;
 using Aspire.Shared;
-using Aspire.TerminalHost;
 
 BundleVersionLease? acquiredBundleLease;
 try
@@ -26,8 +24,8 @@ return args switch
 {
     ["dashboard", .. var rest] => await RunDashboard(rest).ConfigureAwait(false),
     ["server", .. var rest] => await RunServer(rest).ConfigureAwait(false),
-    ["nuget", .. var rest] => await RunNuGet(rest).ConfigureAwait(false),
     ["terminalhost", .. var rest] => await RunTerminalHost(rest).ConfigureAwait(false),
+    ["apphost-codegen-v2", var requestPath] => await AppHostServerV2CodeGeneration.GenerateAsync(requestPath).ConfigureAwait(false),
     _ => ShowUsage()
 };
 
@@ -104,37 +102,13 @@ static async Task<int> RunServer(string[] args)
     return 0;
 }
 
-static async Task<int> RunNuGet(string[] args)
-{
-    // Tear this helper down if the launching CLI dies so a hung/slow NuGet operation cannot linger as an
-    // orphaned aspire-managed process. No-op when ASPIRE_CLI_PID is not set — either invoked directly, or
-    // on Windows where the CLI relies on the kernel kill-on-close job instead (see LayoutProcessRunner).
-    using var operationCts = new CancellationTokenSource();
-    var parentWatchdog = ParentProcessWatchdog.Start(operationCts);
-    try
-    {
-        var rootCommand = new RootCommand("Aspire NuGet Helper - Package operations for Aspire CLI bundle");
-        rootCommand.Subcommands.Add(SearchCommand.Create());
-        rootCommand.Subcommands.Add(RestoreCommand.Create());
-        rootCommand.Subcommands.Add(ManifestCommand.Create());
-        return await rootCommand.Parse(args).InvokeAsync(cancellationToken: operationCts.Token).ConfigureAwait(false);
-    }
-    finally
-    {
-        if (parentWatchdog is not null)
-        {
-            await parentWatchdog.DisposeAsync().ConfigureAwait(false);
-        }
-    }
-}
-
 static async Task<int> RunTerminalHost(string[] args)
 {
-    return await TerminalHostProcessRunner.RunAsync(args).ConfigureAwait(false);
+    return await TerminalHostForwarder.RunAsync(args).ConfigureAwait(false);
 }
 
 static int ShowUsage()
 {
-    Console.Error.WriteLine($"Usage: {AppDomain.CurrentDomain.FriendlyName} <dashboard|server|nuget|terminalhost> [args...]");
+    Console.Error.WriteLine($"Usage: {AppDomain.CurrentDomain.FriendlyName} <dashboard|server|terminalhost|apphost-codegen-v2> [args...]");
     return 1;
 }

@@ -31,6 +31,26 @@ aspire secret set Azure:Location "<azure location>"
 > NOTE: Developers must have Owner access to the target subscription so that role assignments
 > can be configured for the provisioned resources.
 
+## Deploying with short-lived federated credentials
+
+Before provisioning Azure resources, Aspire acquires the ARM token and the token scopes
+declared by selected Azure deployment steps. ACR login steps declare the ACR scope, including
+for existing and automatically created registries. Provisioning-only targets do not acquire
+ACR tokens unless registry login is in their selected dependency graph. The configured
+principal provider also resolves the deployment identity before resource-group creation.
+
+This reduces failures when a federated assertion expires during provisioning, provided the
+configured credential caches audience-specific access tokens. `AzureCliCredential` asks the
+Azure CLI for tokens; reuse depends on the CLI/MSAL token cache, not the credential object's
+lifetime. Custom credentials retain their own caching behavior.
+
+Pre-acquisition does not renew a federated assertion or extend an access token's lifetime.
+If the assertion is already expired, or deployment outlasts the cached access token, fresh
+authentication is still required. See [Azure CLI federated-token limitations](https://github.com/Azure/azure-cli/issues/28708).
+Registry token exchange and container-runtime login still occur after provisioning, when
+the registry endpoint is available. Offline publishing and resource destruction do not
+perform this deployment pre-acquisition.
+
 ## Usage example
 
 In the AppHost, add a resource based on a Bicep template:

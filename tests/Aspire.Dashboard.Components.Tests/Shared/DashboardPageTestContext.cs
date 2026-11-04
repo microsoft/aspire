@@ -8,7 +8,7 @@ using Microsoft.JSInterop;
 using System.Reflection;
 
 namespace Aspire.Dashboard.Components.Tests.Shared;
-public abstract class DashboardTestContext : TestContext
+public abstract class DashboardTestContext : BunitContext
 {
     private const string VirtualizeJsFunctionsPrefix = "Blazor._internal.Virtualize.";
 
@@ -43,6 +43,7 @@ public abstract class DashboardTestContext : TestContext
             return true;
         }).SetVoidResult();
         JSInterop.Setup<bool>($"{VirtualizeJsFunctionsPrefix}isFollowingBottom", _ => true).SetResult(false);
+        JSInterop.Setup<bool>($"{VirtualizeJsFunctionsPrefix}isFollowingTop", _ => true).SetResult(false);
     }
 
     private void RemoveBunitVirtualizeHandler()

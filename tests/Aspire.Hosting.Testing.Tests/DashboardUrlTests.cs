@@ -124,10 +124,11 @@ public class DashboardUrlTests
                 var page = await context.NewPageAsync();
                 await page.GotoAsync(dashboardUri.AbsoluteUri);
 
-                var resourceRow = page.Locator("tr.resource-row").Filter(new() { HasText = resourceName });
-                var stateCell = resourceRow.Locator(".state-column-cell");
+                // The dashboard's default view renders each resource as a card labelled with the resource name.
+                var resourceCard = page.Locator($"article.resource-card[aria-label='{resourceName}']");
+                var stateCell = resourceCard.Locator(".state-column-cell");
 
-                await Assertions.Expect(resourceRow).ToBeVisibleAsync();
+                await Assertions.Expect(resourceCard).ToBeVisibleAsync();
                 await Assertions.Expect(stateCell).ToContainTextAsync(initialState);
 
                 var updatedResourceTask = app.ResourceNotifications.WaitForResourceAsync(

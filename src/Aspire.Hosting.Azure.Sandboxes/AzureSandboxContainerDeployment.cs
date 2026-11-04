@@ -1,9 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES001
-#pragma warning disable ASPIREPIPELINES002
-#pragma warning disable ASPIREPIPELINES004
 #pragma warning disable ASPIREAZURE001
 #pragma warning disable ASPIRECOMPUTE002
 #pragma warning disable ASPIRECONTAINERRUNTIME001
@@ -808,8 +805,8 @@ internal static class AzureSandboxContainerDeployment
         var options = GetAzureSandboxContainerOptions(resource.TargetResource);
         return (options?.Tier ?? AzureSandboxTier.Medium) switch
         {
-            AzureSandboxTier.ExtraSmall => new() { Cpu = "250m", Memory = "512Mi", Disk = "20480Mi" },
-            AzureSandboxTier.Small => new() { Cpu = "500m", Memory = "1024Mi", Disk = "20480Mi" },
+            AzureSandboxTier.ExtraSmall => new() { Cpu = "250m", Memory = "512Mi", Disk = "5120Mi" },
+            AzureSandboxTier.Small => new() { Cpu = "500m", Memory = "1024Mi", Disk = "10240Mi" },
             AzureSandboxTier.Medium => new() { Cpu = "1000m", Memory = "2048Mi", Disk = "20480Mi" },
             AzureSandboxTier.Large => new() { Cpu = "2000m", Memory = "4096Mi", Disk = "40960Mi" },
             AzureSandboxTier.ExtraLarge => new() { Cpu = "4000m", Memory = "8192Mi", Disk = "81920Mi" },

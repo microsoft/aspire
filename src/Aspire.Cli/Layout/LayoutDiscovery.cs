@@ -268,7 +268,8 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
             _logger.LogDebug("  {Dir}/{Dashboard}/{Exe}: {Exists}", BundleDiscovery.BundleDirectoryName, BundleDiscovery.DashboardDirectoryName, dashboardExeName, File.Exists(bundleDashboardExe) ? "exists" : "MISSING");
             _logger.LogDebug("  {Dir}/{Dcp}/{Exe}: {Exists}", BundleDiscovery.BundleDirectoryName, BundleDiscovery.DcpDirectoryName, Path.GetFileName(bundleDcpExe), File.Exists(bundleDcpExe) ? "exists" : "MISSING");
 
-            if (File.Exists(bundleManagedExe) && File.Exists(bundleDashboardExe) && File.Exists(bundleDcpExe))
+            if (File.Exists(bundleManagedExe) && File.Exists(bundleDashboardExe) && File.Exists(bundleDcpExe) &&
+                TerminalHostPayload.IsValid(Path.Combine(bundlePath, BundleDiscovery.TerminalHostDirectoryName)))
             {
                 _logger.LogDebug("TryInferLayout: New bundle/ layout is valid");
                 return new LayoutConfiguration
@@ -279,6 +280,9 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
                         Dcp = Path.Combine(BundleDiscovery.BundleDirectoryName, BundleDiscovery.DcpDirectoryName),
                         Dashboard = Path.Combine(BundleDiscovery.BundleDirectoryName, BundleDiscovery.DashboardDirectoryName),
                         Managed = Path.Combine(BundleDiscovery.BundleDirectoryName, BundleDiscovery.ManagedDirectoryName),
+                        AppHostServer = Path.Combine(BundleDiscovery.BundleDirectoryName, BundleDiscovery.AppHostServerDirectoryName),
+                        TerminalHost = Path.Combine(BundleDiscovery.BundleDirectoryName, BundleDiscovery.TerminalHostDirectoryName),
+                        Tray = FindTrayRelativePath(layoutPath, BundleDiscovery.BundleDirectoryName),
                     }
                 };
             }
@@ -307,7 +311,8 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
         _logger.LogDebug("  dashboard/{DashboardExe}: {Exists}", dashboardExeName, File.Exists(dashboardExePath) ? "exists" : "MISSING");
         _logger.LogDebug("  dcp/{DcpExe}: {Exists}", Path.GetFileName(dcpExePath), File.Exists(dcpExePath) ? "exists" : "MISSING");
 
-        if (!File.Exists(managedExePath) || !File.Exists(dashboardExePath) || !File.Exists(dcpExePath))
+        if (!File.Exists(managedExePath) || !File.Exists(dashboardExePath) || !File.Exists(dcpExePath) ||
+            !TerminalHostPayload.IsValid(Path.Combine(layoutPath, BundleDiscovery.TerminalHostDirectoryName)))
         {
             _logger.LogDebug("TryInferLayout: Layout rejected - required executable not found");
             return null;
@@ -319,8 +324,21 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
         return new LayoutConfiguration
         {
             LayoutPath = layoutPath,
-            Components = new LayoutComponents()
+            Components = new LayoutComponents
+            {
+                Tray = FindTrayRelativePath(layoutPath, "")
+            }
         };
+    }
+
+    /// <summary>
+    /// Finds the optional tray in either an installation root or a leased version directory.
+    /// </summary>
+    internal static string? FindTrayRelativePath(string layoutPath, string bundleDirectory)
+    {
+        var relativePath = Path.Combine(bundleDirectory, OperatingSystem.IsWindows()
+            ? WindowsTrayPayload.ExecutablePath : LayoutComponents.MacTrayExecutablePath);
+        return File.Exists(Path.Combine(layoutPath, relativePath)) ? relativePath : null;
     }
 
     private LayoutConfiguration LogEnvironmentOverrides(LayoutConfiguration config)
@@ -354,6 +372,13 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
         if (dashboardPath is null || !File.Exists(dashboardPath))
         {
             _logger.LogDebug("Layout validation failed: Dashboard not found at {Path}", dashboardPath);
+            return false;
+        }
+
+        var terminalHostPath = layout.GetTerminalHostPath();
+        if (terminalHostPath is null || !TerminalHostPayload.IsValid(Path.GetDirectoryName(terminalHostPath)!))
+        {
+            _logger.LogDebug("Layout validation failed: TerminalHost not found at {Path}", terminalHostPath);
             return false;
         }
 

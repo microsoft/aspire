@@ -8,4 +8,6 @@ namespace Aspire.Cli.Tests.TestServices;
 internal sealed class TestProcessPathProvider(string? processPath) : IProcessPathProvider
 {
     public string? ProcessPath { get; } = processPath;
+
+    public bool IsNativeAot { get; init; }
 }

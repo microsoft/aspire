@@ -385,4 +385,109 @@ The legacy file continues to work — this is a non-blocking warning.</value>
     <value>Run 'aspire update --migrate' to apply the recommended migration.
 The current layout continues to work — this is a non-blocking warning.</value>
   </data>
+  <data name="ContainerRuntimeExplicitSelectionSuffix" xml:space="preserve">
+    <value> ← explicitly selected</value>
+    <comment>Suffix marking a configured runtime. Preserve the leading space and arrow.</comment>
+  </data>
+  <data name="ContainerRuntimeActiveSuffix" xml:space="preserve">
+    <value> ← active</value>
+    <comment>Suffix marking the automatically selected runtime. Preserve the leading space and arrow.</comment>
+  </data>
+  <data name="ContainerRuntimeWslcUnsupportedHostMessage" xml:space="preserve">
+    <value>WSLc is only supported on Windows</value>
+  </data>
+  <data name="ContainerRuntimeSelectAlternativeFix" xml:space="preserve">
+    <value>Set ASPIRE_CONTAINER_RUNTIME to docker or podman.</value>
+    <comment>ASPIRE_CONTAINER_RUNTIME, docker and podman are configuration identifiers. Do not translate them.</comment>
+  </data>
+  <data name="ContainerRuntimeNotDetectedMessage" xml:space="preserve">
+    <value>No container runtime detected</value>
+  </data>
+  <data name="ContainerRuntimeInstallFix" xml:space="preserve">
+    <value>Install Docker Desktop: https://www.docker.com/products/docker-desktop or Podman: https://podman.io/getting-started/installation</value>
+  </data>
+  <data name="ContainerRuntimeInstallWindowsFix" xml:space="preserve">
+    <value>Install Docker Desktop: https://www.docker.com/products/docker-desktop or Podman: https://podman.io/getting-started/installation or WSLc: https://aka.ms/aspire/containers</value>
+  </data>
+  <data name="ContainerRuntimeCheckFailedMessage" xml:space="preserve">
+    <value>Failed to check container runtime</value>
+  </data>
+  <data name="ContainerRuntimeClientVersionWarningFormat" xml:space="preserve">
+    <value>{0} client version {1} is below minimum required {2}</value>
+    <comment>{0} is the runtime name, {1} the detected version, {2} the minimum version.</comment>
+  </data>
+  <data name="ContainerRuntimeServerVersionWarningFormat" xml:space="preserve">
+    <value>{0} server version {1} is below minimum required {2}</value>
+    <comment>{0} is the runtime name, {1} the detected version, {2} the minimum version.</comment>
+  </data>
+  <data name="ContainerRuntimeWindowsModeMessageFormat" xml:space="preserve">
+    <value>{0} is running in Windows container mode</value>
+    <comment>{0} is Docker or Docker Desktop.</comment>
+  </data>
+  <data name="ContainerRuntimeWindowsModeDetails" xml:space="preserve">
+    <value>Aspire requires Linux containers. Windows containers are not supported.</value>
+  </data>
+  <data name="ContainerRuntimeWindowsModeFix" xml:space="preserve">
+    <value>Switch Docker Desktop to Linux containers mode (right-click Docker tray icon → 'Switch to Linux containers...')</value>
+  </data>
+  <data name="ContainerRuntimeNotFoundMessageFormat" xml:space="preserve">
+    <value>{0}: not found (configured via ASPIRE_CONTAINER_RUNTIME={1}){2}</value>
+    <comment>{0} is the runtime name, {1} the configuration value, {2} the selection suffix. Do not translate ASPIRE_CONTAINER_RUNTIME.</comment>
+  </data>
+  <data name="ContainerRuntimeStoppedMessageFormat" xml:space="preserve">
+    <value>{0}: installed but not running{1}</value>
+    <comment>{0} is the runtime name, {1} the selection suffix.</comment>
+  </data>
+  <data name="ContainerRuntimeVersionSuffixFormat" xml:space="preserve">
+    <value> v{0}</value>
+    <comment>{0} is the runtime version. Preserve the leading space.</comment>
+  </data>
+  <data name="ContainerRuntimeRunningMessageFormat" xml:space="preserve">
+    <value>{0}{1}: running{2}</value>
+    <comment>{0} is the runtime name, {1} the optional version suffix, {2} the selection suffix.</comment>
+  </data>
+  <data name="ContainerRuntimeInstallDockerFix" xml:space="preserve">
+    <value>Install Docker Desktop: https://www.docker.com/products/docker-desktop</value>
+  </data>
+  <data name="ContainerRuntimeInstallPodmanFix" xml:space="preserve">
+    <value>Install Podman: https://podman.io/getting-started/installation</value>
+  </data>
+  <data name="ContainerRuntimeInstallWslcFix" xml:space="preserve">
+    <value>Install WSLc on Windows: https://aka.ms/aspire/containers</value>
+  </data>
+  <data name="ContainerRuntimeInstallGenericFixFormat" xml:space="preserve">
+    <value>Install {0}</value>
+    <comment>{0} is the runtime name.</comment>
+  </data>
+  <data name="ContainerRuntimeUpgradeFixFormat" xml:space="preserve">
+    <value>Upgrade {0} to version {1} or later from: {2}</value>
+    <comment>{0} is the runtime name, {1} the minimum version, {2} the installation URL.</comment>
+  </data>
+  <data name="ContainerRuntimeUpgradeWslcFixFormat" xml:space="preserve">
+    <value>Upgrade WSLc to version {0} or later. See: https://aka.ms/aspire/containers</value>
+    <comment>{0} is the minimum version.</comment>
+  </data>
+  <data name="ContainerRuntimeUpgradeGenericFixFormat" xml:space="preserve">
+    <value>Upgrade {0} to a newer version</value>
+    <comment>{0} is the runtime name.</comment>
+  </data>
+  <data name="ContainerRuntimeStartDockerDesktopFix" xml:space="preserve">
+    <value>Start Docker Desktop</value>
+  </data>
+  <data name="ContainerRuntimeStartDaemonFixFormat" xml:space="preserve">
+    <value>Start {0} daemon</value>
+    <comment>{0} is the runtime name.</comment>
+  </data>
+  <data name="ContainerRuntimeStartPodmanFix" xml:space="preserve">
+    <value>Start Podman service: sudo systemctl start podman</value>
+    <comment>Do not translate the command sudo systemctl start podman.</comment>
+  </data>
+  <data name="ContainerRuntimeStartWslcFix" xml:space="preserve">
+    <value>Ensure the WSLc session manager is running. Check its status with: wslc info --format json</value>
+    <comment>Do not translate the command wslc info --format json.</comment>
+  </data>
+  <data name="ContainerRuntimeVersionUnavailableMessageFormat" xml:space="preserve">
+    <value>{0}: required version metadata could not be validated</value>
+    <comment>{0} is the runtime name.</comment>
+  </data>
 </root>

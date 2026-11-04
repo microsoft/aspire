@@ -2,15 +2,19 @@
 
 Core abstractions for the Aspire application model. It provides the building blocks for the distributed application
 hosting model. This package should not be referenced by AppHost projects directly. Instead use the `Aspire.Hosting.AppHost`
-package to add a transitive referencing including custom build targets to support code generation of metadata
-types for referenced .NET projects.
+package for AppHost APIs and targets. Add `Aspire.Hosting.Dotnet` separately to declare .NET
+services by their actual project paths with `AddDotnetProject`.
 
 Developers wishing to build their own custom resource types and supporting APIs for Aspire should reference
 this package directly.
 
 ## Aspire Application Model Overview
 
-Aspire models distributed applications as a graph of **resources**—services, infrastructure elements, and supporting components—using strongly-typed, extensible abstractions. Resources are inert data objects that describe capabilities, configuration, and relationships. Developers compose applications using fluent extension methods (like `AddProject`, `AddPostgres`, etc.), wire dependencies explicitly, and attach metadata through annotations to drive orchestration, configuration, and deployment.
+Aspire models distributed applications as a graph of **resources**—services, infrastructure elements, and supporting components—using strongly-typed, extensible abstractions. Resources are inert data objects that describe capabilities, configuration, and relationships. Developers compose applications using fluent extension methods (like `AddDotnetProject`, `AddPostgres`, etc.), wire dependencies explicitly, and attach metadata through annotations to drive orchestration, configuration, and deployment.
+
+Legacy .NET-hosting `AddProject` overloads are obsolete but remain functional. See the
+[migration guide](../../docs/migrate-from-addproject.md) for overload mappings, returned
+resources, generic helpers, model queries, and compatibility boundaries.
 
 Key concepts include:
 

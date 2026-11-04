@@ -5,7 +5,6 @@ using System.Threading.Channels;
 using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Components.Tests.Shared;
-using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.DashboardService.Proto.V1;
 using Bunit;
@@ -20,22 +19,18 @@ public partial class TerminalDockTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task FirstOpening_DefersResourcesAndRenderingButPreservesRemoteActivation(bool remoteActivation)
+    public async Task FirstOpening_DefersRenderingButPreservesRemoteActivation(bool remoteActivation)
     {
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
         var processed = Channel.CreateUnbounded<WatchTerminalsUpdate>();
-        var resources = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
-        List<ResourceViewModel> initialResources = [TerminalSetupHelpers.CreateTerminalResource("first-resource")];
         var client = new TestDashboardClient(
             isEnabled: true,
-            terminalChannelProvider: () => updates,
-            resourceChannelProvider: () => resources,
-            initialResources: initialResources)
+            terminalChannelProvider: () => updates)
         {
             OnTerminalUpdateProcessed = update => processed.Writer.TryWrite(update)
         };
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
-        var cut = RenderComponent<TerminalDock>();
+        var cut = Render<TerminalDock>();
         var renderCount = cut.RenderCount;
         WatchTerminalsUpdate[] metadata =
         [
@@ -57,7 +52,6 @@ public partial class TerminalDockTests
         Assert.Empty(cut.FindComponents<TerminalView>());
         Assert.Equal([], JSInterop.Invocations.Where(IsTerminalModuleImport));
 
-        initialResources.Add(TerminalSetupHelpers.CreateTerminalResource("second-resource"));
         if (remoteActivation)
         {
             await updates.Writer.WriteAsync(TerminalSetupHelpers.Change(TerminalChangeType.Activated, "first", "Renamed"));
@@ -76,14 +70,13 @@ public partial class TerminalDockTests
 
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot());
         await processed.Reader.ReadAsync().AsTask().DefaultTimeout();
-        cut.WaitForAssertion(() => Assert.Equal(["first-resource", "second-resource"],
-            cut.FindAll(".terminal-dock-resource-links a").Select(link => link.TextContent)));
-        Assert.Equal(1, client.ResourceSubscriptionCount);
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".terminal-dock-panel")));
+        Assert.Equal(0, client.ResourceSubscriptionCount);
 
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
         Assert.Equal(1, client.TerminalSubscriptionCount);
-        Assert.Equal(1, client.ResourceSubscriptionCount);
+        Assert.Equal(0, client.ResourceSubscriptionCount);
         await cut.InvokeAsync(() => cut.Instance.DisposeAsync().AsTask()).DefaultTimeout();
         Assert.Equal(0, client.ActiveTerminalSubscriptionCount);
     }
@@ -96,7 +89,7 @@ public partial class TerminalDockTests
     {
         var client = new TestDashboardClient(isEnabled: enabled, isReadOnly: readOnly);
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
-        var cut = RenderComponent<TerminalDock>();
+        var cut = Render<TerminalDock>();
 
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
         await cut.InvokeAsync(() => cut.Instance.DisposeAsync().AsTask()).DefaultTimeout();
@@ -133,7 +126,7 @@ public partial class TerminalDockTests
         {
             import.SetResult(module);
         }
-        var cut = RenderComponent<TerminalDock>();
+        var cut = Render<TerminalDock>();
         try
         {
             await cut.InvokeAsync(cut.Instance.ToggleAsync);
@@ -199,7 +192,7 @@ public partial class TerminalDockTests
         {
             import.SetResult(module);
         }
-        var cut = RenderComponent<TerminalDock>();
+        var cut = Render<TerminalDock>();
         Task disposing = Task.CompletedTask;
         try
         {
@@ -250,7 +243,7 @@ public partial class TerminalDockTests
             BeforeInvokeAsync = identifier => identifier == failedStage ? Task.FromException(failure) : Task.CompletedTask
         };
         var import = TestJSObjectReference.SetupImport(this, "./Components/Layout/TerminalDock.razor.js");
-        var cut = RenderComponent<TerminalDock>();
+        var cut = Render<TerminalDock>();
         var component = cut.Instance;
         await cut.InvokeAsync(component.ToggleAsync);
         if (failedStage == "import")

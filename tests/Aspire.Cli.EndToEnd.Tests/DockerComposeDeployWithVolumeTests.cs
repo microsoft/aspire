@@ -61,7 +61,6 @@ public sealed class DockerComposeDeployWithVolumeTests(ITestOutputHelper output)
         // whole point of the overload: the same source works in run mode (where the path is an
         // Aspire store directory on the host) and after publish (where it is MountPath).
         var appHostCode = $$"""
-            #pragma warning disable ASPIREDOTNETPROJECT001
             #pragma warning disable ASPIREPIPELINES003
             using Aspire.Hosting;
 
@@ -84,6 +83,7 @@ public sealed class DockerComposeDeployWithVolumeTests(ITestOutputHelper output)
                     }
                 });
 
+            {{(useProjectV2 ? "" : "#pragma warning disable CS0618 // Retain legacy project deployment alongside the modern scenario.")}}
             var api = {{(useProjectV2
                 ? $"builder.AddDotnetProject(\"{serverName}\", \"../{ProjectName}.ApiService/{ProjectName}.ApiService.csproj\")"
                 : $"builder.AddProject<Projects.{ProjectName}_ApiService>(\"{serverName}\")")}}
@@ -98,6 +98,7 @@ public sealed class DockerComposeDeployWithVolumeTests(ITestOutputHelper output)
                 .WithReference(api)
                 .WaitFor(api)
                 .WithExternalHttpEndpoints();
+            {{(useProjectV2 ? "" : "#pragma warning restore CS0618")}}
 
             builder.Build().Run();
             """;
@@ -129,7 +130,8 @@ public sealed class DockerComposeDeployWithVolumeTests(ITestOutputHelper output)
             apiClientPackages: [],
             appHostCode: appHostCode,
             apiProgramCode: apiProgramCode,
-            output: output);
+            output: output,
+            useLegacyProjectResources: !useProjectV2);
 
         LocalDeploymentTestHelpers.WriteReferencingWebProgram(projectDir, ProjectName, serverName);
 

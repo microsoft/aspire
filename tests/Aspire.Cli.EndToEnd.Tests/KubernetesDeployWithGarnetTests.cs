@@ -55,7 +55,7 @@ public sealed class KubernetesDeployWithGarnetTests(ITestOutputHelper output)
 
                 var cache = builder.AddGarnet("cache");
 
-                var api = builder.AddProject<Projects.{{ProjectName}}_ApiService>("server")
+                var api = builder.AddDotnetProject("server", "../{{ProjectName}}.ApiService/{{ProjectName}}.ApiService.csproj")
                     .WithReference(cache)
                     .WaitFor(cache)
                     .WithExternalHttpEndpoints();

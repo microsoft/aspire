@@ -170,14 +170,10 @@ public static class AspireMongoDBDriverExtensions
         builder.TryAddHealthCheck(
             healthCheckName,
             healthCheck => healthCheck.AddMongoDb(
-#if MONGODB_V2
-                settings.ConnectionString,
-#else
                 serviceKey is null
                     ? sp => sp.GetRequiredService<IMongoClient>()
                     : sp => sp.GetRequiredKeyedService<IMongoClient>(serviceKey),
                 _ => MongoUrl.Create(settings.ConnectionString).DatabaseName,
-#endif
                 healthCheckName,
                 null,
                 null,

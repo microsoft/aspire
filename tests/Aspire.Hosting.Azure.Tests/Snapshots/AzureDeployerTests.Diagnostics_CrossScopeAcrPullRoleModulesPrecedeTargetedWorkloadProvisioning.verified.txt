@@ -18,13 +18,13 @@ If targeting 'deploy-api-service':
   Cache:
 If targeting 'deploy-cache':
   Direct dependencies: print-cache-summary
-  Total steps: 11
+  Total steps: 12
   Execution order:
     [0] process-parameters | validate-build-only-container-references (parallel)
     [1] deploy-prereq
     [2] validate-azure-login
     [3] create-provisioning-context
-    [4] provision-aca-env-mi
+    [4] provision-aca-env-mi | provision-aca-registry (parallel)
     [5] provision-aca-env-mi-roles-aca-registry
     [6] provision-aca-env
     [7] provision-cache-containerapp

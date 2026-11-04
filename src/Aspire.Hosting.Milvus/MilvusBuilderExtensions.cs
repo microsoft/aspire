@@ -27,7 +27,7 @@ public static class MilvusBuilderExtensions
     /// var builder = DistributedApplication.CreateBuilder(args);
     ///
     /// var milvus = builder.AddMilvus("milvus");
-    /// var api = builder.AddProject&lt;Projects.Api&gt;("api")
+    /// var api = builder.AddDotnetProject("api", "../Api/Api.csproj")
     ///   .WithReference(milvus);
     ///
     /// builder.Build().Run();
@@ -83,10 +83,10 @@ public static class MilvusBuilderExtensions
     /// <code lang="csharp">
     /// var builder = DistributedApplication.CreateBuilder(args);
     ///
-    /// var booksdb = builder.AddMilvus("milvus");
+    /// var booksdb = builder.AddMilvus("milvus")
     ///   .AddDatabase("booksdb");
     ///
-    /// var api = builder.AddProject&lt;Projects.Api&gt;("api")
+    /// var api = builder.AddDotnetProject("api", "../Api/Api.csproj")
     ///   .WithReference(booksdb);
     ///
     /// builder.Build().Run();
@@ -126,7 +126,7 @@ public static class MilvusBuilderExtensions
     ///
     /// var milvus = builder.AddMilvus("milvus")
     ///   .WithAttu();
-    /// var api = builder.AddProject&lt;Projects.Api&gt;("api")
+    /// var api = builder.AddDotnetProject("api", "../Api/Api.csproj")
     ///   .WithReference(milvus);
     ///
     /// builder.Build().Run();
@@ -158,13 +158,11 @@ public static class MilvusBuilderExtensions
                                                         .ExcludeFromManifest();
 
         resourceBuilder.WithHidden();
-#pragma warning disable CS0618 // DisplayOrder is obsolete but must still be set to prioritize this URL.
         builder.WithUrlForEndpoint(attuContainer.PrimaryEndpoint, url =>
         {
             url.DisplayText = "Manage";
             url.DisplayOrder = 1;
         });
-#pragma warning restore CS0618
 
         configureContainer?.Invoke(resourceBuilder);
 

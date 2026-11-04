@@ -45,4 +45,47 @@ public class EmojiWidthTests
         // Assert - Spectre 0.55.2+ correctly measures emoji widths
         Assert.InRange(width, 1, 2);
     }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void FormatEmojiPrefix_PoliceCarLightUsesSingleSpace(bool replaceEmoji, bool suppressColor)
+    {
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter())
+        });
+        var expectedEmoji = replaceEmoji ? "\U0001F6A8"
+            : suppressColor ? ":police_car_light:" : "[red]:police_car_light:[/]";
+
+        var prefix = ConsoleHelpers.FormatEmojiPrefix(KnownEmojis.PoliceCarLight, console, replaceEmoji, suppressColor);
+
+        Assert.Equal($"{expectedEmoji} ", prefix);
+    }
+
+    [Theory]
+    [InlineData(40, "Use the Aspire plugin at your own\n   risk.\n   Review the source before enabling it.")]
+    [InlineData(100, "Use the Aspire plugin at your own risk.\n   Review the source before enabling it.")]
+    public void CreateEmojiGrid_PoliceCarLightKeepsWrappedTextAligned(int width, string expectedMessage)
+    {
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(output))
+        });
+        console.Profile.Width = width;
+
+        console.Write(ConsoleHelpers.CreateEmojiGrid(KnownEmojis.PoliceCarLight, console,
+            new Text("Use the Aspire plugin at your own risk.\nReview the source before enabling it.")));
+
+        var lines = output.ToString().Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal($"\U0001F6A8 {expectedMessage}",
+            string.Join('\n', lines.Select(line => line.TrimEnd())));
+    }
 }

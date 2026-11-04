@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Shared;
 using Hex1b;
 using Hex1b.Tokens;
 using Microsoft.Extensions.Logging;
@@ -17,6 +18,7 @@ internal sealed class Hmp1UdsServerListenerFilter : IHex1bTerminalPresentationFi
     private readonly Hmp1PresentationAdapter _presentation;
     private readonly ILogger<Hmp1UdsServerListenerFilter> _logger;
     private readonly Action<Exception> _listenerFaulted;
+    private readonly Task _producerConnected;
     private readonly object _gate = new();
     private readonly HashSet<Task> _clientTasks = [];
     private CancellationTokenSource? _listenerCts;
@@ -27,12 +29,14 @@ internal sealed class Hmp1UdsServerListenerFilter : IHex1bTerminalPresentationFi
         string socketPath,
         Hmp1PresentationAdapter presentation,
         ILogger<Hmp1UdsServerListenerFilter> logger,
-        Action<Exception> listenerFaulted)
+        Action<Exception> listenerFaulted,
+        Task producerConnected)
     {
         _socketPath = socketPath;
         _presentation = presentation;
         _logger = logger;
         _listenerFaulted = listenerFaulted;
+        _producerConnected = producerConnected;
         _listener = BindListener(socketPath);
     }
 
@@ -120,6 +124,11 @@ internal sealed class Hmp1UdsServerListenerFilter : IHex1bTerminalPresentationFi
     {
         try
         {
+            // A recycled terminal is empty until DCP reconnects. Completing a viewer
+            // handshake now would replace its retained screen with that empty state.
+            // Bind immediately for endpoint readiness, but defer handshakes until
+            // the producer is attached. Session cancellation still releases the listener.
+            await _producerConnected.WaitAsync(ct).ConfigureAwait(false);
             while (!ct.IsCancellationRequested)
             {
                 var socket = await listener.AcceptAsync(ct).ConfigureAwait(false);
@@ -206,7 +215,7 @@ internal sealed class Hmp1UdsServerListenerFilter : IHex1bTerminalPresentationFi
         var directory = Path.GetDirectoryName(socketPath);
         if (!string.IsNullOrWhiteSpace(directory))
         {
-            Directory.CreateDirectory(directory);
+            SocketPermissionHelper.CreateDirectory(directory, repairExisting: false);
         }
 
         if (File.Exists(socketPath))
@@ -217,7 +226,7 @@ internal sealed class Hmp1UdsServerListenerFilter : IHex1bTerminalPresentationFi
         var listener = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
         try
         {
-            listener.Bind(new UnixDomainSocketEndPoint(socketPath));
+            SocketPermissionHelper.Bind(listener, socketPath);
             listener.Listen(backlog: 16);
             return listener;
         }

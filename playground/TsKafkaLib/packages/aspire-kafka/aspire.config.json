@@ -1,0 +1,8 @@
+{
+  "appHost": {
+    "language": "typescript/nodejs"
+  },
+  "packages": {
+    "Aspire.Hosting": ""
+  }
+}

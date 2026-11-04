@@ -23,7 +23,8 @@ namespace Aspire.Hosting.Tests.Terminals;
 public class ResourceTerminalCatalogTests : IAsyncLifetime
 {
     // Leave room for the generated host socket name under macOS's 104-byte Unix socket path limit.
-    private readonly string _terminalDirectory = Directory.CreateTempSubdirectory("aspire-tc-").FullName;
+    private readonly string _terminalRoot = Directory.CreateTempSubdirectory().FullName;
+    private string _terminalDirectory => Path.Combine(_terminalRoot, ".aspire", "trmnl");
 
     [Fact]
     public void BuildIdRoundTripsThroughIsResourceTerminalId()
@@ -279,7 +280,7 @@ public class ResourceTerminalCatalogTests : IAsyncLifetime
     {
         try
         {
-            Directory.Delete(_terminalDirectory, recursive: true);
+            Directory.Delete(_terminalRoot, recursive: true);
         }
         catch (DirectoryNotFoundException)
         {

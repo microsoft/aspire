@@ -30,7 +30,8 @@ internal sealed record ConfigInfo(
 /// <param name="Name">The feature flag name (without the "features." prefix).</param>
 /// <param name="Description">A description of what the feature does.</param>
 /// <param name="DefaultValue">The default value if not explicitly configured.</param>
-internal sealed record FeatureInfo(string Name, string Description, bool DefaultValue);
+/// <param name="ProjectOnly">Whether the feature requires explicit project configuration.</param>
+internal sealed record FeatureInfo(string Name, string Description, bool DefaultValue, bool ProjectOnly);
 
 /// <summary>
 /// Schema information for the settings.json file structure.

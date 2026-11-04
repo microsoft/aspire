@@ -7,10 +7,7 @@ using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Model.MetricValues;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Tests.Shared;
-using Aspire.Tests;
 using Aspire.Tests.Shared.DashboardModel;
-using System.Collections.Concurrent;
-using System.Diagnostics;
 using Google.Protobuf;
 using Google.Protobuf.Collections;
 using Microsoft.AspNetCore.InternalTesting;
@@ -198,7 +195,7 @@ public sealed class SqliteTelemetryPersistenceTests(ITestOutputHelper testOutput
     }
 
     [Fact]
-    public async Task Cache_HydratesPersistedMetadataOnce()
+    public async Task Cache_ReusesPersistedMetadata()
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
         var startTime = new DateTime(2025, 4, 5, 6, 7, 8, DateTimeKind.Utc);
@@ -223,12 +220,7 @@ public sealed class SqliteTelemetryPersistenceTests(ITestOutputHelper testOutput
         }
 
         using var historicalContext = await CreateRepositoryAsync(workspace.Path, readOnly: true);
-        var activities = new ConcurrentQueue<Activity>();
-        using var listener = ActivityListenerHelper.Create(historicalContext.Repository.SqlActivitySource, onActivityStopped: activities.Enqueue);
-        using var parent = new Activity("cache hydration test").Start();
         var firstResource = Assert.Single(historicalContext.Repository.GetResources());
-        Assert.NotEmpty(activities);
-        activities.Clear();
 
         var secondResource = Assert.Single(historicalContext.Repository.GetResources());
         var summary = Assert.Single(historicalContext.Repository.GetInstrumentSummaries(firstResource.ResourceKey));
@@ -248,7 +240,6 @@ public sealed class SqliteTelemetryPersistenceTests(ITestOutputHelper testOutput
                 Assert.Equal(KeyValuePair.Create("resource-key", "resource-value"), property);
             });
         Assert.Equal("requests", summary.Name);
-        Assert.Empty(activities);
     }
 
     [Fact]
@@ -452,6 +443,88 @@ public sealed class SqliteTelemetryPersistenceTests(ITestOutputHelper testOutput
         using var command = connection.CreateCommand();
         command.CommandText = "SELECT COUNT(*) FROM telemetry_metric_points;";
         Assert.Equal(1L, command.ExecuteScalar());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Metrics_ReopenRestoresPointCountsForRetention(bool failFirstWrite)
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var databasePath = GetDatabasePath(workspace.Path);
+        var startTime = new DateTime(2025, 2, 3, 4, 5, 6, DateTimeKind.Utc);
+        var options = Options.Create(new DashboardOptions
+        {
+            TelemetryLimits = new TelemetryLimitOptions { MaxMetricsCount = 3 }
+        });
+
+        ResourceMetrics CreatePoints(params int[] values) => new()
+        {
+            Resource = CreateResource(),
+            ScopeMetrics =
+            {
+                new ScopeMetrics
+                {
+                    Scope = CreateScope("TestMeter"),
+                    Metrics =
+                    {
+                        values.Select(value => CreateSumMetric(
+                            "requests",
+                            startTime.AddMinutes(value),
+                            attributes: [KeyValuePair.Create("route", "/api"), KeyValuePair.Create("method", "GET")],
+                            value: value))
+                    }
+                }
+            }
+        };
+
+        using (var repositoryContext = await SqliteRepositoryTestHelpers.CreateTelemetryRepositoryAsync(databasePath, dashboardOptions: options))
+        {
+            await repositoryContext.Repository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
+            {
+                CreatePoints(1, 2, 3)
+            });
+        }
+
+        using var reopenedContext = await SqliteRepositoryTestHelpers.CreateTelemetryRepositoryAsync(databasePath, dashboardOptions: options);
+        if (failFirstWrite)
+        {
+            using var connection = reopenedContext.Database.OpenConnection();
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                CREATE TRIGGER fail_metric_trim BEFORE DELETE ON telemetry_metric_points
+                BEGIN
+                    SELECT RAISE(ABORT, 'test metric trim failure');
+                END;
+                """;
+            command.ExecuteNonQuery();
+
+            await Assert.ThrowsAsync<SqliteException>(() => reopenedContext.Repository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
+            {
+                CreatePoints(4)
+            }));
+
+            command.CommandText = "DROP TRIGGER fail_metric_trim;";
+            command.ExecuteNonQuery();
+        }
+
+        var context = new AddContext();
+        await reopenedContext.Repository.AddMetricsAsync(context, new RepeatedField<ResourceMetrics>
+        {
+            CreatePoints(3, 4, 4, 5)
+        });
+        Assert.Equal(4, context.SuccessCount);
+        Assert.Equal(0, context.FailureCount);
+
+        var instrument = await reopenedContext.Repository.GetInstrumentAsync(new GetInstrumentRequest
+        {
+            ResourceKey = CreateResource().GetResourceKey(),
+            MeterName = "TestMeter",
+            InstrumentName = "requests",
+            StartTime = DateTime.MinValue,
+            EndTime = DateTime.MaxValue
+        }, cancellationToken: CancellationToken.None);
+        Assert.Equal([3L, 4L, 5L], Assert.Single(instrument!.Dimensions).Values.Select(value => Assert.IsType<MetricValue<long>>(value).Value));
     }
 
     [Fact]

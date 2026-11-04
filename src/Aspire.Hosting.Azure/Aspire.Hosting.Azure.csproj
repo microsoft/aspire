@@ -19,6 +19,7 @@
     <Compile Include="$(SharedDir)ExceptionUtils.cs" Link="Utils\ExceptionUtils.cs" />
     <Compile Include="$(SharedDir)StringComparers.cs" Link="Utils\StringComparers.cs" />
     <Compile Include="$(SharedDir)StringUtils.cs" Link="Utils\StringUtils.cs" />
+    <Compile Include="$(SharedDir)ResourceNameHelpers.cs" Link="Utils\ResourceNameHelpers.cs" />
     <Compile Include="$(SharedDir)Model\KnownRelationshipTypes.cs" />
     <Compile Include="$(SharedDir)PathLookupHelper.cs" Link="Utils\PathLookupHelper.cs" />
   </ItemGroup>
@@ -46,6 +47,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Aspire.Hosting.Azure.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Azure.ContainerRegistry" />
+    <InternalsVisibleTo Include="Aspire.Hosting.Azure.EntraId.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Foundry" />
   </ItemGroup>
 

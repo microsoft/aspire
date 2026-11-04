@@ -10,6 +10,7 @@ From your AppHost directory, add the `Aspire.Hosting.MongoDB` integration with t
 
 ```bash
 aspire add Aspire.Hosting.MongoDB
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Usage example
@@ -26,7 +27,7 @@ var mongodb = builder.AddMongoDB("mongodb").WithReplicaSet();
 #pragma warning restore ASPIREMONGODB001
 var db = mongodb.AddDatabase("mydb");
 
-var myService = builder.AddProject<Projects.MyService>("myservice")
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(db)
                        .WaitFor(db);
 ```
@@ -43,6 +44,30 @@ const myService = await builder.addNodeApp("myService", "../my-service", "server
 ```
 
 Omit `WithReplicaSet()` / `withReplicaSet()` when a standalone server is sufficient.
+
+### Interactive REPL
+
+Call `WithRepl()` to opt into a **REPL** command on the MongoDB server resource in the dashboard:
+
+```csharp
+builder.AddMongoDB("mongo").WithRepl();
+```
+
+```typescript
+await builder.addMongoDB("mongo").withRepl();
+```
+
+REPL access is disabled by default and is available only in run mode. Enable it only for trusted dashboard
+users: the shell uses the resource's configured credentials and is not read-only. Sharing the dashboard
+through a tunnel, Codespaces, or VS Code remote development also exposes this capability to users who can
+execute resource commands.
+
+Use `exit` before closing the terminal tab to end the session cleanly. Closing the tab alone can
+leave `mongosh` running inside the container. Stopping the container also ends any remaining REPL processes.
+
+Select the command while the container is running to open the bundled `mongosh` client in the terminal dock; no local MongoDB client installation is required.
+
+The shell authenticates against `admin` using the configured credentials, passed through the environment rather than command-line arguments. It connects directly to the server inside its container, including replica set members. When TLS is enabled, it uses the configured certificate trust bundle and validates the server certificate for `localhost`. Custom certificates must cover `localhost`, and their issuing CA must be trusted through Aspire's certificate configuration. The command is not included in published applications.
 
 ### Single-member replica set
 
@@ -115,7 +140,7 @@ var replicaSet = builder.AddMongoDBReplicaSet("rs0")
                         .WithMember(mongo2)
                         .WithMember(mongo3);
 
-var myService = builder.AddProject<Projects.MyService>("myservice")
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(replicaSet)
                        .WaitFor(replicaSet);
 #pragma warning restore ASPIREMONGODB001

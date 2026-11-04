@@ -772,9 +772,7 @@ public class AzureSqlServerResource : AzureProvisioningResource, IResourceWithCo
 
         public IDistributedApplicationEventing Eventing => throw new NotImplementedException();
 
-#pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         public IDistributedApplicationPipeline Pipeline => throw new NotImplementedException();
-#pragma warning restore ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
         public DistributedApplication Build()
         {

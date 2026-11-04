@@ -1,7 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREDOTNETPROJECT001, ASPIREPROJECTS001, ASPIREDOTNETTOOL
+#pragma warning disable CS0618 // Retains legacy project build-readiness coverage alongside V2 scenarios.
+
+#pragma warning disable ASPIREPROJECTS001, ASPIREDOTNETTOOL
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.EntityFrameworkCore.Tests.TestServices;

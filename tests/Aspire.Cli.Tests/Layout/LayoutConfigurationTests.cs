@@ -15,6 +15,47 @@ public class LayoutConfigurationTests(ITestOutputHelper outputHelper)
         Assert.Equal(1, (int)LayoutComponent.Dcp);
         Assert.Equal(2, (int)LayoutComponent.Managed);
         Assert.Equal(3, (int)LayoutComponent.Dashboard);
+        Assert.Equal(5, (int)LayoutComponent.TerminalHost);
+    }
+
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData("13.6.0", false)]
+    [InlineData("17.0.0-preview.1", true)]
+    [InlineData("17.0.0", true)]
+    public void SupportsDirectTerminalHostRequiresEmptyArgumentOverrideSupport(string? hostingVersion, bool expected)
+    {
+        Assert.Equal(expected, TerminalHostLaunchHelper.SupportsDirectLaunch(hostingVersion is null ? null : SemVersion.Parse(hostingVersion)));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void TerminalHostLaunchPairsPathAndInvocationArguments(bool supportsDirectLaunch)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var layout = new LayoutConfiguration { LayoutPath = workspace.WorkspaceRoot.FullName };
+        foreach (var path in new[] { layout.GetManagedPath()!, layout.GetTerminalHostPath()! })
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, "executable");
+        }
+
+        var launch = TerminalHostLaunchHelper.GetLaunch(layout, supportsDirectLaunch);
+        Assert.NotNull(launch);
+        Assert.Equal(supportsDirectLaunch ? layout.GetTerminalHostPath() : layout.GetManagedPath(), launch.Value.Path);
+        Assert.Equal(supportsDirectLaunch ? string.Empty : "terminalhost", launch.Value.InvocationArgs);
+    }
+
+    [Fact]
+    public void DirectTerminalHostLaunchDoesNotHideMissingPayloadWithManagedFallback()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var layout = new LayoutConfiguration { LayoutPath = workspace.WorkspaceRoot.FullName };
+        Directory.CreateDirectory(Path.GetDirectoryName(layout.GetManagedPath()!)!);
+        File.WriteAllText(layout.GetManagedPath()!, "managed");
+
+        Assert.Null(TerminalHostLaunchHelper.GetLaunch(layout, supportsDirectLaunch: true));
     }
 
     [Theory]

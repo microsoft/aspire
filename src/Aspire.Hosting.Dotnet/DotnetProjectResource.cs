@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 
 #pragma warning disable ASPIREPROJECTS001 // ProjectLaunchDefaultsAnnotation is experimental.
@@ -9,7 +8,7 @@ using Aspire.Hosting.ApplicationModel;
 namespace Aspire.Hosting.Dotnet;
 
 /// <summary>
-/// A resource that represents a specified C# project or file-based app added by path.
+/// A resource that represents an SDK-style .NET project or file-based C# app added by path.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -18,12 +17,15 @@ namespace Aspire.Hosting.Dotnet;
 /// <c>dotnet run --file &lt;path&gt;</c> for a file-based app (a <c>.cs</c> file).
 /// </para>
 /// <para>
+/// Supported project files are <c>.csproj</c>, <c>.fsproj</c>, and <c>.vbproj</c>.
+/// F# scripts and non-SDK project systems are not supported.
+/// </para>
+/// <para>
 /// Resources created by <c>AddDotnetProject</c> support the same .NET SDK container-publishing pipeline as
 /// resources created by <c>AddProject</c>. A directly constructed resource must be given project metadata and
 /// explicitly configured for publishing by its builder.
 /// </para>
 /// </remarks>
-[Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 [AspireExport(ExposeProperties = true)]
 public class DotnetProjectResource :
     ExecutableResource,
@@ -38,7 +40,7 @@ public class DotnetProjectResource :
     /// <param name="workingDirectory">The working directory for the app, typically the directory containing the project or <c>.cs</c> file.</param>
     public DotnetProjectResource(string name, string workingDirectory) : base(name, "dotnet", workingDirectory)
     {
-        // Ensure uniform C# project defaults, including the Rebuild command and Kestrel endpoint wiring.
+        // Ensure uniform .NET project defaults, including the Rebuild command and Kestrel endpoint wiring.
         Annotations.Add(new ProjectLaunchDefaultsAnnotation());
     }
 }

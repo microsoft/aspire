@@ -100,6 +100,46 @@ test("loadDashboard ranks review-ready PRs by time waiting for review", async ()
   assert.deepEqual(reviewQueue.items.map((item) => item.pr.number), [2, 1]);
 });
 
+test("loadDashboard attributes Copilot PRs only to their sole human assignee", async () => {
+  const cases = [
+    { author: "copilot-swe-agent", assignee: "octocat", expected: "octocat/copilot" },
+    { author: "copilot-swe-agent[bot]", assignee: "octocat", expected: "octocat/copilot" },
+    { author: "copilot-swe-agent", assignee: "copilot-swe-agent", expected: "copilot-swe-agent" },
+  ];
+
+  for (const { author, assignee, expected } of cases) {
+    const copilotPr = prNode(19893, new Date().toISOString());
+    copilotPr.author = { __typename: "Bot", login: author, avatarUrl: null };
+    copilotPr.assignees.nodes = [{ login: assignee }];
+
+    globalThis.fetch = async (_url, options = {}) => {
+      const body = JSON.parse(options.body);
+      if (body.query.includes("pullRequests")) {
+        return jsonResponse({ data: { repository: {
+          isPrivate: false,
+          pullRequests: {
+            nodes: [copilotPr],
+            pageInfo: { hasNextPage: false, endCursor: null },
+          },
+        } } });
+      }
+      throw new Error(`Unexpected query: ${body.query}`);
+    };
+
+    const dashboard = await loadDashboard({
+      accounts: [{ token: "token", login: "octocat", repos: ["microsoft/aspire"] }],
+      mode: "review",
+      release: "9.5",
+      prefs: {},
+      dismissed: [],
+    });
+
+    const pullRequests = dashboard.attention.buckets.flatMap((bucket) => bucket.items.map((item) => item.pr));
+    const attributed = pullRequests.find((pr) => pr.number === copilotPr.number);
+    assert.equal(attributed.author, expected);
+  }
+});
+
 test("loadDashboard paginates open issues for each watched repo", async () => {
   const seenAfter = [];
   globalThis.fetch = async (_url, options = {}) => {

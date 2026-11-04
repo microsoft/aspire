@@ -218,7 +218,8 @@ internal sealed class TypeScriptAppHostMigration : IMigration
                 currentPath.AsSpan(0, currentPath.Length - LegacyTypeScriptAppHost.LegacyAppHostFileName.Length),
                 LegacyTypeScriptAppHost.ModernAppHostFileName);
 
-            File.WriteAllText(configPath, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+            var json = root.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(configPath, ConfigurationHelper.EnsureFinalNewline(json));
         }
         catch (JsonException ex)
         {
@@ -353,7 +354,7 @@ internal sealed class TypeScriptAppHostMigration : IMigration
             if (!success)
             {
                 _interactionService.DisplayMessage(
-                    KnownEmojis.Warning,
+                    KnownEmojis.PoliceCarLight,
                     $"[yellow]{Markup.Escape(MigrationStrings.RegenerateFailedWarning)}[/]",
                     allowMarkup: true);
             }
@@ -366,7 +367,7 @@ internal sealed class TypeScriptAppHostMigration : IMigration
         {
             _logger.LogDebug(ex, "SDK regeneration after migration failed");
             _interactionService.DisplayMessage(
-                KnownEmojis.Warning,
+                KnownEmojis.PoliceCarLight,
                 $"[yellow]{Markup.Escape(MigrationStrings.RegenerateFailedWarning)}[/]",
                 allowMarkup: true);
         }

@@ -52,12 +52,43 @@ docker run --rm -d \
     --env ASPIRE_DASHBOARD_APPLICATION_NAME=my-app \
     --env ASPIRE_DASHBOARD_DATA_DIRECTORY=/dashboard-data \
     --env ASPIRE_DASHBOARD_PERSISTENCE_MODE=Resume \
-    mcr.microsoft.com/dotnet/aspire-dashboard:latest
+    mcr.microsoft.com/aspire/dashboard:latest
 ```
 
 Restart the container with the same volume, application name, data directory, and persistence mode to continue using the existing database. The Dashboard can remain running through idle periods, and its data remains available after stop and restart, subject to the configured telemetry retention limits.
 
 The AppHost console-log protocol does not identify the AppHost generation that produced a line. Resume prioritizes preserving logs from later AppHost generations, whose line numbers restart at 1. If the Dashboard restarts while the same AppHost remains running, console logs replayed by that AppHost can therefore be persisted again.
+
+### AppHost resource traits and dashboard customizations
+
+Resources can declare non-sensitive metadata as immutable name/value traits. Repeated
+names add multiple values:
+
+```csharp
+builder.AddProject<Projects.Api>("api")
+    .WithTags("Backend", "API")
+    .WithTrait("Owner", "Finance")
+    .WithTrait("Owner", "Platform")
+    .WithDashboardPosition(-10);
+```
+
+`WithTags` accepts a single tag or multiple tags using `params ReadOnlySpan<string>`,
+avoiding a temporary argument array in C#. Polyglot SDKs accept an array of tags.
+It uses the reserved trait `Aspire_Dashboard_Tag`. These tags participate in
+dashboard tag grouping but cannot be removed in the dashboard. User-added tags are
+stored separately in the application settings database, so restarting an AppHost
+does not lose customizations or copy declared tags from a different run.
+
+`WithDashboardPosition` uses `Aspire_Dashboard_Position`; repeated calls replace the
+previous value. Lower positions appear first; defaults can change between runs until
+the user reorders resources. Existing saved dashboard ordering takes precedence. Drag-and-drop ordering is saved
+per application, independently of the run database.
+
+Traits are transported as list-valued resource properties named `resource.trait.<name>`,
+including in recorded snapshots. Trait names are case-sensitive; dashboard tags are
+deduplicated case-insensitively. Tags must have at most 50 characters and use single
+spaces between words. Trait values are visible to dashboard and tooling consumers
+and must not contain secrets.
 
 ## Goals
 
@@ -227,9 +258,25 @@ Summary tables and indexes let trace list queries avoid reconstructing every tra
 
 `telemetry_metric_instruments` identifies instruments by resource, scope, and name and stores type, temporality, monotonicity, unit, and description.
 
-Metric dimensions are normalized into an attribute set and stable non-cryptographic hash. Points store timestamps, point type, repeated-value count, integer or floating-point values, and histogram data. Histogram bucket counts and explicit bounds are compact binary values rather than JSON. Exemplars and their filtered attributes are separate rows correlated to trace and span IDs.
+Metric dimensions use normalized attribute sets and stable non-cryptographic hashes. Points store intervals, repeated-value counts, numeric values, and compact binary histogram buckets and bounds. Exemplars and their filtered attributes are separate rows linked to points, traces, and spans.
+
+Metric and exemplar timestamps use signed Unix nanoseconds, preserving precision through persistence and export independently of display conversions. Timestamps outside the supported range, ending in April 2262, are logged and rejected; rejecting an exemplar does not discard its parent measurement.
+
+Histograms retain the producer's aggregation start separately from the normalized chart interval. Export uses producer timestamps to preserve OTLP semantics. Aggregation identities distinguish cumulative resets and independent delta intervals across persistence, rollup, and database reopening:
+
+- Cumulative rollups retain the latest snapshot for each aggregation and preserve reset boundaries rather than combining unrelated observations.
+- Delta intervals remain independent and are combined within chart windows, including when the producer omits a start timestamp.
+- Duplicate histogram deliveries update the existing interval before retention, preserving associated exemplars without consuming additional retained-point slots.
+
+Cumulative bucket layouts must remain stable within an aggregation. Charts combine differing layouts only at shared bucket boundaries, without estimating missing distributions. When percentiles cannot be calculated, the Dashboard warns and shows unavailable values rather than zero; counts and exemplars remain accessible in graph and table views.
 
 Indexes support instrument lookup, dimension matching, time-window queries, retention, and exemplar lookup.
+
+Repeated metric values extend the latest point's end time without inserting a new point. The single time-window index is ordered by dimension, a persisted 60-second end-time bucket, interval start, and point ID. Repeats update the indexed bucket only when their exact end time crosses a bucket boundary, reducing index writes and the resulting WAL/checkpoint work. An expression index over the exact end time would still be maintained on every repeat, even when its computed bucket is unchanged.
+
+Time buckets only prefilter candidate points. Queries still compare exact interval bounds, and exemplar window queries explicitly use the time-window index before loading points and exemplars. Latest-time queries seek the highest bucket in each dimension and take the maximum exact end time within it; point insertion order does not determine the latest timestamp.
+
+Every export still commits its exact timestamps and counts before ingestion completes. Transaction boundaries, checkpoint policy, and retention are unchanged. Bucket crossings still re-key the index, and new points still maintain it. Coarser index ordering can trade some full-history read and append/retention performance for lower repeat-ingestion cost; it does not eliminate all SQLite write work or change timestamp precision.
 
 ## Repository behavior
 
@@ -294,6 +341,10 @@ The Dashboard applies these default ingestion limits:
 | `Dashboard:TelemetryLimits:MaxResourceCount` | 10,000 | Distinct OTLP resources |
 
 The oldest logs, traces, and metric points are removed when their limits are exceeded. Fixed limits of 10,000 also apply to resource views per resource, scopes per database, instruments per resource, and dimensions per instrument; additional identities are rejected.
+
+The `AddHistogramMetricsAtCapacity` benchmark in [TelemetryRepositoryMetricsBenchmarks](../../benchmarks/Aspire.Dashboard.Benchmarks/TelemetryRepositoryMetricsBenchmarks.cs) measures steady-state ingestion with one or five dimensions already at the default retention limit. Each invocation adds one cumulative histogram point per dimension with four replayed exemplars, exercising eviction and cascading exemplar deletes. Payload construction and history population are outside the measured operation.
+
+The `AddRepeatedMetrics` benchmark in [TelemetryRepositoryMetricRepeatsBenchmarks](../../benchmarks/Aspire.Dashboard.Benchmarks/TelemetryRepositoryMetricRepeatsBenchmarks.cs) measures unchanged numeric values across 1,000 dimensions, with 100 or 4,600 stored points per dimension. Each invocation extends the latest points by one second through ten exports of 100 dimensions, exercising time-index updates and commits without new points or retention deletes. History population and payload construction are outside the measured operation.
 
 Console logs are persisted only after their stream is viewed or exported. The frontend keeps up to `Dashboard:Frontend:MaxConsoleLogCount` entries in memory, which defaults to 100,000. The same limit applies across all console logs in the database, with the oldest entries removed when the limit is exceeded. Historical runs can therefore omit uncaptured logs.
 

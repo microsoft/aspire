@@ -13,6 +13,7 @@ import { AspireResourceExtendedDebugConfiguration, EnvVar, ExecutableLaunchConfi
 import { ResourceDebuggerExtension } from '../debugger/debuggerExtensions';
 import { rustDebuggerExtensionNotInstalled } from '../loc/strings';
 import { extensionLogOutputChannel } from '../utils/logging';
+import { AppHostBuildFailureError } from '../debugger/appHostBuildFailureError';
 
 type TestChildProcess = Omit<nodeChildProcess.ChildProcessWithoutNullStreams, 'exitCode' | 'signalCode'> & {
     exitCode: number | null;
@@ -250,12 +251,45 @@ suite('Rust Debugger Extension Tests', () => {
         harness.childProcess.emit('close', 101, null);
 
         await assert.rejects(build, error => {
-            assert.ok(error instanceof Error);
-            assert.ok(!(error instanceof vscode.CancellationError));
+            assert.ok(error instanceof AppHostBuildFailureError);
+            assert.strictEqual(error.debugConsoleOutputAlreadyWritten, true);
             assert.ok(error.message.includes('exit code 101'));
             assert.ok(error.message.includes('error: compilation failed'));
             return true;
         });
+    });
+
+    test('reports asynchronous cargo spawn errors as typed build failures without streamed output', async () => {
+        const harness = createRustProcessHarness();
+        const build = harness.rustService.build('/workspace/api', ['build'], [], '/workspace/api/target/debug/api');
+        const spawnError = Object.assign(new Error('cargo executable missing'), { code: 'ENOENT' });
+
+        harness.childProcess.emit('error', spawnError);
+
+        await assert.rejects(build, error => {
+            assert.ok(error instanceof AppHostBuildFailureError);
+            assert.strictEqual(error.debugConsoleOutputAlreadyWritten, false);
+            assert.ok(error.message.includes('/workspace/api'));
+            assert.ok(error.message.includes(spawnError.message));
+            return true;
+        });
+    });
+
+    test('reports synchronous cargo spawn errors as typed build failures without streamed output', async () => {
+        const harness = createRustProcessHarness();
+        const spawnError = Object.assign(new Error('invalid cargo working directory'), { code: 'ENOENT' });
+        const spawn = nodeChildProcess.spawn as unknown as sinon.SinonStub;
+        spawn.throws(spawnError);
+
+        await assert.rejects(
+            harness.rustService.build('/workspace/api', ['build'], [], '/workspace/api/target/debug/api'),
+            error => {
+                assert.ok(error instanceof AppHostBuildFailureError);
+                assert.strictEqual(error.debugConsoleOutputAlreadyWritten, false);
+                assert.ok(error.message.includes('/workspace/api'));
+                assert.ok(error.message.includes(spawnError.message));
+                return true;
+            });
     });
 
     test('reports user disposal during cargo build as cancellation', async () => {
@@ -512,8 +546,8 @@ suite('Rust Debugger Extension Tests', () => {
         harness.childProcess.emit('close', null, 'SIGTERM');
 
         await assert.rejects(build, error => {
-            assert.ok(error instanceof Error);
-            assert.ok(!(error instanceof vscode.CancellationError));
+            assert.ok(error instanceof AppHostBuildFailureError);
+            assert.strictEqual(error.debugConsoleOutputAlreadyWritten, true);
             assert.ok(error.message.includes('SIGTERM'));
             return true;
         });
@@ -811,6 +845,20 @@ suite('Rust Debugger Extension Tests', () => {
         assert.strictEqual(await build, '/workspace/api/target/debug/api');
         const spawn = nodeChildProcess.spawn as unknown as sinon.SinonStub;
         assert.deepStrictEqual(spawn.firstCall.args[1], ['build', '--message-format=json']);
+    });
+
+    test('does not classify post-build executable selection failures as build boundary failures', async () => {
+        const harness = createRustProcessHarness();
+        const build = harness.rustService.build('/workspace/api', ['build'], [], undefined);
+
+        harness.childProcess.emit('close', 0, null);
+
+        await assert.rejects(build, error => {
+            assert.ok(error instanceof Error);
+            assert.ok(!(error instanceof AppHostBuildFailureError));
+            assert.ok(error.message.includes('did not produce a runnable binary'));
+            return true;
+        });
     });
 
     test('adds the legacy JSON message format before rustc arguments', async () => {

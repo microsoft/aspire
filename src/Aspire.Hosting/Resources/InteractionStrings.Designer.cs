@@ -115,42 +115,6 @@ namespace Aspire.Hosting.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Development certificate not fully trusted.
-        /// </summary>
-        internal static string DeveloperCertificateNotFullyTrustedTitle {
-            get {
-                return ResourceManager.GetString("DeveloperCertificateNotFullyTrustedTitle", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   The most recent development certificate isn&apos;t fully trusted. See https://aka.ms/aspire/devcerts for more information..
-        /// </summary>
-        internal static string DeveloperCertificateNotFullyTrustedMessage {
-            get {
-                return ResourceManager.GetString("DeveloperCertificateNotFullyTrustedMessage", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to No trusted development certificate.
-        /// </summary>
-        internal static string NoDeveloperCertificateTrustedTitle {
-            get {
-                return ResourceManager.GetString("NoDeveloperCertificateTrustedTitle", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   No trusted development certificate was found. See https://aka.ms/aspire/devcerts for more information..
-        /// </summary>
-        internal static string NoDeveloperCertificateTrustedMessage {
-            get {
-                return ResourceManager.GetString("NoDeveloperCertificateTrustedMessage", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to Ensure that Podman is running..
         /// </summary>
         internal static string ContainerRuntimePodmanAdvice {
@@ -205,6 +169,42 @@ namespace Aspire.Hosting.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to The most recent development certificate isn&apos;t fully trusted. See https://aka.ms/aspire/devcerts for more information..
+        /// </summary>
+        internal static string DeveloperCertificateNotFullyTrustedMessage {
+            get {
+                return ResourceManager.GetString("DeveloperCertificateNotFullyTrustedMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Development certificate not fully trusted.
+        /// </summary>
+        internal static string DeveloperCertificateNotFullyTrustedTitle {
+            get {
+                return ResourceManager.GetString("DeveloperCertificateNotFullyTrustedTitle", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to No trusted development certificate was found. See https://aka.ms/aspire/devcerts for more information..
+        /// </summary>
+        internal static string NoDeveloperCertificateTrustedMessage {
+            get {
+                return ResourceManager.GetString("NoDeveloperCertificateTrustedMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to No trusted development certificate.
+        /// </summary>
+        internal static string NoDeveloperCertificateTrustedTitle {
+            get {
+                return ResourceManager.GetString("NoDeveloperCertificateTrustedTitle", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to There are unresolved parameters that need to be set. Please provide values for them..
         /// </summary>
         internal static string ParametersBarMessage {
@@ -232,7 +232,7 @@ namespace Aspire.Hosting.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to The value is currently saved in [user secrets](https://aka.ms/aspire/user-secrets)..
+        ///   Looks up a localized string similar to Delete a value that is saved in [user secrets](https://aka.ms/aspire/user-secrets)..
         /// </summary>
         internal static string ParametersInputsDeleteDescription {
             get {
@@ -286,15 +286,6 @@ namespace Aspire.Hosting.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Save to user secrets.
-        /// </summary>
-        internal static string ParametersInputsRememberLabel {
-            get {
-                return ResourceManager.GetString("ParametersInputsRememberLabel", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to Save value to [user secrets](https://aka.ms/aspire/user-secrets) for future use..
         /// </summary>
         internal static string ParametersInputsRememberDescriptionConfigured {
@@ -313,6 +304,15 @@ namespace Aspire.Hosting.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Save to user secrets.
+        /// </summary>
+        internal static string ParametersInputsRememberLabel {
+            get {
+                return ResourceManager.GetString("ParametersInputsRememberLabel", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Set unresolved parameters.
         /// </summary>
         internal static string ParametersInputsTitle {
@@ -322,9 +322,7 @@ namespace Aspire.Hosting.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Please provide a value for the parameter.
-        ///
-        ///New parameter values may not be used until dependent resources are restarted..
+        ///   Looks up a localized string similar to Please provide a value for the parameter. New parameter values may not be used until dependent resources are restarted..
         /// </summary>
         internal static string SetParameterMessage {
             get {

@@ -6,6 +6,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -189,8 +190,31 @@ public static class BlazorHostedExtensions
                     var logger = beforeStartEvent.Services
                         .GetRequiredService<ILoggerFactory>()
                         .CreateLogger(typeof(BlazorHostedExtensions));
+
+                    // ResolveWebAssemblyProjectReferences only exists in the .NET 11 Static Web Assets SDK.
+                    // Running it against an older SDK fails the whole AppHost startup (MSB4057), even for
+                    // apps that never asked for browser debugging. Probe the active SDK first and skip
+                    // discovery gracefully when it isn't supported: https://github.com/microsoft/aspire/issues/20417
+                    var versionProvider = beforeStartEvent.Services.GetRequiredService<IDotnetSdkVersionProvider>();
+                    var serverDirectory = Path.GetDirectoryName(projectMetadata.ProjectPath);
+                    var dotnetExecutablePath = BlazorDotNetCliRunner.GetExecutablePath();
+                    var sdkVersion = await versionProvider.TryGetVersionAsync(
+                        serverDirectory,
+                        dotnetExecutablePath,
+                        cancellationToken).ConfigureAwait(false);
+
+                    if (!DotnetSdkUtils.SupportsWebAssemblyProjectReferenceResolution(sdkVersion))
+                    {
+                        BlazorGatewayLog.WasmClientDiscoverySkippedUnsupportedSdk(
+                            logger,
+                            projectMetadata.ProjectPath,
+                            sdkVersion?.ToString() ?? "unknown");
+                        return;
+                    }
+
                     annotation.DebuggerClientProjectPath = await ResolveBlazorWasmClientProjectPathAsync(
                         projectMetadata.ProjectPath,
+                        dotnetExecutablePath,
                         logger,
                         cancellationToken).ConfigureAwait(false);
                 });
@@ -260,6 +284,7 @@ public static class BlazorHostedExtensions
     /// </summary>
     private static async Task<string?> ResolveBlazorWasmClientProjectPathAsync(
         string serverProjectPath,
+        string dotnetExecutablePath,
         ILogger logger,
         CancellationToken cancellationToken)
     {
@@ -275,6 +300,7 @@ public static class BlazorHostedExtensions
         // The target returns each evaluated WASM ProjectReference. An empty collection is valid
         // and keeps the browser debugging command hidden.
         var result = await BlazorDotNetCliRunner.RunAsync(
+            dotnetExecutablePath,
             serverProjectPath,
             "msbuild",
             [

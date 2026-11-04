@@ -581,8 +581,10 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
             exception.Message);
     }
 
-    [Fact]
-    public async Task ResumeMode_DeletesIncompatibleDatabase()
+    [Theory]
+    [InlineData(1)]
+    [InlineData(DashboardSqliteDatabase.SchemaVersion - 1)]
+    public async Task ResumeMode_DeletesIncompatibleDatabase(int schemaVersion)
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
         var options = CreateOptions(workspace, persistenceMode: DashboardPersistenceMode.Resume);
@@ -594,7 +596,8 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
             using var connection = new SqliteConnection($"Data Source={databasePath};Pooling=False");
             connection.Open();
             using var command = connection.CreateCommand();
-            command.CommandText = "CREATE TABLE dashboard_schema (version INTEGER NOT NULL); INSERT INTO dashboard_schema VALUES (1);";
+            command.CommandText = "CREATE TABLE dashboard_schema (version INTEGER NOT NULL); INSERT INTO dashboard_schema VALUES (@SchemaVersion);";
+            command.Parameters.AddWithValue("@SchemaVersion", schemaVersion);
             command.ExecuteNonQuery();
         }
 
@@ -1486,6 +1489,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
 
         Assert.True(selectedClient.IsEnabled);
         Assert.True(selectedClient.WhenConnected.IsCompletedSuccessfully);
+        Assert.True(selectedClient.WhenResourcesReady.IsCompletedSuccessfully);
         Assert.Equal(DashboardConnectionState.Connected, selectedClient.ConnectionState);
         Assert.Equal(0, connectionStateChangedCount);
         await selectedClient.ReconnectAsync();

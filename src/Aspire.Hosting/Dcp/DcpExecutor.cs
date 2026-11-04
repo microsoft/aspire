@@ -3,7 +3,6 @@
 
 #pragma warning disable ASPIRECERTIFICATES001
 #pragma warning disable ASPIRECONTAINERSHELLEXECUTION001
-#pragma warning disable ASPIREUSERSECRETS001
 
 using System.Collections.Immutable;
 using System.Diagnostics;
@@ -125,7 +124,7 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
     internal DcpResourceWatcher ResourceWatcher => _resourceWatcher;
 
     private string ContainerHostName => _configuration["AppHost:ContainerHostname"] ??
-        (_options.Value.EnableAspireContainerTunnel ? KnownHostNames.DefaultContainerTunnelHostName : _dcpInfo?.Containers?.HostName ?? KnownHostNames.DockerDesktopHostBridge);
+        (_options.Value.EnableAspireContainerTunnel ? KnownHostNames.DefaultContainerTunnelHostName : _dcpInfo?.Containers?.ContainerHostName ?? KnownHostNames.DockerDesktopHostBridge);
 
     public async Task RunApplicationAsync(CancellationToken ct = default)
     {
@@ -1187,7 +1186,8 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
                         patch = CreatePatch(c, obj => obj.Spec.Stop = true);
                         await _kubernetesService.PatchAsync(c, patch, attemptCancellationToken).ConfigureAwait(false);
                         var cu = await _kubernetesService.GetAsync<Container>(c.Metadata.Name, cancellationToken: attemptCancellationToken).ConfigureAwait(false);
-                        if (cu.Status?.State == ContainerState.Exited)
+                        // DCP reports FailedToStart (terminal) when the stop arrives before the container was launched.
+                        if (cu.Status?.State is ContainerState.Exited or ContainerState.FailedToStart)
                         {
                             _logger.LogDebug("Container '{ResourceName}' was stopped.", resourceReference.DcpResourceName);
                             return true;
@@ -1202,7 +1202,9 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
                         patch = CreatePatch(e, obj => obj.Spec.Stop = true);
                         await _kubernetesService.PatchAsync(e, patch, attemptCancellationToken).ConfigureAwait(false);
                         var eu = await _kubernetesService.GetAsync<Executable>(e.Metadata.Name, cancellationToken: attemptCancellationToken).ConfigureAwait(false);
-                        if (eu.Status?.State == ExecutableState.Finished || eu.Status?.State == ExecutableState.Terminated)
+                        // DCP reports FailedToStart (terminal) when the stop arrives before the process was launched,
+                        // e.g. when a resource is stopped right after a restart re-created it.
+                        if (eu.Status?.State is ExecutableState.Finished or ExecutableState.Terminated or ExecutableState.FailedToStart)
                         {
                             _logger.LogDebug("Executable '{ResourceName}' was stopped.", resourceReference.DcpResourceName);
                             return true;
@@ -1318,6 +1320,8 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
         ForgetCachedCallbackResults(resource.ModelResource);
         ForgetConnectionStringAvailableEvent(resource.ModelResource);
 
+        // The delete watch can clear its observation while the API deletion is still being polled.
+        string? deletedUid = null;
         var result = await DeleteResourceRetryPipeline.ExecuteAsync(async (resourceName, attemptCancellationToken) =>
         {
             string? uid = null;
@@ -1329,6 +1333,7 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
             {
                 var r = await _kubernetesService.DeleteAsync<T>(resourceName, cancellationToken: attemptCancellationToken).ConfigureAwait(false);
                 uid = r.Uid();
+                deletedUid = uid;
 
                 _logger.LogDebug("Delete request for '{ResourceName}' successfully completed. Resource to delete has UID '{Uid}'.", resourceName, uid);
             }
@@ -1366,6 +1371,9 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
         {
             throw new DistributedApplicationException($"Failed to delete '{resource.DcpResourceName}' successfully before restart.");
         }
+
+        // Do not suppress updates from an object whose deletion failed.
+        _resourceWatcher.MarkPreviousIncarnationSuperseded(T.ObjectKind, resource.DcpResourceName, deletedUid);
     }
 
     /// <summary>

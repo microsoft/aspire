@@ -37,6 +37,9 @@ internal static partial class BlazorGatewayLog
     [LoggerMessage(Level = LogLevel.Error, Message = "ResolveWebAssemblyProjectReferences failed for {ProjectPath}:\n{Stdout}\n{Stderr}")]
     public static partial void WasmClientDiscoveryFailed(ILogger logger, string projectPath, string stdout, string stderr);
 
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Skipped Blazor WebAssembly client discovery for {ProjectPath} because the active .NET SDK ({SdkVersion}) does not support the ResolveWebAssemblyProjectReferences MSBuild target. Install a .NET 11 SDK to enable the \"Debug in Browser\" command for this project.")]
+    public static partial void WasmClientDiscoverySkippedUnsupportedSdk(ILogger logger, string projectPath, string sdkVersion);
+
     [LoggerMessage(Level = LogLevel.Error, Message = "ResolveStaticWebAssetsConfiguration returned incomplete paths: Endpoints='{EndpointsPath}', Runtime='{RuntimePath}'")]
     public static partial void IncompleteManifestPaths(ILogger logger, string? endpointsPath, string? runtimePath);
 

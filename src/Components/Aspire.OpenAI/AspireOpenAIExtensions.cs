@@ -123,7 +123,10 @@ public static class AspireOpenAIExtensions
                 .WithMetrics(b => b.AddMeter(telemetrySources));
         }
 
-        return new AspireOpenAIClientBuilder(builder, connectionName, serviceKey, settings.DisableTracing, settings.EnableSensitiveTelemetryData);
+        return new AspireOpenAIClientBuilder(builder, connectionName, serviceKey, settings.DisableTracing, settings.EnableSensitiveTelemetryData)
+        {
+            DisableMetrics = settings.DisableMetrics
+        };
 
         OpenAIClient ConfigureOpenAI(IServiceProvider serviceProvider)
         {

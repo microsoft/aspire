@@ -1,10 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource Kubernetes projection alongside executable/V2 deployment coverage.
 #pragma warning disable ASPIRECOMPUTE002
 #pragma warning disable ASPIRECOMPUTE003
-#pragma warning disable ASPIREPIPELINES001
-#pragma warning disable ASPIREPIPELINES002
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIRECONTAINERRUNTIME001
 
@@ -1766,6 +1765,43 @@ public class KubernetesDeployTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task Dashboard_ConfiguresOtlpForResourcesReferencedBeforeTheyAreProcessed()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: WellKnownPipelineSteps.Publish);
+
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IPipelineActivityReporter>(new TestPipelineActivityReporter(outputHelper));
+
+        builder.AddKubernetesEnvironment("env");
+
+        // service-a is processed first and references service-b, so service-b's Kubernetes
+        // resource is created while resolving service-a's environment.
+        var serviceA = builder.AddProject<Projects.ServiceA>("service-a");
+        var serviceB = builder.AddProject<Projects.ServiceA>("service-b");
+        serviceA.WithReference(serviceB);
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        foreach (var resourceName in new[] { "service-a", "service-b" })
+        {
+            var configPath = Path.Combine(workspace.Path, "templates", resourceName, "config.yaml");
+            Assert.True(File.Exists(configPath), $"Expected {configPath} to exist.");
+            var config = await File.ReadAllTextAsync(configPath);
+            outputHelper.WriteLine(config);
+
+            Assert.Contains("OTEL_EXPORTER_OTLP_ENDPOINT", config);
+            Assert.Contains("OTEL_EXPORTER_OTLP_PROTOCOL", config);
+            Assert.Contains("OTEL_SERVICE_NAME", config);
+        }
+    }
+
+    [Fact]
     public async Task Dashboard_Disabled_NoOtlpConfiguration()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -2094,3 +2130,4 @@ public class KubernetesDeployTests(ITestOutputHelper outputHelper)
         Assert.Equal("podinfo", stateSection.Data["ReleaseName"]?.ToString());
     }
 }
+#pragma warning restore CS0618

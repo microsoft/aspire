@@ -32,6 +32,33 @@ namespace Aspire.Dashboard.Components.Tests.Pages;
 [UseCulture("en-US")]
 public partial class StructuredLogsTests : DashboardTestContext
 {
+    [Theory]
+    [InlineData(AspireDataType.StructuredLogs)]
+    [InlineData(AspireDataType.Traces)]
+    [InlineData(AspireDataType.Metrics)]
+    public async Task EmptyState_HelpDisappearsAfterAnySignalAndStaysHiddenAfterClear(AspireDataType signal)
+    {
+        SetupStructureLogsServices();
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        Services.GetRequiredService<DimensionManager>().InvokeOnViewportInformationChanged(viewport);
+        var cut = Render<StructuredLogs>(parameters => parameters.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".telemetry-help-button")));
+        Assert.Equal(Resources.StructuredLogs.StructuredLogsNoLogsFound, cut.Find(".telemetry-empty-content > div").TextContent.Trim());
+
+        var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await TelemetryHelpSetupHelpers.AddSignalAsync(repository, signal);
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll(".telemetry-help-button")));
+        await repository.ClearStructuredLogsAsync();
+        await repository.ClearTracesAsync();
+        await repository.ClearMetricsAsync();
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Single(cut.FindAll(".telemetry-empty-content"));
+            Assert.Empty(cut.FindAll(".telemetry-help-button"));
+        });
+    }
+
     [Fact]
     public async Task Render_ResourceInstanceHasDashes_AppKeyResolvedCorrectly()
     {
@@ -68,7 +95,7 @@ public partial class StructuredLogsTests : DashboardTestContext
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
         // Act
-        var cut = RenderComponent<StructuredLogs>(builder =>
+        var cut = Render<StructuredLogs>(builder =>
         {
             builder.Add(p => p.ResourceName, "TestApp");
             builder.Add(p => p.ViewportInformation, viewport);
@@ -98,7 +125,7 @@ public partial class StructuredLogsTests : DashboardTestContext
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
         // Act
-        var cut = RenderComponent<StructuredLogs>(builder =>
+        var cut = Render<StructuredLogs>(builder =>
         {
             builder.Add(p => p.ViewportInformation, viewport);
         });
@@ -138,7 +165,7 @@ public partial class StructuredLogsTests : DashboardTestContext
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
         // Act
-        var cut = RenderComponent<StructuredLogs>(builder =>
+        var cut = Render<StructuredLogs>(builder =>
         {
             builder.Add(p => p.ViewportInformation, viewport);
         });
@@ -176,7 +203,7 @@ public partial class StructuredLogsTests : DashboardTestContext
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
         // Act
-        var cut = RenderComponent<StructuredLogs>(builder =>
+        var cut = Render<StructuredLogs>(builder =>
         {
             builder.Add(p => p.ViewportInformation, viewport);
         });
@@ -215,7 +242,7 @@ public partial class StructuredLogsTests : DashboardTestContext
         var dimensionManager = Services.GetRequiredService<DimensionManager>();
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        var cut = RenderComponent<StructuredLogs>(builder =>
+        var cut = Render<StructuredLogs>(builder =>
         {
             builder.Add(p => p.ViewportInformation, viewport);
         });
@@ -273,7 +300,7 @@ public partial class StructuredLogsTests : DashboardTestContext
         });
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         Services.GetRequiredService<DimensionManager>().InvokeOnViewportInformationChanged(viewport);
-        var cut = RenderComponent<StructuredLogs>(builder => builder.Add(p => p.ViewportInformation, viewport));
+        var cut = Render<StructuredLogs>(builder => builder.Add(p => p.ViewportInformation, viewport));
         var grid = cut.FindComponent<AspireFluentDataGrid<LogSummary>>();
         await grid.InvokeAsync(grid.Instance.RefreshDataAndRenderAsync);
 
@@ -308,13 +335,14 @@ public partial class StructuredLogsTests : DashboardTestContext
         var dimensionManager = Services.GetRequiredService<DimensionManager>();
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        var cut = RenderComponent<StructuredLogs>(builder =>
+        var cut = Render<StructuredLogs>(builder =>
         {
             builder.Add(p => p.ViewportInformation, viewport);
         });
 
-        var search = Assert.Single(cut.FindComponents<FluentTextInput>());
-        Assert.Equal("off", search.Instance.AutoComplete);
+        var searches = cut.FindComponents<FluentTextInput>();
+        Assert.NotEmpty(searches);
+        Assert.All(searches, search => Assert.Equal("off", search.Instance.AutoComplete));
     }
 
     [Fact]
@@ -327,7 +355,7 @@ public partial class StructuredLogsTests : DashboardTestContext
         var dimensionManager = Services.GetRequiredService<DimensionManager>();
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        var cut = RenderComponent<StructuredLogs>(builder =>
+        var cut = Render<StructuredLogs>(builder =>
         {
             builder.Add(p => p.ViewportInformation, viewport);
         });

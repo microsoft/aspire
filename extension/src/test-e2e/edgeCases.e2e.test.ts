@@ -2,6 +2,7 @@ import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
 import type { AspireExtensionE2EControlCommand } from '../types/extensionApi';
+import type { ExecutableLaunchConfiguration } from '../dcp/types';
 import { getCommandInvocationCount, getDebugLaunchCount, isSamePath, waitForCommandOutcome, waitForDebugLaunch, waitForDebugSessionStartup, waitForExtensionState, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForRunningAppHost, waitForSelectedWorkspaceAppHost, waitForWorkspaceAppHost } from './helpers/assertions';
 import { createEmptyAppHostProject, createExternalSingleFileAppHost, executeE2eControlCommand, getGeneratedAppHostPath, getGeneratedProjectRoot, isProcessAlive, removeExternalSingleFileAppHost, removeGeneratedProject, restoreWorkspaceAppHostConfig, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setDebugLaunchSuppressedForE2E, stopAppHostIfRunning, stopPrimaryAppHostIfRunning, waitForKnownProcessExit, writeFileWithRetry, writeWorkspaceAppHostConfigForPath } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath, getWorkspaceRoot } from './helpers/paths';
@@ -75,6 +76,17 @@ suite('Aspire extension edge case E2E', function () {
             executeE2eControlCommand({ name: 'publishAppHost' }),
             /publishAppHost requires appHostPath/);
         assert.strictEqual(getDebugLaunchCount(), beforePublishLaunch);
+
+        await assert.rejects(
+            executeE2eControlCommand({
+                name: 'createResourceDebugConfiguration',
+                launchConfig: {
+                    type: 'browser',
+                    browser: 'safari',
+                    url: 'https://top-secret.invalid',
+                } as ExecutableLaunchConfiguration,
+            }),
+            /E2E control command failed\./);
     });
 
     test('keeps CLI-independent settings commands available when the CLI is unavailable', async () => {
@@ -83,7 +95,9 @@ suite('Aspire extension edge case E2E', function () {
         await setCliUnavailableForE2E(true);
 
         const settingsBefore = getCommandInvocationCount('aspire-vscode.settings');
-        await executeE2eControlCommand({ name: 'executeAspireCommand', commandId: 'aspire-vscode.settings' });
+        // The first Settings editor open in a window can take well over the 10s control wait on
+        // Windows runners, so the command outcome wait owns completion.
+        await executeE2eControlCommand({ name: 'executeAspireCommand', commandId: 'aspire-vscode.settings' }, { waitFor: 'started' });
         await waitForCommandOutcome('aspire-vscode.settings', 'success', 60000, settingsBefore);
 
         const launchJsonPath = path.join(getWorkspaceRoot(), '.vscode', 'launch.json');
@@ -187,9 +201,6 @@ suite('Aspire extension edge case E2E', function () {
         writeFileWithRetry(
             appHostPath,
             appHostSource
-                // This scenario validates the Hosting and extension changes together. The local CLI
-                // bundle can predate the repo-built packages, which would omit the debugger metadata.
-                .replace('#:property AspireUseCliBundle=true', '#:property AspireUseCliBundle=false')
                 .replace(
                     'builder.Build().Run();',
                     `#pragma warning disable ASPIREEXTENSION001
@@ -217,8 +228,10 @@ builder.Build().Run();`));
     test('process-owner cleanup stops the owned CLI and AppHost process tree', async () => {
         await openAspireView();
         await waitForRepositoryIdle();
-        const discovered = await waitForWorkspaceAppHost();
-        const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
+        await waitForWorkspaceAppHost();
+        // The previous test removes a generated AppHost; discovery can still select it while
+        // that deletion propagates. This test targets the permanent fixture, not the selection.
+        const appHostPath = getPrimaryAppHostProjectPath();
 
         const beforeInvocation = getCommandInvocationCount('aspire-vscode.debugAppHost');
         await executeE2eControlCommand({ name: 'debugAppHost', appHostPath }, { waitFor: 'started' });

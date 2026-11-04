@@ -871,10 +871,6 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
         var serverCertificate = _configuration[KnownConfigNames.ExtensionCert];
         Debug.Assert(!string.IsNullOrEmpty(serverCertificate));
         var data = Convert.FromBase64String(serverCertificate);
-#if NET9_0_OR_GREATER
         return X509CertificateLoader.LoadCertificate(data);
-#else
-        return new X509Certificate2(data);
-#endif
     }
 }

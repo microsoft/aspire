@@ -45,7 +45,11 @@ jobs:
       jobs:
       - job: BuildNative_${{ replace(targetRid, '-', '_') }}
         displayName: ${{ replace(targetRid, '-', '_') }}
-        timeoutInMinutes: 60
+        # Signing and notarization can push successful macOS jobs close to an hour.
+        ${{ if eq(parameters.agentOs, 'macos') }}:
+          timeoutInMinutes: 90
+        ${{ else }}:
+          timeoutInMinutes: 60
 
         variables:
         - TeamName: ${{ parameters.teamName }}
@@ -202,6 +206,29 @@ jobs:
               /bl:$(Build.Arcade.LogsPath)PublishManaged.binlog
             displayName: 🟣Prepare aspire-managed
 
+          - script: >-
+              $(Build.SourcesDirectory)/$(dotnetScript)
+              msbuild
+              $(Build.SourcesDirectory)/eng/Bundle.proj
+              /t:_PublishAppHostServer
+              /p:Configuration=$(_BuildConfig)
+              /p:TargetRid=${{ targetRid }}
+              ${{ parameters.extraBuildArgs }}
+              /bl:$(Build.Arcade.LogsPath)PublishAppHostServer.binlog
+            displayName: Prepare AppHost Server v2
+
+          - script: >-
+              $(Build.SourcesDirectory)/$(dotnetScript)
+              publish
+              $(Build.SourcesDirectory)/src/Aspire.TerminalHost/Aspire.TerminalHost.csproj
+              -c $(_BuildConfig)
+              -r ${{ targetRid }}
+              /p:GenerateDocumentationFile=false
+              /p:EnforceCodeStyleInBuild=false
+              ${{ parameters.extraBuildArgs }}
+              /bl:$(Build.Arcade.LogsPath)PublishTerminalHost.binlog
+            displayName: 🟣Prepare Native AOT TerminalHost
+
           - pwsh: |
               $ErrorActionPreference = 'Stop'
               $buildLog = "$(Build.Arcade.LogsPath)PublishNativeDashboard.log"
@@ -237,15 +264,44 @@ jobs:
                 $(Build.SourcesDirectory)/artifacts/bin/Aspire.Managed/Release/net10.0/${{ targetRid }}/publish/aspire-managed
               displayName: 🟣Ad-hoc codesign aspire-managed with JIT entitlements
 
-          # ESRP treats the Dashboard executable path as a discovery pattern and otherwise
-          # finds the adjacent .dSYM DWARF binary with the same name. Dashboard packages do
-          # not ship symbols, so remove the bundle before any signing pass evaluates inputs.
+          # Publish native tray payloads before signing and never republish afterward.
+          - ${{ if in(parameters.agentOs, 'macos', 'windows') }}:
+            - script: >-
+                $(Build.SourcesDirectory)/$(dotnetScript)
+                msbuild
+                $(Build.SourcesDirectory)/eng/Bundle.proj
+                /t:_PublishNativeTray
+                /p:Configuration=$(_BuildConfig)
+                /p:TargetRid=${{ targetRid }}
+                ${{ parameters.extraBuildArgs }}
+                /bl:$(Build.Arcade.LogsPath)PublishTray.binlog
+              displayName: 🟣Prepare native tray app
+            - ${{ if and(eq(parameters.codeSign, true), eq(parameters.agentOs, 'macos')) }}:
+              - script: >-
+                  $(Build.SourcesDirectory)/$(dotnetScript)
+                  msbuild
+                  $(Build.SourcesDirectory)/src/Aspire.Tray/Mac/Aspire.Tray.Mac.csproj
+                  /t:PrepareTraySigning
+                  /p:Configuration=$(_BuildConfig)
+                  /p:RuntimeIdentifier=${{ targetRid }}
+                displayName: 🟣Prepare tray app signing input
+
+          # ESRP treats executable paths as discovery patterns and otherwise finds adjacent
+          # .dSYM DWARF binaries with the same names. Native bundle components do not ship
+          # symbols, so remove them before any signing pass evaluates inputs.
           - ${{ if and(eq(parameters.codeSign, true), eq(parameters.agentOs, 'macos')) }}:
-            - pwsh: >-
-                Remove-Item
-                -LiteralPath "$(Build.SourcesDirectory)/artifacts/bin/Aspire.Dashboard/${{ targetRid }}/Release/net11.0/${{ targetRid }}/publish/Aspire.Dashboard.dSYM"
-                -Recurse -Force
-              displayName: 🟣Remove Native AOT Dashboard debug symbols
+            - pwsh: |
+                Remove-Item -LiteralPath "$(Build.SourcesDirectory)/artifacts/bin/Aspire.Dashboard/${{ targetRid }}/Release/net11.0/${{ targetRid }}/publish/Aspire.Dashboard.dSYM" -Recurse -Force
+                $optionalSymbols = @(
+                  "$(Build.SourcesDirectory)/artifacts/bin/Aspire.TerminalHost/Release/net11.0/${{ targetRid }}/publish/Aspire.TerminalHost.dSYM"
+                  "$(Build.SourcesDirectory)/artifacts/bin/Aspire.Hosting.Native.Server/Release/net11.0/${{ targetRid }}/publish/Aspire.Hosting.Native.Server.dSYM"
+                )
+                foreach ($symbols in $optionalSymbols) {
+                  if (Test-Path -LiteralPath $symbols) {
+                    Remove-Item -LiteralPath $symbols -Recurse -Force
+                  }
+                }
+              displayName: 🟣Remove Native AOT bundle debug symbols
 
           - ${{ if eq(parameters.codeSign, true) }}:
             - script: >-
@@ -254,9 +310,33 @@ jobs:
                 ${{ parameters.extraBuildArgs }}
                 -projects "$(Build.SourcesDirectory)/src/Aspire.Managed/Aspire.Managed.csproj"
                 /bl:$(Build.Arcade.LogsPath)SignManaged.binlog
-              displayName: 🟣Sign managed executables
+              # eng/Signing.props includes the Windows tray publish output.
+              displayName: 🟣Sign bundle components
               env:
                 SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+
+          - ${{ if and(eq(parameters.codeSign, true), eq(parameters.agentOs, 'macos')) }}:
+            - script: >-
+                $(Build.SourcesDirectory)/$(dotnetScript)
+                msbuild
+                $(Build.SourcesDirectory)/eng/pipelines/SignTray.proj
+                -restore
+                /t:SignTray
+                /p:Configuration=$(_BuildConfig)
+                /p:RuntimeIdentifier=${{ targetRid }}
+                /p:SignType=real
+                /bl:$(Build.Arcade.LogsPath)SignTray.binlog
+              displayName: 🟣Sign and notarize whole tray app
+              env:
+                SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+            - script: >-
+                $(Build.SourcesDirectory)/$(dotnetScript)
+                msbuild
+                $(Build.SourcesDirectory)/src/Aspire.Tray/Mac/Aspire.Tray.Mac.csproj
+                /t:RestoreSignedTray
+                /p:Configuration=$(_BuildConfig)
+                /p:RuntimeIdentifier=${{ targetRid }}
+              displayName: 🟣Restore and verify signed tray app
 
           # On macOS/Linux, restore the execute bit after Arcade signing.
           # MicroBuild rewrites the binary file during signing, which resets permissions
@@ -266,6 +346,8 @@ jobs:
             - script: |
                 chmod +x $(Build.SourcesDirectory)/artifacts/bin/Aspire.Managed/Release/net10.0/${{ targetRid }}/publish/aspire-managed
                 chmod +x $(Build.SourcesDirectory)/artifacts/bin/Aspire.Dashboard/${{ targetRid }}/Release/net11.0/${{ targetRid }}/publish/Aspire.Dashboard
+                chmod +x $(Build.SourcesDirectory)/artifacts/bin/Aspire.Hosting.Native.Server/Release/net11.0/${{ targetRid }}/publish/Aspire.Hosting.Native.Server
+                chmod +x $(Build.SourcesDirectory)/artifacts/bin/Aspire.TerminalHost/Release/net11.0/${{ targetRid }}/publish/Aspire.TerminalHost
               displayName: 🟣Restore execute permissions on managed executables
 
           # Repack the already-published/signed Dashboard without republishing it,
@@ -331,9 +413,18 @@ jobs:
               /p:Configuration=$(_BuildConfig)
               /p:TargetRid=${{ targetRid }}
               /p:BundleVersion=ci-bundlepayload
+              /p:SkipTrayBuild=true
+              /p:RequireWindowsTraySignature=${{ parameters.codeSign }}
+              /p:RequireMacTraySignature=${{ parameters.codeSign }}
               /p:ContinuousIntegrationBuild=true
               /bl:$(Build.Arcade.LogsPath)BundleLayout.binlog
             displayName: 🟣Create bundle layout
+
+          - pwsh: >-
+              & "$(Build.SourcesDirectory)/eng/scripts/test-native-terminalhost.ps1"
+              -TerminalHostPath "$(Build.SourcesDirectory)/artifacts/bundle/${{ targetRid }}/terminalhost/Aspire.TerminalHost${{ iif(eq(parameters.agentOs, 'windows'), '.exe', '') }}"
+            displayName: 🟣Smoke test bundled Native AOT TerminalHost
+            condition: and(succeeded(), eq(variables['Agent.OSArchitecture'], variables['_ridAgentArch']), not(contains('${{ targetRid }}', 'musl')))
 
           - script: >-
               $(Build.SourcesDirectory)/$(scriptName)
@@ -343,6 +434,7 @@ jobs:
               -restore
               /p:SkipManagedBuild=true
               /p:TargetRids=${{ targetRid }}
+              /p:SkipAppHostServerBuild=true
               /p:BundlePayloadPath=$(Build.SourcesDirectory)/artifacts/bundle/aspire-ci-bundlepayload-${{ targetRid }}.tar.gz
               /p:AspireCliChannel=$(aspireCliChannel)
               $(_buildArgs)

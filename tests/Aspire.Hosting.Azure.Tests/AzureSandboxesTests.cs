@@ -1,13 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES001
-#pragma warning disable ASPIREPIPELINES002
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIREAZURE001
-#pragma warning disable ASPIREAZURE003
-#pragma warning disable ASPIREDOTNETPROJECT001
 
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -22,7 +20,9 @@ using Aspire.Hosting.Utils;
 using Azure.Core;
 using Azure.Provisioning.Resources;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Testing;
 
 namespace Aspire.Hosting.Azure.Tests;
 
@@ -1588,13 +1588,28 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public async Task AzureDevComputeClientKeepsCancellationAfterRejectedCreateDefinite()
     {
-        var handler = new RecordingHandler(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.Forbidden)));
+        var requestCount = 0;
+        var handler = new RecordingHandler(_ =>
+        {
+            Interlocked.Increment(ref requestCount);
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Forbidden));
+        });
+        // Cancel when the client logs the 403 retry warning, after the rejection has been received and
+        // before the retry delay starts. A wall-clock timeout could fire while the request is still in flight.
+        using var cancellationTokenSource = new CancellationTokenSource();
+        var sink = new TestSink();
+        sink.MessageLogged += context =>
+        {
+            if (context.LogLevel == LogLevel.Warning)
+            {
+                cancellationTokenSource.Cancel();
+            }
+        };
         var client = new AzureDevComputeClient(
             new HttpClient(handler),
             new RecordingTokenCredential(),
-            NullLogger.Instance,
+            new TestLogger(nameof(AzureDevComputeClient), sink, enabled: true),
             TimeSpan.FromMinutes(1));
-        using var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromMilliseconds(10));
 
         var exception = await Assert.ThrowsAsync<AzureDevComputeCreateException>(() => client.CreateDiskImageAsync(
             new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
@@ -1605,6 +1620,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
             },
             cancellationTokenSource.Token));
 
+        Assert.Equal(1, requestCount);
         Assert.False(exception.ResponseMayHaveBeenLost);
         Assert.IsType<TaskCanceledException>(exception.OriginalException);
     }
@@ -2547,6 +2563,61 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         Assert.Equal("2000m", resources.Cpu);
         Assert.Equal("4096Mi", resources.Memory);
         Assert.Equal("40960Mi", resources.Disk);
+    }
+
+    [Theory]
+    [InlineData(AzureSandboxTier.ExtraSmall, "250m", "512Mi", "5120Mi")]
+    [InlineData(AzureSandboxTier.Small, "500m", "1024Mi", "10240Mi")]
+    [InlineData(AzureSandboxTier.Medium, "1000m", "2048Mi", "20480Mi")]
+    [InlineData(AzureSandboxTier.Large, "2000m", "4096Mi", "40960Mi")]
+    [InlineData(AzureSandboxTier.ExtraLarge, "4000m", "8192Mi", "81920Mi")]
+    public async Task SandboxTierMapsToExpectedResources(AzureSandboxTier tier, string expectedCpu, string expectedMemory, string expectedDisk)
+    {
+        var resources = await CreateSandboxResourcesForTierAsync(tier);
+
+        Assert.Equal(expectedCpu, resources.Cpu);
+        Assert.Equal(expectedMemory, resources.Memory);
+        Assert.Equal(expectedDisk, resources.Disk);
+    }
+
+    [Fact]
+    public async Task AllSandboxTiersRequestDiskWithinServiceTierMaximum()
+    {
+        // The Azure Dev Compute data plane rejects sandboxes whose disk exceeds cores x 20Gi with
+        // an InvalidResourceTier error. Iterate every enum value so newly added tiers are covered.
+        foreach (var tier in Enum.GetValues<AzureSandboxTier>())
+        {
+            var resources = await CreateSandboxResourcesForTierAsync(tier);
+
+            Assert.EndsWith("m", resources.Cpu);
+            Assert.EndsWith("Mi", resources.Disk);
+            var millicores = int.Parse(resources.Cpu[..^1], CultureInfo.InvariantCulture);
+            var diskMebibytes = int.Parse(resources.Disk[..^2], CultureInfo.InvariantCulture);
+            var maxDiskMebibytes = millicores * 20 * 1024 / 1000;
+
+            Assert.True(
+                diskMebibytes <= maxDiskMebibytes,
+                $"Tier '{tier}' requests disk '{resources.Disk}' which exceeds the tier maximum of {maxDiskMebibytes}Mi for CPU '{resources.Cpu}'.");
+        }
+    }
+
+    private async Task<AzureDevComputeSandboxResources> CreateSandboxResourcesForTierAsync(AzureSandboxTier tier)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
+
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
+        builder.AddContainer("frontend", "mcr.microsoft.com/dotnet/runtime-deps", "10.0")
+            .PublishAsAzureSandbox(new AzureSandboxOptions { Tier = tier });
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+
+        var computeResource = Assert.Single(model.GetComputeResources(), resource => resource.Name == "frontend");
+        var deploymentTarget = computeResource.GetDeploymentTargetAnnotation(sandboxGroup.Resource);
+        var sandboxContainer = Assert.IsType<AzureSandboxContainerResource>(deploymentTarget?.DeploymentTarget);
+
+        return AzureSandboxContainerDeployment.CreateSandboxResources(sandboxContainer);
     }
 
     [Fact]
@@ -3659,3 +3730,4 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         };
     }
 }
+#pragma warning restore CS0618

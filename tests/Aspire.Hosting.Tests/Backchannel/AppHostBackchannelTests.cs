@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES001
-
 using System.Net.Sockets;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
@@ -17,8 +15,21 @@ public class AppHostBackchannelTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task CanConnectToBackchannel()
     {
+        var root = Directory.CreateTempSubdirectory();
+        try
+        {
+            await CanConnectToBackchannelAsync(Path.Combine(root.FullName, "custom", "cli.sock"));
+        }
+        finally
+        {
+            root.Delete(recursive: true);
+        }
+    }
+
+    private async Task CanConnectToBackchannelAsync(string socketPath)
+    {
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(outputHelper);
-        builder.Configuration[KnownConfigNames.UnixSocketPath] = UnixSocketHelper.GetBackchannelSocketPath();
+        builder.Configuration[KnownConfigNames.UnixSocketPath] = socketPath;
 
         var backchannelReadyTaskCompletionSource = new TaskCompletionSource<BackchannelReadyEvent>();
         builder.Eventing.Subscribe<BackchannelReadyEvent>((e, ct) => {
@@ -37,6 +48,14 @@ public class AppHostBackchannelTests(ITestOutputHelper outputHelper)
         await app.StartAsync().WaitAsync(TimeSpan.FromSeconds(60));
 
         var backchannelReadyEvent = await backchannelReadyTaskCompletionSource.Task.WaitAsync(TimeSpan.FromSeconds(60));
+
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute,
+                File.GetUnixFileMode(Path.GetDirectoryName(backchannelReadyEvent.SocketPath)!));
+            Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite,
+                File.GetUnixFileMode(backchannelReadyEvent.SocketPath));
+        }
 
         var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
         var endpoint = new UnixDomainSocketEndPoint(backchannelReadyEvent.SocketPath);

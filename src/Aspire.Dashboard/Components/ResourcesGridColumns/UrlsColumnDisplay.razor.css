@@ -66,10 +66,12 @@
     text-overflow: ellipsis;
 }
 
-/* Fluent positions the dialog below the anchor's left edge using an inline inset. Use the generated
-   overflow anchor name so the dialog remains right-aligned for any +N button width. */
+/* Fluent sets the dialog insets inline; override them using the generated anchor to keep any +N button aligned. */
 ::deep .url-overflow-popover::part(dialog) {
-    left: anchor(var(--url-overflow-anchor) right) !important;
-    right: auto !important;
-    transform: translateX(-100%);
+    position-anchor: var(--url-overflow-anchor);
+    top: anchor(bottom) !important;
+    right: anchor(right) !important;
+    bottom: auto !important;
+    left: auto !important;
+    position-try-fallbacks: flip-block;
 }

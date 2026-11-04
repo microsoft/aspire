@@ -15,7 +15,7 @@ internal sealed class TestJSObjectReference : IJSObjectReference
     public Func<string, Task>? BeforeInvokeAsync { get; init; }
     public int DisposeCount => Volatile.Read(ref _disposeCount);
 
-    public static JSRuntimeInvocationHandler<IJSObjectReference> SetupImport(TestContext context, string modulePath)
+    public static JSRuntimeInvocationHandler<IJSObjectReference> SetupImport(BunitContext context, string modulePath)
     {
         // A custom handler lets tests delay import and count disposal of the returned reference.
         var handler = new ImportHandler(modulePath);

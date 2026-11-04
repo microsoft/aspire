@@ -129,6 +129,15 @@
   <data name="DevTunnelHealthy" xml:space="preserve">
     <value>Dev tunnel '{0}' is active with {1} host connections and {2} ports.</value>
   </data>
+  <data name="DevTunnelHostHealthy" xml:space="preserve">
+    <value>Dev tunnel '{0}' is connected and hosting all expected ports.</value>
+  </data>
+  <data name="DevTunnelHostDisconnected" xml:space="preserve">
+    <value>The local host for dev tunnel '{0}' is disconnected.</value>
+  </data>
+  <data name="DevTunnelHostNotReady" xml:space="preserve">
+    <value>Waiting for dev tunnel '{0}' to connect and expose its ports.</value>
+  </data>
   <data name="DevTunnelPortHealthy" xml:space="preserve">
     <value>Dev tunnel port '{0}' on dev tunnel '{1}' is active.</value>
   </data>

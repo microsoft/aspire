@@ -9,7 +9,7 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	apiKey := builder.AddParameter("openai-api-key", &aspire.AddParameterOptions{Secret: aspire.BoolPtr(true)})
@@ -18,16 +18,16 @@ func main() {
 	openai.WithEndpoint("https://api.openai.com/v1")
 	openai.WithApiKey(apiKey)
 	if err = openai.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	openai.AddModel("chat-model", "gpt-4o-mini")
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	if err := app.Run(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 }

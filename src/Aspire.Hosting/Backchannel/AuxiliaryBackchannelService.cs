@@ -4,6 +4,7 @@
 using System.Net.Sockets;
 using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Eventing;
+using Aspire.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -123,7 +124,7 @@ internal sealed class AuxiliaryBackchannelService(
 
         try
         {
-            logger.LogDebug("Client connected to auxiliary backchannel.");
+            logger.LogTrace("Client connected to auxiliary backchannel.");
 
             // Publish the connected event
             var connectedEvent = new AuxiliaryBackchannelConnectedEvent(serviceProvider, SocketPath!, clientSocket);
@@ -163,17 +164,17 @@ internal sealed class AuxiliaryBackchannelService(
             // are disposed before the application's service provider is torn down.
             await rpc.Completion.WaitAsync(stoppingToken).ConfigureAwait(false);
 
-            logger.LogDebug("Client disconnected from auxiliary backchannel");
+            logger.LogTrace("Client disconnected from auxiliary backchannel");
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
-            logger.LogDebug("Client connection handler was cancelled");
+            logger.LogTrace("Client connection handler was cancelled");
         }
-        catch (IOException ex) when (ex.InnerException is SocketException { SocketErrorCode: SocketError.ConnectionReset })
+        catch (IOException ex) when (SocketExceptionHelpers.IsConnectionReset(ex))
         {
             // IOException wrapping a ConnectionReset SocketException is expected when the client
             // disconnects abruptly (e.g., process exit). This is a normal condition and not an error.
-            logger.LogDebug(ex, "Client disconnected from auxiliary backchannel");
+            logger.LogTrace("Client disconnected from auxiliary backchannel (connection reset)");
         }
         catch (Exception ex)
         {

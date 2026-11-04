@@ -1,9 +1,8 @@
-#pragma warning disable ASPIREAZURE001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning disable ASPIREPIPELINES002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
+
+#pragma warning disable ASPIREAZURE003 // Tenant-scoped resource annotations are experimental.
 
 using System.Collections.Immutable;
 using System.Text.Json.Nodes;
@@ -28,6 +27,303 @@ namespace Aspire.Hosting.Azure.Tests;
 
 public class AzureEnvironmentResourceExtensionsTests(ITestOutputHelper testOutputHelper)
 {
+    [Fact]
+    public void TenantScopedResourceAnnotation_CopiesAndValidatesObjectIdMetadata()
+    {
+        var outputs = new Dictionary<string, string> { ["Microsoft.Graph/applications"] = "objectId" };
+        var annotation = new TenantScopedResourceAnnotation(outputs);
+        outputs.Clear();
+
+        Assert.Equal("objectId", Assert.Single(annotation.ResourceIdOutputs).Value);
+        Assert.Throws<ArgumentNullException>(() => new TenantScopedResourceAnnotation(null!));
+        Assert.Throws<ArgumentException>(() => new TenantScopedResourceAnnotation(
+            new Dictionary<string, string> { [""] = "objectId" }));
+        Assert.Throws<ArgumentException>(() => new TenantScopedResourceAnnotation(
+            new Dictionary<string, string> { ["Microsoft.Graph/applications"] = "" }));
+    }
+
+    [Theory]
+    [InlineData(false, 0)]
+    [InlineData(true, 0)]
+    [InlineData(true, 404)]
+    [InlineData(true, 409)]
+    public async Task DeleteAzureResourcesCommand_PreservesAndReportsNonArmObjects(bool cachedOnly, int deleteStatus)
+    {
+        var builder = CreateBuilder(isRunMode: true);
+        var deploymentState = new TestDeploymentStateManager();
+        var resourceGroup = deleteStatus == 0
+            ? new TestResourceGroupResource("test-rg")
+            : new TestResourceGroupResource("test-rg", new RequestFailedException(deleteStatus, "Delete failed."));
+        AddTestAzureProvisioning(builder, armClientProvider: new TestArmClientProvider(resourceGroup), deploymentStateManager: deploymentState);
+        var storage = builder.AddBicepTemplateString("storage", "param location string");
+        var directory = builder.AddBicepTemplateString("directory", "param location string")
+            .WithAnnotation(new TenantScopedResourceAnnotation(new Dictionary<string, string>
+            {
+                ["Microsoft.Graph/applications"] = "objectId",
+                ["Microsoft.Graph/servicePrincipals"] = "servicePrincipalId"
+            }));
+        builder.AddBicepTemplateString("existing", "param location string")
+            .WithAnnotation(new TenantScopedResourceAnnotation(new Dictionary<string, string>
+            {
+                ["Microsoft.Graph/applications"] = "objectId"
+            }))
+            .ExcludeFromManifest();
+        using var app = builder.Build();
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var environment = Assert.Single(model.Resources.OfType<AzureEnvironmentResource>());
+        var azure = await deploymentState.AcquireSectionAsync("Azure", cts.Token);
+        azure.Data["SubscriptionId"] = "12345678-1234-1234-1234-123456789012";
+        azure.Data["ResourceGroup"] = "test-rg";
+        azure.Data["Location"] = "westus2";
+        await deploymentState.SaveSectionAsync(azure, cts.Token);
+        var directoryState = await deploymentState.AcquireSectionAsync("Azure:Deployments:directory", cts.Token);
+        directoryState.Data["Id"] = "directory-deployment";
+        directoryState.Data["Outputs"] = """
+            {"objectId":{"value":"aaaabbbb-0000-cccc-1111-dddd2222eeee"},"servicePrincipalId":{"value":"00001111-aaaa-2222-bbbb-3333cccc4444"},"tenantId":{"value":"87654321-4321-4321-4321-210987654321"},"secret":{"value":"not-for-reporting"}}
+            """;
+        await deploymentState.SaveSectionAsync(directoryState, cts.Token);
+        var originalDirectoryState = directoryState.Data.ToJsonString();
+        if (!cachedOnly)
+        {
+            directory.Resource.Outputs["objectId"] = "aaaabbbb-0000-cccc-1111-dddd2222eeee";
+            directory.Resource.Outputs["servicePrincipalId"] = "00001111-aaaa-2222-bbbb-3333cccc4444";
+            directory.Resource.Outputs["tenantId"] = "87654321-4321-4321-4321-210987654321";
+        }
+        var originalOutputs = new Dictionary<string, object?>(directory.Resource.Outputs);
+        var storageState = await deploymentState.AcquireSectionAsync("Azure:Deployments:storage", cts.Token);
+        storageState.Data["Id"] = "storage-deployment";
+        await deploymentState.SaveSectionAsync(storageState, cts.Token);
+        storage.Resource.Outputs["id"] = "storage-resource";
+        var notifications = app.Services.GetRequiredService<ResourceNotificationService>();
+        await notifications.PublishUpdateAsync(directory.Resource, snapshot => snapshot with
+        {
+            State = KnownResourceStates.Running,
+            Urls = [new("Entra registration", "https://entra.microsoft.com", IsInternal: false)]
+        });
+        var delete = Assert.Single(environment.Annotations.OfType<ResourceCommandAnnotation>(),
+            command => command.Name == AzureProvisioningController.DeleteAzureResourcesCommandName);
+
+        var result = await delete.ExecuteCommand(new ExecuteCommandContext
+        {
+            Services = app.Services,
+            ResourceName = environment.Name,
+            CancellationToken = cts.Token,
+            Logger = NullLogger.Instance,
+            Arguments = new InteractionInputCollection([])
+        }).WaitAsync(cts.Token);
+
+        Assert.Equal(1, resourceGroup.DeleteCallCount);
+        Assert.Equal(deleteStatus != 409, result.Success);
+        Assert.Equal(originalDirectoryState, (await deploymentState.AcquireSectionAsync("Azure:Deployments:directory", cts.Token)).Data.ToJsonString());
+        Assert.Equal(originalOutputs, directory.Resource.Outputs);
+        Assert.True(notifications.TryGetCurrentState(directory.Resource.Name, out var directorySnapshot));
+        Assert.Equal(KnownResourceStates.Running, directorySnapshot.Snapshot.State?.Text);
+        Assert.Single(directorySnapshot.Snapshot.Urls);
+        if (result.Success)
+        {
+            Assert.Empty((await deploymentState.AcquireSectionAsync("Azure:Deployments:storage", cts.Token)).Data);
+            Assert.Empty(storage.Resource.Outputs);
+            var json = JsonNode.Parse(Assert.IsType<string>(result.Data!.Value))!;
+            Assert.True(result.Data.DisplayImmediately);
+            var remaining = json["remainingResources"]!.AsArray();
+            Assert.Equal(2, remaining.Count);
+            Assert.Equal("aaaabbbb-0000-cccc-1111-dddd2222eeee", remaining[0]!["objectId"]!.GetValue<string>());
+            Assert.Equal("00001111-aaaa-2222-bbbb-3333cccc4444", remaining[1]!["objectId"]!.GetValue<string>());
+            Assert.Contains("Microsoft.Graph/applications", result.Message);
+            Assert.Contains("Microsoft.Graph/servicePrincipals", result.Message);
+            await Verify(json.ToJsonString(), "json");
+        }
+        else
+        {
+            Assert.Equal("storage-deployment", (await deploymentState.AcquireSectionAsync("Azure:Deployments:storage", cts.Token)).Data["Id"]!.GetValue<string>());
+            Assert.Equal("storage-resource", storage.Resource.Outputs["id"]);
+        }
+    }
+
+    [Fact]
+    public async Task NonArmResources_ExposeOnlyDeploymentCommandsAndAllowEnvironmentDeletion()
+    {
+        var builder = CreateBuilder(isRunMode: true);
+        AddTestAzureProvisioning(builder);
+        var directory = builder.AddBicepTemplateString("directory", "param location string");
+        directory.WithAnnotation(new TenantScopedResourceAnnotation(new Dictionary<string, string>
+        {
+            ["Microsoft.Graph/applications"] = "objectId"
+        }));
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var preparer = new AzureResourcePreparer(
+            app.Services.GetRequiredService<IOptions<AzureProvisioningOptions>>(),
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>());
+        await preparer.PrepareResourcesAsync(model, CancellationToken.None);
+
+        Assert.Equal(new[]
+        {
+            AzureProvisioningController.CancelCommandName,
+            AzureProvisioningController.ForgetStateCommandName,
+            AzureProvisioningController.ReprovisionResourceCommandName
+        }.Order(), directory.Resource.Annotations.OfType<ResourceCommandAnnotation>().Select(command => command.Name).Order());
+        var environment = Assert.Single(model.Resources.OfType<AzureEnvironmentResource>());
+        var delete = Assert.Single(environment.Annotations.OfType<ResourceCommandAnnotation>(),
+            command => command.Name == AzureProvisioningController.DeleteAzureResourcesCommandName);
+        Assert.Equal(ResourceCommandState.Enabled, delete.UpdateState(new UpdateCommandStateContext
+        {
+            Services = app.Services,
+            ResourceSnapshot = new CustomResourceSnapshot
+            {
+                ResourceType = nameof(AzureEnvironmentResource),
+                Properties = []
+            }
+        }));
+        var result = await delete.ExecuteCommand(new ExecuteCommandContext
+        {
+            Services = app.Services,
+            ResourceName = environment.Name,
+            CancellationToken = CancellationToken.None,
+            Logger = NullLogger.Instance,
+            Arguments = new InteractionInputCollection([])
+        });
+        Assert.True(result.Success);
+        var json = JsonNode.Parse(Assert.IsType<string>(result.Data!.Value))!;
+        var remaining = Assert.Single(json["remainingResources"]!.AsArray())!;
+        Assert.Equal("directory", remaining["resourceName"]!.GetValue<string>());
+        Assert.Equal("Microsoft.Graph/applications", remaining["resourceType"]!.GetValue<string>());
+        Assert.Null(remaining["objectId"]);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ArmResources_KeepManagementCommandsRegardlessOfDeploymentScope(bool tenantScoped)
+    {
+        var builder = CreateBuilder(isRunMode: true);
+        AddTestAzureProvisioning(builder);
+        var arm = builder.AddBicepTemplateString("arm", "param location string");
+        if (tenantScoped)
+        {
+            arm.Resource.Scope = AzureBicepResourceScope.CreateForTenant();
+        }
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var preparer = new AzureResourcePreparer(
+            app.Services.GetRequiredService<IOptions<AzureProvisioningOptions>>(),
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>());
+        await preparer.PrepareResourcesAsync(model, CancellationToken.None);
+
+        Assert.Equal(AzureProvisioningController.ResourceCommandDefinitions.Select(command => command.Name).Order(),
+            arm.Resource.Annotations.OfType<ResourceCommandAnnotation>().Select(command => command.Name).Order());
+        Assert.False(AzureResourcePreparer.RequiresTenantResourceSuffix(model));
+    }
+
+    [Theory]
+    [InlineData("delete")]
+    [InlineData("location")]
+    public async Task NonArmResources_RejectDirectArmOperations(string operation)
+    {
+        var builder = CreateBuilder(isRunMode: true);
+        AddTestAzureProvisioning(builder);
+        var directory = builder.AddBicepTemplateString("directory", "param location string");
+        directory.WithAnnotation(new TenantScopedResourceAnnotation(new Dictionary<string, string>()));
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var controller = app.Services.GetRequiredService<AzureProvisioningController>();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => operation == "delete"
+            ? controller.DeleteAzureResourceAsync(model, directory.Resource.Name)
+            : controller.ChangeResourceLocationAsync(model, directory.Resource.Name, CancellationToken.None));
+
+        Assert.Equal("This operation cannot manage non-ARM extension resources. Manage those resources through their provider.", exception.Message);
+    }
+
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(true, false, false)]
+    [InlineData(true, true, false)]
+    [InlineData(true, false, true)]
+    [InlineData(true, true, true)]
+    public async Task ChangeAzureContextCommand_ConditionallyIncludesTenantResourceSuffix(
+        bool tenantScoped, bool hasSuffixParameter, bool excluded)
+    {
+        var builder = CreateBuilder(isRunMode: true);
+        builder.Configuration["Azure:TenantResourceSuffix"] = "configured";
+        var registration = builder.AddBicepTemplateString("registration", "param tenantResourceSuffix string = ''");
+        if (hasSuffixParameter)
+        {
+            registration.WithParameter(AzureBicepResource.KnownParameters.TenantResourceSuffix);
+        }
+        if (tenantScoped)
+        {
+            registration.WithAnnotation(new TenantScopedResourceAnnotation(new Dictionary<string, string>()));
+        }
+        if (excluded)
+        {
+            registration.ExcludeFromManifest();
+        }
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var preparer = new AzureResourcePreparer(
+            app.Services.GetRequiredService<IOptions<AzureProvisioningOptions>>(),
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>());
+        await preparer.PrepareResourcesAsync(model, CancellationToken.None);
+
+        var environment = Assert.Single(model.Resources.OfType<AzureEnvironmentResource>());
+        var command = Assert.Single(environment.Annotations.OfType<ResourceCommandAnnotation>(),
+            command => command.Name == AzureProvisioningController.ChangeAzureContextCommandName);
+        Assert.Equal(tenantScoped && !excluded ? 5 : 4, command.Arguments.Count);
+        if (tenantScoped && !excluded)
+        {
+            var inputs = CloneInputs(command.Arguments);
+            var suffix = inputs[AzureBicepResource.KnownParameters.TenantResourceSuffix];
+            Assert.Equal(InputType.Text, suffix.InputType);
+            Assert.False(suffix.Required);
+            Assert.True(suffix.Disabled);
+            await LoadInputAsync(app.Services, inputs, suffix);
+            Assert.False(suffix.Disabled);
+            Assert.Equal("configured", suffix.Value);
+        }
+    }
+
+    [Fact]
+    public async Task ChangeAzureContextCommand_PersistsAndReportsTenantResourceSuffix()
+    {
+        var builder = CreateBuilder(isRunMode: true);
+        var deploymentState = new TestDeploymentStateManager();
+        AddTestAzureProvisioning(builder, deploymentStateManager: deploymentState);
+        builder.AddBicepTemplateString("registration", "param tenantResourceSuffix string = ''")
+            .WithParameter(AzureBicepResource.KnownParameters.TenantResourceSuffix)
+            .WithAnnotation(new TenantScopedResourceAnnotation(new Dictionary<string, string>()));
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var environment = Assert.Single(model.Resources.OfType<AzureEnvironmentResource>());
+        var command = Assert.Single(environment.Annotations.OfType<ResourceCommandAnnotation>(),
+            command => command.Name == AzureProvisioningController.ChangeAzureContextCommandName);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+        var result = await command.ExecuteCommand(new ExecuteCommandContext
+        {
+            Services = app.Services,
+            ResourceName = environment.Name,
+            CancellationToken = cts.Token,
+            Logger = NullLogger.Instance,
+            Arguments = new InteractionInputCollection([
+                new() { Name = "tenantId", InputType = InputType.Text, Value = "87654321-4321-4321-4321-210987654321" },
+                new() { Name = "subscriptionId", InputType = InputType.Text, Value = "12345678-1234-1234-1234-123456789012" },
+                new() { Name = "resourceGroup", InputType = InputType.Text, Value = "test-rg" },
+                new() { Name = "location", InputType = InputType.Text, Value = "westus2" },
+                new() { Name = AzureBicepResource.KnownParameters.TenantResourceSuffix, InputType = InputType.Text, Value = "dev-a" }
+            ])
+        }).WaitAsync(cts.Token);
+
+        Assert.True(result.Success);
+        var saved = await deploymentState.AcquireSectionAsync("Azure", cts.Token);
+        Assert.Equal("dev-a", saved.Data["TenantResourceSuffix"]!.GetValue<string>());
+        var json = JsonNode.Parse(Assert.IsType<string>(result.Data!.Value))!;
+        Assert.Equal("dev-a", json["tenantResourceSuffix"]!.GetValue<string>());
+        Assert.Equal("dev-a", json["azureContext"]!["tenantResourceSuffix"]!.GetValue<string>());
+    }
+
     [Fact]
     public void AddAzureEnvironment_ShouldAddResourceToBuilder_InPublishMode()
     {
@@ -634,6 +930,28 @@ public class AzureEnvironmentResourceExtensionsTests(ITestOutputHelper testOutpu
         Assert.Equal(1, cachedStateProvisioner.ConfigureResourceCallCount);
         Assert.Equal(0, cachedStateProvisioner.GetOrCreateResourceCallCount);
         Assert.Equal("https://storage.blob.core.windows.net/", storage.Resource.Outputs["blobEndpoint"]);
+    }
+
+    [Fact]
+    public async Task EnsureProvisioned_DoesNotCreateProvisioningContextWhenAllResourcesAreSatisfiedFromCachedState()
+    {
+        var builder = CreateBuilder(isRunMode: true);
+        var cachedStateProvisioner = new CachedStateTestBicepProvisioner();
+        var provisioningContextProvider = new TestProvisioningContextProvider();
+        AddTestAzureProvisioning(builder, bicepProvisioner: cachedStateProvisioner, provisioningContextProvider: provisioningContextProvider);
+
+        builder.AddBicepTemplateString("storage", "resource storage 'Microsoft.Storage/storageAccounts@2024-01-01' = {}");
+        builder.AddBicepTemplateString("storage2", "resource storage 'Microsoft.Storage/storageAccounts@2024-01-01' = {}");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var controller = app.Services.GetRequiredService<AzureProvisioningController>();
+
+        await controller.EnsureProvisionedAsync(model);
+
+        Assert.Equal(2, cachedStateProvisioner.ConfigureResourceCallCount);
+        Assert.Equal(0, cachedStateProvisioner.GetOrCreateResourceCallCount);
+        Assert.Equal(0, provisioningContextProvider.CreateProvisioningContextCallCount);
     }
 
     [Fact]
@@ -5567,7 +5885,8 @@ public class AzureEnvironmentResourceExtensionsTests(ITestOutputHelper testOutpu
                 azureSection.Data["SubscriptionId"]?.GetValue<string>(),
                 azureSection.Data["ResourceGroup"]?.GetValue<string>(),
                 azureSection.Data["Location"]?.GetValue<string>(),
-                azureSection.Data["TenantId"]?.GetValue<string>());
+                azureSection.Data["TenantId"]?.GetValue<string>(),
+                azureSection.Data["TenantResourceSuffix"]?.GetValue<string>());
         }
 
         public Task PersistProvisioningOptionsAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
@@ -5578,6 +5897,10 @@ public class AzureEnvironmentResourceExtensionsTests(ITestOutputHelper testOutpu
             azureSection.Data["SubscriptionId"] = options.SubscriptionId;
             azureSection.Data["Location"] = options.Location;
             azureSection.Data["ResourceGroup"] = options.ResourceGroup;
+            if (options.TenantResourceSuffix is not null)
+            {
+                azureSection.Data["TenantResourceSuffix"] = options.TenantResourceSuffix;
+            }
 
             if (!string.IsNullOrEmpty(options.TenantId))
             {
@@ -5589,7 +5912,8 @@ public class AzureEnvironmentResourceExtensionsTests(ITestOutputHelper testOutpu
             }
 
             await deploymentStateManager.SaveSectionAsync(azureSection, cancellationToken);
-            return new AzureProvisioningOptionsState(options.SubscriptionId, options.ResourceGroup, options.Location, options.TenantId);
+            return new AzureProvisioningOptionsState(options.SubscriptionId, options.ResourceGroup, options.Location, options.TenantId,
+                azureSection.Data["TenantResourceSuffix"]?.GetValue<string>());
         }
     }
 

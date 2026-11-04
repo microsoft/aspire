@@ -22,7 +22,6 @@ using Microsoft.Extensions.Options;
 namespace Aspire.Hosting.Dcp;
 
 #pragma warning disable ASPIRECERTIFICATES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 internal sealed class DcpHost
 {
@@ -44,16 +43,6 @@ internal sealed class DcpHost
     private string? _dcpTlsCertFile;
     private string? _dcpTlsKeyFile;
     private Task? _logProcessorTask;
-
-    // These environment variables should never be inherited by DCP from the app host.
-    private static readonly string[] s_doNotInheritEnvironmentVars =
-    [
-        KnownAspNetCoreConfigNames.Urls,
-        "DOTNET_LAUNCH_PROFILE",
-        KnownAspNetCoreConfigNames.Environment,
-        KnownAspNetCoreConfigNames.DotNetEnvironment,
-        KnownConfigNames.AspireLogLevel,
-    ];
 
     public DcpHost(
         ILoggerFactory loggerFactory,
@@ -269,7 +258,7 @@ internal sealed class DcpHost
         await TaskHelpers.WaitIgnoreCancelAsync(_logProcessorTask, _logger, "Error in logging socket processor.").ConfigureAwait(false);
     }
 
-    private void EnsureDcpHostRunning()
+    internal void EnsureDcpHostRunning()
     {
         var dcpProcessSpec = CreateDcpProcessSpec(_locations);
 
@@ -292,7 +281,35 @@ internal sealed class DcpHost
             _logger.LogError(ex, "Failed to enable orchestration logging.");
         }
 
-        _ = ProcessUtil.Run(dcpProcessSpec);
+        var (dcpLauncherResult, _) = ProcessUtil.Run(dcpProcessSpec);
+
+        // DCP now owns DCP_SESSION_FOLDER: the detached apiserver reads the kubeconfig there during its own cleanup,
+        // after the AppHost may have shut down, and then deletes the folder. Transfer ownership as soon as the launcher
+        // has started so that AppHost disposal never deletes the folder under DCP, even if the AppHost stops early.
+        _locations.TransferDcpSessionDirOwnershipToDcp();
+        DcpLaunchResultObserved = DeleteDcpSessionDirIfDcpFailedToStartAsync(dcpLauncherResult);
+    }
+
+    // Exposed for testing.
+    internal Task DcpLaunchResultObserved { get; private set; } = Task.CompletedTask;
+
+    private async Task DeleteDcpSessionDirIfDcpFailedToStartAsync(Task<ProcessResult> dcpLauncherResult)
+    {
+        // With --detach, the launcher exits with 0 as soon as the detached apiserver has started, and with a non-zero
+        // exit code when startup fails. In that case no DCP process will delete the session folder.
+        try
+        {
+            var result = await dcpLauncherResult.ConfigureAwait(false);
+            if (result.ExitCode != 0)
+            {
+                _logger.LogDebug("DCP launcher exited with code {ExitCode}. Deleting the DCP session folder.", result.ExitCode);
+                _locations.DeleteDcpSessionDir();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Failed to observe the DCP launcher result.");
+        }
     }
 
     public ProcessSpec CreateDcpProcessSpec(Locations locations)
@@ -326,6 +343,8 @@ internal sealed class DcpHost
             OnOutputData = Console.Out.Write,
             OnErrorData = Console.Error.Write,
             InheritEnv = false,
+            // The launcher exit code is observed to decide who deletes DCP_SESSION_FOLDER.
+            ThrowOnNonZeroReturnCode = false,
         };
 
         _logger.LogInformation("Starting DCP with arguments: {Arguments}", dcpProcessSpec.Arguments);
@@ -343,7 +362,7 @@ internal sealed class DcpHost
         {
             var key = de.Key?.ToString();
             var val = de.Value?.ToString();
-            if (key is not null && val is not null && !IsExcludedEnvironmentVariable(key))
+            if (key is not null && val is not null && !DcpEnvironmentVariables.IsExcluded(key))
             {
                 dcpProcessSpec.EnvironmentVariables[key] = val;
             }
@@ -437,7 +456,8 @@ internal sealed class DcpHost
             return false;
         }
 
-        // Shipped CLI bundles flatten the selected RID's native assets into managed/. Repo-local portable builds
+        // Shipped CLI bundles flatten the selected RID's native assets into terminalhost/ and retain the ConPTY
+        // provider in managed/ for compatibility launches. Repo-local portable builds
         // keep every RID under runtimes/<rid>/native. In both layouts conpty.dll must match the DCP/AppHost process
         // architecture, while OpenConsole.exe must match the native Windows architecture (for example, an x64
         // process running under emulation on ARM64 Windows uses win-x64/conpty.dll with arm64/OpenConsole.exe).
@@ -497,31 +517,21 @@ internal sealed class DcpHost
         }
     }
 
-    private static bool IsExcludedEnvironmentVariable(string key)
+    internal static Socket CreateLoggingSocket(string socketPath)
     {
-        foreach (var entry in s_doNotInheritEnvironmentVars)
-        {
-            if (string.Equals(key, entry, StringComparisons.EnvironmentVariableName))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private static Socket CreateLoggingSocket(string socketPath)
-    {
-        var directoryName = Path.GetDirectoryName(socketPath);
-        if (!string.IsNullOrEmpty(directoryName))
-        {
-            DirectoryHelper.CreateWithOwnerOnlyPermissions(directoryName);
-        }
-
+        // This directory was allocated for the DCP session, not supplied as a socket override.
+        SocketPermissionHelper.CreateDirectory(Path.GetDirectoryName(socketPath)!, repairExisting: true);
         var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
-        socket.Bind(new UnixDomainSocketEndPoint(socketPath));
-
-        return socket;
+        try
+        {
+            SocketPermissionHelper.Bind(socket, socketPath);
+            return socket;
+        }
+        catch
+        {
+            socket.Dispose();
+            throw;
+        }
     }
 
     private async Task StartLoggingSocketAsync(Socket socket)

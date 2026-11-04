@@ -416,6 +416,7 @@ internal sealed partial class ContainerNetworkEndpointProvisioner : IDisposable
         tunnelProxy.Spec.ContainerNetworkName = KnownNetworkIdentifiers.DefaultAspireContainerNetwork.Value;
         tunnelProxy.Spec.Aliases = [await GetContainerHostNameAsync(cancellationToken).ConfigureAwait(false)];
         tunnelProxy.Spec.Tunnels = tunnels;
+        tunnelProxy.Spec.BaseImage = _options.Value.ContainerTunnelBaseImage;
         var tunnelAppResource = new AppResource<ContainerNetworkTunnelProxy>(tunnelProxy);
         _appResources.Add(tunnelAppResource);
 
@@ -495,7 +496,7 @@ internal sealed partial class ContainerNetworkEndpointProvisioner : IDisposable
         var dcpInfo = await _dcpDependencyCheckService
             .GetDcpInfoAsync(cancellationToken: cancellationToken)
             .ConfigureAwait(false);
-        return dcpInfo?.Containers?.HostName ?? KnownHostNames.DockerDesktopHostBridge;
+        return dcpInfo?.Containers?.ContainerHostName ?? KnownHostNames.DockerDesktopHostBridge;
     }
 
     private string GetTunnelProxyResourceName()

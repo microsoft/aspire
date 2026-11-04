@@ -23,6 +23,10 @@ internal sealed class TestDevTunnelClient(Version? cliVersion = null) : IDevTunn
 
     public DevTunnelAccessStatus AccessStatus { get; set; } = new();
 
+    public Func<string, CancellationToken, Task<DevTunnelStatus>>? GetTunnelCallback { get; set; }
+
+    public Func<int?, CancellationToken, Task<DevTunnelAccessStatus>>? GetAccessCallback { get; set; }
+
     public Task<Version> GetVersionAsync(ILogger? logger = null, CancellationToken cancellationToken = default)
     {
         Calls.Enqueue(new(nameof(GetVersionAsync)));
@@ -68,13 +72,13 @@ internal sealed class TestDevTunnelClient(Version? cliVersion = null) : IDevTunn
     public Task<DevTunnelStatus> GetTunnelAsync(string tunnelId, ILogger? logger = null, CancellationToken cancellationToken = default)
     {
         Calls.Enqueue(new(nameof(GetTunnelAsync), tunnelId));
-        return Task.FromResult(TunnelStatus);
+        return GetTunnelCallback?.Invoke(tunnelId, cancellationToken) ?? Task.FromResult(TunnelStatus);
     }
 
     public Task<DevTunnelAccessStatus> GetAccessAsync(string tunnelId, int? portNumber = null, ILogger? logger = null, CancellationToken cancellationToken = default)
     {
         Calls.Enqueue(new(nameof(GetAccessAsync), tunnelId, portNumber));
-        return Task.FromResult(AccessStatus);
+        return GetAccessCallback?.Invoke(portNumber, cancellationToken) ?? Task.FromResult(AccessStatus);
     }
 }
 
