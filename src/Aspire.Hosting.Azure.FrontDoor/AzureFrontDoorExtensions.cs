@@ -353,11 +353,16 @@ public static class AzureFrontDoorExtensions
             var targetIdentifier = Infrastructure.NormalizeBicepIdentifier(resourceId.Resource.Name);
 
             // Distinct outputs of one module, such as per-origin IDs, must not share a parameter, because the parameter
-            // name identifies the binding and a repeated name would replace the earlier one.
+            // name identifies the binding and a repeated name would replace the earlier one. The fallback names can
+            // collide too, so keep probing with a numeric suffix until a name is reserved.
+            var baseIdentifier = targetIdentifier;
             if (!_parameterNames.Add($"{targetIdentifier}_environment_id"))
             {
-                targetIdentifier = Infrastructure.NormalizeBicepIdentifier($"{targetIdentifier}_{resourceId.Name}");
-                _parameterNames.Add($"{targetIdentifier}_environment_id");
+                targetIdentifier = Infrastructure.NormalizeBicepIdentifier($"{baseIdentifier}_{resourceId.Name}");
+                for (var i = 2; !_parameterNames.Add($"{targetIdentifier}_environment_id"); i++)
+                {
+                    targetIdentifier = Infrastructure.NormalizeBicepIdentifier($"{baseIdentifier}_{resourceId.Name}_{i}");
+                }
             }
 
             var targetId = resourceId.AsProvisioningParameter(infrastructure, $"{targetIdentifier}_environment_id");

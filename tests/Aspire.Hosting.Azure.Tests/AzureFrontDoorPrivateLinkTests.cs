@@ -518,6 +518,46 @@ public class AzureFrontDoorPrivateLinkTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task WithAzureFrontDoorPrivateLinkReservesUniqueFallbackParameterNames()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
+
+        var target = builder.AddResource(new TestPrivateLinkTarget("target") { PerOrigin = true });
+        var other = builder.AddResource(new TestPrivateLinkTarget("target-webId"));
+        var frontDoor = builder.AddAzureFrontDoor("frontdoor");
+        target.WithAzureFrontDoorPrivateLink(frontDoor);
+        other.WithAzureFrontDoorPrivateLink(frontDoor);
+
+        var api = builder.AddDotnetProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
+            .WithHttpsEndpoint()
+            .WithExternalHttpEndpoints()
+            .WithComputeEnvironment(target);
+        var middle = builder.AddDotnetProject("middle", "middle.csproj", options => options.ExcludeLaunchProfile = true)
+            .WithHttpsEndpoint()
+            .WithExternalHttpEndpoints()
+            .WithComputeEnvironment(other);
+        var web = builder.AddDotnetProject("web", "web.csproj", options => options.ExcludeLaunchProfile = true)
+            .WithHttpsEndpoint()
+            .WithExternalHttpEndpoints()
+            .WithComputeEnvironment(target);
+        frontDoor.WithOrigin(api).WithOrigin(middle).WithOrigin(web);
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var (_, bicep) = await GetManifestWithBicep(frontDoor.Resource);
+
+        var parameterNames = bicep.Split('\n')
+            .Select(line => line.Trim())
+            .Where(line => line.StartsWith("param ", StringComparison.Ordinal) && line.EndsWith("_environment_id string", StringComparison.Ordinal))
+            .ToList();
+
+        Assert.Equal(3, parameterNames.Count);
+        Assert.Equal(3, parameterNames.Distinct().Count());
+    }
+
+    [Fact]
     public void AzureContainerAppEnvironmentIsAPrivateLinkTarget()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
