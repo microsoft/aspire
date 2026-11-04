@@ -407,13 +407,48 @@ suite('Node Debugger Tests', () => {
         const clock = createFakeClock();
         const result = await stopInspectorWaitingProcesses(
             argument,
-            createPosixListing([[21], [21], []], argument, call => call === 0 ? new Error('timed out') : 'ok'),
+            createPosixListing([[21], [21], [21], []], argument, call => call === 0 ? new Error('timed out') : 'ok'),
             clock,
             { launcherPid: 10, kill: pid => killed.push(pid), isSpawnSettled: () => true });
 
         assert.deepStrictEqual(killed, [21]);
         assert.deepStrictEqual(result, { stopped: [21], running: [], unidentified: [] });
         assert.deepStrictEqual(clock.sleeps, [100, 200]);
+    });
+
+    test('does not treat the exited ps helper from each POSIX listing as an unidentified process', async () => {
+        const argument = '--inspect-wait=127.0.0.1:1234';
+        const killed: number[] = [];
+        let listCall = 0;
+        let denoRunning = true;
+        // Like `ps -axo pid=,ppid=` on macOS: every listing includes its own short-lived ps child of the extension
+        // host, which has exited before its details are read, so `ps -p` fails with a generic error rather than ENOENT.
+        const query = {
+            listProcesses: async (): Promise<LaunchedChildProcess[]> => [
+                { pid: 10, parentPid: 1, executable: '', command: '' },
+                ...(denoRunning ? [{ pid: 21, parentPid: 10, executable: '', command: '' }] : []),
+                { pid: 1000 + listCall++, parentPid: 10, executable: '', command: '' },
+            ],
+            getProcess: async (pid: number): Promise<LaunchedChildProcess | undefined> => {
+                if (pid >= 1000) {
+                    throw new Error('Command \'ps\' exited with code 1.');
+                }
+
+                return { pid, parentPid: 10, executable: '/usr/local/bin/deno', command: '', commandLineArguments: ['deno', 'run', argument, 'apphost.mts'] };
+            },
+        };
+
+        const result = await stopInspectorWaitingProcesses(argument, query, createFakeClock(), {
+            launcherPid: 10,
+            kill: pid => {
+                killed.push(pid);
+                denoRunning = false;
+            },
+            isSpawnSettled: () => true,
+        });
+
+        assert.deepStrictEqual(killed, [21]);
+        assert.deepStrictEqual(result, { stopped: [21], running: [], unidentified: [] });
     });
 
     test('confirms a Deno AppHost exited when its POSIX process details are gone', async () => {

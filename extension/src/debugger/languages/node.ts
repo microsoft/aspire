@@ -110,7 +110,8 @@ export interface InspectorWaitingProcessIds {
  *
  * POSIX listings only carry pids and parent pids, so each candidate's command line is read separately. A failed
  * read (for example a timeout or I/O error) does not show the process exited, so it is reported as unidentified
- * rather than as a non-match; only a lookup that finds the process gone confirms it is not running.
+ * rather than as a non-match, unless a second listing shows the process has exited. Only that, or a lookup that
+ * finds the process gone, confirms it is not running.
  */
 export async function findInspectorWaitingProcessIds(
     inspectorArgument: string,
@@ -151,6 +152,19 @@ export async function findInspectorWaitingProcessIds(
 
         if (candidate && hasCommandLineArgument(candidate, inspectorArgument)) {
             matches.push(pid);
+        }
+    }
+
+    if (unidentified.length > 0) {
+        // A lookup can also fail because the process exited after the listing, as with the `ps` helper that
+        // produced the listing itself, whose `ps -p` lookup fails with a generic error on macOS. Only processes
+        // a later listing still shows remain unidentified; if that listing fails, nothing is confirmed gone.
+        try {
+            const stillListed = new Set((await query.listProcesses(undefined, inspectorWaitingProcessQueryTimeoutMs)).map(listed => listed.pid));
+            return { matches, unidentified: unidentified.filter(pid => stillListed.has(pid)) };
+        }
+        catch {
+            return { matches, unidentified };
         }
     }
 
