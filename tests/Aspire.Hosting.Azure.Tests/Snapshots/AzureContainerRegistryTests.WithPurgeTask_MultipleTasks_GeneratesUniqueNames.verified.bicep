@@ -12,7 +12,7 @@ resource acr 'Microsoft.ContainerRegistry/registries@2025-04-01' = {
   }
 }
 
-var purgeTaskCmd_0 = 'version: v1.1.0\nsteps:\n- cmd: acr purge --filter \'app1:.*\' --ago 0d --keep 3 --untagged'
+var purgeTaskCmd_0 = 'version: v1.1.0\nsteps:\n- cmd: mcr.microsoft.com/acr/acr-cli:0.20 purge --filter \'app1:.*\' --max-tags 3 --untagged --max-untagged-manifests 0'
 
 resource purgeOldImages_0 'Microsoft.ContainerRegistry/registries/tasks@2019-04-01' = {
   name: 'purgeOldImages'
@@ -37,7 +37,7 @@ resource purgeOldImages_0 'Microsoft.ContainerRegistry/registries/tasks@2019-04-
   parent: acr
 }
 
-var purgeTaskCmd_1 = 'version: v1.1.0\nsteps:\n- cmd: acr purge --filter \'app2:.*\' --ago 30d --keep 10 --untagged'
+var purgeTaskCmd_1 = 'version: v1.1.0\nsteps:\n- cmd: mcr.microsoft.com/acr/acr-cli:0.20 purge --filter \'app2:.*\' --ago 30d --max-tags 10 --untagged --max-untagged-manifests 0'
 
 resource purgeOldImages_1 'Microsoft.ContainerRegistry/registries/tasks@2019-04-01' = {
   name: 'purgeOldImages_1'

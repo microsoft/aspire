@@ -69,7 +69,8 @@ See the [Container Apps deployment guide](https://aspire.dev/deployment/azure/co
 
 ## Schedule image cleanup
 
-By default, `WithPurgeTask` removes tags and eligible untagged manifests to reclaim storage.
+By default, `WithPurgeTask` retains the newest three matching tags per repository and removes
+the remaining matching tags and eligible untagged manifests to reclaim storage.
 Set `untagged` to `false` to remove tags only, leaving the underlying manifests and image layers.
 
 **C#**
@@ -77,8 +78,7 @@ Set `untagged` to `false` to remove tags only, leaving the underlying manifests 
 ```csharp
 registry.WithPurgeTask("0 1 * * *",
     filter: "myapp:.*",
-    ago: TimeSpan.FromDays(7),
-    keep: 5);
+    keep: 3);
 ```
 
 **TypeScript**
@@ -86,8 +86,7 @@ registry.WithPurgeTask("0 1 * * *",
 ```typescript
 await registry.withPurgeTask("0 1 * * *", {
     filter: "myapp:.*",
-    ago: 7 * 24 * 60 * 60 * 1000,
-    keep: 5
+    keep: 3
 });
 ```
 
@@ -96,9 +95,20 @@ in matching repositories are also eligible, so deletion can break digest-based p
 rollbacks. Shared image layers remain until no retained manifests reference them, and storage
 usage reporting can lag behind deletion.
 
-The purge tool's version determines how age and keep filters apply to untagged manifests.
-Current versions apply `keep` independently to tags and untagged manifests; keeping five
-candidates does not guarantee five deployable application versions. See
+The task pins `mcr.microsoft.com/acr/acr-cli:0.20` and generates:
+
+```text
+mcr.microsoft.com/acr/acr-cli:0.20 purge --filter 'myapp:.*' --max-tags 3 --untagged --max-untagged-manifests 0
+```
+
+`keep` maps to `--max-tags`, not `--keep`, so it does not retain an extra set of untagged
+manifests. When `ago` is omitted or zero, the task omits `--ago` and uses count-only retention.
+A nonzero `ago` also makes tags older than that duration eligible for deletion, including tags
+within the count limit; tags beyond the limit are eligible regardless of age. Untagged cleanup
+retains no additional untagged manifests regardless of age.
+
+Locked artifacts and dependencies of retained images remain protected, so these limits do not
+guarantee that only three manifests or three deployable application versions remain. See
 [ACR purge behavior](https://learn.microsoft.com/azure/container-registry/container-registry-auto-purge).
 
 ## Additional documentation

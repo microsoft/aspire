@@ -235,10 +235,27 @@ public class AzureContainerRegistryTests(ITestOutputHelper testOutputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var acr = builder.AddAzureContainerRegistry("acr")
-            .WithPurgeTask("0 1 * * *", ago: TimeSpan.FromDays(7), keep: 5);
+            .WithPurgeTask("0 1 * * *", filter: "myapp:.*");
 
         var (_, bicep) = await GetManifestWithBicep(acr.Resource);
 
+        await Verify(bicep, "bicep");
+    }
+
+    [Fact]
+    public async Task WithPurgeTask_ZeroAgo_MatchesDefaultCountRetention()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var acr = builder.AddAzureContainerRegistry("acr")
+            .WithPurgeTask("0 1 * * *", ago: TimeSpan.Zero);
+        using var defaultBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var defaultAcr = defaultBuilder.AddAzureContainerRegistry("acr")
+            .WithPurgeTask("0 1 * * *");
+
+        var (_, bicep) = await GetManifestWithBicep(acr.Resource);
+        var (_, defaultBicep) = await GetManifestWithBicep(defaultAcr.Resource);
+
+        Assert.Equal(defaultBicep, bicep);
         await Verify(bicep, "bicep");
     }
 

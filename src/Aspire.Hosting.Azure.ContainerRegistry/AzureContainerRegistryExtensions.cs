@@ -129,15 +129,17 @@ public static class AzureContainerRegistryExtensions
     /// (<c>minute hour day-of-month month day-of-week</c>); seconds are not supported.</param>
     /// <param name="filter">An optional filter for the <c>acr purge --filter</c> parameter. Only repositories matching this
     /// filter will be purged. Defaults to <c>".*:.*"</c> (all repositories and tags) when <see langword="null"/>.</param>
-    /// <param name="ago">The age threshold for <c>acr purge --ago</c>. Tags last modified before this duration will be considered
-    /// for removal. Uses Go-style duration format (e.g., <c>2d3h6m</c>). Defaults to <c>0d</c> when <see langword="null"/>.</param>
-    /// <param name="keep">The number of most recent purge candidate tags to keep per repository.
+    /// <param name="ago">An optional age threshold for <c>acr purge --ago</c>. Tags older than this duration are eligible
+    /// for removal even when within the <paramref name="keep"/> limit. Tags beyond the count limit are eligible regardless
+    /// of age. When null or zero, only count-based retention applies.</param>
+    /// <param name="keep">The maximum number of newest matching tags to retain per repository.
     /// Must be greater than zero. Defaults to 3.</param>
     /// <param name="taskName">An optional name for the ACR task resource. If not provided, a name is auto-generated
     /// based on existing purge tasks to avoid conflicts. If a task with the specified name already exists,
     /// an <see cref="ArgumentException"/> is thrown.</param>
     /// <param name="untagged">Whether to also delete eligible untagged manifests. Defaults to true.</param>
-    /// <ats-param name="ago">The age threshold based on last modified time, in milliseconds. Defaults to zero.</ats-param>
+    /// <ats-param name="ago">An optional age threshold based on last modified time, in milliseconds. Tags older than this
+    /// duration or beyond the keep limit are eligible for removal. When omitted or zero, only count-based retention applies.</ats-param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureContainerRegistryResource}"/> for chaining.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> is <see langword="null"/>.</exception>
@@ -149,14 +151,16 @@ public static class AzureContainerRegistryExtensions
     /// Tag removal alone does not reclaim storage. By default, <paramref name="untagged"/> also deletes eligible
     /// previously untagged manifests and can break digest-based pulls and rollbacks. No Premium SKU or retention
     /// policy is required. Set <paramref name="untagged"/> to false to remove tags only.
-    /// The purge tool's version determines how age and keep filters apply to untagged manifests.
+    /// The task uses ACR CLI 0.20 with separate tag and untagged-manifest count limits. Untagged cleanup retains no
+    /// additional untagged manifests, regardless of age. Locked artifacts and dependencies of retained images are protected,
+    /// so the count limit is not an unconditional guarantee of the number of remaining tags or manifests.
     /// </remarks>
     /// <example>
-    /// This example schedules a daily purge of tags last modified more than 7 days ago and eligible untagged manifests,
-    /// keeping the 5 most recent purge candidate tags:
+    /// This example schedules a daily purge that retains the 3 newest matching tags per repository and removes eligible
+    /// untagged manifests:
     /// <code>
     /// var acr = builder.AddAzureContainerRegistry("myregistry")
-    ///     .WithPurgeTask("0 1 * * *", ago: TimeSpan.FromDays(7), keep: 5);
+    ///     .WithPurgeTask("0 1 * * *", filter: "myapp:.*", keep: 3);
     /// </code>
     /// </example>
     [AspireExport]
@@ -329,12 +333,17 @@ public static class AzureContainerRegistryExtensions
         return builder.WithRoleAssignments(target, builtInRoles);
     }
 
-    private static string CreatePurgeTaskContent(string? filter, string ago, int keep, bool untagged)
+    private static string CreatePurgeTaskContent(string? filter, string? ago, int keep, bool untagged)
     {
+        // ACR CLI 0.20 rejects --keep with count limits. A zero-age cutoff would delete even the
+        // newest tags, so omit --ago for count-only retention.
+        // https://github.com/Azure/acr-cli/blob/v0.20/cmd/acr/purge.go
+        var agoArgument = ago is null ? "" : $" --ago {ago}";
+
         return $"""
             version: v1.1.0
             steps:
-            - cmd: acr purge --filter '{filter ?? ".*:.*"}' --ago {ago} --keep {keep}{(untagged ? " --untagged" : "")}
+            - cmd: mcr.microsoft.com/acr/acr-cli:0.20 purge --filter '{filter ?? ".*:.*"}'{agoArgument} --max-tags {keep}{(untagged ? " --untagged --max-untagged-manifests 0" : "")}
             """.ReplaceLineEndings("\n");
     }
 
@@ -349,7 +358,7 @@ public static class AzureContainerRegistryExtensions
     ///   for minutes. For example, --ago 2d3h6m selects all filtered images last modified more than two days, 3 hours, and 6 minutes
     ///   ago, and --ago 1.5h selects images last modified more than 1.5 hours ago.
     /// </remarks>
-    private static string FormatAgo(TimeSpan ago)
+    private static string? FormatAgo(TimeSpan ago)
     {
         if (ago.TotalMinutes < 1 && ago != TimeSpan.Zero)
         {
@@ -358,7 +367,7 @@ public static class AzureContainerRegistryExtensions
 
         if (ago == TimeSpan.Zero)
         {
-            return "0d";
+            return null;
         }
 
         var sb = new StringBuilder();
