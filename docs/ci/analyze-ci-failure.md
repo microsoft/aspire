@@ -147,16 +147,19 @@ and resource limits. Coverage is based on available reports, not a manifest of
 expected target frameworks; an entirely absent framework report cannot be
 detected if another usable report for the same job exists.
 
-The results job checks actual downloaded TRX paths with the same
-`CombinedTrxReports` matcher after uploading `All-TestResults`, so a naming
-contract failure cannot suppress diagnostic evidence. The read-only
+The separate `Combined TRX report contract (advisory)` job in `ci.yml` downloads
+`All-TestResults` and checks actual TRX paths with the same `CombinedTrxReports`
+matcher. It runs alongside the required Final Results gate, not as its dependency,
+and uses job-level `continue-on-error` so report-contract failures do not fail
+product CI. Artifact publication and test summaries are unaffected. The read-only
 `check-combined-reports` command requires each available, unmerged report to
 identify one known producer. Current jobs retain duplicate identities;
 historical jobs provide rerun context without duplicating current job names.
 Unknown or ambiguous paths, unavailable GitHub metadata, and filesystem errors
 fail the check. Known `testresults/merged/merged-*.trx` summary outputs are excluded.
 
-An empty report set explicitly reports that no associations were validated.
+Selective runs without an `All-TestResults` artifact are treated as an empty
+report set, explicitly reporting that no associations were validated.
 This is not an expected-framework inventory, XML validation, or a test-success
 check: failed, crashed, and skipped jobs need not produce reports.
 
