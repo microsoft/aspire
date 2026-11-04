@@ -2223,7 +2223,7 @@ function cardActionBtn(pr, a) {
   // GHES/EMU (non-dotcom) PR to the current session. Detect that here from the server-resolved PR
   // url and don't advertise "Open in new session" for those cards: render a single current-session
   // button so enterprise users see the honest behavior up front instead of discovering it on click.
-  const isDotcom = /^https:\/\/github\.com\//i.test(pr.url || "");
+  const isDotcom = /^https:\/\/github\.com\//i.test(pr.url || "") && !a.currentOnly;
   const mainTarget = isDotcom ? "new-session" : "current-session";
   // aria-live="polite" turns the main button into a live region: onCardAction rewrites its label
   // in place to "Queued\u2026", "Running\u2026", or an error, but the button is disabled while the
@@ -2269,6 +2269,7 @@ var CARD_ACTIONS = {
   discussReview: { kind: "discuss-review", label: "Discuss review", done: "Sent to agent", icon: ICONS.chat },
   addressFeedback: { kind: "address-feedback", label: "Address feedback", done: "Sent to agent", icon: ICONS.check },
   resolveFeedback: { kind: "address-feedback", label: "Resolve", done: "Sent to agent", icon: ICONS.check },
+  closePr: { kind: "close-pr", label: "Close PR", done: "Sent to agent", icon: ICONS.xcircle, currentOnly: true },
 };
 
 // Combine several action lists into one, first-wins by kind, so a card that qualifies for the
@@ -2357,7 +2358,7 @@ function focusCardActions(item) {
   } else {
     ctx = [CARD_ACTIONS.test, CARD_ACTIONS.review];
   }
-  return mergeActions(ctx, sig);
+  return mergeActions(ctx, sig, [CARD_ACTIONS.closePr]);
 }
 
 // "For you" picks that carry an actionable label get an interactive split button. The pick's

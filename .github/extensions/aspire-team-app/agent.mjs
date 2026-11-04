@@ -25,7 +25,7 @@
 // The PR descriptor originates from client-supplied card data, so every prompt tells
 // the agent to treat it as untrusted metadata and fetch the live PR before acting.
 
-export const AGENT_ACTION_KINDS = ["test", "review", "resolve-conflicts", "review-debt", "fix-ci", "discuss-review", "address-feedback"];
+export const AGENT_ACTION_KINDS = ["test", "review", "resolve-conflicts", "review-debt", "fix-ci", "discuss-review", "address-feedback", "close-pr"];
 export const AGENT_ACTION_TARGETS = ["new-session", "current-session"];
 
 // Convert an untrusted client-supplied PR number to a strict positive integer, or NaN. Unlike
@@ -132,7 +132,10 @@ function isGitHubComUrl(url) {
 // host-qualified URL instead of spawning a sub-session against the wrong repository. Both the
 // prompt builder and the timeline breadcrumb route through here so they never disagree about
 // where the work actually runs.
-function effectiveActionTarget(requestedTarget, url) {
+function effectiveActionTarget(requestedTarget, url, kind) {
+  // Closing a PR needs no checkout, and a confirmation must happen in the conversation the user is
+  // watching, so it never spawns a sub-session.
+  if (kind === "close-pr") return "current-session";
   return requestedTarget === "new-session" && !isGitHubComUrl(url) ? "current-session" : requestedTarget;
 }
 
@@ -143,7 +146,7 @@ function effectiveActionTarget(requestedTarget, url) {
 // rejects those with a 400, so the client never reaches the reflected value), while a valid
 // new-session action against a non-github.com URL degrades to current-session (see
 // effectiveActionTarget).
-export function resolveActionTarget(rawPr, target = "new-session") {
+export function resolveActionTarget(rawPr, target = "new-session", kind) {
   const requested = normalizeActionTarget(target);
   if (!AGENT_ACTION_TARGETS.includes(requested)) {
     return requested;
@@ -152,7 +155,7 @@ export function resolveActionTarget(rawPr, target = "new-session") {
   if (!isValidActionPr(pr)) {
     return requested;
   }
-  return effectiveActionTarget(requested, safePrUrl(pr));
+  return effectiveActionTarget(requested, safePrUrl(pr), kind);
 }
 
 // Collapse a possibly multi-line, attacker-controlled display string (a PR title) to a
@@ -194,7 +197,7 @@ export function buildAgentActionPrompt(kind, rawPr, target = "new-session", pref
   // Degrade new-session to current-session for non-github.com PRs (see effectiveActionTarget):
   // open_pr_session can only address github.com, so a GHES PR must run in place against its
   // host-qualified URL rather than open the same-named dotcom repo.
-  const where = effectiveActionTarget(requestedTarget, url);
+  const where = effectiveActionTarget(requestedTarget, url, kind);
   if (where === "current-session") {
     return currentSessionPrompt(kind, ctx);
   }
@@ -214,7 +217,7 @@ export function buildAgentActionLog(kind, rawPr, target = "new-session") {
   const title = pr.title ? ` \u2014 "${sanitizeLine(pr.title)}"` : "";
   // Mirror the prompt's routing decision so the breadcrumb never claims "a new session" for a
   // non-github.com PR that actually runs in this session (see effectiveActionTarget).
-  const where = effectiveActionTarget(normalizeActionTarget(target), safePrUrl(pr)) === "current-session" ? "this session" : "a new session";
+  const where = effectiveActionTarget(normalizeActionTarget(target), safePrUrl(pr), kind) === "current-session" ? "this session" : "a new session";
   let action;
   switch (kind) {
     case "test": action = `Test PR ${ref}${title}`; break;
@@ -224,6 +227,7 @@ export function buildAgentActionLog(kind, rawPr, target = "new-session") {
     case "fix-ci": action = `Evaluate CI failures on PR ${ref}${title}`; break;
     case "discuss-review": action = `Discuss the review on PR ${ref}${title}`; break;
     case "address-feedback": action = `Address review feedback on PR ${ref}${title}`; break;
+    case "close-pr": action = `Close PR ${ref}${title}`; break;
     default: action = `Work on PR ${ref}${title}`;
   }
   return `${action} in ${where}`;
@@ -411,7 +415,7 @@ Validate your changes (build and tests where practical) and push only once the f
 
 // ---- current-session prompts: do the work here, no sub-session ----
 
-function currentSessionPrompt(kind, { ref, url }) {
+function currentSessionPrompt(kind, { ref, url, pr }) {
   switch (kind) {
     case "test":
       return `Test pull request ${ref}: ${url}
@@ -453,6 +457,12 @@ ${UNTRUSTED}`;
       return `Let's address the outstanding review feedback on pull request ${ref}: ${url}
 
 Work interactively in this session (do not open a separate sub-session). Read the unresolved review threads and requested changes; for each, make the change where the intent is clear, then reply to and resolve the thread. Check in with me on anything ambiguous before acting, validate your changes, and push only once the feedback is addressed.
+
+${UNTRUSTED}`;
+    case "close-pr":
+      return `Close pull request ${ref}: ${url}
+
+Work in THIS session (do not open a separate sub-session). Fetch the live pull request first. If it is already closed or merged, say so and stop. Otherwise, use the ask_user tool to confirm that I want to close it, showing the PR title and author. Only after I confirm, close it without merging (for example \`gh pr close ${pr.number} --repo ${pr.repository}\`), then verify its state is closed and report the result. Never delete the branch.
 
 ${UNTRUSTED}`;
     default:

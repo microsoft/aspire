@@ -223,6 +223,17 @@ test("computeFocusItems retains review-debt PRs through the full createAttention
   assert.equal(focus.find((i) => i.pullRequest.number === 44), undefined);
 });
 
+test("computeFocusItems excludes approved PRs even when they are fresh", () => {
+  const needsReview = makePr({ number: 50, updatedAt: isoAgo(dayMs) });
+  const approvedFresh = makePr({
+    number: 51,
+    updatedAt: isoAgo(dayMs),
+    review: { state: "approved", approvalCount: 1, reviewerCount: 1, lastApprovedAt: isoAgo(dayMs), lastReviewedAt: isoAgo(dayMs) },
+  });
+  const focus = computeFocusItems(createAttentionBuckets([needsReview, approvedFresh]));
+  assert.deepEqual(focus.map((i) => i.pullRequest.number), [50]);
+});
+
 test("isReviewDebt survives display-signal truncation that a pill-derived flag would drop", () => {
   // Regression guard for the review-debt derivation in github.mjs focusCards: the "review debt"
   // pill is emitted last by createAttentionSignals, so a PR stacked with higher-priority danger

@@ -854,7 +854,7 @@ async function handle(req, res, log, instanceId) {
       // Report the target actually used, not the one requested: buildAgentActionPrompt degrades
       // new-session to current-session for non-github.com (GHES) PRs, so echoing the raw request
       // would tell the client "Opened in a new session" when the work is really running in place.
-      const effectiveTarget = resolveActionTarget(resolvedPr, target);
+      const effectiveTarget = resolveActionTarget(resolvedPr, target, kind);
       return send(res, 200, { ok: true, kind, target: effectiveTarget, messageId, queued });
     }
     if (req.method === "POST" && path === "/api/open-pr") {
