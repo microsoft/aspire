@@ -1131,6 +1131,8 @@ Primitive type mapping:
 
 For npm-based TypeScript AppHosts, `aspire restore`, `aspire run`, and publishing use
 `npm ci` when the AppHost directory contains `package-lock.json` or `npm-shrinkwrap.json`.
+Both local npm lockfiles take precedence over package-manager markers in a parent
+directory; an explicit local `packageManager` still controls toolchain selection.
 The lockfile must match `package.json`; a stale lock fails instead of silently changing
 dependency versions. Run `npm install` intentionally after editing dependencies and
 commit the updated lockfile. Projects without a local lockfile, initial scaffolding,
