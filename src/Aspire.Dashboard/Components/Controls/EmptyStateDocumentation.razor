@@ -1,0 +1,16 @@
+@using Aspire.Dashboard.Resources
+
+@inject IStringLocalizer<Aspire.Dashboard.Resources.Resources> Loc
+
+<div class="empty-state-documentation">
+    <span class="empty-state-documentation-message">@Message</span>
+    <div class="empty-state-documentation-footer">
+        <a class="empty-state-documentation-link"
+           href="@Article.Url"
+           target="_blank"
+           rel="noopener noreferrer">
+            <FluentIcon Value="@(new Icons.Regular.Size16.Book())" Width="14px" Color="Color.Custom" CustomColor="currentColor" />
+            <span>@Loc[Article.TitleResourceName]</span>
+        </a>
+    </div>
+</div>

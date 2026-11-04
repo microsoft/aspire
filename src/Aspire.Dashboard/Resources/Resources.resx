@@ -495,6 +495,27 @@
   <data name="ResourceOverviewNoMatchingEnvironmentVariables" xml:space="preserve">
     <value>No environment variables match the filter</value>
   </data>
+  <data name="ResourceOverviewNetworkingDocumentationTitle" xml:space="preserve">
+    <value>Inner-loop networking overview</value>
+  </data>
+  <data name="ResourceOverviewResourceModelDocumentationTitle" xml:space="preserve">
+    <value>Resource Model</value>
+  </data>
+  <data name="ResourceOverviewServiceDefaultsDocumentationTitle" xml:space="preserve">
+    <value>C# Service Defaults</value>
+  </data>
+  <data name="ResourceOverviewCustomResourcesDocumentationTitle" xml:space="preserve">
+    <value>Build custom Aspire resources</value>
+  </data>
+  <data name="ResourceOverviewEnvironmentVariablesDocumentationTitle" xml:space="preserve">
+    <value>Environment variables</value>
+  </data>
+  <data name="ResourceOverviewVolumesDocumentationTitle" xml:space="preserve">
+    <value>Persist Aspire data with volumes and binds</value>
+  </data>
+  <data name="ResourceOverviewHealthChecksDocumentationTitle" xml:space="preserve">
+    <value>Health checks</value>
+  </data>
   <data name="ResourceOverviewShowAllEnvironmentVariables" xml:space="preserve">
     <value>Show all environment variables</value>
   </data>

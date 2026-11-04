@@ -28,6 +28,40 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Dashboard
 
     [Fact]
     [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task EmptyStateDocumentationLinks_OpenWithPointerAndKeyboard()
+    {
+        await RunTestAsync(async page =>
+        {
+            await page.GotoAsync($"/resources/{MockDashboardClient.TestResource1.Name}");
+
+            var links = new[]
+            {
+                page.GetByRole(AriaRole.Link, new() { Name = "Inner-loop networking overview", Exact = true }),
+                page.GetByRole(AriaRole.Link, new() { Name = "Environment variables", Exact = true })
+            };
+
+            for (var i = 0; i < links.Length; i++)
+            {
+                var link = links[i];
+                await Assertions.Expect(link).ToBeVisibleAsync();
+                if (i == 1)
+                {
+                    await link.FocusAsync();
+                    await Assertions.Expect(link).ToBeFocusedAsync();
+                }
+
+                var popup = await page.RunAndWaitForPopupAsync(() => i == 0
+                    ? link.ClickAsync()
+                    : page.Keyboard.PressAsync("Enter"));
+                await popup.WaitForLoadStateAsync();
+                Assert.Equal(await link.GetAttributeAsync("href"), popup.Url);
+                await popup.CloseAsync();
+            }
+        });
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
     public async Task TelemetryOnlyResourceSelection_KeepsCurrentTabAndSupportsConsecutiveChanges()
     {
         var repository = DashboardServerFixture.DashboardApp.Services.GetRequiredService<ITelemetryRepositoryWriter>();

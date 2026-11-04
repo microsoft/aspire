@@ -292,9 +292,19 @@
         <target state="new">{0} of {1}</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourceOverviewCustomResourcesDocumentationTitle">
+        <source>Build custom Aspire resources</source>
+        <target state="new">Build custom Aspire resources</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResourceOverviewEndpointsTitle">
         <source>Endpoints</source>
         <target state="new">Endpoints</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewEnvironmentVariablesDocumentationTitle">
+        <source>Environment variables</source>
+        <target state="new">Environment variables</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewErrors">
@@ -315,6 +325,11 @@
       <trans-unit id="ResourceOverviewFilterEnvironmentVariables">
         <source>Filter environment variables</source>
         <target state="new">Filter environment variables</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewHealthChecksDocumentationTitle">
+        <source>Health checks</source>
+        <target state="new">Health checks</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewInstruments">
@@ -340,6 +355,11 @@
       <trans-unit id="ResourceOverviewMetricsTitle">
         <source>Metrics</source>
         <target state="new">Metrics</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewNetworkingDocumentationTitle">
+        <source>Inner-loop networking overview</source>
+        <target state="new">Inner-loop networking overview</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewNoAttentionLogs">
@@ -437,6 +457,16 @@
         <target state="new">Relationships</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourceOverviewResourceModelDocumentationTitle">
+        <source>Resource Model</source>
+        <target state="new">Resource Model</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewServiceDefaultsDocumentationTitle">
+        <source>C# Service Defaults</source>
+        <target state="new">C# Service Defaults</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResourceOverviewShowAllEnvironmentVariables">
         <source>Show all environment variables</source>
         <target state="new">Show all environment variables</target>
@@ -480,6 +510,11 @@
       <trans-unit id="ResourceOverviewViewAll">
         <source>View all</source>
         <target state="new">View all</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewVolumesDocumentationTitle">
+        <source>Persist Aspire data with volumes and binds</source>
+        <target state="new">Persist Aspire data with volumes and binds</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewWarnings">

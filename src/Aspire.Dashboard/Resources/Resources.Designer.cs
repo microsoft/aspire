@@ -573,6 +573,48 @@ namespace Aspire.Dashboard.Resources {
             }
         }
 
+        public static string ResourceOverviewNetworkingDocumentationTitle {
+            get {
+                return ResourceManager.GetString("ResourceOverviewNetworkingDocumentationTitle", resourceCulture);
+            }
+        }
+
+        public static string ResourceOverviewResourceModelDocumentationTitle {
+            get {
+                return ResourceManager.GetString("ResourceOverviewResourceModelDocumentationTitle", resourceCulture);
+            }
+        }
+
+        public static string ResourceOverviewServiceDefaultsDocumentationTitle {
+            get {
+                return ResourceManager.GetString("ResourceOverviewServiceDefaultsDocumentationTitle", resourceCulture);
+            }
+        }
+
+        public static string ResourceOverviewCustomResourcesDocumentationTitle {
+            get {
+                return ResourceManager.GetString("ResourceOverviewCustomResourcesDocumentationTitle", resourceCulture);
+            }
+        }
+
+        public static string ResourceOverviewEnvironmentVariablesDocumentationTitle {
+            get {
+                return ResourceManager.GetString("ResourceOverviewEnvironmentVariablesDocumentationTitle", resourceCulture);
+            }
+        }
+
+        public static string ResourceOverviewVolumesDocumentationTitle {
+            get {
+                return ResourceManager.GetString("ResourceOverviewVolumesDocumentationTitle", resourceCulture);
+            }
+        }
+
+        public static string ResourceOverviewHealthChecksDocumentationTitle {
+            get {
+                return ResourceManager.GetString("ResourceOverviewHealthChecksDocumentationTitle", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to Structured logs.
         /// </summary>

@@ -222,7 +222,7 @@
             }
             else
             {
-                @EmptyCard(OverviewCard.Endpoints, cardLayout, "overview-endpoints-title", new Icons.Regular.Size16.Link(), Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewEndpointsTitle)], Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewNoEndpoints)])
+                @EmptyCard(OverviewCard.Endpoints, cardLayout, "overview-endpoints-title", new Icons.Regular.Size16.Link(), Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewEndpointsTitle)], Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewNoEndpoints)], EmptyStateDocumentationPanel.Endpoints)
             }
 
             @if (showMetrics)
@@ -272,7 +272,7 @@
             }
             else
             {
-                @EmptyCard(OverviewCard.Metrics, cardLayout, "overview-metrics-title", new Icons.Regular.Size16.ChartMultiple(), Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewMetricsTitle)], Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewNoTelemetry)])
+                @EmptyCard(OverviewCard.Metrics, cardLayout, "overview-metrics-title", new Icons.Regular.Size16.ChartMultiple(), Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewMetricsTitle)], Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewNoTelemetry)], EmptyStateDocumentationPanel.Metrics)
             }
 
             @if (showTerminal && (IsTerminalFocused || !TerminalDockState.IsResourceOpen(resource.Name)))
@@ -345,7 +345,8 @@
                         }
                         else
                         {
-                            @Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewNoConsoleLogs)]
+                            <EmptyStateDocumentation Message="@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewNoConsoleLogs)]"
+                                                     Panel="EmptyStateDocumentationPanel.Console" />
                         }
                     </div>
                 }
@@ -440,7 +441,7 @@
             }
             else
             {
-                @EmptyCard(OverviewCard.Logs, cardLayout, "overview-logs-title", new Icons.Regular.Size16.SlideTextSparkle(), Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewLogsTitle)], Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewNoTelemetry)])
+                @EmptyCard(OverviewCard.Logs, cardLayout, "overview-logs-title", new Icons.Regular.Size16.SlideTextSparkle(), Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewLogsTitle)], Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewNoTelemetry)], EmptyStateDocumentationPanel.StructuredLogs)
             }
 
             @if (showTraces)
@@ -499,7 +500,7 @@
             }
             else
             {
-                @EmptyCard(OverviewCard.Traces, cardLayout, "overview-traces-title", new Icons.Regular.Size16.GanttChart(), Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewTracesTitle)], Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewNoTelemetry)])
+                @EmptyCard(OverviewCard.Traces, cardLayout, "overview-traces-title", new Icons.Regular.Size16.GanttChart(), Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewTracesTitle)], Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewNoTelemetry)], EmptyStateDocumentationPanel.Traces)
             }
 
             <section class="overview-card overview-relationships-card" style="@cardLayout.Style(OverviewCard.Relationships)" aria-labelledby="overview-relationships-title">
@@ -515,7 +516,10 @@
                 </div>
                 @if (relatedResources.Count == 0)
                 {
-                    <div class="overview-empty">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewNoRelationships)]</div>
+                    <div class="overview-empty">
+                        <EmptyStateDocumentation Message="@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewNoRelationships)]"
+                                                 Panel="EmptyStateDocumentationPanel.Relationships" />
+                    </div>
                 }
                 else
                 {
@@ -551,7 +555,10 @@
                 </div>
                 @if (properties.Count == 0)
                 {
-                    <div class="overview-empty">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewNoProperties)]</div>
+                    <div class="overview-empty">
+                        <EmptyStateDocumentation Message="@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewNoProperties)]"
+                                                 Panel="EmptyStateDocumentationPanel.Properties" />
+                    </div>
                 }
                 else
                 {
@@ -605,7 +612,10 @@
                 </div>
                 @if (resource.Environment.Length == 0)
                 {
-                    <div class="overview-empty">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewNoEnvironmentVariables)]</div>
+                    <div class="overview-empty">
+                        <EmptyStateDocumentation Message="@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewNoEnvironmentVariables)]"
+                                                 Panel="EmptyStateDocumentationPanel.EnvironmentVariables" />
+                    </div>
                 }
                 else if (environmentVariables.Count == 0)
                 {
@@ -677,7 +687,7 @@
             }
             else
             {
-                @EmptyCard(OverviewCard.Volumes, cardLayout, "overview-volumes-title", new Icons.Regular.Size16.Storage(), ControlsStringsLoc[nameof(ControlsStrings.ResourceDetailsVolumesHeader)], Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewNoVolumes)])
+                @EmptyCard(OverviewCard.Volumes, cardLayout, "overview-volumes-title", new Icons.Regular.Size16.Storage(), ControlsStringsLoc[nameof(ControlsStrings.ResourceDetailsVolumesHeader)], Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewNoVolumes)], EmptyStateDocumentationPanel.Volumes)
             }
 
             @if (showHealth)
@@ -716,7 +726,7 @@
             }
             else
             {
-                @EmptyCard(OverviewCard.Health, cardLayout, "overview-health-title", new Icons.Regular.Size16.Heart(), ControlsStringsLoc[nameof(ControlsStrings.ResourceHealthChecksHeader)], Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewNoHealthChecks)])
+                @EmptyCard(OverviewCard.Health, cardLayout, "overview-health-title", new Icons.Regular.Size16.Heart(), ControlsStringsLoc[nameof(ControlsStrings.ResourceHealthChecksHeader)], Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewNoHealthChecks)], EmptyStateDocumentationPanel.HealthChecks)
             }
         </div>
     }
@@ -724,7 +734,7 @@
 
 @code {
     // A card that has nothing to show for this resource, so the layout stays the same from one resource to the next.
-    private RenderFragment EmptyCard(OverviewCard card, OverviewCardLayout cardLayout, string titleId, Icon icon, string title, string message) => __builder =>
+    private RenderFragment EmptyCard(OverviewCard card, OverviewCardLayout cardLayout, string titleId, Icon icon, string title, string message, EmptyStateDocumentationPanel documentationPanel) => __builder =>
     {
         <section class="overview-card overview-card-empty" style="@cardLayout.Style(card)" aria-labelledby="@titleId">
             <div class="overview-card-header">
@@ -733,7 +743,9 @@
                 </span>
                 <h2 id="@titleId">@title</h2>
             </div>
-            <div class="overview-empty">@message</div>
+            <div class="overview-empty">
+                <EmptyStateDocumentation Message="@message" Panel="@documentationPanel" />
+            </div>
         </section>
     };
 

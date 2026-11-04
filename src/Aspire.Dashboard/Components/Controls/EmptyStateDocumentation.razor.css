@@ -1,0 +1,45 @@
+.empty-state-documentation {
+    display: flex;
+    flex-direction: column;
+    align-self: stretch;
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+}
+
+.empty-state-documentation-message {
+    display: flex;
+    align-items: center;
+    flex: 1 1 auto;
+    min-height: 40px;
+}
+
+.empty-state-documentation-footer {
+    display: flex;
+    align-items: flex-end;
+    flex: 0 0 34px;
+    box-sizing: border-box;
+    width: 100%;
+    padding-top: 8px;
+    border-top: 1px solid var(--colorNeutralStroke3);
+}
+
+.empty-state-documentation-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--colorBrandForegroundLink);
+    font-size: 12.5px;
+    line-height: var(--lineHeightBase300);
+    text-decoration: none;
+}
+
+.empty-state-documentation-link:hover {
+    text-decoration: underline;
+}
+
+.empty-state-documentation-link:focus-visible {
+    border-radius: 4px;
+    outline: 2px solid var(--colorStrokeFocus2);
+    outline-offset: 2px;
+}
