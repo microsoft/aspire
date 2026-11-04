@@ -213,6 +213,8 @@ public class ResourcesLayoutActivityTests : DashboardTestContext
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
         cut.Find(".resource-pane-canvas-toggle").Click();
         WaitForInsightCount(2);
+        // Child renders finish before the shared refresh's finally releases its coalescing gate.
+        await cut.Instance.PaneActivityRefreshTask.WaitAsync(TimeSpan.FromSeconds(10));
         Assert.Equal(1, Volatile.Read(ref calls));
         var changedKey = new ResourceKey(names[0], "TestId");
         var changed = cut.FindComponents<ResourcePaneInsights>()
@@ -231,6 +233,7 @@ public class ResourcesLayoutActivityTests : DashboardTestContext
         }
         Assert.Equal(["40 incoming", "40 incoming"],
             cut.FindAll($"[data-resource-name='{names[0]}-TestId'] .resource-row-insight-requests span").Select(span => span.TextContent));
+        await cut.Instance.PaneActivityRefreshTask.WaitAsync(TimeSpan.FromSeconds(10));
         Assert.Equal(2, Volatile.Read(ref calls));
         Assert.All(unchanged, item =>
         {
@@ -249,9 +252,11 @@ public class ResourcesLayoutActivityTests : DashboardTestContext
             Assert.Equal(3, Volatile.Read(ref calls));
             Assert.NotEqual(href, changed[0].Find(".resource-row-insight-requests").GetAttribute("href"));
         });
+        await cut.Instance.PaneActivityRefreshTask.WaitAsync(TimeSpan.FromSeconds(10));
         clock.UtcNow += TimeSpan.FromMinutes(6);
         timers.Advance(ResourcesLayout.s_paneActivityRefreshInterval);
         WaitForInsightCount(0);
+        await cut.Instance.PaneActivityRefreshTask.WaitAsync(TimeSpan.FromSeconds(10));
         var beforeHidden = Volatile.Read(ref calls);
         await cut.InvokeAsync(() => cut.Instance.SetPaneActivityVisible(false));
         doubleFirst = false;
@@ -262,6 +267,7 @@ public class ResourcesLayoutActivityTests : DashboardTestContext
         Assert.Equal(beforeHidden, Volatile.Read(ref calls));
         await cut.InvokeAsync(() => cut.Instance.SetPaneActivityVisible(true));
         WaitForInsightCount(2);
+        await cut.Instance.PaneActivityRefreshTask.WaitAsync(TimeSpan.FromSeconds(10));
         Assert.Equal(beforeHidden + 1, Volatile.Read(ref calls));
         var url = new Uri(new Uri("http://localhost"), cut.Find(".resource-row-insight-requests").GetAttribute("href"));
         var filters = TelemetryFilterFormatter.DeserializeFiltersFromString(QueryHelpers.ParseQuery(url.Query)["filters"].ToString());

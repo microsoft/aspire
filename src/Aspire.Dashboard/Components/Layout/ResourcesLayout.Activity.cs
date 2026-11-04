@@ -26,6 +26,7 @@ public sealed partial class ResourcesLayout
     private DateTime _paneActivityWindowEnd;
     private bool _paneActivitySampled;
     internal event Action? PaneActivityChanged;
+    internal Task PaneActivityRefreshTask => _paneActivityRefreshTask ?? Task.CompletedTask;
 
     internal ResourcePaneActivitySnapshot? GetPaneActivitySnapshot(ResourceKey key) =>
         _paneActivity.GetValueOrDefault(key);

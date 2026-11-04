@@ -24,12 +24,13 @@ namespace Aspire.Dashboard.Components.Tests.Shared;
 
 internal static class ResourceSetupHelpers
 {
-    public static void SetupResourceOverview(BunitContext context, ViewportInformation viewport, IDashboardClient dashboardClient)
+    public static void SetupResourceOverview(BunitContext context, ViewportInformation viewport, IDashboardClient dashboardClient,
+        Action<IServiceCollection>? configureServices = null)
     {
         context.Services.AddSingleton<IVolumePathLauncher, VolumePathLauncher>();
         context.Services.AddSingleton<IInstrumentUnitResolver, TestInstrumentUnitResolver>();
         context.Services.AddSingleton<ConsoleLogsManager>();
-        SetupResourcesLayout(context, viewport, dashboardClient);
+        SetupResourcesLayout(context, viewport, dashboardClient, configureServices);
         context.JSInterop.Setup<string>("Blazor._internal.PageTitle.getAndRemoveExistingTitle", _ => true).SetResult(string.Empty);
     }
 

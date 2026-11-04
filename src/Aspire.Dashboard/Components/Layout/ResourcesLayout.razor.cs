@@ -1154,7 +1154,15 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     {
         _grouping = grouping;
         StateHasChanged();
-        await LocalStorage.SetUnprotectedAsync(BrowserStorageKeys.ResourcePaneGrouping, grouping.ToString());
+        try
+        {
+            await LocalStorage.SetUnprotectedAsync(BrowserStorageKeys.ResourcePaneGrouping, grouping.ToString());
+        }
+        catch (JSDisconnectedException ex)
+        {
+            // Legacy Tags navigation also persists grouping while the circuit is initializing.
+            Logger.LogDebug(ex, "Resource pane grouping persistence stopped because the circuit disconnected.");
+        }
     }
 
     // Resources with multiple tags appear in each group; untagged resources initially appear last. Parameters are part of
@@ -2022,7 +2030,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     /// <summary>
     /// Gets the URL that selects the given resources on the current tab, falling back to the overview when none of
-    /// the resources support the current tab. Metrics is kept for any selection but a single parameter.
+    /// the resources support the current tab. Telemetry pages are kept for any selection but a single parameter.
     /// </summary>
     private string GetSelectionUrl(IReadOnlyList<string> resourceNames)
     {
@@ -2041,10 +2049,11 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         {
             tab = CurrentTab;
         }
-        else if (CurrentTab == ResourceTab.Metrics && selection is not [{ Resource: { IsParameter: true } }])
+        else if (CurrentTab is ResourceTab.Metrics or ResourceTab.Traces or ResourceTab.StructuredLogs &&
+            selection is not [{ Resource: { IsParameter: true } }])
         {
-            // Changing the selection on the metrics page never leaves it. The page reports resources without metrics.
-            tab = ResourceTab.Metrics;
+            // Keep the chosen telemetry page so it can explain why the selection has no data.
+            tab = CurrentTab;
         }
         else if (selection is [{ Resource: { IsParameter: true } }])
         {

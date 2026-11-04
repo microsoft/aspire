@@ -1048,7 +1048,7 @@
 }
 
 .resource-workspace-foot {
-    display: none;
+    display: block;
 }
 
 /* Resource content */
@@ -1148,60 +1148,65 @@
         border-top: 0;
         border-right: 1px solid var(--colorNeutralStroke3);
     }
+}
 
-    .resource-content-foot {
-        display: flex;
-        grid-column: 2;
-        align-items: center;
-        gap: 8px;
-        min-width: 0;
-        padding: 2px 8px;
-    }
+.resource-content-foot {
+    display: flex;
+    grid-column: 2;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    padding: 2px 8px;
+}
 
-    .resource-footer-status {
-        display: flex;
-        flex: 1 1 auto;
-        align-items: center;
-        gap: 4px 10px;
-        min-width: 0;
-        overflow: hidden;
-        color: var(--colorNeutralForeground2);
-        font-size: 12px;
-        white-space: nowrap;
-    }
+.resource-footer-status {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 4px 10px;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--colorNeutralForeground2);
+    font-size: 12px;
+    white-space: nowrap;
+}
 
-    .resource-footer-status .state-pill {
-        flex: 0 0 auto;
-        padding-block: 1px;
-    }
+.resource-footer-status .state-pill {
+    flex: 0 0 auto;
+    padding-block: 1px;
+}
 
-    .resource-footer-status .resource-header-urls {
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
+.resource-footer-status .resource-header-urls {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
 
-    .resource-footer-page-status {
-        flex: 0 0 auto;
-        min-width: 0;
-        margin-left: auto;
-        color: var(--colorNeutralForeground2);
-        font-size: 12px;
-        white-space: nowrap;
-    }
+.resource-footer-page-status {
+    flex: 0 0 auto;
+    min-width: 0;
+    margin-left: auto;
+    color: var(--colorNeutralForeground2);
+    font-size: 12px;
+    white-space: nowrap;
 }
 
 .resource-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 8px;
     padding: 12px var(--layout-right-padding) 0 var(--layout-left-padding);
     background: var(--aspire-page-background);
+    /* Header actions condense against the full header width without moving their section outlet on resize. */
+    container-type: inline-size;
 }
 
 .resource-header-row {
     display: flex;
+    align-self: start;
     align-items: center;
     gap: 10px;
     min-width: 0;
-    /* Lets header actions (such as the missing parameters notice) condense with @container as the row narrows. */
-    container-type: inline-size;
 }
 
 .resource-header-icon {
@@ -1218,6 +1223,10 @@
 
 .resource-header-icon.neutral {
     border: 1px dashed var(--colorNeutralStroke1);
+    background: transparent;
+}
+
+.resource-header-icon.scope {
     background: transparent;
 }
 
@@ -1553,7 +1562,7 @@
     .resources-layout {
         display: grid;
         grid-template-columns: minmax(0, 1fr);
-        grid-template-rows: auto minmax(0, 1fr);
+        grid-template-rows: auto minmax(0, 1fr) auto;
     }
 
     .resource-context-header {
@@ -1581,14 +1590,23 @@
 
     .resource-header {
         padding: 8px 12px 0;
+        row-gap: 8px;
+    }
+
+    .resource-header-row {
+        grid-column: 1 / -1;
+        grid-row: 1;
+    }
+
+    .resource-header-controls {
+        grid-column: 2;
+        grid-row: 2;
     }
 
     .resource-header-icon {
         display: none;
     }
 
-    /* The 48px minimum height matches the resource icon, which is hidden here. Keeping it would leave a lone
-       title in a tall box. */
     .resource-header-text {
         display: block;
         min-height: 0;
@@ -1596,15 +1614,6 @@
 
     .resource-header-title {
         gap: 0;
-    }
-
-    .resource-header-row {
-        flex-wrap: wrap;
-    }
-
-    .resource-header-controls {
-        width: 100%;
-        margin-left: 0;
     }
 
     /* The title is the control that opens the resource list. It spans the content width, like the page content
@@ -1620,16 +1629,16 @@
         display: grid;
         grid-template-columns: 20px minmax(0, 1fr) 16px;
         align-items: center;
-        column-gap: 10px;
+        column-gap: 8px;
         width: 100%;
-        min-height: 48px;
-        padding: 0 14px;
+        min-height: 36px;
+        padding: 0 10px;
         border: 1px solid var(--colorNeutralStroke1);
         border-radius: var(--aspire-control-radius);
         background: color-mix(in srgb, var(--colorBrandBackground) 5%, var(--aspire-control-background));
         color: var(--colorNeutralForeground1);
         font: inherit;
-        font-size: 16px;
+        font-size: 14px;
         font-weight: 600;
         line-height: 22px;
         text-align: start;
@@ -1673,22 +1682,33 @@
         white-space: nowrap;
     }
 
-    .resource-header-meta {
-        margin-top: 8px;
+    .resource-tabs {
+        grid-column: 1;
+        grid-row: 2;
+        margin-top: 0;
+        column-gap: 8px;
     }
 
-    /* The meta items wrap onto separate lines here, which would leave a separator dangling at a line's end.
-       The row's gap spaces the items instead. */
-    .resource-header-sep {
+    /* The footer is outside the scrolling tab body, so status stays visible without covering the last card. */
+    .resource-workspace-foot {
+        grid-area: 3 / 1;
+        flex: 0 0 auto;
+        min-width: 0;
+        min-height: 32px;
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+        border-top: 1px solid var(--colorNeutralStroke3);
+        background: var(--aspire-page-background);
+    }
+
+    .resources-layout.drawer-open .resource-workspace-foot {
         display: none;
     }
 
-    .resource-tabs {
-        margin-top: 8px;
+    .resource-content-foot {
+        min-height: 32px;
+        padding-inline: 12px;
     }
 
-    /* The view picker is deliberately shorter and quieter than the resource picker above it. Both controls use the
-       same horizontal inset and chevron width so their trailing indicators align. */
     .resource-tabs-nav ::deep .aspire-menu-button {
         flex: 1 1 auto;
     }
@@ -1696,8 +1716,9 @@
     .resource-tabs-nav ::deep .resource-tabs-compact-button {
         flex: 1 1 auto;
         width: 100%;
-        min-height: 40px;
-        padding: 0 14px;
+        min-width: 0;
+        min-height: 34px;
+        padding: 0 10px;
         border-color: var(--colorNeutralStroke2);
         background: var(--aspire-page-background);
         color: var(--colorNeutralForeground1);
@@ -1706,7 +1727,7 @@
     }
 
     .resource-tabs-nav ::deep .resource-tabs-compact-button::part(control) {
-        min-height: 40px;
+        min-height: 34px;
         padding: 0;
         border: 0;
         background: transparent;

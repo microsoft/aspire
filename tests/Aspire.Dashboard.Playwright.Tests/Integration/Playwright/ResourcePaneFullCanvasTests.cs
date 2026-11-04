@@ -180,6 +180,14 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
             if (width > 768)
             {
                 await Assertions.Expect(filter).ToHaveValueAsync("tag-");
+                await Assertions.Expect(page.Locator(".pane-selection-reveal")).ToHaveCountAsync(0);
+                await page.WaitForFunctionAsync("""
+                    () => {
+                        const layout = document.querySelector('.resources-layout');
+                        const width = parseFloat(getComputedStyle(layout).getPropertyValue('--resource-pane-width'));
+                        return Math.abs(layout.querySelector('.resource-pane').getBoundingClientRect().width - width) <= .5;
+                    }
+                    """);
                 var compactBox = await pane.BoundingBoxAsync();
                 Assert.NotNull(compactBox);
                 Assert.True(compactBox.Width < layoutBox.Width);

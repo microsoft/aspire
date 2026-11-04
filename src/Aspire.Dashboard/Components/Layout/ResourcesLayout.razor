@@ -46,6 +46,17 @@
             @if (!_isPaneFullCanvas && (isDesktop || !_isDrawerOpen))
             {
                 RenderHeaderRow(__builder, isDesktop);
+                <div class="resource-header-controls">
+                    <div class="resource-header-actions">
+                        <SectionOutlet SectionName="@HeaderActionsSectionName" />
+                    </div>
+                    @if (isDesktop)
+                    {
+                        <div class="resource-tab-toolbar">
+                            <SectionOutlet SectionName="@TabToolbarSectionName" />
+                        </div>
+                    }
+                </div>
             }
         </header>
         <aside class="resource-pane" aria-label="@Loc[DashboardClient.IsEnabled ? nameof(Dashboard.Resources.Layout.ResourcePaneLandmark) : nameof(Dashboard.Resources.Layout.NavMenuTelemetrySourcesTab)]" inert="@showCollapsedPane" aria-hidden="@(showCollapsedPane ? "true" : null)" hidden="@(!isDesktop && !_isDrawerOpen && !_isPaneFullCanvas)">
@@ -413,9 +424,11 @@
             </div>
         </section>
 
-        @if (isDesktop)
+        @if (isDesktop || SelectedResource is { IsParameter: false })
         {
             <footer class="resource-workspace-foot">
+                @if (isDesktop)
+                {
                     <div class="resource-pane-foot" inert="@showCollapsedPane" aria-hidden="@(showCollapsedPane ? "true" : null)">
                         <span role="img" aria-label="@GetPaneCountText(paneResourceCount, paneParameterCount, paneTelemetrySourceCount)">
                             @RenderPaneCounts(paneResourceCount, paneParameterCount, paneTelemetrySourceCount)
@@ -443,6 +456,7 @@
                             }
                         </div>
                     </div>
+                }
                 <div class="resource-content-foot">
                     @if (SelectedResource is { IsParameter: false } footerResource)
                     {
@@ -659,7 +673,7 @@
 
     // On desktop the title is a heading. On mobile it also opens the resource list, which is a full-screen sheet, so it
     // is drawn as a select, with the list icon and a chevron, to show that it can be changed. The button is inside the
-    // heading rather than replacing it, so the page keeps its heading. A raw button gives the full-width, start-aligned
+    // heading rather than replacing it, so the page keeps its heading. A raw button gives the start-aligned
     // layout that a FluentButton can't without styling its shadow parts.
     private void RenderTitle(RenderTreeBuilder __builder, string text, bool isDesktop)
     {
@@ -723,12 +737,6 @@
                 <div class="resource-header-title">
                     @{ RenderTitle(__builder, selectedName, isDesktop); }
                 </div>
-                @if (!isDesktop)
-                {
-                    <div class="resource-header-meta">
-                        @{ RenderSelectedResourceMeta(__builder, selected); }
-                    </div>
-                }
             </div>
         }
         else if (SelectedTelemetryOnlyResource is { } telemetryOnly)
@@ -786,7 +794,7 @@
         }
         else
         {
-            <span class="resource-header-icon neutral">
+            <span class="resource-header-icon scope">
                 <FluentIcon Width="20px" Value="@(new Icons.Regular.Size20.AppsList())" Color="Color.Default" />
             </span>
             <div class="resource-header-text">
@@ -795,17 +803,6 @@
                 </div>
             </div>
         }
-        <div class="resource-header-controls">
-            <div class="resource-header-actions">
-                <SectionOutlet SectionName="@HeaderActionsSectionName" />
-            </div>
-            @if (isDesktop)
-            {
-                <div class="resource-tab-toolbar">
-                    <SectionOutlet SectionName="@TabToolbarSectionName" />
-                </div>
-            }
-        </div>
     </div>
     }
 
