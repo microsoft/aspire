@@ -49,8 +49,9 @@ public sealed class DashboardCommandExecutor(
         string commandName,
         Func<ResourceViewModel, string> getResourceName)
     {
-        // The name comes from the browser: the game only ever gets to run these two commands.
-        if (commandName is not (CommandViewModel.StopCommand or CommandViewModel.StartCommand))
+        // The name comes from the browser: the game only ever gets to run these two commands. A read-only client, such as
+        // one showing a historical run, still lists commands as enabled but can't run them.
+        if (dashboardClient.IsReadOnly || commandName is not (CommandViewModel.StopCommand or CommandViewModel.StartCommand))
         {
             return null;
         }

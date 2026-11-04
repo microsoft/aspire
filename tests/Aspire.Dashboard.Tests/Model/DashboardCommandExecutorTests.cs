@@ -107,6 +107,27 @@ public sealed class DashboardCommandExecutorTests
     }
 
     [Fact]
+    public async Task ExecuteGraphGameCommandAsync_ReportsCommandAsUnavailableOnReadOnlyClient()
+    {
+        var executed = 0;
+        var client = new TestDashboardClient(isEnabled: true,
+            executeResourceCommand: (_, _, _, _, _) =>
+            {
+                executed++;
+                return Task.FromResult(new ResourceCommandResponseViewModel { Kind = ResourceCommandResponseKind.Succeeded });
+            })
+        {
+            IsReadOnly = true
+        };
+        var executor = CreateExecutor(client, out var notificationService, out _);
+        var resource = ModelTestHelpers.CreateResource(resourceName: "api", commands: [CreateCommand(CommandViewModel.StopCommand)]);
+
+        Assert.Null(await executor.ExecuteGraphGameCommandAsync(resource, CommandViewModel.StopCommand, r => r.DisplayName));
+        Assert.Equal(0, executed);
+        Assert.Empty(notificationService.GetNotifications());
+    }
+
+    [Fact]
     public async Task ExecuteGraphGameCommandAsync_ReportsCommandWithoutOneAsUnavailable()
     {
         var executor = CreateExecutor(new TestDashboardClient(isEnabled: true), out _, out _);
