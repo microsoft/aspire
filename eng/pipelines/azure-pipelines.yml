@@ -582,7 +582,9 @@ extends:
                     }
                   }
                 displayName: 🟣Verify NuGet package signatures
-                condition: and(succeeded(), eq(variables['_SignType'], 'real'))
+                # Arcade excludes NuGet packages from in-build signing when PostBuildSign=true.
+                # Automatic main builds use that policy; release and manual builds sign packages.
+                condition: and(succeeded(), eq(variables['_SignType'], 'real'), ne(variables['PostBuildSign'], 'true'))
 
               - pwsh: |
                   Get-ChildItem -Path "$(Build.SourcesDirectory)/artifacts/packages" -File -Recurse |

@@ -60,11 +60,20 @@ before its Windows signing pass because Linux native jobs skip signing.
 Windows/macOS Dashboard packages are staged afterward so their signed producer
 outputs are preserved.
 
-Assembly checks that all seven Dashboard packages reached `Shipping` and
-verifies every final NuGet release package's signature before publishing,
-including Dashboard, CLI, and managed packages. The unsigned `*.symbols.nupkg`
-files are excluded because they are symbol-server inputs, not NuGet release
-packages. See the Assemble job in
+NuGet signing follows `PostBuildSign` in
+[`common-variables.yml`](../../eng/pipelines/common-variables.yml):
+release-branch and manually queued official builds set it to `false`, enabling
+Arcade's default package-signing inputs. Automatic main builds set it to `true`,
+excluding NuGet packages from in-build signing; native executable and npm
+signing are selected separately.
+
+Assembly checks that all seven Dashboard packages reached `Shipping`. When real
+signing is enabled and `PostBuildSign` is not `true`, it also verifies every final
+NuGet release package's signature before publishing, including Dashboard, CLI,
+and managed packages. This matches package-signing selection
+rather than assuming that a real-signed build signs every artifact. The unsigned
+`*.symbols.nupkg` files are excluded because they are symbol-server inputs, not
+NuGet release packages. See the Assemble job in
 [`azure-pipelines.yml`](../../eng/pipelines/azure-pipelines.yml).
 
 ## Nix flake packaging

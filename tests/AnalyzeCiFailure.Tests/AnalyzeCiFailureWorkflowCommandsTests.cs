@@ -12,6 +12,19 @@ namespace Infrastructure.Tests;
 /// <summary>Checks Actions output protocol, completion policy and limited-evidence finalization.</summary>
 public sealed partial class AnalyzeCiFailureWorkflowTests
 {
+    [Theory]
+    [InlineData("runner-missing-diagnostics")]
+    [InlineData("malformed-trx")]
+    [RequiresTools(["bash", "git"])]
+    public async Task LimitedReportsDefaultToTestOwnedStepSummary(string scenario)
+    {
+        var result = await RunCollectionAsync(scenario, useWorkflowAdapter: true);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        var report = await File.ReadAllTextAsync(Path.Combine(EvidenceDirectory, "limited-analysis.md"));
+        Assert.Equal(report, await File.ReadAllTextAsync(Path.Combine(_workspace.Path, "step-summary")));
+    }
+
     [Fact]
     [RequiresTools(["bash", "git"])]
     public async Task UnavailableSourceResultsProduceLimitedReportInsteadOfRequestingAgentDiagnosis()

@@ -333,8 +333,8 @@
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceNameRequired">
-        <source>Template source names must be nonempty and must not contain dots, colons, or control characters.</source>
-        <target state="new">Template source names must be nonempty and must not contain dots, colons, or control characters.</target>
+        <source>Template source names must be 1-64 ASCII letters, digits, dots, hyphens, or underscores, starting with a letter or digit.</source>
+        <target state="new">Template source names must be 1-64 ASCII letters, digits, dots, hyphens, or underscores, starting with a letter or digit.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceNotFound">

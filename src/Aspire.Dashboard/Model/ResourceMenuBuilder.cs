@@ -95,24 +95,7 @@ public sealed class ResourceMenuBuilder
             menuItems.Add(CreateConsoleLogsMenuItem(resource, resourceByName));
         }
 
-        menuItems.Add(new MenuButtonItem
-        {
-            Text = _controlLoc[nameof(ControlsStrings.ViewJson)],
-            Icon = s_bracesIcon,
-            OnClick = async () =>
-            {
-                var result = ExportHelpers.GetResourceAsJson(resource, resourceByName);
-                await TextVisualizerDialog.OpenDialogAsync(new OpenTextVisualizerDialogOptions
-                {
-                    DialogService = _dialogService,
-                    ValueDescription = result.FileName,
-                    Value = result.Content,
-                    DownloadFileName = result.FileName,
-                    ContainsSecret = true,
-                    FixedFormat = DashboardUIHelpers.JsonFormat
-                }).ConfigureAwait(false);
-            }
-        });
+        menuItems.Add(CreateViewJsonMenuItem(resource, resourceByName));
 
         if (resource.Environment.Any(e => e.FromSpec))
         {
@@ -144,6 +127,28 @@ public sealed class ResourceMenuBuilder
         {
             AddUrlMenuItems(menuItems, resource);
         }
+    }
+
+    internal MenuButtonItem CreateViewJsonMenuItem(ResourceViewModel resource, IDictionary<string, ResourceViewModel> resourceByName)
+    {
+        return new MenuButtonItem
+        {
+            Text = _controlLoc[nameof(ControlsStrings.ViewJson)],
+            Icon = s_bracesIcon,
+            OnClick = async () =>
+            {
+                var result = ExportHelpers.GetResourceAsJson(resource, resourceByName);
+                await TextVisualizerDialog.OpenDialogAsync(new OpenTextVisualizerDialogOptions
+                {
+                    DialogService = _dialogService,
+                    ValueDescription = result.FileName,
+                    Value = result.Content,
+                    DownloadFileName = result.FileName,
+                    ContainsSecret = true,
+                    FixedFormat = DashboardUIHelpers.JsonFormat
+                }).ConfigureAwait(false);
+            }
+        };
     }
 
     internal MenuButtonItem CreateViewOutputMenuItem(ResourceViewModel resource, IDictionary<string, ResourceViewModel> resourceByName)

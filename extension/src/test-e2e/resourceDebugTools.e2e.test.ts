@@ -241,7 +241,9 @@ suite('Aspire resource debug language model tool E2E', function () {
             });
         }
 
-        await executeE2eControlCommand({ name: 'stopResource', appHostPath, resourceName: worker.name });
+        const stopInvocationBefore = getCommandInvocationCount('aspire-vscode.stopResource');
+        await executeE2eControlCommand({ name: 'stopResource', appHostPath, resourceName: worker.name }, { waitFor: 'started' });
+        await waitForCommandOutcome('aspire-vscode.stopResource', 'success', 60000, stopInvocationBefore);
         await waitForResourceState(worker.name, ['Exited', 'Finished', 'Stopped'], 90000);
 
         const stopped = await invokeLanguageModelTool<ResourceDebugToolResult>(

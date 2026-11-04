@@ -32,6 +32,7 @@ internal sealed class CapabilityDispatcher
     private readonly Dictionary<string, HashSet<string>> _polyglotMethodNamesByClrName = new(StringComparer.Ordinal);
     private readonly HandleRegistry _handles;
     private readonly AtsMarshaller _marshaller;
+    private readonly CapabilityInvocationGate _invocationGate = new();
     private readonly ExternalCapabilityRegistry? _externalRegistry;
     private readonly ILogger _logger;
     private readonly RemoteHostProfilingTelemetry _profilingTelemetry;
@@ -652,7 +653,7 @@ internal sealed class CapabilityDispatcher
         return InvokeAsync(capabilityId, args).GetAwaiter().GetResult();
     }
 
-    private static async Task<object?> InvokeMethodAsync(MethodInfo method, object? target, object?[] methodArgs, bool runInvocationOnBackgroundThread)
+    private async Task<object?> InvokeMethodAsync(MethodInfo method, object? target, object?[] methodArgs, bool runInvocationOnBackgroundThread)
     {
         if (runInvocationOnBackgroundThread)
         {
@@ -662,7 +663,7 @@ internal sealed class CapabilityDispatcher
             return await Task.Run(() => InvokeMethodCore(method, target, methodArgs)).ConfigureAwait(false);
         }
 
-        return InvokeMethodCore(method, target, methodArgs);
+        return await _invocationGate.RunAsync(() => InvokeMethodCore(method, target, methodArgs)).ConfigureAwait(false);
     }
 
     private static async Task<object?> UnwrapAsyncResultAsync(object? result, Type returnType)

@@ -278,6 +278,10 @@
 }
 
 @media (max-width: 768px) {
+    ::deep.layout > header > a.application-name {
+        max-width: none;
+    }
+
     ::deep.layout {
         /* MobileNavMenu uses this same value to place its sheet directly under the header and to keep its
            scrollport within the visible viewport instead of extending underneath the header at high zoom. */
