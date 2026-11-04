@@ -64,7 +64,7 @@ internal static class ConfluentKafkaCommon
         unit: "{message}",
         description: "Number of messages that were delivered to the application.");
 
-    private static readonly ConcurrentDictionary<string, Task<string?>> ClusterIdCache = new();
+    internal static readonly ConcurrentDictionary<string, Task<string?>> ClusterIdCache = new();
 
     internal static async Task<string?> GetOrFetchClusterIdAsync(Handle handle, string? bootstrapServers)
     {
@@ -81,9 +81,10 @@ internal static class ConfluentKafkaCommon
 
         var result = await task.ConfigureAwait(false);
 
-        if (result == null)
+        if (result is null)
         {
-            ClusterIdCache.TryRemove(key, out _);
+            // A stale waiter must not remove a newer discovery task for the same servers.
+            ClusterIdCache.TryRemove(KeyValuePair.Create(key, task));
         }
 
         return result;

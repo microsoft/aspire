@@ -13,14 +13,14 @@ internal class InstrumentedConsumer<TKey, TValue> : IConsumer<TKey, TValue>
 {
     private readonly IConsumer<TKey, TValue> consumer;
     private readonly ConfluentKafkaConsumerInstrumentationOptions<TKey, TValue> options;
-    private readonly Task<string?>? clusterIdTask;
+    private readonly Lazy<Task<string?>> clusterIdTask;
 
     public InstrumentedConsumer(IConsumer<TKey, TValue> consumer, ConfluentKafkaConsumerInstrumentationOptions<TKey, TValue> options, string? bootstrapServers = null)
     {
         this.consumer = consumer;
         this.options = options;
 
-        this.clusterIdTask = ConfluentKafkaCommon.GetOrFetchClusterIdAsync(consumer.Handle, bootstrapServers);
+        this.clusterIdTask = new(() => ConfluentKafkaCommon.GetOrFetchClusterIdAsync(consumer.Handle, bootstrapServers));
     }
 
     public Handle Handle => this.consumer.Handle;
@@ -37,7 +37,7 @@ internal class InstrumentedConsumer<TKey, TValue> : IConsumer<TKey, TValue>
 
     public string? GroupId { get; internal set; }
 
-    internal Task<string?>? ClusterIdTask => this.clusterIdTask;
+    internal Lazy<Task<string?>>? ClusterIdTask => this.options.Traces ? this.clusterIdTask : null;
 
     public void Dispose()
         => this.consumer.Dispose();
@@ -408,8 +408,9 @@ internal class InstrumentedConsumer<TKey, TValue> : IConsumer<TKey, TValue>
                 activity.SetTag(SemanticConventions.AttributeMessagingKafkaMessageTombstone, true);
             }
 
-            if (this.clusterIdTask?.Status == TaskStatus.RanToCompletion
-                && this.clusterIdTask.Result is { Length: > 0 } clusterId)
+            var clusterIdTask = this.clusterIdTask.Value;
+            if (clusterIdTask.Status == TaskStatus.RanToCompletion
+                && clusterIdTask.Result is { Length: > 0 } clusterId)
             {
                 activity.SetTag(SemanticConventions.AttributeMessagingKafkaClusterId, clusterId);
             }

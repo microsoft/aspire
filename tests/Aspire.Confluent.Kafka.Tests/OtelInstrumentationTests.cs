@@ -10,12 +10,191 @@ using OpenTelemetry.Instrumentation.ConfluentKafka;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
 using Xunit;
+using KafkaInstrumentationCommon = OpenTelemetry.Instrumentation.ConfluentKafka.ConfluentKafkaCommon;
 using static Aspire.Confluent.Kafka.Tests.MetricTestHelpers;
 
 namespace Aspire.Confluent.Kafka.Tests;
 
 public class OtelInstrumentationTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ClientConstructionDefersClusterDiscovery(bool tracingEnabled)
+    {
+        var innerProducer = new FakeKafkaProducer<string, string> { ExceptionToThrow = new ArgumentException("serialization error") };
+        var innerConsumer = new FakeKafkaConsumer<string, string>();
+        using var producer = new InstrumentedProducer<string, string>(
+            innerProducer,
+            new ConfluentKafkaProducerInstrumentationOptions<string, string> { Traces = tracingEnabled });
+        using var consumer = new InstrumentedConsumer<string, string>(
+            innerConsumer,
+            new ConfluentKafkaConsumerInstrumentationOptions<string, string> { Traces = tracingEnabled });
+
+        Assert.Equal(0, innerProducer.HandleReadCount);
+        Assert.Equal(0, innerConsumer.HandleReadCount);
+    }
+
+    [Fact]
+    public async Task FailedClusterIdLookupAllowsRetry()
+    {
+        var bootstrapServers = $"cache-test-{Guid.NewGuid()}";
+        Assert.True(KafkaInstrumentationCommon.ClusterIdCache.TryAdd(bootstrapServers, Task.FromResult<string?>(null)));
+
+        try
+        {
+            Assert.Null(await KafkaInstrumentationCommon.GetOrFetchClusterIdAsync(null!, bootstrapServers));
+            Assert.True(KafkaInstrumentationCommon.ClusterIdCache.TryAdd(bootstrapServers, Task.FromResult<string?>("retried-cluster")));
+            Assert.Equal("retried-cluster", await KafkaInstrumentationCommon.GetOrFetchClusterIdAsync(null!, bootstrapServers));
+        }
+        finally
+        {
+            KafkaInstrumentationCommon.ClusterIdCache.TryRemove(bootstrapServers, out _);
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task FailedClusterIdLookupPreservesReplacement(bool replacementCompleted)
+    {
+        var bootstrapServers = $"cache-test-{Guid.NewGuid()}";
+        var failedDiscovery = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var replacementDiscovery = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        Assert.True(KafkaInstrumentationCommon.ClusterIdCache.TryAdd(bootstrapServers, failedDiscovery.Task));
+
+        try
+        {
+            var lookup = KafkaInstrumentationCommon.GetOrFetchClusterIdAsync(null!, bootstrapServers);
+            if (replacementCompleted)
+            {
+                replacementDiscovery.SetResult("replacement-cluster");
+            }
+
+            // Recreate a newer cache entry being installed before a stale waiter resumes.
+            Assert.True(KafkaInstrumentationCommon.ClusterIdCache.TryUpdate(bootstrapServers, replacementDiscovery.Task, failedDiscovery.Task));
+            failedDiscovery.SetResult(null);
+
+            Assert.Null(await lookup.WaitAsync(TimeSpan.FromSeconds(10)));
+            Assert.True(KafkaInstrumentationCommon.ClusterIdCache.TryGetValue(bootstrapServers, out var cachedDiscovery));
+            Assert.Same(replacementDiscovery.Task, cachedDiscovery);
+
+            if (!replacementCompleted)
+            {
+                replacementDiscovery.SetResult("replacement-cluster");
+            }
+
+            Assert.Equal("replacement-cluster", await KafkaInstrumentationCommon.GetOrFetchClusterIdAsync(null!, bootstrapServers));
+        }
+        finally
+        {
+            failedDiscovery.TrySetResult(null);
+            replacementDiscovery.TrySetResult("replacement-cluster");
+            KafkaInstrumentationCommon.ClusterIdCache.TryRemove(bootstrapServers, out _);
+        }
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task ProducerClusterDiscoveryStartsWhenTracingIsEnabled(bool asyncProduce, bool usePartition)
+    {
+        var activityExporter = new TestActivityExporter();
+        using var tracerProvider = Sdk.CreateTracerProviderBuilder()
+            .AddSource(KafkaInstrumentationCommon.ActivitySource.Name)
+            .AddProcessor(new SimpleActivityExportProcessor(activityExporter))
+            .Build();
+        var topic = $"lazy-producer-{Guid.NewGuid()}";
+        var exception = new ArgumentException("serialization error");
+        var innerProducer = new FakeKafkaProducer<string, string> { ExceptionToThrow = exception };
+        var options = new ConfluentKafkaProducerInstrumentationOptions<string, string> { Traces = false, Metrics = true };
+        using var producer = new InstrumentedProducer<string, string>(innerProducer, options);
+        var message = new Message<string, string> { Key = "key", Value = "value" };
+        var partition = new TopicPartition(topic, new Partition(0));
+        Assert.Equal(0, innerProducer.HandleReadCount);
+
+        await ProduceAsync();
+        Assert.Equal(0, innerProducer.HandleReadCount);
+        var disabledActivities = activityExporter.GetActivities()
+            .Where(activity => Equals(activity.GetTagItem("messaging.destination.name"), topic))
+            .ToArray();
+        Assert.Empty(disabledActivities);
+
+        options.Traces = true;
+        await ProduceAsync();
+        await ProduceAsync();
+        Assert.Equal(1, innerProducer.HandleReadCount);
+        Assert.Equal(2, activityExporter.GetActivities().Count(activity => Equals(activity.GetTagItem("messaging.destination.name"), topic)));
+
+        async Task ProduceAsync()
+        {
+            var actual = asyncProduce
+                ? await Record.ExceptionAsync(() => usePartition ? producer.ProduceAsync(partition, message) : producer.ProduceAsync(topic, message))
+                : Record.Exception(() =>
+                {
+                    if (usePartition)
+                    {
+                        producer.Produce(partition, message);
+                    }
+                    else
+                    {
+                        producer.Produce(topic, message);
+                    }
+                });
+            Assert.Same(exception, actual);
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ConsumerClusterDiscoveryStartsWhenTracingIsEnabled(bool processMessages)
+    {
+        var activityExporter = new TestActivityExporter();
+        using var tracerProvider = Sdk.CreateTracerProviderBuilder()
+            .AddSource(KafkaInstrumentationCommon.ActivitySource.Name)
+            .AddProcessor(new SimpleActivityExportProcessor(activityExporter))
+            .Build();
+        var topic = $"lazy-consumer-{Guid.NewGuid()}";
+        var result = CreateConsumeResult(topic, "key");
+        var innerConsumer = new FakeKafkaConsumer<string, string> { ConsumeResult = result };
+        var options = new ConfluentKafkaConsumerInstrumentationOptions<string, string> { Traces = false, Metrics = true };
+        using var consumer = new InstrumentedConsumer<string, string>(innerConsumer, options) { GroupId = $"lazy-group-{Guid.NewGuid()}" };
+        Assert.Equal(0, innerConsumer.HandleReadCount);
+
+        await ConsumeAsync();
+        Assert.Equal(0, innerConsumer.HandleReadCount);
+        var disabledActivities = activityExporter.GetActivities()
+            .Where(activity => Equals(activity.GetTagItem("messaging.destination.name"), topic))
+            .ToArray();
+        Assert.Empty(disabledActivities);
+
+        options.Traces = true;
+        await ConsumeAsync();
+        Assert.Equal(1, innerConsumer.HandleReadCount);
+        Assert.Equal(processMessages ? 2 : 3, activityExporter.GetActivities().Count(activity => Equals(activity.GetTagItem("messaging.destination.name"), topic)));
+
+        async Task ConsumeAsync()
+        {
+            if (processMessages)
+            {
+                Assert.Same(result, await consumer.ConsumeAndProcessMessageAsync((_, activity, _) =>
+                {
+                    Assert.Equal(options.Traces, activity is not null);
+                    return ValueTask.CompletedTask;
+                }));
+            }
+            else
+            {
+                Assert.Same(result, consumer.Consume(0));
+                Assert.Same(result, consumer.Consume(TimeSpan.Zero));
+                Assert.Same(result, consumer.Consume(CancellationToken.None));
+            }
+        }
+    }
+
     [Theory]
     [InlineData(false, true)]
     [InlineData(true, true)]

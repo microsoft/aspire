@@ -15,7 +15,7 @@ internal sealed class InstrumentedProducer<TKey, TValue> : IProducer<TKey, TValu
     private readonly TextMapPropagator propagator = Propagators.DefaultTextMapPropagator;
     private readonly IProducer<TKey, TValue> producer;
     private readonly ConfluentKafkaProducerInstrumentationOptions<TKey, TValue> options;
-    private readonly Task<string?>? clusterIdTask;
+    private readonly Lazy<Task<string?>> clusterIdTask;
 
     public InstrumentedProducer(
         IProducer<TKey, TValue> producer,
@@ -25,7 +25,7 @@ internal sealed class InstrumentedProducer<TKey, TValue> : IProducer<TKey, TValu
         this.producer = producer;
         this.options = options;
 
-        this.clusterIdTask = ConfluentKafkaCommon.GetOrFetchClusterIdAsync(producer.Handle, bootstrapServers);
+        this.clusterIdTask = new(() => ConfluentKafkaCommon.GetOrFetchClusterIdAsync(producer.Handle, bootstrapServers));
     }
 
     public Handle Handle => this.producer.Handle;
@@ -366,8 +366,9 @@ internal sealed class InstrumentedProducer<TKey, TValue> : IProducer<TKey, TValu
                 activity.SetTag(SemanticConventions.AttributeMessagingKafkaMessageTombstone, true);
             }
 
-            if (this.clusterIdTask?.Status == TaskStatus.RanToCompletion
-                && this.clusterIdTask.Result is { Length: > 0 } clusterId)
+            var clusterIdTask = this.clusterIdTask.Value;
+            if (clusterIdTask.Status == TaskStatus.RanToCompletion
+                && clusterIdTask.Result is { Length: > 0 } clusterId)
             {
                 activity.SetTag(SemanticConventions.AttributeMessagingKafkaClusterId, clusterId);
             }

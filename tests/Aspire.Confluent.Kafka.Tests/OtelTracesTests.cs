@@ -80,7 +80,7 @@ public class OtelTracesTests
         // Discovery is asynchronous; wait for the shared cache before creating producer spans.
         var clusterIdTask = instrumentedConsumer.ClusterIdTask;
         Assert.NotNull(clusterIdTask);
-        Assert.Equal(cluster.ClusterId, await clusterIdTask.WaitAsync(TimeSpan.FromSeconds(30)));
+        Assert.Equal(cluster.ClusterId, await clusterIdTask.Value.WaitAsync(TimeSpan.FromSeconds(30)));
 
         string topic = $"otel-topic-{Guid.NewGuid()}";
         using (var producer = useKeyed

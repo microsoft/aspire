@@ -9,7 +9,16 @@ internal sealed class FakeKafkaProducer<TKey, TValue> : IProducer<TKey, TValue>
 {
     public required Exception ExceptionToThrow { get; init; }
 
-    public Handle Handle => null!;
+    public int HandleReadCount => Volatile.Read(ref _handleReadCount);
+
+    public Handle Handle
+    {
+        get
+        {
+            Interlocked.Increment(ref _handleReadCount);
+            return null!;
+        }
+    }
 
     public string Name => "fake-producer";
 
@@ -53,4 +62,6 @@ internal sealed class FakeKafkaProducer<TKey, TValue> : IProducer<TKey, TValue>
     public void Dispose()
     {
     }
+
+    private int _handleReadCount;
 }

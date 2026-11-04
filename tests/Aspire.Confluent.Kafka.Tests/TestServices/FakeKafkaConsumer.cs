@@ -11,7 +11,16 @@ internal sealed class FakeKafkaConsumer<TKey, TValue> : IConsumer<TKey, TValue>
 
     public Exception? ExceptionToThrow { get; set; }
 
-    public Handle Handle => null!;
+    public int HandleReadCount => Volatile.Read(ref _handleReadCount);
+
+    public Handle Handle
+    {
+        get
+        {
+            Interlocked.Increment(ref _handleReadCount);
+            return null!;
+        }
+    }
 
     public string Name => "fake-consumer";
 
@@ -131,4 +140,6 @@ internal sealed class FakeKafkaConsumer<TKey, TValue> : IConsumer<TKey, TValue>
     public void Dispose()
     {
     }
+
+    private int _handleReadCount;
 }
