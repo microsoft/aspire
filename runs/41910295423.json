@@ -1,0 +1,73 @@
+{
+  "run_id": 41910295423,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/41910295423",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-04T21:48:50Z",
+  "verdict": "transient-infra",
+  "pr": null,
+  "triggering_merge_pr": null,
+  "main_context": {
+    "last_successful_main_sha": "d4994d7af558bd42ec3ec36e2499fb4b9ec31ce2",
+    "failed_sha": "795f9be5a45d005fd3acb575ebbc7996c09a2bfc",
+    "candidate_merge_history_state": "incomplete",
+    "candidate_merges": null
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (collection, Aspire.Hosting.Tests, Hosting-2, Hosting-2, tests/Aspire.Hosting.Te... / Hosting-2 (windows-latest)",
+      "id": 126865391991,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/41910295423/job/126865391991",
+      "classification": "transient-infra",
+      "reason": "DCP dependency check timed out running docker --version on Windows runner",
+      "failed_steps": [
+        "Run tests (Windows)"
+      ]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.DotnetTool.Tests, Hosting.DotnetTool, Hosting.DotnetToo... / Hosting.DotnetTool (windows-latest)",
+      "id": 126865439946,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/41910295423/job/126865439946",
+      "classification": "transient-infra",
+      "reason": "DCP dependency check timed out running docker --version on Windows runner",
+      "failed_steps": [
+        "Run tests (Windows)"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.DotnetTool.Tests.DotnetToolFunctionalTests.VerifyNonExistentDotnetToolResource",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.DotnetTool.Tests, Hosting.DotnetTool, Hosting.DotnetToo... / Hosting.DotnetTool (windows-latest)",
+      "error": "Aspire.Hosting.DistributedApplicationException : Application orchestrator dependency check returned an error: The operation has timed out. 2026-11-04T21:10:02.810Z\tinfo\tdcp.info.os-executor\tContext expired, stopping process...\t{\"PID\": 2436, \"Command\": \"C:\\\\Windows\\\\system32\\\\docker.exe\", \"Args\": [\"--version\"]}\n",
+      "stack_trace": "   at Aspire.Hosting.Dcp.DcpDependencyCheck.GetDcpInfoAsync(Boolean force, CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpDependencyCheck.cs:line 116\n   at Aspire.Hosting.Dcp.DcpDependencyCheck.GetDcpInfoAsync(Boolean force, CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpDependencyCheck.cs:line 132\n   at Aspire.Hosting.Dcp.DcpHost.EnsureDcpContainerRuntimeAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpHost.cs:line 81\n   at Aspire.Hosting.Dcp.DcpHost.StartAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpHost.cs:line 72\n   at Aspire.Hosting.Orchestrator.OrchestratorHostService.StartAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Orchestrator/OrchestratorHostService.cs:line 39\n   at Microsoft.Extensions.Hosting.Internal.Host.<StartAsync>b__14_1(IHostedService service, CancellationToken token)\n   at Microsoft.Extensions.Hosting.Internal.Host.ForeachService[T](IEnumerable`1 services, CancellationToken token, Boolean concurrent, Boolean abortOnFirstException, List`1 exceptions, Func`3 operation)\n   at Microsoft.Extensions.Hosting.Internal.Host.StartAsync(CancellationToken cancellationToken)\n   at Aspire.Hosting.DistributedApplication.StartAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/DistributedApplication.cs:line 490\n   at Aspire.Hosting.DotnetTool.Tests.DotnetToolFunctionalTests.VerifyNonExistentDotnetToolResource() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.DotnetTool.Tests\\DotnetToolFunctionalTests.cs.cs:line 44\n--- End of stack trace from previous location ---",
+      "standard_output": "| [2026-11-04T21:09:52] Aspire.Hosting.DistributedApplication Information: Aspire AppHost version: 17.0.0-ci\n| [2026-11-04T21:09:52] Aspire.Hosting.DistributedApplication Information: Distributed application starting.\n| [2026-11-04T21:09:52] Aspire.Hosting.DistributedApplication Information: Application host directory is: D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.TestUtilities\n| [2026-11-04T21:09:52] Aspire.Hosting.Cli.CliOrphanDetector Debug: No CLI process ID configured. Orphan detection disabled.\n| [2026-11-04T21:09:52] Aspire.Hosting.Cli.BackchannelService Debug: Backchannel socket path was not specified.\n| [2026-11-04T21:09:52] Aspire.Hosting.Backchannel.AuxiliaryBackchannelService Debug: Starting auxiliary backchannel service on socket path: C:\\Users\\runneradmin\\.aspire\\cli\\bch\\vygPxKePKFAp1pLQEu_.5044\n| [2026-11-04T21:09:52] Aspire.Hosting.Backchannel.AuxiliaryBackchannelService Debug: Auxiliary backchannel listening on C:\\Users\\runneradmin\\.aspire\\cli\\bch\\vygPxKePKFAp1pLQEu_.5044\n| [2026-11-04T21:09:52] Aspire.Hosting.Devcontainers.Codespaces.CodespacesResourceUrlRewriterService Trace: Not running in Codespaces, skipping URL rewriting.\n| [2026-11-04T21:10:17] Microsoft.Extensions.Hosting.Internal.Host Error: Hosting failed to start\n| Aspire.Hosting.DistributedApplicationException: Application orchestrator dependency check returned an error: The operation has timed out. 2026-11-04T21:10:02.810Z\tinfo\tdcp.info.os-executor\tContext expired, stopping process...\t{\"PID\": 2436, \"Command\": \"C:\\\\Windows\\\\system32\\\\docker.exe\", \"Args\": [\"--version\"]}\n|    at Aspire.Hosting.Dcp.DcpDependencyCheck.GetDcpInfoAsync(Boolean force, CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpDependencyCheck.cs:line 116\n|    at Aspire.Hosting.Dcp.DcpDependencyCheck.GetDcpInfoAsync(Boolean force, CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpDependencyCheck.cs:line 132\n|    at Aspire.Hosting.Dcp.DcpHost.EnsureDcpContainerRuntimeAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpHost.cs:line 81\n|    at Aspire.Hosting.Dcp.DcpHost.StartAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpHost.cs:line 72\n|    at Aspire.Hosting.Orchestrator.OrchestratorHostService.StartAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Orchestrator/OrchestratorHostService.cs:line 39\n|    at Microsoft.Extensions.Hosting.Internal.Host.<StartAsync>b__14_1(IHostedService service, CancellationToken token)\n|    at Microsoft.Extensions.Hosting.Internal.Host.ForeachService[T](IEnumerable`1 services, CancellationToken token, Boolean concurrent, Boolean abortOnFirstException, List`1 exceptions, Func`3 operation)\n| [2026-11-04T21:10:17] Aspire.Hosting.FileSystemService Debug: Allocated temporary directory: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\aspire-dcpgx0imylb.xk1\n| [2026-11-04T21:10:27] Aspire.Hosting.FileSystemService Debug: Cleaning up 1 remaining temporary files/directories\n| [2026-11-04T21:10:27] Aspire.Hosting.FileSystemService Debug: Cleaned up temporary directory: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\aspire-dcpgx0imylb.xk1\n",
+      "standard_error": "",
+      "classification": "transient-infra",
+      "reason": "Orchestrator docker --version probe timed out before test logic ran",
+      "job_id": 126865439946,
+      "execution_id": "2c392943-f6e3-4774-b713-25c7e5769170",
+      "result_file": "00001.trx",
+      "result_format": "trx"
+    },
+    {
+      "name": "Aspire.Hosting.Tests.ExecutableResourceFailureLoggingTests.ExecutableDoesNotExist",
+      "job": "Tests / No-package tests (collection, Aspire.Hosting.Tests, Hosting-2, Hosting-2, tests/Aspire.Hosting.Te... / Hosting-2 (windows-latest)",
+      "error": "Aspire.Hosting.DistributedApplicationException : Application orchestrator dependency check returned an error: The operation has timed out. 2026-11-04T21:12:14.626Z\tinfo\tdcp.info.os-executor\tContext expired, stopping process...\t{\"PID\": 7964, \"Command\": \"C:\\\\Windows\\\\system32\\\\docker.exe\", \"Args\": [\"--version\"]}\n",
+      "stack_trace": "   at Aspire.Hosting.Dcp.DcpDependencyCheck.GetDcpInfoAsync(Boolean force, CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpDependencyCheck.cs:line 116\n   at Aspire.Hosting.Dcp.DcpDependencyCheck.GetDcpInfoAsync(Boolean force, CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpDependencyCheck.cs:line 132\n   at Aspire.Hosting.Dcp.DcpHost.EnsureDcpContainerRuntimeAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpHost.cs:line 81\n   at Aspire.Hosting.Dcp.DcpHost.StartAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpHost.cs:line 72\n   at Aspire.Hosting.Orchestrator.OrchestratorHostService.StartAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Orchestrator/OrchestratorHostService.cs:line 39\n   at Microsoft.Extensions.Hosting.Internal.Host.<StartAsync>b__14_1(IHostedService service, CancellationToken token)\n   at Microsoft.Extensions.Hosting.Internal.Host.ForeachService[T](IEnumerable`1 services, CancellationToken token, Boolean concurrent, Boolean abortOnFirstException, List`1 exceptions, Func`3 operation)\n   at Microsoft.Extensions.Hosting.Internal.Host.StartAsync(CancellationToken cancellationToken)\n   at Aspire.Hosting.DistributedApplication.StartAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/DistributedApplication.cs:line 490\n   at Microsoft.AspNetCore.InternalTesting.AsyncTestHelpers.TimeoutAfter(Task task, TimeSpan timeout, String filePath, Int32 lineNumber) in D:\\a\\aspire\\aspire\\tests\\Shared\\AsyncTestHelpers.cs:line 197\n   at Aspire.Hosting.Tests.ExecutableResourceFailureLoggingTests.ExecutableDoesNotExist() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Tests\\ResourceFailureLoggingTests.cs:line 58\n--- End of stack trace from previous location ---",
+      "standard_output": "| [2026-11-04T21:12:03] Aspire.Hosting.DistributedApplication Information: Aspire AppHost version: 17.0.0-ci\n| [2026-11-04T21:12:03] Aspire.Hosting.DistributedApplication Information: Distributed application starting.\n| [2026-11-04T21:12:03] Aspire.Hosting.DistributedApplication Information: Application host directory is: D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.TestUtilities\n| [2026-11-04T21:12:03] Aspire.Hosting.Cli.CliOrphanDetector Debug: No CLI process ID configured. Orphan detection disabled.\n| [2026-11-04T21:12:03] Aspire.Hosting.Cli.BackchannelService Debug: Backchannel socket path was not specified.\n| [2026-11-04T21:12:03] Aspire.Hosting.Devcontainers.Codespaces.CodespacesResourceUrlRewriterService Trace: Not running in Codespaces, skipping URL rewriting.\n| [2026-11-04T21:12:03] Aspire.Hosting.Backchannel.AuxiliaryBackchannelService Debug: Starting auxiliary backchannel service on socket path: C:\\Users\\runneradmin\\.aspire\\cli\\bch\\vygPxKePKFAOPOMzOrS.1200\n| [2026-11-04T21:12:03] Aspire.Hosting.Backchannel.AuxiliaryBackchannelService Debug: Auxiliary backchannel listening on C:\\Users\\runneradmin\\.aspire\\cli\\bch\\vygPxKePKFAOPOMzOrS.1200\n| [2026-11-04T21:12:29] Microsoft.Extensions.Hosting.Internal.Host Error: Hosting failed to start\n| Aspire.Hosting.DistributedApplicationException: Application orchestrator dependency check returned an error: The operation has timed out. 2026-11-04T21:12:14.626Z\tinfo\tdcp.info.os-executor\tContext expired, stopping process...\t{\"PID\": 7964, \"Command\": \"C:\\\\Windows\\\\system32\\\\docker.exe\", \"Args\": [\"--version\"]}\n|    at Aspire.Hosting.Dcp.DcpDependencyCheck.GetDcpInfoAsync(Boolean force, CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpDependencyCheck.cs:line 116\n|    at Aspire.Hosting.Dcp.DcpDependencyCheck.GetDcpInfoAsync(Boolean force, CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpDependencyCheck.cs:line 132\n|    at Aspire.Hosting.Dcp.DcpHost.EnsureDcpContainerRuntimeAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpHost.cs:line 81\n|    at Aspire.Hosting.Dcp.DcpHost.StartAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpHost.cs:line 72\n|    at Aspire.Hosting.Orchestrator.OrchestratorHostService.StartAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Orchestrator/OrchestratorHostService.cs:line 39\n|    at Microsoft.Extensions.Hosting.Internal.Host.<StartAsync>b__14_1(IHostedService service, CancellationToken token)\n|    at Microsoft.Extensions.Hosting.Internal.Host.ForeachService[T](IEnumerable`1 services, CancellationToken token, Boolean concurrent, Boolean abortOnFirstException, List`1 exceptions, Func`3 operation)\n| [2026-11-04T21:12:29] Aspire.Hosting.FileSystemService Debug: Allocated temporary directory: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\aspire-dcpik4u4pq2.tfb\n| [2026-11-04T21:12:39] Aspire.Hosting.FileSystemService Debug: Cleaning up 1 remaining temporary files/directories\n| [2026-11-04T21:12:39] Aspire.Hosting.FileSystemService Debug: Cleaned up temporary directory: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\aspire-dcpik4u4pq2.tfb\n",
+      "standard_error": "",
+      "classification": "transient-infra",
+      "reason": "Orchestrator docker --version probe timed out before test logic ran",
+      "job_id": 126865391991,
+      "execution_id": "adb9c742-6df2-4868-ab0b-4c04a3ccf687",
+      "result_file": "00001.trx",
+      "result_format": "trx"
+    }
+  ],
+  "causes": [
+    "dcp-docker-version-dependency-check-timeout-windows"
+  ]
+}
