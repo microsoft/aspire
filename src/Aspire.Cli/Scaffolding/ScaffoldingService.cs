@@ -24,7 +24,6 @@ internal sealed class ScaffoldingService : IScaffoldingService
 {
     private const string PackageJsonFileName = "package.json";
     private const string VsCodeSettingsFileName = ".vscode/settings.json";
-    private const string JavaScriptHostingPackageName = "Aspire.Hosting.JavaScript";
     internal const string BrownfieldTypeScriptAppHostDirectoryName = "aspire-apphost";
 
     private static readonly JsonSerializerOptions s_scaffoldJsonSerializerOptions = new()
@@ -121,7 +120,10 @@ internal sealed class ScaffoldingService : IScaffoldingService
             config.Channel = context.Channel;
         }
 
-        PreAddJavaScriptHostingForBrownfieldTypeScript(config, directory, language, sdkVersion);
+        // The language's default hosting packages go into the config before the integrations are collected
+        // so they are restored and code generated with the code generation package instead of waiting for
+        // `aspire add`. They use the SDK version, like the starter templates, to match that package.
+        AddDefaultHostingPackages(config, language, sdkVersion);
         if (!string.IsNullOrWhiteSpace(context.SdkVersion) ||
             !string.IsNullOrEmpty(context.Channel))
         {
@@ -518,20 +520,24 @@ internal sealed class ScaffoldingService : IScaffoldingService
         _logger.LogDebug("Generated {Count} code files in {Path}", generatedFiles.Count, outputPath);
     }
 
-    private static void PreAddJavaScriptHostingForBrownfieldTypeScript(
+    private static void AddDefaultHostingPackages(
         AspireConfigFile config,
-        DirectoryInfo directory,
         LanguageInfo language,
         string defaultSdkVersion)
     {
-        if (!IsTypeScriptLanguage(language) ||
-            !File.Exists(Path.Combine(directory.FullName, PackageJsonFileName)) ||
-            config.Packages?.ContainsKey(JavaScriptHostingPackageName) == true)
+        foreach (var packageName in language.DefaultHostingPackages)
         {
-            return;
-        }
+            // Keep whatever the config already declares for the package (a pinned version, a project
+            // reference) instead of replacing it with the SDK version. Packages is keyed ordinally but
+            // NuGet package ids are case-insensitive, so a hand-edited "aspire.hosting.python" entry
+            // must count as the same package or it would be duplicated.
+            if (config.Packages?.Keys.Contains(packageName, StringComparer.OrdinalIgnoreCase) is true)
+            {
+                continue;
+            }
 
-        config.AddOrUpdatePackage(JavaScriptHostingPackageName, config.GetEffectiveSdkVersion(defaultSdkVersion));
+            config.AddOrUpdatePackage(packageName, config.GetEffectiveSdkVersion(defaultSdkVersion));
+        }
     }
 
     private static bool IsTypeScriptLanguage(LanguageInfo language)
