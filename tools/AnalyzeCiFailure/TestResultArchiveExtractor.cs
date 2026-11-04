@@ -135,6 +135,8 @@ internal static class TestResultArchiveExtractor
                 {
                     throw new ValidationException("archive result data does not match its central directory");
                 }
+                // Preserve the entry path for ownership matching, not filesystem access.
+                // Mappings are usable only if the entire extraction succeeds.
                 extractedFile?.Invoke(name, Path.GetFileName(destination));
             }
             Directory.Move(staging, outputDirectory);

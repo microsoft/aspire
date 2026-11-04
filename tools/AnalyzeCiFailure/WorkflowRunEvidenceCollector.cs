@@ -651,12 +651,17 @@ internal sealed partial class WorkflowRunEvidenceCollector
                 }
             }
             Directory.CreateDirectory(zipDirectory);
+            // Trying combined results must not reset or bypass the limits used by
+            // job-specific fallbacks, including bytes consumed by failed attempts.
             long remainingExpandedBytes = 1073741824;
             long remainingDownloadedBytes = 1073741824;
             var acquisitionCount = 0;
             var acquiredArtifacts = new List<SelectedTestArtifact>();
+            // Keep acquired results visible even if a later fallback fails.
             _selectedArtifacts = acquiredArtifacts;
             var coveredPlans = new HashSet<TestArtifactExpectation>();
+            // Prefer the TRX-only aggregate: crash dumps can make a job's diagnostics
+            // archive too large to download even when its test reports are small.
             if (_workflow is AspireCiWorkflowConventions && plans.Any(plan => plan.Format == TestArtifactFormat.Trx))
             {
                 await CollectCombinedResultsAsync();
@@ -739,15 +744,17 @@ internal sealed partial class WorkflowRunEvidenceCollector
                 {
                     var combined = TestResultArtifacts.Select(TestResultArtifacts.ReadArtifacts(artifacts), [combinedPlan],
                         Text(run["run_started_at"]) ?? "", Text(run["updated_at"]) ?? "", diagnostics: _progress.Diagnostics).Single();
+                    // Establish ownership before acquisition. Reruns can retain reports
+                    // from historical producers whose names overlap current jobs.
                     var producers = await LoadCombinedResultProducersAsync(gitHub, runId, runAttempt, allJobs);
-                    var files = new List<(string EntryPath, string ExtractedFileName)>();
-                    if (await AcquireAsync(combined, (entry, file) => files.Add((entry, file)), reportFailure: false))
+                    var extractedReports = new List<(string EntryPath, string ExtractedFileName)>();
+                    if (await AcquireAsync(combined, (entry, file) => extractedReports.Add((entry, file)), reportFailure: false))
                     {
-                        var owners = files.ToDictionary(file => file.ExtractedFileName,
+                        var reportOwners = extractedReports.ToDictionary(file => file.ExtractedFileName,
                             file => FindCombinedReportOwner(file.EntryPath, producers), StringComparer.Ordinal);
                         foreach (var plan in plans.Where(plan => plan.Format == TestArtifactFormat.Trx))
                         {
-                            // A rerun's new aggregate can include logs left by an older attempt.
+                            // A rerun's new aggregate can include reports left by an older attempt.
                             // Verify the source artifact's attempt window without imposing the
                             // download limit: oversized logs are precisely why we prefer TRX.
                             try
@@ -762,21 +769,26 @@ internal sealed partial class WorkflowRunEvidenceCollector
                                 _progress.Diagnostics.Record("combined-results", "fallback", new { job = plan.JobName, reason = error.Message });
                                 continue;
                             }
-                            var matching = files.Where(file => owners[file.ExtractedFileName] == plan)
+                            var matchingReportFileNames = extractedReports.Where(file => reportOwners[file.ExtractedFileName] == plan)
                                 .Select(file => file.ExtractedFileName).ToArray();
-                            var usable = ReadUsableCombinedReports(plan,
-                                Path.Combine(_scratch.Results, GetValueText(combined.Artifact.Id)), matching);
-                            var complete = matching.Length > 0 && usable.Count == matching.Length;
-                            if (usable.Count > 0)
+                            var usableReportFileNames = ReadUsableCombinedReports(plan,
+                                Path.Combine(_scratch.Results, GetValueText(combined.Artifact.Id)), matchingReportFileNames);
+                            // Coverage means the available reports are usable, not that every
+                            // framework reported. An entirely absent report is undetectable
+                            // without an expected-report inventory.
+                            var canSkipJobArtifact = matchingReportFileNames.Length > 0 && usableReportFileNames.Count == matchingReportFileNames.Length;
+                            if (usableReportFileNames.Count > 0)
                             {
-                                acquiredArtifacts.Add(new(combined.Artifact, plan) { ResultFiles = usable });
+                                // Preserve valid observations even when another report is corrupt
+                                // and this job still needs its diagnostics archive as a fallback.
+                                acquiredArtifacts.Add(new(combined.Artifact, plan) { ResultFiles = usableReportFileNames });
                             }
-                            if (complete)
+                            if (canSkipJobArtifact)
                             {
                                 coveredPlans.Add(plan);
                             }
-                            _progress.Diagnostics.Record("combined-results", complete ? "covered" : "fallback",
-                                new { job = plan.JobName, matched = matching.Length, usable = usable.Count, reason = complete ? null : "Missing, ambiguous or unusable reports." });
+                            _progress.Diagnostics.Record("combined-results", canSkipJobArtifact ? "covered" : "fallback",
+                                new { job = plan.JobName, matched = matchingReportFileNames.Length, usable = usableReportFileNames.Count, reason = canSkipJobArtifact ? null : "Missing, ambiguous or unusable reports." });
                         }
                     }
                     else

@@ -108,10 +108,6 @@ failed downloads, in addition to metadata and extraction checks.
 
 Issue/comment creation validates returned JSON IDs and `html_url` values.
 Label additions use the additive endpoint so operator labels survive updates.
-New cause issue titles omit a leading model-supplied `Flaky:` prefix rather
-than presenting suspected flakiness as confirmed. Stored cause definitions,
-classification and labels are unchanged, and existing non-main cause issue
-titles remain unchanged.
 Mutations are never automatically retried: a lost or invalid response records
 an unknown receipt and preserves the existing publication recovery behavior.
 Internal progress uses the nullable `HasRelevantFailures` flag; its external
@@ -144,47 +140,12 @@ named artifacts. Each archive can also contain multiple TRX files, including
 different target frameworks. Selection and availability checks use every
 job/artifact expectation; finding one artifact cannot satisfy another.
 
-For Aspire CI's .NET jobs, collection first tries `All-TestResults`, which
-contains only TRX reports rather than logs and crash dumps. Reports are matched
-to actionable jobs using the runner directory and test-short-name filename
-contract in `AspireCiWorkflowConventions`. Passing jobs and other runners cannot
-supply their failures or coverage to an actionable job. All matching target-framework
-reports for a matched job are retained with the combined artifact's source ID.
-When short names overlap, the longest matching short name owns the report:
-`Hosting-2_*.trx` belongs to `Hosting-2`, not `Hosting`. Equal-specificity
-producers remain ambiguous and cannot supply observations or coverage. Reports
-owned by another producer neither satisfy nor invalidate the current job's
-coverage.
-For reruns, producer ownership also includes jobs from all run attempts, fetched
-through the bounded, paginated `jobs?filter=all` endpoint. Repeated historical
-job names count as one producer, with current-attempt metadata taking precedence.
-This prevents an earlier sibling such as `Hosting-Collection` from lending its
-reports to the rerun's `Hosting` job. Historical jobs are ownership context only,
-not additional actionable failures. If historical ownership cannot be collected,
-combined observations are not accepted and collection falls back to job artifacts.
-
-The combined artifact must pass the same run/SHA, attempt-window, metadata,
-download and ZIP checks as individual artifacts. Each producing `logs-*`
-artifact must also have unambiguous current-attempt metadata; its size need not
-fit the download cap when only the combined TRX is needed. This prevents a new
-aggregate from making an older attempt's results appear current.
-
-Artifact presence alone does not establish coverage: each job needs nonempty,
-parseable, unambiguously owned reports that pass the provenance checks above.
-Coverage is based on those available reports, not aggregate-job step results or
-a manifest of expected target frameworks. Failed downloads for other runners or
-failed upload-step metadata do not force fallback when this job's reports are
-present and usable.
-If an entire framework report is absent while another usable report for the
-same job is present, this policy cannot detect the omission or trigger fallback
-for it.
-
-Missing, ambiguous or unusable reports fall back **per job** to its `logs-*`
-artifact. Usable combined observations survive another unusable report for the
-same job or a failed fallback, but required evidence stays unavailable until
-that job's fallback succeeds. Combined-result fallback reasons remain in
-collection diagnostics without making a successful fallback unavailable.
-Extension E2E Mocha acquisition is unchanged.
+For Aspire CI's .NET jobs, collection first tries the smaller, TRX-only
+`All-TestResults` artifact, then falls back per job to its diagnostics archive
+when usable, owned reports are unavailable. Both paths share provenance checks
+and resource limits. Coverage is based on available reports, not a manifest of
+expected target frameworks; an entirely absent framework report cannot be
+detected if another usable report for the same job exists.
 
 Evidence policy is separate from the result format:
 
