@@ -289,6 +289,86 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(original, File.ReadAllText(configPath));
     }
 
+    [Fact]
+    public async Task AddCommandUsesNamedLocalIntegrationSourceWithoutCreatingHiveConfig()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appDirectory = workspace.CreateDirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appDirectory.FullName, "AppHost.csproj"));
+        File.WriteAllText(appHostFile.FullName, "<Project />");
+        var feed = workspace.CreateDirectory("team-packages");
+        NuGetTestHelper.CreatePackage(feed, "Aspire.Hosting.Redis", "1.0.0", new Dictionary<string, string>());
+        File.WriteAllText(Path.Combine(appDirectory.FullName, AspireConfigFile.FileName), $$"""
+            {
+              "integrationSources": {
+                "default": {"enabled": false},
+                "team": {
+                  "source": {{JsonSerializer.Serialize(feed.FullName)}},
+                  "patterns": ["Aspire.Hosting.*"]
+                }
+              }
+            }
+            """);
+        var configPath = Path.Combine(workspace.Path, "nuget.config");
+        File.WriteAllText(configPath, """
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="sdk" value="https://example.com/sdk" />
+                <add key="public" value="https://api.nuget.org/v3/index.json" />
+              </packageSources>
+              <packageSourceMapping>
+                <clear />
+                <packageSource key="sdk"><package pattern="Aspire*" /></packageSource>
+                <packageSource key="public"><package pattern="*" /></packageSource>
+              </packageSourceMapping>
+            </configuration>
+            """);
+
+        AddPackageContext? added = null;
+        var factory = new TestAppHostProjectFactory
+        {
+            LanguageId = KnownLanguageId.CSharp,
+            AddPackageAsyncCallback = (context, _) =>
+            {
+                added = context;
+                return Task.FromResult(true);
+            }
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+            options.NuGetClientFactory = _ => NuGetTestHelper.CreateClient();
+        });
+        services.AddSingleton<IAppHostProjectFactory>(factory);
+        using var provider = services.BuildServiceProvider();
+        Assert.True(provider.GetRequiredService<Aspire.Cli.NuGet.BundleNuGetService>()
+            .IsPackageSourceMappingEnabled(appDirectory, TestContext.Current.CancellationToken));
+
+        var exitCode = await provider.GetRequiredService<AddCommand>()
+            .Parse($"add Aspire.Hosting.Redis --apphost \"{appHostFile.FullName}\" --version 1.0.0")
+            .InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(added);
+        Assert.Equal("Aspire.Hosting.Redis", added.PackageId);
+        Assert.Equal("1.0.0", added.PackageVersion);
+        Assert.Null(added.Source);
+        Assert.Null(added.RequestedChannel);
+        Assert.Equal(
+            new[] { "AppHost.csproj", AspireConfigFile.FileName }.Order(StringComparer.Ordinal),
+            appDirectory.EnumerateFiles().Select(file => file.Name).Order(StringComparer.Ordinal));
+        Assert.Equal([feed.FullName], NuGetTestHelper.GetEligiblePackageSources(appDirectory.FullName, added.PackageId));
+        Assert.Equal(["https://example.com/sdk"],
+            NuGetTestHelper.GetEligiblePackageSources(appDirectory.FullName, "Aspire.Hosting.SqlServer"));
+        Assert.Equal(["https://example.com/sdk"],
+            NuGetTestHelper.GetEligiblePackageSources(appDirectory.FullName, "Aspire.AppHost.Sdk"));
+        Assert.Equal([PackageSources.NuGetOrg],
+            NuGetTestHelper.GetEligiblePackageSources(appDirectory.FullName, "Newtonsoft.Json"));
+        await Verify(await File.ReadAllTextAsync(configPath), "xml")
+            .AddScrubber(builder => builder.Replace(workspace.Path, "<workspace>").Replace('\\', '/'));
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

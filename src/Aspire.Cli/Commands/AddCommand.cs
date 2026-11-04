@@ -365,7 +365,10 @@ internal sealed class AddCommand : BaseCommand
             // is named stable/daily/staging but its Aspire.* packages live in a local directory, and
             // without the local source in nuget.config the C# `dotnet add package` restore of the
             // local-only version fails. See docs/specs/cli-identity-sidecar.md.
+            // Named integration feeds persist the selected package below; their discovery patterns
+            // must not become hive-wide restore mappings.
             if (project.LanguageId == KnownLanguageId.CSharp &&
+                selectedNuGetPackage.Channel.IntegrationSource is null &&
                 string.IsNullOrEmpty(source) &&
                 (VersionHelper.IsLocalBuildChannel(selectedNuGetPackage.Channel.Name) || selectedNuGetPackage.Channel.IsBackedByLocalPackageDirectory))
             {
