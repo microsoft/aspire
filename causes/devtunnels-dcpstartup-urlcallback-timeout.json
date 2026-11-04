@@ -1,0 +1,29 @@
+{
+  "id": "devtunnels-dcpstartup-urlcallback-timeout",
+  "type": "flaky-test",
+  "title": "Flaky: DcpStartupPublishesDevTunnelUrls times out waiting for URL callback to start on Windows",
+  "error_pattern": "System.TimeoutException : The operation at DevTunnelResourceBuilderExtensionsTests.cs:807 timed out after reaching the limit of 30000ms.",
+  "occurrences": [
+    {
+      "run_id": 41847296330,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/41847296330",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.DevTunnels.Tests, Hosting.DevTunnels, Hosting.DevTunnel... / Hosting.DevTunnels (windows-latest)",
+      "observed_at": "2026-11-04T15:07:15Z",
+      "pr_number": 0,
+      "tests": [
+        {
+          "name": "Aspire.Hosting.DevTunnels.Tests.DevTunnelResourceBuilderExtensionsTests.DcpStartupPublishesDevTunnelUrls(useConsoleOutput: True, stopDuringUrlCallback: True, restartBeforeUrlCallbackCompletes: False)",
+          "job_id": 126635248251,
+          "job": "Tests / No-package tests (regular, Aspire.Hosting.DevTunnels.Tests, Hosting.DevTunnels, Hosting.DevTunnel... / Hosting.DevTunnels (windows-latest)",
+          "error": "System.TimeoutException : The operation at D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.DevTunnels.Tests\\DevTunnelResourceBuilderExtensionsTests.cs:807 timed out after reaching the limit of 30000ms.",
+          "stack_trace": "   at Microsoft.AspNetCore.InternalTesting.AsyncTestHelpers.TimeoutAfter(Task task, TimeSpan timeout, String filePath, Int32 lineNumber) in D:\\a\\aspire\\aspire\\tests\\Shared\\AsyncTestHelpers.cs:line 201\n   at Aspire.Hosting.DevTunnels.Tests.DevTunnelResourceBuilderExtensionsTests.DcpStartupPublishesDevTunnelUrls(Boolean useConsoleOutput, Boolean stopDuringUrlCallback, Boolean restartBeforeUrlCallbackCompletes) in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.DevTunnels.Tests\\DevTunnelResourceBuilderExtensionsTests.cs:line 807\n   at Aspire.Hosting.DevTunnels.Tests.DevTunnelResourceBuilderExtensionsTests.DcpStartupPublishesDevTunnelUrls(Boolean useConsoleOutput, Boolean stopDuringUrlCallback, Boolean restartBeforeUrlCallbackCompletes) in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.DevTunnels.Tests\\DevTunnelResourceBuilderExtensionsTests.cs:line 839\n--- End of stack trace from previous location ---",
+          "standard_output": "",
+          "standard_error": "",
+          "result_file": "00001.trx",
+          "result_format": "trx",
+          "execution_id": "cf2bb2e6-1423-4761-bbff-d14f1b96311c"
+        }
+      ]
+    }
+  ]
+}
