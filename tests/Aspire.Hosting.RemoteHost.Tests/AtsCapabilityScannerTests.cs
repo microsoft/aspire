@@ -632,6 +632,39 @@ public class AtsCapabilityScannerTests
                 && d.Message.Contains("has collisions", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public void ScanAssembly_AmbiguousCollisionOnDerivedTarget_KeepsGenericCapabilityOnIndependentTarget()
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
+        var baseTypeId = AtsTypeMapping.DeriveTypeId(typeof(CollisionBaseResource));
+        var derivedTypeId = AtsTypeMapping.DeriveTypeId(typeof(CollisionDerivedResource));
+        var independentTypeId = AtsTypeMapping.DeriveTypeId(typeof(CollisionIndependentResource));
+
+        var concreteCapability = Assert.Single(result.Capabilities,
+            c => c.CapabilityId.EndsWith("/concreteCollisionExporter", StringComparison.Ordinal));
+        var genericCapability = Assert.Single(result.Capabilities,
+            c => c.CapabilityId.EndsWith("/genericCollisionExporter", StringComparison.Ordinal));
+
+        Assert.Equal("collisionExporter", concreteCapability.MethodName);
+        Assert.Equal("collisionExporter", genericCapability.MethodName);
+
+        // The concrete export wins on its own target and on the derived target (ambiguous, ordinal tie-break).
+        Assert.Contains(concreteCapability.ExpandedTargetTypes, t => t.TypeId == baseTypeId);
+        Assert.Contains(concreteCapability.ExpandedTargetTypes, t => t.TypeId == derivedTypeId);
+
+        // The generic export is removed only from the colliding targets...
+        Assert.DoesNotContain(genericCapability.ExpandedTargetTypes, t => t.TypeId == baseTypeId);
+        Assert.DoesNotContain(genericCapability.ExpandedTargetTypes, t => t.TypeId == derivedTypeId);
+
+        // ...and must remain available on the independent receiver that has no collision.
+        Assert.Contains(genericCapability.ExpandedTargetTypes, t => t.TypeId == independentTypeId);
+
+        Assert.Contains(result.Diagnostics,
+            d => d.Message.Contains("collisionExporter", StringComparison.Ordinal)
+                && d.Message.Contains(derivedTypeId, StringComparison.Ordinal)
+                && d.Message.Contains("has collisions", StringComparison.Ordinal));
+    }
+
     #endregion
 
     #region Callback Parameter Type Resolution Tests
@@ -891,6 +924,16 @@ public class AtsCapabilityScannerTests
 
     private sealed class OtherEnvironmentResource(string name) : Resource(name), IResourceWithEnvironment;
 
+    public interface ICollisionProgramResource : IResource
+    {
+    }
+
+    private class CollisionBaseResource(string name) : Resource(name), ICollisionProgramResource;
+
+    private sealed class CollisionDerivedResource(string name) : CollisionBaseResource(name);
+
+    private sealed class CollisionIndependentResource(string name) : Resource(name), ICollisionProgramResource;
+
     private enum TestUnionEnum
     {
         First,
@@ -990,6 +1033,33 @@ public class AtsCapabilityScannerTests
 
         [AspireExport("otherEnvironmentProbe")]
         public static IResourceBuilder<OtherEnvironmentResource> OtherEnvironmentProbe(IResourceBuilder<OtherEnvironmentResource> builder)
+        {
+            return builder;
+        }
+
+        [AspireExport("concreteCollisionExporter", MethodName = "collisionExporter")]
+        public static IResourceBuilder<CollisionBaseResource> ConcreteCollisionExporter(IResourceBuilder<CollisionBaseResource> builder, string image)
+        {
+            _ = image;
+            return builder;
+        }
+
+        [AspireExport("genericCollisionExporter", MethodName = "collisionExporter")]
+        public static IResourceBuilder<T> GenericCollisionExporter<T>(IResourceBuilder<T> builder, string image)
+            where T : ICollisionProgramResource
+        {
+            _ = image;
+            return builder;
+        }
+
+        [AspireExport("collisionDerivedProbe")]
+        public static IResourceBuilder<CollisionDerivedResource> CollisionDerivedProbe(IResourceBuilder<CollisionDerivedResource> builder)
+        {
+            return builder;
+        }
+
+        [AspireExport("collisionIndependentProbe")]
+        public static IResourceBuilder<CollisionIndependentResource> CollisionIndependentProbe(IResourceBuilder<CollisionIndependentResource> builder)
         {
             return builder;
         }
