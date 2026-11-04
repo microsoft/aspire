@@ -187,13 +187,15 @@ public partial class NewCommandLocalTemplateTests
     }
 
     [Theory]
-    [InlineData(true, false)]
-    [InlineData(false, false)]
-    [InlineData(null, false)]
-    [InlineData(false, true)]
-    [InlineData(null, true)]
-    public async Task ConfiguredGitSources_InitialPickerHonorsInheritedConsentAndGlobalOverrides(bool? consent, bool priorCache)
+    [InlineData(true, false, false)]
+    [InlineData(false, false, false)]
+    [InlineData(null, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(null, true, false)]
+    [InlineData(null, false, true)]
+    public async Task ConfiguredGitSources_InitialPickerHonorsInheritedConsentAndGlobalOverrides(bool? consent, bool priorCache, bool accept)
     {
+        var usesInheritedSource = consent is true || consent is null && accept;
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var (source, _, _) = await CreateTemplateSourceConfigurationRepositoryAsync(workspace);
         await CreateSearchTemplateAsync(workspace, "personal", "personal", "Personal", "Personal");
@@ -223,16 +225,18 @@ public partial class NewCommandLocalTemplateTests
             {
                 Assert.Null(consent);
                 Assert.Empty(git.Commands);
-                return ConfigSourceStrings.Decline;
+                Assert.Single(interaction.DisplayedMessages,
+                    message => message.Message == $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]");
+                return accept ? ConfigSourceStrings.Accept : ConfigSourceStrings.Decline;
             }
 
             selections++;
             var options = choices.Cast<object>().ToArray();
-            Assert.Equal(consent is true
+            Assert.Equal(usesInheritedSource
                 ? ["Personal (personal) - personal", "Proof (proof) - git-proof"]
                 : new[] { "Personal (personal) - personal" },
-                options.Select(formatter).TakeLast(consent is true ? 2 : 1));
-            var label = consent is true ? "Proof (proof) - git-proof" : "Personal (personal) - personal";
+                options.Select(formatter).TakeLast(usesInheritedSource ? 2 : 1));
+            var label = usesInheritedSource ? "Proof (proof) - git-proof" : "Personal (personal) - personal";
             return Assert.Single(options, option => formatter(option) == label);
         };
         var services = CreateRealGitTemplateSourceServices(workspace, interaction, git, source);
@@ -260,10 +264,13 @@ public partial class NewCommandLocalTemplateTests
         Assert.Equal(CliExitCodes.Success, result);
         Assert.Equal(1, selections);
         Assert.Empty(interaction.DisplayedErrors);
+        var warning = Assert.Single(interaction.DisplayedMessages,
+            message => message.Message == $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]");
+        Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
         Assert.Equal(originalGlobal, await File.ReadAllTextAsync(globalPath));
-        Assert.Equal(consent is true ? "Inherited: Hello" : "Personal: Hello",
+        Assert.Equal(usesInheritedSource ? "Inherited: Hello" : "Personal: Hello",
             await File.ReadAllTextAsync(Path.Combine(workspace.Path, "out", "Demo.txt")));
-        if (consent is true)
+        if (usesInheritedSource)
         {
             Assert.Contains(GetGitResolutions(git), call => call == ("https://git.example/proof-templates", "refs/heads/templates/preview"));
             Assert.Equal("https://git.example/proof-templates", Assert.Single(GetGitFetches(git)).Repository);

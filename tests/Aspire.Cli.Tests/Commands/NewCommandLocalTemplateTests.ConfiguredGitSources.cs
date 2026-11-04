@@ -20,6 +20,39 @@ namespace Aspire.Cli.Tests.Commands;
 
 public partial class NewCommandLocalTemplateTests
 {
+    [Fact]
+    public async Task ConfiguredGitSources_WarnsOnEachInvocationWithCachedTemplates()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interaction = new TestInteractionService
+        {
+            PromptForSelectionCallback = (_, choices, _, _) => choices.Cast<object>().Last()
+        };
+        var git = TestGitCommandRunner.CreateForTemplateCheckout((_, destination, _, _) =>
+            CreateClonedSearchTemplateAsync(workspace, destination, "Remote"));
+        var services = CreateServices(workspace, interaction, interactive: true);
+        services.AddSingleton<IGitCommandRunner>(git);
+        using var provider = services.BuildServiceProvider();
+        await WriteConfiguredSourcesAsync(provider, new() { ["company"] = "https://example.test/templates" });
+
+        for (var invocation = 1; invocation <= 2; invocation++)
+        {
+            interaction.SetupStringPromptResponse("Hello");
+            var result = await provider.GetRequiredService<RootCommand>()
+                .Parse($"new --name Demo --output out{invocation} --suppress-agent-init").InvokeAsync().DefaultTimeout();
+
+            Assert.Equal(CliExitCodes.Success, result);
+            var warnings = interaction.DisplayedMessages.Where(
+                message => message.Message == $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]").ToArray();
+            Assert.Equal(invocation, warnings.Length);
+            Assert.All(warnings, warning => Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride));
+            Assert.Equal("Remote: Hello",
+                await File.ReadAllTextAsync(Path.Combine(workspace.Path, $"out{invocation}", "Demo.txt")));
+        }
+        Assert.Single(GetGitFetches(git));
+        Assert.Equal(2, GetGitResolutions(git).Count);
+    }
+
     [Theory]
     [InlineData("https://example.test/organization/templates")]
     [InlineData("https://example.test:8443/organization/templates.git")]

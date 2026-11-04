@@ -170,7 +170,7 @@ internal sealed class TemplateManagementCommand : ParentCommand
             try
             {
                 var options = AddSourceOptions.FromParseResult(parseResult);
-                InteractionService.DisplaySourceTrustWarning();
+                InteractionService.DisplaySourceTrustWarning(ExecutionContext);
                 var confirmed = await InteractionService.PromptConfirmAsync(
                     string.Format(CultureInfo.CurrentCulture, NewCommandStrings.TemplateSourceTrustPrompt,
                         options.Name.EscapeMarkup(), (options.Repository ?? options.Path!).EscapeMarkup()),

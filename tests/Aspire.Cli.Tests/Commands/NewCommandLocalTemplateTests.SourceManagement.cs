@@ -20,6 +20,28 @@ namespace Aspire.Cli.Tests.Commands;
 public partial class NewCommandLocalTemplateTests
 {
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TemplateSourceCommands_WarnsOnEachInvocation(bool repository)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interaction = new TestInteractionService();
+        using var provider = CreateServices(workspace, interaction, interactive: true).BuildServiceProvider();
+
+        for (var invocation = 1; invocation <= 2; invocation++)
+        {
+            var result = await provider.GetRequiredService<RootCommand>()
+                .Parse(["template", "source", "add", $"source{invocation}",
+                    repository ? "--repository" : "--path", repository ? "https://example.test/templates" : workspace.Path, "--yes"])
+                .InvokeAsync().DefaultTimeout();
+
+            Assert.Equal(CliExitCodes.Success, result);
+            Assert.Equal(invocation, interaction.DisplayedMessages.Count(
+                message => message.Message == $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]"));
+        }
+    }
+
+    [Theory]
     [InlineData(false, true)]
     [InlineData(false, false)]
     [InlineData(false, null)]

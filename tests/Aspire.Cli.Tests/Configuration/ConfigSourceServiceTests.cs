@@ -1890,7 +1890,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         }
         clock.UtcNow += TimeSpan.FromSeconds(1);
         var interaction = new TestInteractionService();
-        using var next = TestConfigSourceServices.Create(context, git: git, clock: clock, interaction: interaction);
+        using var next = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git, clock: clock, interaction: interaction);
 
         await next.CheckProjectAsync(workspace.WorkspaceRoot, true, CancellationToken.None);
 

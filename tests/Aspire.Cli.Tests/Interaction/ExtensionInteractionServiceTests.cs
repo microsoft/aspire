@@ -18,6 +18,29 @@ namespace Aspire.Cli.Tests.Interaction;
 public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
 {
     [Fact]
+    public async Task DisplaySourceTrustWarning_NotifiesExtensionOnlyOnce()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var messages = new List<string>();
+        var backchannel = new TestExtensionBackchannel
+        {
+            DisplayMessageAsyncCallback = (_, message) =>
+            {
+                messages.Add(message);
+                return Task.CompletedTask;
+            }
+        };
+        using var interaction = CreateExtensionInteractionService(workspace, backchannel);
+        var executionContext = workspace.CreateExecutionContext();
+
+        interaction.DisplaySourceTrustWarning(executionContext);
+        interaction.DisplaySourceTrustWarning(executionContext);
+        await interaction.FlushAsync();
+
+        Assert.Equal([SharedCommandStrings.SourceTrustWarning], messages);
+    }
+
+    [Fact]
     public async Task DisplayMessage_DoesNotRenderTerminalHyperlinksToDebugConsoleCapturedOutput()
     {
         var output = new StringBuilder();

@@ -1261,12 +1261,31 @@ public class ConsoleInteractionServiceTests
         console.Profile.Width = 200;
         var interactionService = CreateInteractionService(console);
 
-        interactionService.DisplaySourceTrustWarning();
+        var executionContext = CreateExecutionContext();
+        interactionService.DisplaySourceTrustWarning(executionContext);
+        interactionService.DisplaySourceTrustWarning(executionContext);
 
         var expected = enableColor
             ? $"\u001b[91m\U0001F6A8\u001b[0m \u001b[93m{SharedCommandStrings.SourceTrustWarning}\u001b[0m"
             : $"\U0001F6A8 {SharedCommandStrings.SourceTrustWarning}";
         Assert.Equal(expected, output.ToString().TrimEnd());
+    }
+
+    [Fact]
+    public void DisplaySourceTrustWarning_IsScopedToExecutionContext()
+    {
+        var interaction = new TestInteractionService();
+        var executionContext = CreateExecutionContext();
+
+        Parallel.For(0, 10, _ => interaction.DisplaySourceTrustWarning(executionContext));
+
+        var warning = Assert.Single(interaction.DisplayedMessages);
+        Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", warning.Message);
+        Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
+
+        interaction.DisplaySourceTrustWarning(CreateExecutionContext());
+
+        Assert.Equal([warning, warning], interaction.DisplayedMessages);
     }
 
     [Fact]

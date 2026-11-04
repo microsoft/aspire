@@ -622,7 +622,7 @@ internal sealed class NewCommand : BaseCommand
                     missingDirectory));
                 return CommandResult.Failure(CliExitCodes.InvalidCommand);
             }
-            InteractionService.DisplaySourceTrustWarning();
+            InteractionService.DisplaySourceTrustWarning(ExecutionContext);
         }
 
         // Resolve which templates are actually available at runtime (performs
