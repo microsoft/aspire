@@ -100,6 +100,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # Diagnostics only: samples CPU, memory, commit charge, page file, and disk pressure
+      # into the uploaded logs so slow or hung Windows jobs can be correlated with machine
+      # load. https://github.com/microsoft/aspire/issues/21570
+      - name: Start resource monitor (Windows)
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        shell: pwsh
+        run: ./eng/scripts/ci-resource-monitor.ps1 -Mode Start -OutputDirectory "${{ github.workspace }}/artifacts/log/test-logs/resource-monitor"
+
       - name: Set up .NET Core
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         # Used for running tests outside the repo
@@ -748,6 +757,12 @@ jobs:
           docker container ls --all --format json
           docker volume ls
           docker network ls
+
+      - name: Stop resource monitor (Windows)
+        if: ${{ always() && runner.os == 'Windows' }}
+        continue-on-error: true
+        shell: pwsh
+        run: ./eng/scripts/ci-resource-monitor.ps1 -Mode Stop -OutputDirectory "${{ github.workspace }}/artifacts/log/test-logs/resource-monitor"
 
       - name: Upload logs, and test results
         id: upload-logs
