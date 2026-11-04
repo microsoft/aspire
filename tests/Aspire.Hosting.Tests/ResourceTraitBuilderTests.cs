@@ -16,15 +16,14 @@ public class ResourceTraitBuilderTests
         var resource = builder.AddContainer("api", "image")
             .WithTags("Backend", "API")
             .WithTrait("Owner", "Finance").WithTrait("Owner", "Platform")
-            .WithDashboardPosition(20).WithDashboardPosition(-10);
+            .WithDisplayPosition(20).WithDisplayPosition(-10);
 
         Assert.Equal(
             [
                 (KnownResourceTraits.DashboardTag, "Backend"),
                 (KnownResourceTraits.DashboardTag, "API"),
                 ("Owner", "Finance"),
-                ("Owner", "Platform"),
-                (KnownResourceTraits.DashboardPosition, "-10")
+                ("Owner", "Platform")
             ],
             resource.Resource.Annotations.OfType<TraitAnnotation>().Select(t => (t.Name, t.Value)));
     }
@@ -32,10 +31,6 @@ public class ResourceTraitBuilderTests
     [Theory]
     [InlineData("", "value")]
     [InlineData("Owner", " ")]
-    [InlineData("Aspire_Dashboard_Tag", "  Backend")]
-    [InlineData("Aspire_Dashboard_Tag", "Back  end")]
-    [InlineData("Aspire_Dashboard_Position", "invalid")]
-    [InlineData("Aspire_Dashboard_Position", "2147483648")]
     public void InvalidTraitsAreRejected(string name, string value)
     {
         Assert.ThrowsAny<ArgumentException>(() => new TraitAnnotation(name, value));
@@ -59,16 +54,31 @@ public class ResourceTraitBuilderTests
         Assert.Equal("Owner", properties[2].DisplayName);
     }
 
-    [Fact]
-    public void PositionTraitReplacesOnlyPositionAndValidatesBeforeReplacing()
+    [Theory]
+    [InlineData("  Backend")]
+    [InlineData("Back  end")]
+    [InlineData(" ")]
+    public void WithTagsRejectsInvalidTags(string tag)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var resource = builder.AddContainer("api", "image").WithTags("Backend").WithDashboardPosition(10);
-        Assert.Throws<ArgumentException>(() => resource.WithTrait(KnownResourceTraits.DashboardPosition, "invalid"));
-        resource.WithTrait(KnownResourceTraits.DashboardPosition, "20");
+        var resource = builder.AddContainer("api", "image");
 
-        Assert.Equal([(KnownResourceTraits.DashboardTag, "Backend"), (KnownResourceTraits.DashboardPosition, "20")],
-            resource.Resource.Annotations.OfType<TraitAnnotation>().Select(t => (t.Name, t.Value)));
+        Assert.ThrowsAny<ArgumentException>(() => resource.WithTags(tag));
+    }
+
+    [Fact]
+    public void WithDisplayPositionReplacesPositionAndProducesProperty()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var resource = builder.AddContainer("api", "image").WithTags("Backend").WithDisplayPosition(10).WithDisplayPosition(-20);
+
+        Assert.Equal(-20, Assert.Single(resource.Resource.Annotations.OfType<DisplayPositionAnnotation>()).Position);
+        Assert.Equal([(KnownResourceTraits.DashboardTag, "Backend")], resource.Resource.Annotations.OfType<TraitAnnotation>().Select(t => (t.Name, t.Value)));
+
+        var properties = ResourceTraitSnapshotProperties.AddTraitProperties(resource.Resource, []);
+
+        Assert.Equal(["resource.trait.Aspire_Dashboard_Tag", KnownProperties.Resource.DisplayPosition], properties.Select(p => p.Name));
+        Assert.Equal("-20", properties[1].Value);
     }
 
     [Fact]

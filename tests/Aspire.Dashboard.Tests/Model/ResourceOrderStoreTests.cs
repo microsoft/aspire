@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using Aspire.Dashboard.Model;
 using Aspire.Tests.Shared.DashboardModel;
 using Google.Protobuf.WellKnownTypes;
@@ -17,34 +18,64 @@ public sealed class ResourceOrderStoreTests(ITestOutputHelper testOutputHelper) 
     {
         var databasePath = Path.Combine(_workspace.Path, DashboardSettingsDatabase.DatabaseFileName);
         var store = new ResourceOrderStore(databasePath, NullLogger.Instance);
-        var name = KnownProperties.Resource.TraitPrefix + KnownResourceTraits.DashboardPosition;
-        var api = ModelTestHelpers.CreateResource("api", properties: new()
-        {
-            [name] = new(name, Value.ForList(Value.ForString("20")), false, null, 0, null, false)
-        });
-        var cache = ModelTestHelpers.CreateResource("cache", properties: new()
-        {
-            [name] = new(name, Value.ForList(Value.ForString("-10")), false, null, 0, null, false)
-        });
+        var api = CreateResourceWithPosition("api", 20);
+        var cache = CreateResourceWithPosition("cache", -10);
         var worker = ModelTestHelpers.CreateResource("worker");
-        store.EnsureResources([api, cache, worker]);
+        ResourceViewModel[] resources = [api, cache, worker];
+        store.EnsureResources(resources.Select(r => r.PersistentKey));
 
         Assert.Equal([cache.PersistentKey, api.PersistentKey, worker.PersistentKey],
-            store.GetPositions().OrderBy(p => p.Value).Select(p => p.Key));
+            store.GetPositions(resources).OrderBy(p => p.Value).Select(p => p.Key));
 
         // A restart must not turn inferred order into a user customization.
         store = new ResourceOrderStore(databasePath, NullLogger.Instance);
-        cache.Properties[name].Value.ListValue.Values[0].StringValue = "30";
-        store.EnsureResources([api, cache, worker]);
+        resources = [api, CreateResourceWithPosition("cache", 30), worker];
+        store.EnsureResources(resources.Select(r => r.PersistentKey));
         Assert.Equal([api.PersistentKey, cache.PersistentKey, worker.PersistentKey],
-            store.GetPositions().OrderBy(p => p.Value).Select(p => p.Key));
-        Assert.True(store.TryMove(cache.PersistentKey, api.PersistentKey, false));
+            store.GetPositions(resources).OrderBy(p => p.Value).Select(p => p.Key));
+        Assert.True(store.TryMove(cache.PersistentKey, api.PersistentKey, false, resources));
 
         store = new ResourceOrderStore(databasePath, NullLogger.Instance);
-        store.EnsureResources([api, cache, worker]);
+        store.EnsureResources(resources.Select(r => r.PersistentKey));
         Assert.Equal([cache.PersistentKey, api.PersistentKey, worker.PersistentKey],
-            store.GetPositions().OrderBy(p => p.Value).Select(p => p.Key));
+            store.GetPositions(resources).OrderBy(p => p.Value).Select(p => p.Key));
     }
+
+    [Fact]
+    public void DefaultPositionsAreScopedToTheRequestingRun()
+    {
+        var store = new ResourceOrderStore(databasePath: null, NullLogger.Instance);
+        ResourceViewModel[] liveRun = [CreateResourceWithPosition("api", 0), CreateResourceWithPosition("cache", 10)];
+        ResourceViewModel[] recordedRun = [CreateResourceWithPosition("api", 10), CreateResourceWithPosition("cache", 0)];
+        store.EnsureResources(liveRun.Select(r => r.PersistentKey));
+
+        Assert.Equal(["cache_0", "api_0"], store.GetPositions(recordedRun).OrderBy(p => p.Value).Select(p => p.Key));
+        Assert.Equal(["api_0", "cache_0"], store.GetPositions(liveRun).OrderBy(p => p.Value).Select(p => p.Key));
+    }
+
+    [Fact]
+    public void TryMove_EqualPositions_UsesDisplayedOrder()
+    {
+        var store = new ResourceOrderStore(databasePath: null, NullLogger.Instance);
+        // Inserted out of name order, with b and a sharing a position. The pane displays a, b, c.
+        ResourceViewModel[] resources =
+        [
+            CreateResourceWithPosition("b", 0, "Container"),
+            CreateResourceWithPosition("a", 0, "Project"),
+            CreateResourceWithPosition("c", 10, "Project")
+        ];
+        store.EnsureResources(resources.Select(r => r.PersistentKey));
+
+        Assert.True(store.TryMove("c_0", "a_0", after: true, resources));
+
+        Assert.Equal(["a_0", "c_0", "b_0"], GetOrderedKeys(store));
+    }
+
+    private static ResourceViewModel CreateResourceWithPosition(string name, int position, string resourceType = "Container") =>
+        ModelTestHelpers.CreateResource(name, resourceType: resourceType, properties: new()
+        {
+            [KnownProperties.Resource.DisplayPosition] = new(KnownProperties.Resource.DisplayPosition, Value.ForString(position.ToString(CultureInfo.InvariantCulture)), false, null, 0, null, false)
+        });
 
     private readonly TemporaryWorkspace _workspace = TemporaryWorkspace.Create(testOutputHelper);
 

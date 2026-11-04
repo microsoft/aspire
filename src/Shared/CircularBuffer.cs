@@ -88,8 +88,8 @@ internal sealed class CircularBuffer<T> : IList<T>, ICollection<T>, IEnumerable<
             }
 
             var removedItem = this[0];
-#if DEBUG_CIRCULAR_BUFFER
-            var removedItemCount = CountOccurrences(removedItem);
+#if DEBUG
+            var removedItemCount = ShouldValidateRemoval ? CountOccurrences(removedItem) : 0;
 #endif
 
             var internalIndex = InternalIndex(index);
@@ -129,9 +129,9 @@ internal sealed class CircularBuffer<T> : IList<T>, ICollection<T>, IEnumerable<
             Increment(ref _end);
             _start = _end;
 
-#if DEBUG_CIRCULAR_BUFFER
+#if DEBUG
             Debug.Assert(
-                CountOccurrences(removedItem) == removedItemCount - 1 + (EqualityComparer<T>.Default.Equals(item, removedItem) ? 1 : 0),
+                !ShouldValidateRemoval || CountOccurrences(removedItem) == removedItemCount - 1 + (EqualityComparer<T>.Default.Equals(item, removedItem) ? 1 : 0),
                 "Item was not correctly removed.");
 #endif
             ItemRemovedForCapacity?.Invoke(removedItem);
@@ -201,17 +201,17 @@ internal sealed class CircularBuffer<T> : IList<T>, ICollection<T>, IEnumerable<
         if (IsFull)
         {
             var removedItem = this[0];
-#if DEBUG_CIRCULAR_BUFFER
-            var removedItemCount = CountOccurrences(removedItem);
+#if DEBUG
+            var removedItemCount = ShouldValidateRemoval ? CountOccurrences(removedItem) : 0;
 #endif
 
             _buffer[_end] = item;
             Increment(ref _end);
             _start = _end;
 
-#if DEBUG_CIRCULAR_BUFFER
+#if DEBUG
             Debug.Assert(
-                CountOccurrences(removedItem) == removedItemCount - 1 + (EqualityComparer<T>.Default.Equals(item, removedItem) ? 1 : 0),
+                !ShouldValidateRemoval || CountOccurrences(removedItem) == removedItemCount - 1 + (EqualityComparer<T>.Default.Equals(item, removedItem) ? 1 : 0),
                 "Item was not correctly removed.");
 #endif
             ItemRemovedForCapacity?.Invoke(removedItem);
@@ -280,10 +280,15 @@ internal sealed class CircularBuffer<T> : IList<T>, ICollection<T>, IEnumerable<
         return (_start + index) % _buffer.Count;
     }
 
-    // The removal checks scan the whole buffer twice per added item. A full console log buffer receives a steady stream
-    // of items, which made Debug builds of the AppHost and dashboard spend whole cores in this scan, so the checks only
-    // run when DEBUG_CIRCULAR_BUFFER is defined.
-#if DEBUG_CIRCULAR_BUFFER
+#if DEBUG
+    // The removal checks catch broken buffer logic while testing in Debug, but they scan the whole buffer twice per added
+    // item. A full console log buffer receives a steady stream of items, which made Debug builds of the AppHost and
+    // dashboard spend whole cores in this scan. The logic doesn't depend on the capacity, so small buffers, which is what
+    // the tests use, are enough to catch it breaking.
+    private const int MaxValidatedCapacity = 1024;
+
+    private bool ShouldValidateRemoval => Capacity <= MaxValidatedCapacity;
+
     private int CountOccurrences(T item)
     {
         var count = 0;

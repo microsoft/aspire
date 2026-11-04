@@ -61,6 +61,24 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Back to traces.
+        /// </summary>
+        public static string TraceDetailBackToTraces {
+            get {
+                return ResourceManager.GetString("TraceDetailBackToTraces", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Traces.
+        /// </summary>
+        public static string TraceDetailBackToTracesButton {
+            get {
+                return ResourceManager.GetString("TraceDetailBackToTracesButton", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Depth.
         /// </summary>
         public static string TraceDetailDepthHeader {

@@ -38,6 +38,9 @@ public partial class MissingParametersPanel : IAsyncDisposable
     [Inject]
     public required ParameterInteractionState ParameterInteractionState { get; init; }
 
+    [Inject]
+    public required IDashboardClient DashboardClient { get; init; }
+
     [Parameter, EditorRequired]
     public required IReadOnlyList<ResourceViewModel> Parameters { get; set; }
 
@@ -72,9 +75,14 @@ public partial class MissingParametersPanel : IAsyncDisposable
         }
     }
 
+    // Without the interaction a file is set with its own command, from the editor's button, so it doesn't take part in
+    // submitting the form. There's nothing to submit when only files are left.
     private bool IsSubmitDisabled =>
-        Editors.Count == 0 ||
-        Editors.Any(editor => IsEditorDisabled(editor) || IsMissingRequiredValue(editor.ValueInput));
+        Editors.All(IsSetByFileCommand) ||
+        Editors.Any(editor => IsEditorDisabled(editor) || (!IsSetByFileCommand(editor) && IsMissingRequiredValue(editor.ValueInput)));
+
+    private bool IsSetByFileCommand(ParameterEditor editor) =>
+        Interaction is null && editor.ValueInput.Input.InputType == InputType.File;
 
     // The AppHost's inputs interaction, when it's shown in this panel. The interaction is submitted as a whole, so the
     // panel uses it only when it shows every parameter the interaction asks for. Otherwise each parameter is set with
@@ -92,9 +100,12 @@ public partial class MissingParametersPanel : IAsyncDisposable
     protected override async Task OnParametersSetAsync()
     {
         // The registered parameters decide whether the interaction is shown here, so update them before the editors.
-        _registration!.SetParameterNames(Parameters
-            .Where(parameter => GetSetParameterCommand(parameter) is not null)
-            .Select(parameter => parameter.Name));
+        // A recording's form must not accept or show the live AppHost's prompt, even for parameters with the same names.
+        _registration!.SetParameterNames(DashboardClient.IsReadOnly
+            ? []
+            : Parameters
+                .Where(parameter => GetSetParameterCommand(parameter) is not null)
+                .Select(parameter => parameter.Name));
         SyncEditors();
 
         await ParameterInteractionState.BeginInteractionAsync(_registration);
@@ -118,9 +129,11 @@ public partial class MissingParametersPanel : IAsyncDisposable
             .OrderBy(parameter => parameter.DisplayName, StringComparers.ResourceName))
         {
             var command = GetSetParameterCommand(parameter);
+            // The interaction's inputs belong to this circuit and are submitted as they are. The command's inputs are
+            // resource metadata shared with every other tab, so each editor gets its own copy of them, on every update.
             var valueInput = interactionInputs?.GetValueOrDefault(parameter.Name) ??
                 command?.ArgumentInputs.FirstOrDefault(input =>
-                    !string.Equals(input.Name, SaveToUserSecretsName, StringComparisons.InteractionInputName));
+                    !string.Equals(input.Name, SaveToUserSecretsName, StringComparisons.InteractionInputName))?.Clone();
             if (command is null || valueInput is null)
             {
                 continue;
@@ -157,6 +170,7 @@ public partial class MissingParametersPanel : IAsyncDisposable
     }
 
     private bool IsEditorDisabled(ParameterEditor editor) =>
+        DashboardClient.IsReadOnly ||
         editor.ValueInput.InputDisabled ||
         editor.Command.State == CommandViewModelState.Disabled ||
         IsCommandExecuting(editor.Resource, editor.Command);
@@ -249,6 +263,27 @@ public partial class MissingParametersPanel : IAsyncDisposable
         }
 
         input.SetFileReferences(fileReferences);
+        await OnInputChangedAsync(input);
+    }
+
+    // Without the interaction there's no file upload to attach to, so the button runs the set-parameter command, which
+    // prompts for the file. With the interaction, the button is the anchor of the file input and opens its picker.
+    private async Task OnFileButtonClickAsync(ParameterEditor editor)
+    {
+        if (IsSetByFileCommand(editor) && !IsEditorDisabled(editor))
+        {
+            await OnExecuteCommandAsync(editor.Resource, editor.Command);
+        }
+    }
+
+    // A controlling input tells the AppHost about its changes so that it reloads the inputs that depend on it, otherwise
+    // a required dependent input can't be completed. It's the same in-progress update the inputs dialog sends.
+    private async Task OnInputChangedAsync(InputViewModel input)
+    {
+        if (input.Input.UpdateStateOnChange && Interaction is { } interaction)
+        {
+            await interaction.OnSubmitCallback(interaction.Interaction, true);
+        }
     }
 
     private static Value GetArgumentValue(InputViewModel input) =>
@@ -259,24 +294,30 @@ public partial class MissingParametersPanel : IAsyncDisposable
             _ => Value.ForString(input.Value)
         };
 
-    private static void OnChoiceTextChanged(InputViewModel input, string? text)
+    private Task OnChoiceTextChangedAsync(InputViewModel input, string? text)
     {
         if (input.SelectedOption?.Name == text)
         {
-            return;
+            return Task.CompletedTask;
         }
 
         text ??= string.Empty;
         input.SelectedOption = input.SelectOptions.FirstOrDefault(option => option.Name == text)
             ?? new SelectViewModel<string> { Id = text, Name = text };
-        UpdateChoiceValueState(input);
+        return UpdateChoiceValueStateAsync(input);
     }
 
-    private static void UpdateChoiceValueState(InputViewModel input)
+    private async Task UpdateChoiceValueStateAsync(InputViewModel input)
     {
         input.SelectedOption ??= input.SelectOptions.FirstOrDefault(option => option.Id == input.Value)
             ?? new SelectViewModel<string> { Id = input.Value, Name = input.Value };
-        input.Value = input.SelectedOption.Id;
+
+        // Selecting an option reports both the selection and its text. Only a changed value is worth an update.
+        if (input.Value != input.SelectedOption.Id)
+        {
+            input.Value = input.SelectedOption.Id;
+            await OnInputChangedAsync(input);
+        }
     }
 
     private static string GetFileButtonText(ParameterEditor editor) =>

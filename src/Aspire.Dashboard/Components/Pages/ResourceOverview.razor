@@ -93,7 +93,7 @@
         var showMetrics = isInstrumented && (!_telemetryLoaded || _telemetry is { Instruments.Count: > 0 });
         var consoleLines = GetConsoleLines();
         var showEndpoints = urls.Count > 0;
-        var showTerminal = ResourceSelectHelpers.HasUsableTerminal(resource);
+        var showTerminal = CanShowTerminal(resource);
         var showConsole = !showTerminal;
         var showOverviewTerminal = showTerminal && (IsTerminalFocused || !TerminalDockState.IsResourceOpen(resource.Name));
         var properties = GetVisibleProperties();

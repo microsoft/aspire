@@ -404,7 +404,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     private async Task<HomeActivity> LoadActivityAsync(ITelemetryRepository repository, List<OtlpResource> telemetryResources, List<ResourceKey> resourceKeys, int errorLogCount, CancellationToken cancellationToken)
     {
         // Align the window to bucket boundaries so bars don't shift between refreshes.
-        var now = TimeProvider.GetUtcNow().UtcDateTime;
+        var now = await GetActivityTimeAsync(repository, resourceKeys, cancellationToken).ConfigureAwait(false);
         var windowEnd = new DateTime(((now.Ticks / s_activityBucketSize.Ticks) + 1) * s_activityBucketSize.Ticks, DateTimeKind.Utc);
         var windowStart = windowEnd - (s_activityBucketSize * ActivityBucketCount);
 
@@ -526,6 +526,27 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
                 .Take(InsightItemCount)
                 .ToList()
         };
+    }
+
+    // A recording ended some time ago, so a window ending at the current time would show it as empty. Its activity window
+    // ends at its last request instead. It's the only request that needs to be read, and a recording doesn't get new ones.
+    private async Task<DateTime> GetActivityTimeAsync(ITelemetryRepository repository, List<ResourceKey> resourceKeys, CancellationToken cancellationToken)
+    {
+        var now = TimeProvider.GetUtcNow().UtcDateTime;
+        if (!repository.IsReadOnly)
+        {
+            return now;
+        }
+
+        var latest = await repository.GetRequestSpansAsync(new GetRequestSpansRequest
+        {
+            ResourceKeys = resourceKeys,
+            StartTime = DateTime.MinValue,
+            EndTime = DateTime.MaxValue,
+            MaxCount = 1
+        }, cancellationToken).ConfigureAwait(false);
+
+        return latest.Items is [var span, ..] ? span.StartTime : now;
     }
 
     // Prefer the low-cardinality route template ("GET /api/catalog/{id}") over the span name.
@@ -839,7 +860,10 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         await UpdateResourceGraphResourcesAsync();
     });
 
-    // The cards show how long ago a resource started, so re-render now and then to keep that current.
+    // The cards show how long ago a resource started, so re-render now and then to keep that current. The activity window
+    // also moves with time: once telemetry stops nothing else queues a refresh, and old requests would stay "last 15 min"
+    // indefinitely. The interval matches the window's bucket size, so each refresh can move it by a bucket. A recording's
+    // window doesn't move.
     private async Task RefreshAgesPeriodicallyAsync(CancellationToken cancellationToken)
     {
         using var timer = new PeriodicTimer(s_ageRefreshInterval, TimeProvider);
@@ -847,6 +871,11 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         {
             while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
             {
+                if (!TelemetryRepository.IsReadOnly)
+                {
+                    QueueTelemetryRefresh();
+                }
+
                 await InvokeAsync(StateHasChanged).ConfigureAwait(false);
             }
         }
@@ -904,6 +933,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     private sealed class HomeActivity
     {
         public required DateTime WindowStart { get; init; }
+        public DateTime WindowEnd => WindowStart + (s_activityBucketSize * ActivityBucketCount);
         public required int[] OkBuckets { get; init; }
         public required int[] ErrorBuckets { get; init; }
         public required int TotalRequests { get; init; }

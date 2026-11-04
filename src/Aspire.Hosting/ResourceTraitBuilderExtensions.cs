@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Globalization;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 
@@ -20,18 +19,8 @@ public static class ResourceTraitBuilderExtensions
     public static IResourceBuilder<T> WithTrait<T>(this IResourceBuilder<T> builder, string name, string value) where T : IResource
     {
         ArgumentNullException.ThrowIfNull(builder);
-        var annotation = new TraitAnnotation(name, value);
 
-        if (name == KnownResourceTraits.DashboardPosition)
-        {
-            // Only the position trait is single-valued. Other traits deliberately accumulate.
-            foreach (var previous in builder.Resource.Annotations.OfType<TraitAnnotation>().Where(t => t.Name == name).ToArray())
-            {
-                builder.Resource.Annotations.Remove(previous);
-            }
-        }
-
-        return builder.WithAnnotation(annotation);
+        return builder.WithAnnotation(new TraitAnnotation(name, value));
     }
 
     /// <summary>Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.</summary>
@@ -46,6 +35,13 @@ public static class ResourceTraitBuilderExtensions
 
         foreach (var tag in tags)
         {
+            ArgumentException.ThrowIfNullOrWhiteSpace(tag, nameof(tags));
+
+            if (tag.Length > 50 || tag != string.Join(' ', tag.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)))
+            {
+                throw new ArgumentException("Dashboard tags must be at most 50 characters and use single spaces between words, without leading or trailing whitespace.", nameof(tags));
+            }
+
             builder.WithTrait(KnownResourceTraits.DashboardTag, tag);
         }
 
@@ -64,12 +60,12 @@ public static class ResourceTraitBuilderExtensions
         return builder.WithTags(tags.AsSpan());
     }
 
-    /// <summary>Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.</summary>
+    /// <summary>Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.</summary>
     /// <typeparam name="T">The resource type.</typeparam>
     /// <param name="builder">The resource builder.</param>
     /// <param name="position">The default position. Lower values appear first.</param>
     /// <returns>The resource builder.</returns>
     [AspireExport]
-    public static IResourceBuilder<T> WithDashboardPosition<T>(this IResourceBuilder<T> builder, int position) where T : IResource =>
-        builder.WithTrait(KnownResourceTraits.DashboardPosition, position.ToString(CultureInfo.InvariantCulture));
+    public static IResourceBuilder<T> WithDisplayPosition<T>(this IResourceBuilder<T> builder, int position) where T : IResource =>
+        builder.WithAnnotation(new DisplayPositionAnnotation(position), ResourceAnnotationMutationBehavior.Replace);
 }

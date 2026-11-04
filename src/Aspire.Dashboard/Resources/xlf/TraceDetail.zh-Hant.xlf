@@ -2,6 +2,16 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="zh-Hant" original="../TraceDetail.resx">
     <body>
+      <trans-unit id="TraceDetailBackToTraces">
+        <source>Back to traces</source>
+        <target state="new">Back to traces</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TraceDetailBackToTracesButton">
+        <source>Traces</source>
+        <target state="new">Traces</target>
+        <note />
+      </trans-unit>
       <trans-unit id="TraceDetailDepthHeader">
         <source>Depth</source>
         <target state="translated">深度</target>

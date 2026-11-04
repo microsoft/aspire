@@ -17,7 +17,6 @@ public sealed class ResourceOrderStore
 
     private readonly Lock _lock = new();
     private readonly Dictionary<string, long> _positions = new(StringComparers.ResourceName);
-    private readonly Dictionary<string, long> _defaultPositions = new(StringComparers.ResourceName);
     private readonly Dictionary<string, Dictionary<string, long>> _groupPositions = new(StringComparer.Ordinal);
     private readonly DashboardSettingsDatabase _database;
     private bool _loaded;
@@ -35,7 +34,27 @@ public sealed class ResourceOrderStore
 
     public event Action? Changed;
 
+    /// <summary>
+    /// Gets the saved resource positions, shared by every run.
+    /// </summary>
     public IReadOnlyDictionary<string, long> GetPositions() => GetPositions(grouping: null);
+
+    /// <summary>
+    /// Gets the positions to display the given run's resources with. AppHost defaults apply until the user reorders.
+    /// </summary>
+    /// <remarks>
+    /// Declared defaults are specific to a run while this store is shared by every circuit, and circuits can select
+    /// different runs. They're provided by the caller so opening a recording can't change the order of the live run.
+    /// </remarks>
+    public IReadOnlyDictionary<string, long> GetPositions(IEnumerable<ResourceViewModel> resources)
+    {
+        var defaults = GetDefaultPositions(resources);
+        lock (_lock)
+        {
+            EnsureLoaded();
+            return GetEffectiveResourcePositions(defaults);
+        }
+    }
 
     public IReadOnlyDictionary<string, long> GetGroupPositions(string grouping) => GetPositions(grouping);
 
@@ -44,39 +63,13 @@ public sealed class ResourceOrderStore
         lock (_lock)
         {
             EnsureLoaded();
-            return grouping is null ? GetEffectiveResourcePositions() : new Dictionary<string, long>(GetScopePositions(grouping), StringComparers.ResourceName);
+            return new Dictionary<string, long>(GetScopePositions(grouping), StringComparers.ResourceName);
         }
     }
 
     // Keys must be ResourceViewModel.PersistentKey, not run-specific resource names. Keep positions for absent
     // resources so restarting a run, temporarily removing a resource, or changing its state doesn't reset its order.
     public void EnsureResources(IEnumerable<string> resourceKeys) => EnsureItems(grouping: null, resourceKeys);
-
-    public void EnsureResources(IEnumerable<ResourceViewModel> resources)
-    {
-        var snapshot = resources.ToList();
-        var defaultsChanged = false;
-        lock (_lock)
-        {
-            foreach (var resource in snapshot)
-            {
-                if (resource.DefaultDashboardPosition is { } position)
-                {
-                    defaultsChanged |= !_defaultPositions.TryGetValue(resource.PersistentKey, out var previous) || previous != position;
-                    _defaultPositions[resource.PersistentKey] = position;
-                }
-                else
-                {
-                    defaultsChanged |= _defaultPositions.Remove(resource.PersistentKey);
-                }
-            }
-        }
-        EnsureItems(grouping: null, snapshot.Select(r => r.PersistentKey));
-        if (defaultsChanged)
-        {
-            Changed?.Invoke();
-        }
-    }
 
     public void EnsureGroups(string grouping, IEnumerable<string> groupKeys) => EnsureItems(grouping, groupKeys);
 
@@ -105,11 +98,29 @@ public sealed class ResourceOrderStore
         }
     }
 
-    public bool TryMove(string resourceKey, string targetKey, bool after) => TryMove(grouping: null, resourceKey, targetKey, after);
+    public bool TryMove(string resourceKey, string targetKey, bool after) => TryMove(grouping: null, resourceKey, targetKey, after, [], []);
 
-    public bool TryMoveGroup(string grouping, string groupKey, string targetKey, bool after) => TryMove(grouping, groupKey, targetKey, after);
+    /// <summary>
+    /// Moves a resource within the order the given run's resources are displayed in, which becomes the saved order.
+    /// </summary>
+    public bool TryMove(string resourceKey, string targetKey, bool after, IEnumerable<ResourceViewModel> resources)
+    {
+        var snapshot = resources.ToList();
 
-    private bool TryMove(string? grouping, string resourceKey, string targetKey, bool after)
+        // Resources can share a position, for example the same AppHost default. Those are displayed by name, so the move
+        // needs the same tie-breaker or the moved resource lands somewhere other than where it was dropped.
+        var nameRanks = new Dictionary<string, int>(StringComparers.ResourceName);
+        foreach (var resource in snapshot.OrderBy(r => r, ResourceViewModelNameComparer.Instance))
+        {
+            nameRanks.TryAdd(resource.PersistentKey, nameRanks.Count);
+        }
+
+        return TryMove(grouping: null, resourceKey, targetKey, after, GetDefaultPositions(snapshot), nameRanks);
+    }
+
+    public bool TryMoveGroup(string grouping, string groupKey, string targetKey, bool after) => TryMove(grouping, groupKey, targetKey, after, [], []);
+
+    private bool TryMove(string? grouping, string resourceKey, string targetKey, bool after, Dictionary<string, long> defaultPositions, Dictionary<string, int> nameRanks)
     {
         lock (_lock)
         {
@@ -124,8 +135,12 @@ public sealed class ResourceOrderStore
                 return true;
             }
 
-            var effectivePositions = grouping is null ? GetEffectiveResourcePositions() : currentPositions;
-            var orderedKeys = effectivePositions.OrderBy(pair => pair.Value).Select(pair => pair.Key).ToList();
+            var effectivePositions = grouping is null ? GetEffectiveResourcePositions(defaultPositions) : currentPositions;
+            var orderedKeys = effectivePositions
+                .OrderBy(pair => pair.Value)
+                .ThenBy(pair => nameRanks.GetValueOrDefault(pair.Key, int.MaxValue))
+                .Select(pair => pair.Key)
+                .ToList();
             orderedKeys.RemoveAll(key => StringComparers.ResourceName.Equals(key, resourceKey));
             var targetIndex = orderedKeys.FindIndex(key => StringComparers.ResourceName.Equals(key, targetKey));
             orderedKeys.Insert(targetIndex + (after ? 1 : 0), resourceKey);
@@ -164,9 +179,23 @@ public sealed class ResourceOrderStore
         return positions;
     }
 
-    private Dictionary<string, long> GetEffectiveResourcePositions()
+    private static Dictionary<string, long> GetDefaultPositions(IEnumerable<ResourceViewModel> resources)
     {
-        if (_hasCustomResourceOrder || _defaultPositions.Count == 0)
+        var positions = new Dictionary<string, long>(StringComparers.ResourceName);
+        foreach (var resource in resources)
+        {
+            if (resource.DefaultDisplayPosition is { } position)
+            {
+                positions[resource.PersistentKey] = position;
+            }
+        }
+
+        return positions;
+    }
+
+    private Dictionary<string, long> GetEffectiveResourcePositions(Dictionary<string, long> defaultPositions)
+    {
+        if (_hasCustomResourceOrder || defaultPositions.Count == 0)
         {
             return new Dictionary<string, long>(_positions, StringComparers.ResourceName);
         }
@@ -174,10 +203,10 @@ public sealed class ResourceOrderStore
         // Keep declared defaults separate from saved order: a new AppHost default must take
         // effect until the user explicitly reorders, including after restarting the dashboard.
         var positions = new Dictionary<string, long>(StringComparers.ResourceName);
-        var nextPosition = _defaultPositions.Values.Max() + 1;
+        var nextPosition = defaultPositions.Values.Max() + 1;
         foreach (var pair in _positions.OrderBy(p => p.Value))
         {
-            positions[pair.Key] = _defaultPositions.TryGetValue(pair.Key, out var position) ? position : nextPosition++;
+            positions[pair.Key] = defaultPositions.TryGetValue(pair.Key, out var position) ? position : nextPosition++;
         }
 
         return positions;

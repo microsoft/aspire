@@ -580,8 +580,8 @@
     <value>Dashboard tags</value>
     <comment>Name of the property listing the tags a resource declares in the AppHost.</comment>
   </data>
-  <data name="ResourceTraitDashboardPosition" xml:space="preserve">
-    <value>Dashboard position</value>
+  <data name="ResourceDisplayPosition" xml:space="preserve">
+    <value>Display position</value>
     <comment>Name of the property holding the default position a resource declares in the AppHost.</comment>
   </data>
   <data name="ResourceTagsCreate" xml:space="preserve">
@@ -625,5 +625,98 @@
   </data>
   <data name="MissingParametersSetValues" xml:space="preserve">
     <value>Set parameter values</value>
+  </data>
+  <data name="HomeActivityTitle" xml:space="preserve">
+    <value>Live activity</value>
+  </data>
+  <data name="HomeActivityHistoricalTitle" xml:space="preserve">
+    <value>Activity</value>
+  </data>
+  <data name="HomeActivityCaption" xml:space="preserve">
+    <value>Incoming requests · last 15 min</value>
+  </data>
+  <data name="HomeActivityHistoricalCaption" xml:space="preserve">
+    <value>Incoming requests · last 15 min of this run</value>
+  </data>
+  <data name="HomeActivityLogsLabel" xml:space="preserve">
+    <value>logs</value>
+  </data>
+  <data name="HomeActivityTracesLabel" xml:space="preserve">
+    <value>traces</value>
+  </data>
+  <data name="HomeActivityMetricsLabel" xml:space="preserve">
+    <value>metrics</value>
+  </data>
+  <data name="HomeActivityRequestsPerMinute" xml:space="preserve">
+    <value>requests / min</value>
+  </data>
+  <data name="HomeActivityErrorRate" xml:space="preserve">
+    <value>error rate</value>
+  </data>
+  <data name="HomeActivityP95Latency" xml:space="preserve">
+    <value>p95 latency</value>
+  </data>
+  <data name="HomeActivityChartLabel" xml:space="preserve">
+    <value>Requests per 30 seconds over the last 15 minutes</value>
+  </data>
+  <data name="HomeActivityBarTooltip" xml:space="preserve">
+    <value>{0} · {1} requests, {2} failed</value>
+  </data>
+  <data name="HomeActivityLoading" xml:space="preserve">
+    <value>Loading activity…</value>
+  </data>
+  <data name="HomeActivityWaitingForRequests" xml:space="preserve">
+    <value>Waiting for requests. Interact with your app to see live traffic.</value>
+  </data>
+  <data name="HomeActivityNoRecordedRequests" xml:space="preserve">
+    <value>No requests were recorded in this run.</value>
+  </data>
+  <data name="HomeActivityAxisStart" xml:space="preserve">
+    <value>15 min ago</value>
+  </data>
+  <data name="HomeActivityAxisEnd" xml:space="preserve">
+    <value>now</value>
+  </data>
+  <data name="HomeInsightsLandmark" xml:space="preserve">
+    <value>Insights</value>
+  </data>
+  <data name="HomeInsightSlowestEndpoints" xml:space="preserve">
+    <value>Slowest endpoints</value>
+  </data>
+  <data name="HomeInsightP95" xml:space="preserve">
+    <value>p95</value>
+  </data>
+  <data name="HomeInsightNoRequests" xml:space="preserve">
+    <value>No requests in the last 15 minutes</value>
+  </data>
+  <data name="HomeInsightEndpointTooltip" xml:space="preserve">
+    <value>{0}: {1} ({2} requests)</value>
+  </data>
+  <data name="HomeInsightRequestCountShort" xml:space="preserve">
+    <value>{0} req</value>
+  </data>
+  <data name="HomeInsightBusiestResources" xml:space="preserve">
+    <value>Busiest resources</value>
+  </data>
+  <data name="HomeInsightRequestCount" xml:space="preserve">
+    <value>{0} requests</value>
+  </data>
+  <data name="HomeInsightFailedCount" xml:space="preserve">
+    <value>{0} failed</value>
+  </data>
+  <data name="HomeInsightErrorHotspots" xml:space="preserve">
+    <value>Error hotspots</value>
+  </data>
+  <data name="HomeInsightErrorHotspotsHint" xml:space="preserve">
+    <value>failed requests + error logs</value>
+  </data>
+  <data name="HomeInsightNoErrors" xml:space="preserve">
+    <value>No errors in the last 15 minutes</value>
+  </data>
+  <data name="HomeInsightFailedRequestCount" xml:space="preserve">
+    <value>{0} failed requests</value>
+  </data>
+  <data name="HomeInsightErrorLogCount" xml:space="preserve">
+    <value>{0} error logs</value>
   </data>
 </root>

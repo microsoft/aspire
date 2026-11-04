@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Components;
+using Aspire.Dashboard.Components.Controls.Chart;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Model.MetricValues;
@@ -18,6 +19,56 @@ namespace Aspire.Dashboard.Tests.TelemetryRepositoryTests;
 public abstract class MetricsTests : TelemetryRepositoryTestBase
 {
     private static readonly DateTime s_testTime = new(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
+    [Fact]
+    public async Task GetInstrumentAsync_Rollup_RetainsDeltaNumberObservations()
+    {
+        using var repositoryContext = await CreateRepositoryAsync();
+        var start = s_testTime.AddMinutes(1);
+        var sum = new Sum { AggregationTemporality = AggregationTemporality.Delta, IsMonotonic = true };
+        foreach (var (seconds, value) in new[] { (1, 4), (2, 6), (3, 5) })
+        {
+            sum.DataPoints.Add(new NumberDataPoint
+            {
+                AsInt = value,
+                StartTimeUnixNano = DateTimeToUnixNanoseconds(start.AddSeconds(seconds - 1)),
+                TimeUnixNano = DateTimeToUnixNanoseconds(start.AddSeconds(seconds))
+            });
+        }
+
+        var addContext = new AddContext();
+        await repositoryContext.Repository.AsWriter().AddMetricsAsync(addContext, new RepeatedField<ResourceMetrics>()
+        {
+            new ResourceMetrics
+            {
+                Resource = CreateResource(),
+                ScopeMetrics =
+                {
+                    new ScopeMetrics
+                    {
+                        Scope = CreateScope(name: "test-meter"),
+                        Metrics = { new Metric { Name = "test", Unit = "widget", Sum = sum } }
+                    }
+                }
+            }
+        });
+        Assert.Equal(0, addContext.FailureCount);
+
+        var resource = Assert.Single(repositoryContext.Repository.GetResources());
+        var instrument = await repositoryContext.Repository.GetInstrumentAsync(new GetInstrumentRequest
+        {
+            ResourceKey = resource.ResourceKey,
+            MeterName = "test-meter",
+            InstrumentName = "test",
+            StartTime = start,
+            EndTime = start.AddMinutes(1),
+            DataPointInterval = TimeSpan.FromMinutes(1)
+        }, CancellationToken.None);
+
+        Assert.NotNull(instrument);
+        Assert.True(ChartDataCalculator.TryCalculateDeltaPoint(instrument.Dimensions, new DateTimeOffset(start, TimeSpan.Zero), new DateTimeOffset(start.AddMinutes(1), TimeSpan.Zero), out var total));
+        Assert.Equal(15, total);
+    }
 
     [Fact]
     public async Task AddMetrics()

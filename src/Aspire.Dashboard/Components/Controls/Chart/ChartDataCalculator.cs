@@ -160,7 +160,7 @@ internal sealed class ChartDataCalculator
     {
         if (temporality == OtlpAggregationTemporality.Delta)
         {
-            return [.. CalculateChartValues(dimensions, startTime, static t => t, string.Empty).Traces[0].Values];
+            return CalculateDeltaIncreases(dimensions, startTime);
         }
 
         // A cumulative counter has a running total per dimension (attribute set). The increases are calculated per
@@ -189,6 +189,95 @@ internal sealed class ChartDataCalculator
         }
 
         return total ?? [.. Enumerable.Repeat<double?>(null, _pointCount + 2)];
+    }
+
+    private List<double?> CalculateDeltaIncreases(List<DimensionScope> dimensions, DateTimeOffset startTime)
+    {
+        var pointDuration = _duration / _pointCount;
+        var values = new List<double?>(_pointCount + 2);
+
+        // Same points as CalculateChartValues, generated in reverse order, so the results line up with its x-values.
+        for (var pointIndex = 0; pointIndex < (_pointCount + 2); pointIndex++)
+        {
+            var start = CalcOffset(pointIndex, startTime, pointDuration);
+            var end = CalcOffset(pointIndex - 1, startTime, pointDuration);
+            values.Add(TryCalculateDeltaPoint(dimensions, start, end, out var value) ? value : null);
+        }
+
+        values.Reverse();
+        return values;
+    }
+
+    /// <summary>
+    /// Adds up the delta observations in an interval. Each one is a change, so unlike the level that
+    /// <see cref="TryCalculatePoint"/> calculates, all of the observations in the interval count.
+    /// </summary>
+    internal static bool TryCalculateDeltaPoint(List<DimensionScope> dimensions, DateTimeOffset start, DateTimeOffset end, out double pointValue)
+    {
+        var hasValue = false;
+        pointValue = 0d;
+
+        foreach (var dimension in dimensions)
+        {
+            var dimensionValues = dimension.Values;
+            for (var i = dimensionValues.Count - 1; i >= 0; i--)
+            {
+                var metric = dimensionValues[i];
+
+                // Values are stored chronologically, so everything before this one was also observed before the interval.
+                if (new DateTimeOffset(metric.End, TimeSpan.Zero) <= start)
+                {
+                    break;
+                }
+
+                var value = metric switch
+                {
+                    MetricValue<long> longMetric => longMetric.Value,
+                    MetricValue<double> doubleMetric => doubleMetric.Value,
+                    _ => 0
+                };
+
+                var observationCount = CountObservations(metric, end) - CountObservations(metric, start);
+                if (observationCount > 0)
+                {
+                    pointValue += value * observationCount;
+                    hasValue = true;
+                }
+            }
+        }
+
+        // JS interop doesn't support serializing NaN values.
+        if (double.IsNaN(pointValue))
+        {
+            pointValue = default;
+            return false;
+        }
+
+        return hasValue;
+    }
+
+    /// <summary>
+    /// Counts the observations of a metric value made up to and including the given time. Consecutive exports with the
+    /// same value are stored as one value with a count, e.g. exports of 5 at 10s, 20s and 30s are 5 x 3 over 0s-30s.
+    /// Only the first and last times are kept, so the exports are taken to be evenly spaced. An observation is at the
+    /// end of its export interval, which puts it in exactly one chart interval so it can't be counted twice.
+    /// </summary>
+    private static long CountObservations(MetricValueBase metric, DateTimeOffset time)
+    {
+        var count = checked((long)metric.Count);
+        var ticks = time.UtcTicks;
+        if (ticks >= metric.End.Ticks)
+        {
+            return count;
+        }
+
+        var duration = (metric.End - metric.Start).Ticks;
+        if (duration <= 0 || ticks < metric.Start.Ticks)
+        {
+            return 0;
+        }
+
+        return (long)(count * ((double)(ticks - metric.Start.Ticks) / duration));
     }
 
     internal static List<double?> CalculateCounterIncreases(IReadOnlyList<double?> values, OtlpAggregationTemporality temporality)
@@ -231,6 +320,9 @@ internal sealed class ChartDataCalculator
         {
             var dimensionValues = dimension.Values;
             var dimensionValue = 0d;
+            // The first value replaces the initial zero rather than being compared with it. Gauges and up-down counters
+            // can be negative, and comparing -5 with zero would report a level of 0.
+            var hasDimensionValue = false;
             for (var i = dimensionValues.Count - 1; i >= 0; i--)
             {
                 var metric = dimensionValues[i];
@@ -280,7 +372,8 @@ internal sealed class ChartDataCalculator
                         _ => 0
                     };
 
-                    dimensionValue = Math.Max(value, dimensionValue);
+                    dimensionValue = hasDimensionValue ? Math.Max(value, dimensionValue) : value;
+                    hasDimensionValue = true;
                     hasValue = true;
                 }
             }

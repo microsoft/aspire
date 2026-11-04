@@ -152,4 +152,10 @@
   <data name="TraceDetailNoSpans" xml:space="preserve">
     <value>No spans found</value>
   </data>
+  <data name="TraceDetailBackToTraces" xml:space="preserve">
+    <value>Back to traces</value>
+  </data>
+  <data name="TraceDetailBackToTracesButton" xml:space="preserve">
+    <value>Traces</value>
+  </data>
 </root>

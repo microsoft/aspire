@@ -13281,11 +13281,11 @@ export interface ContainerRegistryResource {
      */
     withTags(tags: string[]): ContainerRegistryResourcePromise;
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
      * @param position The default position. Lower values appear first.
      * @returns The resource builder.
      */
-    withDashboardPosition(position: number): ContainerRegistryResourcePromise;
+    withDisplayPosition(position: number): ContainerRegistryResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -13643,11 +13643,11 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      */
     withTags(tags: string[]): ContainerRegistryResourcePromise;
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
      * @param position The default position. Lower values appear first.
      * @returns The resource builder.
      */
-    withDashboardPosition(position: number): ContainerRegistryResourcePromise;
+    withDisplayPosition(position: number): ContainerRegistryResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -14529,22 +14529,22 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
     }
 
     /** @internal */
-    private async _withDashboardPositionInternal(position: number): Promise<ContainerRegistryResource> {
+    private async _withDisplayPositionInternal(position: number): Promise<ContainerRegistryResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, position };
         const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
-            'Aspire.Hosting/withDashboardPosition',
+            'Aspire.Hosting/withDisplayPosition',
             rpcArgs
         );
         return new ContainerRegistryResourceImpl(result, this._client);
     }
 
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
      * @param position The default position. Lower values appear first.
      * @returns The resource builder.
      */
-    withDashboardPosition(position: number): ContainerRegistryResourcePromise {
-        return new ContainerRegistryResourcePromiseImpl(this._withDashboardPositionInternal(position), this._client);
+    withDisplayPosition(position: number): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromiseImpl(this._withDisplayPositionInternal(position), this._client);
     }
 
     /** @internal */
@@ -15190,7 +15190,7 @@ const ContainerRegistryResourcePromiseImpl = $aspireCreateFluentPromiseClass<Con
     ["withHiddenOnCompletion"]: () => ContainerRegistryResourcePromiseImpl,
     ["withTrait"]: () => ContainerRegistryResourcePromiseImpl,
     ["withTags"]: () => ContainerRegistryResourcePromiseImpl,
-    ["withDashboardPosition"]: () => ContainerRegistryResourcePromiseImpl,
+    ["withDisplayPosition"]: () => ContainerRegistryResourcePromiseImpl,
     ["withTerminal"]: () => ContainerRegistryResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ContainerRegistryResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ContainerRegistryResourcePromiseImpl,
@@ -15937,11 +15937,11 @@ export interface ContainerResource {
      */
     withTags(tags: string[]): ContainerResourcePromise;
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
      * @param position The default position. Lower values appear first.
      * @returns The resource builder.
      */
-    withDashboardPosition(position: number): ContainerResourcePromise;
+    withDisplayPosition(position: number): ContainerResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -16795,11 +16795,11 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      */
     withTags(tags: string[]): ContainerResourcePromise;
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
      * @param position The default position. Lower values appear first.
      * @returns The resource builder.
      */
-    withDashboardPosition(position: number): ContainerResourcePromise;
+    withDisplayPosition(position: number): ContainerResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -19110,22 +19110,22 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
-    private async _withDashboardPositionInternal(position: number): Promise<ContainerResource> {
+    private async _withDisplayPositionInternal(position: number): Promise<ContainerResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, position };
         const result = await this._client.invokeCapability<ContainerResourceHandle>(
-            'Aspire.Hosting/withDashboardPosition',
+            'Aspire.Hosting/withDisplayPosition',
             rpcArgs
         );
         return new ContainerResourceImpl(result, this._client);
     }
 
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
      * @param position The default position. Lower values appear first.
      * @returns The resource builder.
      */
-    withDashboardPosition(position: number): ContainerResourcePromise {
-        return new ContainerResourcePromiseImpl(this._withDashboardPositionInternal(position), this._client);
+    withDisplayPosition(position: number): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._withDisplayPositionInternal(position), this._client);
     }
 
     /** @internal */
@@ -19917,7 +19917,7 @@ const ContainerResourcePromiseImpl = $aspireCreateFluentPromiseClass<ContainerRe
     ["withRemoteImageTag"]: () => ContainerResourcePromiseImpl,
     ["withTrait"]: () => ContainerResourcePromiseImpl,
     ["withTags"]: () => ContainerResourcePromiseImpl,
-    ["withDashboardPosition"]: () => ContainerResourcePromiseImpl,
+    ["withDisplayPosition"]: () => ContainerResourcePromiseImpl,
     ["withTerminal"]: () => ContainerResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ContainerResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ContainerResourcePromiseImpl,
@@ -20506,11 +20506,11 @@ export interface CSharpAppResource {
      */
     withTags(tags: string[]): CSharpAppResourcePromise;
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
      * @param position The default position. Lower values appear first.
      * @returns The resource builder.
      */
-    withDashboardPosition(position: number): CSharpAppResourcePromise;
+    withDisplayPosition(position: number): CSharpAppResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -21204,11 +21204,11 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      */
     withTags(tags: string[]): CSharpAppResourcePromise;
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
      * @param position The default position. Lower values appear first.
      * @returns The resource builder.
      */
-    withDashboardPosition(position: number): CSharpAppResourcePromise;
+    withDisplayPosition(position: number): CSharpAppResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -23107,22 +23107,22 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
-    private async _withDashboardPositionInternal(position: number): Promise<CSharpAppResource> {
+    private async _withDisplayPositionInternal(position: number): Promise<CSharpAppResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, position };
         const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
-            'Aspire.Hosting/withDashboardPosition',
+            'Aspire.Hosting/withDisplayPosition',
             rpcArgs
         );
         return new CSharpAppResourceImpl(result, this._client);
     }
 
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
      * @param position The default position. Lower values appear first.
      * @returns The resource builder.
      */
-    withDashboardPosition(position: number): CSharpAppResourcePromise {
-        return new CSharpAppResourcePromiseImpl(this._withDashboardPositionInternal(position), this._client);
+    withDisplayPosition(position: number): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._withDisplayPositionInternal(position), this._client);
     }
 
     /** @internal */
@@ -23909,7 +23909,7 @@ const CSharpAppResourcePromiseImpl = $aspireCreateFluentPromiseClass<CSharpAppRe
     ["withRemoteImageTag"]: () => CSharpAppResourcePromiseImpl,
     ["withTrait"]: () => CSharpAppResourcePromiseImpl,
     ["withTags"]: () => CSharpAppResourcePromiseImpl,
-    ["withDashboardPosition"]: () => CSharpAppResourcePromiseImpl,
+    ["withDisplayPosition"]: () => CSharpAppResourcePromiseImpl,
     ["withTerminal"]: () => CSharpAppResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => CSharpAppResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => CSharpAppResourcePromiseImpl,
@@ -24541,11 +24541,11 @@ export interface DotnetToolResource {
      */
     withTags(tags: string[]): DotnetToolResourcePromise;
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
      * @param position The default position. Lower values appear first.
      * @returns The resource builder.
      */
-    withDashboardPosition(position: number): DotnetToolResourcePromise;
+    withDisplayPosition(position: number): DotnetToolResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -25275,11 +25275,11 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      */
     withTags(tags: string[]): DotnetToolResourcePromise;
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
      * @param position The default position. Lower values appear first.
      * @returns The resource builder.
      */
-    withDashboardPosition(position: number): DotnetToolResourcePromise;
+    withDisplayPosition(position: number): DotnetToolResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -27293,22 +27293,22 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
-    private async _withDashboardPositionInternal(position: number): Promise<DotnetToolResource> {
+    private async _withDisplayPositionInternal(position: number): Promise<DotnetToolResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, position };
         const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
-            'Aspire.Hosting/withDashboardPosition',
+            'Aspire.Hosting/withDisplayPosition',
             rpcArgs
         );
         return new DotnetToolResourceImpl(result, this._client);
     }
 
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
      * @param position The default position. Lower values appear first.
      * @returns The resource builder.
      */
-    withDashboardPosition(position: number): DotnetToolResourcePromise {
-        return new DotnetToolResourcePromiseImpl(this._withDashboardPositionInternal(position), this._client);
+    withDisplayPosition(position: number): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._withDisplayPositionInternal(position), this._client);
     }
 
     /** @internal */
@@ -28082,7 +28082,7 @@ const DotnetToolResourcePromiseImpl = $aspireCreateFluentPromiseClass<DotnetTool
     ["withRemoteImageTag"]: () => DotnetToolResourcePromiseImpl,
     ["withTrait"]: () => DotnetToolResourcePromiseImpl,
     ["withTags"]: () => DotnetToolResourcePromiseImpl,
-    ["withDashboardPosition"]: () => DotnetToolResourcePromiseImpl,
+    ["withDisplayPosition"]: () => DotnetToolResourcePromiseImpl,
     ["withTerminal"]: () => DotnetToolResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => DotnetToolResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => DotnetToolResourcePromiseImpl,
@@ -28681,11 +28681,11 @@ export interface ExecutableResource {
      */
     withTags(tags: string[]): ExecutableResourcePromise;
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
      * @param position The default position. Lower values appear first.
      * @returns The resource builder.
      */
-    withDashboardPosition(position: number): ExecutableResourcePromise;
+    withDisplayPosition(position: number): ExecutableResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -29376,11 +29376,11 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      */
     withTags(tags: string[]): ExecutableResourcePromise;
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
      * @param position The default position. Lower values appear first.
      * @returns The resource builder.
      */
-    withDashboardPosition(position: number): ExecutableResourcePromise;
+    withDisplayPosition(position: number): ExecutableResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -31284,22 +31284,22 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
-    private async _withDashboardPositionInternal(position: number): Promise<ExecutableResource> {
+    private async _withDisplayPositionInternal(position: number): Promise<ExecutableResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, position };
         const result = await this._client.invokeCapability<ExecutableResourceHandle>(
-            'Aspire.Hosting/withDashboardPosition',
+            'Aspire.Hosting/withDisplayPosition',
             rpcArgs
         );
         return new ExecutableResourceImpl(result, this._client);
     }
 
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
      * @param position The default position. Lower values appear first.
      * @returns The resource builder.
      */
-    withDashboardPosition(position: number): ExecutableResourcePromise {
-        return new ExecutableResourcePromiseImpl(this._withDashboardPositionInternal(position), this._client);
+    withDisplayPosition(position: number): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._withDisplayPositionInternal(position), this._client);
     }
 
     /** @internal */
@@ -32067,7 +32067,7 @@ const ExecutableResourcePromiseImpl = $aspireCreateFluentPromiseClass<Executable
     ["withRemoteImageTag"]: () => ExecutableResourcePromiseImpl,
     ["withTrait"]: () => ExecutableResourcePromiseImpl,
     ["withTags"]: () => ExecutableResourcePromiseImpl,
-    ["withDashboardPosition"]: () => ExecutableResourcePromiseImpl,
+    ["withDisplayPosition"]: () => ExecutableResourcePromiseImpl,
     ["withTerminal"]: () => ExecutableResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ExecutableResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ExecutableResourcePromiseImpl,
@@ -32350,11 +32350,11 @@ export interface ExternalServiceResource {
      */
     withTags(tags: string[]): ExternalServiceResourcePromise;
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
      * @param position The default position. Lower values appear first.
      * @returns The resource builder.
      */
-    withDashboardPosition(position: number): ExternalServiceResourcePromise;
+    withDisplayPosition(position: number): ExternalServiceResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -32717,11 +32717,11 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      */
     withTags(tags: string[]): ExternalServiceResourcePromise;
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
      * @param position The default position. Lower values appear first.
      * @returns The resource builder.
      */
-    withDashboardPosition(position: number): ExternalServiceResourcePromise;
+    withDisplayPosition(position: number): ExternalServiceResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -33627,22 +33627,22 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
     }
 
     /** @internal */
-    private async _withDashboardPositionInternal(position: number): Promise<ExternalServiceResource> {
+    private async _withDisplayPositionInternal(position: number): Promise<ExternalServiceResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, position };
         const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
-            'Aspire.Hosting/withDashboardPosition',
+            'Aspire.Hosting/withDisplayPosition',
             rpcArgs
         );
         return new ExternalServiceResourceImpl(result, this._client);
     }
 
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
      * @param position The default position. Lower values appear first.
      * @returns The resource builder.
      */
-    withDashboardPosition(position: number): ExternalServiceResourcePromise {
-        return new ExternalServiceResourcePromiseImpl(this._withDashboardPositionInternal(position), this._client);
+    withDisplayPosition(position: number): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromiseImpl(this._withDisplayPositionInternal(position), this._client);
     }
 
     /** @internal */
@@ -34289,7 +34289,7 @@ const ExternalServiceResourcePromiseImpl = $aspireCreateFluentPromiseClass<Exter
     ["withHiddenOnCompletion"]: () => ExternalServiceResourcePromiseImpl,
     ["withTrait"]: () => ExternalServiceResourcePromiseImpl,
     ["withTags"]: () => ExternalServiceResourcePromiseImpl,
-    ["withDashboardPosition"]: () => ExternalServiceResourcePromiseImpl,
+    ["withDisplayPosition"]: () => ExternalServiceResourcePromiseImpl,
     ["withTerminal"]: () => ExternalServiceResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ExternalServiceResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ExternalServiceResourcePromiseImpl,
@@ -34592,11 +34592,11 @@ export interface ParameterResource {
      */
     withTags(tags: string[]): ParameterResourcePromise;
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
      * @param position The default position. Lower values appear first.
      * @returns The resource builder.
      */
-    withDashboardPosition(position: number): ParameterResourcePromise;
+    withDisplayPosition(position: number): ParameterResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -35001,11 +35001,11 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      */
     withTags(tags: string[]): ParameterResourcePromise;
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
      * @param position The default position. Lower values appear first.
      * @returns The resource builder.
      */
-    withDashboardPosition(position: number): ParameterResourcePromise;
+    withDisplayPosition(position: number): ParameterResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -35991,22 +35991,22 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     }
 
     /** @internal */
-    private async _withDashboardPositionInternal(position: number): Promise<ParameterResource> {
+    private async _withDisplayPositionInternal(position: number): Promise<ParameterResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, position };
         const result = await this._client.invokeCapability<ParameterResourceHandle>(
-            'Aspire.Hosting/withDashboardPosition',
+            'Aspire.Hosting/withDisplayPosition',
             rpcArgs
         );
         return new ParameterResourceImpl(result, this._client);
     }
 
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
      * @param position The default position. Lower values appear first.
      * @returns The resource builder.
      */
-    withDashboardPosition(position: number): ParameterResourcePromise {
-        return new ParameterResourcePromiseImpl(this._withDashboardPositionInternal(position), this._client);
+    withDisplayPosition(position: number): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._withDisplayPositionInternal(position), this._client);
     }
 
     /** @internal */
@@ -36693,7 +36693,7 @@ const ParameterResourcePromiseImpl = $aspireCreateFluentPromiseClass<ParameterRe
     ["withHiddenOnCompletion"]: () => ParameterResourcePromiseImpl,
     ["withTrait"]: () => ParameterResourcePromiseImpl,
     ["withTags"]: () => ParameterResourcePromiseImpl,
-    ["withDashboardPosition"]: () => ParameterResourcePromiseImpl,
+    ["withDisplayPosition"]: () => ParameterResourcePromiseImpl,
     ["withTerminal"]: () => ParameterResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ParameterResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ParameterResourcePromiseImpl,
@@ -37281,11 +37281,11 @@ export interface ProjectResource {
      */
     withTags(tags: string[]): ProjectResourcePromise;
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
      * @param position The default position. Lower values appear first.
      * @returns The resource builder.
      */
-    withDashboardPosition(position: number): ProjectResourcePromise;
+    withDisplayPosition(position: number): ProjectResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -37979,11 +37979,11 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      */
     withTags(tags: string[]): ProjectResourcePromise;
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
      * @param position The default position. Lower values appear first.
      * @returns The resource builder.
      */
-    withDashboardPosition(position: number): ProjectResourcePromise;
+    withDisplayPosition(position: number): ProjectResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -39883,22 +39883,22 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
-    private async _withDashboardPositionInternal(position: number): Promise<ProjectResource> {
+    private async _withDisplayPositionInternal(position: number): Promise<ProjectResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, position };
         const result = await this._client.invokeCapability<ProjectResourceHandle>(
-            'Aspire.Hosting/withDashboardPosition',
+            'Aspire.Hosting/withDisplayPosition',
             rpcArgs
         );
         return new ProjectResourceImpl(result, this._client);
     }
 
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
      * @param position The default position. Lower values appear first.
      * @returns The resource builder.
      */
-    withDashboardPosition(position: number): ProjectResourcePromise {
-        return new ProjectResourcePromiseImpl(this._withDashboardPositionInternal(position), this._client);
+    withDisplayPosition(position: number): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._withDisplayPositionInternal(position), this._client);
     }
 
     /** @internal */
@@ -40685,7 +40685,7 @@ const ProjectResourcePromiseImpl = $aspireCreateFluentPromiseClass<ProjectResour
     ["withRemoteImageTag"]: () => ProjectResourcePromiseImpl,
     ["withTrait"]: () => ProjectResourcePromiseImpl,
     ["withTags"]: () => ProjectResourcePromiseImpl,
-    ["withDashboardPosition"]: () => ProjectResourcePromiseImpl,
+    ["withDisplayPosition"]: () => ProjectResourcePromiseImpl,
     ["withTerminal"]: () => ProjectResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ProjectResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ProjectResourcePromiseImpl,
@@ -41436,11 +41436,11 @@ export interface TestDatabaseResource {
      */
     withTags(tags: string[]): TestDatabaseResourcePromise;
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
      * @param position The default position. Lower values appear first.
      * @returns The resource builder.
      */
-    withDashboardPosition(position: number): TestDatabaseResourcePromise;
+    withDisplayPosition(position: number): TestDatabaseResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -42294,11 +42294,11 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      */
     withTags(tags: string[]): TestDatabaseResourcePromise;
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
      * @param position The default position. Lower values appear first.
      * @returns The resource builder.
      */
-    withDashboardPosition(position: number): TestDatabaseResourcePromise;
+    withDisplayPosition(position: number): TestDatabaseResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -44608,22 +44608,22 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _withDashboardPositionInternal(position: number): Promise<TestDatabaseResource> {
+    private async _withDisplayPositionInternal(position: number): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, position };
         const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
-            'Aspire.Hosting/withDashboardPosition',
+            'Aspire.Hosting/withDisplayPosition',
             rpcArgs
         );
         return new TestDatabaseResourceImpl(result, this._client);
     }
 
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
      * @param position The default position. Lower values appear first.
      * @returns The resource builder.
      */
-    withDashboardPosition(position: number): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._withDashboardPositionInternal(position), this._client);
+    withDisplayPosition(position: number): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._withDisplayPositionInternal(position), this._client);
     }
 
     /** @internal */
@@ -45415,7 +45415,7 @@ const TestDatabaseResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestData
     ["withRemoteImageTag"]: () => TestDatabaseResourcePromiseImpl,
     ["withTrait"]: () => TestDatabaseResourcePromiseImpl,
     ["withTags"]: () => TestDatabaseResourcePromiseImpl,
-    ["withDashboardPosition"]: () => TestDatabaseResourcePromiseImpl,
+    ["withDisplayPosition"]: () => TestDatabaseResourcePromiseImpl,
     ["withTerminal"]: () => TestDatabaseResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => TestDatabaseResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => TestDatabaseResourcePromiseImpl,
@@ -46181,11 +46181,11 @@ export interface TestRedisResource {
      */
     withTags(tags: string[]): TestRedisResourcePromise;
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
      * @param position The default position. Lower values appear first.
      * @returns The resource builder.
      */
-    withDashboardPosition(position: number): TestRedisResourcePromise;
+    withDisplayPosition(position: number): TestRedisResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -47123,11 +47123,11 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      */
     withTags(tags: string[]): TestRedisResourcePromise;
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
      * @param position The default position. Lower values appear first.
      * @returns The resource builder.
      */
-    withDashboardPosition(position: number): TestRedisResourcePromise;
+    withDisplayPosition(position: number): TestRedisResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -49541,22 +49541,22 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _withDashboardPositionInternal(position: number): Promise<TestRedisResource> {
+    private async _withDisplayPositionInternal(position: number): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, position };
         const result = await this._client.invokeCapability<TestRedisResourceHandle>(
-            'Aspire.Hosting/withDashboardPosition',
+            'Aspire.Hosting/withDisplayPosition',
             rpcArgs
         );
         return new TestRedisResourceImpl(result, this._client);
     }
 
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
      * @param position The default position. Lower values appear first.
      * @returns The resource builder.
      */
-    withDashboardPosition(position: number): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._withDashboardPositionInternal(position), this._client);
+    withDisplayPosition(position: number): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._withDisplayPositionInternal(position), this._client);
     }
 
     /** @internal */
@@ -50625,7 +50625,7 @@ const TestRedisResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestRedisRe
     ["withRemoteImageTag"]: () => TestRedisResourcePromiseImpl,
     ["withTrait"]: () => TestRedisResourcePromiseImpl,
     ["withTags"]: () => TestRedisResourcePromiseImpl,
-    ["withDashboardPosition"]: () => TestRedisResourcePromiseImpl,
+    ["withDisplayPosition"]: () => TestRedisResourcePromiseImpl,
     ["withTerminal"]: () => TestRedisResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => TestRedisResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => TestRedisResourcePromiseImpl,
@@ -51391,11 +51391,11 @@ export interface TestVaultResource {
      */
     withTags(tags: string[]): TestVaultResourcePromise;
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
      * @param position The default position. Lower values appear first.
      * @returns The resource builder.
      */
-    withDashboardPosition(position: number): TestVaultResourcePromise;
+    withDisplayPosition(position: number): TestVaultResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -52251,11 +52251,11 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      */
     withTags(tags: string[]): TestVaultResourcePromise;
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
      * @param position The default position. Lower values appear first.
      * @returns The resource builder.
      */
-    withDashboardPosition(position: number): TestVaultResourcePromise;
+    withDisplayPosition(position: number): TestVaultResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -54567,22 +54567,22 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _withDashboardPositionInternal(position: number): Promise<TestVaultResource> {
+    private async _withDisplayPositionInternal(position: number): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, position };
         const result = await this._client.invokeCapability<TestVaultResourceHandle>(
-            'Aspire.Hosting/withDashboardPosition',
+            'Aspire.Hosting/withDisplayPosition',
             rpcArgs
         );
         return new TestVaultResourceImpl(result, this._client);
     }
 
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
      * @param position The default position. Lower values appear first.
      * @returns The resource builder.
      */
-    withDashboardPosition(position: number): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._withDashboardPositionInternal(position), this._client);
+    withDisplayPosition(position: number): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._withDisplayPositionInternal(position), this._client);
     }
 
     /** @internal */
@@ -55389,7 +55389,7 @@ const TestVaultResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestVaultRe
     ["withRemoteImageTag"]: () => TestVaultResourcePromiseImpl,
     ["withTrait"]: () => TestVaultResourcePromiseImpl,
     ["withTags"]: () => TestVaultResourcePromiseImpl,
-    ["withDashboardPosition"]: () => TestVaultResourcePromiseImpl,
+    ["withDisplayPosition"]: () => TestVaultResourcePromiseImpl,
     ["withTerminal"]: () => TestVaultResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => TestVaultResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => TestVaultResourcePromiseImpl,
@@ -55952,11 +55952,11 @@ export interface Resource {
      */
     withTags(tags: string[]): ResourcePromise;
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
      * @param position The default position. Lower values appear first.
      * @returns The resource builder.
      */
-    withDashboardPosition(position: number): ResourcePromise;
+    withDisplayPosition(position: number): ResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -56314,11 +56314,11 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      */
     withTags(tags: string[]): ResourcePromise;
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
      * @param position The default position. Lower values appear first.
      * @returns The resource builder.
      */
-    withDashboardPosition(position: number): ResourcePromise;
+    withDisplayPosition(position: number): ResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -57201,22 +57201,22 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     }
 
     /** @internal */
-    private async _withDashboardPositionInternal(position: number): Promise<Resource> {
+    private async _withDisplayPositionInternal(position: number): Promise<Resource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, position };
         const result = await this._client.invokeCapability<IResourceHandle>(
-            'Aspire.Hosting/withDashboardPosition',
+            'Aspire.Hosting/withDisplayPosition',
             rpcArgs
         );
         return new ResourceImpl(result, this._client);
     }
 
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
+     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
      * @param position The default position. Lower values appear first.
      * @returns The resource builder.
      */
-    withDashboardPosition(position: number): ResourcePromise {
-        return new ResourcePromiseImpl(this._withDashboardPositionInternal(position), this._client);
+    withDisplayPosition(position: number): ResourcePromise {
+        return new ResourcePromiseImpl(this._withDisplayPositionInternal(position), this._client);
     }
 
     /** @internal */
@@ -57862,7 +57862,7 @@ const ResourcePromiseImpl = $aspireCreateFluentPromiseClass<Resource, ResourcePr
     ["withHiddenOnCompletion"]: () => ResourcePromiseImpl,
     ["withTrait"]: () => ResourcePromiseImpl,
     ["withTags"]: () => ResourcePromiseImpl,
-    ["withDashboardPosition"]: () => ResourcePromiseImpl,
+    ["withDisplayPosition"]: () => ResourcePromiseImpl,
     ["withTerminal"]: () => ResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ResourcePromiseImpl,

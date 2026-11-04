@@ -61,6 +61,285 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to now.
+        /// </summary>
+        public static string HomeActivityAxisEnd {
+            get {
+                return ResourceManager.GetString("HomeActivityAxisEnd", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to 15 min ago.
+        /// </summary>
+        public static string HomeActivityAxisStart {
+            get {
+                return ResourceManager.GetString("HomeActivityAxisStart", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0} · {1} requests, {2} failed.
+        /// </summary>
+        public static string HomeActivityBarTooltip {
+            get {
+                return ResourceManager.GetString("HomeActivityBarTooltip", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Incoming requests · last 15 min.
+        /// </summary>
+        public static string HomeActivityCaption {
+            get {
+                return ResourceManager.GetString("HomeActivityCaption", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Requests per 30 seconds over the last 15 minutes.
+        /// </summary>
+        public static string HomeActivityChartLabel {
+            get {
+                return ResourceManager.GetString("HomeActivityChartLabel", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to error rate.
+        /// </summary>
+        public static string HomeActivityErrorRate {
+            get {
+                return ResourceManager.GetString("HomeActivityErrorRate", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Incoming requests · last 15 min of this run.
+        /// </summary>
+        public static string HomeActivityHistoricalCaption {
+            get {
+                return ResourceManager.GetString("HomeActivityHistoricalCaption", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Activity.
+        /// </summary>
+        public static string HomeActivityHistoricalTitle {
+            get {
+                return ResourceManager.GetString("HomeActivityHistoricalTitle", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Loading activity….
+        /// </summary>
+        public static string HomeActivityLoading {
+            get {
+                return ResourceManager.GetString("HomeActivityLoading", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to logs.
+        /// </summary>
+        public static string HomeActivityLogsLabel {
+            get {
+                return ResourceManager.GetString("HomeActivityLogsLabel", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to metrics.
+        /// </summary>
+        public static string HomeActivityMetricsLabel {
+            get {
+                return ResourceManager.GetString("HomeActivityMetricsLabel", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to No requests were recorded in this run..
+        /// </summary>
+        public static string HomeActivityNoRecordedRequests {
+            get {
+                return ResourceManager.GetString("HomeActivityNoRecordedRequests", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to p95 latency.
+        /// </summary>
+        public static string HomeActivityP95Latency {
+            get {
+                return ResourceManager.GetString("HomeActivityP95Latency", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to requests / min.
+        /// </summary>
+        public static string HomeActivityRequestsPerMinute {
+            get {
+                return ResourceManager.GetString("HomeActivityRequestsPerMinute", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Live activity.
+        /// </summary>
+        public static string HomeActivityTitle {
+            get {
+                return ResourceManager.GetString("HomeActivityTitle", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to traces.
+        /// </summary>
+        public static string HomeActivityTracesLabel {
+            get {
+                return ResourceManager.GetString("HomeActivityTracesLabel", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Waiting for requests. Interact with your app to see live traffic..
+        /// </summary>
+        public static string HomeActivityWaitingForRequests {
+            get {
+                return ResourceManager.GetString("HomeActivityWaitingForRequests", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Busiest resources.
+        /// </summary>
+        public static string HomeInsightBusiestResources {
+            get {
+                return ResourceManager.GetString("HomeInsightBusiestResources", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0}: {1} ({2} requests).
+        /// </summary>
+        public static string HomeInsightEndpointTooltip {
+            get {
+                return ResourceManager.GetString("HomeInsightEndpointTooltip", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Error hotspots.
+        /// </summary>
+        public static string HomeInsightErrorHotspots {
+            get {
+                return ResourceManager.GetString("HomeInsightErrorHotspots", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to failed requests + error logs.
+        /// </summary>
+        public static string HomeInsightErrorHotspotsHint {
+            get {
+                return ResourceManager.GetString("HomeInsightErrorHotspotsHint", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0} error logs.
+        /// </summary>
+        public static string HomeInsightErrorLogCount {
+            get {
+                return ResourceManager.GetString("HomeInsightErrorLogCount", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0} failed.
+        /// </summary>
+        public static string HomeInsightFailedCount {
+            get {
+                return ResourceManager.GetString("HomeInsightFailedCount", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0} failed requests.
+        /// </summary>
+        public static string HomeInsightFailedRequestCount {
+            get {
+                return ResourceManager.GetString("HomeInsightFailedRequestCount", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to No errors in the last 15 minutes.
+        /// </summary>
+        public static string HomeInsightNoErrors {
+            get {
+                return ResourceManager.GetString("HomeInsightNoErrors", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to No requests in the last 15 minutes.
+        /// </summary>
+        public static string HomeInsightNoRequests {
+            get {
+                return ResourceManager.GetString("HomeInsightNoRequests", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to p95.
+        /// </summary>
+        public static string HomeInsightP95 {
+            get {
+                return ResourceManager.GetString("HomeInsightP95", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0} requests.
+        /// </summary>
+        public static string HomeInsightRequestCount {
+            get {
+                return ResourceManager.GetString("HomeInsightRequestCount", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0} req.
+        /// </summary>
+        public static string HomeInsightRequestCountShort {
+            get {
+                return ResourceManager.GetString("HomeInsightRequestCountShort", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Slowest endpoints.
+        /// </summary>
+        public static string HomeInsightSlowestEndpoints {
+            get {
+                return ResourceManager.GetString("HomeInsightSlowestEndpoints", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Insights.
+        /// </summary>
+        public static string HomeInsightsLandmark {
+            get {
+                return ResourceManager.GetString("HomeInsightsLandmark", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Persistent.
         /// </summary>
         public static string ResourcePersistentLifetime {
@@ -955,11 +1234,11 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Dashboard position.
+        ///   Looks up a localized string similar to Display position.
         /// </summary>
-        public static string ResourceTraitDashboardPosition {
+        public static string ResourceDisplayPosition {
             get {
-                return ResourceManager.GetString("ResourceTraitDashboardPosition", resourceCulture);
+                return ResourceManager.GetString("ResourceDisplayPosition", resourceCulture);
             }
         }
 

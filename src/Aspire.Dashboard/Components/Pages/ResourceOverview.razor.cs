@@ -44,7 +44,9 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
     private Subscription? _logsSubscription;
     private Subscription? _tracesSubscription;
     private Subscription? _metricsSubscription;
-    private int _telemetryRefreshPending;
+    // Replaced when the selection changes, so a canceled refresh that hasn't observed its cancellation yet can't make
+    // the next resource's first refresh look like it's already pending.
+    private TelemetryRefreshGeneration _telemetryRefresh = new();
     private int _consoleRenderPending;
     private bool _hasConsoleLogs;
     private bool _consoleLogsLoaded;
@@ -124,7 +126,13 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
     private ResourceViewModel? Resource => ResourcesLayout?.SelectedResource;
 
     private bool IsTerminalFocused => ResourcesLayout?.CurrentTab == ResourceTab.Terminal &&
-        Resource is { } resource && ResourceSelectHelpers.HasUsableTerminal(resource);
+        Resource is { } resource && CanShowTerminal(resource);
+
+    // A recording's terminal endpoint would resolve through the live dashboard client, and recorded instance names can
+    // still match a running AppHost after a dashboard-only restart. Showing it would open a writable connection to a
+    // live process from a read-only run, so recordings show the console card instead, like the Terminals page.
+    private bool CanShowTerminal(ResourceViewModel resource) =>
+        !DashboardClient.IsReadOnly && ResourceSelectHelpers.HasUsableTerminal(resource);
 
     private void ToggleTerminalFocus() =>
         NavigationManager.NavigateTo(DashboardUrls.SetResourceTerminalFocus(NavigationManager.Uri, !IsTerminalFocused));
@@ -170,6 +178,10 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
             if (_subscribedResourceName is { } resourceName)
             {
                 StartConsoleSubscription(resourceName);
+
+                // Replacing the subscription cancels a refresh that's still waiting. Nothing else queues another one
+                // for a quiet resource, which would otherwise keep showing its loading skeleton.
+                QueueTelemetryRefresh();
             }
 
             StateHasChanged();
@@ -255,7 +267,8 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
 
     private void QueueTelemetryRefresh()
     {
-        if (_telemetryKey is null || Interlocked.Exchange(ref _telemetryRefreshPending, 1) == 1)
+        var refresh = _telemetryRefresh;
+        if (_telemetryKey is null || Interlocked.Exchange(ref refresh.Pending, 1) == 1)
         {
             return;
         }
@@ -266,7 +279,7 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
             try
             {
                 await Task.Delay(s_telemetryRefreshDelay, cancellationToken).ConfigureAwait(false);
-                Interlocked.Exchange(ref _telemetryRefreshPending, 0);
+                Interlocked.Exchange(ref refresh.Pending, 0);
 
                 if (_telemetryKey is not { } key)
                 {
@@ -287,11 +300,11 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
             }
             catch (OperationCanceledException)
             {
-                Interlocked.Exchange(ref _telemetryRefreshPending, 0);
+                Interlocked.Exchange(ref refresh.Pending, 0);
             }
             catch (Exception ex)
             {
-                Interlocked.Exchange(ref _telemetryRefreshPending, 0);
+                Interlocked.Exchange(ref refresh.Pending, 0);
                 Logger.LogWarning(ex, "Error loading telemetry summary for the resource overview.");
             }
         }, CancellationToken.None);
@@ -372,6 +385,7 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
         _resourceCts?.Cancel();
         _resourceCts?.Dispose();
         _resourceCts = null;
+        _telemetryRefresh = new();
 
         lock (_consoleLock)
         {
@@ -594,6 +608,11 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
         {
             return _consoleLines.ToList();
         }
+    }
+
+    private sealed class TelemetryRefreshGeneration
+    {
+        public int Pending;
     }
 
     private sealed record EndpointGroup(DisplayedUrl Primary, DisplayedUrl? Secondary);

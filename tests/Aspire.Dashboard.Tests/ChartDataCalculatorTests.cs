@@ -366,6 +366,68 @@ public class ChartDataCalculatorTests
     }
 
     [Fact]
+    public void CalculateCounterIncreaseValues_DeltaExportsInSameInterval_AreSummed()
+    {
+        var context = CreateContext();
+        var dimension = new DimensionScope(capacity: 100, []);
+
+        // Two exports in the newest interval (-10s to 0s), and one in the interval before it.
+        foreach (var (start, end, value) in new[] { (-25, -15, 3), (-9, -6, 4), (-6, -2, 6) })
+        {
+            dimension.AddPointValue(new NumberDataPoint
+            {
+                AsInt = value,
+                StartTimeUnixNano = ToNanos(s_startTime.AddSeconds(start)),
+                TimeUnixNano = ToNanos(s_startTime.AddSeconds(end))
+            }, context);
+        }
+
+        var calculator = new ChartDataCalculator(pointCount: 3, duration: TimeSpan.FromSeconds(30));
+        var increases = calculator.CalculateCounterIncreaseValues([dimension], s_startTime, OtlpAggregationTemporality.Delta);
+
+        Assert.Equal([null, null, 3, 10, null], increases);
+    }
+
+    [Fact]
+    public void CalculateCounterIncreaseValues_RepeatedDeltaValues_CountEachExportOnce()
+    {
+        var context = CreateContext();
+        var dimension = new DimensionScope(capacity: 100, []);
+
+        // Exports with the same value are stored as one value with a count, spanning several intervals.
+        foreach (var end in new[] { -25, -15, -5 })
+        {
+            dimension.AddPointValue(new NumberDataPoint
+            {
+                AsInt = 5,
+                StartTimeUnixNano = ToNanos(s_startTime.AddSeconds(end - 10)),
+                TimeUnixNano = ToNanos(s_startTime.AddSeconds(end))
+            }, context);
+        }
+        Assert.Single(dimension.Values);
+
+        var calculator = new ChartDataCalculator(pointCount: 3, duration: TimeSpan.FromSeconds(30));
+        var increases = calculator.CalculateCounterIncreaseValues([dimension], s_startTime, OtlpAggregationTemporality.Delta);
+
+        Assert.Equal(15, increases.Sum());
+    }
+
+    [Fact]
+    public void TryCalculatePoint_NegativeLevel_IsPreserved()
+    {
+        var dimension = new DimensionScope(capacity: 100, []);
+        dimension.AddPointValue(new NumberDataPoint
+        {
+            AsInt = -5,
+            StartTimeUnixNano = ToNanos(s_startTime.AddSeconds(-5)),
+            TimeUnixNano = ToNanos(s_startTime.AddSeconds(-5))
+        }, CreateContext());
+
+        Assert.True(ChartDataCalculator.TryCalculatePoint([dimension], s_startTime.AddSeconds(-10), s_startTime, out var value));
+        Assert.Equal(-5, value);
+    }
+
+    [Fact]
     public void CalculateCounterIncreaseValues_NoDimensions_AllNullValues()
     {
         var calculator = new ChartDataCalculator(pointCount: 3, duration: TimeSpan.FromSeconds(30));
