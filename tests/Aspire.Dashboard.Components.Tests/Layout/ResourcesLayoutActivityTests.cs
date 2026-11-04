@@ -93,7 +93,9 @@ public class ResourcesLayoutActivityTests : DashboardTestContext
             configureServices: services => services.AddSingleton<ITelemetryRepository>(provider =>
                 new TestTelemetryRepository(provider.GetRequiredService<SqliteTelemetryRepository>())
                 {
-                    OnNewLogsRegistered = callback => notifyLogs = callback
+                    OnNewLogsRegistered = callback => notifyLogs = callback,
+                    // Log ingestion also publishes resource notifications. Isolate the log callback's render guard.
+                    OnNewResourcesSubscribed = subscription => subscription.Dispose()
                 }));
         var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
         await AddLogAsync(SeverityNumber.Info);
@@ -210,9 +212,11 @@ public class ResourcesLayoutActivityTests : DashboardTestContext
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
         cut.Find(".resource-pane-canvas-toggle").Click();
-        cut.WaitForAssertion(() => Assert.Equal(112, cut.FindAll(".resource-row-insight").Count));
+        WaitForInsightCount(2);
         Assert.Equal(1, Volatile.Read(ref calls));
         var changedKey = new ResourceKey(names[0], "TestId");
+        var changed = cut.FindComponents<ResourcePaneInsights>()
+            .Where(component => component.Instance.ResourceKey == changedKey).ToArray();
         var unchanged = cut.FindComponents<ResourcePaneInsights>()
             .Where(component => component.Instance.ResourceKey != changedKey)
             .Select(component => (Component: component, Renders: component.RenderCount,
@@ -221,29 +225,33 @@ public class ResourcesLayoutActivityTests : DashboardTestContext
         // Tick the polling timer without changing the displayed clock to isolate
         // a changed resource from the separate renewal of all active URL windows.
         timers.Advance(ResourcesLayout.s_paneActivityRefreshInterval);
-        cut.WaitForAssertion(() => Assert.Equal(["40 incoming", "40 incoming"],
-            cut.FindAll($"[data-resource-name='{names[0]}-TestId'] .resource-row-insight-requests span").Select(span => span.TextContent)));
+        foreach (var component in changed)
+        {
+            component.WaitForAssertion(() => Assert.Equal("40 incoming", component.Find(".resource-row-insight-requests span").TextContent));
+        }
+        Assert.Equal(["40 incoming", "40 incoming"],
+            cut.FindAll($"[data-resource-name='{names[0]}-TestId'] .resource-row-insight-requests span").Select(span => span.TextContent));
         Assert.Equal(2, Volatile.Read(ref calls));
         Assert.All(unchanged, item =>
         {
             Assert.Equal(item.Renders, item.Component.RenderCount);
             Assert.Same(item.Snapshot, cut.Instance.GetPaneActivitySnapshot(item.Component.Instance.ResourceKey));
         });
-        var href = cut.Find(".resource-row-insight-requests").GetAttribute("href");
+        var href = changed[0].Find(".resource-row-insight-requests").GetAttribute("href");
         clock.UtcNow += TimeSpan.FromSeconds(14);
         timers.Advance(TimeSpan.FromSeconds(14));
         await cut.InvokeAsync(() => { });
         Assert.Equal(2, Volatile.Read(ref calls));
         clock.UtcNow += TimeSpan.FromSeconds(1);
         timers.Advance(TimeSpan.FromSeconds(1));
-        cut.WaitForAssertion(() =>
+        changed[0].WaitForAssertion(() =>
         {
             Assert.Equal(3, Volatile.Read(ref calls));
-            Assert.NotEqual(href, cut.Find(".resource-row-insight-requests").GetAttribute("href"));
+            Assert.NotEqual(href, changed[0].Find(".resource-row-insight-requests").GetAttribute("href"));
         });
         clock.UtcNow += TimeSpan.FromMinutes(6);
         timers.Advance(ResourcesLayout.s_paneActivityRefreshInterval);
-        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll(".resource-row-insight")));
+        WaitForInsightCount(0);
         var beforeHidden = Volatile.Read(ref calls);
         await cut.InvokeAsync(() => cut.Instance.SetPaneActivityVisible(false));
         doubleFirst = false;
@@ -253,7 +261,7 @@ public class ResourcesLayoutActivityTests : DashboardTestContext
         await cut.InvokeAsync(() => { });
         Assert.Equal(beforeHidden, Volatile.Read(ref calls));
         await cut.InvokeAsync(() => cut.Instance.SetPaneActivityVisible(true));
-        cut.WaitForAssertion(() => Assert.Equal(112, cut.FindAll(".resource-row-insight").Count));
+        WaitForInsightCount(2);
         Assert.Equal(beforeHidden + 1, Volatile.Read(ref calls));
         var url = new Uri(new Uri("http://localhost"), cut.Find(".resource-row-insight-requests").GetAttribute("href"));
         var filters = TelemetryFilterFormatter.DeserializeFiltersFromString(QueryHelpers.ParseQuery(url.Query)["filters"].ToString());
@@ -262,6 +270,18 @@ public class ResourcesLayoutActivityTests : DashboardTestContext
         timers.Advance(TimeSpan.FromMinutes(1));
         Assert.Equal(beforeHidden + 1, Volatile.Read(ref calls));
         Assert.Equal(1, maximumActive);
+
+        void WaitForInsightCount(int count)
+        {
+            // Activity updates render the insight children, not their layout. Await each child's own render signal.
+            var components = cut.FindComponents<ResourcePaneInsights>();
+            Assert.Equal(56, components.Count);
+            foreach (var component in components)
+            {
+                component.WaitForAssertion(() => Assert.Equal(count, component.FindAll(".resource-row-insight").Count));
+            }
+            Assert.Equal(count * components.Count, cut.FindAll(".resource-row-insight").Count);
+        }
     }
 
     [Theory]

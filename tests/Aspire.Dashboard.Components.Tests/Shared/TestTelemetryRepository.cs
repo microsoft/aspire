@@ -12,6 +12,7 @@ internal sealed class TestTelemetryRepository(ITelemetryRepository inner) : ITel
     public Func<GetLogsContext, CancellationToken, Task<PagedResult<LogSummary>>>? GetLogSummariesAsyncHandler { get; init; }
     public Func<GetRequestSpansRequest, CancellationToken, Task<GetRequestSpansResponse>>? GetRequestSpansAsyncHandler { get; init; }
     public Action<Func<Task>>? OnNewLogsRegistered { get; init; }
+    public Action<Subscription>? OnNewResourcesSubscribed { get; init; }
 
     public bool IsReadOnly => inner.IsReadOnly;
     public bool HasReceivedTelemetry => inner.HasReceivedTelemetry;
@@ -28,7 +29,12 @@ internal sealed class TestTelemetryRepository(ITelemetryRepository inner) : ITel
     public Dictionary<ResourceKey, int> GetResourceUnviewedErrorLogsCount() => inner.GetResourceUnviewedErrorLogsCount();
     public void MarkViewedErrorLogs(ResourceKey? key) => inner.MarkViewedErrorLogs(key);
 
-    public Subscription OnNewResources(Func<Task> callback) => inner.OnNewResources(callback);
+    public Subscription OnNewResources(Func<Task> callback)
+    {
+        var subscription = inner.OnNewResources(callback);
+        OnNewResourcesSubscribed?.Invoke(subscription);
+        return subscription;
+    }
     public Subscription OnNewLogs(ResourceKey? resourceKey, SubscriptionType subscriptionType, Func<Task> callback)
     {
         OnNewLogsRegistered?.Invoke(callback);
