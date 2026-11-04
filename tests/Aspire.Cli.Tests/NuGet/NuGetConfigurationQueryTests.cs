@@ -13,6 +13,63 @@ namespace Aspire.Cli.Tests.NuGet;
 public class NuGetConfigurationQueryTests(ITestOutputHelper outputHelper)
 {
     [Theory]
+    [InlineData(null)]
+    [InlineData("*")]
+    [InlineData("Aspire*")]
+    public async Task ExactIntegrationSelection_PreservesSdkFeedAfterPersistence(string? sdkPattern)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var sdkFeed = workspace.CreateDirectory(Path.Combine(".aspire", "hives", "pr-21366", "packages")).FullName;
+        var integrationFeed = workspace.CreateDirectory("integration-feed").FullName;
+        const string sdkSourceKey = "aspire-pr-21366";
+        const string packageId = "Contoso.Hosting.One";
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "nuget.config"), $$"""
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="{{sdkSourceKey}}" value="{{sdkFeed}}" />
+                <add key="public" value="{{PackageSources.NuGetOrg}}" />
+              </packageSources>
+              {{(sdkPattern is null ? "" : $"""
+              <packageSourceMapping>
+                <packageSource key="{sdkSourceKey}"><package pattern="{sdkPattern}" /></packageSource>
+                <packageSource key="public"><package pattern="*" /></packageSource>
+              </packageSourceMapping>
+              """)}}
+            </configuration>
+            """);
+        var service = NuGetTestHelper.CreateService();
+        Assert.True(Assert.Single(service.GetNuGetSettings(workspace.Path, TestContext.Current.CancellationToken).Sources,
+            source => source.Name == sdkSourceKey).IsCliManaged);
+        var configuration = service.BuildAppHostConfiguration(
+            workspace.WorkspaceRoot, "integration-add",
+            [new(packageId, integrationFeed) { SourceKey = "team" }],
+            overrideIntegrationSources: false, TestContext.Current.CancellationToken);
+        var candidate = await new DotNetAppHostNuGetConfigMerger(service).PrepareAsync(
+            workspace.WorkspaceRoot, configuration, createIfMissing: false,
+            globalPackagesFolder: null, TestContext.Current.CancellationToken);
+        Assert.NotNull(candidate);
+
+        await DotNetAppHostNuGetConfigMerger.ApplyAsync(candidate, TestContext.Current.CancellationToken);
+
+        Assert.True(Assert.Single(service.GetNuGetSettings(workspace.Path, TestContext.Current.CancellationToken).Sources,
+            source => source.Name == sdkSourceKey).IsEnabled);
+        Assert.Equal(sdkPattern is not null,
+            service.IsPackageSourceMappingEnabled(workspace.WorkspaceRoot, TestContext.Current.CancellationToken));
+        string[] allSources = [sdkFeed, PackageSources.NuGetOrg, integrationFeed];
+        string[] sdkSources = sdkPattern switch
+        {
+            null => allSources,
+            "*" => [sdkFeed, PackageSources.NuGetOrg],
+            _ => [sdkFeed]
+        };
+        Assert.Equal(sdkSources.Order(StringComparer.Ordinal),
+            NuGetTestHelper.GetEligiblePackageSources(workspace.Path, "Aspire.Hosting.AppHost"));
+        Assert.Equal((sdkPattern is null ? allSources : [integrationFeed]).Order(StringComparer.Ordinal),
+            NuGetTestHelper.GetEligiblePackageSources(workspace.Path, packageId));
+    }
+
+    [Theory]
     [InlineData(PackageChannelNames.Daily, false)]
     [InlineData(PackageChannelNames.Daily, true)]
     [InlineData(PackageChannelNames.Staging, false)]

@@ -12,6 +12,42 @@ namespace Aspire.Cli.Tests.NuGet;
 public class NuGetConfigurationTests
 {
     [Theory]
+    [InlineData("Contoso.Hosting.One", null)]
+    [InlineData("Contoso.Hosting.One", "*")]
+    [InlineData("Contoso.Hosting.One", "Aspire*")]
+    [InlineData("Aspire.Hosting.Custom", null)]
+    [InlineData("Aspire.Hosting.Custom", "*")]
+    [InlineData("Aspire.Hosting.Custom", "Aspire*")]
+    public void Build_ExactIntegrationSelectionPreservesSdkChannelSources(string packageId, string? sdkPattern)
+    {
+        const string integrationSource = "https://team.example/v3/index.json";
+        const string sdkSourceKey = "aspire-pr-21366";
+        var settings = CreateSettings(sdkPattern is null
+            ? []
+            : [new(sdkSourceKey, [sdkPattern]), new("public", ["*"])]) with
+        {
+            Sources =
+            [
+                new(sdkSourceKey, "sdk", true, false, false) { IsCliManaged = true },
+                new("public", "public", true, false, false)
+            ]
+        };
+
+        var configuration = DotNetAppHostNuGetConfigBuilder.Build(
+            settings, "integration-add", [new(packageId, integrationSource) { SourceKey = "team" }]);
+
+        var overlay = Assert.IsType<NuGetConfigOverlay>(configuration.Overlay);
+        Assert.Empty(overlay.RetiredSourceKeys);
+        Assert.Empty(overlay.DisabledPackageSourceKeys);
+        var sdkMapping = Assert.Single(overlay.PackageSourceMappings, mapping => mapping.SourceKey == sdkSourceKey);
+        Assert.Equal([sdkPattern ?? "*"], sdkMapping.Patterns);
+        var persistence = Assert.IsType<DotNetAppHostNuGetConfig>(configuration.AppHostConfig);
+        Assert.Empty(persistence.SourceChanges.RetiredSourceKeys);
+        Assert.Empty(persistence.RemovedPackageSourceMappings);
+        Assert.Equal([("aspire-integration-team", integrationSource)], persistence.SourceChanges.Sources);
+    }
+
+    [Theory]
     [InlineData("team")]
     [InlineData("aspire-integration-team")]
     public void Build_NamedFeedSwitchRemovesOnlyThePreviousExactIntegrationMapping(string previousKey)

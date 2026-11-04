@@ -13,10 +13,12 @@ namespace Aspire.Cli.EndToEnd.Tests;
 public sealed class IntegrationSourceTests(ITestOutputHelper output)
 {
     [Theory]
-    [InlineData("csharp")]
-    [InlineData("typescript")]
+    [InlineData("csharp", false)]
+    [InlineData("csharp", true)]
+    [InlineData("typescript", false)]
+    [InlineData("typescript", true)]
     [CaptureWorkspaceOnFailure]
-    public async Task Add_FromLocalIntegrationSourcePersistsNuGetConfiguration(string language)
+    public async Task Add_FromLocalIntegrationSourcePersistsNuGetConfiguration(string language, bool hasMappings)
     {
         const string packageId = "Contoso.Hosting.LocalSource";
         const string packageVersion = "1.0.0";
@@ -75,6 +77,22 @@ public sealed class IntegrationSourceTests(ITestOutputHelper output)
         var projectDirectory = Path.Combine(root, "SourceApp");
         var nugetConfigPath = Path.Combine(projectDirectory, "nuget.config");
         var originalConfig = File.Exists(nugetConfigPath) ? XDocument.Load(nugetConfigPath) : null;
+        if (hasMappings)
+        {
+            originalConfig ??= new XDocument(new XElement("configuration",
+                new XElement("packageSources",
+                    new XElement("add", new XAttribute("key", "nuget.org"),
+                        new XAttribute("value", "https://api.nuget.org/v3/index.json")))));
+            // Enable mapping explicitly while preserving every existing source's eligibility.
+            originalConfig.Root!.Element("packageSourceMapping")?.Remove();
+            originalConfig.Root.Add(new XElement("packageSourceMapping",
+                new XElement("clear"),
+                originalConfig.Descendants("packageSources").Elements("add").Select(source =>
+                    new XElement("packageSource", new XAttribute("key", source.Attribute("key")!.Value),
+                        new XElement("package", new XAttribute("pattern", "*"))))));
+            originalConfig.Save(nugetConfigPath);
+        }
+        Assert.Equal(hasMappings, originalConfig?.Descendants("packageSourceMapping").Elements("packageSource").Any() ?? false);
         Assert.Empty(originalConfig?.Descendants("packageSources").Elements("add")
             .Where(source => (string?)source.Attribute("value") == containerFeed) ?? []);
         var packageCacheDirectory = Path.Combine(root, ".nuget-packages", packageId.ToLowerInvariant(), packageVersion);
@@ -105,9 +123,16 @@ public sealed class IntegrationSourceTests(ITestOutputHelper output)
         var addedSource = Assert.Single(updatedConfig.Descendants("packageSources").Elements("add"),
             source => (string?)source.Attribute("value") == containerFeed);
         var sourceKey = addedSource.Attribute("key")!.Value;
-        var mapping = Assert.Single(updatedConfig.Descendants("packageSourceMapping").Elements("packageSource"),
-            source => (string?)source.Attribute("key") == sourceKey);
-        Assert.Equal([packageId], mapping.Elements("package").Select(package => (string?)package.Attribute("pattern")));
+        var mappings = updatedConfig.Descendants("packageSourceMapping").Elements("packageSource");
+        if (hasMappings)
+        {
+            var mapping = Assert.Single(mappings, source => (string?)source.Attribute("key") == sourceKey);
+            Assert.Equal([packageId], mapping.Elements("package").Select(package => (string?)package.Attribute("pattern")));
+        }
+        else
+        {
+            Assert.Empty(mappings);
+        }
 
         foreach (var originalSource in originalConfig?.Descendants("packageSources").Elements("add") ?? [])
         {

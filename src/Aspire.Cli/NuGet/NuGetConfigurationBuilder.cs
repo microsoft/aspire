@@ -282,8 +282,12 @@ internal static class NuGetConfigurationBuilder
 
         var selectedKeysForPolicy = selectedSources.Select(static source => source.Key)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        // Selecting an integration package does not replace the AppHost's SDK channel.
+        var isExactPackageSelection = selectedMappings.Length > 0 &&
+            selectedMappings.All(static mapping => PackageSourceOverrideMappings.IsExactPackagePattern(mapping.PackageFilter));
         var retiredSourceKeys = settings.Sources
             .Where(source =>
+                !isExactPackageSelection &&
                 !source.IsIntegrationSource &&
                 !selectedKeysForPolicy.Contains(source.Name) &&
                 !packageSourceMappings.Any(mapping =>

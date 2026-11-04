@@ -86,6 +86,8 @@ internal static class DotNetAppHostNuGetConfigBuilder
             .ToHashSet(StringComparer.Ordinal);
         var retiredKeys = new List<string>();
         var removedMappings = new List<NuGetPackageSourceMapping>();
+        var isExactPackageSelection = selectedMappings.Count > 0 &&
+            selectedMappings.All(static mapping => PackageSourceOverrideMappings.IsExactPackagePattern(mapping.PackageFilter));
         // Explicit named-feed selections replace that package's previous exact routing.
         // Other user patterns remain untouched; persistence checks that removals are local.
         foreach (var source in settings.Sources.Where(source =>
@@ -111,7 +113,8 @@ internal static class DotNetAppHostNuGetConfigBuilder
                 !mappings.Any(selected =>
                     string.Equals(selected.SourceKey, source.Name, StringComparison.OrdinalIgnoreCase) &&
                     selected.Patterns.Contains(pattern, StringComparer.OrdinalIgnoreCase))).ToArray();
-            if (!source.IsIntegrationSource && !selectedKeys.Contains(source.Name) &&
+            // Unmapped and catch-all SDK feeds remain necessary after an integration add.
+            if (!isExactPackageSelection && !source.IsIntegrationSource && !selectedKeys.Contains(source.Name) &&
                 patterns.Except(obsoletePatterns, StringComparer.OrdinalIgnoreCase)
                     .All(static pattern => pattern == PackageMapping.AllPackages))
             {
