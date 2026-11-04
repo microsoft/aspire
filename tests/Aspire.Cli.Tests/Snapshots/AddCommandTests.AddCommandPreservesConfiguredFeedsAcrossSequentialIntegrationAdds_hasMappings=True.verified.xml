@@ -5,7 +5,7 @@
         <clear />
         <add key="sdk" value="https://example.com/sdk" />
         <add key="public" value="https://example.com/public" />
-        <add key="team" value="https://example.com/team" />
+        <add key="aspire-integration-team" value="https://example.com/team" />
       </packageSources>
       <packageSourceMapping>
         <clear />
@@ -15,7 +15,7 @@
         <packageSource key="public">
           <package pattern="*" />
         </packageSource>
-        <packageSource key="team">
+        <packageSource key="aspire-integration-team">
           <package pattern="Contoso.Hosting.One" />
         </packageSource>
       </packageSourceMapping>
@@ -27,8 +27,8 @@
         <clear />
         <add key="sdk" value="https://example.com/sdk" />
         <add key="public" value="https://example.com/public" />
-        <add key="team" value="https://example.com/team" />
-        <add key="other" value="https://example.com/other" />
+        <add key="aspire-integration-team" value="https://example.com/team" />
+        <add key="aspire-integration-other" value="https://example.com/other" />
       </packageSources>
       <packageSourceMapping>
         <clear />
@@ -38,10 +38,10 @@
         <packageSource key="public">
           <package pattern="*" />
         </packageSource>
-        <packageSource key="team">
+        <packageSource key="aspire-integration-team">
           <package pattern="Contoso.Hosting.One" />
         </packageSource>
-        <packageSource key="other">
+        <packageSource key="aspire-integration-other">
           <package pattern="Fabrikam.Hosting.Two" />
         </packageSource>
       </packageSourceMapping>
@@ -53,8 +53,8 @@
         <clear />
         <add key="sdk" value="https://example.com/sdk" />
         <add key="public" value="https://example.com/public" />
-        <add key="team" value="https://example.com/team" />
-        <add key="other" value="https://example.com/other" />
+        <add key="aspire-integration-team" value="https://example.com/team" />
+        <add key="aspire-integration-other" value="https://example.com/other" />
       </packageSources>
       <packageSourceMapping>
         <clear />
@@ -64,10 +64,10 @@
         <packageSource key="public">
           <package pattern="*" />
         </packageSource>
-        <packageSource key="other">
+        <packageSource key="aspire-integration-other">
           <package pattern="Fabrikam.Hosting.Two" />
         </packageSource>
-        <packageSource key="team">
+        <packageSource key="aspire-integration-team">
           <package pattern="Contoso.Hosting.One" />
           <package pattern="Contoso.Hosting.Three" />
         </packageSource>

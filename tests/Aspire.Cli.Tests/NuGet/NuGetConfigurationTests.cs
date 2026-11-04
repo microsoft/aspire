@@ -12,6 +12,43 @@ namespace Aspire.Cli.Tests.NuGet;
 public class NuGetConfigurationTests
 {
     [Theory]
+    [InlineData("team")]
+    [InlineData("aspire-integration-team")]
+    public void Build_NamedFeedSwitchRemovesOnlyThePreviousExactIntegrationMapping(string previousKey)
+    {
+        const string previousSource = "https://team.example/v3/index.json";
+        const string selectedSource = "https://other.example/v3/index.json";
+        var settings = CreateSettings(
+        [
+            new(previousKey, ["Contoso.Hosting.One", "Contoso.Hosting.Keep", "Contoso.Internal.*"]),
+            new("public", ["*"]),
+            new("sdk", ["Aspire*"])
+        ]);
+        settings = settings with
+        {
+            Sources =
+            [
+                new(previousKey, NuGetSourceIdentity.Compute(previousSource, settings.SourceIdentityKey),
+                    true, true, false) { IsIntegrationSource = true },
+                new("public", "public", true, false, false),
+                new("sdk", "sdk", true, false, false)
+            ]
+        };
+
+        var configuration = DotNetAppHostNuGetConfigBuilder.Build(
+            settings, "integration-add", [new("Contoso.Hosting.One", selectedSource) { SourceKey = "other" }]);
+
+        var persistence = Assert.IsType<DotNetAppHostNuGetConfig>(configuration.AppHostConfig);
+        var removed = Assert.Single(persistence.RemovedPackageSourceMappings);
+        Assert.Equal(previousKey, removed.SourceKey);
+        Assert.Equal(["Contoso.Hosting.One"], removed.Patterns);
+        var added = Assert.Single(persistence.PackageSourceMappings);
+        Assert.Equal("aspire-integration-other", added.SourceKey);
+        Assert.Equal(["Contoso.Hosting.One"], added.Patterns);
+        Assert.Empty(persistence.SourceChanges.RetiredSourceKeys);
+    }
+
+    [Theory]
     [InlineData("Contoso.*", "*", true, false)]
     [InlineData("contoso.*", "*", true, false)]
     [InlineData("Contoso.Hosting.One", "Contoso.*", true, false)]

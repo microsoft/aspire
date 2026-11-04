@@ -239,8 +239,8 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData("team")]
-    [InlineData("TEAM")]
+    [InlineData("aspire-integration-team")]
+    [InlineData("ASPIRE-INTEGRATION-TEAM")]
     public async Task AddCommandRejectsIntegrationSourceKeyCollisionsWithoutChangingNuGetConfig(string existingKey)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

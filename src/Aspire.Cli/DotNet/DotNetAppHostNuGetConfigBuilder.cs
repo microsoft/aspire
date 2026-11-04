@@ -76,23 +76,32 @@ internal static class DotNetAppHostNuGetConfigBuilder
                 .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         var selectedKeys = selectedSources.Select(static source => source.Key)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var exactIntegrationPatterns = integrationMappings
+            .Where(static mapping => mapping.SourceKey is not null &&
+                PackageSourceOverrideMappings.IsExactPackagePattern(mapping.PackageFilter))
+            .Select(static mapping => mapping.PackageFilter)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var preservedIdentities = preservedSources
             .Select(source => NuGetSourceIdentity.Compute(source, settings.SourceIdentityKey))
             .ToHashSet(StringComparer.Ordinal);
         var retiredKeys = new List<string>();
         var removedMappings = new List<NuGetPackageSourceMapping>();
-        // Only CLI-owned channel entries are maintained. User mappings, including exact
-        // Aspire package mappings, retain their native NuGet precedence.
+        // Explicit named-feed selections replace that package's previous exact routing.
+        // Other user patterns remain untouched; persistence checks that removals are local.
         foreach (var source in settings.Sources.Where(source =>
-            NuGetConfigurationBuilder.IsCliManagedSource(source, workloadId) &&
+            (NuGetConfigurationBuilder.IsCliManagedSource(source, workloadId) ||
+             source.IsIntegrationSource && exactIntegrationPatterns.Count > 0) &&
             !preservedIdentities.Contains(source.Identity)))
         {
+            var isCliManaged = NuGetConfigurationBuilder.IsCliManagedSource(source, workloadId);
             var patterns = settings.PackageSourceMappings
                 .Where(mapping => string.Equals(mapping.SourceKey, source.Name, StringComparison.OrdinalIgnoreCase))
                 .SelectMany(static mapping => mapping.Patterns)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToArray();
             var obsoletePatterns = patterns.Where(pattern =>
+                (isCliManaged ||
+                 !selectedKeys.Contains(source.Name) && exactIntegrationPatterns.Contains(pattern)) &&
                 (!source.IsIntegrationSource || selectedMappings.Count > 0 && selectedPatterns.Any(selectedPattern =>
                     PackageSourceOverrideMappings.IsExactPackagePattern(selectedPattern) &&
                     PackageSourceOverrideMappings.CompetesWithAuthoritativePattern(pattern, selectedPattern))) &&
@@ -143,9 +152,10 @@ internal static class DotNetAppHostNuGetConfigBuilder
 
         var ambientSource = settings.Sources.Single(ambient =>
             string.Equals(ambient.Name, source.Key, StringComparison.OrdinalIgnoreCase));
-        // CLI-owned aliases must still participate in channel-pattern cleanup.
+        // Channel aliases must participate in cleanup; explicitly named integration aliases
+        // can retain sufficient routing without materializing another mapping.
         if (!ambientSource.IsIntegrationSource ||
-            NuGetConfigurationBuilder.IsCliManagedSource(ambientSource, workloadId))
+            !source.IsExplicitlyNamed && NuGetConfigurationBuilder.IsCliManagedSource(ambientSource, workloadId))
         {
             return false;
         }

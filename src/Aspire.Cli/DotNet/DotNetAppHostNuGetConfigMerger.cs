@@ -230,6 +230,41 @@ internal sealed class DotNetAppHostNuGetConfigMerger(BundleNuGetService nuGetSer
             }
         }
 
+        foreach (var removed in configuration.RemovedPackageSourceMappings)
+        {
+            if (!sourceConfiguration.Settings.Sources.Any(source =>
+                source.IsIntegrationSource &&
+                string.Equals(source.Name, removed.SourceKey, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            var localPatterns = localMappingItems.OfType<PackageSourceMappingSourceItem>()
+                .Where(mapping => string.Equals(mapping.Key, removed.SourceKey, StringComparison.OrdinalIgnoreCase))
+                .SelectMany(static mapping => mapping.Patterns)
+                .Select(static pattern => pattern.Pattern)
+                .ToArray();
+            var retainsLocalMapping = localPatterns.Any(pattern =>
+                !removed.Patterns.Contains(pattern, StringComparer.OrdinalIgnoreCase)) ||
+                configuration.PackageSourceMappings.Any(mapping =>
+                    string.Equals(mapping.SourceKey, removed.SourceKey, StringComparison.OrdinalIgnoreCase));
+            // Deleting the last local entry would expose the parent's whole mapping entry,
+            // potentially restoring the old exact route or changing unrelated eligibility.
+            var exposesInheritedMapping = !retainsLocalMapping &&
+                !localMappingItems.Any(static item => item is ClearItem) &&
+                inheritedMappings.Any(mapping =>
+                    string.Equals(mapping.Key, removed.SourceKey, StringComparison.OrdinalIgnoreCase));
+            if (!localPatterns.Any(pattern => removed.Patterns.Contains(pattern, StringComparer.OrdinalIgnoreCase)) ||
+                exposesInheritedMapping)
+            {
+                throw new ProjectUpdaterException(string.Format(
+                    CultureInfo.CurrentCulture,
+                    UpdateCommandStrings.ChannelFeedAlreadyConfiguredFormat,
+                    targetFile.FullName,
+                    removed.SourceKey));
+            }
+        }
+
         var changedKeys = configuration.PackageSourceMappings.Select(static mapping => mapping.SourceKey)
             .Concat(configuration.RemovedPackageSourceMappings.Select(static mapping => mapping.SourceKey))
             .Concat(configuration.SourceChanges.RetiredSourceKeys)

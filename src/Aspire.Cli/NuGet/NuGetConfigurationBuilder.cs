@@ -13,6 +13,8 @@ namespace Aspire.Cli.NuGet;
 /// </summary>
 internal static class NuGetConfigurationBuilder
 {
+    internal const string IntegrationSourceKeyPrefix = "aspire-integration-";
+
     public static NuGetConfiguration BuildStableAppHostConfiguration(
         NuGetSettingsInfo settings,
         string workloadId,
@@ -106,7 +108,8 @@ internal static class NuGetConfigurationBuilder
         => source.IsCliManaged || IsCliManagedSourceKey(source.Name, workloadId);
 
     internal static bool IsCliManagedSourceKey(string sourceKey, string workloadId)
-        => string.Equals(sourceKey, $"aspire-{PackageChannelNames.Daily}", StringComparison.OrdinalIgnoreCase) ||
+        => sourceKey.StartsWith(IntegrationSourceKeyPrefix, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(sourceKey, $"aspire-{PackageChannelNames.Daily}", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(sourceKey, $"aspire-{PackageChannelNames.Staging}", StringComparison.OrdinalIgnoreCase) ||
             sourceKey.StartsWith("aspire-pr-", StringComparison.OrdinalIgnoreCase) ||
             sourceKey.StartsWith("aspire-apphost-", StringComparison.OrdinalIgnoreCase) ||
@@ -141,17 +144,11 @@ internal static class NuGetConfigurationBuilder
             // Source order still determines the primary source when its ambient alias is reused.
             var isPrimarySource = sourceIndex++ == 0;
             var sourceIdentity = NuGetSourceIdentity.Compute(source, sourceIdentityKey);
-            var preferredKey = mappings.First(mapping => PackageSourceIdentity.Comparer.Equals(mapping.Source, source)).SourceKey;
-            if (preferredKey is not null)
+            var configuredKey = mappings.First(mapping => PackageSourceIdentity.Comparer.Equals(mapping.Source, source)).SourceKey;
+            var preferredKey = configuredKey is null ? null : $"{IntegrationSourceKeyPrefix}{configuredKey}";
+            if (configuredKey is not null)
             {
-                SourceNameValidator.Validate(preferredKey, $"{IntegrationSourceConfiguration.SectionName}.{preferredKey}");
-                if (usedKeys.Contains(preferredKey) && !ambientSources.Any(candidate =>
-                    string.Equals(candidate.Name, preferredKey, StringComparison.OrdinalIgnoreCase) &&
-                    string.Equals(candidate.Identity, sourceIdentity, StringComparison.Ordinal)))
-                {
-                    throw new InvalidOperationException(string.Format(
-                        CultureInfo.CurrentCulture, ErrorStrings.NuGetSourceKeyAlreadyInUse, preferredKey));
-                }
+                SourceNameValidator.Validate(configuredKey, $"{IntegrationSourceConfiguration.SectionName}.{configuredKey}");
             }
             var ambientMatches = ambientSources
                 .Where(candidate =>
@@ -182,7 +179,8 @@ internal static class NuGetConfigurationBuilder
                         IsAmbient: true,
                         ambientSource.IsEnabled)
                     {
-                        IsExplicitlyNamed = string.Equals(ambientSource.Name, preferredKey, StringComparison.OrdinalIgnoreCase)
+                        IsExplicitlyNamed = string.Equals(ambientSource.Name, preferredKey, StringComparison.OrdinalIgnoreCase) ||
+                            string.Equals(ambientSource.Name, configuredKey, StringComparison.OrdinalIgnoreCase)
                     });
                 }
 
@@ -193,7 +191,11 @@ internal static class NuGetConfigurationBuilder
             if (preferredKey is not null)
             {
                 key = preferredKey;
-                usedKeys.Add(key);
+                if (!usedKeys.Add(key))
+                {
+                    throw new InvalidOperationException(string.Format(
+                        CultureInfo.CurrentCulture, ErrorStrings.NuGetSourceKeyAlreadyInUse, key));
+                }
             }
             else if (isPrimarySource)
             {

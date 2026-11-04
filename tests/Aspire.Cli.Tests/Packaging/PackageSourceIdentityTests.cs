@@ -18,7 +18,9 @@ public class PackageSourceIdentityTests(ITestOutputHelper outputHelper)
     [InlineData("Team_1")]
     [InlineData("1team")]
     [InlineData("team.source")]
-    public void ExplicitSourceKeyIsUsedForNewFeeds(string sourceKey)
+    [InlineData("nugetOrg")]
+    [InlineData("daily")]
+    public void ExplicitSourceKeyIsPrefixedForNewFeeds(string sourceKey)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         WriteSource(workspace.WorkspaceRoot, "https://example.com/existing");
@@ -30,14 +32,18 @@ public class PackageSourceIdentityTests(ITestOutputHelper outputHelper)
             "integration-add", snapshot.Sources, snapshot.ReservedPackageSourceKeys, snapshot.SourceIdentityKey);
 
         var alias = Assert.Single(aliases);
-        Assert.Equal(sourceKey, alias.Key);
+        Assert.Equal($"aspire-integration-{sourceKey}", alias.Key);
         Assert.False(alias.IsAmbient);
         Assert.True(alias.IsExplicitlyNamed);
+        Assert.True(NuGetConfigurationBuilder.IsCliManagedSourceKey(alias.Key, "different-workload"));
     }
 
     [Theory]
     [InlineData("local")]
     [InlineData("aspire-integration-add")]
+    [InlineData("aspire-integration-team")]
+    [InlineData("team")]
+    [InlineData("nuget.org")]
     [InlineData("team.source")]
     public void ExplicitSourceKeyPreservesExistingFeedAliases(string existingKey)
     {
@@ -53,7 +59,7 @@ public class PackageSourceIdentityTests(ITestOutputHelper outputHelper)
         var alias = Assert.Single(aliases);
         Assert.Equal(existingKey, alias.Key);
         Assert.True(alias.IsAmbient);
-        Assert.False(alias.IsExplicitlyNamed);
+        Assert.Equal(existingKey is "team" or "aspire-integration-team", alias.IsExplicitlyNamed);
     }
 
     [Theory]
@@ -63,17 +69,36 @@ public class PackageSourceIdentityTests(ITestOutputHelper outputHelper)
     public void ExplicitSourceKeyRejectsCollisionsWithoutOverwriting(string sourceKey)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        WriteSource(workspace.WorkspaceRoot, "https://example.com/existing");
+        var reservedKey = $"aspire-integration-{sourceKey}";
+        WriteSource(workspace.WorkspaceRoot, "https://example.com/existing", reservedKey);
         var snapshot = NuGetTestHelper.CreateClient().GetSettings(
             workspace.Path, new byte[NuGetSourceIdentity.KeySizeInBytes]);
 
         var exception = Assert.Throws<InvalidOperationException>(() => NuGetConfigurationBuilder.ResolveSourceAliases(
             [new PackageMapping("Contoso.Hosting.One", "https://example.com/team") { SourceKey = sourceKey }],
-            "integration-add", snapshot.Sources, [.. snapshot.ReservedPackageSourceKeys, "reserved"], snapshot.SourceIdentityKey));
+            "integration-add", snapshot.Sources, snapshot.ReservedPackageSourceKeys, snapshot.SourceIdentityKey));
 
-        Assert.Equal(string.Format(CultureInfo.CurrentCulture, ErrorStrings.NuGetSourceKeyAlreadyInUse, sourceKey), exception.Message);
+        Assert.Equal(string.Format(CultureInfo.CurrentCulture, ErrorStrings.NuGetSourceKeyAlreadyInUse, reservedKey), exception.Message);
         Assert.Equal("https://example.com/existing",
             Assert.Single(new PackageSourceProvider(Settings.LoadSpecificSettings(workspace.Path, "NuGet.Config")).LoadPackageSources()).Source);
+    }
+
+    [Fact]
+    public void ExplicitSourceKeyReusesExistingAliasWhenGeneratedKeyIsReserved()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const string source = "https://example.com/team";
+        WriteSource(workspace.WorkspaceRoot, source, "company-feed");
+        var snapshot = NuGetTestHelper.CreateClient().GetSettings(
+            workspace.Path, new byte[NuGetSourceIdentity.KeySizeInBytes]);
+
+        var alias = Assert.Single(NuGetConfigurationBuilder.ResolveSourceAliases(
+            [new PackageMapping("Contoso.Hosting.One", source) { SourceKey = "team" }],
+            "integration-add", snapshot.Sources, [.. snapshot.ReservedPackageSourceKeys, "aspire-integration-team"],
+            snapshot.SourceIdentityKey));
+
+        Assert.Equal("company-feed", alias.Key);
+        Assert.True(alias.IsAmbient);
     }
 
     [Theory]
