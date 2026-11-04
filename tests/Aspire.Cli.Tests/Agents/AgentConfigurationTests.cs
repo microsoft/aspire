@@ -687,9 +687,12 @@ public class AgentConfigurationTests(ITestOutputHelper output) : IDisposable
 
         Assert.Equal(AgentConfigurationStatus.Configured, Assert.Single(results).Status);
         Assert.Equal(Path.Combine(_context.Project.FullName, ".github", "copilot", "settings.json"), results[0].TargetPath);
+        Assert.NotNull(results[0].Configuration);
+        Assert.True(JsonNode.DeepEquals(AgentConfiguration.ReadObject(results[0].TargetPath), results[0].Configuration));
         Assert.Equal([results[0].TargetPath], Directory.EnumerateFiles(_context.Project.FullName, "*", SearchOption.AllDirectories));
         Assert.Empty(_context.Home.EnumerateFileSystemInfos());
         Assert.Equal(AgentConfigurationStatus.Unchanged, Assert.Single(repeated).Status);
+        Assert.True(JsonNode.DeepEquals(results[0].Configuration, repeated[0].Configuration));
     }
 
     [Fact]
@@ -724,6 +727,7 @@ public class AgentConfigurationTests(ITestOutputHelper output) : IDisposable
 
         var result = Assert.Single(results);
         Assert.Equal(AgentConfigurationStatus.Failed, result.Status);
+        Assert.Null(result.Configuration);
         Assert.Equal([_context.Copilot, _context.ClaudeCode], result.Clients);
         Assert.Equal(original, await File.ReadAllTextAsync(path));
     }

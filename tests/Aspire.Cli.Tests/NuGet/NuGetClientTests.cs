@@ -20,6 +20,64 @@ namespace Aspire.Cli.Tests.NuGet;
 
 public class NuGetClientTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData(3999, false)]
+    [InlineData(4000, true)]
+    [InlineData(4001, true)]
+    public async Task SearchAsync_BoundsPaginationAndReportsWhenResultsMayBeIncomplete(int packageCount, bool expectLimitReached)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var feed = workspace.CreateDirectory("feed");
+        var ids = Enumerable.Range(0, packageCount).Select(index => $"Paging.Package{index:D4}").ToArray();
+        var expectedIds = ids.ToHashSet(StringComparer.Ordinal);
+        foreach (var id in ids)
+        {
+            NuGetTestHelper.CreatePackage(feed, id, "1.0.0", new Dictionary<string, string>());
+        }
+
+        var client = new NuGetClient(new TestFeatures(), new TestEnvironment(), NullLogger<NuGetClient>.Instance)
+        {
+            AmbientSettingsLoader = NuGetTestHelper.LoadSettings,
+            MachineWideSettingsFactory = () => new TestMachineWideSettings(NullSettings.Instance)
+        };
+
+        foreach (var (take, expectedLimitReached) in new[] { (3500, false), (4000, false), (int.MaxValue, expectLimitReached) })
+        {
+            var results = await client.SearchAsync(
+                "Paging.Package", prerelease: true, take,
+                explicitSources: [feed.FullName], nugetConfigPath: null,
+                workingDirectory: workspace.Path, TestContext.Current.CancellationToken);
+
+            // Local feeds limit results before the client sorts them, so the bounded subset
+            // is not guaranteed to contain the first IDs in lexicographic order.
+            var packageIds = results.Packages.Select(package => package.Id).ToArray();
+            Assert.Equal(Math.Min(packageCount, Math.Min(take, 4000)), packageIds.Length);
+            Assert.Distinct(packageIds);
+            Assert.All(packageIds, packageId => Assert.Contains(packageId, expectedIds));
+            Assert.Equal(packageIds.Order(), packageIds);
+            Assert.Equal(expectedLimitReached, results.LimitReached);
+        }
+    }
+
+    [Fact]
+    public async Task SearchAsync_ReturnsAllRequestedPages()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var feed = workspace.CreateDirectory("feed");
+        var ids = Enumerable.Range(0, 1001).Select(index => $"Paging.Package{index:D4}").ToArray();
+        foreach (var id in ids)
+        {
+            NuGetTestHelper.CreatePackage(feed, id, "1.0.0", new Dictionary<string, string>());
+        }
+
+        var results = await NuGetTestHelper.CreateClient().SearchAsync(
+            "Paging.Package", prerelease: true, take: int.MaxValue,
+            explicitSources: [feed.FullName], nugetConfigPath: null,
+            workingDirectory: workspace.Path, TestContext.Current.CancellationToken);
+
+        Assert.Equal(ids, results.Packages.Select(package => package.Id));
+    }
+
     [Fact]
     public async Task GetPackageVersionsAsync_CombinesEveryEligibleFeedsVersionsInSemanticOrder()
     {
@@ -135,14 +193,14 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
 
         if (hasExplicitSource)
         {
-            var package = Assert.Single(results);
+            var package = Assert.Single(results.Packages);
             Assert.Equal(packageId, package.Id);
             Assert.Equal("1.0.0", package.Version);
             Assert.Equal(feedDirectory.FullName, package.Source);
         }
         else
         {
-            Assert.Empty(results);
+            Assert.Empty(results.Packages);
         }
     }
 
@@ -169,7 +227,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
             workspace.WorkspaceRoot.FullName,
             TestContext.Current.CancellationToken);
 
-        Assert.Single(results);
+        Assert.Single(results.Packages);
     }
 
     [Fact]
@@ -196,8 +254,9 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
             TestContext.Current.CancellationToken);
 
         // Only the winning source's entry survives, so its versions are not merged with the other source's.
-        var package = Assert.Single(results);
+        var package = Assert.Single(results.Packages);
         Assert.Equal("Aspire.Test.Package", package.Id);
+        Assert.Empty(results.FailedSources);
         Assert.Equal("2.0.0", package.Version);
         Assert.Equal(secondFeedDirectory.FullName, package.Source);
         Assert.Equal(["2.0.0"], package.AllVersions);
@@ -252,7 +311,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
             TestContext.Current.CancellationToken);
 
         Assert.Collection(
-            results,
+            results.Packages,
             package =>
             {
                 Assert.Equal(packageId, package.Id);
@@ -337,7 +396,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
             nugetConfigPath: null,
             workspace.WorkspaceRoot.FullName,
             TestContext.Current.CancellationToken);
-        var result = Assert.Single(results);
+        var result = Assert.Single(results.Packages);
         Assert.Equal("1.0.0", result.Version);
         Assert.Equal(selectedFeed.FullName, result.Source);
 
@@ -388,7 +447,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
 
         // The aspire-managed helper picked the entry with the highest version *string*, so "9.0.0" wins over
         // "10.0.0". This pins that behavior so a change to it is a deliberate decision rather than a side effect.
-        var package = Assert.Single(results);
+        var package = Assert.Single(results.Packages);
         Assert.Equal("9.0.0", package.Version);
         Assert.Equal(firstFeedDirectory.FullName, package.Source);
     }
@@ -424,7 +483,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
             workspace.WorkspaceRoot.FullName,
             TestContext.Current.CancellationToken);
 
-        var package = Assert.Single(results);
+        var package = Assert.Single(results.Packages);
         Assert.Equal("Aspire.Test.Package", package.Id);
         Assert.Equal(feedDirectory.FullName, package.Source);
     }
@@ -450,8 +509,9 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
             workspace.WorkspaceRoot.FullName,
             TestContext.Current.CancellationToken);
 
-        var package = Assert.Single(results);
+        var package = Assert.Single(results.Packages);
         Assert.Equal("Aspire.Test.Package", package.Id);
+        Assert.Equal(["https://127.0.0.1:1/v3/index.json"], results.FailedSources);
     }
 
     [Fact]
@@ -488,7 +548,8 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
             workspace.WorkspaceRoot.FullName,
             TestContext.Current.CancellationToken);
 
-        Assert.Empty(results);
+        Assert.Empty(results.Packages);
+        Assert.Equal(["https://alias.example/v3/index.json"], results.FailedSources);
         var logRecords = logger.Collector.GetSnapshot();
         Assert.NotEmpty(logRecords);
         Assert.DoesNotContain(logRecords, record => record.Message.Contains(sourceNameSecret, StringComparison.Ordinal));
@@ -777,7 +838,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
                     workingDirectory,
                     CancellationToken.None);
 
-                Assert.Single(results);
+                Assert.Single(results.Packages);
                 Assert.Null(HttpHandlerResourceV3.CredentialService);
             },
             feedDirectory.FullName,

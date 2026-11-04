@@ -128,7 +128,7 @@ internal static class TemplateSourceConfiguration
 
     public static void ValidateName(string name)
     {
-        if (string.IsNullOrWhiteSpace(name) || name.Any(char.IsControl) || name.Contains('.') || name.Contains(':'))
+        if (!SourceNameValidator.IsValid(name))
         {
             throw new TemplateSourceConfigurationException(AspireConfigFile.TemplateSourcesSectionName, NewCommandStrings.TemplateSourceNameRequired);
         }

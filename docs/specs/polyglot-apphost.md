@@ -1348,7 +1348,7 @@ classDiagram
 
 | Command | Method | Description |
 |---------|--------|-------------|
-| `aspire init` | `ScaffoldAsync` | Calls `scaffoldAppHost` RPC, writes files |
+| `aspire init` | `ScaffoldAsync` | Calls `scaffoldAppHost` RPC, writes files, records the language's default hosting packages |
 | `aspire new` | `ScaffoldAsync` | Create new project with apphost |
 | `aspire run` | `RunAsync` | Gets `RuntimeSpec`, executes via `GuestRuntime` |
 | `aspire publish` | `PublishAsync` | Gets `RuntimeSpec`, executes in publish mode |
@@ -1394,9 +1394,20 @@ The unified config file for polyglot AppHosts. Replaces the legacy split across 
 | `sdk.version` | Aspire SDK version. Used as the default for package versions and codegen. |
 | `channel` | NuGet channel for package resolution (`stable`, `preview`, ...). |
 | `profiles` | Launch profiles (ports, environment variables). Replaces the legacy `apphost.run.json`. |
-| `packages` | Package references added via `aspire add`. Per-entry shape is string-or-object — see below. |
+| `packages` | Package references. A new AppHost starts with its language's default hosting packages (listed below); more are added via `aspire add`. Per-entry shape is string-or-object — see below. |
 
 **Language persistence:** On first `aspire run`, if `appHost.language` is not set, the CLI detects it from file patterns and saves it to `aspire.config.json`. Subsequent runs use the persisted value.
+
+**Default hosting packages.** Scaffolding an AppHost (`aspire init`, or an empty AppHost from `aspire new`) records the hosting package its language almost always needs in `packages`, at the SDK version. It is restored and code generated together with the language's code generation package, so its resource APIs are available without a separate `aspire add`. A package that is already in `packages` keeps its existing entry. A language gets a default only once its hosting package ships stable: a preview-only package (one that sets `SuppressFinalPackageVersion`) has no version that satisfies the stable CLI version the scaffolder pins.
+
+| Language | Default hosting packages |
+|----------|--------------------------|
+| `typescript/nodejs` | `Aspire.Hosting.JavaScript` |
+| `python` | `Aspire.Hosting.Python` |
+| `go` | `Aspire.Hosting.Go` |
+| `java` | None yet. `Aspire.Hosting.Java` is still a preview package. |
+| `rust` | None yet. `Aspire.Hosting.Rust` is still a preview package. |
+| `csharp` | None. C# AppHosts declare packages as `#:package` directives in `apphost.cs`, where the scaffolded file already lists its defaults, or as `PackageReference` items in the project. |
 
 **Package entry shape.** Each value in `packages` is either a **string** (short form: a `.csproj` path is a project reference; otherwise empty means the SDK version and non-empty is an explicit NuGet version) or an **object** (long form, carries a required `source` discriminator — `nuget`, `project`, or `npm` — with per-source fields). See the [Integration Declaration](./polyglot-integrations.md#integration-declaration) section of the sibling spec for the full schema and examples.
 

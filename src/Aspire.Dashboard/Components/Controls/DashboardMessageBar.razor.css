@@ -123,12 +123,15 @@
     height: 16px;
 }
 
-@media (max-width: 767px) {
+@media (max-width: 768px) {
     .dashboard-message-bar {
+        position: relative;
+        /* Let the capped alert stack scroll instead of compressing wrapped actions out of their card. */
+        flex-shrink: 0;
         grid-template-columns: auto minmax(0, 1fr);
         align-items: start;
-        padding: 10px;
-        row-gap: 8px;
+        padding: 8px 40px 8px 8px;
+        gap: 6px;
     }
 
     .dashboard-message-bar-icon {
@@ -141,14 +144,40 @@
         overflow-wrap: anywhere;
     }
 
-    .dashboard-message-bar-title,
     .dashboard-message-bar-link {
-        display: block;
-        padding-inline: 0;
+        padding-inline-start: 4px;
     }
 
     .dashboard-message-bar-actions {
         grid-column: 2;
         justify-content: flex-start;
+        gap: 6px;
+    }
+
+    .dashboard-message-bar-actions:not(:has(.dashboard-message-bar-action, .dashboard-message-bar-link-action)) {
+        display: contents;
+    }
+
+    ::deep .dashboard-message-bar-actions .dashboard-message-bar-dismiss {
+        position: absolute;
+        inset-block-start: 4px;
+        inset-inline-end: 4px;
+        width: 32px;
+        min-width: 32px;
+        max-width: 32px;
+        height: 32px;
+        min-height: 32px;
+    }
+}
+
+@media (min-width: 601px) and (max-width: 768px) {
+    .dashboard-message-bar {
+        grid-template-columns: auto minmax(0, 1fr) auto;
+    }
+
+    .dashboard-message-bar-actions {
+        grid-column: 3;
+        grid-row: 1;
+        align-self: center;
     }
 }

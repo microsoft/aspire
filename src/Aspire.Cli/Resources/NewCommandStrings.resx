@@ -290,7 +290,7 @@
     <value>Specify an absolute 'path' for a local source or 'repository' for a Git source. 'ref' requires 'repository'.</value>
   </data>
   <data name="TemplateSourceNameRequired" xml:space="preserve">
-    <value>Template source names must be nonempty and must not contain dots, colons, or control characters.</value>
+    <value>Template source names must be 1-64 ASCII letters, digits, dots, hyphens, or underscores, starting with a letter or digit.</value>
   </data>
   <data name="TemplateSourceCannotExtendString" xml:space="preserve">
     <value>This source is a string. Delete it with 'aspire config delete {0} --global' before setting object fields.</value>
@@ -305,7 +305,7 @@
     <value>Add a named template source to global configuration after confirming you trust it.</value>
   </data>
   <data name="TemplateSourceTrustPrompt" xml:space="preserve">
-    <value>Templates can run code. Do you trust template source '{0}' ({1})?</value>
+    <value>Do you trust template source '{0}' ({1})?</value>
   </data>
   <data name="TemplateSourceYesOptionDescription" xml:space="preserve">
     <value>Trust the template source and skip confirmation.</value>

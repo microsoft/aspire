@@ -74,5 +74,6 @@ internal static class DotNetAppHostNuGetConfigTestHelper
     private static NuGetConfiguration BuildConfiguration(BundleNuGetService service, DirectoryInfo directory, PackageMapping[] mappings)
         => service.BuildAppHostConfiguration(
             directory, "test", mappings.Length == 0 ? null : mappings,
+            overrideIntegrationSources: false,
             cancellationToken: TestContext.Current.CancellationToken);
 }

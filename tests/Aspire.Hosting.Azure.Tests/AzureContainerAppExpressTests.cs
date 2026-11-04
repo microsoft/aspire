@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREACAEXPRESS001
+#pragma warning disable ASPIREAZURE003
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.AppContainers;
@@ -94,6 +95,44 @@ public class AzureContainerAppExpressTests(ITestOutputHelper testOutputHelper)
         var (_, standardBicep) = await GetManifestWithBicep(standard.Resource);
 
         await Verify(expressBicep, "bicep").AppendContentAsFile(standardBicep, "bicep", "standard");
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task AsExpressRejectsInternalLoadBalancerWhenGeneratingBicep(bool expressFirst, bool existing)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
+        var vnet = builder.AddAzureVirtualNetwork("vnet");
+        var subnet = vnet.AddSubnet("container-apps-subnet", "10.0.0.0/23");
+        var environment = builder.AddAzureContainerAppEnvironment("env");
+        if (expressFirst)
+        {
+            environment.AsExpress().WithDelegatedSubnet(subnet).WithInternalLoadBalancer(vnet);
+        }
+        else
+        {
+            environment.WithDelegatedSubnet(subnet).WithInternalLoadBalancer(vnet).AsExpress();
+        }
+        if (existing)
+        {
+            environment.AsExisting(builder.AddParameter("existing-name"), builder.AddParameter("existing-resource-group"));
+        }
+
+        var exception = Assert.Throws<InvalidOperationException>(environment.Resource.GetBicepTemplateString);
+
+        Assert.Equal(
+            "Azure Container Apps Express environment 'env' cannot use an internal load balancer because the required static IP output is unavailable for Express environments. " +
+            "Remove AsExpress() to use a workload profiles environment with internal networking.",
+            exception.Message);
+
+        using var application = builder.Build();
+        var pipelineException = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => ExecuteBeforeStartHooksAsync(application, default));
+
+        Assert.Equal(exception.Message, pipelineException.Message);
     }
 
     [Fact]

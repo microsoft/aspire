@@ -211,10 +211,18 @@ public partial class NewCommandLocalTemplateTests
             3 => ErrorStrings.GitTimedOut,
             _ => string.Format(CultureInfo.CurrentCulture, NewCommandStrings.TemplateRepositoryRefNotFound, "HEAD")
         };
-        var warning = Assert.Single(interaction.DisplayedMessages);
-        Assert.Equal(KnownEmojis.Warning, warning.Emoji);
-        Assert.Equal(string.Format(CultureInfo.CurrentCulture,
-            NewCommandStrings.TemplateSourceSearchFailed, "broken", expectedError), warning.Message);
+        Assert.Collection(interaction.DisplayedMessages,
+            warning =>
+            {
+                Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", warning.Message);
+                Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
+            },
+            warning =>
+            {
+                Assert.Equal(KnownEmojis.PoliceCarLight, warning.Emoji);
+                Assert.Equal(string.Format(CultureInfo.CurrentCulture,
+                    NewCommandStrings.TemplateSourceSearchFailed, "broken", expectedError), warning.Message);
+            });
         Assert.Equal([brokenRepository, workingRepository], GetGitResolutions(git).Select(call => call.Repository));
         Assert.Equal(failResolution ? [workingRepository] : new[] { brokenRepository, workingRepository },
             GetGitFetches(git).Select(call => call.Repository));
@@ -265,7 +273,9 @@ public partial class NewCommandLocalTemplateTests
 
         Assert.Single(GetGitResolutions(git));
         Assert.Equal(cancelResolution ? 0 : 1, GetGitFetches(git).Count);
-        Assert.Empty(interaction.DisplayedMessages);
+        var warning = Assert.Single(interaction.DisplayedMessages);
+        Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", warning.Message);
+        Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
         var cacheRoot = Path.Combine(provider.GetRequiredService<CliExecutionContext>().CacheDirectory.FullName, "git");
         if (cancelResolution)
         {

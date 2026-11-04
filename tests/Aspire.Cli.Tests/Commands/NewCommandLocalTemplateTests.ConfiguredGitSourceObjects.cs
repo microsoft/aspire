@@ -122,7 +122,9 @@ public partial class NewCommandLocalTemplateTests
         Assert.Equal(2, selections);
         Assert.Equal([(repository, "HEAD^{}"), (repository, "refs/heads/release/17.0"), (repository, "refs/heads/v17.0")], GetGitResolutions(git));
         Assert.Equal(TestGitCommandRunner.DefaultCommitSha, Assert.Single(GetGitFetches(git)).CommitSha);
-        Assert.Empty(interaction.DisplayedMessages);
+        var warning = Assert.Single(interaction.DisplayedMessages);
+        Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", warning.Message);
+        Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
         Assert.Empty(interaction.DisplayedErrors);
         await Verify(ReadOutput(workspace));
     }
@@ -196,11 +198,20 @@ public partial class NewCommandLocalTemplateTests
         var result = Assert.Single(await provider.GetRequiredService<ConfiguredTemplateSourceService>().SearchAsync("", default));
 
         Assert.Equal("working", result.SourceName);
-        var warning = Assert.Single(interaction.DisplayedMessages);
-        Assert.Equal(KnownEmojis.Warning, warning.Emoji);
-        Assert.Equal(string.Format(CultureInfo.CurrentCulture,
-            NewCommandStrings.TemplateSourceSearchFailed, "broken", NewCommandStrings.TemplateRepositoryPathInvalid),
-            warning.Message);
+        Assert.Collection(interaction.DisplayedMessages,
+            warning =>
+            {
+                Assert.Equal(KnownEmojis.PoliceCarLight, warning.Emoji);
+                Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", warning.Message);
+                Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
+            },
+            warning =>
+            {
+                Assert.Equal(KnownEmojis.PoliceCarLight, warning.Emoji);
+                Assert.Equal(string.Format(CultureInfo.CurrentCulture,
+                    NewCommandStrings.TemplateSourceSearchFailed, "broken", NewCommandStrings.TemplateRepositoryPathInvalid),
+                    warning.Message);
+            });
         Assert.Single(GetGitFetches(git));
         Assert.Empty(Directory.GetFileSystemEntries(
             Path.Combine(provider.GetRequiredService<CliExecutionContext>().CacheDirectory.FullName, "git")));
@@ -235,12 +246,20 @@ public partial class NewCommandLocalTemplateTests
         Assert.Equal("sample", result.Template.Name);
         Assert.Equal(2, GetGitFetches(git).Count);
         var missingPath = Path.Combine(GetGitFetches(git)[0].Destination.FullName, "templates", "missing");
-        var warning = Assert.Single(interaction.DisplayedMessages);
-        Assert.Equal(KnownEmojis.Warning, warning.Emoji);
-        Assert.Equal(string.Format(CultureInfo.CurrentCulture,
-            NewCommandStrings.TemplateSourceSearchFailed, "missing",
-            string.Format(CultureInfo.CurrentCulture, NewCommandStrings.TemplateDirectoryNotFound, missingPath)),
-            warning.Message);
+        Assert.Collection(interaction.DisplayedMessages,
+            warning =>
+            {
+                Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", warning.Message);
+                Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
+            },
+            warning =>
+            {
+                Assert.Equal(KnownEmojis.PoliceCarLight, warning.Emoji);
+                Assert.Equal(string.Format(CultureInfo.CurrentCulture,
+                    NewCommandStrings.TemplateSourceSearchFailed, "missing",
+                    string.Format(CultureInfo.CurrentCulture, NewCommandStrings.TemplateDirectoryNotFound, missingPath)),
+                    warning.Message);
+            });
         Assert.Single(Directory.GetFileSystemEntries(
             Path.Combine(provider.GetRequiredService<CliExecutionContext>().CacheDirectory.FullName, "git")));
     }
@@ -276,12 +295,20 @@ public partial class NewCommandLocalTemplateTests
         Assert.Equal("working", result.SourceName);
         Assert.Equal([(repository, "refs/heads/missing"), (repository, "refs/heads/v17.0")], GetGitResolutions(git));
         Assert.Single(GetGitFetches(git));
-        var warning = Assert.Single(interaction.DisplayedMessages);
-        Assert.Equal(KnownEmojis.Warning, warning.Emoji);
-        Assert.Equal(string.Format(CultureInfo.CurrentCulture,
-            NewCommandStrings.TemplateSourceSearchFailed, "missing",
-            string.Format(CultureInfo.CurrentCulture, NewCommandStrings.TemplateRepositoryRefNotFound, "missing")),
-            warning.Message);
+        Assert.Collection(interaction.DisplayedMessages,
+            warning =>
+            {
+                Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", warning.Message);
+                Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
+            },
+            warning =>
+            {
+                Assert.Equal(KnownEmojis.PoliceCarLight, warning.Emoji);
+                Assert.Equal(string.Format(CultureInfo.CurrentCulture,
+                    NewCommandStrings.TemplateSourceSearchFailed, "missing",
+                    string.Format(CultureInfo.CurrentCulture, NewCommandStrings.TemplateRepositoryRefNotFound, "missing")),
+                    warning.Message);
+            });
     }
 
     [Fact]
@@ -373,7 +400,9 @@ public partial class NewCommandLocalTemplateTests
                     : $"refs/heads/{reference}";
                 Assert.Equal((repositoryUrl, expectedPattern), Assert.Single(GetGitResolutions(git)));
             }
-            Assert.Empty(interaction.DisplayedMessages);
+            var warning = Assert.Single(interaction.DisplayedMessages);
+            Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", warning.Message);
+            Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
             Assert.Empty(interaction.DisplayedErrors);
             outputs[label] = ReadOutput(Path.Combine(workspace.Path, "out", label));
         }

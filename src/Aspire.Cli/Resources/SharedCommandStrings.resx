@@ -233,4 +233,15 @@
     <value>Unrecognized option '{0}'. Did you mean '{1}'?</value>
     <comment>{0} is the unrecognized option, {1} is the suggested correct option.</comment>
   </data>
+  <data name="SourceTrustWarning" xml:space="preserve">
+    <value>Only use sources you trust. Content from these sources can run code on your machine.</value>
+  </data>
+  <data name="NuGetSearchLimitWarning" xml:space="preserve">
+    <value>NuGet search results may be incomplete because the limit of {0} packages per feed was reached. Use narrower integration source patterns.</value>
+    <comment>{0} is the maximum number of packages searched per feed.</comment>
+  </data>
+  <data name="NuGetSearchSourceFailedWarning" xml:space="preserve">
+    <value>Failed to search NuGet source '{0}'. Some integrations may be missing. Check the source configuration and authentication. See the CLI logs for details.</value>
+    <comment>{0} is the redacted NuGet source name or URL.</comment>
+  </data>
 </root>
