@@ -370,7 +370,7 @@ public partial class NewCommandLocalTemplateTests
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal(1, selectionCount);
-        Assert.Equal("Sample - Observable services", Assert.Single(interaction.GroupedSelectionPromptCalls)[^1].DisplayLabel);
+        Assert.Equal("Sample (Observable services)", Assert.Single(interaction.GroupedSelectionPromptCalls)[^1].DisplayLabel);
         Assert.Empty(interaction.DisplayedMessages);
         Assert.Equal(["Greeting text"], interaction.StringPromptCalls.Select(call => call.PromptText));
         Assert.Equal([true], interaction.StringPromptLogResponses);

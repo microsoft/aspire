@@ -60,7 +60,7 @@ public class ConsoleInteractionServiceTests
             {
                 "built-in" => "Starter",
                 "first" => "Same",
-                _ => "Same - Observable services"
+                _ => "Same (Observable services)"
             });
 
         Assert.Same(choices[0], selected);
@@ -160,7 +160,7 @@ public class ConsoleInteractionServiceTests
     [InlineData(null, "Same")]
     [InlineData("", "Same")]
     [InlineData(" ", "Same")]
-    [InlineData("Observable [services]", "Same - Observable [services]")]
+    [InlineData("Observable [services]", "Same (Observable [services])")]
     public void TemplateDisplayLabel_IncludesOnlyNonemptyDescriptions(string? description, string expectedLabel)
     {
         var template = CreateSearchableTemplate("sample", description);

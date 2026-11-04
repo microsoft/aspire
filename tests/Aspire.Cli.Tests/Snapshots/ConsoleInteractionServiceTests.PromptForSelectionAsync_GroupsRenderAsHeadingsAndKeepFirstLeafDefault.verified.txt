@@ -5,7 +5,7 @@
   Company [first]
     Same
   Company [second]
-    Same - Observable services
+    Same (Observable services)
 
 (Type to search)
 [2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[?25hSelect a template: Starter

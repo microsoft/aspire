@@ -401,7 +401,7 @@ internal sealed class NewCommand : BaseCommand
     internal static string FormatTemplateDisplayLabel(ITemplate template) =>
         string.IsNullOrWhiteSpace(template.SearchDescription)
             ? template.Description
-            : $"{template.Description} - {template.SearchDescription}";
+            : $"{template.Description} ({template.SearchDescription})";
 
     private static string GetUniqueTemplateLabel(string baseLabel, HashSet<string> labels)
     {
