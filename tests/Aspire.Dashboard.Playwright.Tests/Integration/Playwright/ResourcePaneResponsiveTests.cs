@@ -606,6 +606,18 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                         "el => el.scrollHeight>el.clientHeight&&getComputedStyle(el).overflowY==='auto'"));
                     await page.Locator(".resource-filter-body").EvaluateAsync("el=>el.scrollTop=el.scrollHeight");
                     await AssertContainedAsync(page.Locator(".resource-filter-done"));
+                    // Measure native dismissal in the same JavaScript turn, before Blazor can handle the close event.
+                    var dismissal = await surface.EvaluateAsync<int[]>("""
+                        dialog => {
+                            const wasOpen = dialog.matches(':popover-open');
+                            dialog.hidePopover();
+                            return [wasOpen ? 1 : 0, dialog.matches(':popover-open') ? 1 : 0, dialog.getClientRects().length];
+                        }
+                        """);
+                    Assert.Equal([1, 0, 0], dismissal);
+                    await Assertions.Expect(button).ToHaveAttributeAsync("aria-expanded", "false");
+                    await button.ClickAsync();
+                    await Assertions.Expect(surface).ToBeVisibleAsync();
                 }
                 else
                 {

@@ -13,8 +13,6 @@
     margin: 6px 0 12px;
     position-try-fallbacks: flip-inline, flip-block, flip-block flip-inline;
     position-try-order: most-height;
-    display: flex;
-    flex-direction: column;
     box-sizing: border-box;
     width: min(320px, calc(100vw - 24px));
     max-width: none;
@@ -26,6 +24,12 @@
     padding: 0;
     overflow: hidden;
     cursor: default;
+}
+
+/* Preserve the browser's display: none for natively dismissed popovers. */
+.resource-pane-filter ::deep .resource-filter-popover::part(dialog):popover-open {
+    display: flex;
+    flex-direction: column;
 }
 
 .resource-filter {
