@@ -932,6 +932,38 @@ public class ResourcesLayoutTests : DashboardTestContext
     }
 
     [Fact]
+    public void Tabs_RenderAcknowledgementTimeoutReleasesLatestTarget()
+    {
+        var viewport = new ViewportInformation(IsDesktop: false, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var suspendedAck = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var acknowledgements = 0;
+        var module = new TestJSObjectReference
+        {
+            BeforeInvokeAsync = identifier => identifier == "waitForResourceTabRender" && ++acknowledgements == 1
+                ? suspendedAck.Task : Task.CompletedTask
+        };
+        TestJSObjectReference.SetupImport(this, "./Components/Layout/ResourcesLayout.razor.js").SetResult(module);
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo(DashboardUrls.ResourceOverviewUrl("api"));
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.Equal("tab-Overview", cut.FindComponent<FluentTabs>().Instance.ActiveTabId));
+
+        cut.Find("#tab-Console").Click();
+        cut.Find("#tab-Metrics").Click();
+        cut.Render();
+        Assert.Equal("http://localhost/consolelogs/resource/api", navigation.Uri);
+        cut.WaitForAssertion(() => Assert.Equal("http://localhost/metrics/resource/api", navigation.Uri));
+        cut.Render();
+        cut.WaitForAssertion(() => Assert.False(cut.Find(".resources-layout").HasAttribute("data-tab-navigation")));
+        Assert.Equal("tab-Metrics", cut.FindComponent<FluentTabs>().Instance.ActiveTabId);
+        cut.Find("#tab-Traces").Click();
+        Assert.Equal("http://localhost/traces/resource/api", navigation.Uri);
+    }
+
+    [Fact]
     public async Task Tabs_ExternalNavigationCancelsQueuedTargetAndInvalidatesItsRenderAck()
     {
         var viewport = new ViewportInformation(IsDesktop: false, IsUltraLowHeight: false, IsUltraLowWidth: false);

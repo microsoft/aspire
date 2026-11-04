@@ -372,6 +372,112 @@ public sealed class RouteTransitionTests(RouteTransitionTests.RouteTransitionDas
         });
     }
 
+    [Theory]
+    [InlineData("hidden", "animated")]
+    [InlineData("timeout", "animated")]
+    [InlineData("disposed", "animated")]
+    [InlineData("hidden", "reduced")]
+    [InlineData("hidden", "unsupported")]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task SuspendedRenderFrames_AcknowledgementSettlesAndNavigationRecovers(string interruption, string mode)
+    {
+        await RunTestAsync(async page =>
+        {
+            if (mode == "reduced")
+            {
+                await page.EmulateMediaAsync(new() { ReducedMotion = ReducedMotion.Reduce });
+            }
+            else if (mode == "unsupported")
+            {
+                await page.Context.AddInitScriptAsync("document.startViewTransition = undefined;");
+            }
+            await page.GotoAsync("/resources/TestResource");
+            await Assertions.Expect(page.Locator(".property-grid").First).ToBeVisibleAsync();
+            await page.Locator("#tab-Console").ClickAsync();
+            await Assertions.Expect(page.Locator(".resource-tab-body")).ToHaveAttributeAsync("data-resource-tab", "Console");
+            await Assertions.Expect(page.Locator(".resources-layout[data-tab-navigation]")).ToHaveCountAsync(0);
+            await page.Locator("#tab-Overview").ClickAsync();
+            await Assertions.Expect(page.Locator(".resource-tab-body")).ToHaveAttributeAsync("data-resource-tab", "Overview");
+            await Assertions.Expect(page.Locator(".resources-layout[data-tab-navigation]")).ToHaveCountAsync(0);
+            Assert.True(await page.EvaluateAsync<bool>("""
+                async interruption => {
+                    const module = await import('/Components/Layout/ResourcesLayout.razor.js');
+                    const layout = document.querySelector('.resources-layout');
+                    const requestFrame = window.requestAnimationFrame;
+                    const cancelFrame = window.cancelAnimationFrame;
+                    const visibility = Object.getOwnPropertyDescriptor(document, 'visibilityState');
+                    let frameCanceled = false;
+                    try {
+                        // Deterministically suspend the acknowledgement's first frame without
+                        // depending on headless Chromium's OS-dependent background throttling.
+                        window.requestAnimationFrame = () => 2147483647;
+                        window.cancelAnimationFrame = id => {
+                            if (id === 2147483647) frameCanceled = true;
+                            else cancelFrame.call(window, id);
+                        };
+                        let settled = false;
+                        const acknowledgement = module.waitForResourceTabRender(layout).then(() => { settled = true; });
+                        window.requestAnimationFrame = requestFrame;
+                        if (interruption === 'hidden') {
+                            Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+                            document.dispatchEvent(new Event('visibilitychange'));
+                        } else if (interruption === 'disposed') {
+                            module.unregisterRouteTransitions(layout);
+                        }
+                        await Promise.race([acknowledgement, new Promise(resolve => setTimeout(resolve, 1000))]);
+                        return settled && frameCanceled;
+                    } finally {
+                        window.requestAnimationFrame = requestFrame;
+                        window.cancelAnimationFrame = cancelFrame;
+                        if (visibility) Object.defineProperty(document, 'visibilityState', visibility);
+                        else delete document.visibilityState;
+                    }
+                }
+                """, interruption));
+            await page.EvaluateAsync("""
+                () => {
+                    document.getElementById('tab-Console').click();
+                    document.getElementById('tab-Metrics').click();
+                }
+                """);
+            await Assertions.Expect(page.Locator(".resource-tab-body")).ToHaveAttributeAsync("data-resource-tab", "Metrics");
+            await Assertions.Expect(page.Locator(".resources-layout[data-tab-navigation]")).ToHaveCountAsync(0);
+            await Assertions.Expect(page.Locator("#tab-Metrics")).ToHaveAttributeAsync("aria-selected", "true");
+            Assert.EndsWith("/metrics/resource/TestResource", page.Url);
+            await Assertions.Expect(page.Locator("#blazor-error-ui")).Not.ToBeVisibleAsync();
+        });
+    }
+
+    [Theory]
+    [InlineData("true")]
+    [InlineData("TRUE")]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task TerminalFocusRoute_DoesNotStartPrimaryTransition(string terminalFocus)
+    {
+        await RunTestAsync(async page =>
+        {
+            await page.GotoAsync("/consolelogs/resource/TestResource");
+            await page.Locator("#tab-Traces").ClickAsync();
+            await Assertions.Expect(page.Locator(".resource-tab-body")).ToHaveAttributeAsync("data-resource-tab", "Traces");
+            await Assertions.Expect(page.Locator(".resources-layout[data-tab-navigation]")).ToHaveCountAsync(0);
+            await page.EvaluateAsync("""
+                () => {
+                    window.terminalTransitions = 0;
+                    const start = document.startViewTransition.bind(document);
+                    document.startViewTransition = update => {
+                        window.terminalTransitions++;
+                        return start(update);
+                    };
+                }
+                """);
+            await page.EvaluateAsync("url => Blazor.navigateTo(url)", $"/resources/TestResource?terminal={terminalFocus}");
+            await Assertions.Expect(page.Locator(".resource-tab-body")).ToHaveAttributeAsync("data-resource-tab", "Terminal");
+            Assert.Equal(0, await page.EvaluateAsync<int>("window.terminalTransitions"));
+            await Assertions.Expect(page.Locator("html[data-route-transition]")).ToHaveCountAsync(0);
+            await Assertions.Expect(page.Locator("#blazor-error-ui")).Not.ToBeVisibleAsync();
+        });
+    }
+
     public sealed class RouteTransitionDashboardServerFixture : DashboardServerFixture
     {
         protected override IReadOnlyList<ResourceViewModel> Resources =>

@@ -32,7 +32,7 @@ internal sealed class TestJSObjectReference : IJSObjectReference
         Invocations.Enqueue(new(identifier, args ?? []));
         if (BeforeInvokeAsync is { } beforeInvoke)
         {
-            await beforeInvoke(identifier);
+            await beforeInvoke(identifier).WaitAsync(cancellationToken);
         }
         return default!;
     }

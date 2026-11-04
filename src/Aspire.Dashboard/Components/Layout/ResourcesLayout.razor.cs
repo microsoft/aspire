@@ -2419,9 +2419,21 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
         var renderVersion = _tabRenderVersion;
         _acknowledgingTabVersion = renderVersion;
+        using var acknowledgementCts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
+        acknowledgementCts.CancelAfter(TimeSpan.FromSeconds(5));
         try
         {
-            await _jsModule.InvokeVoidAsync("waitForResourceTabRender", _layoutElement);
+            await _jsModule.InvokeVoidAsync("waitForResourceTabRender", acknowledgementCts.Token, _layoutElement);
+        }
+        catch (OperationCanceledException ex) when (acknowledgementCts.IsCancellationRequested)
+        {
+            if (_isDisposed || _cts.IsCancellationRequested)
+            {
+                return;
+            }
+
+            // A suspended browser must not leave the coalescer locked after interop times out.
+            Logger.LogWarning(ex, "Timed out waiting for the primary tab render acknowledgement.");
         }
         catch (ObjectDisposedException) when (_isDisposed)
         {

@@ -92,6 +92,7 @@ export function unregisterPaneActivityVisibility(layoutElement) {
 }
 
 const routeTransitions = new WeakMap();
+const tabRenderAcknowledgements = new WeakMap();
 const orderedRoutes = ["resources", "consolelogs", "structuredlogs", "traces", "metrics"];
 const orderedTabs = ["Overview", "Console", "StructuredLogs", "Traces", "Metrics"];
 
@@ -129,7 +130,9 @@ export function registerRouteTransitions(layout) {
 
         // Primary routes have shapes such as /traces/resource/api?type=http. Selection,
         // filters and trace details within the same tab aren't separate motion destinations.
-        const to = orderedRoutes.indexOf(destination.pathname.split("/")[1]);
+        const terminalFocus = destination.pathname.startsWith("/resources/") &&
+            destination.searchParams.get("terminal")?.toLowerCase() === "true";
+        const to = terminalFocus ? -1 : orderedRoutes.indexOf(destination.pathname.split("/")[1]);
         if (disposed || request !== version || !body.isConnected ||
             !event.destination.sameDocument || from < 0 || to < 0 || from === to ||
             (previous && body.dataset.resourceTab === orderedTabs[to]) ||
@@ -194,7 +197,7 @@ export function registerRouteTransitions(layout) {
 
     window.navigation.addEventListener("navigate", navigate);
     reducedMotion.addEventListener("change", cancel);
-    routeTransitions.set(layout, { finished: () => active?.transition.finished, dispose: () => {
+    routeTransitions.set(layout, { finished: () => active?.transition.finished, cancel, dispose: () => {
         disposed = true;
         version++;
         window.navigation.removeEventListener("navigate", navigate);
@@ -204,15 +207,56 @@ export function registerRouteTransitions(layout) {
 }
 
 export function unregisterRouteTransitions(layout) {
+    tabRenderAcknowledgements.get(layout)?.();
     routeTransitions.get(layout)?.dispose();
     routeTransitions.delete(layout);
 }
 
 export async function waitForResourceTabRender(layout) {
+    tabRenderAcknowledgements.get(layout)?.();
+    if (!layout.isConnected || document.visibilityState !== "visible") {
+        routeTransitions.get(layout)?.cancel();
+        return;
+    }
+
     // Let the committed render paint and child interop run even when motion is disabled.
-    // If a snapshot is active, keep only the latest queued tab until that effect settles.
-    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-    await routeTransitions.get(layout)?.finished();
+    // Background tabs can suspend frames indefinitely, so visibility loss, disposal or
+    // the same slow-render deadline must also release the latest queued navigation.
+    await new Promise((resolve, reject) => {
+        let frame = 0;
+        const cleanup = () => {
+            clearTimeout(timeout);
+            cancelAnimationFrame(frame);
+            document.removeEventListener("visibilitychange", visibilityChanged);
+            if (tabRenderAcknowledgements.get(layout) === cancel) {
+                tabRenderAcknowledgements.delete(layout);
+            }
+        };
+        const complete = () => {
+            cleanup();
+            resolve();
+        };
+        const cancel = () => {
+            routeTransitions.get(layout)?.cancel();
+            complete();
+        };
+        const visibilityChanged = () => {
+            if (document.visibilityState !== "visible") {
+                cancel();
+            }
+        };
+        const timeout = setTimeout(cancel, 200);
+        tabRenderAcknowledgements.set(layout, cancel);
+        document.addEventListener("visibilitychange", visibilityChanged);
+        frame = requestAnimationFrame(() => {
+            frame = requestAnimationFrame(() => {
+                Promise.resolve(routeTransitions.get(layout)?.finished()).then(complete, error => {
+                    cleanup();
+                    reject(error);
+                });
+            });
+        });
+    });
 }
 
 // Priority+ overflow for the tab strip in the header. Tabs that no longer fit are marked with data-tab-overflow (hidden
