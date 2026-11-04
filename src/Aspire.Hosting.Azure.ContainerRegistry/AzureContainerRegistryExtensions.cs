@@ -136,8 +136,7 @@ public static class AzureContainerRegistryExtensions
     /// <param name="taskName">An optional name for the ACR task resource. If not provided, a name is auto-generated
     /// based on existing purge tasks to avoid conflicts. If a task with the specified name already exists,
     /// an <see cref="ArgumentException"/> is thrown.</param>
-    /// <param name="untagged">Whether to also delete eligible untagged manifests. Defaults to false.</param>
-    /// <param name="dryRun">Whether to preview deletions in the task logs without deleting artifacts. Defaults to false.</param>
+    /// <param name="untagged">Whether to also delete eligible untagged manifests. Defaults to true.</param>
     /// <ats-param name="ago">The age threshold based on last modified time, in milliseconds. Defaults to zero.</ats-param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureContainerRegistryResource}"/> for chaining.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
@@ -147,17 +146,17 @@ public static class AzureContainerRegistryExtensions
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="keep"/> is less than 1,
     /// or <paramref name="ago"/> is negative or less than 1 minute (when non-zero).</exception>
     /// <remarks>
-    /// Tag removal alone does not reclaim storage. Enabling <paramref name="untagged"/> also deletes eligible
+    /// Tag removal alone does not reclaim storage. By default, <paramref name="untagged"/> also deletes eligible
     /// previously untagged manifests and can break digest-based pulls and rollbacks. No Premium SKU or retention
-    /// policy is required. Preview deletions with <paramref name="dryRun"/> first.
+    /// policy is required. Set <paramref name="untagged"/> to false to remove tags only.
     /// The purge tool's version determines how age and keep filters apply to untagged manifests.
     /// </remarks>
     /// <example>
-    /// This example previews a daily purge of tags last modified more than 7 days ago and eligible untagged manifests,
+    /// This example schedules a daily purge of tags last modified more than 7 days ago and eligible untagged manifests,
     /// keeping the 5 most recent purge candidate tags:
     /// <code>
     /// var acr = builder.AddAzureContainerRegistry("myregistry")
-    ///     .WithPurgeTask("0 1 * * *", ago: TimeSpan.FromDays(7), keep: 5, untagged: true, dryRun: true);
+    ///     .WithPurgeTask("0 1 * * *", ago: TimeSpan.FromDays(7), keep: 5);
     /// </code>
     /// </example>
     [AspireExport]
@@ -168,8 +167,7 @@ public static class AzureContainerRegistryExtensions
         TimeSpan? ago = null,
         int keep = 3,
         string? taskName = null,
-        bool untagged = false,
-        bool dryRun = false)
+        bool untagged = true)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrWhiteSpace(schedule);
@@ -223,7 +221,7 @@ public static class AzureContainerRegistryExtensions
 
             var purgeTaskCmdVariable = new ProvisioningVariable($"purgeTaskCmd_{taskIndex}", typeof(string))
             {
-                Value = CreatePurgeTaskContent(filter, purgeAgo, keep, untagged, dryRun)
+                Value = CreatePurgeTaskContent(filter, purgeAgo, keep, untagged)
             };
             infra.Add(purgeTaskCmdVariable);
 
@@ -252,11 +250,11 @@ public static class AzureContainerRegistryExtensions
         });
     }
 
-    /// <inheritdoc cref="WithPurgeTask(IResourceBuilder{AzureContainerRegistryResource}, string, string, TimeSpan?, int, string, bool, bool)"/>
+    /// <inheritdoc cref="WithPurgeTask(IResourceBuilder{AzureContainerRegistryResource}, string, string, TimeSpan?, int, string, bool)"/>
     /// <remarks>
     /// Preserves the original CLR signature. Defaults are on the extended overload to avoid ambiguous source calls.
     /// </remarks>
-    [AspireExportIgnore(Reason = "Retained for binary compatibility. Polyglot AppHosts use the overload with optional purge flags.")]
+    [AspireExportIgnore(Reason = "Retained for binary compatibility. Polyglot AppHosts use the overload with the optional untagged flag.")]
     public static IResourceBuilder<AzureContainerRegistryResource> WithPurgeTask(
         this IResourceBuilder<AzureContainerRegistryResource> builder,
         string schedule,
@@ -265,7 +263,7 @@ public static class AzureContainerRegistryExtensions
         int keep,
         string? taskName)
     {
-        return WithPurgeTask(builder, schedule, filter, ago, keep, taskName, untagged: false, dryRun: false);
+        return WithPurgeTask(builder, schedule, filter, ago, keep, taskName, untagged: true);
     }
 
     /// <summary>
@@ -331,12 +329,12 @@ public static class AzureContainerRegistryExtensions
         return builder.WithRoleAssignments(target, builtInRoles);
     }
 
-    private static string CreatePurgeTaskContent(string? filter, string ago, int keep, bool untagged, bool dryRun)
+    private static string CreatePurgeTaskContent(string? filter, string ago, int keep, bool untagged)
     {
         return $"""
             version: v1.1.0
             steps:
-            - cmd: acr purge --filter '{filter ?? ".*:.*"}' --ago {ago} --keep {keep}{(untagged ? " --untagged" : "")}{(dryRun ? " --dry-run" : "")}
+            - cmd: acr purge --filter '{filter ?? ".*:.*"}' --ago {ago} --keep {keep}{(untagged ? " --untagged" : "")}
             """.ReplaceLineEndings("\n");
     }
 

@@ -243,22 +243,21 @@ public class AzureContainerRegistryTests(ITestOutputHelper testOutputHelper)
     }
 
     [Theory]
-    [InlineData(true, false)]
-    [InlineData(false, true)]
-    [InlineData(true, true)]
-    public async Task WithPurgeTask_Flags_GeneratesCorrectBicep(bool untagged, bool dryRun)
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task WithPurgeTask_Untagged_GeneratesCorrectBicep(bool untagged)
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var acr = builder.AddAzureContainerRegistry("acr");
         var result = acr.WithPurgeTask("0 1 * * *",
             filter: "cleanup:.*", ago: TimeSpan.FromDays(7), keep: 5, taskName: "cleanup",
-            untagged: untagged, dryRun: dryRun);
+            untagged: untagged);
 
         Assert.Same(acr, result);
         var (_, bicep) = await GetManifestWithBicep(acr.Resource);
 
-        await Verify(bicep, "bicep").UseParameters(untagged, dryRun);
+        await Verify(bicep, "bicep").UseParameters(untagged);
     }
 
     [Fact]

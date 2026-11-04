@@ -69,9 +69,8 @@ See the [Container Apps deployment guide](https://aspire.dev/deployment/azure/co
 
 ## Schedule image cleanup
 
-By default, `WithPurgeTask` removes tags only; the underlying manifests and image layers remain.
-To reclaim storage, opt into deleting eligible untagged manifests. Use dry-run mode to review
-the task logs before allowing deletions.
+By default, `WithPurgeTask` removes tags and eligible untagged manifests to reclaim storage.
+Set `untagged` to `false` to remove tags only, leaving the underlying manifests and image layers.
 
 **C#**
 
@@ -79,9 +78,7 @@ the task logs before allowing deletions.
 registry.WithPurgeTask("0 1 * * *",
     filter: "myapp:.*",
     ago: TimeSpan.FromDays(7),
-    keep: 5,
-    untagged: true,
-    dryRun: true);
+    keep: 5);
 ```
 
 **TypeScript**
@@ -90,14 +87,11 @@ registry.WithPurgeTask("0 1 * * *",
 await registry.withPurgeTask("0 1 * * *", {
     filter: "myapp:.*",
     ago: 7 * 24 * 60 * 60 * 1000,
-    keep: 5,
-    untagged: true,
-    dryRun: true
+    keep: 5
 });
 ```
 
-Set `dryRun` to `false` after reviewing the preview. Manifest deletion works with a
-Basic registry; no Premium SKU or retention policy is required. Previously untagged manifests
+Manifest deletion works with a Basic registry; no Premium SKU or retention policy is required. Previously untagged manifests
 in matching repositories are also eligible, so deletion can break digest-based pulls and
 rollbacks. Shared image layers remain until no retained manifests reference them, and storage
 usage reporting can lag behind deletion.

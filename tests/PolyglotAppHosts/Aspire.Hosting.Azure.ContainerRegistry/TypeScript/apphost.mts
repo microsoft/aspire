@@ -7,9 +7,7 @@ const registry = await builder.addAzureContainerRegistry("containerregistry")
         filter: "samples:.*",
         ago: 7 * 24 * 60 * 60 * 1000,
         keep: 5,
-        taskName: "purge-samples",
-        untagged: true,
-        dryRun: true
+        taskName: "purge-samples"
     });
 await registry.configureInfrastructure(async infrastructure => {
     const service = await infrastructure.getContainerRegistryService();
