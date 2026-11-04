@@ -112,16 +112,8 @@ compute environment. The callback path can't be discovered, so it must match the
 entraWeb.WithRedirectUris(web.GetEndpoint("https"), "/signin-oidc", "/signout-callback-oidc");
 ```
 
-Run-mode origins come from the endpoint's `BrowserOrigins` after all `WithUrlForEndpoint` and `WithUrls` callbacks finish.
-This includes friendly `*.dev.localhost` names and custom origins added after `WithRedirectUris`. Preferred origins follow display
-ordering, and navigation paths, queries, and fragments are excluded before appending the callback path. Removing all browser URLs
-for the endpoint reports a missing origin rather than falling back to its physical address.
-After endpoint allocation, Entra redirect resolution waits up to 30 seconds for finalized browser URLs. If they are not ready,
-it uses the allocated origin and logs a warning, preserving the existing timeout fallback. That address may differ from a custom
-browser URL; supply explicit redirect URIs when the fallback is unsuitable. General `BrowserOrigins` references do not use this fallback.
-
-The endpoint overload uses an HTTPS hostname expression from the owning compute environment during infrastructure generation,
-preserving deployment outputs and allowing compute-environment configuration after `WithRedirectUris`.
+Local redirects use the finalized browser URL, including friendly `*.dev.localhost` names and URL customizations,
+regardless of whether those customizations are configured before or after `WithRedirectUris`.
 For a different public origin, supply the callback URLs explicitly or through parameters.
 
 When only the host name varies per environment (for example, a custom domain supplied at deployment time), pass a parameter for the host
