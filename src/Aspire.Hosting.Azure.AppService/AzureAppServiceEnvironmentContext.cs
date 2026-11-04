@@ -29,8 +29,11 @@ internal sealed class AzureAppServiceEnvironmentContext(
     private readonly List<(string ResourceName, string[] EndpointNames)> _upgradedEndpoints = [];
     private bool _hasLoggedHttpsUpgrade;
 
-    public ParameterResource GetEndpointInput(EndpointReferenceExpression reference) =>
-        _endpointInputs.GetOrAdd(reference, serviceProvider.GetRequiredService<IConfiguration>());
+    public ParameterResource GetEndpointInput(EndpointReferenceExpression reference)
+    {
+        _endpointInputs.ReserveModelNames(serviceProvider.GetRequiredService<DistributedApplicationModel>().Resources);
+        return _endpointInputs.GetOrAdd(reference, serviceProvider.GetRequiredService<IConfiguration>());
+    }
 
     /// <summary>
     /// Records HTTP endpoints that were upgraded to HTTPS for a resource.

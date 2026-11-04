@@ -4154,6 +4154,7 @@ internal sealed class RadiusInfrastructureBuilder
             case EndpointReferenceExpression endpointReferenceExpression when endpointReferenceExpression.Property is
                 EndpointProperty.BrowserOrigin or EndpointProperty.BrowserOrigins or EndpointProperty.BrowserOriginsJson:
                 ThrowIfEndpointMissing(endpointReferenceExpression.Endpoint, owner);
+                _endpointInputs.ReserveModelNames(_executionContext.Services.GetRequiredService<DistributedApplicationModel>().Resources);
                 var input = _endpointInputs.GetOrAdd(endpointReferenceExpression,
                     _executionContext.Services.GetRequiredService<IConfiguration>());
                 parts.Add(ResolveParameterPart(input, referencedResource, allowRecipeSubstitutions: false));

@@ -16,8 +16,12 @@ internal sealed class KubernetesEnvironmentContext(KubernetesEnvironmentResource
     private readonly EndpointPropertyInputCache _endpointInputs = new();
 
     public ParameterResource GetEndpointInput(EndpointReferenceExpression reference, DistributedApplicationExecutionContext executionContext)
-        => _endpointInputs.GetOrAdd(reference, executionContext.Services.GetRequiredService<IConfiguration>(),
-            () => GetOriginDefault(reference, executionContext.Services.GetRequiredService<DistributedApplicationModel>().Resources));
+    {
+        var resources = executionContext.Services.GetRequiredService<DistributedApplicationModel>().Resources;
+        _endpointInputs.ReserveModelNames(resources);
+        return _endpointInputs.GetOrAdd(reference, executionContext.Services.GetRequiredService<IConfiguration>(),
+            () => GetOriginDefault(reference, resources));
+    }
 
     private string? GetOriginDefault(EndpointReferenceExpression reference, IEnumerable<IResource> resources)
     {

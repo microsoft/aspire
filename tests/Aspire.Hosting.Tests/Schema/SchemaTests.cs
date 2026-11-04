@@ -56,7 +56,7 @@ public class SchemaTests
                         var custom = new TestManifestValue("{frontend.customProperty}", (_, _) =>
                             ValueTask.FromResult<string?>("path with spaces"));
                         var selected = ReferenceExpression.CreateConditional(tls, bool.FalseString,
-                            ReferenceExpression.Create($"https://{host}/{custom:uri}?tls={tls}"), ReferenceExpression.Empty);
+                            ReferenceExpression.Create($"https://{host}/{custom}?tls={tls}"), ReferenceExpression.Empty);
                         var wrapper = new TestManifestValue(selected.ValueExpression, (_, _) =>
                             throw new InvalidOperationException("A symbolic wrapper must not be evaluated."), selected);
                         var formatted = new TestManifestValue("prefix/{public-host.value}", (_, _) =>

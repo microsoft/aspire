@@ -20,6 +20,50 @@ namespace Aspire.Hosting.Docker.Tests;
 public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
 {
     [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task BrowserOriginInputsAvoidDeclaredParameterNames(bool originFirst, bool normalizedCollision)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path, step: "prepare-env");
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        var environment = builder.AddDockerComposeEnvironment("env").WithDashboard(false);
+        var declaredName = normalizedCollision ? "WEB-HTTP-BROWSERORIGIN" : "web-http-BrowserOrigin";
+        var declared = builder.AddParameter(declaredName, "https://override.example");
+        var reservedSuffix = builder.AddParameter("web-http-BrowserOrigin-1", "reserved");
+        var web = builder.AddContainer("web", "image").WithHttpEndpoint(port: 8080, targetPort: 80).WithExternalHttpEndpoints();
+        var consumer = builder.AddContainer("consumer", "image");
+        if (originFirst)
+        {
+            consumer.WithEnvironment("ORIGIN", web.GetEndpoint("http").BrowserOrigins.First)
+                .WithEnvironment("DECLARED", declared);
+        }
+        else
+        {
+            consumer.WithEnvironment("DECLARED", declared)
+                .WithEnvironment("ORIGIN", web.GetEndpoint("http").BrowserOrigins.First);
+        }
+        consumer.WithEnvironment("REPEATED", web.GetEndpoint("http").BrowserOrigins.First)
+            .WithEnvironment("RESERVED", reservedSuffix);
+        using var app = builder.Build();
+
+        app.Run();
+
+        var captured = environment.Resource.CapturedEnvironmentVariables;
+        Assert.Equal(3, captured.Count);
+        Assert.Same(declared.Resource, captured["WEB_HTTP_BROWSERORIGIN"].Source);
+        Assert.Same(reservedSuffix.Resource, captured["WEB_HTTP_BROWSERORIGIN_1"].Source);
+        var generated = Assert.IsType<ParameterResource>(captured["WEB_HTTP_BROWSERORIGIN_2"].Source);
+        Assert.Equal("web-http-BrowserOrigin-2", generated.Name);
+        Assert.Equal("https://override.example", await declared.Resource.GetValueAsync(default));
+        Assert.Equal("http://localhost:8080", await generated.GetValueAsync(default));
+        await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, ".env.Production")), "env")
+            .UseParameters(originFirst, normalizedCollision);
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task BrowserOriginInputsKeepDistinctEndpointIdentities(bool longNames)

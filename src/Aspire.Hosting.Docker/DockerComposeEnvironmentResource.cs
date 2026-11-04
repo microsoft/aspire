@@ -271,6 +271,7 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
 
     private Task PublishAsync(PipelineStepContext context)
     {
+        EndpointInputs.ReserveModelNames(context.Model.Resources);
         var outputPath = PublishingContextUtils.GetEnvironmentOutputPath(context, this);
         var imageBuilder = context.Services.GetRequiredService<IResourceContainerImageManager>();
 
