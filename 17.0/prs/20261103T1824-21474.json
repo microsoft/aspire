@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only change",
+  "mergedAt": "2026-11-03T18:24:01Z",
+  "number": 21474,
+  "runDate": "2026-11-04T00:10:00Z",
+  "status": "excluded",
+  "title": "Remove flaky Go goroutine-count test from GeneratedRuntime_PassesGoRuntimeHardeningTests"
+}

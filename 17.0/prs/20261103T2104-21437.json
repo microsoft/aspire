@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Fix Npgsql EF Core retry setup with Npgsql 11 rc.2",
+  "mergedAt": "2026-11-03T21:04:43Z",
+  "number": 21437,
+  "runDate": "2026-11-04T00:10:00Z",
+  "status": "included",
+  "title": "Fix Npgsql EF retry setup TypeLoadException with Npgsql.EntityFrameworkCore.PostgreSQL 11 rc.2"
+}

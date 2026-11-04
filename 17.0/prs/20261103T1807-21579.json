@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Forward --artifacts-path to project resources",
+  "mergedAt": "2026-11-03T18:07:12Z",
+  "number": 21579,
+  "runDate": "2026-11-04T00:10:00Z",
+  "status": "included",
+  "title": "Forward AppHost --artifacts-path to project resource launches"
+}

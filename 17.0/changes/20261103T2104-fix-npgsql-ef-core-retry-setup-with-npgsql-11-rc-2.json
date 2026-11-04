@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Resolving a `DbContext` enriched with `EnrichNpgsqlDbContext` or `EnrichAzureNpgsqlDbContext` no longer throws `TypeLoadException` when retries are enabled with Npgsql.EntityFrameworkCore.PostgreSQL 11 rc.2.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🐘",
+  "firstMergedAt": "2026-11-03T21:04:43Z",
+  "lastMergedAt": "2026-11-03T21:04:43Z",
+  "name": "Fix Npgsql EF Core retry setup with Npgsql 11 rc.2",
+  "owner": "davidfowl",
+  "prs": [
+    21437
+  ]
+}

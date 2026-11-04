@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Release branch merge into main",
+  "mergedAt": "2026-11-03T22:16:57Z",
+  "number": 21730,
+  "runDate": "2026-11-04T00:10:00Z",
+  "status": "excluded",
+  "title": "Merge release/13.6 into main with release-only fixes preserved"
+}

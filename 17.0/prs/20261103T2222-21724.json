@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Customize Entra ID Graph provisioning models",
+  "mergedAt": "2026-11-03T22:22:49Z",
+  "number": 21724,
+  "runDate": "2026-11-04T00:10:00Z",
+  "status": "included",
+  "title": "Expose Entra Graph provisioning models for ConfigureInfrastructure"
+}

@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "AppHosts run with `dotnet run --artifacts-path` no longer fail to start project resources, because the global artifacts path is now forwarded when launching them.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "📦",
+  "firstMergedAt": "2026-11-03T18:07:12Z",
+  "lastMergedAt": "2026-11-03T18:07:12Z",
+  "name": "Forward --artifacts-path to project resources",
+  "owner": "davidfowl",
+  "prs": [
+    21579
+  ]
+}

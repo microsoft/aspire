@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only change",
+  "mergedAt": "2026-11-03T22:17:22Z",
+  "number": 21636,
+  "runDate": "2026-11-04T00:10:00Z",
+  "status": "excluded",
+  "title": "Wait for the settings command outcome instead of the 10s E2E control apply timeout"
+}

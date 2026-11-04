@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Aspire applications can now deploy to a pre-provisioned AKS cluster using the shared Azure `AsExisting` APIs, without reconfiguring the cluster's node pools, networking, or add-ons.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "☸️",
+  "firstMergedAt": "2026-11-03T22:16:09Z",
+  "lastMergedAt": "2026-11-03T22:16:09Z",
+  "name": "Existing Azure Kubernetes environments",
+  "owner": "mitchdenny",
+  "prs": [
+    20921
+  ]
+}

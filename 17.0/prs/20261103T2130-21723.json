@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Bot-authored telemetry sync",
+  "mergedAt": "2026-11-03T21:30:57Z",
+  "number": 21723,
+  "runDate": "2026-11-04T00:10:00Z",
+  "status": "excluded",
+  "title": "[telemetry] Sync telemetry with microsoft/aspire-skills#111"
+}

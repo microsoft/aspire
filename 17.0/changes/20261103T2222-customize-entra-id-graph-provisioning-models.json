@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The Microsoft Graph provisioning models behind `AddEntraIdApplication` are now public, so `ConfigureInfrastructure` can set properties such as tags and `serviceManagementReference`, including from polyglot AppHosts.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🪪",
+  "firstMergedAt": "2026-11-03T22:22:49Z",
+  "lastMergedAt": "2026-11-03T22:22:49Z",
+  "name": "Customize Entra ID Graph provisioning models",
+  "owner": "eerhardt",
+  "prs": [
+    21724
+  ]
+}
