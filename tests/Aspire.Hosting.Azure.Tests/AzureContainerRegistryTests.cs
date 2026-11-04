@@ -243,6 +243,58 @@ public class AzureContainerRegistryTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task WithPurgeTask_CustomCliVersion_UsedInBicep()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var acr = builder.AddAzureContainerRegistry("acr")
+            .WithPurgeTask("0 1 * * *", cliVersion: "0.20");
+
+        var (_, bicep) = await GetManifestWithBicep(acr.Resource);
+
+        await Verify(bicep, "bicep");
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData("-0.21")]
+    [InlineData(".21")]
+    [InlineData("0.21 --dry-run")]
+    [InlineData("0.21\nsteps:")]
+    [InlineData("0.21/other")]
+    [InlineData("0.21:other")]
+    public void WithPurgeTask_InvalidCliVersion_Throws(string? cliVersion)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var acr = builder.AddAzureContainerRegistry("acr");
+
+        var exception = Assert.ThrowsAny<ArgumentException>(() => acr.WithPurgeTask("0 1 * * *", cliVersion: cliVersion!));
+
+        Assert.Equal("cliVersion", exception.ParamName);
+    }
+
+    [Theory]
+    [InlineData(128)]
+    [InlineData(129)]
+    public void WithPurgeTask_CliVersion_ValidatesTagLength(int length)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var acr = builder.AddAzureContainerRegistry("acr");
+        var cliVersion = new string('a', length);
+
+        if (length == 128)
+        {
+            Assert.Same(acr, acr.WithPurgeTask("0 1 * * *", cliVersion: cliVersion));
+        }
+        else
+        {
+            var exception = Assert.Throws<ArgumentException>(() => acr.WithPurgeTask("0 1 * * *", cliVersion: cliVersion));
+            Assert.Equal("cliVersion", exception.ParamName);
+        }
+    }
+
+    [Fact]
     public async Task WithPurgeTask_ZeroAgo_MatchesDefaultCountRetention()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);

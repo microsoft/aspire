@@ -95,10 +95,21 @@ in matching repositories are also eligible, so deletion can break digest-based p
 rollbacks. Shared image layers remain until no retained manifests reference them, and storage
 usage reporting can lag behind deletion.
 
-The task pins `mcr.microsoft.com/acr/acr-cli:0.20` and generates:
+The task defaults to `mcr.microsoft.com/acr/acr-cli:0.21` and generates:
 
 ```text
-mcr.microsoft.com/acr/acr-cli:0.20 purge --filter 'myapp:.*' --max-tags 3 --untagged --max-untagged-manifests 0
+mcr.microsoft.com/acr/acr-cli:0.21 purge --filter 'myapp:.*' --max-tags 3 --untagged --max-untagged-manifests 0
+```
+
+Override the image tag with `cliVersion`. The selected image must support the count-retention
+flags introduced in ACR CLI 0.20:
+
+```csharp
+registry.WithPurgeTask("0 1 * * *", filter: "myapp:.*", cliVersion: "0.20");
+```
+
+```typescript
+await registry.withPurgeTask("0 1 * * *", { filter: "myapp:.*", cliVersion: "0.20" });
 ```
 
 `keep` maps to `--max-tags`, not `--keep`, so it does not retain an extra set of untagged
