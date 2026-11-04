@@ -367,17 +367,19 @@ internal sealed class NewCommand : BaseCommand
         var configuredTemplates = await _configuredTemplateSources.SearchAsync("", cancellationToken);
         HashSet<string> labels = [NewCommandStrings.SearchForMoreTemplates];
         List<TemplateSearchChoice> choices = [];
+        var builtInGroup = new SelectionChoiceGroup("builtin", NewCommandStrings.BuiltInTemplates);
         foreach (var template in templatesForPrompt)
         {
-            choices.Add(new(GetUniqueTemplateLabel(template.Description, labels), template, TemplateSearchAction.Select, false));
+            choices.Add(new(GetUniqueTemplateLabel(template.Description, labels), template, TemplateSearchAction.Select, false, builtInGroup));
         }
         AddConfiguredTemplateChoices(choices, labels, configuredTemplates);
-        choices.Add(new(NewCommandStrings.SearchForMoreTemplates, null, TemplateSearchAction.Search, false));
+        choices.Add(new(NewCommandStrings.SearchForMoreTemplates, null, TemplateSearchAction.Search, false, null));
 
         while (true)
         {
             var selection = await InteractionService.PromptForSelectionAsync(
                 NewCommandStrings.SelectAProjectTemplate, choices, choice => choice.Label.EscapeMarkup(),
+                choice => choice.Group,
                 cancellationToken: cancellationToken);
             if (selection.Template is { } template)
             {
@@ -407,10 +409,11 @@ internal sealed class NewCommand : BaseCommand
             List<TemplateSearchChoice> choices = [];
             HashSet<string> labels = [NewCommandStrings.SearchTemplatesAgain, NewCommandStrings.BackToDefaultTemplates];
             AddConfiguredTemplateChoices(choices, labels, templates);
-            choices.Add(new(NewCommandStrings.SearchTemplatesAgain, null, TemplateSearchAction.Search, false));
-            choices.Add(new(NewCommandStrings.BackToDefaultTemplates, null, TemplateSearchAction.Back, false));
+            choices.Add(new(NewCommandStrings.SearchTemplatesAgain, null, TemplateSearchAction.Search, false, null));
+            choices.Add(new(NewCommandStrings.BackToDefaultTemplates, null, TemplateSearchAction.Back, false, null));
             var choice = await InteractionService.PromptForSelectionAsync(
                 NewCommandStrings.SelectAProjectTemplate, choices, choice => choice.Label.EscapeMarkup(),
+                choice => choice.Group,
                 cancellationToken: cancellationToken);
             if (choice.Action is TemplateSearchAction.Back)
             {
@@ -430,7 +433,8 @@ internal sealed class NewCommand : BaseCommand
         {
             var label = GetUniqueTemplateLabel(
                 $"{result.Template.Description} ({result.Template.Name}) - {result.SourceName}", labels);
-            choices.Add(new(label, result.Template, TemplateSearchAction.Select, true));
+            choices.Add(new(label, result.Template, TemplateSearchAction.Select, true,
+                new SelectionChoiceGroup($"source:{result.SourceName}", result.SourceName)));
         }
     }
 
@@ -895,7 +899,7 @@ internal sealed class NewCommand : BaseCommand
         Back
     }
 
-    private sealed record TemplateSearchChoice(string Label, ITemplate? Template, TemplateSearchAction Action, bool IsConfigured);
+    private sealed record TemplateSearchChoice(string Label, ITemplate? Template, TemplateSearchAction Action, bool IsConfigured, SelectionChoiceGroup? Group);
 }
 
 internal sealed record TemplateSelection(ITemplate? Template)

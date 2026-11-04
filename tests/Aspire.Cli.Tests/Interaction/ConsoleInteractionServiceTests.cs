@@ -5,13 +5,13 @@ using Microsoft.AspNetCore.InternalTesting;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
 using Spectre.Console;
-using Spectre.Console.Rendering;
 
 using System.CommandLine;
 using System.Globalization;
@@ -33,6 +33,130 @@ public class ConsoleInteractionServiceTests
         executionContext ??= CreateExecutionContext();
         var consoleEnvironment = new ConsoleEnvironment(console, console, TextReader.Null);
         return new ConsoleInteractionService(consoleEnvironment, executionContext, hostEnvironment ?? TestHelpers.CreateInteractiveHostEnvironment(), new EnvironmentProcessPathProvider(), loggerFactory ?? NullLoggerFactory.Instance, new ConsoleLogBufferContext());
+    }
+
+    [Fact]
+    public async Task PromptForSelectionAsync_GroupsRenderAsHeadingsAndKeepFirstLeafDefault()
+    {
+        var output = new StringBuilder();
+        var console = CreateSelectionConsole(output, [new('\r', ConsoleKey.Enter, false, false, false)]);
+        var interaction = CreateInteractionService(console);
+        TestItem[] choices = [
+            new("built-in", "Starter"),
+            new("first", "Same (same) - first"),
+            new("second", "Same (same) - second"),
+            new("search", "Search for more templates")];
+
+        var selected = await interaction.PromptForSelectionAsync("Select a template:", choices, choice => choice.Display,
+            choice => choice.Id switch
+            {
+                "built-in" => new("builtin", "Built-in templates"),
+                "first" => new("source:first", "Company [first]"),
+                "second" => new("source:second", "Company [second]"),
+                _ => null
+            });
+
+        Assert.Same(choices[0], selected);
+        await Verify(output.ToString()).ScrubLinesWithReplace(line => line.TrimEnd());
+    }
+
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(1, 1)]
+    [InlineData(2, 2)]
+    [InlineData(3, 3)]
+    public async Task PromptForSelectionAsync_GroupHeadersCannotBeSelected(int moves, int expectedIndex)
+    {
+        var keys = Enumerable.Repeat(new ConsoleKeyInfo('\0', ConsoleKey.DownArrow, false, false, false), moves)
+            .Append(new ConsoleKeyInfo('\r', ConsoleKey.Enter, false, false, false));
+        var interaction = CreateInteractionService(CreateSelectionConsole(new StringBuilder(), keys));
+        TestItem[] choices = [
+            new("built-in", "Same"),
+            new("first", "Same (same) - first"),
+            new("second", "Same (same) - second"),
+            new("search", "Search")];
+
+        var selected = await interaction.PromptForSelectionAsync("Select:", choices, choice => choice.Display,
+            choice => choice.Id == "search" ? null : new SelectionChoiceGroup(choice.Id, "Same heading"));
+
+        Assert.Same(choices[expectedIndex], selected);
+    }
+
+    [Fact]
+    public async Task PromptForSelectionAsync_GroupsWithSameIdShareOneHeadingAndRetainChildOrder()
+    {
+        var output = new StringBuilder();
+        var console = CreateSelectionConsole(output, [new('\r', ConsoleKey.Enter, false, false, false)]);
+        var interaction = CreateInteractionService(console);
+        TestItem[] choices = [
+            new("first:one", "First template - first"),
+            new("second:one", "Other template - second"),
+            new("first:two", "Second template - first")];
+
+        var selected = await interaction.PromptForSelectionAsync("Select:", choices, choice => choice.Display,
+            choice => choice.Id.StartsWith("first:", StringComparison.Ordinal)
+                ? new("source:first", "First source")
+                : new SelectionChoiceGroup("source:second", "Second source"));
+
+        Assert.Same(choices[0], selected);
+        await Verify(output.ToString()).ScrubLinesWithReplace(line => line.TrimEnd());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PromptForSelectionAsync_PresentationGroupsPreserveValueTypeDefault(bool grouped)
+    {
+        var console = CreateSelectionConsole(new StringBuilder(), [new('\r', ConsoleKey.Enter, false, false, false)]);
+        var interaction = CreateInteractionService(console);
+        bool[] choices = [true, false];
+
+        var selected = grouped
+            ? await interaction.PromptForSelectionAsync("Select:", choices, choice => choice.ToString(),
+                _ => new SelectionChoiceGroup("choices", "Choices"))
+            : await interaction.PromptForSelectionAsync("Select:", choices, choice => choice.ToString());
+
+        Assert.False(selected);
+    }
+
+    [Fact]
+    public async Task PromptForSelectionAsync_GroupedChoicesRemainSearchable()
+    {
+        var keys = "second".Select(ch => new ConsoleKeyInfo(ch, Enum.Parse<ConsoleKey>(char.ToUpperInvariant(ch).ToString()), false, false, false))
+            .Append(new ConsoleKeyInfo('\r', ConsoleKey.Enter, false, false, false));
+        var interaction = CreateInteractionService(CreateSelectionConsole(new StringBuilder(), keys));
+        TestItem[] choices = [new("first", "Same (same) - first"), new("second", "Same (same) - second")];
+
+        var selected = await interaction.PromptForSelectionAsync("Select:", choices, choice => choice.Display,
+            choice => new SelectionChoiceGroup(choice.Id, "Source"));
+
+        Assert.Same(choices[1], selected);
+    }
+
+    [Fact]
+    public async Task PromptForSelectionAsync_GroupedBindingUsesFlatLabelWithoutRendering()
+    {
+        var output = new StringBuilder();
+        var interaction = CreateInteractionService(CreateInteractiveConsoleWithInput(output, ""),
+            hostEnvironment: TestHelpers.CreateNonInteractiveHostEnvironment());
+        var option = new Option<string?>("--template");
+        var binding = PromptBinding.Create(new RootCommand { option }.Parse("--template second"), option);
+        TestItem[] choices = [new("first", "first"), new("second", "second")];
+
+        var selected = await interaction.PromptForSelectionAsync("Select:", choices, choice => choice.Display,
+            _ => throw new InvalidOperationException("Noninteractive binding must not evaluate grouping."), binding);
+
+        Assert.Same(choices[1], selected);
+        Assert.Empty(output.ToString());
+    }
+
+    [Fact]
+    public async Task PromptForSelectionAsync_EmptyGroupedChoicesHaveNoSelectableHeaders()
+    {
+        var interaction = CreateInteractionService(CreateInteractiveConsoleWithInput(new StringBuilder(), ""));
+
+        await Assert.ThrowsAsync<EmptyChoicesException>(() => interaction.PromptForSelectionAsync("Select:", Array.Empty<string>(), choice => choice,
+            _ => throw new InvalidOperationException("Empty choices must not create groups.")));
     }
 
     [Fact]
@@ -2094,6 +2218,21 @@ public class ConsoleInteractionServiceTests
         public override string ToString() => Id;
     }
 
+    private static IAnsiConsole CreateSelectionConsole(StringBuilder output, IEnumerable<ConsoleKeyInfo> keys)
+    {
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.Yes,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Interactive = InteractionSupport.Yes,
+            Out = new AnsiConsoleOutput(new StringWriter(output)),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+        });
+        console.Profile.Width = 100;
+        console.Profile.Height = 40;
+        return new TestAnsiConsoleWithInput(console, keys);
+    }
+
     private static IAnsiConsole CreateInteractiveConsoleWithInput(StringBuilder output, string input)
     {
         var settings = new AnsiConsoleSettings
@@ -2106,63 +2245,5 @@ public class ConsoleInteractionServiceTests
         var console = AnsiConsole.Create(settings);
         console.Profile.Width = int.MaxValue;
         return new TestAnsiConsoleWithInput(console, new StringReader(input));
-    }
-}
-
-/// <summary>
-/// A test <see cref="IAnsiConsole"/> wrapper that redirects input reads to a <see cref="TextReader"/>,
-/// allowing prompts to be answered in unit tests without blocking on real console input.
-/// </summary>
-file sealed class TestAnsiConsoleWithInput : IAnsiConsole
-{
-    private readonly IAnsiConsole _inner;
-    private readonly IAnsiConsoleInput _testInput;
-
-    public TestAnsiConsoleWithInput(IAnsiConsole inner, TextReader inputReader)
-    {
-        _inner = inner;
-        _testInput = new TextReaderInput(inputReader);
-    }
-
-    public Profile Profile => _inner.Profile;
-    public IAnsiConsoleCursor Cursor => _inner.Cursor;
-    public IAnsiConsoleInput Input => _testInput;
-    public IExclusivityMode ExclusivityMode => _inner.ExclusivityMode;
-    public RenderPipeline Pipeline => _inner.Pipeline;
-
-    public void Clear(bool home) => _inner.Clear(home);
-    public void Write(IRenderable renderable) => _inner.Write(renderable);
-    public void WriteAnsi(Action<AnsiWriter> action) => _inner.WriteAnsi(action);
-
-    private sealed class TextReaderInput : IAnsiConsoleInput
-    {
-        private readonly TextReader _reader;
-
-        public TextReaderInput(TextReader reader) => _reader = reader;
-
-        public bool IsKeyAvailable() => true;
-
-        public ConsoleKeyInfo? ReadKey(bool intercept)
-        {
-            var read = _reader.Read();
-            if (read == -1)
-            {
-                // End of stream - return Enter as a safe fallback
-                return new ConsoleKeyInfo('\r', ConsoleKey.Enter, shift: false, alt: false, control: false);
-            }
-
-            var ch = (char)read;
-            var key = ch switch
-            {
-                '\n' or '\r' => ConsoleKey.Enter,
-                'y' or 'Y'   => ConsoleKey.Y,
-                'n' or 'N'   => ConsoleKey.N,
-                _            => ConsoleKey.Enter,
-            };
-            return new ConsoleKeyInfo(ch, key, shift: char.IsUpper(ch), alt: false, control: false);
-        }
-
-        public Task<ConsoleKeyInfo?> ReadKeyAsync(bool intercept, CancellationToken cancellationToken)
-            => Task.FromResult(ReadKey(intercept));
     }
 }

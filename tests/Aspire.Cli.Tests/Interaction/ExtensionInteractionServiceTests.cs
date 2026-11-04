@@ -309,6 +309,66 @@ public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PromptForSelectionAsync_GroupingFallsBackToExistingFlatExtensionChoices()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        SelectionChoice[] choices = [new("Same (same) - first"), new("Same (same) - second")];
+        IReadOnlyList<string>? capturedChoices = null;
+        var backchannel = new TestExtensionBackchannel
+        {
+            PromptForSelectionAsyncCallback = (_, labels) =>
+            {
+                capturedChoices = labels;
+                return Task.FromResult(labels[1]);
+            }
+        };
+        using var interaction = CreateExtensionInteractionService(workspace, backchannel);
+
+        var selected = await interaction.PromptForSelectionAsync("Select:", choices, choice => $"[bold]{choice.Label}[/]",
+            _ => throw new InvalidOperationException("Flat extension fallback must not evaluate grouping."));
+
+        Assert.Equal(["Same (same) - first", "Same (same) - second"], capturedChoices);
+        Assert.Same(choices[1], selected);
+    }
+
+    [Fact]
+    public async Task PromptForSelectionAsync_DisabledExtensionPromptsRetainConsoleGrouping()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.Yes,
+            Interactive = InteractionSupport.Yes,
+            Out = new AnsiConsoleOutput(new StringWriter()),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+        });
+        var inputConsole = new TestAnsiConsoleWithInput(console,
+            [new('\0', ConsoleKey.DownArrow, false, false, false), new('\r', ConsoleKey.Enter, false, false, false)]);
+        var consoleInteraction = new ConsoleInteractionService(
+            new ConsoleEnvironment(inputConsole, inputConsole, TextReader.Null),
+            workspace.CreateExecutionContext(), TestHelpers.CreateInteractiveHostEnvironment(),
+            new EnvironmentProcessPathProvider(), NullLoggerFactory.Instance, new ConsoleLogBufferContext());
+        var backchannel = new TestExtensionBackchannel
+        {
+            PromptForSelectionAsyncCallback = (_, _) => throw new InvalidOperationException("Console prompts must not use extension RPC.")
+        };
+        using var interaction = new ExtensionInteractionService(consoleInteraction, backchannel,
+            extensionPromptEnabled: false, logger: NullLogger<ExtensionInteractionService>.Instance);
+        SelectionChoice[] choices = [new("Same (same) - first"), new("Same (same) - second")];
+        var groupedChoices = 0;
+
+        var selected = await interaction.PromptForSelectionAsync("Select:", choices, choice => choice.Label,
+            choice =>
+            {
+                groupedChoices++;
+                return new SelectionChoiceGroup(choice.Label, "Source");
+            });
+
+        Assert.Equal(2, groupedChoices);
+        Assert.Same(choices[1], selected);
+    }
+
+    [Fact]
     public async Task PromptForSelectionsAsync_ForwardsFormattedDefaultsAndMapsSelectedValues()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

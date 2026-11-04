@@ -334,6 +334,13 @@ public partial class NewCommandLocalTemplateTests
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal(1, selectionCount);
+        var groupedChoices = Assert.Single(interaction.GroupedSelectionPromptCalls);
+        Assert.Equal(
+            [new SelectionChoiceGroup("source:first-source", "first-source"),
+                new SelectionChoiceGroup("source:second-source", "second-source"), null],
+            groupedChoices.TakeLast(3).Select(choice => choice.Group));
+        Assert.All(groupedChoices.SkipLast(3), choice =>
+            Assert.Equal(new SelectionChoiceGroup("builtin", NewCommandStrings.BuiltInTemplates), choice.Group));
         Assert.Empty(interaction.DisplayedErrors);
         Assert.Equal(["Greeting text"],
             interaction.StringPromptCalls.Select(call => call.PromptText));

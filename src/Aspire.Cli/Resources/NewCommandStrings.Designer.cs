@@ -70,6 +70,15 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Built-in templates.
+        /// </summary>
+        internal static string BuiltInTemplates {
+            get {
+                return ResourceManager.GetString("BuiltInTemplates", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Channel to use for templates (stable, daily).
         /// </summary>
         internal static string ChannelOptionDescription {

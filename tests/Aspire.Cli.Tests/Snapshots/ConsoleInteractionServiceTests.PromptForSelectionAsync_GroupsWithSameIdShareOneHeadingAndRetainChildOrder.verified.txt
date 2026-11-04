@@ -1,0 +1,10 @@
+﻿[?25lSelect:
+
+  First source
+  > First template - first
+    Second template - first
+  Second source
+    Other template - second
+
+(Type to search)
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[?25hSelect: First template - first

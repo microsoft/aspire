@@ -283,7 +283,13 @@ internal class ConsoleInteractionService : IInteractionService
         return PromptForStringAsync(promptText, validator, isSecret: false, required, binding, cancellationToken: cancellationToken);
     }
 
-    public async Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull
+    public Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull
+        => PromptForSelectionCoreAsync(promptText, choices, choiceFormatter, null, binding, echoSelected, cancellationToken);
+
+    public Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, Func<T, SelectionChoiceGroup?> choiceGroup, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull
+        => PromptForSelectionCoreAsync(promptText, choices, choiceFormatter, choiceGroup, binding, echoSelected, cancellationToken);
+
+    private async Task<T> PromptForSelectionCoreAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, Func<T, SelectionChoiceGroup?>? choiceGroup, PromptBinding<string?>? binding, bool echoSelected, CancellationToken cancellationToken) where T : notnull
     {
         ArgumentNullException.ThrowIfNull(promptText, nameof(promptText));
         ArgumentNullException.ThrowIfNull(choices, nameof(choices));
@@ -325,16 +331,62 @@ internal class ConsoleInteractionService : IInteractionService
 
         MessageLogger.LogInformation("Selection prompt: {PromptText}", promptText);
 
-        var prompt = new SelectionPrompt<T>()
-            .Title(promptText)
-            .UseConverter(choiceFormatter)
-            .AddChoices(choicesList)
-            .PageSize(10)
-            .EnableSearch();
+        T result;
+        if (choiceGroup is null)
+        {
+            var prompt = new SelectionPrompt<T>()
+                .Title(promptText)
+                .UseConverter(choiceFormatter)
+                .AddChoices(choicesList)
+                .PageSize(10)
+                .EnableSearch();
+            prompt.SearchHighlightStyle = s_searchHighlightStyle;
+            result = await MessageConsole.PromptAsync(prompt, cancellationToken);
+        }
+        else
+        {
+            var prompt = new SelectionPrompt<SelectionPromptItem>()
+                .Title(promptText)
+                .UseConverter(item => item.Label)
+                .PageSize(10)
+                .EnableSearch();
+            prompt.Mode = SelectionMode.Leaf;
+            prompt.SearchHighlightStyle = s_searchHighlightStyle;
+            Dictionary<string, ISelectionItem<SelectionPromptItem>> groups = [];
+            foreach (var choice in choicesList)
+            {
+                var item = new SelectionPromptValue<T>(choice, choiceFormatter(choice));
+                // Spectre starts value-type prompts on default(T), if present (e.g. false
+                // for a confirmation). Wrapping choices must not change that default.
+                if (prompt.DefaultValue is null && default(T) is { } typeDefaultValue && EqualityComparer<T>.Default.Equals(choice, typeDefaultValue))
+                {
+                    prompt.DefaultValue = item;
+                }
+                if (choiceGroup(choice) is { } group)
+                {
+                    if (!groups.TryGetValue(group.Id, out var header))
+                    {
+                        // Only create headers for populated groups. An empty Spectre group is
+                        // a leaf and would otherwise become a selectable value.
+                        header = prompt.AddChoice(new SelectionPromptGroup(group.Label.EscapeMarkup()));
+                        groups.Add(group.Id, header);
+                    }
+                    header.AddChild(item);
+                }
+                else
+                {
+                    prompt.AddChoice(item);
+                }
+            }
 
-        prompt.SearchHighlightStyle = s_searchHighlightStyle;
+            var selected = await MessageConsole.PromptAsync(prompt, cancellationToken);
+            if (selected is not SelectionPromptValue<T> selectedValue)
+            {
+                throw new InvalidOperationException("A selection group cannot be selected.");
+            }
+            result = selectedValue.Value;
+        }
 
-        var result = await MessageConsole.PromptAsync(prompt, cancellationToken);
         MessageLogger.LogInformation("Selection result: {Result}", choiceFormatter(result));
 
         // The SelectionPrompt clears its display after the user selects.
@@ -868,4 +920,8 @@ internal class ConsoleInteractionService : IInteractionService
         ThrowNonInteractiveInvalidValue(value, binding.SymbolDisplayName, choicesList, choiceFormatter);
         return default; // unreachable
     }
+
+    private abstract record SelectionPromptItem(string Label);
+    private sealed record SelectionPromptValue<T>(T Value, string Text) : SelectionPromptItem(Text) where T : notnull;
+    private sealed record SelectionPromptGroup(string Text) : SelectionPromptItem(Text);
 }

@@ -1,0 +1,12 @@
+﻿[?25lSelect a template:
+
+  Built-in templates
+  > Starter
+  Company [first]
+    Same (same) - first
+  Company [second]
+    Same (same) - second
+  Search for more templates
+
+(Type to search)
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[?25hSelect a template: Starter

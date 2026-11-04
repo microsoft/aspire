@@ -259,6 +259,9 @@
   <data name="BackToDefaultTemplates" xml:space="preserve">
     <value>Back to default templates</value>
   </data>
+  <data name="BuiltInTemplates" xml:space="preserve">
+    <value>Built-in templates</value>
+  </data>
   <data name="NoMatchingConfiguredTemplates" xml:space="preserve">
     <value>No matching templates were found in the configured sources.</value>
   </data>

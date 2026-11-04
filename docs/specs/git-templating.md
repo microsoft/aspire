@@ -90,6 +90,13 @@ alias. Selecting a configured template uses that exact discovered source snapsho
 even when display names or short names collide. The existing search action remains
 available to filter configured templates. Empty or unavailable sources report their
 existing warnings without preventing selection from other sources or built-ins.
+The terminal picker shows nonselectable headings for built-in templates and each
+configured source. Group order follows first appearance in the discovered choices,
+with built-ins first; templates retain their existing ordering within each group.
+Search and navigation actions remain outside the groups. Grouping is optional
+interaction-service presentation metadata: clients such as the VS Code extension
+continue receiving the existing flat string choices with unique source-qualified
+labels. No extension protocol or capability change is required.
 Discovery does not authorize template post-actions or execution of generated code.
 Help, explicit templates, noninteractive invocations, and built-in-only options
 (`--source`, `--version`, `--channel`, or `--language`) do not trigger this discovery.

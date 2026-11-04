@@ -7,6 +7,11 @@
         <target state="new">Back to default templates</target>
         <note />
       </trans-unit>
+      <trans-unit id="BuiltInTemplates">
+        <source>Built-in templates</source>
+        <target state="new">Built-in templates</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ChannelOptionDescription">
         <source>Channel to use for templates (stable, daily)</source>
         <target state="translated">Canal a ser usado para modelos (estável, diariamente)</target>

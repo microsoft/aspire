@@ -49,6 +49,7 @@ internal sealed class TestInteractionService : IInteractionService
     public List<FilePathPromptCall> FilePathPromptCalls { get; } = [];
     public List<BooleanPromptCall> BooleanPromptCalls { get; } = [];
     public List<(string PromptText, string? DefaultValue, IReadOnlyList<object> PreSelected, bool Optional)> MultiSelectionPromptCalls { get; } = [];
+    public List<IReadOnlyList<(string Label, SelectionChoiceGroup? Group)>> GroupedSelectionPromptCalls { get; } = [];
     public List<string> DisplayedErrors { get; } = [];
     public List<string> ValidationFailures { get; } = [];
     public List<(KnownEmoji Emoji, string Message, ConsoleOutput? ConsoleOverride)> DisplayedMessages { get; } = [];
@@ -166,6 +167,13 @@ internal sealed class TestInteractionService : IInteractionService
         }
 
         return Task.FromResult(binding?.DefaultValue ?? string.Empty);
+    }
+
+    public Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, Func<T, SelectionChoiceGroup?> choiceGroup, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull
+    {
+        var choicesList = choices.ToArray();
+        GroupedSelectionPromptCalls.Add(choicesList.Select(choice => (choiceFormatter(choice), choiceGroup(choice))).ToArray());
+        return PromptForSelectionAsync(promptText, choicesList, choiceFormatter, binding, echoSelected, cancellationToken);
     }
 
     public Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull
