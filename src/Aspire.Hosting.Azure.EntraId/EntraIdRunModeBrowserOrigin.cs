@@ -8,13 +8,18 @@ using Microsoft.Extensions.Logging;
 namespace Aspire.Hosting.Azure;
 
 /// <summary>
+/// Keeps endpoint origins deferred until the registration's Bicep is generated.
+/// </summary>
+internal sealed record EntraIdEndpointRedirectUri(Func<ReferenceExpression> Origins, string Path);
+
+/// <summary>
 /// Bounds the wait for browser URLs when provisioning an Entra redirect URI.
 /// </summary>
 internal sealed class EntraIdRunModeBrowserOrigin(
     EndpointReference endpoint,
     DistributedApplicationExecutionContext executionContext) : IExpressionValue, IValueWithReferences
 {
-    public string ValueExpression => endpoint.BrowserOrigins.First.ValueExpression;
+    public string ValueExpression => endpoint.BrowserOrigins.ValueExpression;
 
     public IEnumerable<object> References => [endpoint];
 
@@ -27,7 +32,7 @@ internal sealed class EntraIdRunModeBrowserOrigin(
         timeout.CancelAfter(TimeSpan.FromSeconds(30));
         try
         {
-            return await endpoint.BrowserOrigins.First.GetValueAsync(timeout.Token).ConfigureAwait(false);
+            return await endpoint.BrowserOrigins.GetValueAsync(timeout.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {

@@ -55,7 +55,7 @@ internal static class DockerComposeServiceResourceExtensions
 
                 return epExpr.Property switch
                 {
-                    EndpointProperty.BrowserOrigins or EndpointProperty.BrowserOrigin or EndpointProperty.BrowserOriginsJson =>
+                    EndpointProperty.BrowserOrigins =>
                         GetEndpointInput(epExpr, mapping).AsEnvironmentPlaceholder(resource),
                     _ => GetValue(mapping, epExpr.Property)
                 };
@@ -103,16 +103,14 @@ internal static class DockerComposeServiceResourceExtensions
         }
 
         ParameterResource GetEndpointInput(EndpointReferenceExpression reference, DockerComposeServiceResource.EndpointMapping mapping)
-            => resource.Parent.EndpointInputs.GetOrAdd(reference, configuration, () => GetOriginDefault(reference, mapping));
+            => resource.Parent.EndpointInputs.GetOrAdd(reference, configuration, () => GetOriginDefault(mapping));
 
-        static string? GetOriginDefault(EndpointReferenceExpression reference, DockerComposeServiceResource.EndpointMapping mapping)
+        static string? GetOriginDefault(DockerComposeServiceResource.EndpointMapping mapping)
         {
             if (mapping.IsExternal && mapping.ExposedPort is int port && mapping.Scheme is "http" or "https")
             {
                 var origin = BrowserOriginHelpers.GetOrigin(new UriBuilder(mapping.Scheme, "localhost", port).Uri);
-                return reference.Property == EndpointProperty.BrowserOriginsJson
-                    ? System.Text.Json.JsonSerializer.Serialize(new[] { origin })
-                    : origin;
+                return origin;
             }
 
             return null;

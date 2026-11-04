@@ -1,8 +1,8 @@
 ﻿{
   "resources": {
-    "frontend-http-BrowserOrigin": {
+    "frontend-http-BrowserOrigins": {
       "type": "parameter.v0",
-      "value": "{frontend-http-BrowserOrigin.inputs.value}",
+      "value": "{frontend-http-BrowserOrigins.inputs.value}",
       "inputs": {
         "value": {
           "type": "string"
@@ -25,12 +25,12 @@
       "type": "container.v0",
       "image": "image:latest",
       "env": {
-        "ORIGIN": "{frontend-http-BrowserOrigin-1.value}"
+        "ORIGIN": "{frontend-http-BrowserOrigins-1.value}"
       }
     },
-    "frontend-http-BrowserOrigin-1": {
+    "frontend-http-BrowserOrigins-1": {
       "type": "parameter.v0",
-      "value": "{frontend-http-BrowserOrigin-1.inputs.value}",
+      "value": "{frontend-http-BrowserOrigins-1.inputs.value}",
       "inputs": {
         "value": {
           "type": "string"

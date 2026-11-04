@@ -501,25 +501,15 @@ public class EndpointReferenceTests
     }
 
     [Fact]
-    public void BrowserOriginsFluentOperationsSelectEndpointProperties()
+    public void BrowserOriginsSelectsEndpointProperty()
     {
         var resource = new TestResource("frontend");
         var endpoint = new EndpointReference(resource, "http");
         var origins = endpoint.BrowserOrigins;
 
-        EndpointReferenceExpression[] expressions = [origins.First, origins.Join(), origins.AsJson()];
-
-        Assert.All(expressions, expression =>
-        {
-            Assert.IsType<EndpointReferenceExpression>(expression);
-            Assert.Same(endpoint, expression.Endpoint);
-            Assert.Same(endpoint, Assert.Single(((IValueWithReferences)expression).References));
-        });
-        Assert.Equal(
-            [EndpointProperty.BrowserOrigin, EndpointProperty.BrowserOrigins, EndpointProperty.BrowserOriginsJson],
-            expressions.Select(expression => expression.Property));
-        Assert.Same(origins, endpoint.BrowserOrigins);
-        Assert.Same(origins.First, origins.First);
+        Assert.Equal(EndpointProperty.BrowserOrigins, origins.Property);
+        Assert.Same(endpoint, origins.Endpoint);
+        Assert.Same(endpoint, Assert.Single(((IValueWithReferences)origins).References));
         Assert.Empty(resource.Annotations);
     }
 
@@ -532,8 +522,8 @@ public class EndpointReferenceTests
         resource.GetEndpoint("http").EndpointAnnotation.BrowserUrlsSnapshot.SetValue([new() { Url = "http://frontend.example" }]);
         resource.GetEndpoint("https").EndpointAnnotation.BrowserUrlsSnapshot.SetValue([new() { Url = "https://separate.example" }]);
 
-        Assert.Equal("http://frontend.example", await resource.GetEndpoint("HTTP").BrowserOrigins.First.GetValueAsync());
-        Assert.Equal("https://separate.example", await resource.GetEndpoint("https").BrowserOrigins.First.GetValueAsync());
+        Assert.Equal("http://frontend.example", await resource.GetEndpoint("HTTP").BrowserOrigins.GetValueAsync());
+        Assert.Equal("https://separate.example", await resource.GetEndpoint("https").BrowserOrigins.GetValueAsync());
     }
 
     [Fact]
@@ -545,14 +535,12 @@ public class EndpointReferenceTests
         var container = resource.GetEndpoint("http", KnownNetworkIdentifiers.DefaultAspireContainerNetwork);
         host.EndpointAnnotation.BrowserUrlsSnapshot.SetValue([new() { Url = "https://public.example/app" }]);
 
-        Assert.Equal("https://public.example", await host.BrowserOrigins.First.GetValueAsync());
-        Assert.Equal("https://public.example", await container.BrowserOrigins.First.GetValueAsync());
+        Assert.Equal("https://public.example", await host.BrowserOrigins.GetValueAsync());
+        Assert.Equal("https://public.example", await container.BrowserOrigins.GetValueAsync());
     }
 
     [Theory]
-    [InlineData(EndpointProperty.BrowserOrigin, "http://preferred.example:8080")]
     [InlineData(EndpointProperty.BrowserOrigins, "http://preferred.example:8080,https://frontend.example,https://127.0.0.1:8443,https://frontend.example:9443")]
-    [InlineData(EndpointProperty.BrowserOriginsJson, "[\"http://preferred.example:8080\",\"https://frontend.example\",\"https://127.0.0.1:8443\",\"https://frontend.example:9443\"]")]
     public async Task BrowserOriginPropertiesResolveFinalizedUrls(EndpointProperty property, string expected)
     {
         var resource = new TestResource("frontend");
@@ -582,13 +570,11 @@ public class EndpointReferenceTests
         var endpoint = resource.GetEndpoint("http");
         endpoint.EndpointAnnotation.BrowserUrlsSnapshot.SetValue([new() { Url = url }]);
 
-        Assert.Equal(expected, await endpoint.BrowserOrigins.First.GetValueAsync());
+        Assert.Equal(expected, await endpoint.BrowserOrigins.GetValueAsync());
     }
 
     [Theory]
-    [InlineData(EndpointProperty.BrowserOrigin)]
     [InlineData(EndpointProperty.BrowserOrigins)]
-    [InlineData(EndpointProperty.BrowserOriginsJson)]
     public async Task BrowserOriginPropertiesSupportCancellation(EndpointProperty property)
     {
         var resource = new TestResource("frontend");
@@ -602,9 +588,7 @@ public class EndpointReferenceTests
     }
 
     [Theory]
-    [InlineData(EndpointProperty.BrowserOrigin)]
     [InlineData(EndpointProperty.BrowserOrigins)]
-    [InlineData(EndpointProperty.BrowserOriginsJson)]
     public async Task BrowserOriginPropertiesAwaitFinalizedUrlsRegardlessOfExecutionMode(EndpointProperty property)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -617,7 +601,7 @@ public class EndpointReferenceTests
 
         Assert.False(value.IsCompleted);
         endpoint.EndpointAnnotation.BrowserUrlsSnapshot.SetValue([new() { Url = "https://frontend.example/app" }]);
-        Assert.Equal(property == EndpointProperty.BrowserOriginsJson ? "[\"https://frontend.example\"]" : "https://frontend.example",
+        Assert.Equal("https://frontend.example",
             await value.AsTask().WaitAsync(TimeSpan.FromSeconds(10)));
     }
 
@@ -628,7 +612,7 @@ public class EndpointReferenceTests
         using var publishingBuilder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var frontend = builder.AddContainer("frontend", "image").WithHttpEndpoint(targetPort: 8080);
         var endpoint = frontend.GetEndpoint("http");
-        var origin = endpoint.BrowserOrigins.First;
+        var origin = endpoint.BrowserOrigins;
         var backend = builder.AddContainer("backend", "image").WithEnvironment("ORIGIN", origin);
         endpoint.EndpointAnnotation.BrowserUrlsSnapshot.SetValue([new() { Url = "https://local.example" }]);
 

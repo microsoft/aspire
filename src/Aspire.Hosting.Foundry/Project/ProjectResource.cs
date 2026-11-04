@@ -235,10 +235,8 @@ public class AzureCognitiveServicesProjectResource :
         {
             EndpointProperty.Url => GetAgentAddressExpression(endpointReferenceExpression.Endpoint),
             EndpointProperty.Scheme => ReferenceExpression.Create($"https"),
-            EndpointProperty.BrowserOrigin or EndpointProperty.BrowserOrigins =>
+            EndpointProperty.BrowserOrigins =>
                 ReferenceExpression.Create($"{new BicepOutputReference("endpointOrigin", this)}"),
-            EndpointProperty.BrowserOriginsJson =>
-                ReferenceExpression.Create($"[\"{new BicepOutputReference("endpointOrigin", this)}\"]"),
             _ => throw new InvalidOperationException(
                 $"The endpoint property '{property}' is not supported for Foundry hosted agent endpoints.")
         };

@@ -5,9 +5,9 @@ param env_outputs_azure_container_apps_environment_default_domain string
 
 param env_outputs_azure_container_apps_environment_id string
 
-param a_b_c_browserorigin_value string
+param a_b_c_browserorigins_value string
 
-param a_b_c_browserorigin_1b1c82807515af0d_value string
+param a_b_c_browserorigins_2eb5787a775df1cb_value string
 
 resource consumer 'Microsoft.App/containerApps@2025-07-01' = {
   name: 'consumer'
@@ -30,15 +30,15 @@ resource consumer 'Microsoft.App/containerApps@2025-07-01' = {
           env: [
             {
               name: 'FIRST'
-              value: a_b_c_browserorigin_value
+              value: a_b_c_browserorigins_value
             }
             {
               name: 'SECOND'
-              value: a_b_c_browserorigin_1b1c82807515af0d_value
+              value: a_b_c_browserorigins_2eb5787a775df1cb_value
             }
             {
               name: 'REPEATED'
-              value: a_b_c_browserorigin_value
+              value: a_b_c_browserorigins_value
             }
           ]
         }

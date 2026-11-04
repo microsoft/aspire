@@ -139,8 +139,7 @@ builder.Build().Run();
             content = DotnetProjectDeploymentHelpers.ReplaceExactlyOnce(content, frontendDeclaration, $"var webfrontend = {frontendDeclaration}");
             content = DotnetProjectDeploymentHelpers.ReplaceExactlyOnce(content, buildRunPattern, """
                 apiService.WithExternalHttpEndpoints()
-                    .WithEnvironment("BROWSER_ORIGIN", webfrontend.GetEndpoint("http").BrowserOrigins.First)
-                    .WithEnvironment("BROWSER_ORIGINS_JSON", webfrontend.GetEndpoint("http").BrowserOrigins.AsJson());
+                    .WithEnvironment("BROWSER_ORIGINS", webfrontend.GetEndpoint("http").BrowserOrigins);
 
                 builder.Build().Run();
                 """);
@@ -148,19 +147,18 @@ builder.Build().Run();
             var marker = $"aca-{Guid.NewGuid():N}";
             var apiProgramPath = Path.Combine(projectDir, $"{projectName}.ApiService", "Program.cs");
             DotnetProjectDeploymentHelpers.ReplaceInFile(apiProgramPath, "var app = builder.Build();", """
-                var browserOrigin = builder.Configuration["BROWSER_ORIGIN"]
-                    ?? throw new InvalidOperationException("The deployed browser origin is missing.");
-                var browserOriginsJson = builder.Configuration["BROWSER_ORIGINS_JSON"]
-                    ?? throw new InvalidOperationException("The deployed browser origins JSON is missing.");
+                var browserOrigins = builder.Configuration["BROWSER_ORIGINS"]
+                    ?? throw new InvalidOperationException("The deployed browser origins are missing.");
+                var allowedOrigins = browserOrigins.Split(',', StringSplitOptions.RemoveEmptyEntries);
                 builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
-                    policy.WithOrigins(browserOrigin).WithMethods("GET")));
+                    policy.WithOrigins(allowedOrigins).WithMethods("GET")));
                 var app = builder.Build();
                 app.UseCors();
                 """);
             DotnetProjectDeploymentHelpers.ReplaceInFile(apiProgramPath,
                 "app.Run();", $$"""
                 app.MapGet("/deployment-marker", () => "{{marker}}");
-                app.MapGet("/browser-origins", () => new { origin = browserOrigin, originsJson = browserOriginsJson });
+                app.MapGet("/browser-origins", () => new { origins = browserOrigins });
                 app.Run();
                 """);
             DotnetProjectDeploymentHelpers.ReplaceInFile(Path.Combine(projectDir, $"{projectName}.Web", "Program.cs"),
@@ -235,9 +233,7 @@ builder.Build().Run();
                 using var originsResponse = await http.GetAsync($"{apiUrl}/browser-origins", cancellationToken);
                 originsResponse.EnsureSuccessStatusCode();
                 using var received = JsonDocument.Parse(await originsResponse.Content.ReadAsStringAsync(cancellationToken));
-                Assert.Equal(frontendUrl, received.RootElement.GetProperty("origin").GetString());
-                using var origins = JsonDocument.Parse(received.RootElement.GetProperty("originsJson").GetString()!);
-                Assert.Equal(frontendUrl, Assert.Single(origins.RootElement.EnumerateArray()).GetString());
+                Assert.Equal(frontendUrl, received.RootElement.GetProperty("origins").GetString());
 
                 using var preflight = new HttpRequestMessage(HttpMethod.Options, $"{apiUrl}/browser-origins");
                 preflight.Headers.Add("Origin", frontendUrl);

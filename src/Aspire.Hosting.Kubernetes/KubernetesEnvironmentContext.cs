@@ -49,12 +49,7 @@ internal sealed class KubernetesEnvironmentContext(KubernetesEnvironmentResource
         }
 
         var distinct = origins.Distinct(StringComparer.Ordinal).ToArray();
-        return distinct.Length == 0 ? null : reference.Property switch
-        {
-            EndpointProperty.BrowserOrigin => distinct[0],
-            EndpointProperty.BrowserOriginsJson => System.Text.Json.JsonSerializer.Serialize(distinct),
-            _ => string.Join(",", distinct)
-        };
+        return distinct.Length == 0 ? null : string.Join(",", distinct);
 
         bool Matches(EndpointReference endpoint) =>
             string.Equals(endpoint.Resource.Name, reference.Endpoint.Resource.Name, StringComparison.OrdinalIgnoreCase) &&

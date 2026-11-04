@@ -254,7 +254,7 @@ public class DevTunnelMonitorTests
     {
         using var test = new TestDevTunnelMonitor();
         var endpoint = test.Port.GetEndpoint(DevTunnelPortResource.TunnelEndpointName);
-        var origin = endpoint.BrowserOrigins.First;
+        var origin = endpoint.BrowserOrigins;
         var callbacks = 0;
         var notifications = 0;
         test.Port.Annotations.Add(new ResourceUrlsCallbackAnnotation(context =>
@@ -279,7 +279,7 @@ public class DevTunnelMonitorTests
             {
                 notifications++;
                 Assert.Equal(1, callbacks);
-                Assert.Equal("https://original-3000.usw2.devtunnels.ms", await origin.GetValueAsync(ct));
+                Assert.Equal("https://original-3000.usw2.devtunnels.ms,https://custom.example", await origin.GetValueAsync(ct));
             });
 
         await test.StartAsync();
@@ -287,7 +287,7 @@ public class DevTunnelMonitorTests
 
         Assert.Equal(
             "https://original-3000.usw2.devtunnels.ms,https://custom.example",
-            await endpoint.BrowserOrigins.Join().GetValueAsync());
+            await endpoint.BrowserOrigins.GetValueAsync());
 
         test.Client.TunnelStatus = test.Client.TunnelStatus with
         {
@@ -297,10 +297,10 @@ public class DevTunnelMonitorTests
 
         Assert.Equal(1, callbacks);
         Assert.Equal(1, notifications);
-        Assert.Equal("https://replacement-3000.usw2.devtunnels.ms", await origin.GetValueAsync());
+        Assert.Equal("https://replacement-3000.usw2.devtunnels.ms,https://custom.example", await origin.GetValueAsync());
         Assert.Equal(
-            "[\"https://replacement-3000.usw2.devtunnels.ms\",\"https://custom.example\"]",
-            await endpoint.BrowserOrigins.AsJson().GetValueAsync());
+            "https://replacement-3000.usw2.devtunnels.ms,https://custom.example",
+            await endpoint.BrowserOrigins.GetValueAsync());
         Assert.Equal([
             "https://replacement-3000.usw2.devtunnels.ms/swagger?x=1#operations",
             "https://replacement-3000-inspect.usw2.devtunnels.ms",

@@ -59,23 +59,23 @@ public class ManifestExpressionTests(ITestOutputHelper outputHelper)
         var consumer = builder.AddContainer("consumer", "image");
         if (reverseOrder)
         {
-            consumer.WithEnvironment("SECOND", second.GetEndpoint("b-c").BrowserOrigins.First);
-            consumer.WithEnvironment("FIRST", first.GetEndpoint("c").BrowserOrigins.First);
+            consumer.WithEnvironment("SECOND", second.GetEndpoint("b-c").BrowserOrigins);
+            consumer.WithEnvironment("FIRST", first.GetEndpoint("c").BrowserOrigins);
         }
         else
         {
-            consumer.WithEnvironment("FIRST", first.GetEndpoint("c").BrowserOrigins.First);
-            consumer.WithEnvironment("SECOND", second.GetEndpoint("b-c").BrowserOrigins.First);
+            consumer.WithEnvironment("FIRST", first.GetEndpoint("c").BrowserOrigins);
+            consumer.WithEnvironment("SECOND", second.GetEndpoint("b-c").BrowserOrigins);
         }
         using var app = builder.Build();
 
         var manifest = await ManifestUtils.GetManifestForModel(app.Services.GetRequiredService<DistributedApplicationModel>());
         var variables = manifest["resources"]!["consumer"]!["env"]!.AsObject();
-        Assert.Equal("{a-b-c-BrowserOrigin.value}", variables["FIRST"]!.GetValue<string>());
-        var secondName = ResourceNameHelpers.GetEndpointPropertyInputName("a", "b-c", nameof(EndpointProperty.BrowserOrigin), ModelName.DefaultMaxLength);
+        Assert.Equal("{a-b-c-BrowserOrigins.value}", variables["FIRST"]!.GetValue<string>());
+        var secondName = ResourceNameHelpers.GetEndpointPropertyInputName("a", "b-c", nameof(EndpointProperty.BrowserOrigins), ModelName.DefaultMaxLength);
         Assert.Equal($"{{{secondName}.value}}", variables["SECOND"]!.GetValue<string>());
         Assert.Equal(
-            ["a-b-c-BrowserOrigin", secondName],
+            ["a-b-c-BrowserOrigins", secondName],
             manifest["resources"]!.AsObject().Where(resource => resource.Value!["type"]!.GetValue<string>() == "parameter.v0")
                 .Select(resource => resource.Key).Order(StringComparer.Ordinal));
     }
@@ -86,7 +86,7 @@ public class ManifestExpressionTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var frontend = builder.AddContainer("frontend", "image").WithHttpEndpoint(targetPort: 8080);
-        var origin = frontend.GetEndpoint("http").BrowserOrigins.First;
+        var origin = frontend.GetEndpoint("http").BrowserOrigins;
         var opaque = new TestManifestExpression("{customValue}");
         var mixed = new TestManifestExpression($"{opaque.ValueExpression}|{origin.ValueExpression}", opaque, origin);
         var module = builder.AddResource(new AzureBicepResource("module", templateString: "param custom string\nparam mixed string"));
@@ -396,9 +396,7 @@ public class ManifestExpressionTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(EndpointProperty.BrowserOrigin)]
     [InlineData(EndpointProperty.BrowserOrigins)]
-    [InlineData(EndpointProperty.BrowserOriginsJson)]
     public async Task EndpointOriginPropertiesBecomeRequiredInputs(EndpointProperty property)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -435,7 +433,7 @@ public class ManifestExpressionTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var frontend = builder.AddContainer("frontend", "image").WithHttpEndpoint(targetPort: 8080);
-        var origin = frontend.GetEndpoint("http").BrowserOrigins.First;
+        var origin = frontend.GetEndpoint("http").BrowserOrigins;
         var module = builder.AddResource(new AzureBicepResource("module", templateString: "param origin string\nparam redirect string"));
         module.Resource.Parameters["origin"] = origin;
         module.Resource.Parameters["redirect"] = () => ReferenceExpression.Create($"{origin}/signin-oidc");
@@ -451,10 +449,10 @@ public class ManifestExpressionTests(ITestOutputHelper outputHelper)
     public async Task EndpointOriginInputsAvoidExistingResourceNames()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        builder.AddParameter("frontend-http-BrowserOrigin");
+        builder.AddParameter("frontend-http-BrowserOrigins");
         var frontend = builder.AddContainer("frontend", "image").WithHttpEndpoint(targetPort: 8080);
         builder.AddContainer("backend", "image")
-            .WithEnvironment("ORIGIN", frontend.GetEndpoint("http").BrowserOrigins.First);
+            .WithEnvironment("ORIGIN", frontend.GetEndpoint("http").BrowserOrigins);
         using var app = builder.Build();
 
         var manifest = await ManifestUtils.GetManifestForModel(app.Services.GetRequiredService<DistributedApplicationModel>())
@@ -470,7 +468,7 @@ public class ManifestExpressionTests(ITestOutputHelper outputHelper)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var frontend = builder.AddContainer("frontend", "image").WithHttpEndpoint(targetPort: 8080);
-        var origin = ReferenceExpression.Create($"{frontend.GetEndpoint("http").Property(EndpointProperty.BrowserOrigin)}");
+        var origin = ReferenceExpression.Create($"{frontend.GetEndpoint("http").Property(EndpointProperty.BrowserOrigins)}");
         var deployed = ReferenceExpression.Create($"https://deployed.example");
         var conditional = ReferenceExpression.CreateConditional(
             frontend.GetEndpoint("http").Property(EndpointProperty.TlsEnabled),

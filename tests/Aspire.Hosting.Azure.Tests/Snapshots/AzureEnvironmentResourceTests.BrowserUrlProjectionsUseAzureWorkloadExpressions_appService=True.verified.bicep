@@ -65,10 +65,6 @@ resource webapp 'Microsoft.Web/sites@2025-03-01' = {
           value: 'https://${take('${toLower('frontend')}-${uniqueString(resourceGroup().id)}', 60)}.azurewebsites.net'
         }
         {
-          name: 'ORIGINS_JSON'
-          value: '["https://${take('${toLower('frontend')}-${uniqueString(resourceGroup().id)}', 60)}.azurewebsites.net"]'
-        }
-        {
           name: 'CONFIG'
           value: 'origin=${'https://${take('${toLower('frontend')}-${uniqueString(resourceGroup().id)}', 60)}.azurewebsites.net'}'
         }

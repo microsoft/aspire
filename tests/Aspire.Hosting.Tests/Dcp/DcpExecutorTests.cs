@@ -4728,8 +4728,8 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         builder.Eventing.Subscribe<ResourceEndpointsAllocatedEvent>(async (@event, ct) =>
         {
             Assert.Equal(2, callbackCount);
-            Assert.Equal("https://frontend.example", await frontend.GetEndpoint("http").BrowserOrigins.First.GetValueAsync(ct));
-            Assert.Equal("https://backend.example", await backend.GetEndpoint("http").BrowserOrigins.First.GetValueAsync(ct));
+            Assert.Equal("https://frontend.example", await frontend.GetEndpoint("http").BrowserOrigins.GetValueAsync(ct));
+            Assert.Equal("https://backend.example", await backend.GetEndpoint("http").BrowserOrigins.GetValueAsync(ct));
             observedResources.Add(@event.Resource.Name);
         });
 

@@ -888,11 +888,11 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
         Assert.All(new[] { "redirectUri0", "redirectUri1" }, name =>
         {
             var expression = Assert.IsType<ReferenceExpression>(entra.Resource.Parameters[name]);
-            Assert.Equal("https://{0}" + (name == "redirectUri0" ? "/signin-oidc" : "/signout-callback-oidc"), expression.Format);
+            Assert.Equal("https://{0}", expression.Format);
         });
-        Assert.Equal("https://web.contoso.example/signin-oidc",
+        Assert.Equal("https://web.contoso.example",
             await Assert.IsType<ReferenceExpression>(entra.Resource.Parameters["redirectUri0"]).GetValueAsync(default));
-        Assert.Equal("https://web.contoso.example/signout-callback-oidc",
+        Assert.Equal("https://web.contoso.example",
             await Assert.IsType<ReferenceExpression>(entra.Resource.Parameters["redirectUri1"]).GetValueAsync(default));
     }
 
@@ -913,10 +913,10 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
 
         var signIn = Assert.IsType<ReferenceExpression>(entra.Resource.Parameters["redirectUri0"]);
         var signOut = Assert.IsType<ReferenceExpression>(entra.Resource.Parameters["redirectUri1"]);
-        Assert.Equal("https://web.dev.localhost:7081/signin-oidc", await signIn.GetValueAsync(CancellationToken.None));
-        Assert.Equal("https://web.dev.localhost:7081/signout-callback-oidc", await signOut.GetValueAsync(CancellationToken.None));
+        Assert.Equal("https://web.dev.localhost:7081", await signIn.GetValueAsync(CancellationToken.None));
+        Assert.Equal("https://web.dev.localhost:7081", await signOut.GetValueAsync(CancellationToken.None));
         var provider = Assert.IsType<EntraIdRunModeBrowserOrigin>(Assert.Single(signIn.ValueProviders));
-        Assert.Equal(endpoint.BrowserOrigins.First.ValueExpression, provider.ValueExpression);
+        Assert.Equal(endpoint.BrowserOrigins.ValueExpression, provider.ValueExpression);
         Assert.Same(endpoint, Assert.Single(provider.References));
     }
 
@@ -989,7 +989,7 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
         _ = app.Services.GetRequiredService<ApplicationOrchestratorProxy>();
         await builder.Eventing.PublishResourceEndpointsAllocatedAsync(new ResourceEndpointsAllocatedEvent(web.Resource, app.Services), CancellationToken.None);
 
-        Assert.Equal("https://web-hashr.dev.localhost:7081/signin-oidc", await resolveTask.WaitAsync(TimeSpan.FromSeconds(10)));
+        Assert.Equal("https://web-hashr.dev.localhost:7081", await resolveTask.WaitAsync(TimeSpan.FromSeconds(10)));
     }
 
     [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]
@@ -1016,7 +1016,7 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
 
         await builder.Eventing.PublishResourceEndpointsAllocatedAsync(new ResourceEndpointsAllocatedEvent(web.Resource, app.Services), CancellationToken.None);
 
-        Assert.Equal("https://public.example:9443/signin-oidc", await expression.GetValueAsync(CancellationToken.None));
+        Assert.Equal("https://public.example:9443,https://web.dev.localhost:7081", await expression.GetValueAsync(CancellationToken.None));
     }
 
     [Fact]
@@ -1043,9 +1043,9 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
         try
         {
             await callbackEntered.Task.WaitAsync(cts.Token);
-            Assert.Equal("https://localhost:7081/signin-oidc", await expression.GetValueAsync(cts.Token));
+            Assert.Equal("https://localhost:7081", await expression.GetValueAsync(cts.Token));
             Assert.False(publish.IsCompleted);
-            var pendingOrigin = web.GetEndpoint("https").BrowserOrigins.First.GetValueAsync(cts.Token).AsTask();
+            var pendingOrigin = web.GetEndpoint("https").BrowserOrigins.GetValueAsync(cts.Token).AsTask();
             Assert.False(pendingOrigin.IsCompleted);
             await using var logs = app.Services.GetRequiredService<ResourceLoggerService>()
                 .WatchAsync(web.Resource).GetAsyncEnumerator(cts.Token);
@@ -1056,7 +1056,7 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
             entra.Resource.ProvisioningTaskCompletionSource!.TrySetResult();
             await publish.WaitAsync(cts.Token);
             Assert.Equal("https://web.example", await pendingOrigin);
-            Assert.Equal("https://web.example/signin-oidc", await expression.GetValueAsync(cts.Token));
+            Assert.Equal("https://web.example", await expression.GetValueAsync(cts.Token));
         }
         finally
         {
@@ -1083,7 +1083,7 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
         using var app = builder.Build();
         _ = app.Services.GetRequiredService<ApplicationOrchestratorProxy>();
         await builder.Eventing.PublishResourceEndpointsAllocatedAsync(new(web.Resource, app.Services), CancellationToken.None);
-        Assert.Equal("https://localhost:7081/signin-oidc", await expression.GetValueAsync(CancellationToken.None));
+        Assert.Equal("https://localhost:7081", await expression.GetValueAsync(CancellationToken.None));
     }
 
     [Fact]
@@ -1160,7 +1160,7 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
         _ = app.Services.GetRequiredService<ApplicationOrchestratorProxy>();
         await builder.Eventing.PublishResourceEndpointsAllocatedAsync(new ResourceEndpointsAllocatedEvent(web.Resource, app.Services), CancellationToken.None);
 
-        Assert.Equal("https://localhost:7081/signin-oidc", await expression.GetValueAsync(new ValueProviderContext(), CancellationToken.None).AsTask().WaitAsync(TimeSpan.FromSeconds(10)));
+        Assert.Equal("https://localhost:7081", await expression.GetValueAsync(new ValueProviderContext(), CancellationToken.None).AsTask().WaitAsync(TimeSpan.FromSeconds(10)));
     }
 
     [Fact]
@@ -1193,11 +1193,11 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
         _ = app.Services.GetRequiredService<ApplicationOrchestratorProxy>();
         await builder.Eventing.PublishResourceEndpointsAllocatedAsync(new ResourceEndpointsAllocatedEvent(web.Resource, app.Services), CancellationToken.None);
 
-        Assert.Equal("https://localhost:7081/signin-oidc", await expression.GetValueAsync(new ValueProviderContext(), CancellationToken.None).AsTask().WaitAsync(TimeSpan.FromSeconds(10)));
+        Assert.Equal("https://localhost:7081", await expression.GetValueAsync(new ValueProviderContext(), CancellationToken.None).AsTask().WaitAsync(TimeSpan.FromSeconds(10)));
     }
 
     [Fact]
-    public async Task WithRedirectUris_Endpoint_RunMode_ClearedUrlsReportMissingOrigin()
+    public async Task WithRedirectUris_Endpoint_RunMode_ClearedUrlsProvideEmptyOrigins()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var web = builder.AddContainer("web", "image")
@@ -1214,9 +1214,7 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
         _ = app.Services.GetRequiredService<ApplicationOrchestratorProxy>();
         await builder.Eventing.PublishResourceEndpointsAllocatedAsync(new ResourceEndpointsAllocatedEvent(web.Resource, app.Services), CancellationToken.None);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await expression.GetValueAsync(new ValueProviderContext(), CancellationToken.None).AsTask().WaitAsync(TimeSpan.FromSeconds(5)));
-        Assert.Equal("No browser URL is available for resource 'web' and endpoint 'https'.", exception.Message);
+        Assert.Equal("", await expression.GetValueAsync(CancellationToken.None));
     }
 
     [Fact]

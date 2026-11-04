@@ -199,9 +199,6 @@ type DockerfileFactoryContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.Appl
 /** Handle to DotnetToolResource */
 type DotnetToolResourceHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource'>;
 
-/** Provides collection operations over an endpoint's finalized browser-facing origins. */
-type EndpointBrowserOriginsHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointBrowserOrigins'>;
-
 /** Represents an endpoint reference for a resource with endpoints. */
 type EndpointReferenceHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference'>;
 
@@ -623,10 +620,6 @@ export enum EndpointProperty {
     TlsEnabled = "TlsEnabled",
     /** Comma-separated browser-facing origins for this endpoint. */
     BrowserOrigins = "BrowserOrigins",
-    /** The first browser-facing origin for this endpoint. */
-    BrowserOrigin = "BrowserOrigin",
-    /** The endpoint's browser-facing origins as a JSON array string. */
-    BrowserOriginsJson = "BrowserOriginsJson",
 }
 
 /** Enum type for HealthStatus */
@@ -4338,109 +4331,6 @@ const DockerfileStagePromiseImpl = $aspireCreateFluentPromiseClass<DockerfileSta
 }));
 
 // ============================================================================
-// EndpointBrowserOrigins
-// ============================================================================
-
-/** Provides collection operations over an endpoint's finalized browser-facing origins. */
-export interface EndpointBrowserOrigins {
-    toJSON(): MarshalledHandle;
-    /** Gets an endpoint-property expression for the preferred browser origin. */
-    first(): EndpointReferenceExpressionPromise;
-    /**
-     * Creates an endpoint-property expression for comma-separated origins.
-     * @returns The joined browser origins as an endpoint-property expression.
-     */
-    join(): EndpointReferenceExpressionPromise;
-    /**
-     * Creates an endpoint-property expression for a JSON array of origins.
-     * @returns The browser origins serialized as a JSON array.
-     */
-    asJson(): EndpointReferenceExpressionPromise;
-}
-
-export interface EndpointBrowserOriginsPromise extends PromiseLike<EndpointBrowserOrigins> {
-    /** Gets an endpoint-property expression for the preferred browser origin. */
-    first(): EndpointReferenceExpressionPromise;
-    /**
-     * Creates an endpoint-property expression for comma-separated origins.
-     * @returns The joined browser origins as an endpoint-property expression.
-     */
-    join(): EndpointReferenceExpressionPromise;
-    /**
-     * Creates an endpoint-property expression for a JSON array of origins.
-     * @returns The browser origins serialized as a JSON array.
-     */
-    asJson(): EndpointReferenceExpressionPromise;
-}
-
-// ============================================================================
-// EndpointBrowserOriginsImpl
-// ============================================================================
-
-/** Provides collection operations over an endpoint's finalized browser-facing origins. */
-class EndpointBrowserOriginsImpl implements EndpointBrowserOrigins {
-    constructor(private _handle: EndpointBrowserOriginsHandle, private _client: AspireClientRpc) {}
-
-    /** Serialize for JSON-RPC transport */
-    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
-
-    first(): EndpointReferenceExpressionPromise {
-        const promise = (async () => {
-            const handle = await this._client.invokeCapability<EndpointReferenceExpressionHandle>(
-                'Aspire.Hosting.ApplicationModel/EndpointBrowserOrigins.first',
-                { context: this._handle }
-            );
-            return new EndpointReferenceExpressionImpl(handle, this._client);
-        })();
-        return new EndpointReferenceExpressionPromiseImpl(promise, this._client, false);
-    }
-
-    /** @internal */
-    async _joinInternal(): Promise<EndpointReferenceExpression> {
-        const rpcArgs: Record<string, unknown> = { context: this._handle };
-        const result = await this._client.invokeCapability<EndpointReferenceExpressionHandle>(
-            'Aspire.Hosting.ApplicationModel/EndpointBrowserOrigins.join',
-            rpcArgs
-        );
-        return new EndpointReferenceExpressionImpl(result, this._client);
-    }
-
-    /**
-     * Creates an endpoint-property expression for comma-separated origins.
-     * @returns The joined browser origins as an endpoint-property expression.
-     */
-    join(): EndpointReferenceExpressionPromise {
-        return new EndpointReferenceExpressionPromiseImpl(this._joinInternal(), this._client);
-    }
-
-    /** @internal */
-    async _asJsonInternal(): Promise<EndpointReferenceExpression> {
-        const rpcArgs: Record<string, unknown> = { context: this._handle };
-        const result = await this._client.invokeCapability<EndpointReferenceExpressionHandle>(
-            'Aspire.Hosting.ApplicationModel/EndpointBrowserOrigins.asJson',
-            rpcArgs
-        );
-        return new EndpointReferenceExpressionImpl(result, this._client);
-    }
-
-    /**
-     * Creates an endpoint-property expression for a JSON array of origins.
-     * @returns The browser origins serialized as a JSON array.
-     */
-    asJson(): EndpointReferenceExpressionPromise {
-        return new EndpointReferenceExpressionPromiseImpl(this._asJsonInternal(), this._client);
-    }
-
-}
-
-/** @internal */
-const EndpointBrowserOriginsPromiseImpl = $aspireCreateFluentPromiseClass<EndpointBrowserOrigins, EndpointBrowserOriginsPromise>((): $aspireFluentPromiseTransitions => ({
-    ["first"]: [() => EndpointReferenceExpressionPromiseImpl, false] as const,
-    ["join"]: () => EndpointReferenceExpressionPromiseImpl,
-    ["asJson"]: () => EndpointReferenceExpressionPromiseImpl,
-}));
-
-// ============================================================================
 // EndpointReference
 // ============================================================================
 
@@ -4452,14 +4342,13 @@ export interface EndpointReference {
     /** Gets the name of the endpoint associated with the endpoint reference. */
     endpointName(): Promise<string>;
     /**
-     * Gets deferred browser-facing origins associated with this endpoint.
+     * Gets a deferred comma-separated list of browser-facing origins associated with this endpoint.
      *
      * Origins use finalized URL customization and are independent of this reference's service-discovery
-     * network context. Use `First` for one preferred origin,
-     * or `AsJson` and `Join`
-     * for all distinct origins.
+     * network context. Origins are distinct and ordered by display preference. An endpoint
+     * without browser-facing HTTP(S) URLs resolves to an empty string.
      */
-    browserOrigins(): EndpointBrowserOriginsPromise;
+    browserOrigins(): EndpointReferenceExpressionPromise;
     /** Gets or sets a custom error message to be thrown when the endpoint annotation is not found. */
     errorMessage(): Promise<string | null>;
     /** Gets a value indicating whether the endpoint is allocated. */
@@ -4528,14 +4417,13 @@ export interface EndpointReferencePromise extends PromiseLike<EndpointReference>
     /** Gets the name of the endpoint associated with the endpoint reference. */
     endpointName(): Promise<string>;
     /**
-     * Gets deferred browser-facing origins associated with this endpoint.
+     * Gets a deferred comma-separated list of browser-facing origins associated with this endpoint.
      *
      * Origins use finalized URL customization and are independent of this reference's service-discovery
-     * network context. Use `First` for one preferred origin,
-     * or `AsJson` and `Join`
-     * for all distinct origins.
+     * network context. Origins are distinct and ordered by display preference. An endpoint
+     * without browser-facing HTTP(S) URLs resolves to an empty string.
      */
-    browserOrigins(): EndpointBrowserOriginsPromise;
+    browserOrigins(): EndpointReferenceExpressionPromise;
     /** Gets or sets a custom error message to be thrown when the endpoint annotation is not found. */
     errorMessage(): Promise<string | null>;
     /** Gets a value indicating whether the endpoint is allocated. */
@@ -4627,15 +4515,15 @@ class EndpointReferenceImpl implements EndpointReference {
         );
     }
 
-    browserOrigins(): EndpointBrowserOriginsPromise {
+    browserOrigins(): EndpointReferenceExpressionPromise {
         const promise = (async () => {
-            const handle = await this._client.invokeCapability<EndpointBrowserOriginsHandle>(
+            const handle = await this._client.invokeCapability<EndpointReferenceExpressionHandle>(
                 'Aspire.Hosting.ApplicationModel/EndpointReference.browserOrigins',
                 { context: this._handle }
             );
-            return new EndpointBrowserOriginsImpl(handle, this._client);
+            return new EndpointReferenceExpressionImpl(handle, this._client);
         })();
-        return new EndpointBrowserOriginsPromiseImpl(promise, this._client, false);
+        return new EndpointReferenceExpressionPromiseImpl(promise, this._client, false);
     }
 
     async errorMessage(): Promise<string | null> {
@@ -4788,7 +4676,7 @@ class EndpointReferenceImpl implements EndpointReference {
 const EndpointReferencePromiseImpl = $aspireCreateFluentPromiseClass<EndpointReference, EndpointReferencePromise>((): $aspireFluentPromiseTransitions => ({
     ["resource"]: [() => ResourceWithEndpointsPromiseImpl, false] as const,
     ["endpointName"]: null,
-    ["browserOrigins"]: [() => EndpointBrowserOriginsPromiseImpl, false] as const,
+    ["browserOrigins"]: [() => EndpointReferenceExpressionPromiseImpl, false] as const,
     ["errorMessage"]: null,
     ["isAllocated"]: null,
     ["exists"]: null,
@@ -60076,7 +59964,6 @@ registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.Docker.Doc
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.DockerfileBuilderCallbackContext', (handle, client) => new DockerfileBuilderCallbackContextImpl(handle as DockerfileBuilderCallbackContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.DockerfileFactoryContext', (handle, client) => new DockerfileFactoryContextImpl(handle as DockerfileFactoryContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.Docker.DockerfileStage', (handle, client) => new DockerfileStageImpl(handle as DockerfileStageHandle, client));
-registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointBrowserOrigins', (handle, client) => new EndpointBrowserOriginsImpl(handle as EndpointBrowserOriginsHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference', (handle, client) => new EndpointReferenceImpl(handle as EndpointReferenceHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReferenceExpression', (handle, client) => new EndpointReferenceExpressionImpl(handle as EndpointReferenceExpressionHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointUpdateContext', (handle, client) => new EndpointUpdateContextImpl(handle as EndpointUpdateContextHandle, client));

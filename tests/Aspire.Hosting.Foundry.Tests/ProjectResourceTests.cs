@@ -12,9 +12,7 @@ namespace Aspire.Hosting.Foundry.Tests;
 public class ProjectResourceTests
 {
     [Theory]
-    [InlineData(EndpointProperty.BrowserOrigin, "{my-project.outputs.endpointOrigin}", "https://account.services.ai.azure.com")]
     [InlineData(EndpointProperty.BrowserOrigins, "{my-project.outputs.endpointOrigin}", "https://account.services.ai.azure.com")]
-    [InlineData(EndpointProperty.BrowserOriginsJson, "[\"{my-project.outputs.endpointOrigin}\"]", "[\"https://account.services.ai.azure.com\"]")]
     public async Task BrowserOriginPropertiesUseDeployedProjectAuthority(EndpointProperty property, string expression, string expected)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);

@@ -28,9 +28,7 @@ namespace Aspire.Hosting.Azure.Tests;
 public class AzureSandboxesTests(ITestOutputHelper output)
 {
     [Theory]
-    [InlineData(EndpointProperty.BrowserOrigin, "https://api.example.test")]
     [InlineData(EndpointProperty.BrowserOrigins, "https://api.example.test")]
-    [InlineData(EndpointProperty.BrowserOriginsJson, "[\"https://api.example.test\"]")]
     public async Task BrowserOriginsUseDeployedSandboxProxyAuthority(EndpointProperty property, string expected)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);

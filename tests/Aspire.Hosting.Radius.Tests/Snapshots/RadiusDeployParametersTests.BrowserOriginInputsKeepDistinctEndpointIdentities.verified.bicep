@@ -1,8 +1,8 @@
 ﻿extension radius
 
-param a_b_c_BrowserOrigin string
+param a_b_c_BrowserOrigins string
 
-param a_b_c_BrowserOrigin_1b1c82807515af0d string
+param a_b_c_BrowserOrigins_2eb5787a775df1cb string
 
 resource recipepack 'Radius.Core/recipePacks@2025-08-01-preview' = {
   name: 'default'
@@ -83,13 +83,13 @@ resource consumer 'Radius.Compute/containers@2025-08-01-preview' = {
         image: 'image:latest'
         env: {
           FIRST: {
-            value: a_b_c_BrowserOrigin
+            value: a_b_c_BrowserOrigins
           }
           SECOND: {
-            value: a_b_c_BrowserOrigin_1b1c82807515af0d
+            value: a_b_c_BrowserOrigins_2eb5787a775df1cb
           }
           REPEATED: {
-            value: a_b_c_BrowserOrigin
+            value: a_b_c_BrowserOrigins
           }
         }
       }

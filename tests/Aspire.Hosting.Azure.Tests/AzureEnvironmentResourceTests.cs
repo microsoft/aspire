@@ -31,9 +31,9 @@ public class AzureEnvironmentResourceTests(ITestOutputHelper output)
         var second = builder.AddContainer(prefix, "image").WithHttpEndpoint(name: "b-c", targetPort: 80);
         builder.AddAzureContainerAppEnvironment("env");
         var backend = builder.AddContainer("consumer", "image").WithHttpEndpoint(targetPort: 8080).WithExternalHttpEndpoints()
-            .WithEnvironment("FIRST", first.GetEndpoint("c").BrowserOrigins.First)
-            .WithEnvironment("SECOND", second.GetEndpoint("b-c").BrowserOrigins.First)
-            .WithEnvironment("REPEATED", first.GetEndpoint("c").BrowserOrigins.First);
+            .WithEnvironment("FIRST", first.GetEndpoint("c").BrowserOrigins)
+            .WithEnvironment("SECOND", second.GetEndpoint("b-c").BrowserOrigins)
+            .WithEnvironment("REPEATED", first.GetEndpoint("c").BrowserOrigins);
         using var app = builder.Build();
 
         await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
@@ -74,13 +74,12 @@ public class AzureEnvironmentResourceTests(ITestOutputHelper output)
 #pragma warning disable CS0618 // Exercise legacy ProjectResource publishing with synthetic project metadata.
         var frontend = builder.AddProject<TestProject>("frontend", launchProfileName: null)
             .WithHttpEndpoint(targetPort: 8080).WithExternalHttpEndpoints();
-        var origin = frontend.GetEndpoint("http").BrowserOrigins.First;
+        var origin = frontend.GetEndpoint("http").BrowserOrigins;
         var backend = builder.AddProject<TestProject>("backend", launchProfileName: null)
             .WithHttpEndpoint(targetPort: 8080)
             .WithExternalHttpEndpoints()
             .WithEnvironment("ORIGIN", origin)
-            .WithEnvironment("ORIGINS", frontend.GetEndpoint("http").BrowserOrigins.Join())
-            .WithEnvironment("ORIGINS_JSON", frontend.GetEndpoint("http").BrowserOrigins.AsJson())
+            .WithEnvironment("ORIGINS", frontend.GetEndpoint("http").BrowserOrigins)
             .WithEnvironment("CONFIG", ReferenceExpression.Create($"origin={origin}"));
 #pragma warning restore CS0618
         using var app = builder.Build();
@@ -115,10 +114,9 @@ public class AzureEnvironmentResourceTests(ITestOutputHelper output)
         var backend = builder.AddProject<TestProject>("backend", launchProfileName: null)
             .WithHttpEndpoint(targetPort: 8080)
             .WithExternalHttpEndpoints()
-            .WithEnvironment("ORIGIN", origins.First)
-            .WithEnvironment("ORIGINS", frontend.GetEndpoint("http").BrowserOrigins.Join())
-            .WithEnvironment("ORIGINS_JSON", origins.AsJson())
-            .WithEnvironment("CONFIG", ReferenceExpression.Create($"origin={origins.First}"));
+            .WithEnvironment("ORIGIN", origins)
+            .WithEnvironment("ORIGINS", frontend.GetEndpoint("http").BrowserOrigins)
+            .WithEnvironment("CONFIG", ReferenceExpression.Create($"origin={origins}"));
 #pragma warning restore CS0618
         using var app = builder.Build();
 
@@ -137,11 +135,9 @@ public class AzureEnvironmentResourceTests(ITestOutputHelper output)
         var bicep = provisioningResource.GetBicepTemplateString();
         var inputs = provisioningResource.Parameters.Values.OfType<ParameterResource>().ToArray();
         Assert.Equal(
-            ["frontend-http-BrowserOrigin", "frontend-http-BrowserOrigins", "frontend-http-BrowserOriginsJson"],
+            ["frontend-http-BrowserOrigins"],
             inputs.Select(input => input.Name));
-        builder.Configuration["Parameters:frontend-http-BrowserOrigin"] = "https://public.example";
         builder.Configuration["Parameters:frontend-http-BrowserOrigins"] = "https://public.example,https://alias.example";
-        builder.Configuration["Parameters:frontend-http-BrowserOriginsJson"] = "[\"https://public.example\",\"https://alias.example\"]";
         var inputBindings = new AzureBicepResource("inputs", templateString: "");
         foreach (var (name, value) in provisioningResource.Parameters.Where(parameter => parameter.Value is ParameterResource))
         {

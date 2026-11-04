@@ -1407,16 +1407,16 @@ public static class EntraIdResourceExtensions
 
         foreach (var path in callbackPaths)
         {
-            builder.Resource.AddRedirectUri(() => CreateExpression(path));
+            builder.Resource.AddRedirectUri(new EntraIdEndpointRedirectUri(CreateExpression, path));
         }
 
         return builder;
 
-        ReferenceExpression CreateExpression(string path)
+        ReferenceExpression CreateExpression()
         {
             if (!builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
             {
-                return ReferenceExpression.Create($"{new EntraIdRunModeBrowserOrigin(endpoint, builder.ApplicationBuilder.ExecutionContext)}{path}");
+                return ReferenceExpression.Create($"{new EntraIdRunModeBrowserOrigin(endpoint, builder.ApplicationBuilder.ExecutionContext)}");
             }
 
             // Delay environment lookup until infrastructure generation, so compute-environment
@@ -1432,7 +1432,7 @@ public static class EntraIdResourceExtensions
 #pragma warning disable ASPIRECOMPUTE002 // Preserve the compute environment's deferred hostname expression.
             var host = computeEnvironment.GetHostAddressExpression(endpoint);
 #pragma warning restore ASPIRECOMPUTE002
-            return ReferenceExpression.Create($"https://{host}{path}");
+            return ReferenceExpression.Create($"https://{host}");
         }
     }
 

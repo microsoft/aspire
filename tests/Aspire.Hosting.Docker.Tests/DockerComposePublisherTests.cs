@@ -30,22 +30,22 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path, step: "prepare-env");
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
         var environment = builder.AddDockerComposeEnvironment("env").WithDashboard(false);
-        var declaredName = normalizedCollision ? "WEB-HTTP-BROWSERORIGIN" : "web-http-BrowserOrigin";
+        var declaredName = normalizedCollision ? "WEB-HTTP-BROWSERORIGINS" : "web-http-BrowserOrigins";
         var declared = builder.AddParameter(declaredName, "https://override.example");
-        var reservedSuffix = builder.AddParameter("web-http-BrowserOrigin-1", "reserved");
+        var reservedSuffix = builder.AddParameter("web-http-BrowserOrigins-1", "reserved");
         var web = builder.AddContainer("web", "image").WithHttpEndpoint(port: 8080, targetPort: 80).WithExternalHttpEndpoints();
         var consumer = builder.AddContainer("consumer", "image");
         if (originFirst)
         {
-            consumer.WithEnvironment("ORIGIN", web.GetEndpoint("http").BrowserOrigins.First)
+            consumer.WithEnvironment("ORIGIN", web.GetEndpoint("http").BrowserOrigins)
                 .WithEnvironment("DECLARED", declared);
         }
         else
         {
             consumer.WithEnvironment("DECLARED", declared)
-                .WithEnvironment("ORIGIN", web.GetEndpoint("http").BrowserOrigins.First);
+                .WithEnvironment("ORIGIN", web.GetEndpoint("http").BrowserOrigins);
         }
-        consumer.WithEnvironment("REPEATED", web.GetEndpoint("http").BrowserOrigins.First)
+        consumer.WithEnvironment("REPEATED", web.GetEndpoint("http").BrowserOrigins)
             .WithEnvironment("RESERVED", reservedSuffix);
         using var app = builder.Build();
 
@@ -53,10 +53,10 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
 
         var captured = environment.Resource.CapturedEnvironmentVariables;
         Assert.Equal(3, captured.Count);
-        Assert.Same(declared.Resource, captured["WEB_HTTP_BROWSERORIGIN"].Source);
-        Assert.Same(reservedSuffix.Resource, captured["WEB_HTTP_BROWSERORIGIN_1"].Source);
-        var generated = Assert.IsType<ParameterResource>(captured["WEB_HTTP_BROWSERORIGIN_2"].Source);
-        Assert.Equal("web-http-BrowserOrigin-2", generated.Name);
+        Assert.Same(declared.Resource, captured["WEB_HTTP_BROWSERORIGINS"].Source);
+        Assert.Same(reservedSuffix.Resource, captured["WEB_HTTP_BROWSERORIGINS_1"].Source);
+        var generated = Assert.IsType<ParameterResource>(captured["WEB_HTTP_BROWSERORIGINS_2"].Source);
+        Assert.Equal("web-http-BrowserOrigins-2", generated.Name);
         Assert.Equal("https://override.example", await declared.Resource.GetValueAsync(default));
         Assert.Equal("http://localhost:8080", await generated.GetValueAsync(default));
         await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, ".env.Production")), "env")
@@ -76,9 +76,9 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
         var first = builder.AddContainer($"{prefix}-b", "image").WithHttpEndpoint(name: "c", port: 8080, targetPort: 80).WithExternalHttpEndpoints();
         var second = builder.AddContainer(prefix, "image").WithHttpEndpoint(name: "b-c", port: 8081, targetPort: 80).WithExternalHttpEndpoints();
         builder.AddContainer("consumer", "image")
-            .WithEnvironment("FIRST", first.GetEndpoint("c").BrowserOrigins.First)
-            .WithEnvironment("SECOND", second.GetEndpoint("b-c").BrowserOrigins.First)
-            .WithEnvironment("REPEATED", first.GetEndpoint("c").BrowserOrigins.First);
+            .WithEnvironment("FIRST", first.GetEndpoint("c").BrowserOrigins)
+            .WithEnvironment("SECOND", second.GetEndpoint("b-c").BrowserOrigins)
+            .WithEnvironment("REPEATED", first.GetEndpoint("c").BrowserOrigins);
         using var app = builder.Build();
 
         app.Run();
@@ -102,7 +102,7 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
         var environment = builder.AddDockerComposeEnvironment("env").WithDashboard(false);
         var web = builder.AddContainer("web", "image").WithHttpEndpoint(port: port, targetPort: 80)
             .WithEndpoint("http", endpoint => endpoint.IsExternal = external);
-        builder.AddContainer("consumer", "image").WithEnvironment("ORIGIN", web.GetEndpoint("http").BrowserOrigins.First);
+        builder.AddContainer("consumer", "image").WithEnvironment("ORIGIN", web.GetEndpoint("http").BrowserOrigins);
         using var app = builder.Build();
 
         app.Run();
@@ -123,12 +123,11 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
         var environment = builder.AddDockerComposeEnvironment("env").WithDashboard(false);
         var web = builder.AddContainer("web", "image").WithHttpEndpoint(port: 8080, targetPort: 80).WithExternalHttpEndpoints();
         builder.AddContainer("consumer", "image")
-            .WithEnvironment("ORIGIN", web.GetEndpoint("http").BrowserOrigins.First)
-            .WithEnvironment("ORIGINS", web.GetEndpoint("http").BrowserOrigins.Join())
-            .WithEnvironment("JSON", web.GetEndpoint("http").BrowserOrigins.AsJson());
+            .WithEnvironment("ORIGIN", web.GetEndpoint("http").BrowserOrigins)
+            .WithEnvironment("ORIGINS", web.GetEndpoint("http").BrowserOrigins);
         if (overridden)
         {
-            builder.Configuration["Parameters:web-http-BrowserOrigin"] = "https://public.example";
+            builder.Configuration["Parameters:web-http-BrowserOrigins"] = "https://public.example";
         }
         using var app = builder.Build();
 
@@ -148,26 +147,23 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
         builder.Services.AddSingleton<IDeploymentStateManager>(new InMemoryDeploymentStateManager());
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
         var environment = builder.AddDockerComposeEnvironment("env");
-        builder.Configuration["Parameters:frontend-http-BrowserOrigin"] = "https://public.example";
         builder.Configuration["Parameters:frontend-http-BrowserOrigins"] = "https://public.example,https://alias.example";
-        builder.Configuration["Parameters:frontend-http-BrowserOriginsJson"] = "[\"https://public.example\",\"https://alias.example\"]";
         var frontend = builder.AddContainer("frontend", "nginx:alpine").WithHttpEndpoint(port: 8080, targetPort: 8080);
-        var origin = frontend.GetEndpoint("HTTP").BrowserOrigins.First;
+        var origin = frontend.GetEndpoint("HTTP").BrowserOrigins;
         builder.AddContainer("backend", "nginx:alpine")
             .WithEnvironment("ORIGIN", origin)
-            .WithEnvironment("ORIGINS", frontend.GetEndpoint("http").BrowserOrigins.Join())
-            .WithEnvironment("ORIGINS_JSON", frontend.GetEndpoint("http").BrowserOrigins.AsJson())
+            .WithEnvironment("ORIGINS", frontend.GetEndpoint("http").BrowserOrigins)
             .WithEnvironment("CONFIG", ReferenceExpression.Create($"origin={origin}"));
         using var app = builder.Build();
 
         app.Run();
 
         var inputs = environment.Resource.CapturedEnvironmentVariables.Values.ToArray();
-        Assert.Equal(3, inputs.Length);
+        Assert.Single(inputs);
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var values = await Task.WhenAll(inputs.Select(async input =>
             await Assert.IsType<ParameterResource>(input.Source).GetValueAsync(cts.Token)));
-        Assert.Equal(["https://public.example", "https://public.example,https://alias.example", "[\"https://public.example\",\"https://alias.example\"]"], values);
+        Assert.Equal(["https://public.example,https://alias.example"], values);
 
         await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "docker-compose.yaml")), "yaml")
             .AppendContentAsFile(await File.ReadAllTextAsync(Path.Combine(workspace.Path, ".env")), "env")

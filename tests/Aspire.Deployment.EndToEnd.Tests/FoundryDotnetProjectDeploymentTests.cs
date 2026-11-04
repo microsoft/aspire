@@ -56,8 +56,7 @@ public sealed class FoundryDotnetProjectDeploymentTests(ITestOutputHelper output
                 var project = builder.AddFoundry("foundry").AddProject("project");
                 var echo = builder.AddDotnetProject("echo", Path.Combine("EchoAgent", "EchoAgent.csproj"))
                     .AsHostedAgent(project, HostedAgentProtocol.Responses, "2.0.0");
-                echo.WithEnvironment("BROWSER_ORIGIN", echo.GetEndpoint("http").BrowserOrigins.First)
-                    .WithEnvironment("BROWSER_ORIGINS_JSON", echo.GetEndpoint("http").BrowserOrigins.AsJson());
+                echo.WithEnvironment("BROWSER_ORIGINS", echo.GetEndpoint("http").BrowserOrigins);
                 builder.Build().Run();
                 """);
             FoundryEchoTestApp.Write(Path.Combine(projectDir, "EchoAgent"), marker);
@@ -129,9 +128,7 @@ public sealed class FoundryDotnetProjectDeploymentTests(ITestOutputHelper output
                     Assert.Equal($"Echo: {nonce}", received.RootElement.GetProperty("echo").GetString());
                     // Read the expected authority from ARM, independently of Aspire's output.
                     var expectedOrigin = endpoint.GetLeftPart(UriPartial.Authority);
-                    Assert.Equal(expectedOrigin, received.RootElement.GetProperty("origin").GetString());
-                    using var origins = JsonDocument.Parse(received.RootElement.GetProperty("originsJson").GetString()!);
-                    Assert.Equal(expectedOrigin, Assert.Single(origins.RootElement.EnumerateArray()).GetString());
+                    Assert.Equal(expectedOrigin, received.RootElement.GetProperty("origins").GetString());
                     succeeded = true;
                     break;
                 }

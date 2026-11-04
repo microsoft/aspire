@@ -643,22 +643,9 @@ public class AtsTypeScriptCodeGeneratorTests
         var endpointOrigins = Assert.Single(capabilities, c =>
             c.CapabilityId == "Aspire.Hosting.ApplicationModel/EndpointReference.browserOrigins");
         Assert.Equal("browserOrigins", endpointOrigins.MethodName);
-        Assert.Equal("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointBrowserOrigins", endpointOrigins.ReturnType.TypeId);
-
-        var firstOrigin = Assert.Single(capabilities, c =>
-            c.CapabilityId == "Aspire.Hosting.ApplicationModel/EndpointBrowserOrigins.first");
-        Assert.Equal("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReferenceExpression", firstOrigin.ReturnType.TypeId);
-        var originOperations = capabilities
-            .Where(c => c.CapabilityId.StartsWith("Aspire.Hosting.ApplicationModel/EndpointBrowserOrigins.", StringComparison.Ordinal))
-            .Select(c => c.MethodName)
-            .Order()
-            .ToArray();
-        Assert.Equal(["asJson", "first", "join"], originOperations);
-        var joinedOrigins = Assert.Single(capabilities, c =>
-            c.CapabilityId == "Aspire.Hosting.ApplicationModel/EndpointBrowserOrigins.join");
-        Assert.Single(joinedOrigins.Parameters);
+        Assert.Equal("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReferenceExpression", endpointOrigins.ReturnType.TypeId);
         Assert.IsType<EndpointReferenceExpression>(
-            new ContainerResource("frontend").GetEndpoint("https").BrowserOrigins.First);
+            new ContainerResource("frontend").GetEndpoint("https").BrowserOrigins);
     }
 
     [Fact]

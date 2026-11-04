@@ -101,8 +101,6 @@ public class AzureContainerAppExpressEndpointTests(ITestOutputHelper outputHelpe
         {
             [EndpointProperty.Url] = "https://api.salmonisland-e9e6a567.westus3.azurecontainerapps.io",
             [EndpointProperty.BrowserOrigins] = "https://api.salmonisland-e9e6a567.westus3.azurecontainerapps.io",
-            [EndpointProperty.BrowserOrigin] = "https://api.salmonisland-e9e6a567.westus3.azurecontainerapps.io",
-            [EndpointProperty.BrowserOriginsJson] = "[\"https://api.salmonisland-e9e6a567.westus3.azurecontainerapps.io\"]",
             [EndpointProperty.Host] = "api.salmonisland-e9e6a567.westus3.azurecontainerapps.io",
             [EndpointProperty.IPV4Host] = "api.salmonisland-e9e6a567.westus3.azurecontainerapps.io",
             [EndpointProperty.HostAndPort] = "api.salmonisland-e9e6a567.westus3.azurecontainerapps.io:443",
@@ -200,9 +198,7 @@ public class AzureContainerAppExpressEndpointTests(ITestOutputHelper outputHelpe
     }
 
     [Theory]
-    [InlineData(EndpointProperty.BrowserOrigin)]
     [InlineData(EndpointProperty.BrowserOrigins)]
-    [InlineData(EndpointProperty.BrowserOriginsJson)]
     public async Task BrowserOriginPropertiesUseTheNormalLocalVisibilityValidation(EndpointProperty property)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);

@@ -391,10 +391,6 @@ pub enum EndpointProperty {
     TlsEnabled,
     #[serde(rename = "BrowserOrigins")]
     BrowserOrigins,
-    #[serde(rename = "BrowserOrigin")]
-    BrowserOrigin,
-    #[serde(rename = "BrowserOriginsJson")]
-    BrowserOriginsJson,
 }
 
 impl std::fmt::Display for EndpointProperty {
@@ -409,8 +405,6 @@ impl std::fmt::Display for EndpointProperty {
             Self::HostAndPort => write!(f, "HostAndPort"),
             Self::TlsEnabled => write!(f, "TlsEnabled"),
             Self::BrowserOrigins => write!(f, "BrowserOrigins"),
-            Self::BrowserOrigin => write!(f, "BrowserOrigin"),
-            Self::BrowserOriginsJson => write!(f, "BrowserOriginsJson"),
         }
     }
 }
@@ -8612,59 +8606,6 @@ impl DotnetToolResource {
     }
 }
 
-/// Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointBrowserOrigins
-pub struct EndpointBrowserOrigins {
-    handle: Handle,
-    client: Arc<AspireClient>,
-}
-
-impl HasHandle for EndpointBrowserOrigins {
-    fn handle(&self) -> &Handle {
-        &self.handle
-    }
-}
-
-impl EndpointBrowserOrigins {
-    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
-        Self { handle, client }
-    }
-
-    pub fn handle(&self) -> &Handle {
-        &self.handle
-    }
-
-    pub fn client(&self) -> &Arc<AspireClient> {
-        &self.client
-    }
-
-    /// Gets an endpoint-property expression for the preferred browser origin.
-    pub fn first(&self) -> Result<EndpointReferenceExpression, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("context".to_string(), self.handle.to_json());
-        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointBrowserOrigins.first", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(EndpointReferenceExpression::new(handle, self.client.clone()))
-    }
-
-    /// Creates an endpoint-property expression for comma-separated origins.
-    pub fn join(&self) -> Result<EndpointReferenceExpression, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("context".to_string(), self.handle.to_json());
-        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointBrowserOrigins.join", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(EndpointReferenceExpression::new(handle, self.client.clone()))
-    }
-
-    /// Creates an endpoint-property expression for a JSON array of origins.
-    pub fn as_json(&self) -> Result<EndpointReferenceExpression, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("context".to_string(), self.handle.to_json());
-        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointBrowserOrigins.asJson", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(EndpointReferenceExpression::new(handle, self.client.clone()))
-    }
-}
-
 /// Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference
 pub struct EndpointReference {
     handle: Handle,
@@ -8707,13 +8648,13 @@ impl EndpointReference {
         Ok(serde_json::from_value(result)?)
     }
 
-    /// Gets deferred browser-facing origins associated with this endpoint.
-    pub fn browser_origins(&self) -> Result<EndpointBrowserOrigins, Box<dyn std::error::Error>> {
+    /// Gets a deferred comma-separated list of browser-facing origins associated with this endpoint.
+    pub fn browser_origins(&self) -> Result<EndpointReferenceExpression, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointReference.browserOrigins", args)?;
         let handle: Handle = serde_json::from_value(result)?;
-        Ok(EndpointBrowserOrigins::new(handle, self.client.clone()))
+        Ok(EndpointReferenceExpression::new(handle, self.client.clone()))
     }
 
     /// Gets or sets a custom error message to be thrown when the endpoint annotation is not found.

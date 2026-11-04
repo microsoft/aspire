@@ -14,9 +14,9 @@
   consumer:
     image: "image:latest"
     environment:
-      FIRST: "${A_B_C_BROWSERORIGIN}"
-      SECOND: "${A_B_C_BROWSERORIGIN_1B1C82807515AF0D}"
-      REPEATED: "${A_B_C_BROWSERORIGIN}"
+      FIRST: "${A_B_C_BROWSERORIGINS}"
+      SECOND: "${A_B_C_BROWSERORIGINS_2EB5787A775DF1CB}"
+      REPEATED: "${A_B_C_BROWSERORIGINS}"
     networks:
       - "aspire"
 networks:

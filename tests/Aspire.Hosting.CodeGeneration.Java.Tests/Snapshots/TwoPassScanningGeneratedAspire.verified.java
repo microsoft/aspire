@@ -1955,7 +1955,6 @@ public class AspireRegistrations {
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.DistributedApplicationModel", (h, c) -> new DistributedApplicationModel(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.DockerfileBuilderCallbackContext", (h, c) -> new DockerfileBuilderCallbackContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.DockerfileFactoryContext", (h, c) -> new DockerfileFactoryContext(h, c));
-        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointBrowserOrigins", (h, c) -> new EndpointBrowserOrigins(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReferenceExpression", (h, c) -> new EndpointReferenceExpression(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointUpdateContext", (h, c) -> new EndpointUpdateContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentCallbackContext", (h, c) -> new EnvironmentCallbackContext(h, c));
@@ -11364,47 +11363,6 @@ public class DynamicLoadingOptions implements JsonSerializable {
     }
 }
 
-// ===== aspire/EndpointBrowserOrigins.java =====
-// EndpointBrowserOrigins.java - GENERATED CODE - DO NOT EDIT
-
-package aspire;
-
-import java.util.HashMap;
-import java.util.Map;
-
-/** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointBrowserOrigins. */
-@SuppressWarnings({"all", "unchecked", "serial"})
-public class EndpointBrowserOrigins extends HandleWrapperBase {
-    EndpointBrowserOrigins(Handle handle, AspireClient client) {
-        super(handle, client);
-    }
-
-    /** Gets an endpoint-property expression for the preferred browser origin. */
-    public EndpointReferenceExpression first() {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointBrowserOrigins.first", reqArgs);
-        return (EndpointReferenceExpression) result;
-    }
-
-    /** Creates an endpoint-property expression for comma-separated origins. */
-    public EndpointReferenceExpression join() {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointBrowserOrigins.join", reqArgs);
-        return (EndpointReferenceExpression) result;
-    }
-
-    /** Creates an endpoint-property expression for a JSON array of origins. */
-    public EndpointReferenceExpression asJson() {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointBrowserOrigins.asJson", reqArgs);
-        return (EndpointReferenceExpression) result;
-    }
-
-}
-
 // ===== aspire/EndpointProperty.java =====
 // EndpointProperty.java - GENERATED CODE - DO NOT EDIT
 
@@ -11421,9 +11379,7 @@ public enum EndpointProperty implements WireValueEnum {
     TARGET_PORT("TargetPort"),
     HOST_AND_PORT("HostAndPort"),
     TLS_ENABLED("TlsEnabled"),
-    BROWSER_ORIGINS("BrowserOrigins"),
-    BROWSER_ORIGIN("BrowserOrigin"),
-    BROWSER_ORIGINS_JSON("BrowserOriginsJson");
+    BROWSER_ORIGINS("BrowserOrigins");
 
     private final String value;
 
@@ -11472,12 +11428,12 @@ public class EndpointReference extends HandleWrapperBase {
         return (String) result;
     }
 
-    /** Gets deferred browser-facing origins associated with this endpoint. */
-    public EndpointBrowserOrigins browserOrigins() {
+    /** Gets a deferred comma-separated list of browser-facing origins associated with this endpoint. */
+    public EndpointReferenceExpression browserOrigins() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointReference.browserOrigins", reqArgs);
-        return (EndpointBrowserOrigins) result;
+        return (EndpointReferenceExpression) result;
     }
 
     /** Gets or sets a custom error message to be thrown when the endpoint annotation is not found. */
@@ -31859,7 +31815,6 @@ public final class WithVolumeOptions {
 .aspire/modules/aspire/DockerfileStage.java
 .aspire/modules/aspire/DotnetToolResource.java
 .aspire/modules/aspire/DynamicLoadingOptions.java
-.aspire/modules/aspire/EndpointBrowserOrigins.java
 .aspire/modules/aspire/EndpointProperty.java
 .aspire/modules/aspire/EndpointReference.java
 .aspire/modules/aspire/EndpointReferenceExpression.java

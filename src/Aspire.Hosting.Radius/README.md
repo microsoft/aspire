@@ -91,8 +91,8 @@ builder.AddContainer("api", "myorg/api", "1.0")
 Untargeted resources surface a clear error from the core pipeline instead of being silently claimed by one environment.
 
 Browser-origin endpoint properties in workload environment variables use required deployment inputs rather than cluster-local service DNS.
-For example, `web.GetEndpoint("http").BrowserOrigins.First` reads `Parameters:web-http-BrowserOrigin`.
-The `BrowserOrigins` and `BrowserOriginsJson` inputs accept comma-separated and JSON origin lists, respectively, and use the normal Radius deployment-parameter file.
+For example, `web.GetEndpoint("http").BrowserOrigins` reads `Parameters:web-http-BrowserOrigins`.
+The input accepts a comma-separated origin list and uses the normal Radius deployment-parameter file.
 
 ## Deploying to a cloud
 

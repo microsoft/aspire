@@ -8,7 +8,6 @@ metadata:
     app.kubernetes.io/component: "backend"
     app.kubernetes.io/instance: "{{ .Release.Name }}"
 data:
-  ORIGIN: {{ tpl "{{ .Values.config.backend.frontend_http_BrowserOrigin }}" . | quote }}
+  ORIGIN: {{ tpl "{{ .Values.config.backend.frontend_http_BrowserOrigins }}" . | quote }}
   ORIGINS: {{ tpl "{{ .Values.config.backend.frontend_http_BrowserOrigins }}" . | quote }}
-  ORIGINS_JSON: {{ tpl "{{ .Values.config.backend.frontend_http_BrowserOriginsJson }}" . | quote }}
-  CONFIG: {{ tpl "origin={{ .Values.config.backend.frontend_http_BrowserOrigin }}" . | quote }}
+  CONFIG: {{ tpl "origin={{ .Values.config.backend.frontend_http_BrowserOrigins }}" . | quote }}

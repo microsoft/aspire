@@ -11,11 +11,7 @@ param env_outputs_azure_container_registry_managed_identity_id string
 
 param backend_containerimage string
 
-param frontend_http_browserorigin_value string
-
 param frontend_http_browserorigins_value string
-
-param frontend_http_browseroriginsjson_value string
 
 resource backend 'Microsoft.App/containerApps@2025-10-02-preview' = {
   name: 'backend'
@@ -61,19 +57,15 @@ resource backend 'Microsoft.App/containerApps@2025-10-02-preview' = {
             }
             {
               name: 'ORIGIN'
-              value: frontend_http_browserorigin_value
+              value: frontend_http_browserorigins_value
             }
             {
               name: 'ORIGINS'
               value: frontend_http_browserorigins_value
             }
             {
-              name: 'ORIGINS_JSON'
-              value: frontend_http_browseroriginsjson_value
-            }
-            {
               name: 'CONFIG'
-              value: 'origin=${frontend_http_browserorigin_value}'
+              value: 'origin=${frontend_http_browserorigins_value}'
             }
           ]
         }

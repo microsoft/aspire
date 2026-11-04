@@ -92,10 +92,8 @@ internal static class FoundryEchoTestApp
                     return JsonSerializer.Serialize(new
                     {
                         echo = $"Echo: {input}",
-                        origin = Environment.GetEnvironmentVariable("BROWSER_ORIGIN")
-                            ?? throw new InvalidOperationException("The deployed browser origin is missing."),
-                        originsJson = Environment.GetEnvironmentVariable("BROWSER_ORIGINS_JSON")
-                            ?? throw new InvalidOperationException("The deployed browser origins JSON is missing.")
+                        origins = Environment.GetEnvironmentVariable("BROWSER_ORIGINS")
+                            ?? throw new InvalidOperationException("The deployed browser origins are missing.")
                     });
                 }
 

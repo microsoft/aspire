@@ -527,11 +527,9 @@ public class AzureAppServiceEnvironmentResource :
 
         return property switch
         {
-            EndpointProperty.BrowserOrigins or EndpointProperty.BrowserOrigin when endpoint.IsExternal && endpoint.UriScheme is "http" or "https" =>
+            EndpointProperty.BrowserOrigins when endpoint.IsExternal && endpoint.UriScheme is "http" or "https" =>
                 ReferenceExpression.Create($"{scheme}://{host}"),
-            EndpointProperty.BrowserOriginsJson when endpoint.IsExternal && endpoint.UriScheme is "http" or "https" =>
-                ReferenceExpression.Create($"[\"{scheme}://{host}\"]"),
-            EndpointProperty.BrowserOrigins or EndpointProperty.BrowserOrigin or EndpointProperty.BrowserOriginsJson =>
+            EndpointProperty.BrowserOrigins =>
                 throw new NotSupportedException($"The compute environment cannot provide browser origins for endpoint '{endpoint.Name}'."),
             EndpointProperty.Url => ReferenceExpression.Create($"{scheme}://{host}"),
             EndpointProperty.Host or EndpointProperty.IPV4Host => host,

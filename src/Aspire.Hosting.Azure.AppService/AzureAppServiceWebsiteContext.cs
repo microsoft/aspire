@@ -903,11 +903,9 @@ internal sealed class AzureAppServiceWebsiteContext(
     {
         return property switch
         {
-            EndpointProperty.BrowserOrigins or EndpointProperty.BrowserOrigin when mapping.IsHttpIngress && mapping.External =>
+            EndpointProperty.BrowserOrigins when mapping.IsHttpIngress && mapping.External =>
                 BicepFunction.Interpolate($"{mapping.Scheme}://{mapping.Host}.azurewebsites.net"),
-            EndpointProperty.BrowserOriginsJson when mapping.IsHttpIngress && mapping.External =>
-                BicepFunction.Interpolate($"[\"{mapping.Scheme}://{mapping.Host}.azurewebsites.net\"]"),
-            EndpointProperty.BrowserOrigins or EndpointProperty.BrowserOrigin or EndpointProperty.BrowserOriginsJson =>
+            EndpointProperty.BrowserOrigins =>
                 AllocateParameter(environmentContext.GetEndpointInput(
                     reference ?? throw new InvalidOperationException("A browser origin property requires its endpoint reference."))),
             EndpointProperty.Url => BicepFunction.Interpolate($"{mapping.Scheme}://{mapping.Host}.azurewebsites.net"),

@@ -2,5 +2,5 @@
 secrets: {}
 config:
   consumer:
-    a_b_c_BrowserOrigin: "http://first.example"
-    a_b_c_BrowserOrigin_1b1c82807515af0d: "http://second.example"
+    a_b_c_BrowserOrigins: "http://first.example"
+    a_b_c_BrowserOrigins_2eb5787a775df1cb: "http://second.example"

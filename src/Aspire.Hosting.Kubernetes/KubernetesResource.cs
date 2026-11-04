@@ -603,7 +603,7 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
 
                 return epExpr.Property switch
                 {
-                    EndpointProperty.BrowserOrigins or EndpointProperty.BrowserOrigin or EndpointProperty.BrowserOriginsJson =>
+                    EndpointProperty.BrowserOrigins =>
                         await ProcessValueAsync(context, executionContext, context.GetEndpointInput(epExpr, executionContext), embedded).ConfigureAwait(false),
                     _ => GetEndpointValue(mapping, epExpr.Property, embedded && epExpr.Property is EndpointProperty.Port or EndpointProperty.TargetPort)
                 };

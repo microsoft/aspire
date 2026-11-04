@@ -18,7 +18,6 @@ public sealed class EndpointReference : IExpressionValue, IManifestExpressionPro
     private EndpointAnnotation? _endpointAnnotation;
     private bool? _isAllocated;
     private readonly NetworkIdentifier? _contextNetworkId;
-    private EndpointBrowserOrigins? _browserOrigins;
 
     /// <summary>
     /// Gets the endpoint annotation associated with the endpoint reference.
@@ -56,20 +55,19 @@ public sealed class EndpointReference : IExpressionValue, IManifestExpressionPro
     public string EndpointName { get; }
 
     /// <summary>
-    /// Gets deferred browser-facing origins associated with this endpoint.
+    /// Gets a deferred comma-separated list of browser-facing origins associated with this endpoint.
     /// </summary>
     /// <remarks>
     /// Origins use finalized URL customization and are independent of this reference's service-discovery
-    /// network context. Use <see cref="EndpointBrowserOrigins.First"/> for one preferred origin,
-    /// or <see cref="EndpointBrowserOrigins.AsJson"/> and <see cref="EndpointBrowserOrigins.Join"/>
-    /// for all distinct origins.
+    /// network context. Origins are distinct and ordered by display preference. An endpoint
+    /// without browser-facing HTTP(S) URLs resolves to an empty string.
     /// </remarks>
     /// <example>
     /// <code>
-    /// backend.WithEnvironment("ALLOWED_ORIGINS", frontend.GetEndpoint("https").BrowserOrigins.AsJson());
+    /// backend.WithEnvironment("ALLOWED_ORIGINS", frontend.GetEndpoint("https").BrowserOrigins);
     /// </code>
     /// </example>
-    public EndpointBrowserOrigins BrowserOrigins => _browserOrigins ??= new(this);
+    public EndpointReferenceExpression BrowserOrigins => Property(EndpointProperty.BrowserOrigins);
 
     /// <summary>
     /// Gets or sets a custom error message to be thrown when the endpoint annotation is not found.
@@ -164,8 +162,6 @@ public sealed class EndpointReference : IExpressionValue, IManifestExpressionPro
             EndpointProperty.HostAndPort => $"{Binding("host")}:{Binding("port")}",
             EndpointProperty.TlsEnabled => Binding("tlsEnabled"),
             EndpointProperty.BrowserOrigins => Binding("browserOrigins"),
-            EndpointProperty.BrowserOrigin => Binding("browserOrigin"),
-            EndpointProperty.BrowserOriginsJson => Binding("browserOriginsJson"),
             _ => throw new InvalidOperationException($"The property '{property}' is not supported for the endpoint '{EndpointName}'.")
         };
 
@@ -383,7 +379,7 @@ public class EndpointReferenceExpression(EndpointReference endpointReference, En
 
         return Property switch
         {
-            EndpointProperty.BrowserOrigins or EndpointProperty.BrowserOrigin or EndpointProperty.BrowserOriginsJson =>
+            EndpointProperty.BrowserOrigins =>
                 await ResolveBrowserOriginsAsync().ConfigureAwait(false),
             EndpointProperty.Scheme => new(Endpoint.Scheme),
             EndpointProperty.TlsEnabled => Endpoint.TlsEnabled ? bool.TrueString : bool.FalseString,
@@ -401,13 +397,7 @@ public class EndpointReferenceExpression(EndpointReference endpointReference, En
                 .Select(BrowserOriginHelpers.GetOrigin)
                 .Distinct(StringComparer.Ordinal)
                 .ToArray();
-            return Property switch
-            {
-                EndpointProperty.BrowserOrigin => origins.Length > 0 ? origins[0] :
-                    throw new InvalidOperationException($"No browser URL is available for resource '{Endpoint.Resource.Name}' and endpoint '{Endpoint.EndpointName}'."),
-                EndpointProperty.BrowserOriginsJson => System.Text.Json.JsonSerializer.Serialize(origins),
-                _ => string.Join(",", origins)
-            };
+            return string.Join(",", origins);
         }
 
         async ValueTask<string?> ResolveValueWithAllocatedAddress()
@@ -480,11 +470,5 @@ public enum EndpointProperty
     TlsEnabled,
 
     /// <summary>Comma-separated browser-facing origins for this endpoint.</summary>
-    BrowserOrigins,
-
-    /// <summary>The first browser-facing origin for this endpoint.</summary>
-    BrowserOrigin,
-
-    /// <summary>The endpoint's browser-facing origins as a JSON array string.</summary>
-    BrowserOriginsJson
+    BrowserOrigins
 }

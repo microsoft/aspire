@@ -455,13 +455,18 @@ public class EntraIdApplicationResource : AzureProvisioningResource, IResourceWi
                 continue;
             }
 
-            var uriExpression = value switch
+            if (value is EntraIdEndpointRedirectUri endpointRedirect)
             {
-                ReferenceExpression referenceExpression => referenceExpression,
-                Func<ReferenceExpression> factory => factory(),
-                _ => null
-            };
-            if (uriExpression is not null)
+                var origins = endpointRedirect.Origins().AsProvisioningParameter(infrastructure, NextDerivedParameterName());
+                // BrowserOrigins is a comma-separated list. This consumer needs one preferred
+                // origin: '${first(split(redirectUri0, ','))}/signin-oidc'.
+                var firstOrigin = new FunctionCallExpression(new IdentifierExpression("first"),
+                    new FunctionCallExpression(new IdentifierExpression("split"), origins.Value.Compile(), new StringLiteralExpression(",")));
+                literals.Add(BicepFunction.Interpolate($"{(BicepValue<string>)firstOrigin}{endpointRedirect.Path}").Compile());
+                continue;
+            }
+
+            if (value is ReferenceExpression uriExpression)
             {
                 // Keep runtime browser origins and deployment parameters/outputs deferred until resolution.
                 var uriParameter = uriExpression.AsProvisioningParameter(infrastructure, NextDerivedParameterName());
@@ -703,7 +708,7 @@ public class EntraIdApplicationResource : AzureProvisioningResource, IResourceWi
     /// </remarks>
     public IReadOnlyList<ParameterResource> RedirectUriParameters => [.. _redirectUriValues.OfType<ParameterResource>()];
 
-    // Keep literal, parameter, expression, and deferred-expression entries in registration order.
+    // Keep literal, parameter, expression, and endpoint-derived entries in registration order.
     private readonly List<object> _redirectUriValues = [];
 
     internal void AddRedirectUri(string redirectUri) => _redirectUriValues.Add(redirectUri);
@@ -712,7 +717,7 @@ public class EntraIdApplicationResource : AzureProvisioningResource, IResourceWi
 
     internal void AddRedirectUri(ReferenceExpression redirectUri) => _redirectUriValues.Add(redirectUri);
 
-    internal void AddRedirectUri(Func<ReferenceExpression> redirectUri) => _redirectUriValues.Add(redirectUri);
+    internal void AddRedirectUri(EntraIdEndpointRedirectUri redirectUri) => _redirectUriValues.Add(redirectUri);
 
     /// <summary>
     /// Gets the application roles to declare on an application created by Aspire.

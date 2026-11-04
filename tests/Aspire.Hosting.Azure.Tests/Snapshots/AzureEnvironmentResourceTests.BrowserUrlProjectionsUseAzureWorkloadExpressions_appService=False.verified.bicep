@@ -62,10 +62,6 @@ resource backend 'Microsoft.App/containerApps@2025-10-02-preview' = {
               value: 'https://frontend.${env_outputs_azure_container_apps_environment_default_domain}'
             }
             {
-              name: 'ORIGINS_JSON'
-              value: '["https://frontend.${env_outputs_azure_container_apps_environment_default_domain}"]'
-            }
-            {
               name: 'CONFIG'
               value: 'origin=${'https://frontend.${env_outputs_azure_container_apps_environment_default_domain}'}'
             }

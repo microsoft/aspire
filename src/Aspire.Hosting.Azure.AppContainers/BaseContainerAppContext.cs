@@ -202,11 +202,9 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
 
         return reference.Property switch
         {
-            EndpointProperty.BrowserOrigins or EndpointProperty.BrowserOrigin when isHttpIngress && external =>
+            EndpointProperty.BrowserOrigins when isHttpIngress && external =>
                 GetHostValue($"{scheme}://"),
-            EndpointProperty.BrowserOriginsJson when isHttpIngress && external =>
-                GetHostValue($"[\"{scheme}://", "\"]"),
-            EndpointProperty.BrowserOrigins or EndpointProperty.BrowserOrigin or EndpointProperty.BrowserOriginsJson =>
+            EndpointProperty.BrowserOrigins =>
                 AllocateParameter(_containerAppEnvironmentContext.GetEndpointInput(reference)),
             EndpointProperty.Url => GetHostValue($"{scheme}://", suffix: isHttpIngress ? null : $":{port}"),
             EndpointProperty.Host or EndpointProperty.IPV4Host => GetHostValue(),
@@ -320,7 +318,7 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
             // Express cannot use a standard environment's private DNS either. Check visibility
             // before delegating, while the original endpoint metadata is still available.
             if (epExpr.Property is EndpointProperty.Url or EndpointProperty.Host or EndpointProperty.IPV4Host or EndpointProperty.HostAndPort or
-                EndpointProperty.BrowserOrigins or EndpointProperty.BrowserOrigin or EndpointProperty.BrowserOriginsJson)
+                EndpointProperty.BrowserOrigins)
             {
                 ValidateExpressEndpointReference(epExpr.Endpoint);
             }
