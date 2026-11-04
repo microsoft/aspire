@@ -1,4 +1,4 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
@@ -27,6 +27,7 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
     private MetricGroupList? _metricGroupList;
     private ElementReference _metricsSplitterElement;
     private IJSObjectReference? _jsModule;
+    private bool _isDisposed;
     private DotNetObjectReference<Metrics>? _selfRef;
     private string? _registeredMetricsSplitterElementId;
     private string _metricGroupsPaneSize = "20%";
@@ -127,18 +128,39 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!ViewportInformation.IsDesktop || PageViewModel.Instruments is not { Count: > 0 } ||
+        if (_isDisposed || !ViewportInformation.IsDesktop || PageViewModel.Instruments is not { Count: > 0 } ||
             _registeredMetricsSplitterElementId == _metricsSplitterElement.Id)
         {
             return;
         }
 
-        _jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", $"/{Assets["Components/Pages/Metrics.razor.js"]}");
-        _selfRef ??= DotNetObjectReference.Create(this);
-        if (await _jsModule.InvokeAsync<bool>("registerMetricsSplitter", _metricsSplitterElement, _selfRef))
+        try
         {
-            // Selecting another resource can replace the splitter element while the Metrics component remains alive.
-            _registeredMetricsSplitterElementId = _metricsSplitterElement.Id;
+            if (_jsModule is null)
+            {
+                var module = await JS.InvokeAsync<IJSObjectReference>("import", $"/{Assets["Components/Pages/Metrics.razor.js"]}");
+                if (_isDisposed)
+                {
+                    await module.DisposeAsync();
+                    return;
+                }
+
+                _jsModule = module;
+            }
+
+            var element = _metricsSplitterElement;
+            _selfRef ??= DotNetObjectReference.Create(this);
+            if (await _jsModule.InvokeAsync<bool>("registerMetricsSplitter", element, _selfRef) && !_isDisposed)
+            {
+                // Selecting another resource can replace the splitter element while the Metrics component remains alive.
+                _registeredMetricsSplitterElementId = element.Id;
+            }
+        }
+        catch (ObjectDisposedException) when (_isDisposed)
+        {
+        }
+        catch (JSDisconnectedException) when (_isDisposed)
+        {
         }
     }
 
@@ -153,6 +175,11 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
     [JSInvokable]
     public Task SetMetricGroupsPaneSizeAsync(double percent)
     {
+        if (_isDisposed)
+        {
+            return Task.CompletedTask;
+        }
+
         SetMetricGroupsPaneSize(percent);
         StateHasChanged();
         return Task.CompletedTask;
@@ -921,6 +948,12 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
 
     public async ValueTask DisposeAsync()
     {
+        if (_isDisposed)
+        {
+            return;
+        }
+
+        _isDisposed = true;
         PinStore.Changed -= OnPinsChanged;
         if (ResourcesLayout is { } layout)
         {

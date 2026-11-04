@@ -6,12 +6,15 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Rendering;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
+using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Components.Controls.Grid;
 
 [CascadingTypeParameter(nameof(TGridItem))]
 public class AspireFluentDataGrid<TGridItem> : FluentDataGrid<TGridItem>
 {
+    private bool _isDisposed;
+
     public AspireFluentDataGrid(LibraryConfiguration configuration) : base(configuration)
     {
         LoadingContent = RenderLoadingContent;
@@ -19,6 +22,34 @@ public class AspireFluentDataGrid<TGridItem> : FluentDataGrid<TGridItem>
 
     [Inject]
     public required IStringLocalizer<ControlsStrings> Loc { get; init; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_isDisposed)
+        {
+            return;
+        }
+
+        try
+        {
+            await base.OnAfterRenderAsync(firstRender);
+        }
+        catch (ObjectDisposedException) when (_isDisposed)
+        {
+            // Navigation can dispose the module while Fluent resumes a previous JS call.
+            // Remove when Fluent checks disposal between its column-interaction awaits:
+            // https://github.com/microsoft/fluentui-blazor/blob/v5.0.1/src/Core/Components/DataGrid/FluentDataGrid.razor.cs
+        }
+        catch (JSDisconnectedException) when (_isDisposed)
+        {
+        }
+    }
+
+    public override ValueTask DisposeAsync()
+    {
+        _isDisposed = true;
+        return base.DisposeAsync();
+    }
 
     protected override void BuildRenderTree(RenderTreeBuilder builder)
     {

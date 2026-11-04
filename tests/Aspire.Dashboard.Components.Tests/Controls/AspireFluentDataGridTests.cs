@@ -7,6 +7,7 @@ using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
 using Bunit;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
 
@@ -181,5 +182,58 @@ public sealed class AspireFluentDataGridTests : DashboardTestContext
         var progressRing = cut.FindComponent<AspireProgressRing>().Instance;
         Assert.Equal("24px", progressRing.Width);
         Assert.Equal("Loading...", cut.Find("tr[row-state='loading-content']").TextContent.Trim());
+    }
+
+    [Fact]
+    public async Task GridInitialization_DisposedReferenceWhileActive_IsNotSuppressed()
+    {
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        var failure = new ObjectDisposedException("active-module");
+        var module = new TestJSObjectReference
+        {
+            BeforeInvokeAsync = _ => Task.FromException(failure)
+        };
+        var import = TestJSObjectReference.SetupImport(this, "./_content/Microsoft.FluentUI.AspNetCore.Components/Components/DataGrid/FluentDataGrid.razor.js");
+        Render<AspireFluentDataGrid<string>>();
+        import.SetResult(module);
+
+        Assert.Same(failure, await Renderer.UnhandledException.DefaultTimeout());
+    }
+
+    [Fact]
+    public async Task Dispose_DuringGridInitialization_DoesNotResumeColumnInteractions()
+    {
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var module = new TestJSObjectReference
+        {
+            BeforeInvokeAsync = identifier =>
+            {
+                if (identifier == "Microsoft.FluentUI.Blazor.DataGrid.Initialize")
+                {
+                    started.TrySetResult();
+                    return release.Task;
+                }
+
+                return Task.CompletedTask;
+            }
+        };
+        TestJSObjectReference.SetupImport(this, "./_content/Microsoft.FluentUI.AspNetCore.Components/Components/DataGrid/FluentDataGrid.razor.js")
+            .SetResult(module);
+        var cut = Render<AspireFluentDataGrid<string>>(builder => builder.Add(c => c.ResizableColumns, true));
+        try
+        {
+            await started.Task.DefaultTimeout();
+            await cut.InvokeAsync(() => cut.Instance.DisposeAsync().AsTask());
+        }
+        finally
+        {
+            release.TrySetResult();
+        }
+
+        await cut.InvokeAsync(() => Task.CompletedTask);
+        Assert.Equal(1, module.DisposeCount);
+        Assert.False(Renderer.UnhandledException.IsCompleted);
     }
 }

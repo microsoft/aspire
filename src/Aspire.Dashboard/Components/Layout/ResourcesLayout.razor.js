@@ -91,6 +91,130 @@ export function unregisterPaneActivityVisibility(layoutElement) {
     activityRegistrations.delete(layoutElement);
 }
 
+const routeTransitions = new WeakMap();
+const orderedRoutes = ["resources", "consolelogs", "structuredlogs", "traces", "metrics"];
+const orderedTabs = ["Overview", "Console", "StructuredLogs", "Traces", "Metrics"];
+
+export function registerRouteTransitions(layout) {
+    unregisterRouteTransitions(layout);
+    if (!window.navigation || !document.startViewTransition) {
+        return;
+    }
+
+    const body = layout.querySelector(".resource-tab-body");
+    const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
+    let active = null;
+    let version = 0;
+    let disposed = false;
+
+    function cancel() {
+        if (active) {
+            active.disconnect();
+            active.complete();
+            active.transition.skipTransition();
+        }
+    }
+
+    async function navigate(event) {
+        const request = ++version;
+        const previous = active;
+        const destination = new URL(event.destination.url);
+        const from = orderedTabs.indexOf(body.dataset.resourceTab);
+        cancel();
+        if (previous) {
+            // Skipping is asynchronous. Let the old native transition release its snapshot
+            // before starting another, without intercepting or delaying Blazor navigation.
+            await previous.transition.finished;
+        }
+
+        // Primary routes have shapes such as /traces/resource/api?type=http. Selection,
+        // filters and trace details within the same tab aren't separate motion destinations.
+        const to = orderedRoutes.indexOf(destination.pathname.split("/")[1]);
+        if (disposed || request !== version || !body.isConnected ||
+            !event.destination.sameDocument || from < 0 || to < 0 || from === to ||
+            (previous && body.dataset.resourceTab === orderedTabs[to]) ||
+            reducedMotion.matches || document.visibilityState !== "visible") {
+            return;
+        }
+
+        const root = document.documentElement;
+        root.dataset.routeTransition = to > from ? "forward" : "backward";
+        let complete;
+        const rendered = new Promise(resolve => { complete = resolve; });
+        // Observe, but never intercept or await, Blazor navigation. Its history commit precedes
+        // the server render. The marker changes in that render batch, without waiting for data.
+        // https://developer.mozilla.org/en-US/docs/Web/API/Navigation/navigate_event
+        let transition;
+        try {
+            transition = document.startViewTransition(() => rendered);
+        }
+        catch (error) {
+            delete root.dataset.routeTransition;
+            if (error.name === "AbortError" || error.name === "InvalidStateError") {
+                return;
+            }
+            throw error;
+        }
+        const state = { transition, complete, disconnect: () => {
+            clearTimeout(timeout);
+            observer.disconnect();
+        } };
+        active = state;
+        const observer = new MutationObserver(() => {
+            if (body.dataset.resourceTab === orderedTabs[to]) {
+                complete();
+            }
+        });
+        observer.observe(body, { attributes: true, attributeFilter: ["data-resource-tab"] });
+        // A slow/canceled server render must not leave the document's rendering suppressed.
+        // Skip the effect instead of holding a loading state behind the old snapshot.
+        const timeout = setTimeout(() => {
+            complete();
+            transition.skipTransition();
+        }, 200);
+        transition.ready.then(() => clearTimeout(timeout), error => {
+            if (error.name !== "AbortError" && error.name !== "InvalidStateError") {
+                console.error("Route transition failed.", error);
+            }
+        });
+        const cleanup = () => {
+            state.disconnect();
+            if (active === state) {
+                active = null;
+                delete root.dataset.routeTransition;
+            }
+        };
+        transition.finished.then(cleanup, error => {
+            cleanup();
+            if (error.name !== "AbortError" && error.name !== "InvalidStateError") {
+                console.error("Route transition failed.", error);
+            }
+        });
+    }
+
+    window.navigation.addEventListener("navigate", navigate);
+    reducedMotion.addEventListener("change", cancel);
+    routeTransitions.set(layout, { finished: () => active?.transition.finished, dispose: () => {
+        disposed = true;
+        version++;
+        window.navigation.removeEventListener("navigate", navigate);
+        reducedMotion.removeEventListener("change", cancel);
+        cancel();
+    } });
+}
+
+export function unregisterRouteTransitions(layout) {
+    routeTransitions.get(layout)?.dispose();
+    routeTransitions.delete(layout);
+}
+
+export async function waitForResourceTabRender(layout) {
+    // Let the committed render paint and child interop run even when motion is disabled.
+    // If a snapshot is active, keep only the latest queued tab until that effect settles.
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    await routeTransitions.get(layout)?.finished();
+}
+
 // Priority+ overflow for the tab strip in the header. Tabs that no longer fit are marked with data-tab-overflow (hidden
 // by CSS) from the right, and their ids are reported to .NET, which lists them in the "..." menu. Hiding is done in the
 // DOM, rather than by rendering, so resizing never waits for a server round trip.
