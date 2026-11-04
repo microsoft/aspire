@@ -11,6 +11,7 @@ using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Packaging;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Templating;
 using Aspire.Cli.Utils;
@@ -32,7 +33,7 @@ internal sealed class ConfigSourceService(
     ILogger<ConfigSourceService> logger) : IDisposable
 {
     internal const string MicrosoftRepository = "https://msft.ghe.com/coreai/aspire-1p-init";
-    private static readonly string[] s_allowedSettings = [SkillSource.SectionName];
+    private static readonly string[] s_allowedSettings = [SkillSource.SectionName, IntegrationSourceConfiguration.SectionName];
     private static readonly TimeSpan s_gitTimeout = TimeSpan.FromSeconds(30);
     private readonly Dictionary<ConfigSourceIdentity, ConfigSourceSnapshot> _snapshots = [];
     private string? _projectDirectory;
@@ -121,7 +122,7 @@ internal sealed class ConfigSourceService(
         }
         foreach (var pending in notifications)
         {
-            interaction.DisplayMessage(KnownEmojis.Warning, pending.Message, consoleOverride: ConsoleOutput.Error);
+            interaction.DisplayMessage(KnownEmojis.PoliceCarLight, pending.Message, consoleOverride: ConsoleOutput.Error);
             DisplayGitTimeoutOutput(interaction, pending.GitOutput);
         }
     }
@@ -553,7 +554,7 @@ internal sealed class ConfigSourceService(
             _sourceTrustWarningDisplayed = true;
         }
 
-        interaction.DisplayMessage(KnownEmojis.Warning, SharedCommandStrings.SourceTrustWarning, consoleOverride: ConsoleOutput.Error);
+        interaction.DisplaySourceTrustWarning();
     }
 
     private async Task<ConfigSourceSnapshot> AcquireAsync(

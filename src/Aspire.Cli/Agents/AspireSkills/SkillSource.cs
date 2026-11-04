@@ -4,6 +4,7 @@
 using System.ComponentModel;
 using System.Globalization;
 using System.Text.Json.Serialization;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Git;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
@@ -85,7 +86,8 @@ internal sealed class SkillSource
         foreach (var name in names)
         {
             var settings = section.GetSection(name);
-            if (settings.Value is not null || !IsIdentifier(name))
+            SourceNameValidator.Validate(name, $"{SectionName}.{name}");
+            if (settings.Value is not null)
             {
                 throw AspireSkillsRemoteConfiguration.ExistingConfiguration($"{SectionName}.{name}");
             }

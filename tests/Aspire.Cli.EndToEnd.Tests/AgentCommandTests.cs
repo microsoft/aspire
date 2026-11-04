@@ -321,7 +321,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
 
         await auto.WaitUntilTextAsync("Installation scope", timeout: TimeSpan.FromSeconds(30));
         var scopeScreen = auto.CreateSnapshot().GetScreenText();
-        Assert.Contains("at your own risk", scopeScreen);
+        Assert.Contains("Only use sources you trust.", scopeScreen);
         Assert.Contains("https://github.com/microsoft/aspire-skills", scopeScreen);
         Assert.DoesNotContain("Install Aspire MCP server", scopeScreen);
         Assert.DoesNotContain("Which source do you want to use for Aspire?", scopeScreen);
@@ -377,7 +377,8 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         // registration — no MCP prompt is shown, and Claude's project MCP file is untouched.
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromSeconds(30));
         var completionScreen = auto.CreateSnapshot().GetScreenText();
-        Assert.Contains("at your own risk", completionScreen);
+        Assert.Contains("Only use sources you trust.", completionScreen);
+        Assert.Contains("https://github.com/microsoft/aspire-skills", completionScreen);
         Assert.DoesNotContain("Which source do you want to use for Aspire?", completionScreen);
         Assert.DoesNotContain("Configure the Aspire MCP server", completionScreen);
         await auto.WaitForSuccessPromptAsync(counter);

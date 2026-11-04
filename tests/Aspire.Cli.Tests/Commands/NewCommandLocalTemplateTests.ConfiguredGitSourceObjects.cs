@@ -123,7 +123,7 @@ public partial class NewCommandLocalTemplateTests
         Assert.Equal([(repository, "HEAD^{}"), (repository, "refs/heads/release/17.0"), (repository, "refs/heads/v17.0")], GetGitResolutions(git));
         Assert.Equal(TestGitCommandRunner.DefaultCommitSha, Assert.Single(GetGitFetches(git)).CommitSha);
         var warning = Assert.Single(interaction.DisplayedMessages);
-        Assert.Equal(SharedCommandStrings.SourceTrustWarning, warning.Message);
+        Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", warning.Message);
         Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
         Assert.Empty(interaction.DisplayedErrors);
         await Verify(ReadOutput(workspace));
@@ -201,13 +201,13 @@ public partial class NewCommandLocalTemplateTests
         Assert.Collection(interaction.DisplayedMessages,
             warning =>
             {
-                Assert.Equal(KnownEmojis.Warning, warning.Emoji);
-                Assert.Equal(SharedCommandStrings.SourceTrustWarning, warning.Message);
+                Assert.Equal(KnownEmojis.PoliceCarLight, warning.Emoji);
+                Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", warning.Message);
                 Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
             },
             warning =>
             {
-                Assert.Equal(KnownEmojis.Warning, warning.Emoji);
+                Assert.Equal(KnownEmojis.PoliceCarLight, warning.Emoji);
                 Assert.Equal(string.Format(CultureInfo.CurrentCulture,
                     NewCommandStrings.TemplateSourceSearchFailed, "broken", NewCommandStrings.TemplateRepositoryPathInvalid),
                     warning.Message);
@@ -249,12 +249,12 @@ public partial class NewCommandLocalTemplateTests
         Assert.Collection(interaction.DisplayedMessages,
             warning =>
             {
-                Assert.Equal(SharedCommandStrings.SourceTrustWarning, warning.Message);
+                Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", warning.Message);
                 Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
             },
             warning =>
             {
-                Assert.Equal(KnownEmojis.Warning, warning.Emoji);
+                Assert.Equal(KnownEmojis.PoliceCarLight, warning.Emoji);
                 Assert.Equal(string.Format(CultureInfo.CurrentCulture,
                     NewCommandStrings.TemplateSourceSearchFailed, "missing",
                     string.Format(CultureInfo.CurrentCulture, NewCommandStrings.TemplateDirectoryNotFound, missingPath)),
@@ -298,12 +298,12 @@ public partial class NewCommandLocalTemplateTests
         Assert.Collection(interaction.DisplayedMessages,
             warning =>
             {
-                Assert.Equal(SharedCommandStrings.SourceTrustWarning, warning.Message);
+                Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", warning.Message);
                 Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
             },
             warning =>
             {
-                Assert.Equal(KnownEmojis.Warning, warning.Emoji);
+                Assert.Equal(KnownEmojis.PoliceCarLight, warning.Emoji);
                 Assert.Equal(string.Format(CultureInfo.CurrentCulture,
                     NewCommandStrings.TemplateSourceSearchFailed, "missing",
                     string.Format(CultureInfo.CurrentCulture, NewCommandStrings.TemplateRepositoryRefNotFound, "missing")),
@@ -401,7 +401,7 @@ public partial class NewCommandLocalTemplateTests
                 Assert.Equal((repositoryUrl, expectedPattern), Assert.Single(GetGitResolutions(git)));
             }
             var warning = Assert.Single(interaction.DisplayedMessages);
-            Assert.Equal(SharedCommandStrings.SourceTrustWarning, warning.Message);
+            Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", warning.Message);
             Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
             Assert.Empty(interaction.DisplayedErrors);
             outputs[label] = ReadOutput(Path.Combine(workspace.Path, "out", label));

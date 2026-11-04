@@ -327,7 +327,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
         if (preservedScriptNames.Count > 0)
         {
             _interactionService.DisplayMessage(
-                KnownEmojis.Warning,
+                KnownEmojis.PoliceCarLight,
                 $"Preserved existing package.json script(s) {string.Join(", ", preservedScriptNames)}. Run the AppHost directly from {relativeAppHostDirectory} or remove the existing script(s) and rerun 'aspire init' to regenerate the root delegates.");
         }
 
@@ -474,7 +474,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
                 }
 
                 _interactionService.DisplayMessage(
-                    KnownEmojis.Warning,
+                    KnownEmojis.PoliceCarLight,
                     MissingJavaScriptToolWarning.GetMessage(directory, language, _environment));
                 return 0;
             }

@@ -449,7 +449,7 @@ internal sealed class ProjectLocator(
                         var relativePath = Path.GetRelativePath(executionContext.WorkingDirectory.FullName, candidateFile.FullName);
                         if (displayProgress)
                         {
-                            interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.ProjectFileUnsupportedInCurrentEnvironment, relativePath));
+                            interactionService.DisplayMessage(KnownEmojis.PoliceCarLight, string.Format(CultureInfo.CurrentCulture, ErrorStrings.ProjectFileUnsupportedInCurrentEnvironment, relativePath));
                         }
                         logger.LogDebug("Skipping unsupported project {CandidateFile}", candidateFile.FullName);
                         lock (lockObject)
@@ -463,7 +463,7 @@ internal sealed class ProjectLocator(
                         AppHostProjectCandidate appHostProject;
                         if (displayProgress)
                         {
-                            interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.ProjectFileMayBeUnbuildableAppHost, relativePath));
+                            interactionService.DisplayMessage(KnownEmojis.PoliceCarLight, string.Format(CultureInfo.CurrentCulture, ErrorStrings.ProjectFileMayBeUnbuildableAppHost, relativePath));
                         }
                         lock (lockObject)
                         {
@@ -544,7 +544,7 @@ internal sealed class ProjectLocator(
                     var relativePath = Path.GetRelativePath(executionContext.WorkingDirectory.FullName, settingsAppHost.FullName);
                     if (displayProgress)
                     {
-                        interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.ProjectFileUnsupportedInCurrentEnvironment, relativePath));
+                        interactionService.DisplayMessage(KnownEmojis.PoliceCarLight, string.Format(CultureInfo.CurrentCulture, ErrorStrings.ProjectFileUnsupportedInCurrentEnvironment, relativePath));
                     }
 
                     logger.LogDebug("Skipping configured AppHost project {SettingsAppHost} because no project handler was found.", settingsAppHost.FullName);
@@ -571,7 +571,7 @@ internal sealed class ProjectLocator(
                 {
                     if (displayProgress)
                     {
-                        interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.ProjectFileMayBeUnbuildableAppHost, settingsAppHostRelativePath));
+                        interactionService.DisplayMessage(KnownEmojis.PoliceCarLight, string.Format(CultureInfo.CurrentCulture, ErrorStrings.ProjectFileMayBeUnbuildableAppHost, settingsAppHostRelativePath));
                     }
 
                     var appHostProject = new AppHostProjectCandidate(settingsAppHost, handler.LanguageId, AppHostProjectCandidateStatus.PossiblyUnbuildable);
@@ -582,7 +582,7 @@ internal sealed class ProjectLocator(
                 {
                     if (displayProgress)
                     {
-                        interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.ProjectFileUnsupportedInCurrentEnvironment, settingsAppHostRelativePath));
+                        interactionService.DisplayMessage(KnownEmojis.PoliceCarLight, string.Format(CultureInfo.CurrentCulture, ErrorStrings.ProjectFileUnsupportedInCurrentEnvironment, settingsAppHostRelativePath));
                     }
 
                     logger.LogDebug("Skipping unsupported configured AppHost project {SettingsAppHost}", settingsAppHost.FullName);
@@ -765,7 +765,7 @@ internal sealed class ProjectLocator(
                 {
                     if (!silent)
                     {
-                        interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.AppHostWasSpecifiedButDoesntExist, configFilePath, qualifiedPath));
+                        interactionService.DisplayMessage(KnownEmojis.PoliceCarLight, string.Format(CultureInfo.CurrentCulture, ErrorStrings.AppHostWasSpecifiedButDoesntExist, configFilePath, qualifiedPath));
                     }
                     return null;
                 }
@@ -825,7 +825,7 @@ internal sealed class ProjectLocator(
                                     // settings (PR #17234); see https://github.com/microsoft/aspire/issues/17620
                                     // for the user-facing impact of pointing users at a file they did
                                     // not create.
-                                    interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.AppHostWasSpecifiedButDoesntExist, settingsFile.FullName, qualifiedAppHostPath));
+                                    interactionService.DisplayMessage(KnownEmojis.PoliceCarLight, string.Format(CultureInfo.CurrentCulture, ErrorStrings.AppHostWasSpecifiedButDoesntExist, settingsFile.FullName, qualifiedAppHostPath));
                                 }
                                 return null;
                             }
