@@ -600,6 +600,23 @@ public class ManifestExpressionTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task EndpointUriFormattingFailsExplicitlyWhenPublishing()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var web = builder.AddContainer("web", "image").WithHttpsEndpoint(targetPort: 8080);
+        builder.AddContainer("consumer", "image").WithEnvironment("REDIRECT",
+            ReferenceExpression.Create($"https://login.example/?redirect_uri={web.GetEndpoint("https"):uri}"));
+        using var app = builder.Build();
+
+        var error = await Assert.ThrowsAsync<NotSupportedException>(() => ManifestUtils.GetManifestForModel(
+            app.Services.GetRequiredService<DistributedApplicationModel>()));
+
+        Assert.Equal(
+            "URI formatting cannot be deferred for manifest reference '{web.bindings.https.url}'. " +
+            "Use a parameter/output expression or a publication-time value.", error.Message);
+    }
+
+    [Fact]
     public async Task WrappersDiscoverSelectedConditionalAndUnsupportedLeafReferences()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);

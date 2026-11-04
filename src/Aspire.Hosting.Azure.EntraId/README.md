@@ -116,8 +116,9 @@ Run-mode origins come from the endpoint's `BrowserOrigins` after all `WithUrlFor
 This includes friendly `*.dev.localhost` names and custom origins added after `WithRedirectUris`. Preferred origins follow display
 ordering, and navigation paths, queries, and fragments are excluded before appending the callback path. Removing all browser URLs
 for the endpoint reports a missing origin rather than falling back to its physical address.
-Resolution fails if URL finalization has not completed within 30 seconds of endpoint allocation. URL callbacks must not await provisioning outputs
-from a registration whose redirect URIs depend on those URLs; supply an explicit redirect URI to break that dependency cycle.
+After endpoint allocation, Entra redirect resolution waits up to 30 seconds for finalized browser URLs. If they are not ready,
+it uses the allocated origin and logs a warning, preserving the existing timeout fallback. That address may differ from a custom
+browser URL; supply explicit redirect URIs when the fallback is unsuitable. General `BrowserOrigins` references do not use this fallback.
 
 The endpoint overload uses an HTTPS hostname expression from the owning compute environment during infrastructure generation,
 preserving deployment outputs and allowing compute-environment configuration after `WithRedirectUris`.

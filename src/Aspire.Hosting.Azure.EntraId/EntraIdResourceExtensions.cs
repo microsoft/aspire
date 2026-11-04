@@ -1359,8 +1359,8 @@ public static class EntraIdResourceExtensions
     /// In run mode the origin comes from the endpoint's finalized browser URLs, including vanity hostnames and URL
     /// customization. When publishing or deploying, the host name comes from the resource's compute environment and
     /// the scheme is <c>https</c>.
-    /// Resolution fails if URL finalization has not completed within 30 seconds of endpoint allocation. URL callbacks must not wait for
-    /// provisioning outputs from this registration, because its redirect URIs depend on those callbacks completing.
+    /// After endpoint allocation, resolution waits up to 30 seconds for finalized browser URLs. If they are not ready,
+    /// the allocated origin is used with a warning. Supply explicit redirect URIs if that address differs from the browser URL.
     /// </para>
     /// <para>
     /// The callback path can't be discovered from the endpoint: it's configured by the consuming application, so it is
@@ -1416,7 +1416,7 @@ public static class EntraIdResourceExtensions
         {
             if (!builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
             {
-                return ReferenceExpression.Create($"{new EntraIdRunModeBrowserOrigin(endpoint)}{path}");
+                return ReferenceExpression.Create($"{new EntraIdRunModeBrowserOrigin(endpoint, builder.ApplicationBuilder.ExecutionContext)}{path}");
             }
 
             // Delay environment lookup until infrastructure generation, so compute-environment

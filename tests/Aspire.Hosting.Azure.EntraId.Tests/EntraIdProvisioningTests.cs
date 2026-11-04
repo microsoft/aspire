@@ -1020,7 +1020,7 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task WithRedirectUris_Endpoint_RunMode_IndirectProvisioningCycleFailsExplicitly()
+    public async Task WithRedirectUris_Endpoint_RunMode_IndirectProvisioningCycleFallsBackWithWarning()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var web = builder.AddContainer("web", "image").WithHttpsEndpoint(targetPort: 8080)
@@ -1032,6 +1032,7 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
         {
             callbackEntered.SetResult();
             await entra.Resource.ClientIdOutputReference.GetValueAsync(context.CancellationToken);
+            context.Urls[0].Url = "https://web.example/home";
         });
         _ = entra.Resource.GetBicepTemplateString();
         var expression = Assert.IsType<ReferenceExpression>(entra.Resource.Parameters["redirectUri0"]);
@@ -1042,13 +1043,20 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
         try
         {
             await callbackEntered.Task.WaitAsync(cts.Token);
-            var error = await Assert.ThrowsAsync<InvalidOperationException>(async () => await expression.GetValueAsync(cts.Token));
-            Assert.Equal(
-                "Timed out resolving the browser origin for endpoint 'https' on resource 'web' for an Entra redirect URI. " +
-                "URL callbacks must not wait for provisioning that depends on their finalized URLs. Register an explicit redirect URI to break the dependency cycle.",
-                error.Message);
-            entra.Resource.ProvisioningTaskCompletionSource!.TrySetException(error);
+            Assert.Equal("https://localhost:7081/signin-oidc", await expression.GetValueAsync(cts.Token));
+            Assert.False(publish.IsCompleted);
+            var pendingOrigin = web.GetEndpoint("https").BrowserOrigins.First.GetValueAsync(cts.Token).AsTask();
+            Assert.False(pendingOrigin.IsCompleted);
+            await using var logs = app.Services.GetRequiredService<ResourceLoggerService>()
+                .WatchAsync(web.Resource).GetAsyncEnumerator(cts.Token);
+            Assert.True(await logs.MoveNextAsync());
+            Assert.Contains(logs.Current, line => line.Content.Contains(
+                "Using allocated origin 'https://localhost:7081' for the Entra redirect URI.", StringComparison.Ordinal));
+            entra.Resource.Outputs["clientId"] = ClientId;
+            entra.Resource.ProvisioningTaskCompletionSource!.TrySetResult();
             await publish.WaitAsync(cts.Token);
+            Assert.Equal("https://web.example", await pendingOrigin);
+            Assert.Equal("https://web.example/signin-oidc", await expression.GetValueAsync(cts.Token));
         }
         finally
         {
