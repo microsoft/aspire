@@ -117,21 +117,17 @@ public partial class NewCommandLocalTemplateTests
         await CreateSearchTemplateAsync(workspace, "enterprise", "enterprise", "Enterprise", "Enterprise");
         await CreateSearchTemplateAsync(workspace, "personal", "personal", "Personal", "Personal");
         var interaction = new TestInteractionService();
-        interaction.SetupStringPromptResponse("");
         interaction.SetupStringPromptResponse("Hello");
         var selectionCount = 0;
         interaction.PromptForSelectionCallback = (_, choices, formatter, _) =>
         {
             var options = choices.Cast<object>().ToArray();
-            if (++selectionCount == 1)
-            {
-                return options[^1];
-            }
+            selectionCount++;
             Assert.Equal(
                 ["Enterprise (enterprise) - enterprise", "Personal (personal) - personal",
-                    Aspire.Cli.Resources.NewCommandStrings.SearchTemplatesAgain, Aspire.Cli.Resources.NewCommandStrings.BackToDefaultTemplates],
-                options.Select(formatter));
-            return options[0];
+                    NewCommandStrings.SearchForMoreTemplates],
+                options.Select(formatter).TakeLast(3));
+            return options[^3];
         };
         var git = new TestConfigSourceRepository
         {
@@ -154,7 +150,7 @@ public partial class NewCommandLocalTemplateTests
 
         Assert.Equal(CliExitCodes.Success, result);
         Assert.Empty(interaction.DisplayedErrors);
-        Assert.Equal(2, selectionCount);
+        Assert.Equal(1, selectionCount);
         Assert.Equal(1, git.Calls);
         Assert.Equal(originalGlobal, await File.ReadAllTextAsync(globalPath));
         var projectConfig = Path.Combine(workspace.Path, "out", AspireConfigFile.FileName);
@@ -170,7 +166,6 @@ public partial class NewCommandLocalTemplateTests
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await CreateSearchTemplateAsync(workspace, "personal", "personal", "Personal", "Personal");
         var interaction = new TestInteractionService();
-        interaction.SetupStringPromptResponse("");
         interaction.SetupStringPromptResponse("Hello");
         var selectionCount = 0;
         interaction.PromptForSelectionCallback = (prompt, choices, formatter, _) =>
@@ -180,15 +175,11 @@ public partial class NewCommandLocalTemplateTests
                 return ConfigSourceStrings.Decline;
             }
             var options = choices.Cast<object>().ToArray();
-            if (++selectionCount == 1)
-            {
-                Assert.Equal(NewCommandStrings.SearchForMoreTemplates, formatter(options[^1]));
-                return options[^1];
-            }
+            selectionCount++;
             Assert.Equal(
-                ["Personal (personal) - personal", NewCommandStrings.SearchTemplatesAgain, NewCommandStrings.BackToDefaultTemplates],
-                options.Select(formatter));
-            return options[0];
+                ["Personal (personal) - personal", NewCommandStrings.SearchForMoreTemplates],
+                options.Select(formatter).TakeLast(2));
+            return options[^2];
         };
         var git = new TestConfigSourceRepository
         {
@@ -205,7 +196,7 @@ public partial class NewCommandLocalTemplateTests
 
         Assert.Equal(CliExitCodes.Success, result);
         Assert.Empty(interaction.DisplayedErrors);
-        Assert.Equal(2, selectionCount);
+        Assert.Equal(1, selectionCount);
         Assert.Equal(0, git.Calls);
         Assert.Empty(git.FetchModes);
         Assert.Equal(originalGlobal, await File.ReadAllTextAsync(globalPath));

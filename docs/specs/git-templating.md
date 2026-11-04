@@ -83,6 +83,17 @@ Declining a configuration source during `aspire new`, interactively or through
 `--use-config-source false`, also disables template sources inherited from it for
 that command. Independently configured global template sources remain available.
 
+Interactive `aspire new` without an explicit template discovers configured sources
+before showing the template picker. Their templates appear alongside built-ins,
+after the existing built-in choices, labeled with the template name and source
+alias. Selecting a configured template uses that exact discovered source snapshot,
+even when display names or short names collide. The existing search action remains
+available to filter configured templates. Empty or unavailable sources report their
+existing warnings without preventing selection from other sources or built-ins.
+Discovery does not authorize template post-actions or execution of generated code.
+Help, explicit templates, noninteractive invocations, and built-in-only options
+(`--source`, `--version`, `--channel`, or `--language`) do not trigger this discovery.
+
 Git-backed template discovery displays the CLI's shared localized source-trust
 warning once per command before contacting repositories, including configured
 sources and cached checkouts. `aspire template source add` displays the same warning before its

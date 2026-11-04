@@ -364,12 +364,24 @@ internal sealed class NewCommand : BaseCommand
             return (await _prompter.PromptForTemplateAsync(templatesForPrompt, cancellationToken), false);
         }
 
+        var configuredTemplates = await _configuredTemplateSources.SearchAsync("", cancellationToken);
+        HashSet<string> labels = [NewCommandStrings.SearchForMoreTemplates];
+        List<TemplateSearchChoice> choices = [];
+        foreach (var template in templatesForPrompt)
+        {
+            choices.Add(new(GetUniqueTemplateLabel(template.Description, labels), template, TemplateSearchAction.Select, false));
+        }
+        AddConfiguredTemplateChoices(choices, labels, configuredTemplates);
+        choices.Add(new(NewCommandStrings.SearchForMoreTemplates, null, TemplateSearchAction.Search, false));
+
         while (true)
         {
-            var selection = await _prompter.PromptForTemplateOrSearchAsync(templatesForPrompt, cancellationToken);
+            var selection = await InteractionService.PromptForSelectionAsync(
+                NewCommandStrings.SelectAProjectTemplate, choices, choice => choice.Label.EscapeMarkup(),
+                cancellationToken: cancellationToken);
             if (selection.Template is { } template)
             {
-                return (template, false);
+                return (template, selection.IsConfigured);
             }
 
             var configuredTemplate = await SearchConfiguredTemplatesAsync(cancellationToken);
@@ -394,21 +406,9 @@ internal sealed class NewCommand : BaseCommand
 
             List<TemplateSearchChoice> choices = [];
             HashSet<string> labels = [NewCommandStrings.SearchTemplatesAgain, NewCommandStrings.BackToDefaultTemplates];
-            foreach (var result in templates)
-            {
-                var baseLabel = $"{result.Template.Description} ({result.Template.Name}) - {result.SourceName}";
-                var label = baseLabel;
-                var suffix = 2;
-                // Extension pickers use formatted labels as dictionary keys, so even distinct
-                // template identities with the same names must have unique display labels.
-                while (!labels.Add(label))
-                {
-                    label = string.Create(CultureInfo.InvariantCulture, $"{baseLabel} [{suffix++}]");
-                }
-                choices.Add(new(label, result.Template, TemplateSearchAction.Select));
-            }
-            choices.Add(new(NewCommandStrings.SearchTemplatesAgain, null, TemplateSearchAction.Search));
-            choices.Add(new(NewCommandStrings.BackToDefaultTemplates, null, TemplateSearchAction.Back));
+            AddConfiguredTemplateChoices(choices, labels, templates);
+            choices.Add(new(NewCommandStrings.SearchTemplatesAgain, null, TemplateSearchAction.Search, false));
+            choices.Add(new(NewCommandStrings.BackToDefaultTemplates, null, TemplateSearchAction.Back, false));
             var choice = await InteractionService.PromptForSelectionAsync(
                 NewCommandStrings.SelectAProjectTemplate, choices, choice => choice.Label.EscapeMarkup(),
                 cancellationToken: cancellationToken);
@@ -421,6 +421,31 @@ internal sealed class NewCommand : BaseCommand
                 return choice.Template;
             }
         }
+    }
+
+    private static void AddConfiguredTemplateChoices(
+        List<TemplateSearchChoice> choices, HashSet<string> labels, IReadOnlyList<ConfiguredTemplate> templates)
+    {
+        foreach (var result in templates)
+        {
+            var label = GetUniqueTemplateLabel(
+                $"{result.Template.Description} ({result.Template.Name}) - {result.SourceName}", labels);
+            choices.Add(new(label, result.Template, TemplateSearchAction.Select, true));
+        }
+    }
+
+    private static string GetUniqueTemplateLabel(string baseLabel, HashSet<string> labels)
+    {
+        var label = baseLabel;
+        var suffix = 2;
+        // Extension pickers use formatted labels as dictionary keys, so even distinct
+        // template identities with the same names must have unique display labels.
+        while (!labels.Add(label))
+        {
+            label = string.Create(CultureInfo.InvariantCulture, $"{baseLabel} [{suffix++}]");
+        }
+
+        return label;
     }
 
     private sealed class ResolveTemplateVersionResult
@@ -870,7 +895,7 @@ internal sealed class NewCommand : BaseCommand
         Back
     }
 
-    private sealed record TemplateSearchChoice(string Label, ITemplate? Template, TemplateSearchAction Action);
+    private sealed record TemplateSearchChoice(string Label, ITemplate? Template, TemplateSearchAction Action, bool IsConfigured);
 }
 
 internal sealed record TemplateSelection(ITemplate? Template)

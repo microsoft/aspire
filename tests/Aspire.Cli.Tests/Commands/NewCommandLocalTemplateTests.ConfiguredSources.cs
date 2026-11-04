@@ -304,24 +304,17 @@ public partial class NewCommandLocalTemplateTests
         await CreateSearchTemplateAsync(workspace, "first", "same", "Same template", "First");
         await CreateSearchTemplateAsync(workspace, "second", "same", "Same template", "Second");
         var interaction = new TestInteractionService();
-        interaction.SetupStringPromptResponse("");
         interaction.SetupStringPromptResponse("Welcome");
         var selectionCount = 0;
         interaction.PromptForSelectionCallback = (_, choices, formatter, _) =>
         {
             var options = choices.Cast<object>().ToArray();
             selectionCount++;
-            if (selectionCount == 1)
-            {
-                Assert.Equal(NewCommandStrings.SearchForMoreTemplates, formatter(options[^1]));
-                return options[^1];
-            }
-
             Assert.Equal(
                 ["Same template (same) - first-source", "Same template (same) - second-source",
-                    NewCommandStrings.SearchTemplatesAgain, NewCommandStrings.BackToDefaultTemplates],
-                options.Select(formatter));
-            return options[1];
+                    NewCommandStrings.SearchForMoreTemplates],
+                options.Select(formatter).TakeLast(3));
+            return options[^2];
         };
         var services = CreateServices(workspace, interaction, interactive: true);
         if (noBuiltIns)
@@ -340,9 +333,9 @@ public partial class NewCommandLocalTemplateTests
             .Parse("new --name Demo --output out --suppress-agent-init").InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.Equal(2, selectionCount);
+        Assert.Equal(1, selectionCount);
         Assert.Empty(interaction.DisplayedErrors);
-        Assert.Equal([NewCommandStrings.TemplateSearchPrompt, "Greeting text"],
+        Assert.Equal(["Greeting text"],
             interaction.StringPromptCalls.Select(call => call.PromptText));
         await Verify(ReadOutput(workspace)).UseParameters(noBuiltIns);
     }
@@ -541,7 +534,6 @@ public partial class NewCommandLocalTemplateTests
     public async Task ConfiguredSources_ExplicitBuiltInOptionsDoNotOfferConfiguredTemplates(string option, string value)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        await CreateSearchTemplateAsync(workspace, "template", "sample", "Sample", "Found");
         var interaction = new TestInteractionService();
         using var cancellation = new CancellationTokenSource();
         var selectionCount = 0;
@@ -554,8 +546,11 @@ public partial class NewCommandLocalTemplateTests
             cancellation.Cancel();
             throw new OperationCanceledException(cancellation.Token);
         };
-        using var provider = CreateServices(workspace, interaction, interactive: true).BuildServiceProvider();
-        await WriteConfiguredSourcesAsync(provider, new() { ["company"] = Path.Combine(workspace.Path, "template") });
+        var git = new TestGitCommandRunner();
+        var services = CreateServices(workspace, interaction, interactive: true);
+        services.AddSingleton<IGitCommandRunner>(git);
+        using var provider = services.BuildServiceProvider();
+        await WriteConfiguredSourcesAsync(provider, new() { ["company"] = "https://example.test/templates.git" });
 
         var exitCode = await provider.GetRequiredService<RootCommand>()
             .Parse(["new", "--name", "Demo", "--output", "out", "--suppress-agent-init", option, value])
@@ -564,6 +559,8 @@ public partial class NewCommandLocalTemplateTests
         Assert.Equal(CliExitCodes.Cancelled, exitCode);
         Assert.Equal(1, selectionCount);
         Assert.Empty(interaction.DisplayedErrors);
+        Assert.Empty(GetGitResolutions(git));
+        Assert.Empty(GetGitFetches(git));
         Assert.False(Directory.Exists(Path.Combine(workspace.Path, "out")));
     }
 
@@ -590,20 +587,16 @@ public partial class NewCommandLocalTemplateTests
         await CreateSearchTemplateAsync(workspace, "templates/first", "same", "Same template", "First");
         await CreateSearchTemplateAsync(workspace, "templates/second", "same", "Same template", "Second");
         var interaction = new TestInteractionService();
-        interaction.SetupStringPromptResponse("");
         using var cancellation = new CancellationTokenSource();
         var selections = 0;
         interaction.PromptForSelectionCallback = (_, choices, formatter, _) =>
         {
             var options = choices.Cast<object>().ToArray();
-            if (++selections == 1)
-            {
-                return options[^1];
-            }
+            selections++;
             var labels = options.Select(formatter).ToArray();
             Assert.Equal(
                 ["Same template (same) - company", "Same template (same) - company [[2]]",
-                    NewCommandStrings.SearchTemplatesAgain, NewCommandStrings.BackToDefaultTemplates], labels);
+                    NewCommandStrings.SearchForMoreTemplates], labels.TakeLast(3));
             Assert.Equal(labels.Length, labels.ToDictionary(label => label).Count);
             cancellation.Cancel();
             throw new OperationCanceledException(cancellation.Token);
@@ -615,7 +608,7 @@ public partial class NewCommandLocalTemplateTests
             .InvokeAsync(cancellationToken: cancellation.Token).DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Cancelled, result);
-        Assert.Equal(2, selections);
+        Assert.Equal(1, selections);
         Assert.Empty(interaction.DisplayedErrors);
     }
 
