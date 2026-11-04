@@ -3,13 +3,17 @@
 
 #pragma warning disable ASPIREAZURE001
 #pragma warning disable ASPIREPIPELINES001
+#pragma warning disable ASPIREAZUREPROVISIONING001
 
 using System.Reflection;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Azure.EntraId.Provisioning;
+using Aspire.Hosting.Azure.Provisioning;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.RemoteHost;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
+using Aspire.TypeSystem;
 
 namespace Aspire.Hosting.Azure.EntraId.Tests;
 
@@ -18,6 +22,57 @@ public class EntraIdPolyglotTests
     private const string TenantId = "aaaabbbb-0000-cccc-1111-dddd2222eeee";
     private const string ClientId = "00001111-aaaa-2222-bbbb-3333cccc4444";
     private const string CertificateCapabilityId = "Aspire.Hosting.Azure.EntraId/runWithLocalDeveloperCertificateCredential";
+
+    [Fact]
+    public async Task ConfigureInfrastructure_ProxiesCustomizeGraphResources()
+    {
+        var exports = AtsCapabilityScanner.ScanAssemblies(
+        [
+            typeof(DistributedApplication).Assembly,
+            typeof(AzureProvisioningResource).Assembly,
+            typeof(EntraIdApplicationResource).Assembly,
+            typeof(BicepValueProxy).Assembly,
+            Assembly.Load("Aspire.Hosting.Azure.Provisioning.EntraId")
+        ]);
+        Assert.All(exports.Diagnostics, d => Assert.Equal(AtsDiagnosticSeverity.Info, d.Severity));
+
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var serviceReference = builder.AddParameter("service-reference");
+        var entra = builder.AddEntraIdApplication("entra-api")
+            .WithScope("read", "Read data.");
+        var configure = exports.Methods["Aspire.Hosting.Azure/configureInfrastructure"]
+            .MakeGenericMethod(typeof(EntraIdApplicationResource));
+        Action<AzureResourceInfrastructure> callback = infrastructure =>
+        {
+            object GetResource(string methodName, string identifier) =>
+                exports.Methods.Single(m => m.Value.Name == methodName).Value.Invoke(null, [infrastructure, identifier])!;
+
+            var application = GetResource("GetMicrosoftGraphApplicationByIdentifier", "application");
+            var principal = GetResource("GetMicrosoftGraphServicePrincipalByIdentifier", "servicePrincipal");
+            Assert.IsType<MicrosoftGraphApplication>(Assert.IsAssignableFrom<ProvisionableResourceProxy>(application).Inner);
+            Assert.IsType<MicrosoftGraphServicePrincipal>(Assert.IsAssignableFrom<ProvisionableResourceProxy>(principal).Inner);
+
+            const string proxyPrefix = "Aspire.Hosting.Azure.Provisioning.EntraId.Generated/";
+            var applicationTags = exports.Properties[proxyPrefix + "MicrosoftGraphApplicationProxy.tags"].GetValue(application)!;
+            var principalTags = exports.Properties[proxyPrefix + "MicrosoftGraphServicePrincipalProxy.tags"].GetValue(principal)!;
+            var addTag = exports.Methods.Single(m => m.Value.DeclaringType == applicationTags.GetType() && m.Value.Name == "Add").Value;
+            addTag.Invoke(applicationTags, ["department:engineering"]);
+            addTag.Invoke(principalTags, ["department:engineering"]);
+
+            var bicep = exports.Methods["Aspire.Hosting.Azure.Provisioning/bicep"].Invoke(null, [infrastructure])!;
+            var parameter = exports.Methods.Single(m => m.Value.DeclaringType == bicep.GetType() && m.Value.Name == "Parameter")
+                .Value.Invoke(bicep, [serviceReference, null])!;
+            addTag.Invoke(applicationTags, [parameter]);
+            exports.Properties[proxyPrefix + "MicrosoftGraphApplicationProxy.setServiceManagementReference"].SetValue(application, parameter);
+            exports.Properties[proxyPrefix + "MicrosoftGraphApplicationProxy.setEnableIdTokenIssuance"].SetValue(application, true);
+        };
+        Assert.Same(entra, configure.Invoke(null, [entra, callback]));
+
+        var actual = entra.Resource.GetBicepTemplateString();
+        Assert.Same(serviceReference.Resource, entra.Resource.Parameters["service_reference"]);
+        Assert.Equal(actual, entra.Resource.GetBicepTemplateString());
+        await Verify(actual, "bicep");
+    }
 
     [Theory]
     [InlineData(false, false)]
@@ -537,6 +592,41 @@ public class EntraIdPolyglotTests
         var named = Assert.Throws<TargetInvocationException>(() => DispatchReference(consumer, entra, name: "service"));
         Assert.IsType<InvalidOperationException>(named.GetBaseException());
         Assert.Empty(entra.Resource.Consumers);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AppRoleAssignments_ExportAcceptsIdentityAndCompute(bool compute)
+    {
+        const string CapabilityId = "Aspire.Hosting.Azure.EntraId/publishWithAppRoleAssignment";
+        var exports = ScanExports();
+        var capability = Assert.Single(exports.Capabilities, c => c.CapabilityId == CapabilityId);
+        Assert.Equal("publishWithAppRoleAssignment", capability.MethodName);
+        var method = exports.Methods[CapabilityId];
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var identity = builder.AddAzureUserAssignedIdentity("caller-identity");
+        var worker = builder.AddContainer("worker", "image").WithAzureUserAssignedIdentity(identity);
+        var api = builder.AddEntraIdApplication("entra-api")
+            .WithAppRoleForExport("Read", "Read", "Read.", ["Application"]);
+        object target = compute ? worker : identity;
+
+        Assert.Same(api, method.Invoke(null, [api, target, new[] { "Read" }]));
+        var assignment = Assert.Single(api.Resource.GetManagedIdentityRoleAssignments(requireIdentity: true));
+        Assert.Same(identity.Resource, assignment.Identity);
+        Assert.Equal("Read", assignment.Role.Value);
+        await Verify(api.Resource.GetBicepTemplateString(), "bicep").UseParameters(compute);
+    }
+
+    [Fact]
+    public void AppRoleAssignments_ExportRejectsUnsupportedTargets()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var api = builder.AddEntraIdApplication("entra-api")
+            .WithAppRoleForExport("Read", "Read", "Read.", ["Application"]);
+        Assert.Throws<ArgumentException>(() => api.PublishWithAppRoleAssignmentForExport(42, ["Read"]));
+        Assert.Throws<ArgumentNullException>(() => api.PublishWithAppRoleAssignmentForExport(null!, ["Read"]));
+        Assert.Empty(api.Resource.AppRoleAssignments);
     }
 
     private static AtsCapabilityScanner.ScanResult ScanExports() => AtsCapabilityScanner.ScanAssemblies(

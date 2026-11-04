@@ -127,8 +127,13 @@ internal static class PackageUpdateHelpers
     }
 
     public static List<NuGetPackage> ParsePackageSearchResults(string stdout, string? packageId = null)
+        => ParsePackageSearchResults(stdout, out _, packageId);
+
+    public static List<NuGetPackage> ParsePackageSearchResults(string stdout, out IReadOnlyList<string> failedSources, string? packageId)
     {
         var foundPackages = new List<NuGetPackage>();
+        var sourceFailures = new List<string>();
+        failedSources = sourceFailures;
 
         using var document = JsonDocument.Parse(ExtractJsonPayload(stdout, IsPackageSearchPayload));
         if (!document.RootElement.TryGetProperty("searchResult", out var searchResultsArray))
@@ -139,6 +144,16 @@ internal static class PackageUpdateHelpers
         foreach (var sourceResult in searchResultsArray.EnumerateArray())
         {
             var source = sourceResult.GetProperty("sourceName").GetString()!;
+            // SDK search can exit successfully with partial results:
+            // {"sourceName":"team","problems":[{"problemType":"Error","text":"..."}],"packages":[]}
+            // Keep the source identity, not diagnostic text that can contain credentials.
+            if (sourceResult.TryGetProperty("problems", out var problems) &&
+                problems.EnumerateArray().Any(problem =>
+                    problem.TryGetProperty("problemType", out var problemType) && problemType.GetString() == "Error"))
+            {
+                sourceFailures.Add(source);
+            }
+
             var sourcePackagesArray = sourceResult.GetProperty("packages");
 
             foreach (var packageResult in sourcePackagesArray.EnumerateArray())

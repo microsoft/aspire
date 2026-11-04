@@ -81,7 +81,7 @@ For this scenario, suppose the repository initially supplies:
 }
 ```
 
-The application is still created from the selected Aspire starter. Acquiring this configuration does not itself download a custom starter, install a private integration, or replace the embedded agent skills. Subsequent agent initialization in remote mode registers the configured sources alongside the built-in source; the agent clients acquire their content.
+The application is still created from the selected Aspire starter. Acquiring this configuration does not itself download a custom starter, install a private integration, or acquire agent assets. Subsequent agent initialization registers the configured sources alongside the built-in source; the agent clients acquire their content.
 
 If Maya declines, creation continues with standard Aspire configuration and saves `"configSource": { "optOut": true }` without Git acquisition. This prevents subsequent adoption prompts for that project. If she cancels the source prompt, the app is not created. If she accepts but repository access or validation fails, creation reports the error rather than silently switching to standard configuration.
 
@@ -114,7 +114,7 @@ The relevant excerpt from the project's file is:
 
 This is an excerpt, not a replacement for the generated file. Maya keeps its AppHost, SDK, package, and other project-owned settings.
 
-Only [allowlisted top-level settings](cli-config-sources.md#materialize-an-allowlist-into-the-app-configuration) are copied, not the entire source JSON. Currently only `skillSources` is allowed, and it is copied in full when supplied. Other source values, including `docs`, AppHost paths, SDK/channel selection, packages, and arbitrary feature settings, are not imported.
+Only [allowlisted top-level settings](cli-config-sources.md#materialize-an-allowlist-into-the-app-configuration) are copied, not the entire source JSON. `skillSources` and `integrationSources` are allowed, and each is copied in full when supplied. Other source values, including `docs`, AppHost paths, SDK/channel selection, packages, and arbitrary feature settings, are not imported.
 
 Maya commits the resulting app file with the application. It contains neither Git credentials nor an absolute tracking path, so another machine can use the saved values immediately.
 
@@ -196,7 +196,7 @@ Maya can inspect these effective values and use them:
 ```powershell
 aspire config get skillSources.platform.repository
 aspire config get skillSources.inventory.ref
-aspire agent init --skills aspire --aspire-source remote
+aspire agent init --skills aspire
 ```
 
 Agent initialization registers the saved sources using each agent's native configuration. Existing agent-side registrations and pins are preserved, so editing a ref does not retarget an already registered marketplace. Git authentication for the configuration repository is not forwarded to the agent clients; acquisition of skill content remains their responsibility.
@@ -210,7 +210,7 @@ Noah joins Maya's team and clones the application repository, including its mate
 From Inventory's project directory, he runs:
 
 ```powershell
-aspire agent init --skills aspire --aspire-source remote
+aspire agent init --skills aspire
 ```
 
 The command reads Inventory's saved skill sources and registers them with the selected agents. It does not fetch configuration to fill in runtime values or copy Maya's tracking directory.

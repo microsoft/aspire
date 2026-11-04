@@ -106,7 +106,7 @@ internal sealed class ConfiguredTemplateSourceService(
     }
 
     private void Warn(string source, string message) =>
-        interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(
+        interactionService.DisplayMessage(KnownEmojis.PoliceCarLight, string.Format(
             CultureInfo.CurrentCulture, NewCommandStrings.TemplateSourceSearchFailed, source, message));
 }
 

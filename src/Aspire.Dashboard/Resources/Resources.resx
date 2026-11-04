@@ -410,6 +410,15 @@
   <data name="ResourceOverviewNoTelemetry" xml:space="preserve">
     <value>This resource hasn't sent telemetry</value>
   </data>
+  <data name="ResourceOverviewPanelsLabel" xml:space="preserve">
+    <value>Panels</value>
+  </data>
+  <data name="ResourceOverviewShowAllPanels" xml:space="preserve">
+    <value>Show all panels</value>
+  </data>
+  <data name="ResourceOverviewHideEmptyPanels" xml:space="preserve">
+    <value>Hide empty panels</value>
+  </data>
   <data name="ResourceOverviewTotal" xml:space="preserve">
     <value>Total</value>
   </data>

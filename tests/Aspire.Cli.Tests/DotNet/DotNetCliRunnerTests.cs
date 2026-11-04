@@ -2918,6 +2918,45 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task SearchPackagesAsyncPreservesRedactedSourceFailures()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper).BuildServiceProvider();
+        var runner = DotNetCliRunnerTestHelper.Create(
+            provider,
+            CreateExecutionContext(workspace.WorkspaceRoot),
+            (_, _, _, options) => options.StandardOutputCallback?.Invoke(
+                """
+                {
+                  "version": 2,
+                  "problems": [],
+                  "searchResult": [
+                    {
+                      "sourceName": "https://private.example/v3/index.json?sig=secret",
+                      "problems": [{"problemType": "Error", "text": "Diagnostic with secret"}],
+                      "packages": []
+                    },
+                    {
+                      "sourceName": "public-feed",
+                      "problems": [{"problemType": "Warning", "text": "A warning"}],
+                      "packages": [{"id": "Aspire.Hosting.Redis", "latestVersion": "1.0.0"}]
+                    }
+                  ]
+                }
+                """),
+            0);
+
+        var result = await runner.SearchPackagesAsync(
+            workspace.WorkspaceRoot, "Aspire.Hosting", exactMatch: false, prerelease: false,
+            take: 100, skip: 0, nugetConfigFile: null, useCache: false,
+            new ProcessInvocationOptions { SuppressLogging = true }, TestContext.Current.CancellationToken);
+
+        Assert.Equal(CliExitCodes.Success, result.ExitCode);
+        Assert.Equal(["https://private.example/v3/index.json"], result.FailedSources);
+        Assert.Equal("Aspire.Hosting.Redis", Assert.Single(result.Packages!).Id);
+    }
+
+    [Fact]
     public async Task SearchPackagesAsync_WithExactMatch_UsesExactMatchFlagWithoutPaginationArguments()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

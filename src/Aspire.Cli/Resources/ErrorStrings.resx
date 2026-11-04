@@ -327,4 +327,16 @@
     <value>SDK API export cannot export {0} because that package supplies the selected language's code generator instead of an integration API surface.</value>
     <comment>{0} is the code-generation package name.</comment>
   </data>
+  <data name="InvalidIntegrationSource" xml:space="preserve">
+    <value>Invalid integration source configuration at '{0}'. Specify a NuGet source without embedded credentials and, optionally, a non-empty list of allowed package patterns (exact IDs, prefixes ending in *, or *).</value>
+    <comment>{0} is the configuration key. Do not translate NuGet or *.</comment>
+  </data>
+  <data name="InvalidSourceName" xml:space="preserve">
+    <value>Invalid source name at '{0}'. Source names must be 1-64 ASCII letters, digits, dots, hyphens, or underscores, starting with a letter or digit.</value>
+    <comment>{0} is the configuration key. Do not translate ASCII.</comment>
+  </data>
+  <data name="NuGetSourceKeyAlreadyInUse" xml:space="preserve">
+    <value>NuGet source key '{0}' is already reserved by another source or its settings. Choose another integration source key or update the NuGet configuration manually.</value>
+    <comment>{0} is the source key. Do not translate NuGet.</comment>
+  </data>
 </root>

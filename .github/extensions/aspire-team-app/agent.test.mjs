@@ -239,6 +239,47 @@ test("new-session routing is unchanged for a github.com PR", () => {
   }
 });
 
+test("detached preference routes every new-session PR action through detached creation", () => {
+  for (const kind of AGENT_ACTION_KINDS) {
+    const prompt = buildAgentActionPrompt(kind, validPr, "new-session", { detachedSessions: true });
+    assert.match(prompt, /Use list_repositories/);
+    assert.match(prompt, /Use create_session with:/);
+    assert.match(prompt, /- detached: true/);
+    assert.match(prompt, /- workspace_type: "worktree"/);
+    assert.match(prompt, /Leave base_branch unset/);
+    assert.match(prompt, /get_session with the returned session ID/);
+    assert.match(prompt, /do not silently clone/);
+    assert.doesNotMatch(prompt, /Use the open_pr_session tool with:/);
+    const kickoff = JSON.parse(prompt.match(/^- kickoff\.prompt: (.+)$/m)[1]);
+    assert.match(kickoff, /check out its branch in this session's isolated worktree/);
+    assert.match(kickoff, /Verify that the checkout matches the live PR head/);
+    assert.match(kickoff, /including fork PRs/);
+    assert.match(kickoff, /Do not open another session/);
+    assert.doesNotMatch(kickoff, /report back/);
+    assert.match(kickoff, /microsoft\/aspire#123/);
+  }
+});
+
+test("detached preference is opt-in and does not change current-session or GHES routing", () => {
+  const ghes = { ...validPr, url: "https://ghe.example.com/microsoft/aspire/pull/123" };
+  for (const kind of AGENT_ACTION_KINDS) {
+    for (const value of [undefined, false, "true", 1]) {
+      assert.equal(
+        buildAgentActionPrompt(kind, validPr, "new-session", { detachedSessions: value }),
+        buildAgentActionPrompt(kind, validPr),
+      );
+    }
+    assert.equal(
+      buildAgentActionPrompt(kind, validPr, "current-session", { detachedSessions: true }),
+      buildAgentActionPrompt(kind, validPr, "current-session"),
+    );
+    assert.equal(
+      buildAgentActionPrompt(kind, ghes, "new-session", { detachedSessions: true }),
+      buildAgentActionPrompt(kind, ghes),
+    );
+  }
+});
+
 test("buildAgentActionLog breadcrumb reflects the effective session for a GHES new-session action", () => {
   // The breadcrumb must agree with the prompt: a GHES new-session action actually runs in this
   // session, so it must not claim "a new session".

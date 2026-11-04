@@ -163,6 +163,7 @@ public class ApplicationSummaryTests : DashboardTestContext
     {
         Services.Configure<DashboardOptions>(options => options.UI.DisableResourceGraph = true);
         var cut = RenderSummary();
+        var outlet = Render<SectionOutlet>(builder => builder.Add(p => p.SectionName, ResourcesLayout.HeaderActionsSectionName));
         var preferences = Services.GetRequiredService<DashboardViewPreferences>();
 
         await cut.InvokeAsync(() => preferences.SetGroupOverviewAsync(GroupOverview.Graph));
@@ -170,29 +171,54 @@ public class ApplicationSummaryTests : DashboardTestContext
         cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll(".resource-card").Count));
         Assert.Equal(GroupOverview.Cards, preferences.GroupOverview);
         Assert.True(cut.Find(".home-resource-graph-layout").HasAttribute("hidden"));
+        Assert.Equal(["Cards", "Home"], outlet.FindAll(".icon-toggle").Select(button => button.GetAttribute("aria-label")));
     }
 
-    [Fact]
-    public void Render_MobileViewport_CollapsesLayoutOptionsIntoMenu()
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    [InlineData(false, true)]
+    public void Render_LayoutToggleChangesViewsWithMissingParameters(bool isDesktop, bool missingParameters)
     {
-        var viewport = new ViewportInformation(IsDesktop: false, IsUltraLowHeight: false, IsUltraLowWidth: true);
+        var viewport = new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: !isDesktop);
+        JSInterop.SetupModule("/js/app-resourcegraph.js").Mode = JSRuntimeMode.Loose;
         var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
         ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
             initialResources:
             [
                 ModelTestHelpers.CreateResource("api", state: KnownResourceState.Running, resourceType: "Project"),
-                ModelTestHelpers.CreateResource("broken", state: KnownResourceState.FailedToStart, resourceType: "Container")
+                ModelTestHelpers.CreateResource("broken", state: KnownResourceState.FailedToStart, resourceType: "Container"),
+                ModelTestHelpers.CreateResource("parameter", resourceType: KnownResourceTypes.Parameter,
+                    state: missingParameters ? KnownResourceState.ValueMissing : KnownResourceState.Running)
             ],
             resourceChannelProvider: () => channel));
         var outlet = Render<SectionOutlet>(builder => builder.Add(p => p.SectionName, ResourcesLayout.HeaderActionsSectionName));
-        _ = Render<ApplicationSummary>(builder => builder.AddCascadingValue(viewport));
+        var cut = Render<ApplicationSummary>(builder => builder.AddCascadingValue(viewport));
+        var preferences = Services.GetRequiredService<DashboardViewPreferences>();
 
         outlet.WaitForAssertion(() =>
         {
-            Assert.Empty(outlet.FindAll(".icon-toggle-group"));
-            Assert.Equal("Cards", outlet.Find(".overview-layout-menu").TextContent.Trim());
-            Assert.Equal("Layout: Cards", outlet.Find(".overview-layout-menu").GetAttribute("aria-label"));
+            Assert.Equal("Layout", outlet.Find(".icon-toggle-group").GetAttribute("aria-label"));
+            Assert.Equal(["Cards", "Home", "Graph"], outlet.FindAll(".icon-toggle").Select(button => button.GetAttribute("aria-label")));
+            Assert.Equal(missingParameters ? 1 : 0, outlet.FindAll(".missing-parameters-link").Count);
+            Assert.Equal("true", outlet.Find("[aria-label='Cards']").GetAttribute("aria-pressed"));
         });
+
+        outlet.Find("[aria-label='Home']").Click();
+        cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll(".home-hero")));
+        Assert.Equal(GroupOverview.Summary, preferences.GroupOverview);
+        Assert.Equal("true", outlet.Find("[aria-label='Home']").GetAttribute("aria-pressed"));
+
+        outlet.Find("[aria-label='Graph']").Click();
+        cut.WaitForAssertion(() => Assert.False(cut.Find(".home-resource-graph-layout").HasAttribute("hidden")));
+        Assert.Equal(GroupOverview.Graph, preferences.GroupOverview);
+        Assert.Equal("true", outlet.Find("[aria-label='Graph']").GetAttribute("aria-pressed"));
+
+        outlet.Find("[aria-label='Cards']").Click();
+        cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll(".resource-card")));
+        Assert.Equal(GroupOverview.Cards, preferences.GroupOverview);
+        Assert.Equal("true", outlet.Find("[aria-label='Cards']").GetAttribute("aria-pressed"));
     }
 
     private IRenderedComponent<ApplicationSummary> RenderSummary(ViewportInformation? viewport = null)

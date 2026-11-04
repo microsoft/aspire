@@ -1035,7 +1035,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
         AssertDcpCleanupInvocation(processFactory, expectedWorkloadId, deleteVolumes);
         Assert.Contains(interactionService.DisplayedMessages, message =>
-            message.Emoji.Equals(KnownEmojis.Warning) &&
+            message.Emoji.Equals(KnownEmojis.PoliceCarLight) &&
             message.Message.Contains(expectedWarning, StringComparison.Ordinal));
     }
 
@@ -1075,7 +1075,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
         AssertDcpCleanupInvocation(processFactory, expectedWorkloadId);
         Assert.Contains(interactionService.DisplayedMessages, message =>
-            message.Emoji.Equals(KnownEmojis.Warning) &&
+            message.Emoji.Equals(KnownEmojis.PoliceCarLight) &&
             message.Message.Contains("an unknown version", StringComparison.Ordinal));
     }
 
@@ -1114,7 +1114,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
         AssertDcpCleanupInvocation(processFactory, expectedWorkloadId);
         Assert.Contains(interactionService.DisplayedMessages, message =>
-            message.Emoji.Equals(KnownEmojis.Warning) &&
+            message.Emoji.Equals(KnownEmojis.PoliceCarLight) &&
             message.Message.Contains("Could not inspect the AppHost project", StringComparison.Ordinal));
     }
 

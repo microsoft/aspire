@@ -773,4 +773,49 @@ public class DevTunnelMonitorTests
         Assert.False(response.Task.IsCompleted);
         await Assert.ThrowsAsync<ObjectDisposedException>(() => test.Monitor.CheckHealthAsync(CancellationToken.None));
     }
+
+    [Fact]
+    public async Task FixtureDisposalStopsMonitorBeforeServicesAreDisposed()
+    {
+        var test = new TestDevTunnelMonitor(configureServices: services => services.AddSingleton<DisposalProbe>());
+        var queried = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var response = new TaskCompletionSource<DevTunnelAccessStatus>(TaskCreationOptions.RunContinuationsAsynchronously);
+        test.Client.GetAccessCallback = (port, ct) =>
+        {
+            if (port is null)
+            {
+                return Task.FromResult(test.Client.AccessStatus);
+            }
+            queried.TrySetResult();
+            return response.Task.WaitAsync(ct);
+        };
+        // Resolved after the monitor, so the provider disposes the probe first. Its disposal runs
+        // after the provider rejects resolution, which is where a still-running monitor would publish.
+        var probe = test.App.Services.GetRequiredService<DisposalProbe>();
+        probe.Disposing = () =>
+        {
+            var refresh = test.Monitor.WaitForAccessRefreshAsync(CancellationToken.None);
+            response.TrySetResult(test.Client.AccessStatus);
+            Task.WhenAny(refresh).DefaultTimeout().GetAwaiter().GetResult();
+        };
+        await test.StartAsync();
+        await test.ReadyAsync();
+        await queried.Task.DefaultTimeout();
+
+        test.Dispose();
+
+        Assert.True(probe.Disposed);
+    }
+
+    private sealed class DisposalProbe : IDisposable
+    {
+        public Action? Disposing { get; set; }
+        public bool Disposed { get; private set; }
+
+        public void Dispose()
+        {
+            Disposed = true;
+            Disposing?.Invoke();
+        }
+    }
 }

@@ -1,0 +1,7 @@
+﻿[
+  Skill sources:
+https://third-party.example/skills/
+https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v2/
+https://team.example/skills/,
+  [yellow]Only use sources you trust. Content from these sources can run code on your machine.[/]
+]
