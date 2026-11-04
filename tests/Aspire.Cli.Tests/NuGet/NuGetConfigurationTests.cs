@@ -1,9 +1,12 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
+using Aspire.Cli.Projects;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -11,6 +14,84 @@ namespace Aspire.Cli.Tests.NuGet;
 
 public class NuGetConfigurationTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void BuildStable_RemovesSdkPatternsFromProtectedChannelSources(bool isEnabled)
+    {
+        var settings = CreateSettings(
+        [
+            new("aspire-daily", ["Aspire*", "*", "Aspire.Hosting.Private", "Private.*"]),
+            new("public", ["*"])
+        ]) with
+        {
+            Sources =
+            [
+                new("aspire-daily", "integration", isEnabled, true, false) { IsIntegrationSource = true },
+                new("public", "public", true, false, false)
+            ],
+            DisabledPackageSourceKeys = isEnabled ? [] : ["aspire-daily"]
+        };
+        var channel = PackageChannel.CreateExplicitChannel(
+            "stable", PackageChannelQuality.Stable, [new("*", PackageSources.NuGetOrg)],
+            new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
+
+        var configuration = DotNetAppHostNuGetConfigBuilder.BuildStable(settings, "test", channel);
+
+        var overlay = Assert.IsType<NuGetConfigOverlay>(configuration.Overlay);
+        Assert.Empty(overlay.RetiredSourceKeys);
+        Assert.Equal(settings.DisabledPackageSourceKeys, overlay.DisabledPackageSourceKeys);
+        Assert.Equal(["Aspire.Hosting.Private", "Private.*"],
+            Assert.Single(overlay.PackageSourceMappings, mapping => mapping.SourceKey == "aspire-daily").Patterns);
+        var persistence = Assert.IsType<DotNetAppHostNuGetConfig>(configuration.AppHostConfig);
+        Assert.Empty(persistence.SourceChanges.RetiredSourceKeys);
+        var removal = Assert.Single(persistence.RemovedPackageSourceMappings);
+        Assert.Equal("aspire-daily", removal.SourceKey);
+        Assert.Equal(["Aspire*", "*"], removal.Patterns);
+    }
+
+    [Theory]
+    [InlineData("Aspire*")]
+    [InlineData("*")]
+    public void BuildStable_RequiresManualConfigurationForAmbiguousIntegrationRouting(string pattern)
+    {
+        var settings = CreateSettings([new("aspire-daily", [pattern])]) with
+        {
+            ConfigPaths = ["nuget.config"],
+            Sources = [new("aspire-daily", "integration", true, false, false) { IsIntegrationSource = true }]
+        };
+        var channel = PackageChannel.CreateExplicitChannel(
+            "stable", PackageChannelQuality.Stable, [new("*", PackageSources.NuGetOrg)],
+            new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
+
+        var exception = Assert.Throws<ProjectUpdaterException>(() =>
+            DotNetAppHostNuGetConfigBuilder.BuildStable(settings, "test", channel));
+
+        Assert.Equal(string.Format(CultureInfo.CurrentCulture,
+            UpdateCommandStrings.ChannelFeedAlreadyConfiguredFormat, "nuget.config", "aspire-daily"), exception.Message);
+    }
+
+    [Theory]
+    [InlineData("aspire-integration-team")]
+    [InlineData("company")]
+    public void BuildStable_PreservesExplicitIntegrationAliasMappings(string sourceKey)
+    {
+        var settings = CreateSettings([new(sourceKey, ["Aspire*", "*"])]) with
+        {
+            Sources = [new(sourceKey, "integration", true, false, false) { IsIntegrationSource = true }]
+        };
+        var channel = PackageChannel.CreateExplicitChannel(
+            "stable", PackageChannelQuality.Stable, [new("*", PackageSources.NuGetOrg)],
+            new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
+
+        var configuration = DotNetAppHostNuGetConfigBuilder.BuildStable(settings, "test", channel);
+
+        var overlay = Assert.IsType<NuGetConfigOverlay>(configuration.Overlay);
+        Assert.Equal(["Aspire*", "*"], Assert.Single(overlay.PackageSourceMappings).Patterns);
+        Assert.Empty(overlay.RetiredSourceKeys);
+        Assert.Empty(Assert.IsType<DotNetAppHostNuGetConfig>(configuration.AppHostConfig).RemovedPackageSourceMappings);
+    }
+
     [Theory]
     [InlineData("Contoso.Hosting.One", null)]
     [InlineData("Contoso.Hosting.One", "*")]

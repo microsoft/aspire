@@ -4,6 +4,7 @@
 using System.Globalization;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Packaging;
+using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 
 namespace Aspire.Cli.NuGet;
@@ -26,29 +27,50 @@ internal static class NuGetConfigurationBuilder
             .ToHashSet(StringComparer.Ordinal);
         // Shared .NET feeds are identified by their CLI aliases, including aliases left
         // behind when an AppHost moves and its path-derived workload identifier changes.
-        var channelSourceKeys = settings.Sources
-            .Where(source => !source.IsIntegrationSource && !preservedSourceIdentities.Contains(source.Identity) &&
+        var channelSources = settings.Sources
+            .Where(source => !preservedSourceIdentities.Contains(source.Identity) &&
                 IsCliManagedSource(source, workloadId))
-            .Select(static source => source.Name)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            .ToDictionary(static source => source.Name, StringComparer.OrdinalIgnoreCase);
 
         // Stable returns to existing NuGet policy, not a prescribed public endpoint. Remove
         // channel-owned Aspire mappings while retaining user feeds and unrelated mappings.
-        var mappings = ResolveAmbientMappingAliases(settings)
-            .Select(mapping => channelSourceKeys.Contains(mapping.SourceKey)
+        var ambientMappings = ResolveAmbientMappingAliases(settings);
+        var mappings = ambientMappings
+            .Select(mapping => channelSources.TryGetValue(mapping.SourceKey, out var source)
                 ? mapping with
                 {
-                    Patterns = [.. mapping.Patterns.Where(static pattern =>
-                        pattern != PackageMapping.AllPackages &&
-                        !PackageSourceOverrideMappings.CompetesWithAuthoritativePattern(
-                            pattern, PackageSourceOverrideMappings.DefaultPackagePattern))]
+                    Patterns = [.. mapping.Patterns.Where(pattern =>
+                        !IsObsoleteStableChannelPattern(source, pattern))]
                 }
                 : mapping)
             .Where(static mapping => mapping.Patterns.Count > 0)
             .ToArray();
-        var retiredSourceKeys = channelSourceKeys
-            .Where(key => !mappings.Any(mapping =>
-                string.Equals(mapping.SourceKey, key, StringComparison.OrdinalIgnoreCase)))
+        foreach (var source in channelSources.Values.Where(static source => source.IsIntegrationSource))
+        {
+            if (!ambientMappings.Any(mapping =>
+                string.Equals(mapping.SourceKey, source.Name, StringComparison.OrdinalIgnoreCase) &&
+                mapping.Patterns.Any(pattern => IsObsoleteStableChannelPattern(source, pattern))))
+            {
+                continue;
+            }
+
+            var aliases = settings.Sources.Where(alias => string.Equals(alias.Identity, source.Identity, StringComparison.Ordinal))
+                .Select(static alias => alias.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            // Discovery filters do not describe private dependencies. Require an existing
+            // narrower restore route on this feed, including equivalent aliases, rather
+            // than guessing how to replace its only broad mapping.
+            if (!mappings.Any(mapping => aliases.Contains(mapping.SourceKey) &&
+                mapping.Patterns.Any(pattern => !IsObsoleteStableChannelPattern(source, pattern))))
+            {
+                throw new ProjectUpdaterException(string.Format(
+                    CultureInfo.CurrentCulture, UpdateCommandStrings.ChannelFeedAlreadyConfiguredFormat,
+                    string.Join(", ", settings.ConfigPaths), source.Name));
+            }
+        }
+        var retiredSourceKeys = channelSources.Values
+            .Where(source => !source.IsIntegrationSource && !mappings.Any(mapping =>
+                string.Equals(mapping.SourceKey, source.Name, StringComparison.OrdinalIgnoreCase)))
+            .Select(static source => source.Name)
             .ToArray();
         var overlay = new NuGetConfigOverlay(
             Sources: [],
@@ -106,6 +128,17 @@ internal static class NuGetConfigurationBuilder
 
     internal static bool IsCliManagedSource(NuGetSourceInfo source, string workloadId)
         => source.IsCliManaged || IsCliManagedSourceKey(source.Name, workloadId);
+
+    internal static bool IsObsoleteStableChannelPattern(NuGetSourceInfo source, string pattern)
+        // Integration aliases own their mappings, not SDK policy. A shared channel alias
+        // can lose its old SDK wildcards without losing exact or narrower private routes.
+        => source.IsIntegrationSource
+            ? !source.Name.StartsWith(IntegrationSourceKeyPrefix, StringComparison.OrdinalIgnoreCase) &&
+                (pattern == PackageMapping.AllPackages ||
+                 string.Equals(pattern, PackageSourceOverrideMappings.DefaultPackagePattern, StringComparison.OrdinalIgnoreCase))
+            : pattern == PackageMapping.AllPackages ||
+                PackageSourceOverrideMappings.CompetesWithAuthoritativePattern(
+                    pattern, PackageSourceOverrideMappings.DefaultPackagePattern);
 
     internal static bool IsCliManagedSourceKey(string sourceKey, string workloadId)
         => sourceKey.StartsWith(IntegrationSourceKeyPrefix, StringComparison.OrdinalIgnoreCase) ||

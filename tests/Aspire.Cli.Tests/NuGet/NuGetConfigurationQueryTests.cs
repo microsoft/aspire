@@ -4,6 +4,7 @@
 using Aspire.Cli.NuGet;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Packaging;
+using Aspire.Cli.Projects;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -12,6 +13,109 @@ namespace Aspire.Cli.Tests.NuGet;
 
 public class NuGetConfigurationQueryTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData("Aspire.Hosting.Private", false, false, true)]
+    [InlineData("Aspire.Hosting.Private*", false, false, true)]
+    [InlineData("Aspire.Hosting.Private", true, false, true)]
+    [InlineData("Aspire.Hosting.Private", false, true, true)]
+    [InlineData("Aspire.Hosting.Private", false, false, false)]
+    [InlineData("*", false, false, true)]
+    public async Task StableChannelPolicy_PreservesIntegrationFeedAndRouting(
+        string privatePattern, bool separateIntegrationAlias, bool inheritedMapping, bool isEnabled)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostDirectory = workspace.CreateDirectory("AppHost");
+        const string privateFeed = "https://example.test/team/v3/index.json";
+        const string sdkSourceKey = "aspire-daily";
+        var integrationKey = separateIntegrationAlias ? "company" : sdkSourceKey;
+        var configPath = Path.Combine(workspace.Path, "nuget.config");
+        var original = $$"""
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="{{sdkSourceKey}}" value="{{privateFeed}}" />
+                {{(separateIntegrationAlias ? $"""<add key="{integrationKey}" value="{privateFeed}" />""" : "")}}
+                <add key="public" value="{{PackageSources.NuGetOrg}}" />
+              </packageSources>
+              <packageSourceCredentials>
+                <aspire-daily><add key="Username" value="test-user" /><add key="ClearTextPassword" value="test-password" /></aspire-daily>
+              </packageSourceCredentials>
+              {{(isEnabled ? "" : """<disabledPackageSources><add key="aspire-daily" value="true" /></disabledPackageSources>""")}}
+              <packageSourceMapping>
+                <clear />
+                <packageSource key="{{sdkSourceKey}}">
+                  <package pattern="Aspire*" />
+                  {{(separateIntegrationAlias ? "" : $"""<package pattern="{privatePattern}" />""")}}
+                </packageSource>
+                {{(separateIntegrationAlias ? $"""<packageSource key="{integrationKey}"><package pattern="{privatePattern}" /></packageSource>""" : "")}}
+                <packageSource key="public"><package pattern="*" /></packageSource>
+              </packageSourceMapping>
+            </configuration>
+            """;
+        await File.WriteAllTextAsync(configPath, original);
+        await File.WriteAllTextAsync(Path.Combine(appHostDirectory.FullName, Aspire.Cli.Configuration.AspireConfigFile.FileName), $$"""
+            {
+              "integrationSources": {
+                "default": {"enabled":false},
+                "team": {"source":"{{privateFeed}}","patterns":["Aspire.Hosting.Private"]}
+              }
+            }
+            """);
+        var service = new BundleNuGetService(NullLogger<BundleNuGetService>.Instance, NuGetTestHelper.CreateClient(),
+            new TestConfigurationService { SettingsFilePath = Path.Combine(workspace.Path, "global.json") });
+        var settings = service.GetNuGetSettings(appHostDirectory.FullName, TestContext.Current.CancellationToken);
+        Assert.True(Assert.Single(settings.Sources, source => source.Name == sdkSourceKey).IsIntegrationSource);
+        var channel = PackageChannel.CreateExplicitChannel(
+            "stable", PackageChannelQuality.Stable, [new("*", PackageSources.NuGetOrg)],
+            new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
+        if (privatePattern == PackageMapping.AllPackages)
+        {
+            Assert.Throws<ProjectUpdaterException>(() =>
+                DotNetAppHostNuGetConfigBuilder.BuildStable(settings, "test", channel));
+            Assert.Equal(original, await File.ReadAllTextAsync(configPath));
+            Assert.False(File.Exists(Path.Combine(appHostDirectory.FullName, "nuget.config")));
+            return;
+        }
+
+        var configuration = DotNetAppHostNuGetConfigBuilder.BuildStable(settings, "test", channel);
+        using var preview = await service.CreateConfigurationPreviewAsync(
+            appHostDirectory, configuration, globalPackagesFolder: null, TestContext.Current.CancellationToken);
+        var previewDirectory = preview.EffectiveWorkingDirectory.FullName;
+        string[] privateSources = isEnabled ? [privateFeed] : [];
+
+        Assert.Equal([PackageSources.NuGetOrg], NuGetTestHelper.GetEligiblePackageSources(previewDirectory, "Aspire.AppHost.Sdk"));
+        Assert.Equal([PackageSources.NuGetOrg], NuGetTestHelper.GetEligiblePackageSources(previewDirectory, "Aspire.Hosting.AppHost"));
+        Assert.Equal(privateSources, NuGetTestHelper.GetEligiblePackageSources(previewDirectory, "Aspire.Hosting.Private"));
+        Assert.Equal(original, await File.ReadAllTextAsync(configPath));
+        var merger = new DotNetAppHostNuGetConfigMerger(service);
+        if (inheritedMapping)
+        {
+            await Assert.ThrowsAsync<ProjectUpdaterException>(() => merger.PrepareAsync(
+                appHostDirectory, configuration, createIfMissing: true, globalPackagesFolder: null, TestContext.Current.CancellationToken));
+            Assert.Equal(original, await File.ReadAllTextAsync(configPath));
+            Assert.False(File.Exists(Path.Combine(appHostDirectory.FullName, "nuget.config")));
+            return;
+        }
+
+        var candidate = await merger.PrepareAsync(
+            workspace.WorkspaceRoot, configuration, createIfMissing: false, globalPackagesFolder: null, TestContext.Current.CancellationToken);
+        Assert.NotNull(candidate);
+        await DotNetAppHostNuGetConfigMerger.ApplyAsync(candidate, TestContext.Current.CancellationToken);
+
+        Assert.Equal([PackageSources.NuGetOrg], NuGetTestHelper.GetEligiblePackageSources(appHostDirectory.FullName, "Aspire.AppHost.Sdk"));
+        Assert.Equal([PackageSources.NuGetOrg], NuGetTestHelper.GetEligiblePackageSources(appHostDirectory.FullName, "Aspire.Hosting.AppHost"));
+        Assert.Equal(privateSources, NuGetTestHelper.GetEligiblePackageSources(appHostDirectory.FullName, "Aspire.Hosting.Private"));
+        var retained = Assert.Single(service.GetNuGetSettings(appHostDirectory.FullName, TestContext.Current.CancellationToken).Sources,
+            source => source.Name == sdkSourceKey);
+        Assert.Equal(isEnabled, retained.IsEnabled);
+        Assert.True(retained.HasCredentials);
+        var persistedSource = Assert.Single(new global::NuGet.Configuration.PackageSourceProvider(
+            NuGetTestHelper.LoadSettings(appHostDirectory.FullName)).LoadPackageSources(), source => source.Name == sdkSourceKey);
+        Assert.NotNull(persistedSource.Credentials);
+        Assert.Equal("test-user", persistedSource.Credentials.Username);
+        Assert.Equal("test-password", persistedSource.Credentials.Password);
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("*")]
