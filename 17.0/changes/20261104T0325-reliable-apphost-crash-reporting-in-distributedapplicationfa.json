@@ -1,0 +1,19 @@
+{
+  "area": "Testing",
+  "areaEmoji": "🧪",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed a race where an AppHost crash after build could surface from BuildAsync instead of StartAsync when using DistributedApplicationFactory.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🏁",
+  "firstMergedAt": "2026-11-04T03:25:16Z",
+  "lastMergedAt": "2026-11-04T03:25:16Z",
+  "name": "Reliable AppHost crash reporting in DistributedApplicationFactory",
+  "owner": "davidfowl",
+  "prs": [
+    21547
+  ]
+}

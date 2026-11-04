@@ -1,0 +1,20 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "The resource pane can be expanded to a full-canvas view that keeps filters and selection, with contextual access to existing resource actions. The Select all action is now a visible, labeled button.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🗂️",
+  "firstMergedAt": "2026-11-04T02:30:25Z",
+  "lastMergedAt": "2026-11-04T04:57:25Z",
+  "name": "Expandable resource pane with contextual actions",
+  "owner": "IEvangelist",
+  "prs": [
+    21689,
+    21727
+  ]
+}

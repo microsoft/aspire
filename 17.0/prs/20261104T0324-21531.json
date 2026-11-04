@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only readiness signal change",
+  "mergedAt": "2026-11-04T03:24:00Z",
+  "number": 21531,
+  "runDate": "2026-11-04T06:10:00Z",
+  "status": "excluded",
+  "title": "Signal RemoteHost JSON-RPC listener readiness instead of polling connects in tests"
+}

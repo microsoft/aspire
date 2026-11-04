@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Reliable AppHost crash reporting in DistributedApplicationFactory",
+  "mergedAt": "2026-11-04T03:25:16Z",
+  "number": 21547,
+  "runDate": "2026-11-04T06:10:00Z",
+  "status": "included",
+  "title": "Fix race publishing the built app in DistributedApplicationFactory (CrashTests after-build)"
+}

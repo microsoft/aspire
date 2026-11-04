@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Unattended configuration-source Git acquisition now allows up to 30 seconds for the OpenSSH version probe, so a valid but slow-starting client is no longer rejected.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🐢",
+  "firstMergedAt": "2026-11-04T01:56:52Z",
+  "lastMergedAt": "2026-11-04T01:56:52Z",
+  "name": "Slow OpenSSH startup tolerated during Git verification",
+  "owner": "JamesNK",
+  "prs": [
+    21686
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Concurrent un-awaited calls from TypeScript and other polyglot AppHosts are now serialized per connection, fixing lost resources or health check registrations and sporadic \"A health check registration is missing\" startup errors.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔐",
+  "firstMergedAt": "2026-11-04T03:08:43Z",
+  "lastMergedAt": "2026-11-04T03:08:43Z",
+  "name": "Polyglot AppHost calls no longer race on builder state",
+  "owner": "davidfowl",
+  "prs": [
+    21519
+  ]
+}

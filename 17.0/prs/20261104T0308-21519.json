@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Polyglot AppHost calls no longer race on builder state",
+  "mergedAt": "2026-11-04T03:08:43Z",
+  "number": 21519,
+  "runDate": "2026-11-04T06:10:00Z",
+  "status": "included",
+  "title": "Serialize synchronous capability invocations per polyglot guest connection"
+}

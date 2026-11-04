@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Resource overviews hide empty panels by default (toggle to show all), repack cards, and adapt alerts and navigation to mobile, tablet and desktop widths.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "📱",
+  "firstMergedAt": "2026-11-04T03:13:49Z",
+  "lastMergedAt": "2026-11-04T03:13:49Z",
+  "name": "Responsive resource overviews with empty panels hidden",
+  "owner": "IEvangelist",
+  "prs": [
+    21691
+  ]
+}
