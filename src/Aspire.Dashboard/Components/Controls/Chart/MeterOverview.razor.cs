@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Otlp.Model;
+using Aspire.Dashboard.Model;
 using Microsoft.AspNetCore.Components;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
@@ -28,6 +29,9 @@ public partial class MeterOverview : LiveSparklinesBase
 
     [Parameter, EditorRequired]
     public required Func<OtlpInstrumentSummary, string> GetInstrumentUrl { get; set; }
+
+    [Parameter]
+    public Func<OtlpInstrumentSummary, MetricPinResourceKey>? GetPinResourceKey { get; set; }
 
     [Parameter]
     public EventCallback<OtlpInstrumentSummary> InstrumentSelected { get; set; }
@@ -122,6 +126,11 @@ public partial class MeterOverview : LiveSparklinesBase
 
         return MaxCount is { } maxCount ? sorted.Take(maxCount) : sorted;
     }
+
+    private MetricPinResourceKey ResolvePinResourceKey(OtlpInstrumentSummary instrument) =>
+        ResourceKey is { InstanceId: null } groupResourceKey
+            ? new MetricPinResourceKey(groupResourceKey.Name, ReplicaIndex: null)
+            : GetPinResourceKey?.Invoke(instrument) ?? new MetricPinResourceKey(instrument.ResourceView.ResourceKey.Name, ReplicaIndex: null);
 
     private string? GetInstrumentTypeName(OtlpInstrumentType type) => type switch
     {

@@ -3,7 +3,6 @@
 
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
-using Aspire.Dashboard.Otlp.Storage;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
@@ -61,11 +60,12 @@ public sealed class DashboardSettingsDatabaseTests(ITestOutputHelper testOutputH
         Assert.True(tags.AddTag("api", "backend"));
         order.EnsureResources(["api_0", "cache_0"]);
         Assert.True(order.TryMove("cache_0", "api_0", after: false));
-        Assert.True(pins.SetPinned(new ResourceKey("api", InstanceId: null), instrument, pinned: true));
+        var pinResourceKey = new MetricPinResourceKey("api", ReplicaIndex: 1);
+        Assert.True(pins.SetPinned(pinResourceKey, instrument, pinned: true));
 
         Assert.Equal(["backend"], tags.GetTags("api"));
         Assert.Equal(["cache_0", "api_0"], order.GetPositions().OrderBy(pair => pair.Value).Select(pair => pair.Key));
-        Assert.Equal([new MetricPin(new ResourceKey("api", InstanceId: null), instrument)], pins.GetPins());
+        Assert.Equal([new MetricPin(pinResourceKey, instrument)], pins.GetPins());
         Assert.Empty(Directory.GetFileSystemEntries(databasePath));
     }
 

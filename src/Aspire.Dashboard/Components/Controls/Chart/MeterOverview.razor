@@ -73,7 +73,7 @@
                 }
             </div>
         </a>
-        <MetricPinButton ResourceKey="@instrument.ResourceView.ResourceKey" InstrumentKey="@instrument.GetKey()" Class="meter-card-pin" />
+        <MetricPinButton ResourceKey="@ResolvePinResourceKey(instrument)" InstrumentKey="@instrument.GetKey()" Class="meter-card-pin" />
         </div>
     }
 </div>

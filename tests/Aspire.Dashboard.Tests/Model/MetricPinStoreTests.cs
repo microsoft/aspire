@@ -16,8 +16,8 @@ public sealed class MetricPinStoreTests(ITestOutputHelper testOutputHelper) : ID
     private static readonly OtlpInstrumentKey s_duration = new("Microsoft.AspNetCore.Hosting", "http.server.request.duration");
     private static readonly OtlpInstrumentKey s_heap = new("System.Runtime", "dotnet.gc.heap.total_allocated");
     private static readonly OtlpInstrumentKey s_cpu = new("System.Runtime", "dotnet.process.cpu.time");
-    private static readonly ResourceKey s_api = new("api", InstanceId: null);
-    private static readonly ResourceKey s_worker = new("worker", InstanceId: null);
+    private static readonly MetricPinResourceKey s_api = new("api", ReplicaIndex: 1);
+    private static readonly MetricPinResourceKey s_worker = new("worker", ReplicaIndex: 1);
 
     private readonly TemporaryWorkspace _workspace = TemporaryWorkspace.Create(testOutputHelper);
 
@@ -47,20 +47,34 @@ public sealed class MetricPinStoreTests(ITestOutputHelper testOutputHelper) : ID
     }
 
     [Fact]
-    public void SetPinned_NullAndEmptyInstanceIdsPersistIndependently()
+    public void SetPinned_ReplicaIndexesPersistIndependently()
     {
         var databasePath = Path.Combine(_workspace.Path, DashboardSettingsDatabase.DatabaseFileName);
-        var nullInstance = new ResourceKey("api", InstanceId: null);
-        var emptyInstance = new ResourceKey("api", InstanceId: string.Empty);
+        var firstReplica = new MetricPinResourceKey("api", ReplicaIndex: 1);
+        var secondReplica = new MetricPinResourceKey("api", ReplicaIndex: 2);
         var store = new MetricPinStore(databasePath, NullLogger.Instance);
 
-        Assert.True(store.SetPinned(nullInstance, s_cpu, pinned: true));
-        Assert.True(store.SetPinned(emptyInstance, s_cpu, pinned: true));
+        Assert.True(store.SetPinned(firstReplica, s_cpu, pinned: true));
+        Assert.True(store.SetPinned(secondReplica, s_cpu, pinned: true));
 
         store = new MetricPinStore(databasePath, NullLogger.Instance);
         Assert.Equal(
-            [new MetricPin(nullInstance, s_cpu), new MetricPin(emptyInstance, s_cpu)],
+            [new MetricPin(firstReplica, s_cpu), new MetricPin(secondReplica, s_cpu)],
             store.GetPins());
+    }
+
+    [Fact]
+    public void SetPinned_NewRuntimeInstanceIdMatchesStableReplica()
+    {
+        var databasePath = Path.Combine(_workspace.Path, DashboardSettingsDatabase.DatabaseFileName);
+        var store = new MetricPinStore(databasePath, NullLogger.Instance);
+        Assert.True(store.SetPinned(s_api, s_cpu, pinned: true));
+
+        store = new MetricPinStore(databasePath, NullLogger.Instance);
+        var instrumentAfterRestart = CreateInstrument(new ResourceKey("api", "new-random-instance"), s_cpu);
+
+        Assert.Equal([instrumentAfterRestart], store.GetPinnedInstruments([instrumentAfterRestart], _ => s_api));
+        Assert.True(store.IsPinned(s_api, s_cpu));
     }
 
     [Fact]
@@ -103,22 +117,22 @@ public sealed class MetricPinStoreTests(ITestOutputHelper testOutputHelper) : ID
         store.SetPinned(s_api, s_heap, pinned: true);
 
         // The API doesn't report the HTTP duration instrument, so that pin is skipped.
-        var heap = CreateInstrument(s_api, s_heap);
-        var cpu = CreateInstrument(s_api, s_cpu);
-        var unpinned = CreateInstrument(s_api, new OtlpInstrumentKey("System.Runtime", "dotnet.exceptions"));
+        var heap = CreateInstrument(new ResourceKey("api", "runtime-instance"), s_heap);
+        var cpu = CreateInstrument(new ResourceKey("api", "runtime-instance"), s_cpu);
+        var unpinned = CreateInstrument(new ResourceKey("api", "runtime-instance"), new OtlpInstrumentKey("System.Runtime", "dotnet.exceptions"));
 
-        Assert.Equal([cpu, heap], store.GetPinnedInstruments([heap, unpinned, cpu]));
+        Assert.Equal([cpu, heap], store.GetPinnedInstruments([heap, unpinned, cpu], _ => s_api));
     }
 
     [Fact]
     public void SetPinned_SameInstrumentForResourcesAndReplicas_IsIndependent()
     {
         var store = new MetricPinStore(databasePath: null, NullLogger.Instance);
-        var apiReplica = new ResourceKey("api", "first");
-        var secondApiReplica = new ResourceKey("api", "second");
-        var apiInstrument = CreateInstrument(apiReplica, s_cpu);
-        var secondApiInstrument = CreateInstrument(secondApiReplica, s_cpu);
-        var workerInstrument = CreateInstrument(s_worker, s_cpu);
+        var apiReplica = new MetricPinResourceKey("api", ReplicaIndex: 1);
+        var secondApiReplica = new MetricPinResourceKey("api", ReplicaIndex: 2);
+        var apiInstrument = CreateInstrument(new ResourceKey("api", "first"), s_cpu);
+        var secondApiInstrument = CreateInstrument(new ResourceKey("api", "second"), s_cpu);
+        var workerInstrument = CreateInstrument(new ResourceKey("worker", "worker-instance"), s_cpu);
 
         store.SetPinned(apiReplica, s_cpu, pinned: true);
         store.SetPinned(s_worker, s_cpu, pinned: true);
@@ -126,13 +140,39 @@ public sealed class MetricPinStoreTests(ITestOutputHelper testOutputHelper) : ID
         Assert.True(store.IsPinned(apiReplica, s_cpu));
         Assert.False(store.IsPinned(secondApiReplica, s_cpu));
         Assert.True(store.IsPinned(s_worker, s_cpu));
-        Assert.Equal([apiInstrument, workerInstrument], store.GetPinnedInstruments([apiInstrument, secondApiInstrument, workerInstrument]));
+        Assert.Equal(
+            [apiInstrument, workerInstrument],
+            store.GetPinnedInstruments([apiInstrument, secondApiInstrument, workerInstrument], GetResourceKey));
 
         store.SetPinned(apiReplica, s_cpu, pinned: false);
 
         Assert.False(store.IsPinned(apiReplica, s_cpu));
         Assert.True(store.IsPinned(s_worker, s_cpu));
-        Assert.Equal([workerInstrument], store.GetPinnedInstruments([apiInstrument, secondApiInstrument, workerInstrument]));
+        Assert.Equal(
+            [workerInstrument],
+            store.GetPinnedInstruments([apiInstrument, secondApiInstrument, workerInstrument], GetResourceKey));
+
+        MetricPinResourceKey GetResourceKey(OtlpInstrumentSummary instrument) =>
+            instrument.ResourceView.ResourceKey.InstanceId switch
+            {
+                "first" => apiReplica,
+                "second" => secondApiReplica,
+                _ => s_worker
+            };
+    }
+
+    [Fact]
+    public void SetPinned_ResourceGroupMatchesEveryReplica()
+    {
+        var store = new MetricPinStore(databasePath: null, NullLogger.Instance);
+        var resourceGroup = new MetricPinResourceKey("api", ReplicaIndex: null);
+        var firstReplica = new MetricPinResourceKey("api", ReplicaIndex: 1);
+        var secondReplica = new MetricPinResourceKey("API", ReplicaIndex: 2);
+
+        store.SetPinned(resourceGroup, s_cpu, pinned: true);
+
+        Assert.True(store.IsPinned(firstReplica, s_cpu));
+        Assert.True(store.IsPinned(secondReplica, s_cpu));
     }
 
     [Fact]
@@ -159,11 +199,15 @@ public sealed class MetricPinStoreTests(ITestOutputHelper testOutputHelper) : ID
         }
 
         var store = new MetricPinStore(databasePath, NullLogger.Instance);
-        var apiInstrument = CreateInstrument(s_api, s_cpu);
-        var workerInstrument = CreateInstrument(s_worker, s_cpu);
+        var apiInstrument = CreateInstrument(new ResourceKey("api", "api-instance"), s_cpu);
+        var workerInstrument = CreateInstrument(new ResourceKey("worker", "worker-instance"), s_cpu);
 
         Assert.Equal([new MetricPin(null, s_cpu)], store.GetPins());
-        Assert.Equal([apiInstrument, workerInstrument], store.GetPinnedInstruments([apiInstrument, workerInstrument]));
+        Assert.Equal(
+            [apiInstrument, workerInstrument],
+            store.GetPinnedInstruments(
+                [apiInstrument, workerInstrument],
+                instrument => instrument.ResourceView.ResourceKey.Name == "api" ? s_api : s_worker));
         Assert.True(store.IsPinned(s_api, s_cpu));
         Assert.True(store.IsPinned(s_worker, s_cpu));
 

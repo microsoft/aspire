@@ -81,6 +81,7 @@
                                     PageViewModel="@PageViewModel"
                                     SelectGroupAsync="@SelectGroupAsync"
                                     GetGroupUrl="@GetGroupUrl"
+                                    GetPinResourceKey="@GetPinResourceKey"
                                     TextFilterChanged="@OnTextFilterChanged"/>
                             }
                         </FluentMultiSplitterPane>
@@ -115,6 +116,7 @@
                                             ShowChangePerIntervalOption="true"
                                             BackLabel="@GetBackLabel()"
                                             OnBackAsync="@NavigateBackAsync"
+                                            GetPinResourceKey="@GetPinResourceKey"
                                             Resources="@_resources" />
                                     }
                                     else if (PageViewModel.ShowPinned && (PageViewModel.SelectedResource.Id is not null || IsAggregate))
@@ -253,6 +255,7 @@
                                ShowMeterName="@showMeterName"
                                MaxCount="@maxCount"
                                GetInstrumentUrl="@GetInstrumentUrl"
+                               GetPinResourceKey="@GetPinResourceKey"
                                InstrumentSelected="@OnInstrumentSelected" />
             }
         </section>
@@ -321,6 +324,7 @@
                 IncludeLabel="true"
                 SelectGroupAsync="@SelectGroupAsync"
                 GetGroupUrl="@GetGroupUrl"
+                GetPinResourceKey="@GetPinResourceKey"
                 TextFilterChanged="@OnTextFilterChanged"/>
         }
     }

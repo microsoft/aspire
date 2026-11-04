@@ -2,7 +2,6 @@
 
 @using Aspire.Dashboard.Model
 @using Aspire.Dashboard.Otlp.Model
-@using Aspire.Dashboard.Otlp.Storage
 @using MetricsResources = Aspire.Dashboard.Resources.Metrics
 
 @implements IDisposable
@@ -36,7 +35,7 @@
     public required OtlpInstrumentKey InstrumentKey { get; set; }
 
     [Parameter, EditorRequired]
-    public required ResourceKey ResourceKey { get; set; }
+    public required MetricPinResourceKey ResourceKey { get; set; }
 
     [Parameter]
     public string? Class { get; set; }
