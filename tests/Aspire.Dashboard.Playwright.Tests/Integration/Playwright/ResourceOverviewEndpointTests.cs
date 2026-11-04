@@ -113,9 +113,12 @@ public sealed class ResourceOverviewEndpointTests : PlaywrightTestsBase<Resource
 
             async Task AssertKeyboardTooltipAfterScrollingAsync(ILocator address, string expectedText, bool scrollToEnd)
             {
+                var list = card.Locator(".overview-list");
+                // Force the target out of view independently of the responsive card height so
+                // keyboard focus always exercises the scroll-triggered tooltip repositioning.
+                await list.EvaluateAsync("list => list.style.maxHeight = '60px'");
                 await address.EvaluateAsync("address => address.focus({ preventScroll: true })");
                 await page.Keyboard.PressAsync("Shift+Tab");
-                var list = card.Locator(".overview-list");
                 await list.EvaluateAsync("(list, end) => list.scrollTop = end ? list.scrollHeight : 0", scrollToEnd);
                 await AfterScrollEventsAsync();
                 var before = await list.EvaluateAsync<double>("list => list.scrollTop");
@@ -133,6 +136,7 @@ public sealed class ResourceOverviewEndpointTests : PlaywrightTestsBase<Resource
                 await list.EvaluateAsync("(list, end) => list.scrollTop = end ? list.scrollHeight : 0", scrollToEnd);
                 await AfterScrollEventsAsync();
                 await Assertions.Expect(tooltip).ToHaveCountAsync(0);
+                await list.EvaluateAsync("list => list.style.removeProperty('max-height')");
             }
 
             Task AfterScrollEventsAsync() => page.EvaluateAsync(
