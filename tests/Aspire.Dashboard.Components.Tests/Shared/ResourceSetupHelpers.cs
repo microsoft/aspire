@@ -47,10 +47,19 @@ internal static class ResourceSetupHelpers
         var module = context.JSInterop.SetupModule(invocation => invocation.Arguments[0] is string path && path.Contains(nameof(ResourcesLayout), StringComparison.Ordinal));
         module.SetupVoid("registerPaneResizer", _ => true).SetVoidResult();
         module.SetupVoid("unregisterPaneResizer", _ => true).SetVoidResult();
-        module.Setup<bool>("fitPaneToActions", _ => true).SetResult(true);
+        module.Setup<bool>("usesCommandSelectionModifier", _ => true).SetResult(false);
         module.SetupVoid("setTabListAriaLabel", _ => true).SetVoidResult();
+        module.Setup<bool>("isResourceTabFocused", _ => true).SetResult(true);
         module.SetupVoid("registerResourceOrdering", _ => true).SetVoidResult();
         module.SetupVoid("unregisterResourceOrdering", _ => true).SetVoidResult();
+        module.SetupVoid("registerResourceContextMenu", _ => true).SetVoidResult();
+        module.SetupVoid("unregisterResourceContextMenu", _ => true).SetVoidResult();
+        module.SetupVoid("registerPaneActivityVisibility", _ => true).SetVoidResult();
+        module.SetupVoid("unregisterPaneActivityVisibility", _ => true).SetVoidResult();
+        module.SetupVoid("restoreResourceContextMenuFocus", _ => true).SetVoidResult();
+        module.SetupVoid("startPaneSelectionReveal", _ => true).SetVoidResult();
+        module.SetupVoid("focusPaneSelectionReveal", _ => true).SetVoidResult();
+        module.SetupVoid("cancelPaneSelectionReveal", _ => true).SetVoidResult();
         module.SetupVoid("registerTabOverflow", _ => true).SetVoidResult();
         module.SetupVoid("unregisterTabOverflow", _ => true).SetVoidResult();
     }

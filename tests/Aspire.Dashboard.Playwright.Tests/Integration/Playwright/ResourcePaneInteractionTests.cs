@@ -1,7 +1,8 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
@@ -142,7 +143,7 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Dashboard
                 var resizer = page.GetByRole(AriaRole.Separator, new() { Name = Resources.Layout.ResourcePaneResize });
                 await resizer.FocusAsync();
                 await page.Keyboard.PressAsync("Home");
-                await Assertions.Expect(resizer).ToHaveAttributeAsync("aria-valuenow", "200");
+                await Assertions.Expect(resizer).ToHaveAttributeAsync("aria-valuenow", "420");
             }
 
             var selectAll = page.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.ResourcePaneSelectAll, Exact = true });
@@ -190,9 +191,14 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Dashboard
         });
     }
 
-    [Fact]
+    [Theory]
+    [InlineData(null, null, 0)]
+    [InlineData("macOS", "MacIntel", 0)]
+    [InlineData(null, "MacIntel", 5)]
+    [InlineData(null, "iPad", 5)]
+    [InlineData("Windows", "MacIntel", 0)]
     [OuterloopTest("Resource-intensive Playwright browser test")]
-    public async Task ResourceRowModifierClicks_SelectSeveralResources()
+    public async Task ResourceRowModifierClicks_SelectSeveralResources(string? userAgentPlatform, string? platform, int touchPoints)
     {
         var repository = DashboardServerFixture.DashboardApp.Services.GetRequiredService<ITelemetryRepositoryWriter>();
         await repository.AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
@@ -204,12 +210,28 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Dashboard
 
         await RunTestAsync(async page =>
         {
+            if (platform is not null)
+            {
+                await page.AddInitScriptAsync($$$"""
+                    (() => {
+                        const data={{{JsonSerializer.Serialize(new { userAgentPlatform, platform, touchPoints })}}};
+                        Object.defineProperty(navigator,'userAgentData',{value:data.userAgentPlatform===null ? undefined : {platform:data.userAgentPlatform}});
+                        Object.defineProperty(navigator,'platform',{value:data.platform});
+                        Object.defineProperty(navigator,'maxTouchPoints',{value:data.touchPoints});
+                    })();
+                    """);
+            }
             await page.SetViewportSizeAsync(1280, 900);
             await page.GotoAsync(DashboardUrls.AddTelemetryPane(DashboardUrls.StructuredLogsUrl(resource: "multi-a")));
 
+            // Read the browser, not the test host: iPadOS desktop mode reports MacIntel.
+            var usesCommand = await page.EvaluateAsync<bool>("""
+                () => /^(mac|iphone|ipad|ipod|ios)/i.test(navigator.userAgentData?.platform || navigator.platform)
+                """);
+            var selectionModifier = usesCommand ? KeyboardModifier.Meta : KeyboardModifier.Control;
             var pane = page.Locator(".resource-pane");
             var title = page.Locator("h1.resource-title");
-            await Assertions.Expect(page.GetByRole(AriaRole.Gridcell, new() { Name = "multi-a", Exact = true })).ToBeVisibleAsync();
+            await Assertions.Expect(page.GetByRole(AriaRole.Gridcell, new() { Name = "multi-a", Exact = true }).First).ToBeVisibleAsync();
             var telemetryToggle = pane.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.NavMenuTelemetrySourcesTab, Exact = true });
             if (await telemetryToggle.GetAttributeAsync("aria-pressed") != "true")
             {
@@ -223,17 +245,65 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Dashboard
             }
             await Assertions.Expect(title).ToHaveTextAsync("multi-a");
 
-            await GetRowLink("multi-c").ClickAsync(new LocatorClickOptions { Modifiers = [KeyboardModifier.ControlOrMeta] });
+            await GetRowLink("multi-c").ClickAsync(new LocatorClickOptions { Modifiers = [selectionModifier] });
             await Assertions.Expect(page).ToHaveURLAsync(new Regex(@"/structuredlogs\?resource=multi-a&resource=multi-c$"));
             await Assertions.Expect(title).ToHaveTextAsync(string.Format(CultureInfo.CurrentCulture, Resources.Layout.ResourceHeaderSelectedResources, 2));
             await Assertions.Expect(pane.Locator("a[aria-current='true']")).ToHaveCountAsync(2);
 
             // Shift+click selects the rows between the last clicked row (multi-c) and the clicked row.
+            Assert.NotEmpty(await page.EvaluateAsync<string>("""
+                () => {
+                    const range=document.createRange(),selection=window.getSelection();
+                    range.selectNodeContents(document.querySelector('.resource-content'));
+                    selection.removeAllRanges();
+                    selection.addRange(range);
+                    return selection.toString();
+                }
+                """));
             await GetRowLink("multi-a").ClickAsync(new LocatorClickOptions { Modifiers = [KeyboardModifier.Shift] });
             await Assertions.Expect(page).ToHaveURLAsync(new Regex(@"/structuredlogs\?resource=multi-a&resource=multi-b&resource=multi-c$"));
             await Assertions.Expect(title).ToHaveTextAsync(string.Format(CultureInfo.CurrentCulture, Resources.Layout.ResourceHeaderSelectedResources, 3));
+            Assert.Equal(string.Empty, await page.EvaluateAsync<string>("() => window.getSelection().toString()"));
+            Assert.Equal(0, await page.EvaluateAsync<int>("() => window.getSelection().rangeCount"));
 
-            await GetRowLink("multi-b").ClickAsync(new LocatorClickOptions { Modifiers = [KeyboardModifier.ControlOrMeta] });
+            var hint = page.Locator(".resource-selection-hint");
+            await Assertions.Expect(hint).ToBeVisibleAsync();
+            var hintGeometry = await hint.EvaluateAsync<double[]>("""
+                hint => {
+                    const h=hint.getBoundingClientRect(),f=hint.parentElement.getBoundingClientRect();
+                    const groups=[...hint.querySelectorAll('.resource-selection-instruction')].map(e=>e.getBoundingClientRect());
+                    const counts=hint.parentElement.firstElementChild.getBoundingClientRect();
+                    const actions=hint.parentElement.querySelector('.resource-pane-foot-actions').getBoundingClientRect();
+                    return [Math.abs(h.x+h.width/2-f.x-f.width/2),Math.abs(groups[0].y-groups[1].y),
+                        h.height,counts.right<=h.left && actions.left>=h.right ? 1:0];
+                }
+                """);
+            Assert.InRange(hintGeometry[0], 0, .5);
+            Assert.Equal(0, hintGeometry[1]);
+            Assert.InRange(hintGeometry[2], 0, 18);
+            Assert.Equal(1, hintGeometry[3]);
+            await pane.Locator(".resource-pane-canvas-toggle").ClickAsync();
+            await Assertions.Expect(hint).ToBeVisibleAsync();
+            await page.WaitForFunctionAsync("""
+                () => Math.abs(document.querySelector('.resource-pane').getBoundingClientRect().width -
+                    document.querySelector('.resources-layout').getBoundingClientRect().width) < .5
+                """);
+            var footerBounds = await page.Locator(".resource-workspace-foot .resource-pane-foot").BoundingBoxAsync();
+            var hintBounds = await hint.BoundingBoxAsync();
+            Assert.NotNull(footerBounds);
+            Assert.NotNull(hintBounds);
+            Assert.InRange(Math.Abs(hintBounds.X + hintBounds.Width / 2 - footerBounds.X - footerBounds.Width / 2), 0, .5);
+            await Assertions.Expect(hint.Locator("kbd").First).ToHaveTextAsync(usesCommand ? "⌘ + click" : "Ctrl + click");
+            await Assertions.Expect(hint.Locator("kbd").Last).ToHaveTextAsync("Shift + click");
+            await Assertions.Expect(hint).ToContainTextAsync("Add/remove");
+            await Assertions.Expect(hint).ToContainTextAsync("Select range");
+            await Assertions.Expect(hint).ToHaveAttributeAsync("aria-label", usesCommand
+                ? Resources.Layout.ResourcePaneSelectionCommandDescription
+                : Resources.Layout.ResourcePaneSelectionControlDescription);
+            await pane.Locator(".resource-pane-canvas-toggle").ClickAsync();
+            await Assertions.Expect(hint).ToBeVisibleAsync();
+
+            await GetRowLink("multi-b").ClickAsync(new LocatorClickOptions { Modifiers = [selectionModifier] });
             await Assertions.Expect(page).ToHaveURLAsync(new Regex(@"/structuredlogs\?resource=multi-a&resource=multi-c$"));
 
             await GetRowLink("multi-b").ClickAsync();
@@ -260,8 +330,7 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Dashboard
             var pane = page.Locator(".resource-pane");
             var resizer = page.GetByRole(AriaRole.Separator, new PageGetByRoleOptions { Name = Resources.Layout.ResourcePaneResize });
             await resizer.DblClickAsync();
-            await page.WaitForTimeoutAsync(1000);
-            var fittedWidth = int.Parse((await resizer.GetAttributeAsync("aria-valuenow"))!, CultureInfo.InvariantCulture);
+            await Assertions.Expect(resizer).ToHaveAttributeAsync("aria-valuenow", "420");
 
             var box = await resizer.BoundingBoxAsync();
             Assert.NotNull(box);
@@ -272,7 +341,7 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Dashboard
             await page.Mouse.MoveAsync(x + 200, y, new MouseMoveOptions { Steps = 5 });
             await page.Mouse.UpAsync();
 
-            var draggedWidth = fittedWidth + 200;
+            const int draggedWidth = 560;
             await Assertions.Expect(resizer).ToHaveAttributeAsync("aria-valuenow", draggedWidth.ToString(CultureInfo.InvariantCulture));
             Assert.Equal(draggedWidth, await GetPaneWidthAsync());
 
@@ -292,10 +361,9 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Dashboard
             await Assertions.Expect(resizer).ToHaveAttributeAsync("aria-valuenow", maximumWidth.ToString(CultureInfo.InvariantCulture));
 
             await resizer.DblClickAsync();
-            await page.WaitForTimeoutAsync(1000);
-            var exactFitWidth = int.Parse((await resizer.GetAttributeAsync("aria-valuenow"))!, CultureInfo.InvariantCulture);
-            Assert.InRange(exactFitWidth, 240, maximumWidth);
-            Assert.Equal(exactFitWidth, await GetPaneWidthAsync());
+            await Assertions.Expect(resizer).ToHaveAttributeAsync("aria-valuenow", "420");
+            Assert.Equal(420, await GetPaneWidthAsync());
+            await AssertStoredWidthAsync("420");
 
             async Task<int> GetPaneWidthAsync() => await pane.EvaluateAsync<int>("e => Math.round(e.getBoundingClientRect().width)");
 
@@ -305,6 +373,73 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Dashboard
                     async () => await page.EvaluateAsync<string?>($"localStorage.getItem('{BrowserStorageKeys.ResourcePaneWidth}')") == expected,
                     "Resource pane width wasn't persisted.");
             }
+        });
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task ResourcePaneResizer_DelayedRendersDoNotLoseKeyboardSteps()
+    {
+        await RunTestAsync(async page =>
+        {
+            await page.SetViewportSizeAsync(1440, 900);
+            await page.GotoAsync("/structuredlogs");
+            await Assertions.Expect(page.Locator(".resource-pane-resizer")).ToHaveAttributeAsync("aria-disabled", "false");
+            await page.EvaluateAsync("""
+                async () => {
+                    const asset = performance.getEntriesByType('resource').find(entry =>
+                        entry.name.includes('/Components/Layout/ResourcesLayout.') &&
+                        new URL(entry.name).pathname.endsWith('.js'));
+                    if (!asset) throw new Error('Resource layout module was not loaded.');
+                    const module = await import(asset.name);
+                    const layout = document.createElement('div');
+                    layout.id = 'resize-race-fixture';
+                    layout.style.setProperty('--resource-pane-expanded-width', '420px');
+                    layout.innerHTML = '<aside class="resource-pane"><div class="resource-pane-resizer" role="separator" aria-valuenow="420" style="width:10px;height:40px"></div></aside>';
+                    document.body.append(layout);
+                    const handle = layout.querySelector('[role="separator"]');
+                    const requests = [];
+                    module.registerPaneResizer(layout, {
+                        invokeMethodAsync: (_, width) => new Promise(resolve => requests.push({ width, resolve }))
+                    }, 420, 560);
+                    window.resizeRace = {
+                        requests,
+                        render: width => {
+                            layout.style.setProperty('--resource-pane-expanded-width', `${width}px`);
+                            handle.setAttribute('aria-valuenow', `${width}`);
+                        }
+                    };
+                }
+                """);
+            var resizer = page.Locator("#resize-race-fixture [role='separator']");
+            await resizer.PressAsync("ArrowRight");
+            await resizer.PressAsync("ArrowRight");
+            await page.EvaluateAsync("() => window.resizeRace.render(430)");
+            await resizer.PressAsync("ArrowRight");
+            var requests = await page.EvaluateAsync<int[]>("() => window.resizeRace.requests.map(request => request.width)");
+            Assert.Equal([430, 440, 450], requests);
+            await Assertions.Expect(resizer).ToHaveAttributeAsync("aria-valuenow", "450");
+
+            await page.EvaluateAsync("""
+                () => {
+                    window.resizeRace.render(440);
+                    window.resizeRace.requests[1].resolve();
+                    window.resizeRace.render(430);
+                    window.resizeRace.requests[0].resolve();
+                }
+                """);
+            await Assertions.Expect(resizer).ToHaveAttributeAsync("aria-valuenow", "450");
+            await page.EvaluateAsync("""
+                () => {
+                    window.resizeRace.render(450);
+                    window.resizeRace.requests[2].resolve();
+                }
+                """);
+            // Once every commit is acknowledged, a restored preference becomes authoritative again.
+            await page.EvaluateAsync("() => window.resizeRace.render(507)");
+            await resizer.PressAsync("ArrowRight");
+            requests = await page.EvaluateAsync<int[]>("() => window.resizeRace.requests.map(request => request.width)");
+            Assert.Equal([430, 440, 450, 517], requests);
         });
     }
 
