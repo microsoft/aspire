@@ -176,6 +176,35 @@ public sealed class MetricPinStoreTests(ITestOutputHelper testOutputHelper) : ID
     }
 
     [Fact]
+    public void SetPinned_ResourceGroupReplacesOverlappingReplicaPins()
+    {
+        var store = new MetricPinStore(databasePath: null, NullLogger.Instance);
+        var resourceGroup = new MetricPinResourceKey("api", ReplicaIndex: null);
+        var firstReplica = new MetricPinResourceKey("api", ReplicaIndex: 1);
+
+        store.SetPinned(firstReplica, s_cpu, pinned: true);
+        store.SetPinned(resourceGroup, s_cpu, pinned: true);
+
+        Assert.Equal([new MetricPin(resourceGroup, s_cpu)], store.GetPins());
+        Assert.True(store.SetPinned(firstReplica, s_cpu, pinned: false));
+        Assert.Empty(store.GetPins());
+        Assert.False(store.IsPinned(firstReplica, s_cpu));
+    }
+
+    [Fact]
+    public void SetPinned_TelemetryOnlyReplicaInstancesAreIndependent()
+    {
+        var store = new MetricPinStore(databasePath: null, NullLogger.Instance);
+        var firstReplica = new MetricPinResourceKey("api", ReplicaIndex: null, InstanceId: "first");
+        var secondReplica = new MetricPinResourceKey("api", ReplicaIndex: null, InstanceId: "second");
+
+        store.SetPinned(firstReplica, s_cpu, pinned: true);
+
+        Assert.True(store.IsPinned(firstReplica, s_cpu));
+        Assert.False(store.IsPinned(secondReplica, s_cpu));
+    }
+
+    [Fact]
     public void ExistingGlobalPins_RemainGlobalUntilExplicitlyUnpinned()
     {
         var databasePath = Path.Combine(_workspace.Path, DashboardSettingsDatabase.DatabaseFileName);

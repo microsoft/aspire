@@ -121,14 +121,8 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
 
     private ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
 
-    private MetricPinResourceKey GetPinResourceKey(OtlpInstrumentSummary instrument)
-    {
-        var resource = DataSource.ResourceRepository.GetResources().FirstOrDefault(resource =>
-            TelemetryRepository.GetResourceByCompositeName(resource.Name)?.ResourceKey == instrument.ResourceView.ResourceKey);
-        return resource is null
-            ? new MetricPinResourceKey(instrument.ResourceView.ResourceKey.Name, ReplicaIndex: null)
-            : new MetricPinResourceKey(resource.DisplayName, resource.ReplicaIndex);
-    }
+    private MetricPinResourceKey GetPinResourceKey(OtlpInstrumentSummary instrument) =>
+        MetricPinResourceKey.Resolve(instrument.ResourceView.ResourceKey, DataSource.ResourceRepository, TelemetryRepository);
 
     private ResourceViewModel? Resource => ResourcesLayout?.SelectedResource;
 

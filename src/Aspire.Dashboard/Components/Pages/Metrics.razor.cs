@@ -410,14 +410,8 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
     private MetricPinResourceKey GetPinResourceKey(OtlpInstrumentSummary instrument) =>
         GetPinResourceKey(instrument.ResourceView.ResourceKey);
 
-    private MetricPinResourceKey GetPinResourceKey(ResourceKey resourceKey)
-    {
-        var resource = DataSource.ResourceRepository.GetResources().FirstOrDefault(resource =>
-            TelemetryRepository.GetResourceByCompositeName(resource.Name)?.ResourceKey == resourceKey);
-        return resource is null
-            ? new MetricPinResourceKey(resourceKey.Name, ReplicaIndex: null)
-            : new MetricPinResourceKey(resource.DisplayName, resource.ReplicaIndex);
-    }
+    private MetricPinResourceKey GetPinResourceKey(ResourceKey resourceKey) =>
+        MetricPinResourceKey.Resolve(resourceKey, DataSource.ResourceRepository, TelemetryRepository);
 
     private readonly HashSet<string> _collapsedSections = new(StringComparer.OrdinalIgnoreCase);
     private bool _organizeStateLoaded;
@@ -581,6 +575,11 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
         PageViewModel is { ShowPinned: true, ShowFilterResults: false }
             ? null
             : PageViewModel.SelectedResource.Id?.GetResourceKey();
+
+    private MetricPinResourceKey? OverviewGroupPinResourceKey =>
+        PageViewModel is { ShowPinned: false, ShowFilterResults: false, SelectedResource.Id.Type: OtlpResourceType.ResourceGrouping }
+            ? new MetricPinResourceKey(PageViewModel.SelectedResource.Name, ReplicaIndex: null)
+            : null;
 
     private Func<OtlpInstrumentSummary, string>? ResourceLabelProvider =>
         IsAggregate || PageViewModel is { ShowPinned: true, ShowFilterResults: false, SelectedResource.Id.Type: OtlpResourceType.ResourceGrouping }

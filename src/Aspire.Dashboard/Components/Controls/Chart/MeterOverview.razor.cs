@@ -1,8 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Otlp.Model;
 using Microsoft.AspNetCore.Components;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
@@ -32,6 +32,9 @@ public partial class MeterOverview : LiveSparklinesBase
 
     [Parameter]
     public Func<OtlpInstrumentSummary, MetricPinResourceKey>? GetPinResourceKey { get; set; }
+
+    [Parameter]
+    public MetricPinResourceKey? GroupPinResourceKey { get; set; }
 
     [Parameter]
     public EventCallback<OtlpInstrumentSummary> InstrumentSelected { get; set; }
@@ -128,9 +131,9 @@ public partial class MeterOverview : LiveSparklinesBase
     }
 
     private MetricPinResourceKey ResolvePinResourceKey(OtlpInstrumentSummary instrument) =>
-        ResourceKey is { InstanceId: null } groupResourceKey
-            ? new MetricPinResourceKey(groupResourceKey.Name, ReplicaIndex: null)
-            : GetPinResourceKey?.Invoke(instrument) ?? new MetricPinResourceKey(instrument.ResourceView.ResourceKey.Name, ReplicaIndex: null);
+        GroupPinResourceKey ??
+        GetPinResourceKey?.Invoke(instrument) ??
+        MetricPinResourceKey.Resolve(instrument.ResourceView.ResourceKey, DataSource.ResourceRepository, DataSource.TelemetryRepository);
 
     private string? GetInstrumentTypeName(OtlpInstrumentType type) => type switch
     {

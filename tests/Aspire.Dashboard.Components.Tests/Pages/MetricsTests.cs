@@ -1405,7 +1405,7 @@ public partial class MetricsTests : DashboardTestContext
             Assert.Equal("true", pinButton.Find("fluent-button").GetAttribute("aria-pressed"));
         });
         Assert.Equal(
-            [new MetricPin(new MetricPinResourceKey("TestApp", ReplicaIndex: null), new OtlpInstrumentKey("test-meter", "test-instrument-b"))],
+            [new MetricPin(new MetricPinResourceKey("TestApp", ReplicaIndex: null, InstanceId: "TestId"), new OtlpInstrumentKey("test-meter", "test-instrument-b"))],
             Services.GetRequiredService<MetricPinStore>().GetPins());
 
         // Selecting the pinned group shows the pinned instruments as cards, grouped by their meter.
@@ -1476,6 +1476,11 @@ public partial class MetricsTests : DashboardTestContext
     {
         JSInterop.Mode = JSRuntimeMode.Loose;
         MetricsSetupHelpers.SetupMetricsPage(this);
+        Services.AddSingleton<IDashboardClient>(new TestDashboardClient(initialResources:
+        [
+            ModelTestHelpers.CreateResource(resourceName: "TestApp-first", displayName: "TestApp", replicaIndex: 1),
+            ModelTestHelpers.CreateResource(resourceName: "TestApp-second", displayName: "TestApp", replicaIndex: 2)
+        ]));
         var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
         await telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
         {
@@ -1506,7 +1511,7 @@ public partial class MetricsTests : DashboardTestContext
         cut.WaitForAssertion(() =>
         {
             var pinStore = Services.GetRequiredService<MetricPinStore>();
-            var pinResourceKey = new MetricPinResourceKey(summary.ResourceView.ResourceKey.Name, ReplicaIndex: null);
+            var pinResourceKey = new MetricPinResourceKey("TestApp", ReplicaIndex: 1);
             Assert.Equal([new MetricPin(pinResourceKey, summary.GetKey())], pinStore.GetPins());
             Assert.Equal([summary], pinStore.GetPinnedInstruments([summary], _ => pinResourceKey));
         });
@@ -1533,6 +1538,7 @@ public partial class MetricsTests : DashboardTestContext
             builder.Add(component => component.ShowMeterName, false);
             builder.Add(component => component.GetInstrumentUrl, _ => "/metrics");
             builder.Add(component => component.GetPinResourceKey, _ => new MetricPinResourceKey("TestApp", ReplicaIndex: 1));
+            builder.Add(component => component.GroupPinResourceKey, new MetricPinResourceKey("TestApp", ReplicaIndex: null));
         });
 
         cut.FindComponent<MetricPinButton>().Find("fluent-button").Click();
@@ -1685,7 +1691,7 @@ public partial class MetricsTests : DashboardTestContext
         });
 
         Assert.Equal(
-            [new MetricPin(new MetricPinResourceKey("SecondApp", ReplicaIndex: null), new OtlpInstrumentKey("test-meter", "shared-instrument"))],
+            [new MetricPin(new MetricPinResourceKey("SecondApp", ReplicaIndex: null, InstanceId: "TestId"), new OtlpInstrumentKey("test-meter", "shared-instrument"))],
             Services.GetRequiredService<MetricPinStore>().GetPins());
 
         List<IRenderedComponent<MetricPinButton>> GetPinButtons() =>
@@ -1703,6 +1709,46 @@ public partial class MetricsTests : DashboardTestContext
                 }
             }
         };
+    }
+
+    [Fact]
+    public async Task TelemetryOnlyReplicas_PinIndependently()
+    {
+        MetricsSetupHelpers.SetupMetricsPage(this);
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
+        {
+            CreateReplicaResourceMetrics("first"),
+            CreateReplicaResourceMetrics("second")
+        });
+        var instruments = telemetryRepository.GetResources()
+            .SelectMany(resource => telemetryRepository.GetInstrumentSummaries(resource.ResourceKey))
+            .ToList();
+
+        var cut = Render<MeterOverview>(builder =>
+        {
+            builder.Add(component => component.ResourceKey, null);
+            builder.Add(component => component.Instruments, instruments);
+            builder.Add(component => component.Duration, TimeSpan.FromMinutes(5));
+            builder.Add(component => component.ShowMeterName, false);
+            builder.Add(component => component.SortBy, MetricSortBy.Resource);
+            builder.Add(component => component.GetResourceLabel, instrument => instrument.ResourceView.ResourceKey.InstanceId!);
+            builder.Add(component => component.GetInstrumentUrl, _ => "/metrics");
+        });
+
+        var pinButtons = cut.FindComponents<MetricPinButton>()
+            .OrderBy(button => button.Instance.ResourceKey.InstanceId, StringComparer.Ordinal)
+            .ToList();
+        pinButtons[0].Find("fluent-button").Click();
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal("true", pinButtons[0].Find("fluent-button").GetAttribute("aria-pressed"));
+            Assert.Equal("false", pinButtons[1].Find("fluent-button").GetAttribute("aria-pressed"));
+        });
+        Assert.Equal(
+            [new MetricPin(new MetricPinResourceKey("TestApp", ReplicaIndex: null, InstanceId: "first"), new OtlpInstrumentKey("test-meter", "shared-instrument"))],
+            Services.GetRequiredService<MetricPinStore>().GetPins());
     }
 
     [Fact]
