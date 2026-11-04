@@ -1,0 +1,33 @@
+{
+  "run_id": 41870877547,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/41870877547",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-04T17:47:49Z",
+  "verdict": "transient-infra",
+  "pr": null,
+  "triggering_merge_pr": null,
+  "main_context": {
+    "last_successful_main_sha": "d4994d7af558bd42ec3ec36e2499fb4b9ec31ce2",
+    "failed_sha": "5e1904a837d53f910d21b6b1c2a2788703d2b6a8",
+    "candidate_merge_history_state": "incomplete",
+    "candidate_merges": null
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (macos-latest)",
+      "id": 126718712627,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/41870877547/job/126718712627",
+      "classification": "transient-infra",
+      "reason": "Aspire.Cli.Tests macOS test host crashed (exit code 3) during CertificateFactoryTests with 0 failed tests out of 8928; no deterministic failure observed.",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    }
+  ],
+  "failed_tests": [],
+  "causes": [
+    "aspire-cli-tests-macos-testhost-crash-exit-3"
+  ]
+}

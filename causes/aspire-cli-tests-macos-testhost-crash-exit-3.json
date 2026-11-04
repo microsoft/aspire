@@ -1,0 +1,15 @@
+{
+  "id": "aspire-cli-tests-macos-testhost-crash-exit-3",
+  "type": "infra-failure",
+  "title": "Aspire.Cli.Tests (macos-latest) test host crashes with exit code 3 despite no failed tests",
+  "error_pattern": "Test application process didn't exit gracefully, exit code is '3'\nTest run completed with non-success exit code: 7. The test host process exited unexpectedly.",
+  "occurrences": [
+    {
+      "run_id": 41870877547,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/41870877547",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (macos-latest)",
+      "observed_at": "2026-11-04T17:47:49Z",
+      "pr_number": 0
+    }
+  ]
+}
