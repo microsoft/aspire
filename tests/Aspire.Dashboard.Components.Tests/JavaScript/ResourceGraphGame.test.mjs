@@ -158,7 +158,7 @@ function outageWith(results = () => true) {
     const outage = new ResourceOutage(async (id, command) => {
         calls.push(`${command} ${id}`);
         return results(id, command, calls);
-    }, 0);
+    }, () => { }, 0);
     return { outage, calls };
 }
 
@@ -176,8 +176,9 @@ test("hard core restarts what it stopped when the wave is cleared, after the sto
     const { outage, calls } = outageWith();
     outage.stop("api");
     outage.restartAll();
-    assert.equal(outage.downCount, 0);
+    assert.equal(outage.downCount, 1);
     await outage.whenIdle();
+    assert.equal(outage.downCount, 0);
     assert.deepEqual(calls, ["stop api", "start api"]);
 
     // The next wave can stop it again.
@@ -200,9 +201,43 @@ test("hard core doesn't count or restart a resource whose stop failed, and doesn
     outage.stop("api");
     await outage.whenIdle();
     assert.equal(outage.downCount, 0);
+
+    // Another enemy of the same resource, in the same wave.
+    assert.equal(outage.stop("api"), false);
+    await outage.whenIdle();
+    assert.deepEqual(calls, ["stop api"]);
+
     outage.restartAll();
     await outage.whenIdle();
     assert.deepEqual(calls, ["stop api"]);
+
+    // The next wave gets its own attempt.
+    assert.equal(outage.stop("api"), true);
+    await outage.whenIdle();
+    assert.deepEqual(calls, ["stop api", "stop api"]);
+});
+
+test("hard core reports changes when a command finishes late", async () => {
+    let finishStart;
+    let changes = 0;
+    const outage = new ResourceOutage(
+        (_, command) => command === "stop" ? Promise.resolve(true) : new Promise(resolve => { finishStart = resolve; }),
+        () => { changes++; },
+        0);
+    outage.stop("api");
+    await outage.queues.get("api");
+    assert.equal(changes, 1);
+
+    // The game can reach its game over screen while this start is running.
+    outage.restartAll();
+    await new Promise(resolve => setTimeout(resolve));
+    assert.equal(outage.downCount, 1);
+    assert.equal(changes, 1);
+
+    finishStart(true);
+    await outage.whenIdle();
+    assert.equal(outage.downCount, 0);
+    assert.equal(changes, 2);
 });
 
 test("hard core keeps counting a resource whose start failed, and tries it when the next wave is cleared", async () => {
@@ -242,7 +277,7 @@ test("hard core leaves alone a resource it couldn't stop", async () => {
 });
 
 test("hard core survives a page that went away", async () => {
-    const outage = new ResourceOutage(async () => { throw new Error("circuit disconnected"); }, 0);
+    const outage = new ResourceOutage(async () => { throw new Error("circuit disconnected"); }, () => { }, 0);
     outage.stop("api");
     await outage.whenIdle();
     assert.equal(outage.downCount, 0);

@@ -126,49 +126,55 @@ export function isButtonTarget(target) {
  * has already reported it. A resource that failed to start counts as down, and is tried again when the next wave is cleared.
  */
 export class ResourceOutage {
-    constructor(execute, retryDelayMs = COMMAND_RETRY_MS) {
+    constructor(execute, onChange, retryDelayMs = COMMAND_RETRY_MS) {
         this.execute = execute;
+        this.onChange = onChange;
         this.retryDelayMs = retryDelayMs;
-        // Stop was requested and the wave wasn't cleared since.
-        this.down = new Set();
+        // Stop was requested since the last cleared wave, whatever came of it: one attempt per resource per wave.
+        this.attempted = new Set();
+        // Stop was requested and hasn't finished. Counted as down so that the count doesn't dip while it runs.
+        this.stopping = new Set();
         // Stop succeeded and start hasn't, so the resource is really down because of the game.
         this.stopped = new Set();
         this.queues = new Map();
     }
 
     get downCount() {
-        return new Set([...this.down, ...this.stopped]).size;
+        return new Set([...this.stopping, ...this.stopped]).size;
     }
 
     /** Returns true when this call is the one that stops the resource. */
     stop(id) {
-        if (this.down.has(id)) {
+        if (this.attempted.has(id)) {
             return false;
         }
-        this.down.add(id);
+        this.attempted.add(id);
+        this.stopping.add(id);
         this.enqueue(id, async () => {
+            // Again here, because an earlier wave's stop of this resource can have finished since this one was requested.
+            this.stopping.add(id);
             if (await this.attempt(id, 'stop') === true) {
                 this.stopped.add(id);
-            } else {
-                this.down.delete(id);
             }
+            this.stopping.delete(id);
         });
         return true;
     }
 
     restartAll() {
-        for (const id of new Set([...this.down, ...this.stopped])) {
+        for (const id of new Set([...this.stopping, ...this.stopped])) {
             this.enqueue(id, async () => {
                 if (this.stopped.has(id) && await this.attempt(id, 'start') === true) {
                     this.stopped.delete(id);
                 }
             });
         }
-        this.down.clear();
+        this.attempted.clear();
     }
 
     enqueue(id, work) {
-        const next = (this.queues.get(id) ?? Promise.resolve()).then(work);
+        // Commands can finish long after they were requested, such as on the game over screen, which shows the count.
+        const next = (this.queues.get(id) ?? Promise.resolve()).then(work).then(() => this.onChange());
         this.queues.set(id, next);
     }
 
@@ -907,7 +913,9 @@ class ResourceGraphGame {
         this.sound.unlock();
         this.updateMuteButton();
         this.hardcore = false;
-        this.outage = new ResourceOutage((id, command) => graph.resourcesInterop.invokeMethodAsync('ExecuteGraphGameCommand', id, command));
+        this.outage = new ResourceOutage(
+            (id, command) => graph.resourcesInterop.invokeMethodAsync('ExecuteGraphGameCommand', id, command),
+            () => this.updateModeControls());
         this.best = readBestScore(getLocalStorage);
         this.ship = pathSprite(ASPIRE_LOGO, 17, 15, ASPIRE_LOGO_BOX);
         this.lifeIcon = pathSprite(ASPIRE_LOGO, 8, 7, ASPIRE_LOGO_BOX);
@@ -1046,7 +1054,10 @@ class ResourceGraphGame {
         } else if (selecting && this.hardcore) {
             note = this.strings.hardCoreWarning;
         }
-        this.modeNote.textContent = note;
+        // The note is a live region: setting the same text again could announce it again.
+        if (this.modeNote.textContent !== note) {
+            this.modeNote.textContent = note;
+        }
         this.modeNote.hidden = note === '';
     }
 
