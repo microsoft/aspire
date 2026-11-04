@@ -74,10 +74,10 @@
     <_BuildScriptPath Condition="'$(_BuildScriptPath)' == '' and $([MSBuild]::IsOSPlatform('Windows'))">$([MSBuild]::NormalizePath('$(_RepoRoot)', 'build.cmd'))</_BuildScriptPath>
     <_BuildScriptPath Condition="'$(_BuildScriptPath)' == ''">$([MSBuild]::NormalizePath('$(_RepoRoot)', 'build.sh'))</_BuildScriptPath>
 
-    <_ManagedPublishDir Condition="'$(_ManagedPublishDir)' == ''">$([MSBuild]::NormalizeDirectory('$(_ArtifactsDir)', 'bin', 'Aspire.Managed', '$(Configuration)', '$(DefaultTargetFramework)', '$(TargetRid)', 'publish'))</_ManagedPublishDir>
-    <_DashboardPublishDir Condition="'$(_DashboardPublishDir)' == ''">$([MSBuild]::NormalizeDirectory('$(_ArtifactsDir)', 'bin', 'Aspire.Dashboard', '$(TargetRid)', '$(Configuration)', '$(AspireDashboardTargetFramework)', '$(TargetRid)', 'publish'))</_DashboardPublishDir>
-    <_TerminalHostPublishDir Condition="'$(_TerminalHostPublishDir)' == ''">$([MSBuild]::NormalizeDirectory('$(_ArtifactsDir)', 'bin', 'Aspire.TerminalHost', '$(Configuration)', '$(AspireTerminalHostTargetFramework)', '$(TargetRid)', 'publish'))</_TerminalHostPublishDir>
-    <_AppHostServerPublishDir Condition="'$(_AppHostServerPublishDir)' == ''">$([MSBuild]::NormalizeDirectory('$(_ArtifactsDir)', 'bin', 'Aspire.Hosting.Native.Server', '$(Configuration)', 'net11.0', '$(TargetRid)', 'publish'))</_AppHostServerPublishDir>
+    <_ManagedPublishDir>$([MSBuild]::NormalizeDirectory('$(_ArtifactsDir)', 'bin', 'Aspire.Managed', '$(Configuration)', '$(DefaultTargetFramework)', '$(TargetRid)', 'publish'))</_ManagedPublishDir>
+    <_DashboardPublishDir>$([MSBuild]::NormalizeDirectory('$(_ArtifactsDir)', 'bin', 'Aspire.Dashboard', '$(TargetRid)', '$(Configuration)', '$(AspireDashboardTargetFramework)', '$(TargetRid)', 'publish'))</_DashboardPublishDir>
+    <_TerminalHostPublishDir>$([MSBuild]::NormalizeDirectory('$(_ArtifactsDir)', 'bin', 'Aspire.TerminalHost', '$(Configuration)', '$(AspireTerminalHostTargetFramework)', '$(TargetRid)', 'publish'))</_TerminalHostPublishDir>
+    <_AppHostServerPublishDir>$([MSBuild]::NormalizeDirectory('$(_ArtifactsDir)', 'bin', 'Aspire.Hosting.Native.Server', '$(Configuration)', '$(AspireNativeServerTargetFramework)', '$(TargetRid)', 'publish'))</_AppHostServerPublishDir>
 
     <!-- Exec does not inherit MSBuild properties. Forward build identity explicitly,
          but not bundle-only skip controls: they select producers in this project,
@@ -208,8 +208,7 @@
       <_BundleMSBuildArgument Include="$([System.Text.RegularExpressions.Regex]::Replace('$(_BundleChildArgs) $(_BundleSigningArgs)', '(&quot;[^&quot;]*&quot;|\S+)\s*', '$1&#xA;'))" />
     </ItemGroup>
 
-    <!-- Resolve shared component and bundle archive paths after importing projects have overridden
-         artifact and publish directories. Target-only paths stay with their consumers. -->
+    <!-- Resolve executable paths for the validated target RID. -->
     <PropertyGroup>
       <_ExecutableExtension></_ExecutableExtension>
       <_ExecutableExtension Condition="$(TargetRid.StartsWith('win-'))">.exe</_ExecutableExtension>
@@ -499,8 +498,11 @@
       <_BundleLayoutDirArg>$(_BundleLayoutDir.TrimEnd('\').TrimEnd('/'))</_BundleLayoutDirArg>
       <_ArtifactsDirArg>$(_ArtifactsDir.TrimEnd('\').TrimEnd('/'))</_ArtifactsDirArg>
       <_DashboardPublishDirArg>$(_DashboardPublishDir.TrimEnd('\').TrimEnd('/'))</_DashboardPublishDirArg>
+      <_ManagedPublishDirArg>$(_ManagedPublishDir.TrimEnd('\').TrimEnd('/'))</_ManagedPublishDirArg>
+      <_TerminalHostPublishDirArg>$(_TerminalHostPublishDir.TrimEnd('\').TrimEnd('/'))</_TerminalHostPublishDirArg>
+      <_AppHostServerPublishDirArg>$(_AppHostServerPublishDir.TrimEnd('\').TrimEnd('/'))</_AppHostServerPublishDirArg>
 
-      <_CreateLayoutArgs>--output "$(_BundleLayoutDirArg)" --artifacts "$(_ArtifactsDirArg)" --dashboard "$(_DashboardPublishDirArg)" --rid $(TargetRid) --configuration $(Configuration) --bundle-version $(BundleVersion) --verbose --archive</_CreateLayoutArgs>
+      <_CreateLayoutArgs>--output "$(_BundleLayoutDirArg)" --artifacts "$(_ArtifactsDirArg)" --managed "$(_ManagedPublishDirArg)" --dashboard "$(_DashboardPublishDirArg)" --terminal-host "$(_TerminalHostPublishDirArg)" --apphost-server "$(_AppHostServerPublishDirArg)" --rid $(TargetRid) --configuration $(Configuration) --bundle-version $(BundleVersion) --verbose --archive</_CreateLayoutArgs>
       <_CreateLayoutArgs Condition="$(TargetRid.StartsWith('osx-'))">$(_CreateLayoutArgs) --tray-app "$(TrayAppPath.TrimEnd('\').TrimEnd('/'))/"</_CreateLayoutArgs>
       <_CreateLayoutArgs Condition="$(TargetRid.StartsWith('win-'))">$(_CreateLayoutArgs) --tray-windows "$(WindowsTrayPath.TrimEnd('\').TrimEnd('/'))/"</_CreateLayoutArgs>
     </PropertyGroup>

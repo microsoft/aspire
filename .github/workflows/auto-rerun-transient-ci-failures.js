@@ -42,9 +42,8 @@ const ignoredFailureStepPatterns = [
     /^Build test project$/i,
     /^Build and archive test project$/i,
     /^Build native bundle and CLI packages$/i,
-    /^Publish bundle components$/i,
+    // Keep previous step names for reruns of older workflow revisions.
     /^Build bundle payload archive$/i,
-    // Keep the previous step name for reruns of older workflow revisions.
     /^Build RID-specific packages\b/i,
     /^Build Python validation image$/i,
     /^Build with packages$/i,

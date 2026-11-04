@@ -113,7 +113,6 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
 
     [Theory]
     [InlineData("Run tests (Windows)")]
-    [InlineData("Publish bundle components")]
     [InlineData("Build native bundle and CLI packages")]
     [InlineData("Build bundle payload archive")]
     [RequiresTools(["node"])]
@@ -260,7 +259,6 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
     }
 
     [Theory]
-    [InlineData("Publish bundle components")]
     [InlineData("Build native bundle and CLI packages")]
     [InlineData("Build bundle payload archive")]
     [RequiresTools(["node"])]

@@ -80,9 +80,6 @@ jobs:
       # and the clipack build/sign/pack flow in both CI systems.
       - name: Build native bundle and CLI packages
         shell: pwsh
-        env:
-          BUNDLE_CONFIGURATION: ${{ inputs.configuration }}
-          BUNDLE_TARGET_RID: ${{ matrix.targets.rids }}
         run: |
           $dotnetScript = if ($IsWindows) { "./dotnet.cmd" } else { "./dotnet.sh" }
           $arguments = @(
@@ -90,13 +87,13 @@ jobs:
             "eng/Bundle.proj",
             "/t:Build",
             "/p:BuildDistributionPackages=true",
-            "/p:Configuration=$env:BUNDLE_CONFIGURATION",
-            "/p:TargetRid=$env:BUNDLE_TARGET_RID",
+            "/p:Configuration=$env:BUILD_CONFIGURATION",
+            "/p:TargetRid=$env:TARGET_RIDS",
             "/p:BundleVersion=ci-bundlepayload",
             "/p:PackDcpPackage=true",
             "/p:ContinuousIntegrationBuild=true",
             "/p:AspireCliChannel=$env:ASPIRE_CLI_CHANNEL",
-            "/bl:$env:GITHUB_WORKSPACE/artifacts/log/$env:BUNDLE_CONFIGURATION/BuildNativeBundle.binlog"
+            "/bl:$env:GITHUB_WORKSPACE/artifacts/log/$env:BUILD_CONFIGURATION/BuildNativeBundle.binlog"
           )
           if (-not [string]::IsNullOrWhiteSpace($env:VERSION_OVERRIDE_ARG)) {
             # The caller supplies whitespace-separated switches without spaces in values,
