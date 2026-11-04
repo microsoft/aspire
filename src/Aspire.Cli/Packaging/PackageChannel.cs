@@ -286,16 +286,14 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
 
         if (GetLocalIntegrationPackageSource(mappings) is { } localPackageSource)
         {
-            var localPackages = GetIntegrationPackagesFromLocalPackageSource(
-                localPackageSource.Source,
-                localPackageSource.PackageSource,
-                applyPinnedVersion ? GetLocalPackageVersion(workingDirectory) : null,
-                cancellationToken).ToArray();
+            var packageVersion = applyPinnedVersion ? GetLocalPackageVersion(workingDirectory) : null;
+            var result = SearchLocalSourceSafely(() => GetIntegrationPackagesFromLocalPackageSource(
+                localPackageSource.Source, localPackageSource.PackageSource, packageVersion, cancellationToken), cancellationToken);
             logger.LogDebug(
                 "Local integration discovery for channel '{ChannelName}' from '{Source}' found {PackageCount} packages in {ElapsedMilliseconds} ms.",
-                channelName, sourceDetails, localPackages.Length, Stopwatch.GetElapsedTime(startTimestamp).TotalMilliseconds);
+                channelName, sourceDetails, result.Packages.Count, Stopwatch.GetElapsedTime(startTimestamp).TotalMilliseconds);
 
-            return new(localPackages, LimitReached: false, FailedSources: []);
+            return result;
         }
 
         var tasks = new List<Task<PackageSearchResult<NuGetPackage>>>();
@@ -394,6 +392,23 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         => IntegrationSource?.Source is { } source && PackageSourceOverrideMappings.GetNormalizedLocalDirectory(source) is { } directory
             ? (source, new DirectoryInfo(directory))
             : GetLocalAspirePackageSource(mappings);
+
+    private PackageSearchResult<T> SearchLocalSourceSafely<T>(Func<IEnumerable<T>> search, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            return new(search().ToArray(), LimitReached: false, FailedSources: []);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            // Folder feeds bypass NuGet's per-source error handling, including during polyglot tag scans.
+            var sourceName = PackageSourceRedactor.RedactForDisplay(IntegrationSource?.Name ?? Name);
+            logger.LogWarning("Failed to search local NuGet source '{Source}': {ExceptionType}.", sourceName, ex.GetType().Name);
+            return new([], LimitReached: false, FailedSources: [sourceName]);
+        }
+    }
 
     private static (string Source, DirectoryInfo PackageSource)? GetLocalAspirePackageSource(PackageMapping[]? mappings)
     {
@@ -548,12 +563,9 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
     {
         if (GetLocalIntegrationPackageSource(mappings) is { } localPackageSource)
         {
-            var ids = GetPolyglotCompatiblePackageIdsFromLocalPackageSource(
-                localPackageSource.PackageSource,
-                applyPinnedVersion ? GetLocalPackageVersion(workingDirectory) : null,
-                cancellationToken);
-
-            return new(ids.ToArray(), LimitReached: false, FailedSources: []);
+            var packageVersion = applyPinnedVersion ? GetLocalPackageVersion(workingDirectory) : null;
+            return SearchLocalSourceSafely(() => GetPolyglotCompatiblePackageIdsFromLocalPackageSource(
+                localPackageSource.PackageSource, packageVersion, cancellationToken), cancellationToken);
         }
 
         using var searchConfiguration = await CreatePackageOperationConfigurationAsync(

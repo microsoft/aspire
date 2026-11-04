@@ -25,6 +25,83 @@ namespace Aspire.Cli.Tests.Commands;
 public class AddCommandTests(ITestOutputHelper outputHelper)
 {
     [Theory]
+    [InlineData("integration list --format Json", false)]
+    [InlineData("integration list --format Json", true)]
+    [InlineData("integration search redis --format Json", false)]
+    [InlineData("integration search redis --format Json", true)]
+    [InlineData("add Acme.Hosting.Redis --version 1.0.0", false)]
+    [InlineData("add Acme.Hosting.Redis --version 1.0.0", true)]
+    public async Task IntegrationCommandsPreserveHealthyResultsWhenLocalSourceIsUnavailable(string commandLine, bool filterPolyglot)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.Path, "apphost.ts"));
+        File.WriteAllText(appHostFile.FullName, string.Empty);
+        File.WriteAllText(Path.Combine(workspace.Path, AspireConfigFile.FileName), $$"""
+            {
+              "integrationSources": {
+                "default": {"enabled": false},
+                "team": {"source": "https://example.test/team", "patterns": ["Acme.Hosting.*"]},
+                "missing": {
+                  "source": {{JsonSerializer.Serialize(Path.Combine(workspace.Path, "missing"))}},
+                  "patterns": ["Other.Hosting.*"]
+                }
+              }
+            }
+            """);
+        var rawJson = string.Empty;
+        var interactionService = new TestInteractionService();
+        interactionService.DisplayRawTextCallback = text =>
+        {
+            Assert.Single(interactionService.DisplayedMessages);
+            rawJson = text;
+        };
+        var cache = new FakeNuGetPackageCache
+        {
+            GetPackagesAsyncCallback = (_, _, _, _, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>(
+                [new() { Id = "Acme.Hosting.Redis", Version = "1.0.0", Source = "https://example.test/team" }])
+        };
+        AddPackageContext? added = null;
+        var factory = new TestTypeScriptStarterProjectFactory((_, _, _) => Task.FromResult(true));
+        factory.Project.AddPackageAsyncCallback = (context, _) =>
+        {
+            added = context;
+            return Task.FromResult(true);
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+            options.InteractionServiceFactory = _ => interactionService;
+            options.NuGetClientFactory = _ => NuGetTestHelper.CreateClient();
+            options.EnabledFeatures = filterPolyglot ? [KnownFeatures.PolyglotIntegrationFilterEnabled] : [];
+        });
+        services.AddSingleton<INuGetPackageCache>(cache);
+        services.AddSingleton<IAppHostProjectFactory>(factory);
+        using var provider = services.BuildServiceProvider();
+
+        var exitCode = await provider.GetRequiredService<RootCommand>()
+            .Parse($"{commandLine} --apphost \"{appHostFile.FullName}\"")
+            .InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Empty(interactionService.DisplayedErrors);
+        var warning = Assert.Single(interactionService.DisplayedMessages, message =>
+            message.Message == "[yellow]Failed to search NuGet source 'missing'. Some integrations may be missing. Check the source configuration and authentication. See the CLI logs for details.[/]");
+        Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
+        if (commandLine.StartsWith("add ", StringComparison.Ordinal))
+        {
+            Assert.NotNull(added);
+            Assert.Equal("Acme.Hosting.Redis", added.PackageId);
+            Assert.Equal("1.0.0", added.PackageVersion);
+            Assert.Empty(rawJson);
+        }
+        else
+        {
+            Assert.Null(added);
+            Assert.Equal([("acme-hosting-redis", "Acme.Hosting.Redis", "1.0.0")], ReadIntegrationResults(rawJson));
+        }
+    }
+
+    [Theory]
     [InlineData(false, true, false)]
     [InlineData(true, true, false)]
     [InlineData(false, false, false)]

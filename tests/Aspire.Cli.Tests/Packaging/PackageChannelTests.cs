@@ -2,11 +2,16 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.IO.Compression;
+using System.Text.Json;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
+using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
@@ -14,6 +19,104 @@ namespace Aspire.Cli.Tests.Packaging;
 
 public class PackageChannelTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task LocalIntegrationDiscovery_UnavailableSourceReportsFailure(bool sourceIsFile)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var source = Path.Combine(workspace.Path, "unavailable");
+        if (sourceIsFile)
+        {
+            File.WriteAllText(source, string.Empty);
+        }
+
+        var logger = new CapturingLogger<PackageChannel>();
+        var channel = new PackageChannel(
+            "integration:missing", PackageChannelQuality.Both, [new("*", source)],
+            new FakeNuGetPackageCache(), new TestFeatures(), logger)
+        {
+            IntegrationSource = new() { Name = "missing", Source = source, Patterns = ["*"] }
+        };
+
+        var packages = await channel.GetIntegrationPackagesAsync(workspace.WorkspaceRoot, TestContext.Current.CancellationToken);
+        var compatibleIds = await channel.GetPolyglotCompatiblePackageIdsAsync(workspace.WorkspaceRoot, TestContext.Current.CancellationToken);
+
+        Assert.Empty(packages.Packages);
+        Assert.False(packages.LimitReached);
+        Assert.Equal(["missing"], packages.FailedSources);
+        Assert.Empty(compatibleIds.Packages);
+        Assert.False(compatibleIds.LimitReached);
+        Assert.Equal(["missing"], compatibleIds.FailedSources);
+        Assert.Equal(2, logger.Entries.Count(entry => entry.Level == LogLevel.Warning));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task LocalIntegrationDiscovery_PreservesCancellation(bool sourceExists)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var source = Path.Combine(workspace.Path, "packages");
+        if (sourceExists)
+        {
+            Directory.CreateDirectory(source);
+        }
+
+        var channel = new PackageChannel(
+            "integration:team", PackageChannelQuality.Both, [new("*", source)],
+            new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance)
+        {
+            IntegrationSource = new() { Name = "team", Source = source, Patterns = ["*"] }
+        };
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            channel.GetIntegrationPackagesAsync(workspace.WorkspaceRoot, cancellation.Token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            channel.GetPolyglotCompatiblePackageIdsAsync(workspace.WorkspaceRoot, cancellation.Token));
+    }
+
+    [Fact]
+    public async Task LocalIntegrationDiscovery_UnavailableSourcePreservesHealthyResults()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var feed = workspace.CreateDirectory("packages");
+        const string packageId = "Contoso.Hosting.One";
+        CreatePackageWithTags(feed, packageId, "1.0.0", "aspire integration polyglot");
+        File.WriteAllText(Path.Combine(workspace.Path, AspireConfigFile.FileName), $$"""
+            {
+              "integrationSources": {
+                "default": {"enabled": false},
+                "team": {"source": {{JsonSerializer.Serialize(feed.FullName)}}},
+                "missing": {"source": {{JsonSerializer.Serialize(Path.Combine(workspace.Path, "missing"))}}}
+              }
+            }
+            """);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        services.AddSingleton<INuGetPackageCache>(new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) => throw new InvalidOperationException("Local feeds must be enumerated directly."),
+            GetPackagesAsyncCallback = (_, _, _, _, _, _, _) => throw new InvalidOperationException("Local feeds must be enumerated directly.")
+        });
+        using var provider = services.BuildServiceProvider();
+        var search = provider.GetRequiredService<IntegrationPackageSearchService>();
+
+        var packages = await search.GetIntegrationPackagesWithChannelsAsync(
+            workspace.WorkspaceRoot, configuredChannel: null, TestContext.Current.CancellationToken);
+        var compatiblePackages = await search.GetIntegrationPackagesWithPolyglotCompatibilityAsync(
+            workspace.WorkspaceRoot, configuredChannel: null, TestContext.Current.CancellationToken);
+
+        Assert.Equal([packageId], packages.Packages.Select(entry => entry.Package.Id));
+        Assert.False(packages.LimitReached);
+        Assert.Equal(["missing"], packages.FailedSources);
+        Assert.Equal([packageId], compatiblePackages.Packages.Select(entry => entry.Package.Id));
+        Assert.Equal([packageId], compatiblePackages.PolyglotCompatibleIds);
+        Assert.False(compatiblePackages.LimitReached);
+        Assert.Equal(["missing"], compatiblePackages.FailedSources);
+    }
+
     [Fact]
     public void SourceDetails_ImplicitChannel_ReturnsBasedOnNuGetConfig()
     {
