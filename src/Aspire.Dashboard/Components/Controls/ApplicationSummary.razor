@@ -520,10 +520,21 @@
                     {
                         <div class="home-chart-empty">@Loc[activity is null ? nameof(Dashboard.Resources.Resources.HomeActivityLoading) : isRecording ? nameof(Dashboard.Resources.Resources.HomeActivityNoRecordedRequests) : nameof(Dashboard.Resources.Resources.HomeActivityWaitingForRequests)]</div>
                     }
-                    <div class="home-chart-axis" aria-hidden="true">
-                        <span>@(isRecording && activity is not null ? FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, activity.WindowStart) : Loc[nameof(Dashboard.Resources.Resources.HomeActivityAxisStart)])</span>
-                        <span>@(isRecording && activity is not null ? FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, activity.WindowEnd) : Loc[nameof(Dashboard.Resources.Resources.HomeActivityAxisEnd)])</span>
-                    </div>
+                    @* A recording without requests has no times worth showing. Its window isn't related to the recording. *@
+                    @if (!isRecording)
+                    {
+                        <div class="home-chart-axis" aria-hidden="true">
+                            <span>@Loc[nameof(Dashboard.Resources.Resources.HomeActivityAxisStart)]</span>
+                            <span>@Loc[nameof(Dashboard.Resources.Resources.HomeActivityAxisEnd)]</span>
+                        </div>
+                    }
+                    else if (activity is not null && max > 0)
+                    {
+                        <div class="home-chart-axis" aria-hidden="true">
+                            <span>@FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, activity.WindowStart)</span>
+                            <span>@FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, activity.WindowEnd)</span>
+                        </div>
+                    }
                 </div>
             </div>
         </section>

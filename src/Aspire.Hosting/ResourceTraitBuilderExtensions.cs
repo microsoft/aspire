@@ -19,8 +19,16 @@ public static class ResourceTraitBuilderExtensions
     public static IResourceBuilder<T> WithTrait<T>(this IResourceBuilder<T> builder, string name, string value) where T : IResource
     {
         ArgumentNullException.ThrowIfNull(builder);
+        var annotation = new TraitAnnotation(name, value);
 
-        return builder.WithAnnotation(new TraitAnnotation(name, value));
+        // WithTags adds its tags through here, and a reserved tag added directly is still a tag.
+        if (name == KnownResourceTraits.DashboardTag &&
+            (value.Length > 50 || value != string.Join(' ', value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))))
+        {
+            throw new ArgumentException("Dashboard tags must be at most 50 characters and use single spaces between words, without leading or trailing whitespace.", nameof(value));
+        }
+
+        return builder.WithAnnotation(annotation);
     }
 
     /// <summary>Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.</summary>
@@ -35,13 +43,6 @@ public static class ResourceTraitBuilderExtensions
 
         foreach (var tag in tags)
         {
-            ArgumentException.ThrowIfNullOrWhiteSpace(tag, nameof(tags));
-
-            if (tag.Length > 50 || tag != string.Join(' ', tag.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)))
-            {
-                throw new ArgumentException("Dashboard tags must be at most 50 characters and use single spaces between words, without leading or trailing whitespace.", nameof(tags));
-            }
-
             builder.WithTrait(KnownResourceTraits.DashboardTag, tag);
         }
 

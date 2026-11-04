@@ -30,7 +30,7 @@ public class MetricValue<T> : MetricValueBase where T : struct
 
     protected override MetricValueBase Clone()
     {
-        var value = new MetricValue<T>(Value, StartTimeUnixNano, EndTimeUnixNano);
+        var value = new MetricValue<T>(Value, StartTimeUnixNano, EndTimeUnixNano) { Count = Count };
         if (HasExemplars)
         {
             value.Exemplars.AddRange(Exemplars);

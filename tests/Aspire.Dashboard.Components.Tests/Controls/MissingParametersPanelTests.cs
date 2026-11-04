@@ -86,7 +86,9 @@ public class MissingParametersPanelTests : DashboardTestContext
             OnSubmitCallback = (_, update) =>
             {
                 updates.Add(update);
-                return Task.CompletedTask;
+
+                // The AppHost can be gone by the time an input changes. That must not break the page.
+                return Task.FromException(new InvalidOperationException("The AppHost is gone."));
             },
             DashboardClient = Services.GetRequiredService<IDashboardClient>()
         })));

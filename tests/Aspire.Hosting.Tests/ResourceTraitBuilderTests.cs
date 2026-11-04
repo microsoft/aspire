@@ -64,6 +64,7 @@ public class ResourceTraitBuilderTests
         var resource = builder.AddContainer("api", "image");
 
         Assert.ThrowsAny<ArgumentException>(() => resource.WithTags(tag));
+        Assert.ThrowsAny<ArgumentException>(() => resource.WithTrait(KnownResourceTraits.DashboardTag, tag));
     }
 
     [Fact]

@@ -41,6 +41,9 @@ public partial class MissingParametersPanel : IAsyncDisposable
     [Inject]
     public required IDashboardClient DashboardClient { get; init; }
 
+    [Inject]
+    public required ILogger<MissingParametersPanel> Logger { get; init; }
+
     [Parameter, EditorRequired]
     public required IReadOnlyList<ResourceViewModel> Parameters { get; set; }
 
@@ -282,7 +285,16 @@ public partial class MissingParametersPanel : IAsyncDisposable
     {
         if (input.Input.UpdateStateOnChange && Interaction is { } interaction)
         {
-            await interaction.OnSubmitCallback(interaction.Interaction, true);
+            try
+            {
+                await interaction.OnSubmitCallback(interaction.Interaction, true);
+            }
+            catch (Exception ex)
+            {
+                // This runs for each change the user makes, and the AppHost can be gone by then. An exception in an event
+                // callback would take down the circuit. The form keeps what was typed, and submitting reports a failure.
+                Logger.LogDebug(ex, "Error sending parameter input update for interaction {InteractionId}.", interaction.Interaction.InteractionId);
+            }
         }
     }
 

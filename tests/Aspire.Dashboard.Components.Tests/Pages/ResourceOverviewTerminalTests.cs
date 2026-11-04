@@ -42,7 +42,8 @@ public class ResourceOverviewTerminalTests : DashboardTestContext
 
         cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll("#overview-console-title")));
         Assert.Empty(cut.FindComponents<TerminalView>());
-        Assert.DoesNotContain("terminal-focused", cut.Find(".resource-overview").ClassList);
+        Assert.Empty(cut.FindAll(".overview-terminal-card"));
+        Assert.Empty(cut.FindAll(".resource-overview.terminal-focused"));
     }
 
     [Theory]

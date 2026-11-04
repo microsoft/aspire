@@ -8,12 +8,17 @@ using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Otlp.Model;
+using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Tests.Shared.DashboardModel;
+using Aspire.Tests.Shared.Telemetry;
 using Bunit;
+using Google.Protobuf.Collections;
 using Google.Protobuf.WellKnownTypes;
 using Microsoft.AspNetCore.Components.Sections;
 using Microsoft.Extensions.DependencyInjection;
+using OpenTelemetry.Proto.Trace.V1;
 using Xunit;
 
 namespace Aspire.Dashboard.Components.Tests.Controls;
@@ -219,6 +224,63 @@ public class ApplicationSummaryTests : DashboardTestContext
         cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll(".resource-card")));
         Assert.Equal(GroupOverview.Cards, preferences.GroupOverview);
         Assert.Equal("true", outlet.Find("[aria-label='Cards']").GetAttribute("aria-pressed"));
+    }
+
+    [Fact]
+    public async Task Recording_ActivityWindowEndsAtLastRequest()
+    {
+        // Much older than the activity window, which would be empty if it ended at the current time.
+        var requestTime = new DateTime(2020, 1, 15, 12, 0, 10, DateTimeKind.Utc);
+        var cut = await RenderRecordingSummaryAsync(writer => writer.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = TelemetryTestHelpers.CreateResource(),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = TelemetryTestHelpers.CreateScope(),
+                        Spans =
+                        {
+                            TelemetryTestHelpers.CreateSpan(traceId: "1", spanId: "1", startTime: requestTime, endTime: requestTime.AddSeconds(1), kind: Span.Types.SpanKind.Server)
+                        }
+                    }
+                }
+            }
+        }));
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal("Activity", cut.Find("#home-activity-title").TextContent);
+            Assert.Empty(cut.FindAll(".home-live-dot"));
+            Assert.Single(cut.FindAll(".home-chart-bar"));
+            Assert.Equal(2, cut.FindAll(".home-chart-axis span").Count);
+        });
+    }
+
+    [Fact]
+    public async Task Recording_WithoutRequests_HidesActivityAxis()
+    {
+        var cut = await RenderRecordingSummaryAsync(_ => Task.CompletedTask);
+
+        cut.WaitForAssertion(() => Assert.Equal("No requests were recorded in this run.", cut.Find(".home-chart-empty").TextContent));
+        Assert.Empty(cut.FindAll(".home-chart-axis"));
+    }
+
+    private async Task<IRenderedComponent<ApplicationSummary>> RenderRecordingSummaryAsync(Func<ITelemetryRepositoryWriter, Task> seed)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api", state: KnownResourceState.Finished, resourceType: "Project")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>,
+            isReadOnly: true),
+            configureServices: services => FluentUISetupHelpers.AddTelemetryRepositoryConfiguration(services, readOnly: true));
+        await FluentUISetupHelpers.SeedTelemetryRepositoryAsync(this, seed);
+
+        var cut = Render<ApplicationSummary>(builder => builder.AddCascadingValue(viewport));
+        await cut.InvokeAsync(() => Services.GetRequiredService<DashboardViewPreferences>().SetGroupOverviewAsync(GroupOverview.Summary));
+        return cut;
     }
 
     private IRenderedComponent<ApplicationSummary> RenderSummary(ViewportInformation? viewport = null)

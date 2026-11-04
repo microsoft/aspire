@@ -410,6 +410,17 @@ public class ChartDataCalculatorTests
         var increases = calculator.CalculateCounterIncreaseValues([dimension], s_startTime, OtlpAggregationTemporality.Delta);
 
         Assert.Equal(15, increases.Sum());
+
+        // Refreshing a chart clones its values through the instrument cache, which must keep the count.
+        var cached = new OtlpInstrumentData
+        {
+            Summary = null!,
+            Dimensions = [dimension],
+            KnownAttributeValues = [],
+            HasOverflow = false
+        };
+        var merged = MetricInstrumentDataCache.Merge(cached, cached, [], s_startTime.AddHours(-1).UtcDateTime);
+        Assert.Equal(15, calculator.CalculateCounterIncreaseValues(merged.Dimensions, s_startTime, OtlpAggregationTemporality.Delta).Sum());
     }
 
     [Fact]

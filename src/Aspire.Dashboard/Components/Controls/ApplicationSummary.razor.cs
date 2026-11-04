@@ -145,6 +145,8 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
                 .OrderBy(resource => resource.DisplayName, StringComparers.ResourceName)
                 .Select(resource => resource.Name));
 
+    private bool ShowsMovingActivityWindow => ViewPreferences.GroupOverview == GroupOverview.Summary && !TelemetryRepository.IsReadOnly;
+
     private string CardDensityClass => ViewPreferences.Density switch
     {
         ResourceListDensity.Spacious => "resource-card-grid-spacious",
@@ -404,7 +406,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     private async Task<HomeActivity> LoadActivityAsync(ITelemetryRepository repository, List<OtlpResource> telemetryResources, List<ResourceKey> resourceKeys, int errorLogCount, CancellationToken cancellationToken)
     {
         // Align the window to bucket boundaries so bars don't shift between refreshes.
-        var now = await GetActivityTimeAsync(repository, resourceKeys, cancellationToken).ConfigureAwait(false);
+        var now = await GetActivityTimeAsync(repository, resourceKeys, errorLogCount, cancellationToken).ConfigureAwait(false);
         var windowEnd = new DateTime(((now.Ticks / s_activityBucketSize.Ticks) + 1) * s_activityBucketSize.Ticks, DateTimeKind.Utc);
         var windowStart = windowEnd - (s_activityBucketSize * ActivityBucketCount);
 
@@ -472,7 +474,8 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
             var errorLogs = await repository.GetLogSummariesAsync(new GetLogsContext { ResourceKeys = resourceKeys, StartIndex = errorLogCount - logCount, Count = logCount, Filters = s_errorLogFilters }, cancellationToken).ConfigureAwait(false);
             foreach (var log in errorLogs.Items)
             {
-                if (log.TimeStamp < windowStart)
+                // A recording's window can end before its last error log, which isn't part of the window's activity.
+                if (log.TimeStamp < windowStart || log.TimeStamp >= windowEnd)
                 {
                     continue;
                 }
@@ -529,8 +532,9 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     }
 
     // A recording ended some time ago, so a window ending at the current time would show it as empty. Its activity window
-    // ends at its last request instead. It's the only request that needs to be read, and a recording doesn't get new ones.
-    private async Task<DateTime> GetActivityTimeAsync(ITelemetryRepository repository, List<ResourceKey> resourceKeys, CancellationToken cancellationToken)
+    // ends at its last request instead, or at its last error log when it has no requests, so error hotspots still show.
+    // Only that one item needs to be read, and a recording doesn't get new ones.
+    private async Task<DateTime> GetActivityTimeAsync(ITelemetryRepository repository, List<ResourceKey> resourceKeys, int errorLogCount, CancellationToken cancellationToken)
     {
         var now = TimeProvider.GetUtcNow().UtcDateTime;
         if (!repository.IsReadOnly)
@@ -546,7 +550,26 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
             MaxCount = 1
         }, cancellationToken).ConfigureAwait(false);
 
-        return latest.Items is [var span, ..] ? span.StartTime : now;
+        if (latest.Items is [var span, ..])
+        {
+            return span.StartTime;
+        }
+
+        if (errorLogCount == 0)
+        {
+            return now;
+        }
+
+        // Results are ordered oldest first.
+        var latestError = await repository.GetLogSummariesAsync(new GetLogsContext
+        {
+            ResourceKeys = resourceKeys,
+            StartIndex = errorLogCount - 1,
+            Count = 1,
+            Filters = s_errorLogFilters
+        }, cancellationToken).ConfigureAwait(false);
+
+        return latestError.Items is [var log, ..] ? log.TimeStamp : now;
     }
 
     // Prefer the low-cardinality route template ("GET /api/catalog/{id}") over the span name.
@@ -856,14 +879,20 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     // The settings panel changes what the overview shows while it's displayed.
     private void OnViewPreferencesChanged() => _ = InvokeAsync(async () =>
     {
+        // The window wasn't being refreshed while another layout was showing.
+        if (ShowsMovingActivityWindow)
+        {
+            QueueTelemetryRefresh();
+        }
+
         StateHasChanged();
         await UpdateResourceGraphResourcesAsync();
     });
 
     // The cards show how long ago a resource started, so re-render now and then to keep that current. The activity window
     // also moves with time: once telemetry stops nothing else queues a refresh, and old requests would stay "last 15 min"
-    // indefinitely. The interval matches the window's bucket size, so each refresh can move it by a bucket. A recording's
-    // window doesn't move.
+    // indefinitely. The interval matches the window's bucket size, so each refresh can move it by a bucket. Only the home
+    // layout shows the window, and a recording's window doesn't move, so the others skip these queries.
     private async Task RefreshAgesPeriodicallyAsync(CancellationToken cancellationToken)
     {
         using var timer = new PeriodicTimer(s_ageRefreshInterval, TimeProvider);
@@ -871,7 +900,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         {
             while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
             {
-                if (!TelemetryRepository.IsReadOnly)
+                if (ShowsMovingActivityWindow)
                 {
                     QueueTelemetryRefresh();
                 }

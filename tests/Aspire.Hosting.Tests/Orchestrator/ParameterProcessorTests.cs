@@ -1420,6 +1420,43 @@ public class ParameterProcessorTests
     }
 
     [Fact]
+    public async Task InitializeParametersAsync_WithDynamicInputAndDuplicateGeneratedNames_RenamesOnlyDuplicates()
+    {
+        var testInteractionService = new TestInteractionService { IsAvailable = true };
+        var parameterProcessor = CreateParameterProcessor(interactionService: testInteractionService);
+        var firstParameter = CreateParameterWithMissingValue("firstParam");
+        var secondParameter = CreateParameterWithMissingValue("secondParam");
+        var zoneParameter = CreateParameterWithMissingValue("zoneParam");
+        foreach (var parameter in new[] { firstParameter, secondParameter })
+        {
+            parameter.Annotations.Add(new InputGeneratorAnnotation(_ => new InteractionInput
+            {
+                Name = "Value",
+                InputType = InputType.Text,
+                Label = "Value"
+            }));
+        }
+        zoneParameter.Annotations.Add(new InputGeneratorAnnotation(_ => new InteractionInput
+        {
+            Name = "Zone",
+            InputType = InputType.Choice,
+            Label = "Zone",
+            DynamicLoading = new InputLoadOptions
+            {
+                LoadCallback = _ => Task.CompletedTask
+            }
+        }));
+
+        await parameterProcessor.InitializeParametersAsync([firstParameter, secondParameter, zoneParameter]).DefaultTimeout();
+
+        var notificationInteraction = await testInteractionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+        notificationInteraction.CompletionTcs.SetResult(InteractionResult.Ok(true));
+
+        var inputsInteraction = await testInteractionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+        Assert.Equal(["firstParam", "secondParam", "Zone", "SaveToUserSecrets"], inputsInteraction.Inputs.Select(input => input.Name));
+    }
+
+    [Fact]
     public async Task InitializeParametersAsync_WithCustomInputForParameterNamedLikeSaveCheckbox_KeepsGeneratedName()
     {
         var testInteractionService = new TestInteractionService { IsAvailable = true };

@@ -21,7 +21,7 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
     private static readonly DateTime s_testTime = new(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
     [Fact]
-    public async Task GetInstrumentAsync_Rollup_RetainsDeltaNumberObservations()
+    public async Task GetInstrumentAsync_Rollup_SumsDeltaNumbersAndKeepsRowsBounded()
     {
         using var repositoryContext = await CreateRepositoryAsync();
         var start = s_testTime.AddMinutes(1);
@@ -66,6 +66,7 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
         }, CancellationToken.None);
 
         Assert.NotNull(instrument);
+        Assert.Single(Assert.Single(instrument.Dimensions).Values);
         Assert.True(ChartDataCalculator.TryCalculateDeltaPoint(instrument.Dimensions, new DateTimeOffset(start, TimeSpan.Zero), new DateTimeOffset(start.AddMinutes(1), TimeSpan.Zero), out var total));
         Assert.Equal(15, total);
     }
