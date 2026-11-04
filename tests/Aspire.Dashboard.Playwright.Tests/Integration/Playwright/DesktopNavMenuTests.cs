@@ -27,7 +27,7 @@ public sealed class DesktopNavMenuTests : PlaywrightTestsBase<DashboardServerFix
             await page.GotoAsync("/");
 
             await page.WaitForURLAsync(url => new Uri(url).AbsolutePath.StartsWith("/resources", StringComparison.Ordinal));
-            await Assertions.Expect(page.Locator(".resource-card").First).ToBeVisibleAsync();
+            await Assertions.Expect(page.Locator(".home-hero")).ToBeVisibleAsync();
             await Assertions.Expect(page.GetByRole(AriaRole.Tablist, new() { Name = Resources.Layout.ResourceTabsLandmark })).ToBeVisibleAsync();
             await AssertActiveItemAsync(Resources.Layout.ResourceTabOverview);
 

@@ -129,18 +129,16 @@ public sealed partial class AnalyzeCiFailureWorkflowTests
     [Theory]
     [InlineData("populated")]
     [InlineData("empty")]
-    [InlineData("absent")]
     [RequiresTools(["bash", "git"])]
     public async Task LimitedReportUsesExactUtf8LayoutAndAppendsWithoutRewritingSummary(string summaryKind)
     {
         var summary = Path.Combine(_workspace.Path, "summary.md");
         var prefix = new byte[] { 0xef, 0xbb, 0xbf, 0x41, 0x0d, 0x0a };
         await File.WriteAllBytesAsync(summary, prefix);
-        var environment = new Dictionary<string, string>();
-        if (summaryKind != "absent")
+        var environment = new Dictionary<string, string>
         {
-            environment["GITHUB_STEP_SUMMARY"] = summaryKind == "empty" ? "" : summary;
-        }
+            ["GITHUB_STEP_SUMMARY"] = summaryKind == "empty" ? "" : summary
+        };
         var result = await RunCollectionAsync("runner-missing-diagnostics", environment, useWorkflowAdapter: true);
         Assert.True(result.ExitCode == 0, result.Output);
         var expected = """

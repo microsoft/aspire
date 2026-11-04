@@ -1,7 +1,6 @@
 ﻿@using Aspire.Dashboard.Components.Layout
 @using Aspire.Dashboard.Resources
 @using Aspire.Shared
-@using Aspire.Dashboard.Components.ResourcesGridColumns
 
 <StableSectionContent SectionName="@ResourcesLayout.HeaderActionsSectionName">
     <div class="overview-header-actions">
@@ -47,17 +46,7 @@
         var resources = GetResources();
         var summary = GetHealthSummary(resources);
 
-        @* The "group overview" setting picks between the summary and a table of the resources, which adds what the
-           resource list next to the overview doesn't show: their endpoints and actions. *@
-        @if (ViewPreferences.GroupOverview == GroupOverview.Resources)
-        {
-            @ResourceTableSection(resources)
-        }
-        else if (ViewPreferences.GroupOverview == GroupOverview.Cards)
-        {
-            @ResourceCardsSection()
-        }
-        else if (ViewPreferences.GroupOverview == GroupOverview.Summary)
+        @if (ViewPreferences.GroupOverview == GroupOverview.Summary)
         {
             @HeroSection(summary)
             @ActivitySection()
@@ -115,120 +104,6 @@
 </div>
 
 @code {
-    private RenderFragment ResourceCardsSection() => __builder =>
-    {
-        var cardResources = GetCardResources();
-        <section class="resource-card-grid @CardDensityClass" aria-label="@DialogsLoc[nameof(Dashboard.Resources.Dialogs.SettingsDialogGroupOverviewCards)]">
-            @foreach (var resource in cardResources)
-            {
-                var primaryUrl = resource.IsParameter
-                    ? null
-                    : ResourceUrlHelpers.GetUrls(resource, includeInternalUrls: false, includeNonEndpointUrls: true).FirstOrDefault();
-                var parameterValue = resource.IsParameter
-                    ? GetParameterValue(resource)
-                    : (Value: (string?)null, IsSensitive: false, IsUnresolved: false);
-                <article class="resource-card resource-card-clickable @(resource.IsParameter ? "resource-card-parameter" : null)"
-                         role="link"
-                         tabindex="0"
-                         aria-label="@GetResourceName(resource)"
-                         @onclick="@(() => NavigateToResource(resource))"
-                         @onkeydown="@(e => OnResourceCardKeyDown(e, resource))"
-                         @key="@resource.Name">
-                    <header class="resource-card-header">
-                        <span class="resource-card-title" data-tooltip="@GetResourceName(resource)">
-                            <ResourceNameDisplay Resource="resource" FilterText="" FormatName="GetResourceName" ShowHiddenIndicator="false" />
-                        </span>
-                        <span class="resource-card-type">@resource.GetResourceTypeDisplayName(Loc)</span>
-                    </header>
-                    <div class="resource-card-body">
-                        <div class="resource-card-field">
-                            <span class="resource-card-label">@Loc[nameof(Dashboard.Resources.Resources.ResourcesStateColumnHeader)]</span>
-                            <StateColumnDisplay Resource="@resource" UnviewedErrorCounts="@_unviewedErrorCounts" />
-                        </div>
-                        @if (resource.IsParameter)
-                        {
-                            <div class="resource-card-field resource-card-value">
-                                <span class="resource-card-label">@Loc[nameof(Dashboard.Resources.Resources.ResourcesDetailsParameterValueProperty)]</span>
-                                @if (parameterValue.Value is not null)
-                                {
-                                    <GridValue Value="@parameterValue.Value"
-                                               ValueDescription="@Loc[nameof(Dashboard.Resources.Resources.ResourcesDetailsParameterValueProperty)]"
-                                               EnableMasking="@parameterValue.IsSensitive"
-                                               IsMasked="@parameterValue.IsSensitive"
-                                               StopClickPropagation="true" />
-                                }
-                                else if (parameterValue.IsUnresolved)
-                                {
-                                    <span class="resource-card-unset-value">@ControlsStringsLoc[nameof(ControlsStrings.ParameterValueNotSet)]</span>
-                                }
-                                else
-                                {
-                                    <span class="empty-data"></span>
-                                }
-                            </div>
-                        }
-                        else
-                        {
-                            <div class="resource-card-field resource-card-source-field">
-                                <span class="resource-card-label">@Loc[nameof(Dashboard.Resources.Resources.ResourcesSourceColumnHeader)]</span>
-                                @if (ResourceSourceViewModel.GetSourceViewModel(resource) is { } source)
-                                {
-                                    <span class="resource-card-source" data-tooltip="@source.Tooltip">@source.Value</span>
-                                }
-                                else
-                                {
-                                    <span class="empty-data"></span>
-                                }
-                            </div>
-                        }
-                    </div>
-                    <footer class="resource-card-footer" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">
-                        @if (resource.StartTimeStamp is not null)
-                        {
-                            <span class="resource-card-start-time"
-                                  data-tooltip="@GetResourceStartTimeTooltip(resource)">
-                                <FluentIcon Value="@(new Icons.Regular.Size16.Clock())" Color="Color.Default" />
-                                <span>@GetResourceStartAge(resource)</span>
-                            </span>
-                        }
-                        <div class="resource-card-footer-actions">
-                            @if (parameterValue.Value is { } value)
-                            {
-                                <FluentButton Appearance="ButtonAppearance.Subtle"
-                                              IconOnly="true"
-                                Class="resource-card-copy-value"
-                                              data-tooltip="@ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)]"
-                                              aria-label="@ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)]"
-                                              @attributes="@FluentUIExtensions.GetClipboardCopyAdditionalAttributes(value, ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)], ControlsStringsLoc[nameof(ControlsStrings.GridValueCopied)])">
-                                    <FluentIcon Class="copy-icon" Icon="Icons.Regular.Size16.Copy" Color="Color.Primary" />
-                                    <FluentIcon Class="checkmark-icon" Style="display:none" Icon="Icons.Regular.Size16.Checkmark" Color="Color.Primary" />
-                                </FluentButton>
-                            }
-                            @if (primaryUrl?.Url is not null)
-                            {
-                                <a class="resource-card-primary-endpoint"
-                                   href="@primaryUrl.Url"
-                                   target="_blank"
-                                   rel="noopener noreferrer"
-                                   data-tooltip="@($"{primaryUrl.Text}: {primaryUrl.Url}")"
-                                   aria-label="@($"{primaryUrl.Text}: {primaryUrl.Url}")">
-                                    <FluentIcon Value="@(new Icons.Regular.Size16.Open())" Color="Color.Primary" />
-                                </a>
-                            }
-                            <ResourceActions CommandSelected="@(command => ExecuteCardCommandAsync(resource, command))"
-                                             IsCommandExecuting="@((r, command) => DashboardCommandExecutor.IsExecuting(r.Name, command.Name))"
-                                             OnViewDetails="@(_ => NavigateToResource(resource))"
-                                             Resource="resource"
-                                             MaxHighlightedCount="2"
-                                             ResourceByName="@_resourceByName"
-                                             CardMode="true" />
-                        </div>
-                    </footer>
-                </article>
-            }
-        </section>
-    };
-
     private RenderFragment HeroSection(HealthSummary summary) => __builder =>
     {
         var heroState = GetHeroStateClass(summary);
@@ -273,80 +148,6 @@
                     @HealthLegendItem(summary.Attention, "state-error", Loc[nameof(Dashboard.Resources.Resources.HomeNeedsAttentionLabel)])
                     @HealthLegendItem(summary.Inactive, "state-neutral", Loc[nameof(Dashboard.Resources.Resources.HomeInactiveLabel)])
                 </ul>
-            }
-        </section>
-    };
-
-    // The "Resource list" choice of the group overview: the summarized resources with the same columns and actions as
-    // the resources grid had before the resource list moved to the side pane. It reuses that grid's column components
-    // so the information and the actions stay the same.
-    private RenderFragment ResourceTableSection(List<ResourceViewModel> resources) => __builder =>
-    {
-        var maxHighlightedCount = GetMaxHighlightedCount(resources);
-        <section class="home-section home-resource-table" aria-labelledby="home-resources-title">
-            <div class="home-section-header">
-                <h2 id="home-resources-title">@Loc[nameof(Dashboard.Resources.Resources.HomeResourcesLabel)]</h2>
-                <span class="home-section-count">@FormatCount(resources.Count)</span>
-            </div>
-            @if (resources.Count == 0)
-            {
-                <div class="home-empty">@Loc[nameof(Dashboard.Resources.Resources.ResourcesNoResources)]</div>
-            }
-            else
-            {
-                <table>
-                    <thead>
-                        <tr>
-                            <th scope="col">@ControlsStringsLoc[nameof(ControlsStrings.NameColumnHeader)]</th>
-                            <th scope="col">@Loc[nameof(Dashboard.Resources.Resources.ResourcesStateColumnHeader)]</th>
-                            <th scope="col">@Loc[nameof(Dashboard.Resources.Resources.ResourcesStartTimeColumnHeader)]</th>
-                            <th scope="col">@Loc[nameof(Dashboard.Resources.Resources.ResourcesTypeColumnHeader)]</th>
-                            <th scope="col">@Loc[nameof(Dashboard.Resources.Resources.ResourcesSourceColumnHeader)]</th>
-                            <th scope="col">@Loc[nameof(Dashboard.Resources.Resources.ResourcesUrlsColumnHeader)]</th>
-                            <th scope="col">@Loc[nameof(Dashboard.Resources.Resources.ResourcesActionsColumnHeader)]</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var resource in resources.OrderBy(r => r.ResourceType).ThenBy(r => r, ResourceViewModelNameComparer.Instance))
-                        {
-                            <tr @key="resource.Name">
-                                <td>
-                                    <a class="home-table-resource" href="@DashboardUrls.ResourceOverviewUrl(GetResourceName(resource))">
-                                        <ResourceNameDisplay Resource="resource" FilterText="" FormatName="GetResourceName" ShowHiddenIndicator="true" />
-                                    </a>
-                                </td>
-                                <td><StateColumnDisplay Resource="@resource" UnviewedErrorCounts="@_unviewedErrorCounts" /></td>
-                                <td><StartTimeColumnDisplay Resource="@resource" /></td>
-                                <td class="home-table-type">@resource.GetResourceTypeDisplayName(Loc)</td>
-                                <td>
-                                    @if (ResourceSourceViewModel.GetSourceViewModel(resource) is { } source)
-                                    {
-                                        <SourceColumnDisplay FilterText="" Value="@source.Value" ContentAfterValue="@source.ContentAfterValue" ValueToVisualize="@source.ValueToVisualize" Tooltip="@source.Tooltip" />
-                                    }
-                                    else
-                                    {
-                                        <span class="empty-data"></span>
-                                    }
-                                </td>
-                                <td>
-                                    <UrlsColumnDisplay Resource="resource"
-                                                       HasMultipleReplicas="HasMultipleReplicas(resource)"
-                                                       DisplayedUrls="ResourceUrlHelpers.GetUrls(resource, includeInternalUrls: false, includeNonEndpointUrls: true)" />
-                                </td>
-                                <td>
-                                    <div class="grid-action-container">
-                                        <ResourceActions CommandSelected="@(command => ExecuteCommandAsync(resource, command))"
-                                                         IsCommandExecuting="@((r, command) => DashboardCommandExecutor.IsExecuting(r.Name, command.Name))"
-                                                         OnViewDetails="@(_ => NavigateToResource(resource))"
-                                                         Resource="resource"
-                                                         MaxHighlightedCount="maxHighlightedCount"
-                                                         ResourceByName="@_resourceByName" />
-                                    </div>
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
             }
         </section>
     };
@@ -456,13 +257,13 @@
                     {
                         <span class="home-live-dot" aria-hidden="true"></span>
                     }
-                    <h2 id="home-activity-title">@Loc[isRecording ? nameof(Dashboard.Resources.Resources.HomeActivityHistoricalTitle) : nameof(Dashboard.Resources.Resources.HomeActivityTitle)]</h2>
-                    <span class="home-activity-window">@Loc[isRecording ? nameof(Dashboard.Resources.Resources.HomeActivityHistoricalCaption) : nameof(Dashboard.Resources.Resources.HomeActivityCaption)]</span>
+                    <h2 id="home-activity-title">@Loc[isRecording ? nameof(Dashboard.Resources.Resources.HomeActivityHistoricalTitle) : nameof(Dashboard.Resources.Resources.HomeLiveActivity)]</h2>
+                    <span class="home-activity-window">@Loc[isRecording ? nameof(Dashboard.Resources.Resources.HomeActivityHistoricalCaption) : nameof(Dashboard.Resources.Resources.HomeActivityWindow)]</span>
                 </div>
                 <div class="home-activity-totals">
-                    <a href="@DashboardUrls.StructuredLogsUrl()"><strong>@(_telemetry is { } t1 ? FormatCount(t1.LogCount) : "–")</strong> @Loc[nameof(Dashboard.Resources.Resources.HomeActivityLogsLabel)]</a>
-                    <a href="@DashboardUrls.TracesUrl()"><strong>@(_telemetry is { } t2 ? FormatCount(t2.TraceCount) : "–")</strong> @Loc[nameof(Dashboard.Resources.Resources.HomeActivityTracesLabel)]</a>
-                    <a href="@DashboardUrls.MetricsUrl()"><strong>@(_telemetry is { } t3 ? FormatCount(t3.InstrumentCount) : "–")</strong> @Loc[nameof(Dashboard.Resources.Resources.HomeActivityMetricsLabel)]</a>
+                    <a href="@DashboardUrls.StructuredLogsUrl()"><strong>@(_telemetry is { } t1 ? FormatCount(t1.LogCount) : "–")</strong> @Loc[nameof(Dashboard.Resources.Resources.HomeLogsLabel)]</a>
+                    <a href="@DashboardUrls.TracesUrl()"><strong>@(_telemetry is { } t2 ? FormatCount(t2.TraceCount) : "–")</strong> @Loc[nameof(Dashboard.Resources.Resources.HomeTracesLabel)]</a>
+                    <a href="@DashboardUrls.MetricsUrl()"><strong>@(_telemetry is { } t3 ? FormatCount(t3.InstrumentCount) : "–")</strong> @Loc[nameof(Dashboard.Resources.Resources.HomeMetricsLabel)]</a>
                 </div>
             </div>
 
@@ -470,15 +271,15 @@
                 <div class="home-activity-stats">
                     <div class="home-stat">
                         <span class="home-stat-value">@(activity is null ? "–" : FormatRate(activity.RequestsPerMinute))</span>
-                        <span class="home-stat-label">@Loc[nameof(Dashboard.Resources.Resources.HomeActivityRequestsPerMinute)]</span>
+                        <span class="home-stat-label">@Loc[nameof(Dashboard.Resources.Resources.HomeRequestsPerMinute)]</span>
                     </div>
                     <div class="home-stat @(activity?.ErrorRate > 0 ? "error" : null)">
                         <span class="home-stat-value">@(activity?.ErrorRate is { } rate ? rate.ToString("P1", CultureInfo.CurrentCulture) : "–")</span>
-                        <span class="home-stat-label">@Loc[nameof(Dashboard.Resources.Resources.HomeActivityErrorRate)]</span>
+                        <span class="home-stat-label">@Loc[nameof(Dashboard.Resources.Resources.HomeErrorRate)]</span>
                     </div>
                     <div class="home-stat">
                         <span class="home-stat-value">@(activity?.P95 is { } p95 ? DurationFormatter.FormatDuration(p95, CultureInfo.CurrentCulture) : "–")</span>
-                        <span class="home-stat-label">@Loc[nameof(Dashboard.Resources.Resources.HomeActivityP95Latency)]</span>
+                        <span class="home-stat-label">@Loc[nameof(Dashboard.Resources.Resources.HomeP95Latency)]</span>
                     </div>
                 </div>
 
@@ -502,7 +303,7 @@
                                 var okHeight = ok * 92.0 / max;
                                 var errorHeight = errors * 92.0 / max;
                                 var bucketStart = activity.WindowStart + (s_activityBucketSize * i);
-                                <g class="home-chart-bar @(i == ActivityBucketCount - 1 ? "current" : null)" data-tooltip="@Loc[nameof(Dashboard.Resources.Resources.HomeActivityBarTooltip), FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, bucketStart), ok + errors, errors]">
+                                <g class="home-chart-bar @(i == ActivityBucketCount - 1 ? "current" : null)" data-tooltip="@Loc[nameof(Dashboard.Resources.Resources.HomeActivityBucketTooltip), FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, bucketStart), FormatCount(ok + errors), FormatCount(errors)]">
                                     <rect class="ok" x="@Svg(x)" y="@Svg(ChartHeight - okHeight)" width="@Svg(barWidth)" height="@Svg(okHeight)" />
                                     @if (errors > 0)
                                     {
@@ -518,14 +319,14 @@
                     }
                     else
                     {
-                        <div class="home-chart-empty">@Loc[activity is null ? nameof(Dashboard.Resources.Resources.HomeActivityLoading) : isRecording ? nameof(Dashboard.Resources.Resources.HomeActivityNoRecordedRequests) : nameof(Dashboard.Resources.Resources.HomeActivityWaitingForRequests)]</div>
+                        <div class="home-chart-empty">@Loc[activity is null ? nameof(Dashboard.Resources.Resources.HomeActivityLoading) : isRecording ? nameof(Dashboard.Resources.Resources.HomeActivityNoRecordedRequests) : nameof(Dashboard.Resources.Resources.HomeActivityWaiting)]</div>
                     }
                     @* A recording without requests has no times worth showing. Its window isn't related to the recording. *@
                     @if (!isRecording)
                     {
                         <div class="home-chart-axis" aria-hidden="true">
-                            <span>@Loc[nameof(Dashboard.Resources.Resources.HomeActivityAxisStart)]</span>
-                            <span>@Loc[nameof(Dashboard.Resources.Resources.HomeActivityAxisEnd)]</span>
+                            <span>@Loc[nameof(Dashboard.Resources.Resources.HomeActivityWindowStart)]</span>
+                            <span>@Loc[nameof(Dashboard.Resources.Resources.HomeActivityWindowEnd)]</span>
                         </div>
                     }
                     else if (activity is not null && max > 0)
@@ -544,16 +345,16 @@
     {
         var activity = _telemetry?.Activity;
 
-        <section class="home-insights" aria-label="@Loc[nameof(Dashboard.Resources.Resources.HomeInsightsLandmark)]">
+        <section class="home-insights" aria-label="@Loc[nameof(Dashboard.Resources.Resources.HomeInsightsLabel)]">
             <div class="home-insight">
                 <div class="home-insight-header">
                     <span class="card-header-icon slow"><FluentIcon Value="@(new Icons.Regular.Size16.Timer())" Width="16px" Color="Color.Custom" CustomColor="currentColor" /></span>
-                    <h2>@Loc[nameof(Dashboard.Resources.Resources.HomeInsightSlowestEndpoints)]</h2>
-                    <span class="home-insight-hint">@Loc[nameof(Dashboard.Resources.Resources.HomeInsightP95)]</span>
+                    <h2>@Loc[nameof(Dashboard.Resources.Resources.HomeSlowestEndpoints)]</h2>
+                    <span class="home-insight-hint">@Loc[nameof(Dashboard.Resources.Resources.HomeP95Label)]</span>
                 </div>
                 @if (activity is null || activity.SlowestEndpoints.Count == 0)
                 {
-                    <div class="home-empty">@Loc[nameof(Dashboard.Resources.Resources.HomeInsightNoRequests)]</div>
+                    <div class="home-empty">@Loc[nameof(Dashboard.Resources.Resources.HomeNoRecentRequests)]</div>
                 }
                 else
                 {
@@ -562,7 +363,7 @@
                         @foreach (var endpoint in activity.SlowestEndpoints)
                         {
                             <li>
-                                <a href="@DashboardUrls.TracesUrl(resource: endpoint.ResourceName)" data-tooltip="@Loc[nameof(Dashboard.Resources.Resources.HomeInsightEndpointTooltip), endpoint.ResourceName, endpoint.Label, endpoint.Count]">
+                                <a href="@DashboardUrls.TracesUrl(resource: endpoint.ResourceName)" data-tooltip="@Loc[nameof(Dashboard.Resources.Resources.HomeEndpointTooltip), endpoint.ResourceName, endpoint.Label, FormatCount(endpoint.Count)]">
                                     <span class="home-insight-row">
                                         <span class="home-insight-name">@endpoint.Label</span>
                                         <span class="home-insight-value">@DurationFormatter.FormatDuration(endpoint.P95, CultureInfo.CurrentCulture)</span>
@@ -572,7 +373,7 @@
                                         <span class="home-resource-dot" style="background: @ColorGenerator.Instance.GetColorVariableByKey(endpoint.ResourceName)"></span>
                                         <span class="home-event-resource">@endpoint.ResourceName</span>
                                         <span aria-hidden="true">·</span>
-                                        <span>@Loc[nameof(Dashboard.Resources.Resources.HomeInsightRequestCountShort), FormatCount(endpoint.Count)]</span>
+                                        <span>@Loc[nameof(Dashboard.Resources.Resources.HomeRequestCountShort), FormatCount(endpoint.Count)]</span>
                                     </span>
                                 </a>
                             </li>
@@ -584,12 +385,12 @@
             <div class="home-insight">
                 <div class="home-insight-header">
                     <span class="card-header-icon"><FluentIcon Value="@(new Icons.Regular.Size16.DataTrending())" Width="16px" Color="Color.Custom" CustomColor="currentColor" /></span>
-                    <h2>@Loc[nameof(Dashboard.Resources.Resources.HomeInsightBusiestResources)]</h2>
-                    <span class="home-insight-hint">@Loc[nameof(Dashboard.Resources.Resources.HomeActivityRequestsPerMinute)]</span>
+                    <h2>@Loc[nameof(Dashboard.Resources.Resources.HomeBusiestResources)]</h2>
+                    <span class="home-insight-hint">@Loc[nameof(Dashboard.Resources.Resources.HomeRequestsPerMinute)]</span>
                 </div>
                 @if (activity is null || activity.BusiestResources.Count == 0)
                 {
-                    <div class="home-empty">@Loc[nameof(Dashboard.Resources.Resources.HomeInsightNoRequests)]</div>
+                    <div class="home-empty">@Loc[nameof(Dashboard.Resources.Resources.HomeNoRecentRequests)]</div>
                 }
                 else
                 {
@@ -609,11 +410,11 @@
                                     </span>
                                     <span class="home-insight-meter"><span class="busy" style="width: @FormatPercent(busy.Requests, busiest)"></span></span>
                                     <span class="home-event-meta">
-                                        <span>@Loc[nameof(Dashboard.Resources.Resources.HomeInsightRequestCount), FormatCount(busy.Requests)]</span>
+                                        <span>@Loc[nameof(Dashboard.Resources.Resources.HomeRequestCount), FormatCount(busy.Requests)]</span>
                                         @if (busy.ErrorSpans > 0)
                                         {
                                             <span aria-hidden="true">·</span>
-                                            <span>@Loc[nameof(Dashboard.Resources.Resources.HomeInsightFailedCount), FormatCount(busy.ErrorSpans)]</span>
+                                            <span>@Loc[nameof(Dashboard.Resources.Resources.HomeFailedCount), FormatCount(busy.ErrorSpans)]</span>
                                         }
                                     </span>
                                 </a>
@@ -626,14 +427,14 @@
             <div class="home-insight">
                 <div class="home-insight-header">
                     <span class="card-header-icon hot"><FluentIcon Value="@(new Icons.Regular.Size16.Fire())" Width="16px" Color="Color.Custom" CustomColor="currentColor" /></span>
-                    <h2>@Loc[nameof(Dashboard.Resources.Resources.HomeInsightErrorHotspots)]</h2>
-                    <span class="home-insight-hint">@Loc[nameof(Dashboard.Resources.Resources.HomeInsightErrorHotspotsHint)]</span>
+                    <h2>@Loc[nameof(Dashboard.Resources.Resources.HomeErrorHotspots)]</h2>
+                    <span class="home-insight-hint">@Loc[nameof(Dashboard.Resources.Resources.HomeErrorHotspotsHint)]</span>
                 </div>
                 @if (activity is null || activity.ErrorHotspots.Count == 0)
                 {
                     <div class="home-empty">
                         <FluentIcon Value="@(new Icons.Regular.Size16.CheckmarkCircle())" Color="Color.Success" />
-                        @Loc[nameof(Dashboard.Resources.Resources.HomeInsightNoErrors)]
+                        @Loc[nameof(Dashboard.Resources.Resources.HomeNoRecentActivityErrors)]
                     </div>
                 }
                 else
@@ -653,9 +454,9 @@
                                     </span>
                                     <span class="home-insight-meter"><span class="hot" style="width: @FormatPercent(hotspot.TotalErrors, totalErrors)"></span></span>
                                     <span class="home-event-meta">
-                                        <span>@Loc[nameof(Dashboard.Resources.Resources.HomeInsightFailedRequestCount), FormatCount(hotspot.ErrorSpans)]</span>
+                                        <span>@Loc[nameof(Dashboard.Resources.Resources.HomeFailedRequestCount), FormatCount(hotspot.ErrorSpans)]</span>
                                         <span aria-hidden="true">·</span>
-                                        <span>@Loc[nameof(Dashboard.Resources.Resources.HomeInsightErrorLogCount), FormatCount(hotspot.ErrorLogs)]</span>
+                                        <span>@Loc[nameof(Dashboard.Resources.Resources.HomeErrorLogCount), FormatCount(hotspot.ErrorLogs)]</span>
                                     </span>
                                 </a>
                             </li>

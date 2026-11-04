@@ -443,6 +443,11 @@ path_rules:
     targets: [test:Aspire.Cli.Tests]
     reason: CLI tests instantiate template sources and verify frontend package inputs.
   - paths:
+      - tests/Aspire.Cli.EndToEnd.Tests/Fixtures/JsPublish/nextjs/.npmrc
+      - tests/Aspire.Cli.EndToEnd.Tests/Fixtures/JsPublish/npmscript/.npmrc
+    targets: [test:Aspire.Cli.Tests]
+    reason: Cli.Tests/Templating/TemplatePackageLockTests guards these public-registry pins used by Dependabot.
+  - paths:
       - src/Aspire.Hosting.CodeGeneration.Go/AtsGoCodeGenerator.cs
       - src/Aspire.Hosting.CodeGeneration.Go/GoLanguageSupport.cs
     targets: [test:Aspire.Cli.Tests]

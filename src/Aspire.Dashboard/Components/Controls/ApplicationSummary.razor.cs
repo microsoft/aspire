@@ -1,4 +1,4 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
@@ -13,7 +13,6 @@ using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
-using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
@@ -22,8 +21,7 @@ using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 namespace Aspire.Dashboard.Components.Controls;
 
 /// <summary>
-/// Summarizes the app: overall health, telemetry totals, a tile per resource, and recent problems. The resource
-/// overview shows it when all resources are selected.
+/// Summarizes overall health, live activity, insights and recent problems for all or selected resources.
 /// </summary>
 public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
 {
@@ -40,7 +38,6 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     // Metrics arrive every few seconds from each resource, so coalesce telemetry notifications to bound the
     // number of repository queries the page runs.
     private static readonly TimeSpan s_telemetryRefreshDelay = TimeSpan.FromSeconds(1);
-    private static readonly TimeSpan s_ageRefreshInterval = TimeSpan.FromSeconds(30);
     private static readonly List<TelemetryFilter> s_errorLogFilters = [new FieldTelemetryFilter { Field = nameof(OtlpLogEntry.Severity), Condition = FilterCondition.GreaterThanOrEqual, Value = nameof(LogLevel.Error) }];
     private static readonly List<TelemetryFilter> s_warningLogFilters = [new FieldTelemetryFilter { Field = nameof(OtlpLogEntry.Severity), Condition = FilterCondition.Equals, Value = nameof(LogLevel.Warning) }];
     private static readonly FieldTelemetryFilter s_failedTraceFilter = new() { Field = KnownTraceFields.StatusField, Condition = FilterCondition.Equals, Value = nameof(OtlpSpanStatusCode.Error) };
@@ -49,7 +46,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     private readonly ConcurrentDictionary<string, ResourceViewModel> _resourceByName = new(StringComparers.ResourceName);
     private readonly CancellationTokenSource _cts = new();
     private Task? _resourceSubscriptionTask;
-    private Task? _ageRefreshTask;
+    private Task? _activityRefreshTask;
     private Subscription? _logsSubscription;
     private Subscription? _tracesSubscription;
     private Subscription? _metricsSubscription;
@@ -112,9 +109,6 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     public required IStringLocalizer<Dashboard.Resources.Dialogs> DialogsLoc { get; init; }
 
     [Inject]
-    public required IStringLocalizer<Dashboard.Resources.Layout> LayoutLoc { get; init; }
-
-    [Inject]
     public required IJSRuntime JS { get; init; }
 
     [Inject]
@@ -127,8 +121,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     private IReadOnlyList<IconToggleOption<GroupOverview>> OverviewOptions =>
         new IconToggleOption<GroupOverview>[]
         {
-            new(GroupOverview.Cards, new Icons.Regular.Size20.Grid(), DialogsLoc[nameof(Dashboard.Resources.Dialogs.SettingsDialogGroupOverviewCards)]),
-            new(GroupOverview.Summary, new Icons.Regular.Size20.Home(), DialogsLoc[nameof(Dashboard.Resources.Dialogs.SettingsDialogGroupOverviewSummary)]),
+            new(GroupOverview.Summary, new Icons.Regular.Size20.DataBarVertical(), DialogsLoc[nameof(Dashboard.Resources.Dialogs.SettingsDialogGroupOverviewSummary)]),
             new(GroupOverview.Graph, new Icons.Regular.Size20.ShareAndroid(), Loc[nameof(Dashboard.Resources.Resources.GraphPageTitle)])
         }
         .Where(option => option.Value != GroupOverview.Graph || ViewPreferences.IsGraphEnabled)
@@ -147,30 +140,6 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
 
     private bool ShowsMovingActivityWindow => ViewPreferences.GroupOverview == GroupOverview.Summary && !TelemetryRepository.IsReadOnly;
 
-    private string CardDensityClass => ViewPreferences.Density switch
-    {
-        ResourceListDensity.Spacious => "resource-card-grid-spacious",
-        ResourceListDensity.Compact => "resource-card-grid-compact",
-        _ => "resource-card-grid-comfortable"
-    };
-
-    private string? GetResourceStartAge(ResourceViewModel resource) =>
-        resource.StartTimeStamp is { } startTimeStamp
-            ? DashboardRunSelect.FormatRunAge(new DateTimeOffset(startTimeStamp), TimeProvider.GetUtcNow(), LayoutLoc)
-            : null;
-
-    // The card shows how long ago the resource started. The tooltip adds the exact time: "5 minutes ago (10:34:56 AM)".
-    private string? GetResourceStartTimeTooltip(ResourceViewModel resource)
-    {
-        if (resource.StartTimeStamp is not { } startTimeStamp)
-        {
-            return null;
-        }
-
-        // The resource server's time stamp has second precision, so no milliseconds.
-        return $"{GetResourceStartAge(resource)} ({FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, startTimeStamp)})";
-    }
-
     protected override async Task OnInitializedAsync()
     {
         ViewPreferences.Changed += OnViewPreferencesChanged;
@@ -186,6 +155,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         _tracesSubscription = TelemetryRepository.OnNewTraces(null, SubscriptionType.Other, OnTelemetryChanged);
         _metricsSubscription = TelemetryRepository.OnNewMetrics(null, SubscriptionType.Other, OnTelemetryChanged);
         QueueTelemetryRefresh();
+        _activityRefreshTask = RefreshActivityPeriodicallyAsync(_cts.Token);
 
         var (snapshot, subscription) = await DataSource.ResourceRepository.SubscribeResourcesAsync(_cts.Token);
         foreach (var resource in snapshot)
@@ -193,8 +163,6 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
             _resourceByName[resource.Name] = resource;
         }
         _isLoaded = true;
-
-        _ageRefreshTask = RefreshAgesPeriodicallyAsync(_cts.Token);
 
         _resourceSubscriptionTask = Task.Run(async () =>
         {
@@ -638,24 +606,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
 
     private string GetResourceName(ResourceViewModel resource) => ResourceViewModel.GetResourceName(resource, _resourceByName);
 
-    // Like the resources grid, every row reserves room for as many highlighted commands as the busiest resource has, so
-    // the action columns line up. At most two are shown; the others are in the menu.
-    private static int GetMaxHighlightedCount(List<ResourceViewModel> resources) => Math.Min(
-        resources.Select(r => r.Commands.Count(c => c.IsHighlighted && c.State != CommandViewModelState.Hidden)).DefaultIfEmpty(0).Max(),
-        DashboardUIHelpers.MaxHighlightedCommands);
-
-    private bool HasMultipleReplicas(ResourceViewModel resource) =>
-        _resourceByName.Values.Count(r => !r.IsResourceHidden(showHiddenResources: false) && string.Equals(r.DisplayName, resource.DisplayName, StringComparisons.ResourceName)) >= 2;
-
     private void NavigateToResource(ResourceViewModel resource) => NavigationManager.NavigateTo(DashboardUrls.ResourceOverviewUrl(GetResourceName(resource)));
-
-    private void OnResourceCardKeyDown(KeyboardEventArgs args, ResourceViewModel resource)
-    {
-        if (args.Key is "Enter" or " ")
-        {
-            NavigateToResource(resource);
-        }
-    }
 
     private Task ExecuteCommandAsync(ResourceViewModel resource, CommandViewModel command) =>
         DashboardCommandExecutor.ExecuteAsync(resource, command, GetResourceName);
@@ -707,17 +658,6 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         await InvokeAsync(StateHasChanged);
     }
 
-    private Task ExecuteCardCommandAsync(ResourceViewModel resource, CommandViewModel command)
-    {
-        if (string.Equals(command.Name, CommandViewModel.SetParameterCommand, StringComparisons.CommandName))
-        {
-            NavigateToResource(resource);
-            return Task.CompletedTask;
-        }
-
-        return ExecuteCommandAsync(resource, command);
-    }
-
     private List<ResourceViewModel> GetResources()
     {
         return _resourceByName.Values
@@ -726,29 +666,6 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
             .ThenBy(r => r.ResourceType)
             .ThenBy(r => r, ResourceViewModelNameComparer.Instance)
             .ToList();
-    }
-
-    private List<ResourceViewModel> GetCardResources()
-    {
-        return _resourceByName.Values
-            .Where(r => !r.IsResourceHidden(showHiddenResources: false) && IsInScope(r))
-            .OrderBy(r => r.IsParameter ? 1 : 0)
-            .ThenBy(r => NeedsAttention(r) ? 0 : 1)
-            .ThenBy(r => r.ResourceType)
-            .ThenBy(r => r, ResourceViewModelNameComparer.Instance)
-            .ToList();
-    }
-
-    private static (string? Value, bool IsSensitive, bool IsUnresolved) GetParameterValue(ResourceViewModel resource)
-    {
-        var isUnresolved = !resource.IsRunningState();
-        if (resource.Properties.TryGetValue(KnownProperties.Parameter.Value, out var property))
-        {
-            var value = isUnresolved ? null : property.Value.HasStringValue ? property.Value.StringValue : null;
-            return (value, property.IsValueSensitive, isUnresolved);
-        }
-
-        return (null, false, isUnresolved);
     }
 
     private async Task UpdateResourceGraphResourcesAsync()
@@ -862,17 +779,26 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
 
         if (summary.Attention > 0)
         {
-            return Loc[nameof(Dashboard.Resources.Resources.HomeHeadlineAttention), summary.Attention, summary.Total];
+            return summary.Total == 1
+                ? Loc[nameof(Dashboard.Resources.Resources.HomeHeadlineSingleAttention)]
+                : Loc[nameof(Dashboard.Resources.Resources.HomeHeadlineAttention), summary.Attention, summary.Total];
         }
 
         if (summary.Pending > 0)
         {
-            return Loc[nameof(Dashboard.Resources.Resources.HomeHeadlinePending), summary.Pending, summary.Total];
+            return summary.Total == 1
+                ? Loc[nameof(Dashboard.Resources.Resources.HomeHeadlineSinglePending)]
+                : Loc[nameof(Dashboard.Resources.Resources.HomeHeadlinePending), summary.Pending, summary.Total];
         }
 
-        return summary.Running == summary.Total
-            ? Loc[nameof(Dashboard.Resources.Resources.HomeHeadlineAllRunning), summary.Total]
-            : Loc[nameof(Dashboard.Resources.Resources.HomeHeadlineHealthy)];
+        if (summary.Running == summary.Total)
+        {
+            return summary.Total == 1
+                ? Loc[nameof(Dashboard.Resources.Resources.HomeHeadlineSingleRunning)]
+                : Loc[nameof(Dashboard.Resources.Resources.HomeHeadlineAllRunning), summary.Total];
+        }
+
+        return Loc[nameof(Dashboard.Resources.Resources.HomeHeadlineHealthy)];
     }
 
     private static string GetHeroStateClass(HealthSummary summary) => summary switch
@@ -894,7 +820,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     // The settings panel changes what the overview shows while it's displayed.
     private void OnViewPreferencesChanged() => _ = InvokeAsync(async () =>
     {
-        // The window wasn't being refreshed while another layout was showing.
+        // The window isn't refreshed while another layout is showing.
         if (ShowsMovingActivityWindow)
         {
             QueueTelemetryRefresh();
@@ -904,13 +830,12 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         await UpdateResourceGraphResourcesAsync();
     });
 
-    // The cards show how long ago a resource started, so re-render now and then to keep that current. The activity window
-    // also moves with time: once telemetry stops nothing else queues a refresh, and old requests would stay "last 15 min"
-    // indefinitely. The interval matches the window's bucket size, so each refresh can move it by a bucket. Only the home
-    // layout shows the window, and a recording's window doesn't move, so the others skip these queries.
-    private async Task RefreshAgesPeriodicallyAsync(CancellationToken cancellationToken)
+    // The activity window moves with time: once telemetry stops nothing else queues a refresh, and old requests would stay
+    // "last 15 min" indefinitely. The interval matches the window's bucket size, so each refresh can move it by a bucket.
+    // Only the summary layout shows the window, and a recording's window doesn't move, so the others skip these queries.
+    private async Task RefreshActivityPeriodicallyAsync(CancellationToken cancellationToken)
     {
-        using var timer = new PeriodicTimer(s_ageRefreshInterval, TimeProvider);
+        using var timer = new PeriodicTimer(s_activityBucketSize, TimeProvider);
         try
         {
             while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
@@ -919,8 +844,6 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
                 {
                     QueueTelemetryRefresh();
                 }
-
-                await InvokeAsync(StateHasChanged).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -937,7 +860,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         _tracesSubscription?.Dispose();
         _metricsSubscription?.Dispose();
         await TaskHelpers.WaitIgnoreCancelAsync(_resourceSubscriptionTask);
-        await TaskHelpers.WaitIgnoreCancelAsync(_ageRefreshTask);
+        await TaskHelpers.WaitIgnoreCancelAsync(_activityRefreshTask);
         _resourcesInteropReference?.Dispose();
         if (_jsModule is not null)
         {

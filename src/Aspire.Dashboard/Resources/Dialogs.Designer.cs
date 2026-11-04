@@ -1875,15 +1875,6 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Cards.
-        /// </summary>
-        public static string SettingsDialogGroupOverviewCards {
-            get {
-                return ResourceManager.GetString("SettingsDialogGroupOverviewCards", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to Resource list density.
         /// </summary>
         public static string SettingsDialogResourceListDensity {
