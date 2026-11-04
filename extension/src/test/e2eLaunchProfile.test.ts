@@ -2187,6 +2187,23 @@ builder.Build().Run();
         assert.ok(workspaceCollision.includes('await waitForRepositoryIdle();'));
     });
 
+    test('waits for CLI-independent settings command outcomes instead of the control apply timeout', () => {
+        // The first Settings editor open can exceed the 10s control apply wait on Windows CI; the
+        // command outcome wait has the budget for completion.
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const edgeCasesSource = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'edgeCases.e2e.test.ts'), 'utf8');
+        const settingsTest = getTestBlock(edgeCasesSource, 'keeps CLI-independent settings commands available when the CLI is unavailable');
+
+        for (const commandId of ['aspire-vscode.settings', 'aspire-vscode.configureLaunchJson']) {
+            assert.ok(
+                settingsTest.includes(`await executeE2eControlCommand({ name: 'executeAspireCommand', commandId: '${commandId}' }, { waitFor: 'started' });`),
+                `${commandId} must be dispatched with waitFor 'started'.`);
+            assert.ok(
+                new RegExp(`await waitForCommandOutcome\\('${commandId.replace(/\./g, '\\.')}', 'success', 60000, \\w+\\);`).test(settingsTest),
+                `${commandId} must assert a successful command outcome.`);
+        }
+    });
+
     test('uses integrated-browser webview text instead of editor title waits', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const appHostTreeProvider = fs.readFileSync(path.join(extensionRoot, 'src', 'views', 'AspireAppHostTreeProvider.ts'), 'utf8');

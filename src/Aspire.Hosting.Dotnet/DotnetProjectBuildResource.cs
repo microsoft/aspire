@@ -31,9 +31,9 @@ internal sealed class DotnetProjectBuildResource : ExecutableResource, IDisposab
         string workingDirectory,
         string buildDirectory,
         TimeProvider timeProvider)
-        : base(name, "dotnet", workingDirectory)
+        : base(name, "dotnet", ResolveBuildPathCasing(workingDirectory))
     {
-        BuildDirectory = buildDirectory;
+        BuildDirectory = ResolveBuildPathCasing(buildDirectory);
         _artifactManager = new DotnetProjectBuildArtifactManager(BuildDirectory, timeProvider);
     }
 
@@ -86,7 +86,7 @@ internal sealed class DotnetProjectBuildResource : ExecutableResource, IDisposab
     /// </summary>
     public string AddProject(string projectPath)
     {
-        var fullPath = Path.GetFullPath(projectPath);
+        var fullPath = ResolveBuildPathCasing(projectPath);
         // Keep the first path spelling in the traversal project so it stays relative to the AppHost directory,
         // but deduplicate by physical identity so a symlink alias cannot build the same project twice.
         // Every resource for that identity must launch this returned path so MSBuild uses the same
@@ -353,7 +353,33 @@ internal sealed class DotnetProjectBuildResource : ExecutableResource, IDisposab
     private void SetWorkingDirectory(string workingDirectory)
     {
         var executableAnnotation = Annotations.OfType<ExecutableAnnotation>().Single();
-        executableAnnotation.WorkingDirectory = workingDirectory;
+        executableAnnotation.WorkingDirectory = ResolveBuildPathCasing(workingDirectory);
+    }
+
+    // The AppHost directory keeps whatever spelling the AppHost was built or launched with, such as the lowercase
+    // drive letter VS Code uses on Windows. The static web assets SDK compares paths ordinally, so when one build
+    // path uses that spelling and another uses the on-disk spelling, Blazor WebAssembly builds synthesize framework
+    // asset paths that do not exist and fail (https://github.com/microsoft/aspire/issues/21621). Pass only on-disk
+    // spellings to the build. Symlinks are intentionally preserved.
+    internal static string ResolveBuildPathCasing(string path)
+    {
+        var fullPath = Path.GetFullPath(path);
+        var existingPath = fullPath;
+        while (!Path.Exists(existingPath))
+        {
+            var parent = Path.GetDirectoryName(existingPath);
+            if (parent is null)
+            {
+                return fullPath;
+            }
+
+            existingPath = parent;
+        }
+
+        var resolvedExistingPath = PathNormalizer.ResolvePathCasing(existingPath);
+        return existingPath.Length == fullPath.Length
+            ? resolvedExistingPath
+            : Path.Join(resolvedExistingPath, fullPath[existingPath.Length..]);
     }
 
     private void ThrowIfGenerationStarted()

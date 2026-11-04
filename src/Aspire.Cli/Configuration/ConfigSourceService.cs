@@ -41,6 +41,8 @@ internal sealed class ConfigSourceService(
     private readonly Lock _checksLock = new();
     private readonly CancellationTokenSource _stopping = new();
     private Task? _check;
+    private bool _sourceTrustWarningDisplayed;
+    private bool _sourceDeclined;
 
     internal static readonly Option<bool?> s_useSourceOption = new("--use-config-source")
     {
@@ -140,7 +142,7 @@ internal sealed class ConfigSourceService(
     }
 
     /// <summary>
-    /// Resolves a candidate configuration source from the environment or employee detection,
+    /// Resolves an optional configuration source from the environment or employee detection,
     /// obtains consent, and acquires the accepted source.
     /// </summary>
     public Task<ConfigSource?> ResolveAndAcquireConfigSourceAsync(ParseResult parseResult, CancellationToken cancellationToken) =>
@@ -176,7 +178,11 @@ internal sealed class ConfigSourceService(
         interaction.DisplayMessage(KnownEmojis.Information, string.Format(CultureInfo.CurrentCulture, ConfigSourceStrings.Candidate,
             source.Repository, source.Path, source.Ref ?? ConfigSourceStrings.DefaultBranch,
             explicitSource ? CliConfigNames.InitSourceUrl : ConfigSourceStrings.EmployeeOrigin));
+        DisplaySourceTrustWarning();
 
+        // Machine-configured or detected sources suggest useful defaults for new apps;
+        // they do not enforce organizational policy or establish a security boundary.
+        // Declining the source is supported, not a security bypass.
         var accepted = parseResult.GetValue(s_useSourceOption);
         if (accepted is null)
         {
@@ -191,7 +197,8 @@ internal sealed class ConfigSourceService(
                 cancellationToken: cancellationToken);
             accepted = selection == ConfigSourceStrings.Accept;
         }
-        if (!accepted.Value)
+        _sourceDeclined = !accepted.Value;
+        if (_sourceDeclined)
         {
             return new ConfigSource { OptOut = true };
         }
@@ -269,8 +276,14 @@ internal sealed class ConfigSourceService(
 
     internal async Task<JsonObject> GetTemplateSourcesAsync(CancellationToken cancellationToken)
     {
-        // An explicitly configured URL authorizes runtime template inheritance, not
-        // project-file materialization. Do not infer this authority from employee detection.
+        // Discovery runs after creation consent and must not re-enable a declined source.
+        if (_sourceDeclined)
+        {
+            return new JsonObject();
+        }
+
+        // An explicitly configured URL opts into optional runtime template-source inheritance,
+        // not project-file materialization. Employee detection alone does not opt in.
         var repository = environment.GetEnvironmentVariable(CliConfigNames.InitSourceUrl);
         if (repository is null)
         {
@@ -529,6 +542,20 @@ internal sealed class ConfigSourceService(
     internal Task<ConfigSourceSnapshot> AcquireAsync(ConfigSource source, bool force, CancellationToken cancellationToken) =>
         AcquireAsync(source, force, allowInteractiveInput: true, cancellationToken);
 
+    private void DisplaySourceTrustWarning()
+    {
+        lock (_checksLock)
+        {
+            if (_sourceTrustWarningDisplayed)
+            {
+                return;
+            }
+            _sourceTrustWarningDisplayed = true;
+        }
+
+        interaction.DisplayMessage(KnownEmojis.Warning, SharedCommandStrings.SourceTrustWarning, consoleOverride: ConsoleOutput.Error);
+    }
+
     private async Task<ConfigSourceSnapshot> AcquireAsync(
         ConfigSource source, bool force, bool allowInteractiveInput, CancellationToken cancellationToken)
     {
@@ -542,6 +569,7 @@ internal sealed class ConfigSourceService(
             }
         }
 
+        DisplaySourceTrustWarning();
         var cacheDirectory = GetCacheDirectory(source);
         DirectoryHelper.CreateWithOwnerOnlyPermissions(Path.GetDirectoryName(cacheDirectory)!);
         DirectoryHelper.CreateWithOwnerOnlyPermissions(cacheDirectory);
@@ -671,19 +699,15 @@ internal sealed class ConfigSourceService(
         try
         {
             var (repositoryDirectory, commit, version) = await FetchVersionAsync(source, directory, allowInteractiveInput, timeout.Token);
-            var size = await git.GetObjectSizeAsync(repositoryDirectory, version, GitCommandMode.Interactive, timeout.Token);
-            if (size is null or > 4 * 1024 * 1024)
-            {
-                throw new ConfigSourceException(ConfigSourceStrings.InvalidConfiguration);
-            }
-
             var json = await git.ReadBlobAsync(repositoryDirectory, version, GitCommandMode.Interactive, timeout.Token);
             try
             {
+                // These checks ensure configuration can be consumed correctly; they do not
+                // enforce a security boundary or police the contents of a trusted source.
                 var configuration = JsonNode.Parse(json, documentOptions: ConfigurationHelper.ParseOptions) as JsonObject
                     ?? throw new ConfigSourceException(ConfigSourceStrings.InvalidConfiguration);
-                // Validate the known settings as well as JSON syntax. Unknown content settings
-                // are retained for future schemas, but a source cannot enable another source.
+                // Reserve recursive sources for future support, so a later implementation
+                // cannot unexpectedly activate declarations that were previously ignored.
                 if (configuration.Any(p => p.Key.Equals(ConfigSource.SectionName, StringComparison.OrdinalIgnoreCase)
                     || p.Key.StartsWith(ConfigSource.SectionName + ":", StringComparison.OrdinalIgnoreCase)
                     || p.Key.StartsWith(ConfigSource.SectionName + ".", StringComparison.OrdinalIgnoreCase)))
@@ -766,7 +790,8 @@ internal sealed class ConfigSourceService(
             allowInteractive ? GitCommandMode.Interactive : GitCommandMode.Unattended, cancellationToken);
         var commit = await git.GetCommitAsync(repositoryDirectory, "FETCH_HEAD^{commit}", GitCommandMode.Interactive, cancellationToken);
         var entry = await git.GetFileAsync(repositoryDirectory, commit, source.Path, GitCommandMode.Interactive, cancellationToken);
-        if (entry is not { Mode: GitTreeEntry.RegularFileMode or GitTreeEntry.ExecutableFileMode, Type: "blob" })
+        // Read blob contents directly, without interpreting file modes or creating filesystem links.
+        if (entry is not { Type: "blob" })
         {
             throw new ConfigSourceException(ConfigSourceStrings.MissingFile);
         }

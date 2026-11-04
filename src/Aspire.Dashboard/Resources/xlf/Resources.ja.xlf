@@ -317,6 +317,11 @@
         <target state="new">Filter environment variables</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourceOverviewHideEmptyPanels">
+        <source>Hide empty panels</source>
+        <target state="new">Hide empty panels</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResourceOverviewInstruments">
         <source>Instruments</source>
         <target state="new">Instruments</target>
@@ -422,6 +427,11 @@
         <target state="new">Resource overview</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourceOverviewPanelsLabel">
+        <source>Panels</source>
+        <target state="new">Panels</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResourceOverviewPropertiesTitle">
         <source>Properties</source>
         <target state="new">Properties</target>
@@ -440,6 +450,11 @@
       <trans-unit id="ResourceOverviewShowAllEnvironmentVariables">
         <source>Show all environment variables</source>
         <target state="new">Show all environment variables</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceOverviewShowAllPanels">
+        <source>Show all panels</source>
+        <target state="new">Show all panels</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceOverviewShowAppModelEnvironmentVariables">

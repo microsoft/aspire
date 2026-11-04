@@ -23,7 +23,8 @@ public sealed class ResourceOverviewEndpointTests : PlaywrightTestsBase<Resource
     private static readonly string s_longAddress = "https://localhost:7443/" + new string('a', 160) + "/openapi";
     private static readonly string s_longUrl = s_longAddress + "?token=example";
     private static readonly string s_maskedLongUrl = s_longAddress + "?token=" + Mask;
-    private static readonly string s_longFriendlyName = "OpenAPI" + new string('N', 160);
+    // Keep an address outside the visible list even when the responsive cards grow to fit ordinary rows.
+    private static readonly string s_longFriendlyName = "OpenAPI" + new string('N', 400);
 
     public ResourceOverviewEndpointTests(EndpointResourcesFixture dashboardServerFixture)
         : base(dashboardServerFixture)
@@ -100,6 +101,8 @@ public sealed class ResourceOverviewEndpointTests : PlaywrightTestsBase<Resource
             Assert.True(await page.Locator(".resource-overview").EvaluateAsync<bool>("el => el.scrollWidth <= el.clientWidth"));
             Assert.True(await page.EvaluateAsync<bool>("document.documentElement.scrollWidth <= innerWidth"));
 
+            await longAddress.ScrollIntoViewIfNeededAsync();
+            await AfterScrollEventsAsync();
             await longAddress.HoverAsync();
             await Assertions.Expect(tooltip).ToBeVisibleAsync();
             await Assertions.Expect(tooltip).ToHaveTextAsync(s_maskedLongUrl);

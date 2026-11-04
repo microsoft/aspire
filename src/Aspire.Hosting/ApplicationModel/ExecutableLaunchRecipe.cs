@@ -460,7 +460,8 @@ internal sealed class ProjectExecutableLaunchRecipe : IExecutableLaunchRecipe
                     projectArguments,
                     projectMetadata,
                     context.Configuration,
-                    context.DistributedApplicationOptions.Configuration);
+                    context.DistributedApplicationOptions.Configuration,
+                    context.DistributedApplicationOptions.GlobalArtifactsPath);
             }
         }
 
@@ -515,7 +516,8 @@ internal sealed class ProjectExecutableLaunchRecipe : IExecutableLaunchRecipe
                 launchArguments,
                 dotnetProjectLaunchArgumentIndex,
                 executableArgumentStartIndex,
-                context.DistributedApplicationOptions.Configuration);
+                context.DistributedApplicationOptions.Configuration,
+                context.DistributedApplicationOptions.GlobalArtifactsPath);
         }
 
         projectArguments.AddRange(launchArguments.Where(static argument => argument.Executable).Select(static argument => argument.Value));
@@ -606,7 +608,8 @@ internal sealed class ProjectExecutableLaunchRecipe : IExecutableLaunchRecipe
         List<string> projectArguments,
         IProjectMetadata projectMetadata,
         IConfiguration configuration,
-        string? appHostConfiguration)
+        string? appHostConfiguration,
+        string? appHostGlobalArtifactsPath)
     {
         // `dotnet watch` does not work with file-based apps yet, so use `dotnet run` in that case.
         if (configuration.GetBool("DOTNET_WATCH") is not true || projectMetadata.IsFileBasedApp)
@@ -622,6 +625,7 @@ internal sealed class ProjectExecutableLaunchRecipe : IExecutableLaunchRecipe
             {
                 projectArguments.Add("--no-build");
             }
+            AddArtifactsPathArguments(projectArguments, appHostGlobalArtifactsPath);
         }
         else
         {
@@ -642,6 +646,17 @@ internal sealed class ProjectExecutableLaunchRecipe : IExecutableLaunchRecipe
         // Aspire already materializes launch-profile settings into the application model, so allowing `dotnet`
         // to apply the profile again would let it override the resolved environment.
         projectArguments.Add("--no-launch-profile");
+    }
+
+    // An artifacts path passed to the AppHost build as a global property also redirected the output of the project
+    // resources it built, so `dotnet run` has to use the same artifacts path to find (or produce) that output.
+    // See https://github.com/microsoft/aspire/issues/6887.
+    private static void AddArtifactsPathArguments(List<string> arguments, string? appHostGlobalArtifactsPath)
+    {
+        if (!string.IsNullOrEmpty(appHostGlobalArtifactsPath))
+        {
+            arguments.AddRange(["--artifacts-path", appHostGlobalArtifactsPath]);
+        }
     }
 
     private static (List<ExecutableLaunchArgument> LaunchArguments, int? DotnetProjectLaunchArgumentIndex) BuildLaunchArguments(
@@ -841,7 +856,8 @@ internal sealed class ProjectExecutableLaunchRecipe : IExecutableLaunchRecipe
         List<ExecutableLaunchArgument> launchArguments,
         int? dotnetProjectLaunchArgumentIndex,
         int executableArgumentStartIndex,
-        string? appHostConfiguration)
+        string? appHostConfiguration,
+        string? appHostGlobalArtifactsPath)
     {
         if (dotnetProjectLaunchArgumentIndex is not { } projectLaunchIndex)
         {
@@ -853,6 +869,12 @@ internal sealed class ProjectExecutableLaunchRecipe : IExecutableLaunchRecipe
             !ContainsDotnetProjectLaunchOption(launchArguments, "--configuration", "-c"))
         {
             argumentsToInsert.AddRange(["--configuration", appHostConfiguration]);
+        }
+
+        if (string.Equals(launchArguments[projectLaunchIndex].Value, "run", StringComparison.Ordinal) &&
+            !ContainsDotnetProjectLaunchOption(launchArguments, "--artifacts-path"))
+        {
+            AddArtifactsPathArguments(argumentsToInsert, appHostGlobalArtifactsPath);
         }
 
         if (!ContainsDotnetProjectLaunchOption(launchArguments, "--no-launch-profile") &&
