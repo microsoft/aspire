@@ -8,6 +8,15 @@ namespace Aspire.Hosting.Kubernetes.Tests;
 
 public class HelmExtensionsTests
 {
+    [Theory]
+    [InlineData("\U0001F680{{ .Values.message }}", "{{ tpl \"\U0001F680{{ .Values.message }}\" . | quote }}")]
+    [InlineData("\\uD83D\\uDE80{{ .Values.message }}", "{{ tpl \"\\\\uD83D\\\\uDE80{{ .Values.message }}\" . | quote }}")]
+    [InlineData("\"\n\r\t\\\0", "{{ tpl \"\\\"\\n\\r\\t\\\\\\u0000\" . | quote }}")]
+    public void ToQuotedHelmTemplateExpressionUsesGoStringEscaping(string value, string expected)
+    {
+        Assert.Equal(expected, value.ToQuotedHelmTemplateExpression());
+    }
+
     [Fact]
     public void ToQuotedHelmTemplateExpressionDoesNotWrapAnAlreadyQuotedTemplate()
     {

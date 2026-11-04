@@ -391,6 +391,13 @@ public class EndpointReferenceExpression(EndpointReference endpointReference, En
         async ValueTask<string> ResolveBrowserOriginsAsync()
         {
             var snapshot = Endpoint.EndpointAnnotation.BrowserUrlsSnapshot;
+            if (!snapshot.IsValueSet && ResourceUrlsCallbackScope.CurrentResource is { } callbackResource)
+            {
+                throw new InvalidOperationException(
+                    $"The URL callback for resource '{callbackResource.Name}' cannot resolve browser origins for endpoint '{Endpoint.EndpointName}' " +
+                    $"on resource '{Endpoint.Resource.Name}' before its URLs are finalized. Read browser origins after URL callbacks complete, " +
+                    "for example in a ResourceEndpointsAllocatedEvent handler.");
+            }
             var urls = await snapshot.GetValueAsync(cancellationToken).ConfigureAwait(false);
             var origins = urls.Select(url => new Uri(url.Url, UriKind.Absolute))
                 .Where(uri => uri.Scheme is "http" or "https")

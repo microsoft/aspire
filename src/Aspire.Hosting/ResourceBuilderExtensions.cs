@@ -2255,7 +2255,8 @@ public static class ResourceBuilderExtensions
     /// <para>
     /// Final origins associated with the resource's own endpoints are exposed through <see cref="EndpointReference.BrowserOrigins"/>.
     /// Preferred browser values follow display ordering; origin collections deduplicate scheme, host, and port.
-    /// Browser references are finalized after these callbacks, so callbacks must not await unfinished browser references.
+    /// Browser references are finalized after these callbacks. Resolving unfinished browser references from a URL callback
+    /// throws <see cref="InvalidOperationException"/> rather than waiting; already-finalized browser references remain available.
     /// </para>
     /// <example>
     /// Update all displayed URLs to have display text:
@@ -2319,7 +2320,8 @@ public static class ResourceBuilderExtensions
     /// <para>
     /// Final origins associated with the resource's own endpoints are exposed through <see cref="EndpointReference.BrowserOrigins"/>.
     /// Preferred browser values follow display ordering; origin collections deduplicate scheme, host, and port.
-    /// Browser references are finalized after these callbacks, so callbacks must not await unfinished browser references.
+    /// Browser references are finalized after these callbacks. Resolving unfinished browser references from a URL callback
+    /// throws <see cref="InvalidOperationException"/> rather than waiting; already-finalized browser references remain available.
     /// </para>
     /// </remarks>
     [AspireExportIgnore(Reason = "Polyglot AppHosts use the synchronous Action<> overload via withUrlsCallback.")]

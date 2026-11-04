@@ -39,6 +39,8 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
             .WithEnvironment("CONFIG", ReferenceExpression.Create($"origins={origin}"))
             .WithEnvironment("SECRET_CONFIG", ReferenceExpression.Create($"origins={origin};json={json};token={token}"))
             .WithEnvironment("JSON_CONFIG", json)
+            .WithEnvironment("UNICODE_CONFIG", ReferenceExpression.Create($"\U0001F680{origin}"))
+            .WithEnvironment("UNICODE_SECRET", ReferenceExpression.Create($"\U0001F680{token}"))
             .WithEnvironment("TOKEN", token)
             .WithEnvironment("MULTILINE", builder.AddParameter("multiline", "first \"quoted\" line\nsecond\\line", publishValueAsDefault: true))
             .WithEnvironment("PORT", web.GetEndpoint("HTTP").Property(EndpointProperty.Port));
@@ -74,10 +76,12 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
         Assert.Equal($"origins={expected}", Assert.IsType<YamlScalarNode>(data.Children[new YamlScalarNode("CONFIG")]).Value);
         Assert.Equal("first \"quoted\" line\nsecond\\line", Assert.IsType<YamlScalarNode>(data.Children[new YamlScalarNode("MULTILINE")]).Value);
         Assert.Equal("8080", Assert.IsType<YamlScalarNode>(data.Children[new YamlScalarNode("PORT")]).Value);
+        Assert.Equal($"\U0001F680{expected}", Assert.IsType<YamlScalarNode>(data.Children[new YamlScalarNode("UNICODE_CONFIG")]).Value);
         var stringData = Assert.IsType<YamlMappingNode>(resources["Secret"].Children[new YamlScalarNode("stringData")]);
         Assert.Equal("[\"quoted\"]", Assert.IsType<YamlScalarNode>(data.Children[new YamlScalarNode("JSON_CONFIG")]).Value);
         Assert.Equal($"origins={expected};json=[\"quoted\"];token=test-token", Assert.IsType<YamlScalarNode>(stringData.Children[new YamlScalarNode("SECRET_CONFIG")]).Value);
         Assert.Equal("test-token", Assert.IsType<YamlScalarNode>(stringData.Children[new YamlScalarNode("TOKEN")]).Value);
+        Assert.Equal("\U0001F680test-token", Assert.IsType<YamlScalarNode>(stringData.Children[new YamlScalarNode("UNICODE_SECRET")]).Value);
     }
 
     [Theory]

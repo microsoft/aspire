@@ -476,7 +476,10 @@ internal sealed class ApplicationOrchestrator
                     {
                         _logger.LogTrace("Invoking URL callback '{CallbackIndex}' for resource '{ResourceName}'.", index, resource.Name);
                     }
-                    await callback.Callback(urlsCallbackContext).ConfigureAwait(false);
+                    using (new ResourceUrlsCallbackScope(resource))
+                    {
+                        await callback.Callback(urlsCallbackContext).ConfigureAwait(false);
+                    }
                     if (_logger.IsEnabled(LogLevel.Trace))
                     {
                         _logger.LogTrace("{UrlCount} URLs after callback '{CallbackIndex}' for resource '{ResourceName}'.", urlsCallbackContext.Urls.Count, index, resource.Name);
