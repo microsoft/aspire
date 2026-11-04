@@ -19,8 +19,8 @@ resource application 'Microsoft.Graph/applications@v1.0' = {
   }
   web: {
     redirectUris: [
-      redirectUri0
-      redirectUri1
+      '${first(split(redirectUri0, ','))}/signin-oidc'
+      '${first(split(redirectUri1, ','))}/signout-callback-oidc'
     ]
     implicitGrantSettings: {
       enableIdTokenIssuance: false

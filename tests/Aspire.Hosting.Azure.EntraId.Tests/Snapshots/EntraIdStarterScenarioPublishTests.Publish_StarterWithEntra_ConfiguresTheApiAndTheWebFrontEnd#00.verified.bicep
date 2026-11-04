@@ -44,8 +44,8 @@ module webfrontend_entra 'webfrontend-entra/webfrontend-entra.bicep' = {
   scope: rg
   params: {
     tenantResourceSuffix: tenantResourceSuffix
-    redirectUri0: 'https://webfrontend.${env.outputs.AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN}/signin-oidc'
-    redirectUri1: 'https://webfrontend.${env.outputs.AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN}/signout-callback-oidc'
+    redirectUri0: 'https://webfrontend.${env.outputs.AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN}'
+    redirectUri1: 'https://webfrontend.${env.outputs.AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN}'
     apiservice_entraClientId: apiservice_entra.outputs.clientId
     webfrontend_identity_principalId: webfrontend_identity.outputs.principalId
   }
