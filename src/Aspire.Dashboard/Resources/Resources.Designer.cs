@@ -766,6 +766,69 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to {0}: {1} to {2}.
+        /// </summary>
+        public static string RelationshipEdgeDescription {
+            get {
+                return ResourceManager.GetString("RelationshipEdgeDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Flow.
+        /// </summary>
+        public static string RelationshipFlow {
+            get {
+                return ResourceManager.GetString("RelationshipFlow", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Hierarchy.
+        /// </summary>
+        public static string RelationshipHierarchy {
+            get {
+                return ResourceManager.GetString("RelationshipHierarchy", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Layout.
+        /// </summary>
+        public static string RelationshipLayout {
+            get {
+                return ResourceManager.GetString("RelationshipLayout", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Parent (child to parent).
+        /// </summary>
+        public static string RelationshipParent {
+            get {
+                return ResourceManager.GetString("RelationshipParent", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Reference.
+        /// </summary>
+        public static string RelationshipReference {
+            get {
+                return ResourceManager.GetString("RelationshipReference", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Topology.
+        /// </summary>
+        public static string RelationshipTopology {
+            get {
+                return ResourceManager.GetString("RelationshipTopology", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Relationship graph.
         /// </summary>
         public static string ResourceOverviewRelationshipGraph {

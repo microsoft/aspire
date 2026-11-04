@@ -486,6 +486,27 @@
   <data name="ResourceOverviewRelationshipGraph" xml:space="preserve">
     <value>Relationship graph</value>
   </data>
+  <data name="RelationshipLayout" xml:space="preserve">
+    <value>Layout</value>
+  </data>
+  <data name="RelationshipFlow" xml:space="preserve">
+    <value>Flow</value>
+  </data>
+  <data name="RelationshipHierarchy" xml:space="preserve">
+    <value>Hierarchy</value>
+  </data>
+  <data name="RelationshipTopology" xml:space="preserve">
+    <value>Topology</value>
+  </data>
+  <data name="RelationshipEdgeDescription" xml:space="preserve">
+    <value>{0}: {1} to {2}</value>
+  </data>
+  <data name="RelationshipReference" xml:space="preserve">
+    <value>Reference</value>
+  </data>
+  <data name="RelationshipParent" xml:space="preserve">
+    <value>Parent (child to parent)</value>
+  </data>
   <data name="ResourceOverviewPropertiesTitle" xml:space="preserve">
     <value>Properties</value>
   </data>

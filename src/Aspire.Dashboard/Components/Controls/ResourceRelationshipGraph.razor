@@ -1,47 +1,60 @@
 @namespace Aspire.Dashboard.Components.Controls
 
-<svg class="relationship-graph"
-     viewBox="0 0 @_layout.Width @_layout.Height"
-     style="@($"max-width: {(_layout.Width * 3) / 2}px")"
-     role="group"
-     aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewRelationshipGraph)]">
-    <defs>
-        <marker id="@_markerId" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-            <path d="M0,0 L8,4 L0,8 z" class="relationship-graph-arrow" />
-        </marker>
-    </defs>
-
-    @foreach (var edge in _layout.Edges)
-    {
-        <path class="relationship-graph-edge" d="@edge.Path" marker-end="@($"url(#{_markerId})")" data-tooltip="@edge.Type" role="img" aria-label="@edge.Type" />
-    }
-
-    @foreach (var node in _layout.Nodes)
-    {
-        var resourceNode = node.Node;
-        var title = node.IsCenter ? $"{resourceNode.Name} ({resourceNode.Type})" : $"{resourceNode.Type}: {resourceNode.Name}";
-        if (resourceNode.Url is { } url)
+<div class="relationship-container" @ref="_container" data-layout="@_mode">
+    <div class="relationship-toolbar">
+        @HeaderContent
+        <IconToggleGroup TValue="string" Label="@Loc[nameof(Dashboard.Resources.Resources.RelationshipLayout)]"
+                         Value="@_mode" ValueChanged="@ChangeLayoutAsync" Options="@LayoutOptions" />
+    </div>
+    <div class="relationship-viewport" tabindex="0" role="region"
+         aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewRelationshipGraph)]">
+        <svg class="relationship-graph" data-layout="@_renderedMode" viewBox="0 0 @_layout.Width @_layout.Height"
+             style="@($"width: {_layout.Width}px; height: {_layout.Height}px")" role="group"
+             aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewRelationshipGraph)]">
+            <defs>
+                @foreach (var type in _layout.Edges.Select(edge => edge.Type).Distinct())
+                {
+                    <marker id="@MarkerId(type)" viewBox="-1 -1 18 10" refX="16" refY="4"
+                            markerWidth="18" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto">
+                        <path d="M0,4 H9 M8,0 L16,4 L8,8 z" class="relationship-graph-arrow @EdgeClass(type)" />
+                    </marker>
+                }
+            </defs>
+            @foreach (var edge in _layout.Edges)
+            {
+                var description = Loc[nameof(Dashboard.Resources.Resources.RelationshipEdgeDescription), edge.Type, edge.Source, edge.Target];
+                <g class="relationship-edge @EdgeClass(edge.Type)" data-edge="@edge.Id"
+                   data-source="@edge.Source" data-target="@edge.Target">
+                    <path class="relationship-edge-casing" d="@edge.Path" />
+                    <path class="relationship-graph-edge @EdgeClass(edge.Type)" d="@edge.Path"
+                          marker-end="@($"url(#{MarkerId(edge.Type)})")"
+                          data-source="@edge.Source" data-target="@edge.Target" data-relationship="@edge.Type"
+                          data-tooltip="@description" tabindex="0" role="img" aria-label="@description" />
+                </g>
+            }
+            @foreach (var node in _layout.Nodes)
+            {
+                var title = node.IsCenter ? $"{node.Node.Name} ({node.Node.Type})" : node.Node.Name;
+                <a class="relationship-graph-node @(node.IsCenter ? "center" : null)" data-node="@node.Node.Name"
+                   href="@(node.IsCenter ? null : node.Node.Url)" role="@(node.IsCenter ? "img" : null)"
+                   aria-label="@title" data-tooltip="@title">
+                    <rect x="@node.X" y="@node.Y" width="@node.Width" height="@node.Height" rx="6" />
+                    <circle cx="@(node.X + 14)" cy="@(node.Y + node.Height / 2)" r="4"
+                            style="@($"fill: {ColorGenerator.Instance.GetColorVariableByKey(node.Node.Name)}")" />
+                    <text x="@(node.X + 28)" y="@(node.Y + (node.Height - node.Lines.Count * 16) / 2 + 12)">
+                        @for (var i = 0; i < node.Lines.Count; i++)
+                        {
+                            <tspan x="@(node.X + 28)" dy="@(i == 0 ? 0 : 16)">@node.Lines[i]</tspan>
+                        }
+                    </text>
+                </a>
+            }
+        </svg>
+    </div>
+    <div class="relationship-legend">
+        @foreach (var type in _layout.Edges.Select(edge => edge.Type).Distinct())
         {
-            <a class="relationship-graph-node" href="@url" aria-label="@title" data-tooltip="@title">
-                @NodeContent(node, resourceNode)
-            </a>
+            <span class="@EdgeClass(type)">@(type == "Parent" ? Loc[nameof(Dashboard.Resources.Resources.RelationshipParent)] : type == "Reference" ? Loc[nameof(Dashboard.Resources.Resources.RelationshipReference)] : type)</span>
         }
-        else
-        {
-            <g class="relationship-graph-node center" data-tooltip="@title" role="img" aria-label="@title">
-                @NodeContent(node, resourceNode)
-            </g>
-        }
-    }
-</svg>
-
-@code {
-    private readonly string _markerId = $"relationship-arrow-{Guid.NewGuid():N}";
-
-    private RenderFragment NodeContent(NodeLayout node, RelationshipGraphNode resourceNode) =>
-        @<g>
-            <rect x="@node.X" y="@node.Y" width="@_nodeWidth" height="@NodeHeight" rx="6" />
-            <circle cx="@(node.X + 12)" cy="@(node.Y + NodeHeight / 2)" r="4" style="@($"fill: {ColorGenerator.Instance.GetColorVariableByKey(resourceNode.Name)}")" />
-            <text x="@(node.X + LabelStart)" y="@(node.Y + NodeHeight / 2)" dominant-baseline="central">@GetLabel(resourceNode.Name)</text>
-        </g>;
-}
+    </div>
+</div>

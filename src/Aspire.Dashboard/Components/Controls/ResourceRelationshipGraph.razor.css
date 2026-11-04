@@ -1,59 +1,160 @@
+.relationship-container {
+    width: 100%;
+    min-width: 0;
+}
+
+.relationship-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    margin-bottom: 12px;
+}
+
+.relationship-toolbar ::deep .overview-card-header {
+    margin-bottom: 0;
+}
+
+.relationship-toolbar ::deep .icon-toggle-group {
+    flex-shrink: 0;
+    gap: 8px;
+}
+
+.relationship-viewport {
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+    border-radius: 6px;
+}
+
+.relationship-viewport:focus-visible {
+    outline: 2px solid var(--colorStrokeFocus2);
+    outline-offset: 2px;
+}
+
 .relationship-graph {
     display: block;
-    width: 100%;
-    height: auto;
-    margin: auto;
-    overflow: visible;
+    margin-inline: auto;
     font-family: inherit;
     font-size: 12px;
 }
 
+.relationship-edge-casing {
+    fill: none;
+    stroke: var(--aspire-control-background);
+    stroke-width: 5;
+    stroke-linejoin: round;
+}
+
 .relationship-graph-edge {
     fill: none;
-    stroke: var(--colorNeutralStroke1);
-    stroke-width: 1.25;
+    stroke: var(--colorNeutralForeground3);
+    stroke-width: 1.5;
+    stroke-linejoin: round;
+}
+
+.relationship-graph-edge.parent {
+    stroke: var(--colorBrandForeground2);
+    stroke-dasharray: 6 4;
+}
+
+.relationship-graph-edge.other {
+    stroke: var(--colorPaletteTealForeground2);
+    stroke-dasharray: 2 3;
 }
 
 .relationship-graph-arrow {
-    fill: var(--colorNeutralStroke1);
+    color: var(--colorNeutralForeground3);
+    fill: currentColor;
+    stroke: currentColor;
+    stroke-width: 1;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.relationship-graph-arrow.parent {
+    color: var(--colorBrandForeground2);
+}
+
+.relationship-graph-arrow.other {
+    color: var(--colorPaletteTealForeground2);
+}
+
+.has-highlight .relationship-edge:not(.active) {
+    opacity: .16;
+}
+
+.relationship-edge.active .relationship-graph-edge {
+    stroke-width: 2.5;
+}
+
+.relationship-graph-edge:focus-visible {
+    outline: none;
+    stroke-width: 3;
+}
+
+.relationship-graph-node {
+    text-decoration: none;
 }
 
 .relationship-graph-node rect {
     fill: var(--colorNeutralBackground1);
-    stroke: var(--colorNeutralStroke2);
-    stroke-width: 1;
+    stroke: var(--colorNeutralStroke1);
 }
 
 .relationship-graph-node text {
     fill: var(--colorNeutralForeground1);
 }
 
-/* The center node is distinguished by weight rather than a saturated fill, so it doesn't dominate the card. */
 .relationship-graph-node.center rect {
-    fill: var(--colorNeutralBackground3);
-    stroke: var(--colorNeutralStroke1);
-    stroke-width: 1;
+    fill: var(--colorBrandBackground2);
+    stroke: var(--colorBrandStroke1);
 }
 
 .relationship-graph-node.center text {
     font-weight: 600;
 }
 
-a.relationship-graph-node {
-    cursor: pointer;
-    text-decoration: none;
-}
-
-a.relationship-graph-node:hover rect {
+.relationship-graph-node[href]:hover rect {
     fill: var(--colorNeutralBackground1Hover);
     stroke: var(--colorBrandStroke1);
 }
 
-a.relationship-graph-node:focus-visible {
+.relationship-graph-node:focus-visible {
     outline: none;
 }
 
-a.relationship-graph-node:focus-visible rect {
+.relationship-graph-node:focus-visible rect {
     stroke: var(--colorStrokeFocus2);
-    stroke-width: 1.5;
+    stroke-width: 2;
+}
+
+.relationship-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-top: 12px;
+    color: var(--colorNeutralForeground2);
+    font-size: var(--fontSizeBase200);
+}
+
+.relationship-legend span::before {
+    content: "";
+    display: inline-block;
+    width: 20px;
+    margin-inline-end: 6px;
+    vertical-align: middle;
+    border-top: 2px solid var(--colorNeutralForeground3);
+}
+
+.relationship-legend .parent::before {
+    border-color: var(--colorBrandForeground2);
+    border-top-style: dashed;
+}
+
+.relationship-legend .other::before {
+    border-color: var(--colorPaletteTealForeground2);
+    border-top-style: dotted;
 }

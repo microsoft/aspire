@@ -1,142 +1,173 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Globalization;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
+using Microsoft.JSInterop;
+using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components.Controls;
 
-/// <summary>
-/// Draws a small graph of a resource's direct relationships: resources that reference it on the left, the resource in
-/// the middle, and the resources it references on the right.
-/// </summary>
-/// <remarks>
-/// The graph is rendered on the server as inline SVG. Coordinates are integers so attribute values don't depend on
-/// the current culture.
-/// </remarks>
-public sealed partial class ResourceRelationshipGraph : ComponentBase
+public sealed partial class ResourceRelationshipGraph : ComponentBase, IAsyncDisposable
 {
-    // A graph with both sides is sized to fit an overview card without being scaled down. Nodes are wider when only
-    // one side has relationships, so the graph fills about the same width.
-    private const int ThreeColumnNodeWidth = 124;
-    private const int TwoColumnNodeWidth = 170;
-    private const int NodeHeight = 30;
-    private const int RowGap = 10;
-    private const int ThreeColumnGap = 28;
-    private const int TwoColumnGap = 44;
-    private const int Padding = 2;
-
-    // At 12px, text fits in a node with about one character per this many pixels, after the color dot.
-    private const int PixelsPerCharacter = 7;
-    private const int LabelStart = 22;
-
-    private GraphLayout _layout = null!;
-    private int _nodeWidth;
-    private int _maximumLabelLength;
+    private readonly string _markerId = $"relationship-arrow-{Guid.NewGuid():N}";
+    private GraphLayout _layout = new(0, 0, [], []);
+    private ElementReference _container;
+    private IJSObjectReference? _module;
+    private DotNetObjectReference<ResourceRelationshipGraph>? _reference;
+    private Task? _initialization;
+    private bool _disposed;
+    private bool _centerAfterRender;
+    private int _availableWidth;
+    private int _revision;
+    private string _mode = "Flow";
+    private string _renderedMode = "Flow";
 
     [Parameter, EditorRequired]
     public required RelationshipGraphNode Resource { get; set; }
 
-    /// <summary>
-    /// Gets or sets the resources that reference <see cref="Resource"/>.
-    /// </summary>
     [Parameter, EditorRequired]
     public required IReadOnlyList<RelationshipGraphNode> Incoming { get; set; }
 
-    /// <summary>
-    /// Gets or sets the resources that <see cref="Resource"/> references.
-    /// </summary>
     [Parameter, EditorRequired]
     public required IReadOnlyList<RelationshipGraphNode> Outgoing { get; set; }
+
+    [Parameter]
+    public RenderFragment? HeaderContent { get; set; }
 
     [Inject]
     public required IStringLocalizer<Resources.Resources> Loc { get; init; }
 
-    protected override void OnParametersSet()
+    [Inject]
+    public required IJSRuntime JS { get; init; }
+
+    [Inject]
+    public required ILogger<ResourceRelationshipGraph> Logger { get; init; }
+
+    private IReadOnlyList<IconToggleOption<string>> LayoutOptions =>
+    [
+        new("Flow", new Icons.Regular.Size20.ArrowRight(), Loc[nameof(Resources.Resources.RelationshipFlow)]),
+        new("Hierarchy", new Icons.Regular.Size20.BranchFork(), Loc[nameof(Resources.Resources.RelationshipHierarchy)]),
+        new("Topology", new Icons.Regular.Size20.ShareAndroid(), Loc[nameof(Resources.Resources.RelationshipTopology)])
+    ];
+
+    protected override Task OnParametersSetAsync() => UpdateLayoutAsync();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        // Every relationship is drawn so each related resource can be reached from the graph.
-        var incoming = Incoming;
-        var outgoing = Outgoing;
-        var rows = Math.Max(1, Math.Max(incoming.Count, outgoing.Count));
-        var height = (rows * NodeHeight) + ((rows - 1) * RowGap) + (Padding * 2);
-
-        // A side without relationships doesn't take space, so the graph is as large as possible in narrow cards.
-        var columnCount = 1 + (incoming.Count > 0 ? 1 : 0) + (outgoing.Count > 0 ? 1 : 0);
-        _nodeWidth = columnCount == 3 ? ThreeColumnNodeWidth : TwoColumnNodeWidth;
-        var columnGap = columnCount == 3 ? ThreeColumnGap : TwoColumnGap;
-        _maximumLabelLength = (_nodeWidth - LabelStart - 8) / PixelsPerCharacter;
-        var centerX = incoming.Count > 0 ? Padding + _nodeWidth + columnGap : Padding;
-        var width = (columnCount * _nodeWidth) + ((columnCount - 1) * columnGap) + (Padding * 2);
-
-        var center = new NodeLayout(Resource, centerX, (height - NodeHeight) / 2, IsCenter: true);
-        var left = LayoutColumn(incoming, Padding, height);
-        var right = LayoutColumn(outgoing, centerX + _nodeWidth + columnGap, height);
-
-        var edges = new List<EdgeLayout>();
-        foreach (var node in left)
+        if (firstRender)
         {
-            edges.Add(CreateEdge(node.X + _nodeWidth, node.Y + NodeHeight / 2, center.X, center.Y + NodeHeight / 2, node));
+            _initialization = InitializeAsync();
+            await _initialization;
         }
-        foreach (var node in right)
+        if (_centerAfterRender && _module is not null)
         {
-            edges.Add(CreateEdge(center.X + _nodeWidth, center.Y + NodeHeight / 2, node.X, node.Y + NodeHeight / 2, node));
+            _centerAfterRender = false;
+            await _module.InvokeVoidAsync("center", _container);
         }
-
-        _layout = new GraphLayout(width, height, [.. left, center, .. right], edges);
     }
 
-    private static List<NodeLayout> LayoutColumn(IReadOnlyList<RelationshipGraphNode> nodes, int x, int height)
+    private async Task InitializeAsync()
     {
-        var columnHeight = (nodes.Count * NodeHeight) + (Math.Max(0, nodes.Count - 1) * RowGap);
-        var y = (height - columnHeight) / 2;
-        var result = new List<NodeLayout>(nodes.Count);
-        foreach (var node in nodes)
+        _module = await JS.InvokeAsync<IJSObjectReference>("import", $"./{Assets["Components/Controls/ResourceRelationshipGraph.razor.js"]}");
+        if (!_disposed)
         {
-            result.Add(new NodeLayout(node, x, y, IsCenter: false));
-            y += NodeHeight + RowGap;
+            _reference = DotNetObjectReference.Create(this);
+            await _module.InvokeVoidAsync("observe", _container, _reference);
         }
-
-        return result;
     }
 
-    private static EdgeLayout CreateEdge(int x1, int y1, int x2, int y2, NodeLayout node)
+    [JSInvokable]
+    public Task ResizeAsync(int width) => InvokeAsync(async () =>
     {
-        // A horizontal S-curve between the facing sides of the two nodes. The end stops short of the target so the
-        // arrow head isn't drawn under the node's border.
-        var targetX = x2 - 3;
-        var controlOffset = (targetX - x1) / 2;
-        var path = string.Create(CultureInfo.InvariantCulture, $"M{x1},{y1} C{x1 + controlOffset},{y1} {targetX - controlOffset},{y2} {targetX},{y2}");
-        return new EdgeLayout(path, node.Node.Type);
+        if (!_disposed && width > 0 && _availableWidth != width)
+        {
+            _availableWidth = width;
+            await UpdateLayoutAsync();
+            StateHasChanged();
+        }
+    });
+
+    private async Task ChangeLayoutAsync(string value)
+    {
+        _mode = value;
+        await UpdateLayoutAsync();
     }
 
-    /// <summary>
-    /// Shortens a long name by replacing its middle with an ellipsis. Keeping the end distinguishes names that only
-    /// differ by a suffix, such as replicas: <c>catalogservice-kpjvzdsd</c> becomes <c>catalog…kpjvzdsd</c>.
-    /// </summary>
-    private string GetLabel(string name)
+    private async Task UpdateLayoutAsync()
     {
-        if (name.Length <= _maximumLabelLength)
+        if (_module is null || _availableWidth == 0 || _disposed)
         {
-            return name;
+            return;
         }
+        var revision = ++_revision;
+        try
+        {
+            await using var reference = await _module.InvokeAsync<IJSStreamReference>("layout", _container, _mode, _availableWidth, Resource, Incoming, Outgoing);
+            await using var stream = await reference.OpenReadStreamAsync();
+            var layout = await JsonSerializer.DeserializeAsync(stream, GraphJsonContext.Default.GraphLayout)
+                ?? throw new InvalidOperationException("The relationship graph layout was empty.");
+            if (!_disposed && revision == _revision)
+            {
+                _layout = layout;
+                _renderedMode = _mode;
+                _centerAfterRender = true;
+            }
+        }
+        catch (JSException exception)
+        {
+            Logger.LogError(exception, "Could not lay out the relationship graph.");
+            throw;
+        }
+    }
 
-        var endLength = (_maximumLabelLength - 1) / 2;
-        var startLength = _maximumLabelLength - 1 - endLength;
-        return string.Concat(name.AsSpan(0, startLength), "…", name.AsSpan(name.Length - endLength));
+    private static string EdgeClass(string type) => type switch
+    {
+        "Parent" => "parent",
+        "Reference" => "reference",
+        _ => "other"
+    };
+
+    private string MarkerId(string type) => $"{_markerId}-{_layout.Edges.FindIndex(edge => edge.Type == type)}";
+
+    public async ValueTask DisposeAsync()
+    {
+        _disposed = true;
+        try
+        {
+            if (_initialization is not null)
+            {
+                await _initialization;
+            }
+            if (_module is not null)
+            {
+                await _module.InvokeVoidAsync("disconnect", _container);
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+            // Navigation can disconnect the circuit before the observer is released.
+        }
+        finally
+        {
+            _reference?.Dispose();
+            if (_module is not null)
+            {
+                await JSInteropHelpers.SafeDisposeAsync(_module);
+            }
+        }
     }
 
     private sealed record GraphLayout(int Width, int Height, List<NodeLayout> Nodes, List<EdgeLayout> Edges);
+    private sealed record NodeLayout(RelationshipGraphNode Node, int X, int Y, int Width, int Height, bool IsCenter, List<string> Lines);
+    private sealed record EdgeLayout(string Id, string Path, string Type, string Source, string Target);
 
-    private sealed record NodeLayout(RelationshipGraphNode Node, int X, int Y, bool IsCenter);
-
-    private sealed record EdgeLayout(string Path, string Type);
+    [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+    [JsonSerializable(typeof(GraphLayout))]
+    private sealed partial class GraphJsonContext : JsonSerializerContext;
 }
 
-/// <summary>
-/// A resource in a <see cref="ResourceRelationshipGraph"/>.
-/// </summary>
-/// <param name="Name">The resource name displayed in the graph.</param>
-/// <param name="Type">The relationship type, such as <c>Reference</c>, or the resource type for the center resource.</param>
-/// <param name="Url">The URL the node links to, or <c>null</c> for the center resource.</param>
 public sealed record RelationshipGraphNode(string Name, string Type, string? Url);

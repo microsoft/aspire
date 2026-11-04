@@ -182,6 +182,41 @@
         <target state="new">Parameters</target>
         <note />
       </trans-unit>
+      <trans-unit id="RelationshipEdgeDescription">
+        <source>{0}: {1} to {2}</source>
+        <target state="new">{0}: {1} to {2}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RelationshipFlow">
+        <source>Flow</source>
+        <target state="new">Flow</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RelationshipHierarchy">
+        <source>Hierarchy</source>
+        <target state="new">Hierarchy</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RelationshipLayout">
+        <source>Layout</source>
+        <target state="new">Layout</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RelationshipParent">
+        <source>Parent (child to parent)</source>
+        <target state="new">Parent (child to parent)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RelationshipReference">
+        <source>Reference</source>
+        <target state="new">Reference</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RelationshipTopology">
+        <source>Topology</source>
+        <target state="new">Topology</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResourceActionCommandsText">
         <source>Commands</source>
         <target state="translated">Команды</target>

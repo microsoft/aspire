@@ -520,25 +520,31 @@
             }
 
             <section class="overview-card overview-relationships-card" style="@cardLayout.Style(OverviewCard.Relationships)" aria-labelledby="overview-relationships-title" hidden="@hiddenCards.Contains(OverviewCard.Relationships)">
-                <div class="overview-card-header">
-                    <span class="card-header-icon" aria-hidden="true">
-                        <FluentIcon Value="@(new Icons.Regular.Size16.BranchFork())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
-                    </span>
-                    <h2 id="overview-relationships-title">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewRelationshipsTitle)]</h2>
-                    @if (relatedResources.Count > 0)
-                    {
-                        <span class="overview-card-count">@relatedResources.Count</span>
-                    }
-                </div>
                 @if (relatedResources.Count == 0)
                 {
+                    <div class="overview-card-header">
+                        <span class="card-header-icon" aria-hidden="true">
+                            <FluentIcon Value="@(new Icons.Regular.Size16.BranchFork())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
+                        </span>
+                        <h2 id="overview-relationships-title">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewRelationshipsTitle)]</h2>
+                    </div>
                     <div class="overview-empty">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewNoRelationships)]</div>
                 }
                 else
                 {
                     <ResourceRelationshipGraph Resource="@(new RelationshipGraphNode(resourceName, resource.ResourceType, Url: null))"
                                                Incoming="@GetGraphNodes(relatedResources, incoming: true)"
-                                               Outgoing="@GetGraphNodes(relatedResources, incoming: false)" />
+                                               Outgoing="@GetGraphNodes(relatedResources, incoming: false)">
+                        <HeaderContent>
+                            <div class="overview-card-header">
+                                <span class="card-header-icon" aria-hidden="true">
+                                    <FluentIcon Value="@(new Icons.Regular.Size16.BranchFork())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
+                                </span>
+                                <h2 id="overview-relationships-title">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewRelationshipsTitle)]</h2>
+                                <span class="overview-card-count">@relatedResources.Select(r => r.Resource.Name).Distinct().Count()</span>
+                            </div>
+                        </HeaderContent>
+                    </ResourceRelationshipGraph>
                 }
             </section>
 

@@ -658,26 +658,27 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
         }
 
         var resources = ResourcesLayout.ResourceByName.Values.Where(r => !r.IsResourceHidden(showHiddenResources: false)).ToList();
-        var related = new Dictionary<string, RelatedResource>(StringComparers.ResourceName);
+        var related = new List<RelatedResource>();
 
         // Relationships reference other resources by display name, so every replica of the target is related.
         foreach (var relationship in resource.Relationships)
         {
             foreach (var match in resources.Where(r => string.Equals(r.DisplayName, relationship.ResourceName, StringComparisons.ResourceName) && r != resource))
             {
-                related.TryAdd(match.Name, new RelatedResource(match, relationship.Type, IsIncoming: false));
+                related.Add(new RelatedResource(match, relationship.Type, IsIncoming: false));
             }
         }
 
         foreach (var other in resources.Where(r => r != resource))
         {
-            if (other.Relationships.FirstOrDefault(r => string.Equals(r.ResourceName, resource.DisplayName, StringComparisons.ResourceName)) is { } relationship)
+            foreach (var relationship in other.Relationships.Where(r => string.Equals(r.ResourceName, resource.DisplayName, StringComparisons.ResourceName)))
             {
-                related.TryAdd(other.Name, new RelatedResource(other, relationship.Type, IsIncoming: true));
+                related.Add(new RelatedResource(other, relationship.Type, IsIncoming: true));
             }
         }
 
-        return related.Values
+        return related
+            .DistinctBy(r => (r.Resource.Name, r.Type, r.IsIncoming))
             .OrderBy(r => r.IsIncoming)
             .ThenBy(r => GetResourceName(r.Resource), StringComparers.ResourceName);
     }
