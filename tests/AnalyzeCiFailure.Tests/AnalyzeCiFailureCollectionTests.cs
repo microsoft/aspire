@@ -104,6 +104,7 @@ public sealed partial class AnalyzeCiFailureWorkflowTests
 
     [Theory]
     [InlineData("combined", "complete", false)]
+    [InlineData("combined-custom-runner", "complete", false)]
     [InlineData("combined-missing-job", "complete", true)]
     [InlineData("combined-malformed", "complete", true)]
     [InlineData("combined-partial", "complete", false)]
@@ -138,7 +139,12 @@ public sealed partial class AnalyzeCiFailureWorkflowTests
         {
             Assert.Contains(failures, failure => failure!["name"]!.GetValue<string>() == "Suite.Case(value: a/b)");
         }
-        if (scenario is "combined" or "combined-partial" or "combined-upload-failure")
+        if (scenario == "combined-custom-runner")
+        {
+            Assert.Equal("Tests / No-package tests / Infrastructure (8-core-ubuntu-latest)",
+                Assert.Single(evidence["jobs"]!.AsArray())!["name"]!.GetValue<string>());
+        }
+        if (scenario is "combined" or "combined-custom-runner" or "combined-partial" or "combined-upload-failure")
         {
             Assert.Equal(2, failures.Count);
             var sources = failures.Select(failure => Assert.Single(failure!["sources"]!.AsArray())!).ToArray();
@@ -800,7 +806,8 @@ public sealed partial class AnalyzeCiFailureWorkflowTests
         var responses = Directory.CreateDirectory(Path.Combine(_workspace.Path, "responses")).FullName;
         var runnerFailure = scenario.StartsWith("runner-", StringComparison.Ordinal);
         var mocha = scenario.Contains("mocha", StringComparison.Ordinal) || runnerFailure;
-        var jobName = scenario == "combined-split-producer" ? "Tests / No-package tests / Infrastructure-Collection (ubuntu-latest)" :
+        var jobName = scenario == "combined-custom-runner" ? "Tests / No-package tests / Infrastructure (8-core-ubuntu-latest)" :
+            scenario == "combined-split-producer" ? "Tests / No-package tests / Infrastructure-Collection (ubuntu-latest)" :
             scenario == "cancelled-build" ? "Build" :
             scenario == "runner-confirmed-loss-completed-missing-artifact" ? "Tests / No-package tests / Infrastructure (ubuntu-latest)" :
             mocha ? "Tests / VS Code extension E2E (Linux, debug)" : "Tests / No-package tests / Infrastructure (ubuntu-latest)";
@@ -953,6 +960,7 @@ public sealed partial class AnalyzeCiFailureWorkflowTests
         {
             ["id"] = 10,
             ["name"] = mocha ? "extension-e2e-diagnostics-linux-x64-debug-attempt2" :
+                scenario == "combined-custom-runner" ? "logs-Infrastructure-8-core-ubuntu-latest" :
                 scenario == "combined-split-producer" ? "logs-Infrastructure-Collection-ubuntu-latest" : "logs-Infrastructure-ubuntu-latest",
             ["expired"] = false,
             ["created_at"] = "2026-09-04T12:01:00Z",
@@ -1058,7 +1066,7 @@ public sealed partial class AnalyzeCiFailureWorkflowTests
             {
                 artifact["created_at"] = "2026-09-04T11:01:00Z";
             }
-            if (scenario is "combined" or "combined-no-fallback" or "combined-two-jobs" or "combined-rerun-duplicate-name" or "combined-split-producer")
+            if (scenario is "combined" or "combined-custom-runner" or "combined-no-fallback" or "combined-two-jobs" or "combined-rerun-duplicate-name" or "combined-split-producer")
             {
                 artifact["size_in_bytes"] = 145396275;
             }

@@ -16,28 +16,61 @@ internal sealed partial class AspireCiWorkflowConventions : IGitHubWorkflowConve
 
     public string WorkflowPath => ".github/workflows/ci.yml";
 
-    // Match an All-TestResults entry to a producing job's runner and short name.
-    // Return 0 for no match, otherwise the short-name length so the caller can
-    // prefer Hosting-2 over Hosting for Hosting-2_*.trx; tied matches stay ambiguous.
-    internal static int GetMatchingTestShortNameLength(TestArtifactExpectation plan, string entry)
+    internal static (string Runner, string ShortName)? GetTestJobIdentity(TestArtifactExpectation plan)
     {
         var match = TestArtifactJobNameRegex().Match(plan.JobName);
         if (plan.Format != TestArtifactFormat.Trx || !match.Success)
         {
-            return 0;
+            return null;
         }
-        // All-TestResults retains runner/testresults/<short>_<TFM>_<time>.trx,
-        // plus <short>.trx (CLI tests) and <short>-<class>.trx (template batches).
-        var prefix = match.Groups["runner"].Value + "/testresults/";
-        if (!entry.StartsWith(prefix, StringComparison.Ordinal))
+        // tests.yml merges logs-*-ubuntu-latest into ubuntu-latest/, and likewise
+        // for Windows/macOS. Only the aggregate identity uses these buckets;
+        // source artifact names retain full labels such as 8-core-ubuntu-latest.
+        var runner = match.Groups["runner"].Value;
+        var bucket = runner switch
+        {
+            "ubuntu-latest" or "windows-latest" or "macos-latest" => runner,
+            _ when runner.EndsWith("-ubuntu-latest", StringComparison.Ordinal) => "ubuntu-latest",
+            _ when runner.EndsWith("-windows-latest", StringComparison.Ordinal) => "windows-latest",
+            _ when runner.EndsWith("-macos-latest", StringComparison.Ordinal) => "macos-latest",
+            _ => null,
+        };
+        return bucket is not null ? (bucket, match.Groups["short"].Value) : null;
+    }
+
+    internal static (string Runner, string ShortName, bool IsStructured)? GetCombinedReportIdentity(string entry)
+    {
+        var match = CombinedReportPathRegex().Match(entry);
+        if (!match.Success)
+        {
+            return null;
+        }
+        var name = match.Groups["name"].Value;
+        // Aspire.RepoTesting.targets emits <short>_<TargetFramework>_<yyyyMMddhhmmss>.trx;
+        // run-tests.yml's direct-assembly steps emit <short>.trx. Parse the structured
+        // suffix from the right so '-' and '_' remain part of the full short name.
+        var structured = StructuredTrxFileNameRegex().Match(name);
+        return (match.Groups["runner"].Value, structured.Success ? structured.Groups["short"].Value : name, structured.Success);
+    }
+
+    internal static int GetLegacyClassSuffixedMatchLength(TestArtifactExpectation plan, string entry)
+    {
+        var identity = GetTestJobIdentity(plan);
+        var match = CombinedReportPathRegex().Match(entry);
+        if (identity is null || !match.Success || match.Groups["runner"].Value != identity.Value.Runner)
         {
             return 0;
         }
-        var name = entry[prefix.Length..];
-        var shortName = match.Groups["short"].Value;
-        return !name.Contains('/') && (name == shortName + ".trx" ||
-            name.StartsWith(shortName + "_", StringComparison.Ordinal) ||
-            name.StartsWith(shortName + "-", StringComparison.Ordinal)) ? shortName.Length : 0;
+        var name = match.Groups["name"].Value;
+        var prefix = identity.Value.ShortName + "-";
+        if (!name.StartsWith(prefix, StringComparison.Ordinal) || name.Length == prefix.Length)
+        {
+            return 0;
+        }
+        // Preserve legacy <short>-<class>.trx matching separately from exact
+        // report identity. An underscored suffix may be a structured report from
+        // an unknown producer (or a malformed one), not a class suffix we can trust.
+        return name.AsSpan(prefix.Length).Contains('_') ? 0 : identity.Value.ShortName.Length;
     }
 
     public bool IsAggregationJob(JsonObject job)
@@ -112,6 +145,12 @@ internal sealed partial class AspireCiWorkflowConventions : IGitHubWorkflowConve
 
     [GeneratedRegex(@"(^| / )(?<short>[^/]+) \((?<runner>[^()]*)\)\z")]
     private static partial Regex TestArtifactJobNameRegex();
+
+    [GeneratedRegex(@"^(?<runner>[^/\\]+)/testresults/(?<name>[^/\\]+)\.trx\z")]
+    private static partial Regex CombinedReportPathRegex();
+
+    [GeneratedRegex(@"^(?<short>.+)_[^_]+_[0-9]{14}\z")]
+    private static partial Regex StructuredTrxFileNameRegex();
 
     [GeneratedRegex(@"(^| / )VS Code extension E2E \((?<os>Windows|Linux), (?<shard>[^()]+)\)\z")]
     private static partial Regex ExtensionArtifactJobNameRegex();
