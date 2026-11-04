@@ -291,7 +291,7 @@ public sealed class PrComparisonBaseTests(ITestOutputHelper output)
     }
 
     private Task<ProcessResult> Resolve(string repo, string eventBase, string head, string eventName, string merge, string gitRef)
-        => ProcessRunner.RunAsync(output, "bash",
+        => TestProcessRunner.RunAsync(output, "bash",
             [Path.Combine(RepoRoot.Path, "eng", "github-ci", "resolve-comparison-base.sh"), eventBase, head],
             repo,
             new Dictionary<string, string>

@@ -27,6 +27,7 @@ func main() {
 	executable := builder.AddExecutable("worker", "dotnet", ".", []string{"--info"})
 	endpoint := container.GetEndpoint("http")
 	identity := builder.AddAzureUserAssignedIdentity("identity")
+	vault := builder.AddAzureKeyVault("vault")
 
 	// Existing registrations: configuration only, with literal or parameter IDs in any combination.
 	existingEntra := builder.AddExistingEntraApplication("existing-entra", tenantId, exampleClient)
@@ -41,6 +42,7 @@ func main() {
 		TokenExchangeAuthority: aspire.StringPtr("https://login.microsoftonline.com/"),
 	})
 	existingEntra.WithCertificateFromKeyVault("https://vault.vault.azure.net", "certificate")
+	existingEntra.WithCertificateFromKeyVault(vault, "vault-certificate")
 	existingEntra.WithCertificateThumbprint("CurrentUser/My", "thumbprint")
 	existingEntra.WithCertificateDistinguishedName("CurrentUser/My", "CN=certificate")
 	existingEntra.WithCertificateFromFile("/certs/client.pfx", &aspire.WithCertificateFromFileOptions{Password: &certificatePassword})
@@ -79,6 +81,7 @@ func main() {
 	createdEntra.WithRedirectUris(redirectHost, &aspire.WithRedirectUrisOptions{CallbackPaths: []string{"/signin", "/signout"}})
 	createdEntra.WithRedirectUris(endpoint, &aspire.WithRedirectUrisOptions{CallbackPaths: []string{"/signin"}})
 	container.WithReference(createdEntra)
+	createdEntra.RunWithLocalDeveloperCertificateCredential()
 	createdEntra.PublishWithFederatedManagedIdentityCredential()
 	createdEntra.PublishWithFederatedManagedIdentityCredential(&aspire.PublishWithFederatedManagedIdentityCredentialOptions{Identity: container})
 	createdEntra.PublishWithFederatedManagedIdentityCredential(&aspire.PublishWithFederatedManagedIdentityCredentialOptions{Identity: identity})

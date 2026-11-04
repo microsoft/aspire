@@ -1,4 +1,4 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Components.Controls.Grid;
@@ -144,6 +144,9 @@ public partial class PropertyGrid<TItem> where TItem : IPropertyGridItem
 
     [Parameter]
     public DataGridGeneratedHeaderType GenerateHeader { get; set; } = DataGridGeneratedHeaderType.Default;
+
+    [Parameter]
+    public DataGridRowSize RowSize { get; set; } = DataGridRowSize.Medium;
 
     [Parameter]
     public string? Class { get; set; }

@@ -444,7 +444,8 @@ extends:
               # signed upstream — including
               # Aspire.Hosting.Orchestration.<rid>.nupkg whose nested
               # manifest.cat would be re-submitted to ESRP. Keeping Shipping
-              # limited to native CLI staged content at sign time avoids that.
+              # limited to native CLI and Linux Dashboard packages at
+              # sign time avoids that.
               - pwsh: |
                   $ErrorActionPreference = 'Stop'
                   & "$(Build.SourcesDirectory)/eng/scripts/stage-native-cli-tool-packages.ps1" `
@@ -551,6 +552,11 @@ extends:
                     }
                   }
 
+                  $stagedPackages = @(Get-ChildItem -Path $shipping -Filter "Aspire.Dashboard.Sdk.*.nupkg" -File)
+                  if ($stagedPackages.Count -ne 7) {
+                    throw "Expected 7 staged Native AOT Dashboard RID packages, found $($stagedPackages.Count)."
+                  }
+
                   $dashboardArchives = @(Get-ChildItem -Path "$(Build.SourcesDirectory)/artifacts/DashboardArtifacts/$(_BuildConfig)" -Filter "aspire-dashboard-*.zip" -File -Recurse)
                   if ($dashboardArchives.Count -ne 7) {
                     throw "Expected 7 Native AOT Dashboard runtime archives, found $($dashboardArchives.Count): $($dashboardArchives.FullName -join ', ')"
@@ -560,17 +566,22 @@ extends:
               - pwsh: |
                   $ErrorActionPreference = 'Stop'
                   $shipping = "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)/Shipping"
-                  $packages = @(Get-ChildItem -LiteralPath $shipping -Filter 'Aspire.Dashboard.Sdk.linux-*.nupkg' -File)
-                  if ($packages.Count -ne 3) {
-                    throw "Expected 3 final Linux Dashboard packages, found $($packages.Count): $($packages.FullName -join ', ')"
+                  # Symbol packages share Shipping but are unsigned symbol-server
+                  # inputs, not NuGet release packages (see download_native_symbols.yml).
+                  $packages = @(Get-ChildItem -Path $shipping -Filter "*.nupkg" -File -Recurse |
+                    Where-Object { $_.Name -notlike "*.symbols.nupkg" } |
+                    Sort-Object FullName)
+                  if ($packages.Count -eq 0) {
+                    throw "No NuGet release packages were found in '$shipping'."
                   }
+                  Write-Host "Verifying signatures for $($packages.Count) NuGet release packages."
                   foreach ($package in $packages) {
-                    & dotnet nuget verify $package.FullName --all
+                    & "$(Build.SourcesDirectory)/dotnet.cmd" nuget verify $package.FullName
                     if ($LASTEXITCODE -ne 0) {
-                      throw "Linux Dashboard package signature verification failed: $($package.FullName)"
+                      throw "NuGet package signature verification failed: $($package.Name)"
                     }
                   }
-                displayName: 🟣Verify final Linux Dashboard package signatures
+                displayName: 🟣Verify NuGet package signatures
                 condition: and(succeeded(), eq(variables['_SignType'], 'real'))
 
               - pwsh: |

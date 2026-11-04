@@ -1,13 +1,16 @@
+@* The header button of the live view and recordings. It opens the recordings panel, like the notifications and
+   settings buttons open theirs. A dot on the icon shows whether the live view or a recording is displayed. *@
 <div class="application-run-select">
-    <AspireMenuButton Text="@SelectedRunText"
-                      Title="@RunSelectTitle"
-                      aria-label="@RunSelectAccessibleLabel"
-                      IconStart="@(new Icons.Filled.Size12.Circle())"
-                      IconStartClass="application-run-status"
-                      IconStartColor="@(SelectedRunIsCurrent ? Color.Success : Color.Warning)"
-                      ItemsProvider="@LoadRuns"
-                      ButtonAppearance="ButtonAppearance.Default"
-                      ButtonClass="application-run-select-button"
-                      HideIcon="true"
-                      RestoreFocusOnItemClick="true" />
+    <FluentButton Id="@ButtonId"
+                  Class="header-button application-run-select-button"
+                  Appearance="ButtonAppearance.Default"
+                  OnClick="@OnClick"
+                  data-tooltip="@RunSelectTitle"
+                  aria-label="@RunSelectAccessibleLabel"
+                  aria-haspopup="dialog">
+        <span class="application-run-icon">
+            <FluentIcon Value="@s_historyIcon" Color="Color.Default" />
+            <DashboardRunIndicator IsLive="@SelectedRunIsCurrent" />
+        </span>
+    </FluentButton>
 </div>

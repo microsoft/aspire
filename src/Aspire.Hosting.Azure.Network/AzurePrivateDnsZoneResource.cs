@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Hosting.ApplicationModel;
 using Azure.Core;
 using Azure.Provisioning;
 using Azure.Provisioning.Primitives;
@@ -13,21 +14,37 @@ namespace Aspire.Hosting.Azure;
 /// </summary>
 internal sealed class AzurePrivateDnsZoneResource : AzureProvisioningResource
 {
+    private readonly ReferenceExpression _zoneNameExpression;
+
     /// <summary>
     /// Initializes a new instance of <see cref="AzurePrivateDnsZoneResource"/>.
     /// </summary>
     /// <param name="name">The Aspire resource name.</param>
     /// <param name="zoneName">The DNS zone name (e.g., "privatelink.blob.core.windows.net").</param>
     public AzurePrivateDnsZoneResource(string name, string zoneName)
-        : base(name, ConfigureDnsZone)
+        : this(name, ReferenceExpression.Create($"{zoneName}"))
     {
         ZoneName = zoneName;
     }
 
     /// <summary>
-    /// Gets the DNS zone name (e.g., "privatelink.blob.core.windows.net").
+    /// Initializes a Private DNS Zone with a deploy-time zone name.
     /// </summary>
-    public string ZoneName { get; }
+    public AzurePrivateDnsZoneResource(string name, ReferenceExpression zoneName)
+        : base(name, ConfigureDnsZone)
+    {
+        _zoneNameExpression = zoneName;
+    }
+
+    /// <summary>
+    /// Gets the literal DNS zone name, or null for a deploy-time zone name.
+    /// </summary>
+    public string? ZoneName { get; }
+
+    /// <summary>
+    /// Gets the optional A records for this zone.
+    /// </summary>
+    internal List<(string Name, ReferenceExpression Address)> ARecords { get; } = [];
 
     /// <summary>
     /// Gets the "id" output reference from the Private DNS Zone resource.
@@ -79,11 +96,31 @@ internal sealed class AzurePrivateDnsZoneResource : AzureProvisioningResource
 
         var dnsZone = new PrivateDnsZone(infra.AspireResource.GetBicepIdentifier())
         {
-            Name = resource.ZoneName,
+            Name = resource.ZoneName is { } zoneName
+                ? zoneName
+                : resource._zoneNameExpression.AsProvisioningParameter(infra),
             Location = new AzureLocation("global"),
             Tags = { { "aspire-resource-name", resource.Name } }
         };
         infra.Add(dnsZone);
+
+        for (var i = 0; i < resource.ARecords.Count; i++)
+        {
+            var record = resource.ARecords[i];
+            infra.Add(new PrivateDnsARecord($"{dnsZone.BicepIdentifier}_record{i}")
+            {
+                Name = record.Name,
+                Parent = dnsZone,
+                TtlInSeconds = 3600,
+                PrivateDnsARecords =
+                {
+                    new PrivateDnsARecordInfo
+                    {
+                        IPv4Address = record.Address.AsProvisioningParameter(infra),
+                    },
+                },
+            });
+        }
 
         // Create VNet Links for all linked VNets
         foreach (var vnetLinkEntry in resource.VNetLinks)

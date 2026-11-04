@@ -53,9 +53,18 @@ The tool packaging flow therefore extracts the signed `aspire` binary from the s
 
 Linux native jobs do not sign ELF binaries in `build_sign_native`. For Linux, extracting from the native archive gives the same unsigned ELF payload, and the resulting NuGet packages are signed later as packages by the main Windows build.
 
-The official Assemble job signs Linux Dashboard packages and verifies their
-final Shipping signatures before publishing. Preserve signed packages when
-staging producer outputs; see the Assemble job in
+## Native AOT Dashboard package signing
+
+The official Assemble job stages the three Linux Dashboard SDK NuGet packages
+before its Windows signing pass because Linux native jobs skip signing.
+Windows/macOS Dashboard packages are staged afterward so their signed producer
+outputs are preserved.
+
+Assembly checks that all seven Dashboard packages reached `Shipping` and
+verifies every final NuGet release package's signature before publishing,
+including Dashboard, CLI, and managed packages. The unsigned `*.symbols.nupkg`
+files are excluded because they are symbol-server inputs, not NuGet release
+packages. See the Assemble job in
 [`azure-pipelines.yml`](../../eng/pipelines/azure-pipelines.yml).
 
 ## Nix flake packaging

@@ -1,0 +1,12 @@
+﻿{
+  "skillSources": {
+    "team": {
+      "repository": "example/team",
+      "plugins": [
+        "deployment",
+        "other"
+      ]
+    }
+  },
+  "channel": "daily"
+}

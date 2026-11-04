@@ -6,6 +6,8 @@ using System.Xml.Linq;
 using System.Xml;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.DotNet;
+using Aspire.Cli.Projects;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -30,6 +32,242 @@ public class DotNetAppHostNuGetConfigMergerTests
 
     private static PackageChannel CreateChannel(PackageMapping[] mappings) => PackageChannel.CreateExplicitChannel("test", PackageChannelQuality.Both, mappings, new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task PrepareAsync_UnmappedAmbientSourceDoesNotRequireAliasOwnership(bool enabled)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
+        const string source = "https://company.example/v3/index.json";
+        var parent = await WriteConfigAsync(workspace.WorkspaceRoot, $$"""
+            <configuration>
+              <packageSources><clear /><add key="company" value="{{source}}" /></packageSources>
+              <disabledPackageSources>{{(enabled ? "" : """<add key="company" value="true" />""")}}</disabledPackageSources>
+            </configuration>
+            """);
+        var original = await File.ReadAllBytesAsync(parent.FullName);
+        var directory = workspace.CreateDirectory("apphost");
+        var channel = CreateChannel([new("Aspire*", source)]);
+
+        if (enabled)
+        {
+            var candidate = await DotNetAppHostNuGetConfigTestHelper.PrepareAsync(
+                directory, channel, createIfMissing: true, TestContext.Current.CancellationToken);
+            Assert.NotNull(candidate);
+            await DotNetAppHostNuGetConfigMerger.ApplyAsync(candidate, TestContext.Current.CancellationToken);
+            Assert.Equal([source], NuGetTestHelper.GetEligiblePackageSources(directory.FullName, "Other.Dependency"));
+            Assert.Empty(XDocument.Load(candidate.TargetFile.FullName).Descendants("packageSource"));
+        }
+        else
+        {
+            await Assert.ThrowsAsync<ProjectUpdaterException>(() =>
+                DotNetAppHostNuGetConfigTestHelper.PrepareAsync(
+                    directory, channel, createIfMissing: true, TestContext.Current.CancellationToken));
+            Assert.Empty(directory.EnumerateFiles());
+        }
+
+        Assert.Equal(original, await File.ReadAllBytesAsync(parent.FullName));
+    }
+
+    [Theory]
+    [InlineData(false, "company", "https://feed.example/v3/index.json")]
+    [InlineData(true, "company", "https://feed.example/v3/index.json")]
+    [InlineData(true, "aspire-staging", "https://feed.example/v3/index.json")]
+    [InlineData(false, "company", "https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-existing/nuget/v3/index.json")]
+    public async Task PrepareAsync_RefusesBorrowingExistingChannelFeed(
+        bool inherited, string sourceKey, string source)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
+        var target = workspace.CreateDirectory("apphost");
+        var existingDirectory = inherited ? workspace.WorkspaceRoot : target;
+        var existingFile = await WriteConfigAsync(existingDirectory, $$"""
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="{{sourceKey}}" value="{{source}}" />
+              </packageSources>
+              <packageSourceCredentials>
+                <{{sourceKey}}>
+                  <add key="Username" value="test-user" />
+                  <add key="ClearTextPassword" value="test-password" />
+                </{{sourceKey}}>
+              </packageSourceCredentials>
+              <packageSourceMapping>
+                <clear />
+                <packageSource key="{{sourceKey}}"><package pattern="Private.*" /></packageSource>
+              </packageSourceMapping>
+            </configuration>
+            """);
+        var original = await File.ReadAllBytesAsync(existingFile.FullName);
+
+        var error = await Assert.ThrowsAsync<ProjectUpdaterException>(() =>
+            DotNetAppHostNuGetConfigTestHelper.PrepareAsync(
+                target, CreateChannel([new("Aspire*", source)]), createIfMissing: true,
+                TestContext.Current.CancellationToken));
+
+        Assert.Equal(string.Format(
+            System.Globalization.CultureInfo.CurrentCulture,
+            UpdateCommandStrings.ChannelFeedAlreadyConfiguredFormat,
+            Path.Combine(target.FullName, "nuget.config"), sourceKey), error.Message);
+        Assert.Equal(original, await File.ReadAllBytesAsync(existingFile.FullName));
+        if (inherited)
+        {
+            Assert.Empty(target.EnumerateFiles());
+        }
+    }
+
+    [Fact]
+    public async Task PrepareAsync_MaintainsExistingLocalCliOwnedChannelFeed()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
+        const string source = "https://feed.example/v3/index.json";
+        var target = await WriteConfigAsync(workspace.WorkspaceRoot, $$"""
+            <configuration>
+              <packageSources><clear /><add key="aspire-test" value="{{source}}" /></packageSources>
+              <packageSourceMapping>
+                <clear />
+                <packageSource key="aspire-test"><package pattern="Private.*" /></packageSource>
+              </packageSourceMapping>
+            </configuration>
+            """);
+        var candidate = await DotNetAppHostNuGetConfigTestHelper.PrepareAsync(
+            workspace.WorkspaceRoot, CreateChannel([new("Aspire*", source)]), createIfMissing: true,
+            TestContext.Current.CancellationToken);
+
+        Assert.NotNull(candidate);
+        await DotNetAppHostNuGetConfigMerger.ApplyAsync(candidate, TestContext.Current.CancellationToken);
+        Assert.Equal([source], NuGetTestHelper.GetEligiblePackageSources(workspace.Path, "Private.Library"));
+        Assert.Equal([source], NuGetTestHelper.GetEligiblePackageSources(workspace.Path, "Aspire.Hosting"));
+        Assert.Single(XDocument.Load(target.FullName).Root!.Element("packageSources")!.Elements("add"));
+        Assert.Single(XDocument.Load(target.FullName).Root!.Element("packageSourceMapping")!.Elements("clear"));
+    }
+
+    [Theory]
+    [InlineData(true, true, false)]
+    [InlineData(false, true, false)]
+    [InlineData(true, false, false)]
+    [InlineData(false, false, false)]
+    [InlineData(true, true, true)]
+    public async Task PrepareAsync_RefusesEditsRequiringDisabledChannelSource(
+        bool inheritedDisabledSetting, bool requiresEdit, bool clearsDisabledLocally)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
+        const string disabledSetting = """<add key="aspire-test" value="true" />""";
+        var parent = await WriteConfigAsync(workspace.WorkspaceRoot, $$"""
+            <configuration>
+              <packageSources><clear /><add key="company" value="https://company.example/v3/index.json" /></packageSources>
+              <disabledPackageSources>{{(inheritedDisabledSetting ? disabledSetting : "")}}</disabledPackageSources>
+              <packageSourceMapping><packageSource key="company"><package pattern="*" /></packageSource></packageSourceMapping>
+            </configuration>
+            """);
+        var originalParent = await File.ReadAllBytesAsync(parent.FullName);
+        var directory = workspace.CreateDirectory("apphost");
+        const string source = "https://selected.example/v3/index.json";
+        var target = await WriteConfigAsync(directory, $$"""
+            <configuration>
+              <packageSources><add key="aspire-test" value="{{source}}" /></packageSources>
+              <disabledPackageSources>
+                {{(clearsDisabledLocally ? "<clear />" : "")}}
+                {{(!inheritedDisabledSetting ? disabledSetting : "")}}
+              </disabledPackageSources>
+              <packageSourceMapping>
+                <packageSource key="aspire-test"><package pattern="{{(requiresEdit ? "Private.*" : "Aspire*")}}" /></packageSource>
+              </packageSourceMapping>
+            </configuration>
+            """);
+        var original = await File.ReadAllBytesAsync(target.FullName);
+        var originalDisabled = XDocument.Load(target.FullName).Root!.Element("disabledPackageSources")!.ToString();
+        var service = NuGetTestHelper.CreateService();
+        var configuration = service.BuildAppHostConfiguration(
+            directory, "test", [new("Aspire*", source)], TestContext.Current.CancellationToken);
+        Assert.Equal(clearsDisabledLocally, Assert.Single(configuration.ConfigSources).IsEnabled);
+        var merger = new DotNetAppHostNuGetConfigMerger(service);
+
+        if (requiresEdit && !clearsDisabledLocally)
+        {
+            var error = await Assert.ThrowsAsync<ProjectUpdaterException>(() =>
+                merger.PrepareAsync(directory, configuration, createIfMissing: true, globalPackagesFolder: null,
+                    TestContext.Current.CancellationToken));
+            Assert.Equal(string.Format(System.Globalization.CultureInfo.CurrentCulture,
+                UpdateCommandStrings.ChannelFeedAlreadyConfiguredFormat, target.FullName, "aspire-test"), error.Message);
+        }
+        else
+        {
+            var candidate = await merger.PrepareAsync(
+                directory, configuration, createIfMissing: true, globalPackagesFolder: null,
+                TestContext.Current.CancellationToken);
+            Assert.Equal(requiresEdit, candidate is not null);
+            if (candidate is not null)
+            {
+                Assert.Equal(
+                    originalDisabled,
+                    XDocument.Parse(candidate.GetProposedDocument().OuterXml).Root!.Element("disabledPackageSources")!.ToString());
+            }
+        }
+
+        Assert.Equal(original, await File.ReadAllBytesAsync(target.FullName));
+        Assert.Equal(originalParent, await File.ReadAllBytesAsync(parent.FullName));
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task PrepareAsync_LocalChannelSourceDoesNotTakeOwnershipOfInheritedMappings(
+        bool hasLocalMapping, bool clearsMappings)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
+        const string source = "https://feed.example/v3/index.json";
+        var parent = await WriteConfigAsync(workspace.WorkspaceRoot, """
+            <configuration>
+              <packageSources><clear /></packageSources>
+              <packageSourceMapping>
+                <packageSource key="aspire-test"><package pattern="Private.*" /></packageSource>
+              </packageSourceMapping>
+            </configuration>
+            """);
+        var originalParent = await File.ReadAllBytesAsync(parent.FullName);
+        var directory = workspace.CreateDirectory("apphost");
+        var localMapping = hasLocalMapping
+            ? """<packageSource key="aspire-test"><package pattern="Local.*" /></packageSource>"""
+            : string.Empty;
+        var target = await WriteConfigAsync(directory, $$"""
+            <configuration>
+              <packageSources><add key="aspire-test" value="{{source}}" /></packageSources>
+              <packageSourceMapping>
+                {{(clearsMappings ? "<clear />" : "")}}
+                {{localMapping}}
+              </packageSourceMapping>
+            </configuration>
+            """);
+        var original = await File.ReadAllBytesAsync(target.FullName);
+        var channel = CreateChannel([new("Aspire*", source)]);
+
+        if (!hasLocalMapping && !clearsMappings)
+        {
+            Assert.Equal([source], NuGetTestHelper.GetEligiblePackageSources(directory.FullName, "Private.Library"));
+            await Assert.ThrowsAsync<ProjectUpdaterException>(() =>
+                DotNetAppHostNuGetConfigTestHelper.PrepareAsync(
+                    directory, channel, createIfMissing: true, TestContext.Current.CancellationToken));
+            Assert.Equal(original, await File.ReadAllBytesAsync(target.FullName));
+            Assert.Equal([source], NuGetTestHelper.GetEligiblePackageSources(directory.FullName, "Private.Library"));
+        }
+        else
+        {
+            var candidate = await DotNetAppHostNuGetConfigTestHelper.PrepareAsync(
+                directory, channel, createIfMissing: true, TestContext.Current.CancellationToken);
+            Assert.Equal(hasLocalMapping, candidate is not null);
+            if (candidate is not null)
+            {
+                await DotNetAppHostNuGetConfigMerger.ApplyAsync(candidate, TestContext.Current.CancellationToken);
+            }
+            Assert.Equal([source], NuGetTestHelper.GetEligiblePackageSources(directory.FullName, "Aspire.Hosting"));
+            Assert.Equal([source], NuGetTestHelper.GetEligiblePackageSources(directory.FullName, "Local.Library"));
+        }
+
+        Assert.Equal(originalParent, await File.ReadAllBytesAsync(parent.FullName));
+    }
+
     [Fact]
     public async Task CreateOrUpdateAsync_CreatesConfigFromMappings_WhenNoExistingConfig()
     {
@@ -40,7 +278,7 @@ public class DotNetAppHostNuGetConfigMergerTests
         var mappings = new[]
         {
             new PackageMapping("Aspire.*", "https://feed1.example"),
-            new PackageMapping(PackageMapping.AllPackages, "https://feed2.example")
+            new PackageMapping("CommunityToolkit*", "https://feed2.example")
         };
 
         await DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(root, mappings).DefaultTimeout();
@@ -61,7 +299,7 @@ public class DotNetAppHostNuGetConfigMergerTests
         var mappings = new[]
         {
             new PackageMapping("Aspire.*", "https://feed1.example"),
-            new PackageMapping(PackageMapping.AllPackages, "https://feed2.example")
+            new PackageMapping("CommunityToolkit*", "https://feed2.example")
         };
 
         await DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(root, mappings).DefaultTimeout();
@@ -75,8 +313,7 @@ public class DotNetAppHostNuGetConfigMergerTests
         Assert.Contains(packageSources.Elements("add"), e => (string?)e.Attribute("value") == "https://feed2.example");
 
         var psm = xml.Root!.Element("packageSourceMapping");
-        Assert.NotNull(psm);
-        Assert.Equal(2, psm!.Elements("packageSource").Count());
+        Assert.Null(psm);
     }
 
     [Fact]
@@ -91,10 +328,10 @@ public class DotNetAppHostNuGetConfigMergerTests
             <?xml version="1.0"?>
             <configuration>
                 <packageSources>
-                    <add key="https://feed1.example" value="https://feed1.example" />
+                    <add key="aspire-test" value="https://feed1.example" />
                 </packageSources>
                 <packageSourceMapping>
-                    <packageSource key="https://feed1.example">
+                    <packageSource key="aspire-test">
                         <package pattern="Aspire.*" />
                     </packageSource>
                 </packageSourceMapping>
@@ -120,7 +357,7 @@ public class DotNetAppHostNuGetConfigMergerTests
     }
 
     [Fact]
-    public async Task CreateOrUpdateAsync_RemapsPatternsAndRemovesEmptySources()
+    public async Task CreateOrUpdateAsync_PreservesUserMappingsForSelectedPattern()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var root = workspace.WorkspaceRoot;
@@ -151,19 +388,15 @@ public class DotNetAppHostNuGetConfigMergerTests
 
         var xml = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
         var packageSources = xml.Root!.Element("packageSources")!;
-        // Old source should be removed because it's no longer used
-        Assert.DoesNotContain(packageSources.Elements("add"), e => (string?)e.Attribute("value") == "https://old.example");
-        // New source should be present
-        Assert.Contains(packageSources.Elements("add"), e => (string?)e.Attribute("value") == "https://new.example");
-
-        var psm = xml.Root!.Element("packageSourceMapping")!;
-        Assert.Single(psm.Elements("packageSource"));
-        Assert.Equal("aspire-test", (string?)psm.Element("packageSource")!.Attribute("key"));
-        Assert.Equal("Lib.*", (string?)psm.Element("packageSource")!.Element("package")!.Attribute("pattern"));
+        Assert.Equal(["https://old.example", "https://new.example"],
+            packageSources.Elements("add").Select(e => (string?)e.Attribute("value")));
+        Assert.Equal(["https://new.example", "https://old.example"],
+            NuGetTestHelper.GetEligiblePackageSources(root.FullName, "Lib.Example"));
+        await Verify(xml.ToString(), "xml");
     }
 
     [Fact]
-    public async Task CreateOrUpdateAsync_RemapsAspirePackagesFromStagingToStableSource()
+    public async Task CreateOrUpdateAsync_RetiresStagingPolicyWithoutAddingStableMappings()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var root = workspace.WorkspaceRoot;
@@ -187,7 +420,7 @@ public class DotNetAppHostNuGetConfigMergerTests
 
         var mappings = new[]
         {
-            new PackageMapping("Aspire.*", stableSource)
+            new PackageMapping("*", stableSource)
         };
 
         var channel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Stable, PackageChannelQuality.Both, mappings, new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
@@ -197,16 +430,13 @@ public class DotNetAppHostNuGetConfigMergerTests
         var sources = NuGetTestHelper.CreateClient().GetSettings(root.FullName, new byte[NuGetSourceIdentity.KeySizeInBytes]).Sources;
         Assert.Equal(["nuget.org"], sources.Where(static source => source.IsEnabled).Select(static source => source.Name));
 
-        var packageSourceMapping = xml.Root!.Element("packageSourceMapping")!;
-        Assert.DoesNotContain(packageSourceMapping.Elements("packageSource"), e => (string?)e.Attribute("key") == "aspire-staging");
-
-        var stableMapping = Assert.Single(packageSourceMapping.Elements("packageSource"));
-        Assert.Equal("nuget.org", (string?)stableMapping.Attribute("key"));
-        Assert.Equal("Aspire.*", (string?)stableMapping.Element("package")!.Attribute("pattern"));
+        Assert.Null(xml.Root!.Element("packageSourceMapping"));
+        Assert.Equal([stableSource], NuGetTestHelper.GetEligiblePackageSources(root.FullName, "Aspire.Hosting"));
+        Assert.Equal([stableSource], NuGetTestHelper.GetEligiblePackageSources(root.FullName, "Example.Dependency"));
     }
 
     [Fact]
-    public async Task CreateOrUpdateAsync_CreatesPackageSourceMapping_WhenAbsent()
+    public async Task CreateOrUpdateAsync_PreservesUnmappedSources_WhenMappingAbsent()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var root = workspace.WorkspaceRoot;
@@ -218,12 +448,14 @@ public class DotNetAppHostNuGetConfigMergerTests
             <configuration>
                 <packageSources>
                     <clear />
-                    <add key="https://feed1.example" value="https://feed1.example" />
-                    <add key="https://feed2.example" value="https://feed2.example" />
+                    <add key="aspire-test" value="https://feed1.example" />
+                    <add key="aspire-test-0" value="https://feed2.example" />
                 </packageSources>
             </configuration>
             """);
 
+        var target = Path.Combine(root.FullName, "nuget.config");
+        var original = await File.ReadAllBytesAsync(target);
         var mappings = new[]
         {
             new PackageMapping("Aspire.*", "https://feed1.example"),
@@ -233,10 +465,56 @@ public class DotNetAppHostNuGetConfigMergerTests
         var channel = CreateChannel(mappings);
         await DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(root, channel).DefaultTimeout();
 
-        var xml = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
+        Assert.Equal(original, await File.ReadAllBytesAsync(target));
+        var xml = XDocument.Load(target);
         var psm = xml.Root!.Element("packageSourceMapping");
-        Assert.NotNull(psm);
-        Assert.Equal(2, psm!.Elements("packageSource").Count());
+        Assert.Null(psm);
+        Assert.Equal(["https://feed1.example", "https://feed2.example"],
+            NuGetTestHelper.GetEligiblePackageSources(root.FullName, "Other.Dependency"));
+    }
+
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(false, true, true)]
+    [InlineData(true, false, false)]
+    [InlineData(true, true, false)]
+    [InlineData(true, true, true)]
+    public async Task CreateOrUpdateAsync_PreservesEffectiveMappingMode(
+        bool parentHasMapping, bool hasLocalMappingSection, bool clearsMappings)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
+        const string companySource = "https://company.example/v3/index.json";
+        const string channelSource = "https://selected.example/v3/index.json";
+        var parent = await WriteConfigAsync(workspace.WorkspaceRoot, $$"""
+            <configuration>
+              <packageSources><clear /><add key="company" value="{{companySource}}" /></packageSources>
+              {{(parentHasMapping ? """<packageSourceMapping><packageSource key="company"><package pattern="*" /></packageSource></packageSourceMapping>""" : "")}}
+            </configuration>
+            """);
+        var parentBytes = await File.ReadAllBytesAsync(parent.FullName);
+        var directory = workspace.CreateDirectory("apphost");
+        var mappingSection = hasLocalMappingSection
+            ? $"<packageSourceMapping>{(clearsMappings ? "<clear />" : "")}</packageSourceMapping>"
+            : "";
+        var target = await WriteConfigAsync(directory, $"<configuration>{mappingSection}</configuration>");
+
+        await DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(
+            directory, CreateChannel([new("Aspire*", channelSource)])).DefaultTimeout();
+
+        var mappingEnabled = parentHasMapping && !clearsMappings;
+        var document = XDocument.Load(target.FullName);
+        Assert.Equal([channelSource], document.Root!.Element("packageSources")!.Elements("add")
+            .Select(static source => (string?)source.Attribute("value")));
+        Assert.Equal(mappingEnabled ? 1 : 0,
+            document.Root.Element("packageSourceMapping")?.Elements("packageSource").Count() ?? 0);
+        Assert.Equal(clearsMappings ? 1 : 0,
+            document.Root.Element("packageSourceMapping")?.Elements("clear").Count() ?? 0);
+        Assert.Equal(mappingEnabled ? [channelSource] : [companySource, channelSource],
+            NuGetTestHelper.GetEligiblePackageSources(directory.FullName, "Aspire.Hosting.Redis"));
+        Assert.Equal(mappingEnabled ? [companySource] : [companySource, channelSource],
+            NuGetTestHelper.GetEligiblePackageSources(directory.FullName, "Other.Dependency"));
+        Assert.Equal(parentBytes, await File.ReadAllBytesAsync(parent.FullName));
     }
 
     [Fact]
@@ -316,7 +594,7 @@ public class DotNetAppHostNuGetConfigMergerTests
     }
 
     [Fact]
-    public async Task CreateOrUpdateAsync_MapsSamePatternToEveryRequiredSource()
+    public async Task CreateOrUpdateAsync_DoesNotPersistDefaultSourceMappings()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var root = workspace.WorkspaceRoot;
@@ -342,6 +620,8 @@ public class DotNetAppHostNuGetConfigMergerTests
             new PackageMapping("*", "https://feed1.example"),
             new PackageMapping("*", "https://feed2.example")
         };
+        var configPath = Path.Combine(root.FullName, "nuget.config");
+        var original = await File.ReadAllBytesAsync(configPath);
         await DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(root, mappings).DefaultTimeout();
 
         var document = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
@@ -351,11 +631,47 @@ public class DotNetAppHostNuGetConfigMergerTests
             .Select(element => element.Attribute("key")!.Value)
             .ToArray();
 
-        Assert.Equal(["feed1", "feed2"], mappedSources);
+        Assert.Equal(["feed1"], mappedSources);
+        Assert.Equal(original, await File.ReadAllBytesAsync(configPath));
     }
 
     [Fact]
-    public async Task CreateOrUpdateAsync_MapsSourceUrlToEveryExistingAlias()
+    public async Task CreateOrUpdateAsync_IntegrationConfigurationDoesNotCaptureUserDefaultAliases()
+    {
+        using var generator = TemporaryWorkspace.CreateForCli(_outputHelper);
+        using var consumer = TemporaryWorkspace.CreateForCli(_outputHelper);
+        const string generatorConfig = """
+            <configuration>
+              <packageSources><clear /><add key="company-public" value="https://api.nuget.org/v3/index.json" /></packageSources>
+              <packageSourceMapping><packageSource key="company-public"><package pattern="*" /></packageSource></packageSourceMapping>
+            </configuration>
+            """;
+        const string consumerConfig = """
+            <configuration>
+              <packageSources><clear /><add key="nuget.org" value="https://api.nuget.org/v3/index.json" /></packageSources>
+              <packageSourceMapping><packageSource key="nuget.org"><package pattern="*" /></packageSource></packageSourceMapping>
+            </configuration>
+            """;
+        var generatorParent = await WriteConfigAsync(generator.WorkspaceRoot, generatorConfig);
+        var consumerParent = await WriteConfigAsync(consumer.WorkspaceRoot, consumerConfig);
+        var output = generator.CreateDirectory("apphost");
+        var destination = consumer.CreateDirectory("apphost");
+        const string channelSource = "https://channel.example/v3/index.json";
+        var channel = CreateChannel([new("Aspire*", channelSource), new("*", PackageSources.NuGetOrg)]);
+
+        await DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(output, channel);
+        var generated = await File.ReadAllBytesAsync(Path.Combine(output.FullName, "nuget.config"));
+        await File.WriteAllBytesAsync(Path.Combine(destination.FullName, "nuget.config"), generated);
+
+        Assert.Equal([channelSource], NuGetTestHelper.GetEligiblePackageSources(destination.FullName, "Aspire.Hosting"));
+        Assert.Equal([PackageSources.NuGetOrg], NuGetTestHelper.GetEligiblePackageSources(destination.FullName, "Microsoft.Extensions.Options"));
+        Assert.Equal(generatorConfig, await File.ReadAllTextAsync(generatorParent.FullName));
+        Assert.Equal(consumerConfig, await File.ReadAllTextAsync(consumerParent.FullName));
+        await Verify(XDocument.Load(Path.Combine(output.FullName, "nuget.config")).ToString(), "xml");
+    }
+
+    [Fact]
+    public async Task CreateOrUpdateAsync_RefusesMultipleUserOwnedAliasesForChannelFeed()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var root = workspace.WorkspaceRoot;
@@ -374,6 +690,9 @@ public class DotNetAppHostNuGetConfigMergerTests
                   <add key="ClearTextPassword" value="secret" />
                 </authenticated>
               </packageSourceCredentials>
+              <packageSourceMapping>
+                <packageSource key="authenticated"><package pattern="Private.*" /></packageSource>
+              </packageSourceMapping>
             </configuration>
             """);
         var mappings = new[]
@@ -381,23 +700,17 @@ public class DotNetAppHostNuGetConfigMergerTests
             new PackageMapping("Aspire*", sourceUrl)
         };
         var channel = CreateChannel(mappings);
+        var configPath = Path.Combine(root.FullName, "nuget.config");
+        var original = await File.ReadAllBytesAsync(configPath);
 
-        await DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(root, channel).DefaultTimeout();
+        await Assert.ThrowsAsync<ProjectUpdaterException>(() =>
+            DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(root, channel));
 
-        var document = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
-        var mappedSources = document.Descendants("packageSourceMapping")
-            .Elements("packageSource")
-            .Where(element => element.Elements("package").Any(package => package.Attribute("pattern")?.Value == "Aspire*"))
-            .Select(element => element.Attribute("key")!.Value)
-            .ToArray();
-
-        Assert.Equal(["authenticated", "anonymousAlias"], mappedSources);
-        Assert.NotNull(document.Descendants("packageSourceCredentials").Single().Element("authenticated"));
-        Assert.False(DotNetAppHostNuGetConfigTestHelper.HasMissingSources(root, channel));
+        Assert.Equal(original, await File.ReadAllBytesAsync(configPath));
     }
 
     [Fact]
-    public async Task CreateOrUpdateAsync_ReusesExistingSourceKeys_WhenMappingToExistingSourcesByUrl()
+    public async Task CreateOrUpdateAsync_PreservesAmbientSourceKeysWithoutPersistingDefaultMappings()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var root = workspace.WorkspaceRoot;
@@ -418,7 +731,7 @@ public class DotNetAppHostNuGetConfigMergerTests
         var mappings = new[]
         {
             new PackageMapping("Aspire.*", "https://example.com/aspire-feed"),
-            new PackageMapping("*", "https://api.nuget.org/v3/index.json") // Should map to existing "nuget" key
+            new PackageMapping("*", "https://api.nuget.org/v3/index.json")
         };
 
         var channel = CreateChannel(mappings);
@@ -434,19 +747,11 @@ public class DotNetAppHostNuGetConfigMergerTests
         // New source should be added
         Assert.Contains(packageSources.Elements("add"), e => (string?)e.Attribute("value") == "https://example.com/aspire-feed");
 
-        // Package source mapping should use existing key "nuget" instead of URL
-        var psm = xml.Root!.Element("packageSourceMapping")!;
-        var nugetMapping = psm.Elements("packageSource").FirstOrDefault(ps => (string?)ps.Attribute("key") == "nuget");
-        Assert.NotNull(nugetMapping);
-        Assert.Contains(nugetMapping.Elements("package"), p => (string?)p.Attribute("pattern") == "*");
-
-        // Should NOT create a mapping with the URL as key when existing key exists
-        var urlMapping = psm.Elements("packageSource").FirstOrDefault(ps => (string?)ps.Attribute("key") == "https://api.nuget.org/v3/index.json");
-        Assert.Null(urlMapping);
+        Assert.Null(xml.Root.Element("packageSourceMapping"));
     }
 
     [Fact]
-    public async Task CreateOrUpdateAsync_PreservesAllExistingSources_WhenCreatingPackageSourceMappingForFirstTime()
+    public async Task CreateOrUpdateAsync_DoesNotSynthesizeMappingsForExistingSources()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var root = workspace.WorkspaceRoot;
@@ -465,7 +770,6 @@ public class DotNetAppHostNuGetConfigMergerTests
             </configuration>
             """);
 
-        // aspire update adds specific mappings but doesn't include a wildcard
         var mappings = new[]
         {
             new PackageMapping("Aspire*", "https://example.com/aspire-daily")
@@ -484,28 +788,11 @@ public class DotNetAppHostNuGetConfigMergerTests
         // New aspire source should be added
         Assert.Contains(packageSources.Elements("add"), e => (string?)e.Attribute("value") == "https://example.com/aspire-daily");
 
-        // Debug: Print the XML to understand what's happening
-        _outputHelper.WriteLine("Generated XML:");
-        _outputHelper.WriteLine(xml.ToString());
-
-        // Package source mapping should preserve the original behavior:
-        // Since the original config had NO packageSourceMapping, all existing sources should get "*" patterns
-        // so they can continue to serve packages
-        var psm = xml.Root!.Element("packageSourceMapping")!;
-
-        // The aspire source should have its specific pattern
-        var aspireMapping = psm.Elements("packageSource").FirstOrDefault(ps => (string?)ps.Attribute("key") == "aspire-test");
-        Assert.NotNull(aspireMapping);
-        Assert.Contains(aspireMapping.Elements("package"), p => (string?)p.Attribute("pattern") == "Aspire*");
-
-        // The existing sources should get wildcard patterns to preserve their original functionality
-        var nugetMapping = psm.Elements("packageSource").FirstOrDefault(ps => (string?)ps.Attribute("key") == "nuget.org");
-        Assert.NotNull(nugetMapping);
-        Assert.Contains(nugetMapping.Elements("package"), p => (string?)p.Attribute("pattern") == "*");
-
-        var customMapping = psm.Elements("packageSource").FirstOrDefault(ps => (string?)ps.Attribute("key") == "custom");
-        Assert.NotNull(customMapping);
-        Assert.Contains(customMapping.Elements("package"), p => (string?)p.Attribute("pattern") == "*");
+        Assert.Null(xml.Root.Element("packageSourceMapping"));
+        Assert.Equal(
+            ["https://api.nuget.org/v3/index.json", "https://example.com/aspire-daily", "https://example.com/custom/nuget/v3/index.json"],
+            NuGetTestHelper.GetEligiblePackageSources(root.FullName, "Other.Dependency"));
+        await Verify(xml.ToString(), "xml");
     }
 
     [Fact]
@@ -604,7 +891,9 @@ public class DotNetAppHostNuGetConfigMergerTests
             new PackageMapping("*", "https://api.nuget.org/v3/index.json")
         };
 
-        var channel = CreateChannel(mappings);
+        var channel = PackageChannel.CreateExplicitChannel(
+            PackageChannelNames.Stable, PackageChannelQuality.Stable, mappings,
+            new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
         await DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(root, channel).DefaultTimeout();
 
         var xml = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
@@ -652,12 +941,13 @@ public class DotNetAppHostNuGetConfigMergerTests
             </configuration>
             """);
 
-        // New mappings that remap Aspire patterns to nuget.org and add a wildcard
+        // Remap the CLI-owned hive's patterns to a new channel feed.
+        const string selectedSource = "https://new.example/v3/index.json";
         var mappings = new[]
         {
-            new PackageMapping("Aspire*", "https://api.nuget.org/v3/index.json"),
-            new PackageMapping("Microsoft.Extensions.ServiceDiscovery*", "https://api.nuget.org/v3/index.json"),
-            new PackageMapping("*", "https://api.nuget.org/v3/index.json")
+            new PackageMapping("Aspire*", selectedSource),
+            new PackageMapping("Microsoft.Extensions.ServiceDiscovery*", selectedSource),
+            new PackageMapping("*", selectedSource)
         };
 
         var channel = CreateChannel(mappings);
@@ -675,7 +965,7 @@ public class DotNetAppHostNuGetConfigMergerTests
             e => (string?)e.Attribute("value") == "https://valid.example");
 
         var sources = NuGetTestHelper.CreateClient().GetSettings(root.FullName, new byte[NuGetSourceIdentity.KeySizeInBytes]).Sources;
-        Assert.Contains(sources, static source => source.Name == "nuget.org" && source.IsEnabled);
+        Assert.Contains(sources, static source => source.Name == "aspire-test" && source.IsEnabled);
 
         var psm = xml.Root!.Element("packageSourceMapping")!;
 
@@ -690,9 +980,9 @@ public class DotNetAppHostNuGetConfigMergerTests
         Assert.Contains(validExampleMapping.Elements("package"), p => (string?)p.Attribute("pattern") == "ValidPkg*");
         Assert.DoesNotContain(validExampleMapping.Elements("package"), p => (string?)p.Attribute("pattern") == "*");
 
-        // NuGet.org should have all the patterns
+        // The new channel feed gets only the integration-specific patterns.
         var nugetMapping = psm.Elements("packageSource")
-            .FirstOrDefault(ps => (string?)ps.Attribute("key") == "nuget.org");
+            .FirstOrDefault(ps => (string?)ps.Attribute("key") == "aspire-test");
         Assert.NotNull(nugetMapping);
         Assert.Contains(nugetMapping.Elements("package"), p => (string?)p.Attribute("pattern") == "Aspire*");
         Assert.Contains(nugetMapping.Elements("package"), p => (string?)p.Attribute("pattern") == "Microsoft.Extensions.ServiceDiscovery*");
@@ -700,7 +990,7 @@ public class DotNetAppHostNuGetConfigMergerTests
             ["Aspire*", "Microsoft.Extensions.ServiceDiscovery*"],
             nugetMapping.Elements("package").Select(p => (string)p.Attribute("pattern")!));
 
-        // There should be two packageSource elements (nuget.org and valid.example)
+        // There should be two packageSource elements (the channel feed and valid.example).
         Assert.Equal(2, psm.Elements("packageSource").Count());
     }
 
@@ -1106,6 +1396,249 @@ public class DotNetAppHostNuGetConfigMergerTests
     }
 
     [Theory]
+    [InlineData(false, false, false, true)]
+    [InlineData(false, false, false, false)]
+    [InlineData(true, false, false, false)]
+    [InlineData(true, true, false, false)]
+    [InlineData(true, false, true, false)]
+    [InlineData(true, true, true, false)]
+    [InlineData(true, false, false, true)]
+    [InlineData(true, true, false, true)]
+    public async Task PrepareAsync_ChannelCleanupOnlyChangesLocalEntries(
+        bool locallyDefined, bool clearSources, bool clearMappings, bool hasUnrelatedPattern)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
+        const string oldSource = "https://old.example/v3/index.json";
+        const string newSource = "https://new.example/v3/index.json";
+        var oldMapping = $$"""
+            <packageSource key="aspire-staging">
+              <package pattern="Aspire.Hosting.Redis" />
+              {{(hasUnrelatedPattern ? """<package pattern="Private.*" />""" : "")}}
+            </packageSource>
+            """;
+        const string oldSourceEntry = """<add key="aspire-staging" value="https://old.example/v3/index.json" />""";
+        const string companySource = """<add key="company" value="https://company.example/v3/index.json" />""";
+        const string companyMapping = """<packageSource key="company"><package pattern="*" /></packageSource>""";
+        var parent = await WriteConfigAsync(workspace.WorkspaceRoot, $$"""
+            <configuration>
+              <packageSources><clear />{{oldSourceEntry}}{{companySource}}</packageSources>
+              <packageSourceMapping>{{oldMapping}}{{companyMapping}}</packageSourceMapping>
+            </configuration>
+            """);
+        var originalParent = await File.ReadAllBytesAsync(parent.FullName);
+        var directory = workspace.CreateDirectory("apphost");
+        var target = await WriteConfigAsync(directory, $$"""
+            <configuration>
+              <packageSources>
+                {{(clearSources ? "<clear />" + companySource : "")}}
+                {{(locallyDefined ? oldSourceEntry : "")}}
+              </packageSources>
+              <packageSourceMapping>
+                {{(clearMappings ? "<clear />" + companyMapping : "")}}
+                {{(locallyDefined ? oldMapping : "")}}
+              </packageSourceMapping>
+            </configuration>
+            """);
+        var channel = CreateChannel([new("Aspire*", newSource)]);
+        var candidate = await DotNetAppHostNuGetConfigTestHelper.PrepareAsync(
+            directory, channel, createIfMissing: true, TestContext.Current.CancellationToken);
+        Assert.NotNull(candidate);
+        await DotNetAppHostNuGetConfigMerger.ApplyAsync(candidate, TestContext.Current.CancellationToken);
+        var document = XDocument.Load(target.FullName);
+        var expectedLocalSourceKeys = new List<string> { "aspire-test" };
+        if (clearSources)
+        {
+            expectedLocalSourceKeys.Add("company");
+        }
+        if (locallyDefined && hasUnrelatedPattern)
+        {
+            expectedLocalSourceKeys.Add("aspire-staging");
+        }
+        Assert.Equal(expectedLocalSourceKeys.Order(StringComparer.Ordinal),
+            document.Root!.Element("packageSources")!.Elements("add")
+                .Select(static source => source.Attribute("key")!.Value).Order(StringComparer.Ordinal));
+        var localOldMappings = document.Root.Element("packageSourceMapping")!.Elements("packageSource")
+            .Where(static mapping => mapping.Attribute("key")?.Value == "aspire-staging")
+            .SelectMany(static mapping => mapping.Elements("package"))
+            .Select(static pattern => pattern.Attribute("pattern")!.Value);
+        Assert.Equal(locallyDefined && hasUnrelatedPattern ? ["Private.*"] : [], localOldMappings);
+        var inheritsOldMapping = !clearMappings && !(locallyDefined && hasUnrelatedPattern);
+        string[] expectedAspireSources = !inheritsOldMapping ? [newSource] : clearSources ? [] : [oldSource];
+        Assert.Equal(expectedAspireSources,
+            NuGetTestHelper.GetEligiblePackageSources(directory.FullName, "Aspire.Hosting.Redis"));
+
+        Assert.Equal(originalParent, await File.ReadAllBytesAsync(parent.FullName));
+    }
+
+    [Theory]
+    [InlineData(false, null, null)]
+    [InlineData(true, null, null)]
+    [InlineData(false, "aspire-staging", "true")]
+    [InlineData(true, "aspire-staging", "true")]
+    [InlineData(false, "aspire-staging", "false")]
+    [InlineData(true, "aspire-staging", "false")]
+    [InlineData(false, "ASPIRE-STAGING", "true")]
+    [InlineData(true, "ASPIRE-STAGING", "true")]
+    public async Task CreatePersistentNuGetConfigContentAsync_StableCleanupRemovesLocalRecordsRegardlessOfParent(
+        bool hasMappings, string? disabledKey, string? disabledValue)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
+        var disabled = disabledKey is null ? "" : $"""<disabledPackageSources><add key="{disabledKey}" value="{disabledValue}" /></disabledPackageSources>""";
+        const string oldSource = """<add key="aspire-staging" value="https://old.example/v3/index.json" />""";
+        const string oldMapping = """<packageSource key="aspire-staging"><package pattern="Aspire.Hosting.Redis" /></packageSource>""";
+        var parent = await WriteConfigAsync(workspace.WorkspaceRoot, $$"""
+            <configuration>
+              <packageSources><clear />{{oldSource}}</packageSources>
+              {{disabled}}
+              {{(hasMappings ? "<packageSourceMapping>" + oldMapping + "</packageSourceMapping>" : "")}}
+            </configuration>
+            """);
+        var parentBytes = await File.ReadAllBytesAsync(parent.FullName);
+        var directory = workspace.CreateDirectory("apphost");
+        var target = await WriteConfigAsync(directory, $$"""
+            <configuration>
+              <packageSources>
+                {{oldSource}}
+                <add key="user" value="https://private.example/v3/index.json" />
+              </packageSources>
+              <disabledPackageSources><add key="future-private" value="true" /></disabledPackageSources>
+              {{(hasMappings ? "<packageSourceMapping>" + oldMapping + """<packageSource key="user"><package pattern="User.*" /></packageSource></packageSourceMapping>""" : "")}}
+            </configuration>
+            """);
+        var originalDisabled = XDocument.Load(target.FullName).Root!.Element("disabledPackageSources")!.ToString();
+        var channel = PackageChannel.CreateExplicitChannel(
+            PackageChannelNames.Stable, PackageChannelQuality.Stable, null,
+            new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
+        var original = await File.ReadAllBytesAsync(target.FullName);
+        var service = NuGetTestHelper.CreateService();
+        var configuration = service.BuildChannelConfiguration(
+            directory, "test", channel, null, null, TestContext.Current.CancellationToken);
+
+        var content = await new DotNetAppHostNuGetConfigMerger(service).CreatePersistentNuGetConfigContentAsync(
+            configuration, target, original, globalPackagesFolder: null, TestContext.Current.CancellationToken);
+
+        using var stream = new MemoryStream(content);
+        var document = XDocument.Load(stream);
+        Assert.Equal(["user"], document.Root!.Element("packageSources")!.Elements("add")
+            .Select(static source => source.Attribute("key")!.Value));
+        Assert.Equal(hasMappings ? ["user"] : [],
+            document.Root.Element("packageSourceMapping")?.Elements("packageSource")
+                .Select(static mapping => mapping.Attribute("key")!.Value) ?? []);
+        Assert.Equal(originalDisabled, document.Root.Element("disabledPackageSources")!.ToString());
+        Assert.Equal(parentBytes, await File.ReadAllBytesAsync(parent.FullName));
+        Assert.Equal(original, await File.ReadAllBytesAsync(target.FullName));
+    }
+
+    [Fact]
+    public async Task PrepareAsync_InheritedOldMappingDoesNotBlockByteIdenticalNoOp()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
+        var parent = await WriteConfigAsync(workspace.WorkspaceRoot, """
+            <configuration>
+              <packageSources><clear /><add key="aspire-staging" value="https://old.example/v3/index.json" /></packageSources>
+              <packageSourceMapping>
+                <packageSource key="aspire-staging"><package pattern="Aspire.Hosting.Redis" /><package pattern="Private.*" /></packageSource>
+              </packageSourceMapping>
+            </configuration>
+            """);
+        var directory = workspace.CreateDirectory("apphost");
+        var target = await WriteConfigAsync(directory, """
+            <configuration>
+              <packageSources><add key="aspire-test" value="https://selected.example/v3/index.json" /></packageSources>
+              <packageSourceMapping><packageSource key="aspire-test"><package pattern="Aspire*" /></packageSource></packageSourceMapping>
+            </configuration>
+            """);
+        var originalParent = await File.ReadAllBytesAsync(parent.FullName);
+        var original = await File.ReadAllBytesAsync(target.FullName);
+
+        var candidate = await DotNetAppHostNuGetConfigTestHelper.PrepareAsync(
+            directory, CreateChannel([new("Aspire*", "https://selected.example/v3/index.json")]),
+            createIfMissing: true, TestContext.Current.CancellationToken);
+
+        Assert.Null(candidate);
+        Assert.Equal(original, await File.ReadAllBytesAsync(target.FullName));
+        Assert.Equal(originalParent, await File.ReadAllBytesAsync(parent.FullName));
+    }
+
+    [Fact]
+    public async Task PrepareAsync_AlreadyDisabledUnmappedInheritedSourceDoesNotConflictWithNewChannel()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
+        var parent = await WriteConfigAsync(workspace.WorkspaceRoot, """
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="aspire-staging" value="https://old.example/v3/index.json" />
+                <add key="company" value="https://company.example/v3/index.json" />
+              </packageSources>
+              <disabledPackageSources><add key="aspire-staging" value="true" /></disabledPackageSources>
+              <packageSourceMapping><packageSource key="company"><package pattern="*" /></packageSource></packageSourceMapping>
+            </configuration>
+            """);
+        var originalParent = await File.ReadAllBytesAsync(parent.FullName);
+        var directory = workspace.CreateDirectory("apphost");
+        await WriteConfigAsync(directory, "<configuration />");
+        const string source = "https://new.example/v3/index.json";
+
+        var candidate = await DotNetAppHostNuGetConfigTestHelper.PrepareAsync(
+            directory, CreateChannel([new("Aspire*", source)]), createIfMissing: true,
+            TestContext.Current.CancellationToken);
+
+        Assert.NotNull(candidate);
+        await DotNetAppHostNuGetConfigMerger.ApplyAsync(candidate, TestContext.Current.CancellationToken);
+        Assert.Equal([source], NuGetTestHelper.GetEligiblePackageSources(directory.FullName, "Aspire.Hosting.Redis"));
+        Assert.Equal(["aspire-staging"], NuGetTestHelper.CreateClient().GetSettings(
+            directory.FullName, new byte[NuGetSourceIdentity.KeySizeInBytes]).DisabledPackageSourceKeys);
+        Assert.Equal(originalParent, await File.ReadAllBytesAsync(parent.FullName));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PrepareAsync_DiscoveryOnlyChangesDoNotRequireOwnershipOfUnchangedUserMapping(bool requiresEdit)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
+        const string source = "https://selected.example/v3/index.json";
+        const string privateSource = "https://private.example/v3/index.json";
+        var target = await WriteConfigAsync(workspace.WorkspaceRoot, $$"""
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="company" value="{{source}}" />
+                <add key="private" value="{{privateSource}}" />
+              </packageSources>
+              <packageSourceMapping>
+                <packageSource key="company"><package pattern="{{(requiresEdit ? "Company.*" : "Aspire*")}}" /></packageSource>
+                <packageSource key="private"><package pattern="Aspire.Hosting.Redis" /></packageSource>
+              </packageSourceMapping>
+            </configuration>
+            """);
+        var original = await File.ReadAllBytesAsync(target.FullName);
+        var service = NuGetTestHelper.CreateService();
+        var configuration = service.BuildAppHostConfiguration(
+            workspace.WorkspaceRoot, "test", [new("Aspire*", source)], TestContext.Current.CancellationToken);
+        Assert.True(configuration.HasSourcePolicyChanges);
+        var merger = new DotNetAppHostNuGetConfigMerger(service);
+
+        if (requiresEdit)
+        {
+            await Assert.ThrowsAsync<ProjectUpdaterException>(() =>
+                merger.PrepareAsync(workspace.WorkspaceRoot, configuration, createIfMissing: true,
+                    globalPackagesFolder: null, TestContext.Current.CancellationToken));
+        }
+        else
+        {
+            var candidate = await merger.PrepareAsync(
+                workspace.WorkspaceRoot, configuration, createIfMissing: true, globalPackagesFolder: null,
+                TestContext.Current.CancellationToken);
+            Assert.Null(candidate);
+        }
+
+        Assert.Equal(original, await File.ReadAllBytesAsync(target.FullName));
+        Assert.Equal([privateSource], NuGetTestHelper.GetEligiblePackageSources(workspace.Path, "Aspire.Hosting.Redis"));
+    }
+
+    [Theory]
     [InlineData("https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-old/nuget/v3/index.json")]
     [InlineData("./.aspire/hives/old/packages")]
     public async Task PrepareAsync_AlreadyDisabledInheritedFeedDoesNotTriggerRepeatedChanges(string retiredSource)
@@ -1143,11 +1676,75 @@ public class DotNetAppHostNuGetConfigMergerTests
     }
 
     [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task PrepareAsync_PreservesDisabledSourcesWithoutNormalization(bool hasLocalSection, bool clearDisabled)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
+        var parent = await WriteConfigAsync(workspace.WorkspaceRoot, """
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
+                <add key="company" value="https://company.example/v3/index.json" />
+              </packageSources>
+              <disabledPackageSources>
+                <add key="nuget.org" value="true" />
+                <add key="parent-only" value="true" />
+              </disabledPackageSources>
+              <packageSourceMapping><packageSource key="company"><package pattern="*" /></packageSource></packageSourceMapping>
+            </configuration>
+            """);
+        var originalParent = await File.ReadAllBytesAsync(parent.FullName);
+        var directory = workspace.CreateDirectory("apphost");
+        var disabledSection = hasLocalSection
+            ? $$"""
+              <disabledPackageSources>
+                <!-- Keep explicit values and aliases even after their source is removed. -->
+                {{(clearDisabled ? "<clear />" : "")}}
+                <add key="nuget.org" value="true" />
+                <add key="aspire-staging" value="false" />
+                <add key="aspire-apphost-0123456789abcdef" value="true" />
+              </disabledPackageSources>
+              """
+            : string.Empty;
+        var target = await WriteConfigAsync(directory, $$"""
+            <configuration>
+              <packageSources><add key="aspire-staging" value="https://old.example/v3/index.json" /></packageSources>
+              {{disabledSection}}
+              <packageSourceMapping>
+                <clear />
+                <packageSource key="aspire-staging"><package pattern="Aspire*" /></packageSource>
+                <packageSource key="company"><package pattern="*" /></packageSource>
+              </packageSourceMapping>
+            </configuration>
+            """);
+        var originalDisabled = XDocument.Load(target.FullName).Root!.Element("disabledPackageSources")?.ToString();
+        const string source = "https://new.example/v3/index.json";
+
+        var candidate = await DotNetAppHostNuGetConfigTestHelper.PrepareAsync(
+            directory, CreateChannel([new("Aspire*", source), new("*", PackageSources.NuGetOrg)]),
+            createIfMissing: true, TestContext.Current.CancellationToken);
+
+        Assert.NotNull(candidate);
+        await DotNetAppHostNuGetConfigMerger.ApplyAsync(candidate, TestContext.Current.CancellationToken);
+        var proposed = XDocument.Load(target.FullName);
+        Assert.Equal(originalDisabled, proposed.Root!.Element("disabledPackageSources")?.ToString());
+        var settings = NuGetTestHelper.CreateClient().GetSettings(
+            directory.FullName, new byte[NuGetSourceIdentity.KeySizeInBytes]);
+        Assert.False(Assert.Single(settings.Sources, static item => item.Name == "nuget.org").IsEnabled);
+        Assert.Equal([source], NuGetTestHelper.GetEligiblePackageSources(directory.FullName, "Aspire.Hosting.Redis"));
+        Assert.Equal(originalParent, await File.ReadAllBytesAsync(parent.FullName));
+        await Verify(proposed.ToString(), "xml").UseParameters(hasLocalSection, clearDisabled);
+    }
+
+    [Theory]
     [InlineData(true, false, false)]
     [InlineData(false, true, false)]
     [InlineData(true, true, false)]
     [InlineData(true, true, true)]
-    public async Task PrepareAsync_PersistenceMasksOnlySurvivingRetiredSources(
+    public async Task PrepareAsync_PersistencePreservesDisabledSourcesWhenRetiringLocalSources(
         bool locallyDefined, bool inheritedDefined, bool clearSources)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
@@ -1156,12 +1753,13 @@ public class DotNetAppHostNuGetConfigMergerTests
             <add key="company" value="https://company.example/v3/index.json" />
             <add key="user-disabled" value="https://private.example/v3/index.json" />
             """;
-        await WriteConfigAsync(workspace.WorkspaceRoot, $$"""
+        var parent = await WriteConfigAsync(workspace.WorkspaceRoot, $$"""
             <configuration>
               <packageSources><clear />{{userSources}}{{(inheritedDefined ? retired : "")}}</packageSources>
               <disabledPackageSources><add key="user-disabled" value="true" /></disabledPackageSources>
             </configuration>
             """);
+        var parentBytes = await File.ReadAllBytesAsync(parent.FullName);
         var appHostDirectory = workspace.CreateDirectory("apphost");
         var target = await WriteConfigAsync(appHostDirectory, $$"""
             <configuration>
@@ -1190,10 +1788,11 @@ public class DotNetAppHostNuGetConfigMergerTests
         var snapshot = NuGetTestHelper.CreateClient().GetSettings(
             appHostDirectory.FullName, new byte[NuGetSourceIdentity.KeySizeInBytes]);
         Assert.Equal(
-            inheritedDefined && !clearSources ? ["future-private", "retired", "user-disabled"] : ["future-private", "user-disabled"],
+            ["aspire-apphost-0e77e1652908bf0e", "aspire-apphost-efc407738a41fb53-0", "future-private", "user-disabled"],
             snapshot.DisabledPackageSourceKeys.Order(StringComparer.Ordinal));
         Assert.Equal(["https://new.example/v3/index.json"],
             NuGetTestHelper.GetEligiblePackageSources(appHostDirectory.FullName, "Aspire.Hosting.Redis"));
+        Assert.Equal(parentBytes, await File.ReadAllBytesAsync(parent.FullName));
         await Verify(XDocument.Load(target.FullName).ToString(), "xml")
             .UseParameters(locallyDefined, inheritedDefined, clearSources);
     }
@@ -1212,9 +1811,8 @@ public class DotNetAppHostNuGetConfigMergerTests
         const string dailySource = "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json";
         foreach (var source in new[] { prSource, dailySource, prSource, dailySource, prSource })
         {
-            var configuration = service.BuildConfiguration(
+            var configuration = service.BuildAppHostConfiguration(
                 workspace.WorkspaceRoot, "apphost-0123456789abcdef", [new("Aspire*", source)],
-                restrictToSelectedSources: false, hasAuthoritativeAspirePolicy: true,
                 cancellationToken: TestContext.Current.CancellationToken);
             using var projection = await service.CreateConfigurationPreviewAsync(
                 workspace.WorkspaceRoot, configuration, globalPackagesFolder: null, TestContext.Current.CancellationToken);
@@ -1226,17 +1824,18 @@ public class DotNetAppHostNuGetConfigMergerTests
             Assert.NotNull(candidate);
             await DotNetAppHostNuGetConfigMerger.ApplyAsync(candidate, TestContext.Current.CancellationToken);
             Assert.Empty(service.GetNuGetSettings(workspace.Path, TestContext.Current.CancellationToken).DisabledPackageSourceKeys);
-            Assert.Equal([source], NuGetTestHelper.GetEligiblePackageSources(workspace.Path, "Aspire.Hosting.Redis"));
+            Assert.Equal(new[] { source, "https://company.example/v3/index.json" }.Order(StringComparer.Ordinal),
+                NuGetTestHelper.GetEligiblePackageSources(workspace.Path, "Aspire.Hosting.Redis"));
         }
 
         await Verify(XDocument.Load(target.FullName).ToString(), "xml");
     }
 
     [Fact]
-    public async Task PrepareAsync_PersistenceReenablesSelectedInheritedSourceWithoutEnablingOtherSources()
+    public async Task PrepareAsync_RefusesReenablingInheritedChannelSource()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
-        await WriteConfigAsync(workspace.WorkspaceRoot, """
+        var parentFile = await WriteConfigAsync(workspace.WorkspaceRoot, """
             <configuration>
               <packageSources>
                 <clear />
@@ -1250,19 +1849,19 @@ public class DotNetAppHostNuGetConfigMergerTests
               </disabledPackageSources>
             </configuration>
             """);
+        var original = await File.ReadAllBytesAsync(parentFile.FullName);
         var appHostDirectory = workspace.CreateDirectory("apphost");
-        var candidate = await DotNetAppHostNuGetConfigTestHelper.PrepareAsync(
-            appHostDirectory, CreateChannel([new("Aspire*", "https://selected.example/v3/index.json")]),
-            createIfMissing: true, TestContext.Current.CancellationToken);
-        Assert.NotNull(candidate);
-        await DotNetAppHostNuGetConfigMerger.ApplyAsync(candidate, TestContext.Current.CancellationToken);
+        await Assert.ThrowsAsync<ProjectUpdaterException>(() =>
+            DotNetAppHostNuGetConfigTestHelper.PrepareAsync(
+                appHostDirectory, CreateChannel([new("Aspire*", "https://selected.example/v3/index.json")]),
+                createIfMissing: true, TestContext.Current.CancellationToken));
 
         var snapshot = NuGetTestHelper.CreateClient().GetSettings(
             appHostDirectory.FullName, new byte[NuGetSourceIdentity.KeySizeInBytes]);
-        Assert.Equal(["future-private", "user-disabled"], snapshot.DisabledPackageSourceKeys.Order(StringComparer.Ordinal));
-        Assert.Equal(["https://selected.example/v3/index.json"],
-            NuGetTestHelper.GetEligiblePackageSources(appHostDirectory.FullName, "Aspire.Hosting.Redis"));
-        await Verify(XDocument.Load(candidate.TargetFile.FullName).ToString(), "xml");
+        Assert.Equal(["future-private", "selected", "user-disabled"], snapshot.DisabledPackageSourceKeys.Order(StringComparer.Ordinal));
+        Assert.Empty(NuGetTestHelper.GetEligiblePackageSources(appHostDirectory.FullName, "Aspire.Hosting.Redis"));
+        Assert.Empty(appHostDirectory.EnumerateFiles());
+        Assert.Equal(original, await File.ReadAllBytesAsync(parentFile.FullName));
     }
 
     [Theory]
@@ -1280,11 +1879,11 @@ public class DotNetAppHostNuGetConfigMergerTests
             <configuration>
               <packageSources>
                 <clear />
-                <add key="company" value="https://feed.example/v3/index.json" />
+                <add key="aspire-test" value="https://feed.example/v3/index.json" />
               </packageSources>
               <packageSourceMapping>
                 <clear />
-                <packageSource key="company">
+                <packageSource key="aspire-test">
                   <package pattern="Aspire*" />
                 </packageSource>
               </packageSourceMapping>

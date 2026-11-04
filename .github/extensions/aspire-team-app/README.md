@@ -109,6 +109,9 @@ Authenticate with an existing `az` session or `AZURE_DEVOPS_EXT_PAT`. The app st
 only normalized pipeline coordinates and branch preferences; it never stores tokens
 or other credentials. GitHub and Azure DevOps sources are loaded independently, so
 an unavailable provider does not hide results from the other provider.
+GitHub CLI discovery failures appear in Health's error bar without blocking
+configured Azure pipelines. GitHub-only modes show an unauthenticated dashboard
+with the discovery diagnostic while keeping Health and Settings accessible.
 
 When a configured Azure pipeline builds a watched GitHub repository directly, provider
 metadata links both sources into one repository group. Azure Repos mirrors do not expose
@@ -153,6 +156,7 @@ without refetching provider data.
 | `extension.mjs` | Wiring: `joinSession` + `createCanvas`, agent-facing actions. |
 | `server.mjs` | Per-instance loopback HTTP server, atomic complete-snapshot cache, background polling, SSE refresh, multi-account interleave, and health orchestration. |
 | `accounts.mjs` | Credential discovery, per-account repo-access probing, host/enterprise detection. |
+| `cli.mjs` | Shared CLI execution with login-shell executable discovery for restricted desktop environments. |
 | `github.mjs` | GraphQL queries, lane bucketing, signals, avatars, cross-account merge. |
 | `health.mjs` | GitHub default-branch health and provider-neutral health aggregation. |
 | `azure-devops.mjs` | Pipeline URL validation, read-only Azure CLI queries, build timelines, Azure health inference. |
@@ -168,7 +172,31 @@ per-account Copilot credentials, or `gh auth token`, and queries the matching
 GitHub GraphQL API. Azure DevOps queries use the existing Azure CLI authentication.
 No credential is written to the extension preferences.
 
+On macOS and Linux, a standalone canvas launched with a restricted `PATH` falls
+back to the user's login shell to locate `gh` and `az`, then uses their absolute
+executables for GitHub account/token reads and Azure DevOps queries. Shell selection
+uses `SHELL`, then the OS account's configured shell, then a platform default.
+POSIX-style shells and Fish use their respective argument syntax. This reuses
+existing CLI logins without relying on Copilot-injected credentials. Only executable
+paths are discovered; the shell's environment is not imported. If discovery fails,
+the canvas reports a CLI or shell configuration error rather than asking an
+already-authenticated user to log in again. Copilot-only accounts still require
+credentials supplied by the app.
+
 ## Agent actions
+
+In **Settings → Agentic actions**, **Create detached sessions** is off by default.
+Enable it to launch all new-session PR and Health actions as top-level sessions
+instead of children of the canvas's session. Actions targeting the current
+conversation (including GHES fallbacks) are unchanged.
+
+Detached PR sessions use `create_session` and check out the live PR using `gh`,
+instead of `open_pr_session`. They have no automatic report-back relationship
+with the dashboard conversation, and automatic PR/issue association is not
+guaranteed. Read results and answer questions in the launched session.
+The preference follows the existing machine-local settings in
+`$COPILOT_HOME/extensions/aspire-team-app/artifacts/preferences.json`
+(`COPILOT_HOME` defaults to `~/.copilot`); it is not committed to the repository.
 
 - `refresh` — reload the queue and push to the open dashboard.
 - `set_mode` — switch to `review` / `issues` / `ship` / `health`.
@@ -203,6 +231,26 @@ repository session. It discovers stored `gh` accounts independently of tokens
 injected by the Copilot app, and an expired account on another host does not hide
 healthy accounts. The `gh` executable must be on the app's `PATH`; sign in with
 `gh auth login` only if no usable credentials are available.
+PR and Health agent-action buttons are disabled when the host does not provide an
+active session working directory, including sidebar-only canvases. Hover or focus
+the disabled action group to see why and how to enable it: open the canvas from a
+session in the relevant repository. This applies to **new session** actions too:
+the extension requests those through the owning conversation's agent, not a
+direct project/session-creation API. Browsing, refresh, and settings remain available.
+
+To preview this behavior from a normal repository session, open a fresh canvas
+instance with the following input:
+
+```json
+{
+  "previewSidebar": true
+}
+```
+
+The override disables agent actions only for that instance, including server-side
+dispatch. It is preserved when the canvas is rehydrated, does not change saved
+preferences, and cannot enable actions in a sidebar-only canvas.
+
 Older GitHub CLI versions without JSON authentication status use a text-status
 fallback that retains accounts reported on either output stream.
 

@@ -7,11 +7,11 @@
     <add key="aspire-test" value="{PR_HIVE}/packages" />
   </packageSources>
   <packageSourceMapping>
-    <clear />
     <packageSource key="dotnet9">
+      <package pattern="Aspire*" />
       <package pattern="Microsoft.Extensions.SpecialPackage*" />
     </packageSource>
-    <packageSource key="NuGet">
+    <packageSource key="https://api.nuget.org/v3/index.json">
       <package pattern="*" />
     </packageSource>
     <packageSource key="aspire-test">

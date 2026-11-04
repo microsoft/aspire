@@ -8,13 +8,17 @@ using Aspire.Hosting.ApplicationModel;
 namespace Aspire.Hosting.Dotnet;
 
 /// <summary>
-/// A resource that represents a specified C# project or file-based app added by path.
+/// A resource that represents an SDK-style .NET project or file-based C# app added by path.
 /// </summary>
 /// <remarks>
 /// <para>
 /// A <see cref="DotnetProjectResource"/> is added by path and is
 /// launched as an executable: <c>dotnet run --project &lt;path&gt;</c> for a project file, or
 /// <c>dotnet run --file &lt;path&gt;</c> for a file-based app (a <c>.cs</c> file).
+/// </para>
+/// <para>
+/// Supported project files are <c>.csproj</c>, <c>.fsproj</c>, and <c>.vbproj</c>.
+/// F# scripts and non-SDK project systems are not supported.
 /// </para>
 /// <para>
 /// Resources created by <c>AddDotnetProject</c> support the same .NET SDK container-publishing pipeline as
@@ -36,7 +40,7 @@ public class DotnetProjectResource :
     /// <param name="workingDirectory">The working directory for the app, typically the directory containing the project or <c>.cs</c> file.</param>
     public DotnetProjectResource(string name, string workingDirectory) : base(name, "dotnet", workingDirectory)
     {
-        // Ensure uniform C# project defaults, including the Rebuild command and Kestrel endpoint wiring.
+        // Ensure uniform .NET project defaults, including the Rebuild command and Kestrel endpoint wiring.
         Annotations.Add(new ProjectLaunchDefaultsAnnotation());
     }
 }

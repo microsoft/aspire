@@ -790,7 +790,23 @@ public static class GoHostingExtensions
 
         var resource = builder.Resource;
 
-        return builder.WithDebugSupport(
+        if (builder.ApplicationBuilder.ExecutionContext.IsRunMode)
+        {
+            // CLI-started resources must also support attaching later. Append after model configuration
+            // so GOFLAGS set by a later WithEnvironment call participates in the merge.
+            builder.ApplicationBuilder.OnBeforeStart((_, _) =>
+            {
+                if (!resource.HasAnnotationOfType<GoDelveServerAnnotation>() &&
+                    !resource.HasAnnotationOfType<GoLdFlagsAnnotation>())
+                {
+                    builder.WithEnvironment(GoRunDebugging.ConfigureEnvironmentAsync);
+                }
+
+                return Task.CompletedTask;
+            });
+        }
+
+        builder.WithDebugSupport(
             mode =>
             {
                 // Resolve annotations when DCP creates the launch configuration so later
@@ -809,7 +825,17 @@ public static class GoHostingExtensions
                     BuildFlags = buildFlags.Length > 0 ? buildFlags : null
                 };
             },
-            "go")
+            "go");
+
+        if (resource.TryGetLastAnnotation<SupportsDebuggingAnnotation>(out var debugSupport))
+        {
+            // Keep non-debug runs as DCP-managed go run processes so the PID identifies the launcher,
+            // matching CLI starts. Delve's noDebug launch does not emit a DAP process event:
+            // https://github.com/go-delve/delve/blob/v1.25.2/service/dap/server.go
+            debugSupport.RequiresDebugMode = true;
+        }
+
+        return builder
             .WithLaunchToolArgs(static ctx =>
             {
                 // The executable resource normally starts as:
@@ -839,7 +865,6 @@ public static class GoHostingExtensions
                 {
                     ctx.Args.Add($"-ldflags={ldFlagsAnnotation.Flags}");
                 }
-
                 if (ctx.Resource.TryGetLastAnnotation<GoGcFlagsAnnotation>(out var gcFlagsAnnotation))
                 {
                     ctx.Args.Add($"-gcflags={gcFlagsAnnotation.Flags}");

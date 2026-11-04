@@ -114,7 +114,7 @@ function makeButton(kind, label, svg) {
     btn.type = "button";
     btn.className = "scroll-button scroll-to-" + kind;
     btn.setAttribute("aria-label", label);
-    btn.setAttribute("title", label);
+    btn.setAttribute("data-tooltip", label);
     // Supplemental affordance only - keyboard users can already scroll the focused region
     // natively, so keep these out of the tab order to avoid extra tab stops per container.
     btn.tabIndex = -1;

@@ -3,10 +3,12 @@
 
 using System.Threading.Channels;
 using Aspire.Dashboard.Components.Controls;
+using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Model.BrowserStorage;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
 using Aspire.Tests.Shared.DashboardModel;
@@ -23,6 +25,93 @@ namespace Aspire.Dashboard.Components.Tests.Pages;
 [UseCulture("en-US")]
 public class TerminalsTests : DashboardTestContext
 {
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ModernLayout_RedirectsRouteSelectionWithoutOpeningTemporaryViewer(bool isDesktop)
+    {
+        var viewport = new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var client = CreateClient(
+            TerminalSetupHelpers.CreateTerminalResource("first-instance", displayName: "first", autoFit: true),
+            TerminalSetupHelpers.CreateTerminalResource("second", autoFit: false));
+        TerminalsSetupHelpers.SetupResourcesPage(this, viewport, client);
+        var storage = Assert.IsType<TestSessionStorage>(Services.GetRequiredService<ISessionStorage>());
+        storage.OnGetAsync = key => key == BrowserStorageKeys.TerminalsPageState
+            ? (true, new Terminals.TerminalsPageState("second")) : (false, null);
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        string? resourceName = "first";
+        navigation.NavigateTo(DashboardUrls.TerminalsUrl(resourceName) + "?pane=tags#output");
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport).Add(p => p.Body, builder =>
+        {
+            builder.OpenComponent<Terminals>(0);
+            builder.AddAttribute(1, nameof(Terminals.ResourceName), resourceName);
+            builder.CloseComponent();
+        }));
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal("http://localhost/resources/first?pane=tags&terminal=true#output", navigation.Uri);
+            Assert.Equal(ResourceTab.Terminal, cut.Instance.CurrentTab);
+        });
+        Assert.Empty(cut.FindComponents<ResourceSelect>());
+        Assert.Empty(cut.FindComponents<TerminalView>());
+
+        resourceName = "second";
+        navigation.NavigateTo(DashboardUrls.TerminalsUrl(resourceName));
+        cut.Render();
+        cut.WaitForAssertion(() => Assert.Equal("http://localhost/resources/second?terminal=true", navigation.Uri));
+        Assert.Empty(cut.FindComponents<TerminalView>());
+        Assert.Equal(["second"], cut.Instance.SelectedResourceNames);
+        Assert.All(JSInterop.Invocations, invocation =>
+        {
+            Assert.NotEqual("initTerminal", invocation.Identifier);
+            Assert.NotEqual("reconnectTerminal", invocation.Identifier);
+        });
+
+        storage.OnSetAsync = (key, _) =>
+        {
+            if (key == BrowserStorageKeys.TerminalsPageState)
+            {
+                navigation.NavigateTo(DashboardUrls.ResourceOverviewUrl("second"));
+            }
+        };
+        var page = cut.FindComponent<Terminals>().Instance;
+        await cut.InvokeAsync(() => page.UpdateViewModelFromQueryAsync(page.PageViewModel));
+        Assert.Equal("http://localhost/resources/second", navigation.Uri);
+        storage.OnSetAsync = null;
+
+        // The layout can update the outgoing page's cascading parameters before the router replaces its body.
+        cut.Render();
+        Assert.Equal("http://localhost/resources/second", navigation.Uri);
+
+        await cut.InvokeAsync(() => cut.FindComponent<Terminals>().Instance.DisposeAsync().AsTask());
+        Assert.Empty(client.ClosedTerminals);
+    }
+
+    [Fact]
+    public void ModernLayout_DoesNotRestoreSavedTerminalWhenNoResourceIsSelected()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        TerminalsSetupHelpers.SetupResourcesPage(this, viewport, CreateClient(TerminalSetupHelpers.CreateTerminalResource("shell")));
+        var storage = Assert.IsType<TestSessionStorage>(Services.GetRequiredService<ISessionStorage>());
+        storage.OnGetAsync = key => key == BrowserStorageKeys.TerminalsPageState
+            ? (true, new Terminals.TerminalsPageState("shell")) : (false, null);
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo(DashboardUrls.TerminalsUrl());
+
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport).Add(p => p.Body, builder =>
+        {
+            builder.OpenComponent<Terminals>(0);
+            builder.CloseComponent();
+        }));
+
+        cut.WaitForAssertion(() => Assert.Equal(Resources.TerminalStrings.TerminalsSelectAResource,
+            cut.Find(".resource-terminal-page [role='status']").TextContent.Trim()));
+        Assert.Empty(cut.FindComponents<TerminalView>());
+        Assert.Empty(cut.Instance.SelectedResourceNames);
+        Assert.Equal("http://localhost/terminals", navigation.Uri);
+    }
+
     [Theory]
     [InlineData(null, false)]
     [InlineData(false, false)]
@@ -639,6 +728,21 @@ public class TerminalsTests : DashboardTestContext
         var launcher = TerminalSetupHelpers.GetWindowLauncher(this, cut);
         await cut.InvokeAsync(() => launcher.OnTerminalWindowOpenedAsync($"resource:{name}", "opened"));
         Assert.Same(viewer, cut.FindComponent<TerminalView>().Instance);
+    }
+
+    [Fact]
+    public async Task ResourceActions_ViewDetailsNavigatesToResourceOverview()
+    {
+        TerminalsSetupHelpers.SetupPage(this, CreateClient(TerminalSetupHelpers.CreateTerminalResource("shell")));
+        var cut = RenderPage("shell");
+        var actions = cut.FindComponents<AspireMenuButton>()
+            .Single(button => button.Instance.Title == Resources.ControlsStrings.ResourceActions).Instance;
+        var viewDetails = Assert.Single(actions.ItemsProvider!(),
+            item => item.Text == Resources.ControlsStrings.ActionViewDetailsText);
+
+        await cut.InvokeAsync(viewDetails.OnClick!);
+
+        Assert.Equal("http://localhost/resources/shell", Services.GetRequiredService<NavigationManager>().Uri);
     }
 
     [Fact]

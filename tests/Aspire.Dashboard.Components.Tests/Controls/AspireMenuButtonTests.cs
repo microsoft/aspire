@@ -68,7 +68,7 @@ public class AspireMenuButtonTests : DashboardTestContext
     }
 
     [Fact]
-    public void Render_DefaultsIconColorToPrimaryAndAllowsOverride()
+    public void Render_DefaultsIconColorToCurrentColorAndAllowsOverride()
     {
         FluentUISetupHelpers.SetupFluentUIComponents(this);
         FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
@@ -81,7 +81,7 @@ public class AspireMenuButtonTests : DashboardTestContext
             builder.Add(p => p.ItemsProvider, () => [new MenuButtonItem { Text = "Action" }]);
         });
 
-        Assert.Equal(Color.Primary, cut.FindComponent<FluentIcon<Icon>>().Instance.Color);
+        Assert.Equal(Color.Custom, cut.FindComponent<FluentIcon<Icon>>().Instance.Color);
 
         cut.Render(builder => builder.Add(p => p.IconColor, Color.Default));
 

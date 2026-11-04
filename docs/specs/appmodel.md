@@ -10,12 +10,18 @@
 
 A two‑minute "hello‑world" that shows the happy path.
 
+The examples use the AppHost packages plus `Aspire.Hosting.PostgreSQL`,
+`Aspire.Hosting.JavaScript`, and `Aspire.Hosting.Dotnet`. Add those integrations from the
+AppHost directory with `aspire add <package-name>`. Project/app paths are relative to that
+directory and must match your layout. For legacy project resources and typed helpers, see
+the [AddProject migration guide](../migrate-from-addproject.md).
+
 ```csharp
 var builder = DistributedApplication.CreateBuilder(args);
 
 var db = builder.AddPostgres("pg");
-var api = builder.AddProject("api").WithReference(db);
-var web = builder.AddNpmApp("web").WithReference(api);
+var api = builder.AddDotnetProject("api", "../Api/Api.csproj").WithReference(db);
+var web = builder.AddNodeApp("web", "../Web", "server.js").WithReference(api);
 
 builder.Build().Run();
 ```
@@ -27,7 +33,7 @@ graph LR
   api --> pg
 ```
 
-1. Use `AddXyz` helper methods to declare resources (e.g., `AddPostgres`, `AddProject`).
+1. Use `AddXyz` helper methods to declare resources (e.g., `AddPostgres`, `AddDotnetProject`).
 2. Use `.WithReference()` (or similar) to wire explicit dependencies between resources.
 3. Call `Build().Run()` – Aspire builds the application model (graph) and executes it, handling port allocation, environment variables, and startup order.
 
@@ -101,7 +107,7 @@ Annotations allow attaching additional structured information to a resource with
 
 ### Fluent Extension Methods
 
-Resources are typically added using fluent **extension methods** such as `AddRedis`, `AddProject`, or `AddPostgres`.
+Resources are typically added using fluent **extension methods** such as `AddRedis`, `AddDotnetProject`, or `AddPostgres`.
 
 Extension methods encapsulate:
 
@@ -124,8 +130,8 @@ This pattern improves the developer experience by:
 ```csharp
 var builder = DistributedApplication.CreateBuilder(args);
 var pg = builder.AddPostgres("pg");
-var api = builder.AddProject("backend").WithReference(pg);
-var frontend = builder.AddNpmApp("frontend").WithReference(api);
+var api = builder.AddDotnetProject("backend", "../Backend/Backend.csproj").WithReference(pg);
+var frontend = builder.AddNodeApp("frontend", "../Frontend", "server.js").WithReference(api);
 ```
 
 In this example:
@@ -189,12 +195,13 @@ Resource states drive:
 
 ### Built-In Types
 
-Aspire provides a set of fundamental built-in resource types that serve as the foundation for modeling execution units:
+Aspire provides core primitives and language integration types for modeling execution units:
 
 | Type               | Purpose                                                 |
 | ------------------ | ------------------------------------------------------- |
 | ContainerResource  | Runs Docker containers as resources.                    |
-| ProjectResource    | Runs a .NET project directly (build + launch workflow). |
+| DotnetProjectResource | Runs a .NET project or C# file app added by path through `Aspire.Hosting.Dotnet`; derives from `ExecutableResource`. |
+| ProjectResource    | Retained legacy .NET project resource; `AddProject` factories are obsolete. |
 | ExecutableResource | Launches arbitrary executables or scripts as resources. |
 
 These types are **infrastructure-oriented primitives**. They model how code and applications are packaged and executed.
@@ -209,6 +216,11 @@ Built-in types:
 - Expose connection endpoints for dependent services.
 
 Custom resources must **opt-in manually** to these behaviors.
+
+The stable `IDotnetProgramResource` marker identifies both .NET resource models; it does not
+supply metadata, defaults, coordinated-build registration, or publishing. Prefer capability
+interfaces when only environment/endpoints are needed. `GetProjectResources()` remains
+legacy-only; use explicit [V2 or mixed-model queries](../migrate-from-addproject.md#model-queries).
 
 ---
 
@@ -455,8 +467,8 @@ Aspire represents these relationships through a **heterogeneous Directed Acyclic
 var builder = DistributedApplication.CreateBuilder(args);
 
 var db = builder.AddPostgres("pg");
-var api = builder.AddProject("api").WithReference(db);
-var web = builder.AddNpmApp("web").WithReference(api);
+var api = builder.AddDotnetProject("api", "../Api/Api.csproj").WithReference(db);
+var web = builder.AddNodeApp("web", "../Web", "server.js").WithReference(api);
 
 builder.Build().Run();
 ```
@@ -642,7 +654,7 @@ These properties are dynamically resolved during the application’s startup seq
 
 ### IResourceWithEndpoints
 
-Resources supporting endpoints should implement IResourceWithEndpoints, enabling the use of GetEndpoint(name) to retrieve an EndpointReference. This is implemented on the built-in ProjectResource, ContainerResource and ExecutableResource. It allows endpoints to be programmatically accessed and passed between resources.
+Resources supporting endpoints should implement IResourceWithEndpoints, enabling the use of GetEndpoint(name) to retrieve an EndpointReference. This is implemented on ContainerResource, ExecutableResource (including DotnetProjectResource), and retained legacy ProjectResource. It allows endpoints to be programmatically accessed and passed between resources.
 
 **Key Example: Endpoint Access and Resolution**
 
@@ -756,7 +768,7 @@ var builder = DistributedApplication.CreateBuilder(args);
 var redis = builder.AddContainer("redis", "redis")
                    .WithEndpoint(name: "tcp", targetPort: 6379);
 
-builder.AddProject<Projects.Worker>("worker")
+builder.AddDotnetProject("worker", "../Worker/Worker.csproj")
        .WithReference(redis.GetEndpoint("tcp"));
 
 builder.Build().Run();
@@ -776,7 +788,7 @@ var builder = DistributedApplication.CreateBuilder(args);
 var redis = builder.AddContainer("redis", "redis")
                    .WithEndpoint(name: "tcp", targetPort: 6379);
 
-builder.AddProject<Worker>("worker")
+builder.AddDotnetProject("worker", "../Worker/Worker.csproj")
        .WithEnvironment("RedisUrl", redis.GetEndpoint("tcp"));
 
 builder.Build().Run();
@@ -800,7 +812,7 @@ Call `endpoint.Property(...)` to get that field; the result is still a structure
 var redis = builder.AddContainer("redis", "redis")
                    .WithEndpoint("tcp", 6379);
 
-builder.AddProject("worker")
+builder.AddDotnetProject("worker", "../Worker/Worker.csproj")
        .WithEnvironment(ctx =>
        {
            var ep = redis.GetEndpoint("tcp");
@@ -891,7 +903,7 @@ Below example shows a project that is going to setup up grafana and keycloak. We
 ```csharp
 var builder = DistributedApplication.CreateBuilder(args);
 
-var api = builder.AddProject<Projects.Api>("api")
+var api = builder.AddDotnetProject("api", "../Api/Api.csproj")
     .WithEnvironment(ctx =>
     {
         var keyCloakEndpoint = keycloak.GetEndpoint("http");

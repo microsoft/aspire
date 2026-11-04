@@ -209,6 +209,32 @@ public class ProcessUtilTests(ITestOutputHelper outputHelper)
         }
     }
 
+    [Fact]
+    public async Task Run_PreservesLegacyLineInputAndOutput()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var app = DotnetFileAppProcess.WriteApp(workspace.Path, "legacy-lines.cs", """
+            #:sdk Microsoft.NET.Sdk
+            var input = await Console.In.ReadToEndAsync();
+            Console.WriteLine(Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(input)));
+            Console.Write("\nfirst\r\n\nlast");
+            """);
+        var lines = new List<string>();
+        var spec = new ProcessSpec(DotnetFileAppProcess.ResolvedExecutablePath)
+        {
+            ArgumentList = DotnetFileAppProcess.CreateArguments(app),
+            OnOutputData = lines.Add,
+            StandardInputContent = "test input"
+        };
+        var (pending, disposable) = ProcessUtil.Run(spec);
+        await using (disposable)
+        {
+            var result = await pending.DefaultTimeout(TestConstants.LongTimeoutDuration);
+            Assert.Equal(0, result.ExitCode);
+            Assert.Equal(new[] { Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes("test input" + Environment.NewLine)), "first", "last" }, lines);
+        }
+    }
+
     private static ProcessSpec CreateSingleLineOutputProcessSpec(TemporaryWorkspace workspace, Action<string> onOutputData, Action<int> onStart)
     {
         var appPath = DotnetFileAppProcess.WriteApp(workspace.WorkspaceRoot.FullName, "single-line.cs", """

@@ -711,6 +711,29 @@ namespace Projects%3B
     </ItemGroup>
   </Target>
 
+  <!--
+    The dotnet CLI artifacts path option (or `-p:ArtifactsPath=...`) passes ArtifactsPath as a global property, which flows
+    to the referenced project resources so their output lands under the artifacts directory. The AppHost later launches
+    those projects without rebuilding them, which would otherwise look for the output in the default location.
+    Global properties can't be overridden during evaluation, so assigning a sentinel and checking whether it took effect
+    detects that case without misinterpreting values that come from project files or environment variables.
+  -->
+  <PropertyGroup Condition=" '$(IsAspireHost)' == 'true' and '$(ArtifactsPath)' != '' ">
+    <_AspireOriginalArtifactsPath>$(ArtifactsPath)</_AspireOriginalArtifactsPath>
+    <ArtifactsPath>__AspireGlobalArtifactsPathProbe__</ArtifactsPath>
+    <_AspireGlobalArtifactsPath Condition=" '$(ArtifactsPath)' != '__AspireGlobalArtifactsPathProbe__' ">$(_AspireOriginalArtifactsPath)</_AspireGlobalArtifactsPath>
+    <ArtifactsPath>$(_AspireOriginalArtifactsPath)</ArtifactsPath>
+  </PropertyGroup>
+
+  <Target Name="EmbedAppHostGlobalArtifactsPath" BeforeTargets="GetAssemblyAttributes" Condition=" '$(IsAspireHost)' == 'true' and '$(_AspireGlobalArtifactsPath)' != '' ">
+    <ItemGroup>
+      <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+        <_Parameter1>apphostglobalartifactspath</_Parameter1>
+        <_Parameter2>$(_AspireGlobalArtifactsPath)</_Parameter2>
+      </AssemblyAttribute>
+    </ItemGroup>
+  </Target>
+
   <Target Name="EmbedAppHostIntermediateOutputPath" BeforeTargets="GetAssemblyAttributes" Condition=" '$(IsAspireHost)' == 'true' ">
     <ItemGroup>
       <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">

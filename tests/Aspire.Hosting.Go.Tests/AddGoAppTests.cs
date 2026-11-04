@@ -5,12 +5,14 @@
 #pragma warning disable ASPIRECOMMAND001
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Dcp.Model;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using System.Text.Json;
 
 namespace Aspire.Hosting.Go.Tests;
@@ -501,6 +503,68 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
     }
 
     // ---- VS Code debugging --------------------------------------------------
+
+    [Theory]
+    [InlineData(null, true, false)]
+    [InlineData(ExecutableLaunchMode.NoDebug, true, false)]
+    [InlineData(ExecutableLaunchMode.Debug, true, true)]
+    [InlineData(ExecutableLaunchMode.Debug, false, false)]
+    [InlineData(ExecutableLaunchMode.NoDebug, false, false)]
+    public async Task WithVSCodeDebugging_UsesIdeOnlyForSupportedDebugLaunches(
+        string? launchMode,
+        bool supportsGo,
+        bool usesIde)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sourceDir = workspace.CreateDirectory("source");
+        builder.Configuration["DEBUG_SESSION_INFO"] = JsonSerializer.Serialize(new RunSessionInfo
+        {
+            ProtocolsSupported = ["test"],
+            SupportedLaunchConfigurations = supportsGo ? ["go"] : ["python"]
+        });
+        builder.Configuration["DEBUG_SESSION_PORT"] = "5678";
+        builder.Configuration[KnownConfigNames.DebugSessionRunMode] = launchMode;
+        var app = builder.AddGoApp("api", sourceDir.FullName,
+                packagePath: "./cmd/server",
+                buildTags: ["integration"],
+                gcFlags: "all=-N -l")
+            .WithAppArgs("--config", "prod.yaml");
+        using var application = builder.Build();
+        var executionContext = new DistributedApplicationExecutionContext(
+            new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run)
+            {
+                Services = application.Services
+            });
+        var executionConfiguration = await ExecutionConfigurationBuilder.Create(app.Resource)
+            .WithArgumentsConfig()
+            .BuildAsync(executionContext, NullLogger.Instance, CancellationToken.None);
+
+        var plan = await ExecutableCreator.ResolveLaunchPlanAsync(
+            app.Resource,
+            executionConfiguration,
+            builder.Configuration,
+            new DistributedApplicationOptions(),
+            new ExecutableLaunchPolicy(builder.Configuration),
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        Assert.Equal(usesIde ? ExecutableLaunchMechanism.Ide : ExecutableLaunchMechanism.Process, plan.Mechanism);
+        Assert.Equal("go", plan.Command);
+        Assert.Equal(sourceDir.FullName, plan.WorkingDirectory);
+        if (usesIde)
+        {
+            Assert.Equal(["--config", "prod.yaml"], plan.Arguments);
+            var launchConfiguration = Assert.Single(plan.LaunchConfigurations);
+            Assert.Equal("go", launchConfiguration.GetProperty("type").GetString());
+            Assert.Equal(ExecutableLaunchMode.Debug, launchConfiguration.GetProperty("mode").GetString());
+        }
+        else
+        {
+            Assert.Equal(["run", "-tags=integration", "-gcflags=all=-N -l", "./cmd/server", "--config", "prod.yaml"], plan.Arguments);
+            Assert.Empty(plan.LaunchConfigurations);
+        }
+    }
 
     [Fact]
     public async Task WithVSCodeDebugging_PopulatesGoLaunchConfiguration()

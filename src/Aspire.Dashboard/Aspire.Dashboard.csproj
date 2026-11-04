@@ -41,10 +41,22 @@
     <NoWarn>$(NoWarn);IL2101</NoWarn>
 
     <DefineConstants>$(DefineConstants);ASPIRE_DASHBOARD</DefineConstants>
+    <!-- Compile-time seam used to verify that the modern dashboard has no source dependency on
+         Components/Legacy. This is not a product configuration switch; runtime selection remains
+         controlled by Dashboard:UI:DisableModernDashboard and the experience cookie. -->
+    <IncludeLegacyDashboard Condition="'$(IncludeLegacyDashboard)' == ''">true</IncludeLegacyDashboard>
+    <DefineConstants Condition="'$(IncludeLegacyDashboard)' == 'true'">$(DefineConstants);ASPIRE_LEGACY_DASHBOARD</DefineConstants>
 
     <!-- Bundle optimization: disable web.config generation -->
     <IsTransformWebConfigDisabled>true</IsTransformWebConfigDisabled>
   </PropertyGroup>
+
+  <ItemGroup Condition="'$(IncludeLegacyDashboard)' != 'true'">
+    <Compile Remove="Components\Legacy\**\*.cs" />
+    <RazorComponent Remove="Components\Legacy\**\*.razor" />
+    <Content Remove="Components\Legacy\**\*" />
+    <None Remove="Components\Legacy\**\*" />
+  </ItemGroup>
 
   <PropertyGroup>
     <UsePublicApiAnalyzers>false</UsePublicApiAnalyzers>
