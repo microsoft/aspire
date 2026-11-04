@@ -427,21 +427,21 @@ suite('Aspire tree action command E2E', function () {
         // a visible terminal command, and the resulting resource state transitions.
         terminalBefore = getTerminalCommandCount();
         before = getCommandInvocationCount('aspire-vscode.stopResource');
-        await executeE2eControlCommand({ name: 'stopResource', appHostPath, resourceName: workerResourceName });
+        await executeE2eControlCommand({ name: 'stopResource', appHostPath, resourceName: workerResourceName }, { waitFor: 'started' });
         await waitForCommandOutcome('aspire-vscode.stopResource', 'success', 60000, before);
         assert.strictEqual(getTerminalCommandCount(), terminalBefore);
         await waitForResourceState(workerResourceName, ['Exited', 'Finished', 'Stopped'], 90000);
 
         terminalBefore = getTerminalCommandCount();
         before = getCommandInvocationCount('aspire-vscode.startResource');
-        await executeE2eControlCommand({ name: 'startResource', appHostPath, resourceName: workerResourceName });
+        await executeE2eControlCommand({ name: 'startResource', appHostPath, resourceName: workerResourceName }, { waitFor: 'started' });
         await waitForCommandOutcome('aspire-vscode.startResource', 'success', 60000, before);
         assert.strictEqual(getTerminalCommandCount(), terminalBefore);
         await waitForResourceState(workerResourceName, ['Running'], 90000);
 
         terminalBefore = getTerminalCommandCount();
         before = getCommandInvocationCount('aspire-vscode.restartResource');
-        await executeE2eControlCommand({ name: 'restartResource', appHostPath, resourceName: workerResourceName });
+        await executeE2eControlCommand({ name: 'restartResource', appHostPath, resourceName: workerResourceName }, { waitFor: 'started' });
         await waitForCommandOutcome('aspire-vscode.restartResource', 'success', 60000, before);
         assert.strictEqual(getTerminalCommandCount(), terminalBefore);
         await waitForResourceState(workerResourceName, ['Running'], 90000);
