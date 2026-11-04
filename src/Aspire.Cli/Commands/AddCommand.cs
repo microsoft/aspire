@@ -14,6 +14,7 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
+using Aspire.Hosting.Utils;
 using Semver;
 using Spectre.Console;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
@@ -391,9 +392,10 @@ internal sealed class AddCommand : BaseCommand
                 }
             }
 
+            DotNetAppHostNuGetConfigMergerCandidate? configurationCandidate = null;
             if (source is null && selectedNuGetPackage.Channel.IntegrationSource?.Source is { } integrationSource)
             {
-                // Persist an exact package mapping so later builds can still restore the integration.
+                // Prepare an exact package mapping so later builds can still restore the integration.
                 // Unlike --source, this keeps ambient feeds available for the SDK and dependencies.
                 var configuration = _nugetService.BuildAppHostConfiguration(
                     effectiveAppHostProjectFile.Directory!,
@@ -407,12 +409,11 @@ internal sealed class AddCommand : BaseCommand
                 var targetDirectory = DotNetAppHostNuGetConfigMerger.GetRecommendedNuGetConfigDirectory(
                     configuration.Settings.ConfigPaths,
                     effectiveAppHostProjectFile.Directory!);
-                await new DotNetAppHostNuGetConfigMerger(_nugetService).CreateOrUpdateAsync(
+                configurationCandidate = await new DotNetAppHostNuGetConfigMerger(_nugetService).PrepareAsync(
                     targetDirectory,
                     configuration,
                     createIfMissing: true,
                     globalPackagesFolder: null,
-                    confirmationCallback: null,
                     cancellationToken);
             }
 
@@ -458,7 +459,7 @@ internal sealed class AddCommand : BaseCommand
             {
                 success = await InteractionService.ShowStatusAsync(
                     AddCommandStrings.AddingAspireIntegration,
-                    async () => await project.AddPackageAsync(context, cancellationToken)
+                    async () => await AddPackageWithNuGetConfigurationAsync(project, context, configurationCandidate, cancellationToken)
                 );
                 addPackageActivity.SetAddPackageSuccess(success);
                 if (!success)
@@ -511,6 +512,65 @@ internal sealed class AddCommand : BaseCommand
         finally
         {
             addActivity.Dispose();
+        }
+    }
+
+    private static async Task<bool> AddPackageWithNuGetConfigurationAsync(
+        IAppHostProject project,
+        AddPackageContext context,
+        DotNetAppHostNuGetConfigMergerCandidate? candidate,
+        CancellationToken cancellationToken)
+    {
+        if (candidate is null)
+        {
+            return await project.AddPackageAsync(context, cancellationToken);
+        }
+
+        // Native package installation and polyglot preparation need the candidate in the real
+        // configuration hierarchy. Roll back that temporary write if adding the package fails.
+        await using var transaction = new DotNetAppHostUpdateTransaction(new Dictionary<string, byte[]?>
+        {
+            [PathNormalizer.ResolveToFilesystemPath(candidate.TargetFile.FullName)] = candidate.OriginalContent?.ToArray()
+        });
+        try
+        {
+            await transaction.ApplyPreparedAsync(candidate.TargetFile, candidate.ProposedContent,
+                writeStarting => DotNetAppHostNuGetConfigMerger.ApplyAsync(candidate, writeStarting, cancellationToken),
+                cancellationToken);
+            var success = await project.AddPackageAsync(context, cancellationToken);
+            if (!success)
+            {
+                try
+                {
+                    await transaction.DisposeAsync();
+                }
+                catch (Exception rollbackFailure)
+                {
+                    throw new AggregateException(
+                        new InvalidOperationException(string.Format(CultureInfo.CurrentCulture,
+                            AddCommandStrings.PackageInstallationFailed, CliExitCodes.FailedToAddPackage)),
+                        rollbackFailure);
+                }
+
+                return false;
+            }
+
+            await transaction.VerifyAsync(cancellationToken);
+            transaction.Commit();
+
+            return true;
+        }
+        catch (Exception addFailure)
+        {
+            try
+            {
+                await transaction.DisposeAsync();
+            }
+            catch (Exception rollbackFailure)
+            {
+                throw new AggregateException(addFailure, rollbackFailure);
+            }
+            throw;
         }
     }
 

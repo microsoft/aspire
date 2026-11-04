@@ -7,6 +7,7 @@ using System.Xml.Linq;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
@@ -367,6 +368,201 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             NuGetTestHelper.GetEligiblePackageSources(appDirectory.FullName, "Newtonsoft.Json"));
         await Verify(await File.ReadAllTextAsync(configPath), "xml")
             .AddScrubber(builder => builder.Replace(workspace.Path, "<workspace>").Replace('\\', '/'));
+    }
+
+    [Theory]
+    [InlineData(false, KnownLanguageId.CSharp, "success")]
+    [InlineData(true, KnownLanguageId.CSharp, "success")]
+    [InlineData(false, KnownLanguageId.TypeScript, "success")]
+    [InlineData(true, KnownLanguageId.TypeScript, "success")]
+    [InlineData(false, KnownLanguageId.CSharp, "stop-failed")]
+    [InlineData(true, KnownLanguageId.CSharp, "stop-failed")]
+    [InlineData(false, KnownLanguageId.TypeScript, "stop-failed")]
+    [InlineData(true, KnownLanguageId.TypeScript, "stop-failed")]
+    [InlineData(false, KnownLanguageId.CSharp, "install-failed")]
+    [InlineData(true, KnownLanguageId.CSharp, "install-failed")]
+    [InlineData(false, KnownLanguageId.TypeScript, "install-failed")]
+    [InlineData(true, KnownLanguageId.TypeScript, "install-failed")]
+    [InlineData(false, KnownLanguageId.CSharp, "install-exception")]
+    [InlineData(true, KnownLanguageId.CSharp, "install-exception")]
+    [InlineData(false, KnownLanguageId.TypeScript, "install-exception")]
+    [InlineData(true, KnownLanguageId.TypeScript, "install-exception")]
+    [InlineData(false, KnownLanguageId.CSharp, "cancelled")]
+    [InlineData(true, KnownLanguageId.CSharp, "cancelled")]
+    [InlineData(false, KnownLanguageId.TypeScript, "cancelled")]
+    [InlineData(true, KnownLanguageId.TypeScript, "cancelled")]
+    [InlineData(false, KnownLanguageId.CSharp, "stop-conflict")]
+    [InlineData(true, KnownLanguageId.CSharp, "stop-conflict")]
+    [InlineData(false, KnownLanguageId.TypeScript, "stop-conflict")]
+    [InlineData(true, KnownLanguageId.TypeScript, "stop-conflict")]
+    [InlineData(false, KnownLanguageId.CSharp, "rollback-conflict")]
+    [InlineData(true, KnownLanguageId.CSharp, "rollback-conflict")]
+    [InlineData(false, KnownLanguageId.TypeScript, "rollback-conflict")]
+    [InlineData(true, KnownLanguageId.TypeScript, "rollback-conflict")]
+    [InlineData(false, KnownLanguageId.CSharp, "rollback-exception")]
+    [InlineData(true, KnownLanguageId.CSharp, "rollback-exception")]
+    [InlineData(false, KnownLanguageId.TypeScript, "rollback-exception")]
+    [InlineData(true, KnownLanguageId.TypeScript, "rollback-exception")]
+    public async Task AddCommandStagesNamedIntegrationSourceUntilInstallationSucceeds(bool existingConfiguration, string languageId, string outcome)
+    {
+        const string packageId = "Contoso.Hosting.One";
+        const string teamSource = "https://example.test/team";
+        const string oldSource = "https://example.test/old";
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appDirectory = workspace.CreateDirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appDirectory.FullName,
+            languageId == KnownLanguageId.CSharp ? "AppHost.csproj" : "apphost.ts"));
+        File.WriteAllText(appHostFile.FullName, languageId == KnownLanguageId.CSharp ? "<Project />" : string.Empty);
+        File.WriteAllText(Path.Combine(appDirectory.FullName, AspireConfigFile.FileName), $$"""
+            {
+              "integrationSources": {
+                "default": {"enabled": false},
+                "old": {"source": "{{oldSource}}", "enabled": false},
+                "team": {"source": "{{teamSource}}", "patterns": ["Contoso.Hosting.*"]}
+              }
+            }
+            """);
+        var configPath = Path.Combine(appDirectory.FullName, "nuget.config");
+        if (existingConfiguration)
+        {
+            File.WriteAllText(configPath, $$"""
+                <configuration>
+                  <packageSources>
+                    <clear />
+                    <add key="sdk" value="https://example.test/sdk" />
+                    <add key="aspire-integration-old" value="{{oldSource}}" />
+                  </packageSources>
+                  <packageSourceMapping>
+                    <clear />
+                    <packageSource key="sdk"><package pattern="Aspire*" /></packageSource>
+                    <packageSource key="aspire-integration-old">
+                      <package pattern="{{packageId}}" />
+                      <package pattern="Contoso.Hosting.Unrelated" />
+                    </packageSource>
+                  </packageSourceMapping>
+                </configuration>
+                """);
+        }
+        var originalContent = existingConfiguration ? await File.ReadAllBytesAsync(configPath) : null;
+        byte[]? concurrentContent = null;
+        var stopAttempted = false;
+        var addAttempted = false;
+        var interactionService = new TestInteractionService();
+        var factory = new TestAppHostProjectFactory
+        {
+            LanguageId = languageId,
+            CanHandleCallback = file => file.FullName == appHostFile.FullName,
+            FindAndStopRunningInstanceAsyncCallback = async (_, _, cancellationToken) =>
+            {
+                stopAttempted = true;
+                if (originalContent is null)
+                {
+                    Assert.False(File.Exists(configPath));
+                }
+                else
+                {
+                    Assert.Equal(originalContent, await File.ReadAllBytesAsync(configPath, cancellationToken));
+                }
+                if (outcome == "stop-conflict")
+                {
+                    await File.WriteAllTextAsync(configPath, "<configuration />\n<!-- Concurrent edit. -->", cancellationToken);
+                    concurrentContent = await File.ReadAllBytesAsync(configPath, cancellationToken);
+                }
+                return outcome == "stop-failed" ? RunningInstanceResult.StopFailed : RunningInstanceResult.NoRunningInstance;
+            },
+            AddPackageAsyncCallback = async (context, cancellationToken) =>
+            {
+                addAttempted = true;
+                Assert.True(stopAttempted);
+                Assert.Equal(packageId, context.PackageId);
+                Assert.Null(context.Source);
+                var eligibleSources = NuGetTestHelper.GetEligiblePackageSources(appDirectory.FullName, packageId);
+                Assert.Contains(teamSource, eligibleSources);
+                if (existingConfiguration)
+                {
+                    Assert.Equal([teamSource], eligibleSources);
+                    Assert.Equal([oldSource],
+                        NuGetTestHelper.GetEligiblePackageSources(appDirectory.FullName, "Contoso.Hosting.Unrelated"));
+                    Assert.Equal(["https://example.test/sdk"],
+                        NuGetTestHelper.GetEligiblePackageSources(appDirectory.FullName, "Aspire.AppHost.Sdk"));
+                }
+                if (outcome is "rollback-conflict" or "rollback-exception")
+                {
+                    var proposedContent = await File.ReadAllTextAsync(configPath, cancellationToken);
+                    await File.WriteAllTextAsync(configPath, proposedContent + "\n<!-- Concurrent edit. -->", cancellationToken);
+                    concurrentContent = await File.ReadAllBytesAsync(configPath, cancellationToken);
+                }
+                return outcome switch
+                {
+                    "success" => true,
+                    "install-failed" or "rollback-conflict" => false,
+                    "install-exception" or "rollback-exception" => throw new InvalidOperationException("Simulated package installation failure."),
+                    "cancelled" => throw new OperationCanceledException(cancellationToken),
+                    _ => throw new InvalidOperationException($"Unexpected installation outcome: {outcome}")
+                };
+            }
+        };
+        var cache = new FakeNuGetPackageCache
+        {
+            GetPackagesAsyncCallback = (_, _, _, _, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>(
+                [new() { Id = packageId, Version = "1.0.0", Source = teamSource }])
+        };
+        // Without a local config, the shared fixture's synthetic user config would make the
+        // recommended destination point at the test binaries rather than this workspace.
+        var nuGetClient = new NuGetClient(new TestFeatures(), new TestEnvironment(), NullLogger<NuGetClient>.Instance)
+        {
+            AmbientSettingsLoader = (directory, _) => File.Exists(Path.Combine(directory, "nuget.config"))
+                ? Settings.LoadSpecificSettings(directory, "nuget.config")
+                : NullSettings.Instance,
+            MachineWideSettingsFactory = () => new TestMachineWideSettings(NullSettings.Instance)
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+            options.InteractionServiceFactory = _ => interactionService;
+            options.NuGetClientFactory = _ => nuGetClient;
+        });
+        services.AddSingleton<Aspire.Cli.NuGet.INuGetPackageCache>(cache);
+        services.AddSingleton<IAppHostProjectFactory>(factory);
+        using var provider = services.BuildServiceProvider();
+
+        var exitCode = await provider.GetRequiredService<AddCommand>()
+            .Parse($"add {packageId} --apphost \"{appHostFile.FullName}\" --version 1.0.0")
+            .InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(outcome switch
+        {
+            "success" => CliExitCodes.Success,
+            "cancelled" => CliExitCodes.Cancelled,
+            _ => CliExitCodes.FailedToAddPackage
+        }, exitCode);
+        Assert.True(stopAttempted);
+        Assert.Equal(outcome is not ("stop-failed" or "stop-conflict"), addAttempted);
+        if (outcome == "success")
+        {
+            Assert.Contains(teamSource, NuGetTestHelper.GetEligiblePackageSources(appDirectory.FullName, packageId));
+        }
+        else if (concurrentContent is not null)
+        {
+            Assert.Equal(concurrentContent, await File.ReadAllBytesAsync(configPath));
+            if (outcome is "rollback-conflict" or "rollback-exception")
+            {
+                var error = Assert.Single(interactionService.DisplayedErrors);
+                Assert.Contains(outcome == "rollback-conflict"
+                    ? string.Format(AddCommandStrings.PackageInstallationFailed, CliExitCodes.FailedToAddPackage)
+                    : "Simulated package installation failure.", error);
+                Assert.Contains("could not be restored", error);
+            }
+        }
+        else if (originalContent is not null)
+        {
+            Assert.Equal(originalContent, await File.ReadAllBytesAsync(configPath));
+            Assert.Equal([oldSource], NuGetTestHelper.GetEligiblePackageSources(appDirectory.FullName, packageId));
+        }
+        else
+        {
+            Assert.False(File.Exists(configPath));
+        }
     }
 
     [Theory]
