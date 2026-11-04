@@ -365,6 +365,18 @@
             <header class="resource-header">
                 @{ RenderHeaderRow(__builder, isDesktop); }
 
+                <div class="resource-header-controls">
+                    <div class="resource-header-actions">
+                        <SectionOutlet SectionName="@HeaderActionsSectionName" />
+                    </div>
+                    @if (isDesktop)
+                    {
+                        <div class="resource-tab-toolbar">
+                            <SectionOutlet SectionName="@TabToolbarSectionName" />
+                        </div>
+                    }
+                </div>
+
                 @if (isDesktop)
                 {
                     <StableSectionContent SectionName="@MainLayout.HeaderContextSectionName">
@@ -387,10 +399,10 @@
             </div>
         </section>
 
-        @if (isDesktop)
+        @if (isDesktop || SelectedResource is { IsParameter: false })
         {
             <footer class="resource-workspace-foot">
-                @if (!_isPaneCollapsed)
+                @if (isDesktop && !_isPaneCollapsed)
                 {
                     <div class="resource-pane-foot">
                         <span role="img" aria-label="@GetPaneCountText(paneResourceCount, paneParameterCount, paneTelemetrySourceCount)">
@@ -565,7 +577,7 @@
 
     // On desktop the title is a heading. On mobile it also opens the resource list, which is a full-screen sheet, so it
     // is drawn as a select, with the list icon and a chevron, to show that it can be changed. The button is inside the
-    // heading rather than replacing it, so the page keeps its heading. A raw button gives the full-width, start-aligned
+    // heading rather than replacing it, so the page keeps its heading. A raw button gives the start-aligned
     // layout that a FluentButton can't without styling its shadow parts.
     private void RenderTitle(RenderTreeBuilder __builder, string text, bool isDesktop)
     {
@@ -629,12 +641,6 @@
                 <div class="resource-header-title">
                     @{ RenderTitle(__builder, selectedName, isDesktop); }
                 </div>
-                @if (!isDesktop)
-                {
-                    <div class="resource-header-meta">
-                        @{ RenderSelectedResourceMeta(__builder, selected); }
-                    </div>
-                }
             </div>
         }
         else if (SelectedTelemetryOnlyResource is { } telemetryOnly)
@@ -701,17 +707,6 @@
                 </div>
             </div>
         }
-        <div class="resource-header-controls">
-            <div class="resource-header-actions">
-                <SectionOutlet SectionName="@HeaderActionsSectionName" />
-            </div>
-            @if (isDesktop)
-            {
-                <div class="resource-tab-toolbar">
-                    <SectionOutlet SectionName="@TabToolbarSectionName" />
-                </div>
-            }
-        </div>
     </div>
     }
 

@@ -56,22 +56,40 @@
     background: var(--aspire-control-background);
 }
 
+.overview-card[hidden] {
+    display: none;
+}
+
+@media (max-width: 480px) {
+    .overview-panel-selector ::deep .icon-toggle-label {
+        display: none;
+    }
+}
+
 /* Spans are computed per card from its content (see OverviewCardLayout) and passed in as custom properties. */
 .overview-grid > .overview-card {
     grid-column: span var(--overview-span, 12);
 }
 
-/* Cards keep their height; what doesn't fit scrolls inside them, below the card's header. The tags card isn't
-   sized: it's one line, and its tag picker opens a popup that a clipped card would cut off. */
+/* Grid rows size to their tallest content and stretch the other cards to match. Keep the tags picker unclipped. */
 .overview-grid > .overview-card:not(.overview-tags-card) {
-    height: var(--overview-card-height, auto);
     overflow: hidden;
 }
 
-.overview-grid > .overview-card:not(.overview-tags-card) > :not(.overview-card-header) {
+.overview-grid > .overview-terminal-card {
+    min-height: var(--overview-card-height, 300px);
+}
+
+/* Child-component roots lack this component's scope attribute, so anchor it on the card. */
+.overview-grid > .overview-card:not(.overview-tags-card) ::deep > :not(.overview-card-header) {
     flex-shrink: 1;
     min-height: 0;
     overflow: auto;
+}
+
+/* Cap the scrollable content, not the card, so different card limits don't leave uneven row bottoms. */
+.overview-grid > .overview-card:not(.overview-tags-card):not(.overview-terminal-card) ::deep > :not(.overview-card-header) {
+    max-height: var(--overview-card-height, none);
 }
 
 .overview-card-empty .overview-empty {
@@ -483,7 +501,8 @@ a.overview-stat:hover .overview-stat-label {
 }
 
 .overview-terminal {
-    flex: 1 1 auto;
+    /* A terminal's canvas must not determine its row height; it fills the row's stable minimum viewport. */
+    flex: 1 1 0;
     min-height: 0;
     overflow: hidden;
     background: var(--terminal-background, var(--colorNeutralBackground1));

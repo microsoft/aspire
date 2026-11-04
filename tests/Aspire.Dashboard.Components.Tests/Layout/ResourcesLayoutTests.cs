@@ -26,6 +26,35 @@ namespace Aspire.Dashboard.Components.Tests.Layout;
 [UseCulture("en-US")]
 public class ResourcesLayoutTests : DashboardTestContext
 {
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task SelectedResource_StatusRemainsInFooterAndFollowsUpdates(bool isDesktop)
+    {
+        var viewport = new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var changes = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api", state: KnownResourceState.Running, resourceType: KnownResourceTypes.Project)],
+            resourceChannelProvider: () => changes));
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/resources/api");
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+
+        cut.WaitForAssertion(() =>
+        {
+            var footer = cut.Find(".resource-workspace-foot");
+            Assert.Equal(cut.Find(".resources-layout"), footer.ParentElement);
+            Assert.Equal("Running", footer.QuerySelector(".state-pill")!.TextContent.Trim());
+            Assert.Equal("Project", footer.QuerySelector(".resource-status-type")!.TextContent);
+            Assert.Empty(cut.FindAll(".resource-header .resource-header-meta"));
+        });
+
+        await changes.Writer.WriteAsync([new(ResourceViewModelChangeType.Upsert,
+            ModelTestHelpers.CreateResource("api", state: KnownResourceState.Exited, resourceType: KnownResourceTypes.Project))]);
+
+        cut.WaitForAssertion(() => Assert.Equal("Exited", cut.Find(".resource-footer-status .state-pill").TextContent.Trim()));
+        Assert.Equal(["api"], cut.Instance.SelectedResourceNames);
+    }
+
     [Fact]
     public void AppHostTagsParticipateInGroupingWithoutUserTags()
     {

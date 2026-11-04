@@ -23,26 +23,13 @@
                 <span class="missing-parameters-count" aria-hidden="true">@missingParameterCount</span>
             </a>
         }
-        @if (ViewportInformation.IsDesktop)
-        {
-            <IconToggleGroup TValue="GroupOverview"
-                             Label="@Loc[nameof(Dashboard.Resources.Resources.LayoutLabel)]"
-                             Options="@OverviewOptions"
-                             Value="@ViewPreferences.GroupOverview"
-                             ValueChanged="@ViewPreferences.SetGroupOverviewAsync"
-                             ShowLabel="true"
-                             ShowCurrentLabel="false" />
-        }
-        else
-        {
-            var currentOverview = GetCurrentOverviewOption();
-            <AspireMenuButton ButtonAppearance="ButtonAppearance.Default"
-                              ButtonClass="overview-layout-menu"
-                              IconStart="@currentOverview.Icon"
-                              Text="@currentOverview.Text"
-                              Title="@($"{Loc[nameof(Dashboard.Resources.Resources.LayoutLabel)]}: {currentOverview.Text}")"
-                              ItemsProvider="GetOverviewMenuItems" />
-        }
+        <IconToggleGroup TValue="GroupOverview"
+                         Label="@Loc[nameof(Dashboard.Resources.Resources.LayoutLabel)]"
+                         Options="@OverviewOptions"
+                         Value="@ViewPreferences.GroupOverview"
+                         ValueChanged="@ViewPreferences.SetGroupOverviewAsync"
+                         ShowLabel="true"
+                         ShowCurrentLabel="false" />
     </div>
 </StableSectionContent>
 

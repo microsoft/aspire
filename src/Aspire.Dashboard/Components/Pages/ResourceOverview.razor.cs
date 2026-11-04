@@ -3,6 +3,7 @@
 
 using System.Globalization;
 using Aspire.Dashboard.Components.Controls;
+using Aspire.Dashboard.Components.CustomIcons;
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Otlp;
@@ -12,6 +13,7 @@ using Aspire.Dashboard.Utils;
 using Aspire.Shared.ConsoleLogs;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
+using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components.Pages;
 
@@ -52,6 +54,7 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
     private IDisposable? _consoleLogsFiltersChangedSubscription;
     private TerminalView? _terminalView;
     private bool? _renderedTerminalFocus;
+    private bool _hideEmptyPanels = true;
 
     [Parameter]
     public string? ResourceName { get; set; }
@@ -125,6 +128,18 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
 
     private void ToggleTerminalFocus() =>
         NavigationManager.NavigateTo(DashboardUrls.SetResourceTerminalFocus(NavigationManager.Uri, !IsTerminalFocused));
+
+    private IReadOnlyList<IconToggleOption<bool>> PanelOptions =>
+    [
+        new(true, new AspireIcons.Size20.HideEmptyPanels(), Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewHideEmptyPanels)]),
+        new(false, new Icons.Regular.Size20.Grid(), Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewShowAllPanels)])
+    ];
+
+    private Task SetHideEmptyPanelsAsync(bool value)
+    {
+        _hideEmptyPanels = value;
+        return InvokeAsync(StateHasChanged);
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -772,8 +787,8 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
             return string.Create(CultureInfo.InvariantCulture, $"--overview-span: {_spans.GetValueOrDefault(card, Columns)}; --overview-span-md: {_mediumSpans.GetValueOrDefault(card, Columns)}; --overview-card-height: {GetHeight(card)}px;");
         }
 
-        // Each card has a fixed height, so a card is the same size for every resource and the cards below it don't
-        // move. Content that doesn't fit scrolls inside the card. Cards on the same row share a height.
+        // Bound scrollable content while allowing each grid row to fit its tallest card.
+        // Terminals use the console limit as their minimum interactive viewport instead.
         private static int GetHeight(OverviewCard card) => card switch
         {
             OverviewCard.Status or OverviewCard.Endpoints or OverviewCard.Metrics => 260,
