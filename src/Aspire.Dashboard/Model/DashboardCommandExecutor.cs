@@ -40,8 +40,11 @@ public sealed class DashboardCommandExecutor(
     /// <summary>
     /// Stops or starts a resource for the Aspire Outage game's hard core mode, when that command is available right now.
     /// </summary>
-    /// <returns>False when the command isn't available, so the caller can try again later. True once it has been executed, whatever its result: a failure is reported to the user like any other command's.</returns>
-    public async Task<bool> ExecuteGraphGameCommandAsync(
+    /// <returns>
+    /// Null when the command isn't available, so the caller can try again later. Otherwise whether the command succeeded:
+    /// false is final for this attempt, and has been reported to the user like any other command's failure or cancellation.
+    /// </returns>
+    public async Task<bool?> ExecuteGraphGameCommandAsync(
         ResourceViewModel resource,
         string commandName,
         Func<ResourceViewModel, string> getResourceName)
@@ -49,7 +52,7 @@ public sealed class DashboardCommandExecutor(
         // The name comes from the browser: the game only ever gets to run these two commands.
         if (commandName is not (CommandViewModel.StopCommand or CommandViewModel.StartCommand))
         {
-            return false;
+            return null;
         }
 
         // A command that asks for confirmation is treated as unavailable: its author wants the user to agree to it, and a
@@ -59,11 +62,10 @@ public sealed class DashboardCommandExecutor(
             !string.IsNullOrWhiteSpace(command.ConfirmationMessage) ||
             IsExecuting(resource.Name, command.Name))
         {
-            return false;
+            return null;
         }
 
-        await ExecuteAsync(resource, command, getResourceName).ConfigureAwait(false);
-        return true;
+        return await ExecuteAsync(resource, command, getResourceName).ConfigureAwait(false);
     }
 
     /// <summary>Executes a resource command with confirmation and result notifications.</summary>

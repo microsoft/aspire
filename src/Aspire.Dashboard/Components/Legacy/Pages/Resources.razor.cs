@@ -504,10 +504,10 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         }
 
         [JSInvokable]
-        public Task<bool> ExecuteGraphGameCommand(string id, string commandName) =>
+        public Task<bool?> ExecuteGraphGameCommand(string id, string commandName) =>
             resources._resourceByName.TryGetValue(id, out var resource)
                 ? resources.DashboardCommandExecutor.ExecuteGraphGameCommandAsync(resource, commandName, resources.GetResourceName)
-                : Task.FromResult(false);
+                : Task.FromResult<bool?>(null);
     }
 
     internal IEnumerable<ResourceViewModel> GetFilteredResources()

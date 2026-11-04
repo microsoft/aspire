@@ -121,7 +121,9 @@ export function isButtonTarget(target) {
  *
  * Commands for one resource run one after the other. A command that isn't available yet is tried again, because it can
  * take a moment for a resource to get there: start only appears once the resource has stopped, and stop only once a
- * resource that was starting is running. execute(id, command) resolves to false when the command isn't available.
+ * resource that was starting is running. execute(id, command) resolves to null when the command isn't available, and
+ * otherwise to whether it succeeded. A command that failed or that the user cancelled isn't tried again, and the dashboard
+ * has already reported it. A resource that failed to start counts as down, and is tried again when the next wave is cleared.
  */
 export class ResourceOutage {
     constructor(execute, retryDelayMs = COMMAND_RETRY_MS) {
@@ -129,13 +131,13 @@ export class ResourceOutage {
         this.retryDelayMs = retryDelayMs;
         // Stop was requested and the wave wasn't cleared since.
         this.down = new Set();
-        // Stop was executed, so start applies.
+        // Stop succeeded and start hasn't, so the resource is really down because of the game.
         this.stopped = new Set();
         this.queues = new Map();
     }
 
     get downCount() {
-        return this.down.size;
+        return new Set([...this.down, ...this.stopped]).size;
     }
 
     /** Returns true when this call is the one that stops the resource. */
@@ -145,7 +147,7 @@ export class ResourceOutage {
         }
         this.down.add(id);
         this.enqueue(id, async () => {
-            if (await this.attempt(id, 'stop')) {
+            if (await this.attempt(id, 'stop') === true) {
                 this.stopped.add(id);
             } else {
                 this.down.delete(id);
@@ -155,10 +157,10 @@ export class ResourceOutage {
     }
 
     restartAll() {
-        for (const id of this.down) {
+        for (const id of new Set([...this.down, ...this.stopped])) {
             this.enqueue(id, async () => {
-                if (this.stopped.delete(id)) {
-                    await this.attempt(id, 'start');
+                if (this.stopped.has(id) && await this.attempt(id, 'start') === true) {
+                    this.stopped.delete(id);
                 }
             });
         }
@@ -173,8 +175,9 @@ export class ResourceOutage {
     async attempt(id, command) {
         for (let i = 0; i < COMMAND_ATTEMPTS; i++) {
             try {
-                if (await this.execute(id, command)) {
-                    return true;
+                const result = await this.execute(id, command);
+                if (result !== null) {
+                    return result;
                 }
             } catch {
                 // The page can be gone by now, which ends the attempts below.
@@ -183,7 +186,7 @@ export class ResourceOutage {
                 await new Promise(resolve => setTimeout(resolve, this.retryDelayMs));
             }
         }
-        return false;
+        return null;
     }
 
     /** Resolves when every command requested so far has finished. */

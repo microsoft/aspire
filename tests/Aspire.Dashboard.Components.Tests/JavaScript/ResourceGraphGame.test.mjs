@@ -188,15 +188,50 @@ test("hard core restarts what it stopped when the wave is cleared, after the sto
 
 test("hard core tries again until a command becomes available", async () => {
     let starts = 0;
-    const { outage, calls } = outageWith((_, command) => command === "stop" || ++starts === 3);
+    const { outage, calls } = outageWith((_, command) => command === "stop" || ++starts === 3 ? true : null);
     outage.stop("api");
     outage.restartAll();
     await outage.whenIdle();
     assert.deepEqual(calls, ["stop api", "start api", "start api", "start api"]);
 });
 
+test("hard core doesn't count or restart a resource whose stop failed, and doesn't try it again", async () => {
+    const { outage, calls } = outageWith((_, command) => command === "stop" ? false : true);
+    outage.stop("api");
+    await outage.whenIdle();
+    assert.equal(outage.downCount, 0);
+    outage.restartAll();
+    await outage.whenIdle();
+    assert.deepEqual(calls, ["stop api"]);
+});
+
+test("hard core keeps counting a resource whose start failed, and tries it when the next wave is cleared", async () => {
+    let starts = 0;
+    const { outage, calls } = outageWith((_, command) => command === "stop" || ++starts === 2);
+    outage.stop("api");
+    outage.restartAll();
+    await outage.whenIdle();
+    assert.deepEqual(calls, ["stop api", "start api"]);
+    assert.equal(outage.downCount, 1);
+
+    outage.restartAll();
+    await outage.whenIdle();
+    assert.deepEqual(calls, ["stop api", "start api", "start api"]);
+    assert.equal(outage.downCount, 0);
+});
+
+test("hard core counts a resource as down until its start has succeeded", async () => {
+    const { outage } = outageWith();
+    outage.stop("api");
+    await outage.whenIdle();
+    outage.restartAll();
+    assert.equal(outage.downCount, 1);
+    await outage.whenIdle();
+    assert.equal(outage.downCount, 0);
+});
+
 test("hard core leaves alone a resource it couldn't stop", async () => {
-    const { outage, calls } = outageWith((_, command) => command !== "stop");
+    const { outage, calls } = outageWith((_, command) => command === "stop" ? null : true);
     outage.stop("already-stopped");
     await outage.whenIdle();
     assert.equal(outage.downCount, 0);

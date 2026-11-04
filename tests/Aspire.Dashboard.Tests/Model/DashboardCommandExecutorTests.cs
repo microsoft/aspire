@@ -46,7 +46,7 @@ public sealed class DashboardCommandExecutorTests
     [InlineData(CommandViewModel.StartCommand, true)]
     [InlineData(CommandViewModel.RestartCommand, false)]
     [InlineData("custom", false)]
-    public async Task ExecuteGraphGameCommandAsync_OnlyRunsStopAndStart(string commandName, bool expected)
+    public async Task ExecuteGraphGameCommandAsync_OnlyRunsStopAndStart(string commandName, bool runs)
     {
         var executed = new List<string>();
         var client = new TestDashboardClient(isEnabled: true,
@@ -58,8 +58,32 @@ public sealed class DashboardCommandExecutorTests
         var executor = CreateExecutor(client, out _, out _);
         var resource = ModelTestHelpers.CreateResource(resourceName: "api", commands: [CreateCommand(commandName)]);
 
-        Assert.Equal(expected, await executor.ExecuteGraphGameCommandAsync(resource, commandName, r => r.DisplayName));
-        Assert.Equal(expected ? [commandName] : [], executed);
+        Assert.Equal(runs ? true : null, await executor.ExecuteGraphGameCommandAsync(resource, commandName, r => r.DisplayName));
+        Assert.Equal(runs ? [commandName] : [], executed);
+    }
+
+    [Theory]
+    [InlineData(ResourceCommandResponseKind.Failed)]
+    [InlineData(ResourceCommandResponseKind.Cancelled)]
+    public async Task ExecuteGraphGameCommandAsync_ReportsUnsuccessfulCommand(ResourceCommandResponseKind kind)
+    {
+        var client = new TestDashboardClient(isEnabled: true,
+            executeResourceCommand: (_, _, _, _, _) => Task.FromResult(new ResourceCommandResponseViewModel { Kind = kind }));
+        var executor = CreateExecutor(client, out _, out _);
+        var resource = ModelTestHelpers.CreateResource(resourceName: "api", commands: [CreateCommand(CommandViewModel.StopCommand)]);
+
+        Assert.False(await executor.ExecuteGraphGameCommandAsync(resource, CommandViewModel.StopCommand, r => r.DisplayName));
+    }
+
+    [Fact]
+    public async Task ExecuteGraphGameCommandAsync_ReportsCommandThatThrows()
+    {
+        var client = new TestDashboardClient(isEnabled: true,
+            executeResourceCommand: (_, _, _, _, _) => Task.FromException<ResourceCommandResponseViewModel>(new InvalidOperationException("Command failed")));
+        var executor = CreateExecutor(client, out _, out _);
+        var resource = ModelTestHelpers.CreateResource(resourceName: "api", commands: [CreateCommand(CommandViewModel.StopCommand)]);
+
+        Assert.False(await executor.ExecuteGraphGameCommandAsync(resource, CommandViewModel.StopCommand, r => r.DisplayName));
     }
 
     [Theory]
@@ -78,7 +102,7 @@ public sealed class DashboardCommandExecutorTests
         var executor = CreateExecutor(client, out _, out _);
         var resource = ModelTestHelpers.CreateResource(resourceName: "api", commands: [CreateCommand(CommandViewModel.StopCommand, state, confirmationMessage)]);
 
-        Assert.False(await executor.ExecuteGraphGameCommandAsync(resource, CommandViewModel.StopCommand, r => r.DisplayName));
+        Assert.Null(await executor.ExecuteGraphGameCommandAsync(resource, CommandViewModel.StopCommand, r => r.DisplayName));
         Assert.Equal(0, executed);
     }
 
@@ -88,7 +112,7 @@ public sealed class DashboardCommandExecutorTests
         var executor = CreateExecutor(new TestDashboardClient(isEnabled: true), out _, out _);
         var resource = ModelTestHelpers.CreateResource(resourceName: "api", commands: []);
 
-        Assert.False(await executor.ExecuteGraphGameCommandAsync(resource, CommandViewModel.StopCommand, r => r.DisplayName));
+        Assert.Null(await executor.ExecuteGraphGameCommandAsync(resource, CommandViewModel.StopCommand, r => r.DisplayName));
     }
 
     [Fact]
